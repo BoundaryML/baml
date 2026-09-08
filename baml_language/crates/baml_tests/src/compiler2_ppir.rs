@@ -4,7 +4,6 @@
 mod tests {
     use baml_artifact::ArtifactKind;
     use baml_base::Name;
-    use baml_compiler2_hir::package::PackageId;
     use baml_compiler2_hir_ty::package_interface::PackageInterface;
     use baml_db::ProjectDatabase;
 
@@ -21,8 +20,7 @@ mod tests {
             );
         }
 
-        let package =
-            baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
+        let package = baml_compiler2_ppir::package_items(&db, db.workspace_root().unwrap());
         package
             .namespaces
             .keys()
@@ -80,7 +78,7 @@ mod tests {
             "class Zulu {}\nclass Alpha {}\nclass Mike {}\n",
         );
 
-        let package_id = PackageId::new(&db, Name::new("user"));
+        let package_id = db.workspace_root().unwrap();
         let interface =
             baml_compiler2_hir_ty::package_interface::package_interface(&db, package_id);
         let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, interface)

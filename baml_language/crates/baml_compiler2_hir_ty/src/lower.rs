@@ -26,7 +26,7 @@
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::PackageId,
+    package::{accessible_package, is_served_from_interface, wire_name},
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
 use baml_compiler2_ppir::item_data::MethodOwner;
@@ -179,8 +179,7 @@ pub fn lower_ctx_for_file(
     file: baml_base::SourceFile,
 ) -> LowerCtx<'_> {
     let info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_items =
-        baml_compiler2_ppir::package_items(db, PackageId::new(db, info.package.clone()));
+    let package_items = baml_compiler2_ppir::package_items(db, info.root);
     LowerCtx {
         diags: None,
         current_ref: std::cell::Cell::new(None),
@@ -1397,16 +1396,10 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    fn can_access_package(&self, package: &Name) -> bool {
-        if &self.package_items.package == package {
-            return true;
-        }
-        baml_compiler2_hir::package::package_dependencies(
-            self.db,
-            PackageId::new(self.db, self.package_items.package.clone()),
-        )
-        .iter()
-        .any(|dep| dep.name(self.db) == *package)
+    /// The package this context's package spells as `name` (itself, or a
+    /// declared dependency) — see `hir::package::accessible_package`.
+    fn accessible_package(&self, name: &Name) -> Option<baml_base::SourceRoot> {
+        accessible_package(self.db, self.package_items.root, name)
     }
 
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
@@ -1430,21 +1423,14 @@ impl<'db> LowerCtx<'db> {
                 if let Some(def) = self.package_items.lookup_type(prefix_ns, item) {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
-            } else {
-                if baml_compiler2_hir::package::is_external_package(self.db, &segments[0]) {
-                    if !self.can_access_package(&segments[0]) {
-                        return None;
-                    }
-                    let interface =
-                        crate::package_interface::mounted_interface(self.db, &segments[0])?;
+            } else if let Some(package) = self.accessible_package(&segments[0]) {
+                if is_served_from_interface(self.db, package) {
+                    let interface = crate::package_interface::mounted_interface(self.db, package)?;
                     if let Some(exported) = interface.lookup_type(prefix_ns, item) {
                         return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
                     }
                 }
-                let dep_items = baml_compiler2_ppir::package_items(
-                    self.db,
-                    PackageId::new(self.db, segments[0].clone()),
-                );
+                let dep_items = baml_compiler2_ppir::package_items(self.db, package);
                 if let Some(def) = dep_items.lookup_type(prefix_ns, item) {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
@@ -1454,21 +1440,14 @@ impl<'db> LowerCtx<'db> {
         // `json` is the sole builtin namespace shorthand. After ordinary
         // local/package lookup fails, reinterpret `json.*` under `baml`.
         if segments.first().is_some_and(|root| root.as_str() == "json")
-            && self.can_access_package(&Name::new("baml"))
+            && let Some(baml) = self.accessible_package(&Name::new("baml"))
         {
-            let baml_package = Name::new("baml");
-            let baml_items = baml_compiler2_ppir::package_items(
-                self.db,
-                PackageId::new(self.db, baml_package.clone()),
-            );
+            let baml_items = baml_compiler2_ppir::package_items(self.db, baml);
             let namespace = &segments[..segments.len() - 1];
-            let visible = self.package_items.package == baml_package
-                || crate::package_interface::package_interface(
-                    self.db,
-                    PackageId::new(self.db, baml_package),
-                )
-                .lookup_type(namespace, item)
-                .is_some();
+            let visible = self.package_items.root == baml
+                || crate::package_interface::package_interface(self.db, baml)
+                    .lookup_type(namespace, item)
+                    .is_some();
             if visible && let Some(def) = baml_items.lookup_type(namespace, item) {
                 return Some(ResolvedTypeDefinition::Source(def));
             }
@@ -1514,32 +1493,22 @@ impl<'db> LowerCtx<'db> {
                 if let Some(def) = self.package_items.lookup_value(prefix_ns, item) {
                     return Some(def);
                 }
-            } else {
-                let dep_items = baml_compiler2_ppir::package_items(
-                    self.db,
-                    PackageId::new(self.db, segments[0].clone()),
-                );
+            } else if let Some(package) = self.accessible_package(&segments[0]) {
+                let dep_items = baml_compiler2_ppir::package_items(self.db, package);
                 if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
                     return Some(def);
                 }
             }
         }
         if segments.first().is_some_and(|root| root.as_str() == "json")
-            && self.can_access_package(&Name::new("baml"))
+            && let Some(baml) = self.accessible_package(&Name::new("baml"))
         {
-            let baml_package = Name::new("baml");
-            let baml_items = baml_compiler2_ppir::package_items(
-                self.db,
-                PackageId::new(self.db, baml_package.clone()),
-            );
+            let baml_items = baml_compiler2_ppir::package_items(self.db, baml);
             let namespace = &segments[..segments.len() - 1];
-            let visible = self.package_items.package == baml_package
-                || crate::package_interface::package_interface(
-                    self.db,
-                    PackageId::new(self.db, baml_package),
-                )
-                .lookup_function(namespace, item)
-                .is_some();
+            let visible = self.package_items.root == baml
+                || crate::package_interface::package_interface(self.db, baml)
+                    .lookup_function(namespace, item)
+                    .is_some();
             if visible && let Some(def) = baml_items.lookup_value(namespace, item) {
                 return Some(def);
             }
@@ -1557,7 +1526,7 @@ impl<'db> LowerCtx<'db> {
         if segments.len() < 2 {
             return None;
         }
-        let (package, visible_segments) =
+        let (package_name, visible_segments) =
             if segments.first().is_some_and(|root| root.as_str() == "json") {
                 // Mirror `resolve_value`'s sole builtin namespace shorthand after
                 // ordinary local lookup.
@@ -1565,13 +1534,12 @@ impl<'db> LowerCtx<'db> {
             } else {
                 (segments[0].clone(), &segments[1..])
             };
-        if !baml_compiler2_hir::package::is_external_package(self.db, &package)
-            || !self.can_access_package(&package)
-        {
+        let package = self.accessible_package(&package_name)?;
+        if !is_served_from_interface(self.db, package) {
             return None;
         }
         let (item, namespace) = visible_segments.split_last()?;
-        let interface = crate::package_interface::mounted_interface(self.db, &package)?;
+        let interface = crate::package_interface::mounted_interface(self.db, package)?;
         let function = interface.lookup_function(namespace, item)?;
         Some(crate::package_interface::resolved_exported_function(
             function,
@@ -1616,7 +1584,11 @@ impl<'db> LowerCtx<'db> {
     /// keeps `$stream` companions distinct from their base).
     fn qualify(&self, def: Definition<'db>, short: &Name) -> TypeName {
         let info = baml_compiler2_hir::file_package::file_package(self.db, def.file(self.db));
-        TypeName::new(info.package, info.namespace_path, short.clone())
+        TypeName::new(
+            wire_name(self.db, info.root),
+            info.namespace_path,
+            short.clone(),
+        )
     }
 }
 
@@ -1850,7 +1822,7 @@ pub fn class_qualified_name<'db>(
 ) -> TypeName {
     let package = baml_compiler2_hir::file_package::file_package(db, class.file(db));
     TypeName::new(
-        package.package.clone(),
+        wire_name(db, package.root),
         package.namespace_path,
         baml_compiler2_ppir::item_data::class_data(db, class)
             .name
@@ -2011,7 +1983,7 @@ pub fn qualify_def<'db>(
     name: &Name,
 ) -> baml_type::QualifiedTypeName {
     let info = baml_compiler2_hir::file_package::file_package(db, def.file(db));
-    baml_type::QualifiedTypeName::new(info.package, info.namespace_path, name.clone())
+    baml_type::QualifiedTypeName::new(wire_name(db, info.root), info.namespace_path, name.clone())
 }
 
 /// The root generic frame for a class.
@@ -2386,7 +2358,7 @@ pub fn interface_qualified_name<'db>(
 ) -> TypeName {
     let package = baml_compiler2_hir::file_package::file_package(db, interface.file(db));
     TypeName::new(
-        package.package,
+        wire_name(db, package.root),
         package.namespace_path,
         baml_compiler2_ppir::item_data::interface_data(db, interface)
             .name

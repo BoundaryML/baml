@@ -30,15 +30,31 @@ pub enum SourceRootKind {
     Dynamic,
 }
 
-/// Input: one source root — a directory subtree holding the files of exactly
-/// one package.
+/// One dependency edge: the name `root` is spelled by in the depending
+/// package, and the package it reaches.
 ///
-/// The root is the unit of package identity: every file under it belongs to
-/// `package`, and namespaces are derived from `ns_*` path segments relative
-/// to `path`. Per-root inputs (rather than one big table payload) keep
-/// invalidation scoped: adding or removing a file in one root bumps only that
-/// root's `files`, so another package's file-set-derived queries are
-/// untouched.
+/// Names live on edges, never on packages (rust-analyzer's `Dependency {
+/// crate_id, name }`): two packages may reach one root under different names,
+/// and a root needs no name of its own to be depended on. A package's
+/// [`SourceRoot::self_name`] is display metadata and the default edge name a
+/// manifest offers; it is never an identity.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Dependency {
+    /// The spelling `root`'s items are qualified by inside the depending
+    /// package (`baml` in `baml.Array`).
+    pub name: Name,
+    pub root: SourceRoot,
+}
+
+/// Input: one source root — a directory subtree holding the files of exactly
+/// one package. The root IS the package: package identity is this input's
+/// id, and every package-level query is keyed on it.
+///
+/// Every file under the root belongs to the package, and namespaces are
+/// derived from `ns_*` path segments relative to `path`. Per-root inputs
+/// (rather than one big table payload) keep invalidation scoped: adding or
+/// removing a file in one root bumps only that root's `files`, so another
+/// package's file-set-derived queries are untouched.
 // NOT `(debug)`: `SourceRoot::files` and `SourceFile::source_root` point at
 // each other, so field-printing Debug impls on both sides would recurse
 // until stack overflow the first time anyone logs a file. The root prints
@@ -52,14 +68,35 @@ pub struct SourceRoot {
     #[returns(ref)]
     pub path: PathBuf,
 
-    /// The compiler package name every file under this root belongs to.
-    pub package: Name,
-
     pub kind: SourceRootKind,
+
+    /// The package's own name: `[package].name` from its manifest, or the
+    /// language-fixed name of a stdlib package. `None` for an unnamed package
+    /// (a project with no manifest, a runtime-compiled package).
+    ///
+    /// Display metadata and the default name a dependent spells this package
+    /// by; never compared for identity — the root id is the identity, and the
+    /// name a package is reached by lives on the depending package's edge
+    /// ([`Dependency::name`]).
+    pub self_name: Option<Name>,
 
     /// Files in this root, in insertion order.
     #[returns(ref)]
     pub files: Vec<SourceFile>,
+
+    /// The package's serialized compiler interface (`borsh(PackageInterface)`,
+    /// versioned as a `baml_artifact`), when the package is served from one
+    /// instead of from source: a runtime mount, or a precompiled stdlib
+    /// package in a runtime compile. When present it is the semantic
+    /// authority for the package; any `files` are link-only stubs.
+    #[returns(ref)]
+    pub interface: Option<Vec<u8>>,
+
+    /// The packages this package may reach, each under the name it spells
+    /// them by. The whole dependency graph is the union of these per-root
+    /// edge lists; a root reaches nothing it does not list.
+    #[returns(ref)]
+    pub dependencies: Vec<Dependency>,
 }
 
 impl std::fmt::Debug for SourceRoot {

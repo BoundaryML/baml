@@ -1127,7 +1127,7 @@ impl RunArgs {
     /// does not block direct function execution. `baml run` stays quiet on
     /// successful execution; validation errors are surfaced separately.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
-        let manifest = match crate::manifest::parse(content) {
+        let manifest = match baml_db::manifest::parse(content) {
             Ok(m) => m,
             Err(_e) => {
                 return HashMap::new();

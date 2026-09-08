@@ -31,7 +31,7 @@
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::ImplLoc,
-    package::{PackageId, package_dependency_closure},
+    package::{package_dependency_closure, wire_name},
 };
 use baml_type::{
     FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
@@ -325,9 +325,9 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
 /// must compare by the same union laws as its spelled-out form: without
 /// the fold, `Bar<TF>` vs `Bar<bool>` (with `type TF = true | false`) is
 /// wrongly judged disjoint - a fails-open coherence hole.
-fn normalized_alias_map<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
+fn normalized_alias_map(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
 ) -> FxHashMap<TypeName, Ty> {
     let mut aliases = FxHashMap::default();
     collect_package_aliases(db, pkg, &mut aliases);
@@ -342,16 +342,17 @@ fn normalized_alias_map<'db>(
     aliases
 }
 
-fn collect_package_aliases<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
+fn collect_package_aliases(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
     out: &mut FxHashMap<TypeName, Ty>,
 ) {
     let items = baml_compiler2_ppir::package_items(db, pkg);
     for (ns_path, ns_items) in &items.namespaces {
         for (name, def) in &ns_items.types {
             if let Definition::TypeAlias(loc) = def {
-                let qualified = TypeName::new(items.package.clone(), ns_path.clone(), name.clone());
+                let qualified =
+                    TypeName::new(wire_name(db, items.root), ns_path.clone(), name.clone());
                 out.entry(qualified)
                     .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
@@ -1076,7 +1077,7 @@ unsafe impl salsa::Update for CoherenceReport<'_> {
 #[salsa::tracked(returns(ref))]
 pub fn package_coherence_violations<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
+    pkg: baml_base::SourceRoot,
 ) -> CoherenceReport<'db> {
     let mut own = package_impls(db, pkg);
     // Stable textual order for attribution (the later impl carries the
@@ -1129,10 +1130,10 @@ fn overlap_violation(overlap: Overlap) -> Option<bool> {
     }
 }
 
-fn package_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-) -> Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> {
+fn package_impls(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+) -> Vec<(ImplLoc<'_>, &'_ ImplFacts<'_>)> {
     package_impl_locs(db, pkg)
         .iter()
         .filter_map(|&loc| impl_facts(db, loc).resolved().map(|facts| (loc, facts)))
@@ -1177,7 +1178,7 @@ pub fn impls_conflict(
 /// mounted side structural because there is no legitimate `ImplLoc` to mint.
 pub fn source_mounted_impl_conflict(
     db: &dyn baml_compiler2_ppir::Db,
-    source_package: PackageId<'_>,
+    source_package: baml_base::SourceRoot,
     source: &ImplFacts<'_>,
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
@@ -1409,11 +1410,11 @@ unsafe impl salsa::Update for OrphanReport<'_> {
 /// impl's inputs - the for-type then the interface args, in order - with
 /// any generic param BEFORE it uncovered and rejected).
 #[salsa::tracked(returns(ref))]
-pub fn package_orphan_violations<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-) -> OrphanReport<'db> {
-    let current_package = pkg.name(db);
+pub fn package_orphan_violations(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+) -> OrphanReport<'_> {
+    let current_package = wire_name(db, pkg);
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
         let for_ty = facts.for_ty_pattern.to_plain();

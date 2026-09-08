@@ -9,7 +9,7 @@
 //! all LIVE since I1/I2/I5, backed by the impl registry and the scope's
 //! param env.
 
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_hir::{contributions::Definition, package::root_by_wire_name};
 use baml_type::{
     Interface, Name, ParamTy, QualifiedTypeName, Ty,
     interned::InferInterface,
@@ -63,11 +63,13 @@ impl<'db> Facts<'db> {
     }
 }
 
-fn definition_of<'db>(
+/// The source definition a qualified type name points at, if its package is
+/// served from source and declares the item.
+pub(crate) fn definition_of<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     name: &QualifiedTypeName,
 ) -> Option<Definition<'db>> {
-    let package = PackageId::new(db, name.package().clone());
+    let package = root_by_wire_name(db, name.package())?;
     baml_compiler2_ppir::package_items(db, package).lookup_type(name.namespace(), name.name())
 }
 

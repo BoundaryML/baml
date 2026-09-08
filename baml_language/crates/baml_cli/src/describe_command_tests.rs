@@ -24,11 +24,10 @@ fn make_db(files: &[(&str, &str)]) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let workspace = db
-        .add_source_root(baml_db::SourceRootSpec {
-            path: root.to_path_buf(),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        .add_source_root(baml_db::SourceRootSpec::new(
+            root.to_path_buf(),
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
     for (path, content) in files {
         let full_path = root.join(path);
@@ -271,7 +270,7 @@ function LlmIdentity(input: string) -> string {
 #[test]
 fn render_project_listing() {
     let db = multi_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -282,7 +281,7 @@ fn render_project_listing() {
 #[test]
 fn render_namespace_listing_llm() {
     let db = multi_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let ns_path = vec![baml_db::Name::new("llm")];
     let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     let output = capture_listing(&entries);
@@ -519,7 +518,7 @@ class IntDecoder {
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     // The dotted `describe IntDecoder.decode` road: the CLI resolves the
     // parent and hands the member to `describe_item_member`.
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
     let parent = pkg
         .lookup_type(&[], &baml_db::Name::new("IntDecoder"))
@@ -552,7 +551,7 @@ fn render_describe_function_with_docstring() {
 #[test]
 fn render_describe_ns_item() {
     let db = multi_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let ns_path = vec![baml_db::Name::new("llm")];
@@ -571,7 +570,8 @@ fn render_describe_ns_item() {
 #[test]
 fn render_builtin_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -594,7 +594,8 @@ fn render_builtin_package_listing() {
 #[test]
 fn render_builtin_namespace_env() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
     let ns_path = vec![baml_db::Name::new("env")];
     let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
@@ -631,7 +632,8 @@ fn describe_reflect_type_and_intrinsic() {
 #[test]
 fn render_builtin_namespace_ai_internal() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("ai"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("ai")).unwrap();
     let ns_path = vec![baml_db::Name::new("internal")];
     let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
@@ -643,7 +645,9 @@ fn render_builtin_namespace_ai_internal() {
 #[test]
 fn render_testing_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("testing"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("testing"))
+            .unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -654,7 +658,8 @@ fn render_testing_package_listing() {
 #[test]
 fn render_assert_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("assert"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("assert")).unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -694,7 +699,8 @@ fn render_describe_log_info_builtin() {
 #[test]
 fn render_describe_builtin_item_by_definition() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
+    let pkg_id =
+        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let root_ns: Vec<baml_db::Name> = vec![];
@@ -724,7 +730,7 @@ fn non_workspace_package_names_includes_builtins() {
 #[test]
 fn render_describe_member_field() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let root_ns: Vec<baml_db::Name> = vec![];
@@ -740,7 +746,7 @@ fn render_describe_member_field() {
 #[test]
 fn render_describe_ns_member() {
     let db = multi_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let ns_path = vec![baml_db::Name::new("llm")];
@@ -764,7 +770,7 @@ fn render_describe_ns_member() {
 #[test]
 fn deep_namespace_listing_produces_dotted_fqn() {
     let db = deep_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -775,7 +781,7 @@ fn deep_namespace_listing_produces_dotted_fqn() {
 #[test]
 fn deep_namespace_primitive_lookup_works() {
     let db = deep_ns_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let full_ns = vec![baml_db::Name::new("foo"), baml_db::Name::new("bar")];

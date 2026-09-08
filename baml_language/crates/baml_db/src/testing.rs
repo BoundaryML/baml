@@ -35,16 +35,16 @@
 //!
 //! Keeping the sources is load-bearing, not incidental. A database that mounts
 //! the stdlib as a source-less precompiled package (what
-//! [`ProjectDatabase::set_precompiled_stdlib_packages`] builds, and what
+//! [`ProjectDatabase::ensure_precompiled_stdlib`] builds, and what
 //! runtime `reflect.Package.compile` uses) is much faster still, but it is
 //! not a faithful substitute: with no stdlib bodies to look through, a direct
 //! sysop call lowers to a plain `call` instead of `sys_op`, and checks that
 //! walk stdlib bodies or declaration sites go quiet. Emit helpers therefore
 //! never use that mode.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use baml_base::{Name, SourceRoot, SourceRootKind};
+use baml_base::{SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::OptLevel;
 use baml_compiler2_emit::{
@@ -54,17 +54,13 @@ use bex_vm_types::Program;
 
 use crate::{ProjectDatabase, SourceRootSpec, collect_diagnostics, stdlib_prefix::StdlibPrefix};
 
-/// A fresh database with the stdlib installed and one empty `Workspace` root
-/// (path `.`, package `user`).
+/// A fresh database with the stdlib installed and one empty, unnamed
+/// `Workspace` root (path `.`).
 fn workspace_db() -> (ProjectDatabase, SourceRoot) {
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
-        .add_source_root(SourceRootSpec {
-            path: PathBuf::from("."),
-            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(".", SourceRootKind::Workspace))
         .unwrap_or_else(|err| unreachable!("a fresh database has no workspace root: {err}"));
     (db, root)
 }

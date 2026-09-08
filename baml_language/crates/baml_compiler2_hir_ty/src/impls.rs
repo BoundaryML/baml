@@ -32,7 +32,10 @@
 //! match's bindings, where an unbound impl param is unreachable, never a
 //! stand-in type.
 
-use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
+use baml_compiler2_hir::{
+    loc::ImplLoc,
+    package::{is_precompiled_stdlib, root_by_wire_name},
+};
 use baml_type::{
     Name, ParamTy, TypeName,
     interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
@@ -399,14 +402,14 @@ pub fn impl_facts<'db>(
 /// guarantees at most one match; stable order keeps a coherence-violating
 /// program from resolving arbitrarily).
 #[salsa::tracked(returns(ref))]
-pub fn package_impl_locs<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
-) -> Vec<ImplLoc<'db>> {
+pub fn package_impl_locs(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
+) -> Vec<ImplLoc<'_>> {
     let mut out = Vec::new();
-    // Scan only the package's own files (`package_files`), so edits to
-    // another root's file set never invalidate this query.
-    for file in baml_compiler2_hir::package::package_files(db, package) {
+    // Scan only the package's own files, so edits to another root's file
+    // set never invalidate this query.
+    for file in package.files(db) {
         out.extend(
             baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
@@ -634,7 +637,7 @@ pub enum ResolvedImplOrigin<'db> {
     /// tracked artifact queries; unlike a live mount, no owned fact payload is
     /// retained in each impl-cache entry.
     Precompiled {
-        package: PackageId<'db>,
+        package: baml_base::SourceRoot,
         row: u32,
         methods: &'db [crate::package_interface::ExportedFunction],
     },
@@ -672,7 +675,10 @@ enum CachedResolvedImplOrigin<'db> {
         facts: Box<MountedImplFacts>,
     },
     /// Fact-free identity for an immutable compiler-built interface row.
-    Precompiled { package: PackageId<'db>, row: u32 },
+    Precompiled {
+        package: baml_base::SourceRoot,
+        row: u32,
+    },
 }
 
 #[derive(Clone, PartialEq)]
@@ -722,11 +728,7 @@ impl ResolvedImpl<'_> {
     ) -> InferInterface {
         let header = self.implemented();
         let declared: Vec<baml_type::Name> = {
-            let package =
-                baml_compiler2_hir::package::PackageId::new(db, header.name.package().clone());
-            match baml_compiler2_ppir::package_items(db, package)
-                .lookup_type(header.name.namespace(), header.name.name())
-            {
+            match crate::facts::definition_of(db, &header.name) {
                 Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => {
                     baml_compiler2_ppir::item_data::interface_data(db, loc)
                         .associated_types
@@ -1115,7 +1117,7 @@ pub fn impls_for_type<'db>(
             },
             CachedResolvedImplOrigin::Precompiled { package, row } => {
                 let row_index = usize::try_from(*row).expect("precompiled impl row fits usize");
-                let interface = crate::package_interface::mounted_interface(db, &package.name(db))
+                let interface = crate::package_interface::mounted_interface(db, *package)
                     .expect("cached precompiled package remains installed");
                 let exported = interface
                     .impls
@@ -1306,30 +1308,18 @@ fn impls_for_type_cached<'db>(
 
 /// Every package contributing files to the compilation, deduplicated.
 ///
-/// Reads the source-root table (every root carries exactly one package) plus
-/// the external (mounted/precompiled) package names — never the files
-/// themselves, so adding or removing a file cannot invalidate the package set.
+/// Reads the source-root table (every root IS one package, source-backed or
+/// served from its interface) — never the files themselves, so adding or
+/// removing a file cannot invalidate the package set.
 #[salsa::tracked(returns(ref))]
-fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
-    let mut names: Vec<Name> = db
-        .source_roots()
-        .roots(db)
-        .iter()
-        .map(|root| root.package(db))
-        .collect();
-    names.extend(baml_compiler2_hir::package::external_package_names(db));
-    names.sort();
-    names.dedup();
-    names
-        .into_iter()
-        .map(|name| PackageId::new(db, name))
-        .collect()
+fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<baml_base::SourceRoot> {
+    db.source_roots().roots(db).clone()
 }
 
-fn package_impl_candidates<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
-) -> impl Iterator<Item = (ResolvedImplOrigin<'db>, ResolvedImplFacts<'db>)> + 'db {
+fn package_impl_candidates(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
+) -> impl Iterator<Item = (ResolvedImplOrigin<'_>, ResolvedImplFacts<'_>)> + '_ {
     let source = package_impl_locs(db, package)
         .iter()
         .filter_map(move |&block| {
@@ -1342,9 +1332,9 @@ fn package_impl_candidates<'db>(
                 ResolvedImplFacts::Source(facts),
             ))
         });
-    let precompiled = baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db));
+    let precompiled = is_precompiled_stdlib(db, package);
     let immutable = precompiled
-        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
+        .then(|| crate::package_interface::mounted_interface(db, package))
         .into_iter()
         .flatten()
         .flat_map(move |interface| {
@@ -1366,7 +1356,7 @@ fn package_impl_candidates<'db>(
                 })
         });
     let mounted = (!precompiled)
-        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
+        .then(|| crate::package_interface::mounted_interface(db, package))
         .into_iter()
         .flatten()
         .flat_map(move |interface| {
@@ -1414,15 +1404,15 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
 /// Cache entries retain only `(package, row)`; all callers borrow this shared
 /// fact value and record the live package-interface dependency.
 #[salsa::tracked(returns(ref))]
-fn precompiled_impl_facts<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
+fn precompiled_impl_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
     row: u32,
 ) -> Option<MountedImplFacts> {
-    if !baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db)) {
+    if !is_precompiled_stdlib(db, package) {
         return None;
     }
-    let interface = crate::package_interface::mounted_interface(db, &package.name(db))?;
+    let interface = crate::package_interface::mounted_interface(db, package)?;
     let row = interface.impls.get(usize::try_from(row).ok()?)?;
     Some(exported_impl_facts(row))
 }
@@ -1443,7 +1433,9 @@ pub(crate) fn impl_candidates<'db>(
     names.dedup();
     let mut out = Vec::new();
     for name in names {
-        let package = PackageId::new(db, name);
+        let Some(package) = root_by_wire_name(db, &name) else {
+            continue;
+        };
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block).resolved()
                 && facts.interface.name == *interface_name
@@ -1577,11 +1569,11 @@ fn resolve_within_depth<'db>(
 
 /// Every package a qualified name on either side points into - the
 /// orphan rule guarantees the impl lives in one of them.
-fn search_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+fn search_roots(
+    db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
     interface: &InferInterface,
-) -> Vec<PackageId<'db>> {
+) -> Vec<baml_base::SourceRoot> {
     let mut names: Vec<Name> = vec![interface.name.package().clone()];
     collect_packages(concrete, &mut names);
     for arg in &interface.generics {
@@ -1591,7 +1583,7 @@ fn search_roots<'db>(
     names.dedup();
     names
         .into_iter()
-        .map(|name| PackageId::new(db, name))
+        .filter_map(|name| root_by_wire_name(db, &name))
         .collect()
 }
 

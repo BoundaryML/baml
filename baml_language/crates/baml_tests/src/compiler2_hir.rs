@@ -12,7 +12,7 @@ mod tests {
         file_semantic_index,
         loc::FunctionLoc,
         namespace::NamespaceId,
-        package::{PackageId, package_items},
+        package::package_items,
         signature::{
             elaborated_function_signature, function_parameter_defaults, function_signature,
         },
@@ -88,7 +88,7 @@ mod tests {
             "function bar(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }",
         );
 
-        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let user_pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, user_pkg_id);
 
         // Root namespace (empty path)
@@ -118,7 +118,7 @@ mod tests {
             "enum Color { Red\nGreen\nBlue }\ntype Str = string",
         );
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, pkg_id);
         let ns = items.namespaces.get(&vec![]).unwrap();
 
@@ -141,7 +141,7 @@ mod tests {
             "class MyClass {\n  name string\n  function helper(x: string) -> string { client: \"openai/gpt-4o-mini\"\nprompt: `hi` }\n}",
         );
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, pkg_id);
         let ns = items.namespaces.get(&vec![]).unwrap();
 
@@ -163,7 +163,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.file("lookup.baml", "class Point {}\nenum Dir { N\nS }");
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, pkg_id);
 
         assert!(
@@ -187,7 +187,7 @@ mod tests {
         let _f1 = db.file("main.baml", "class Config { key string }");
         let _f2 = db.file("ns_llm/models.baml", "class Response { text string }");
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let pkg_items = package_items(&db, pkg_id);
 
         // Response is only in ["llm"] namespace
@@ -225,7 +225,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.file("ns.baml", "class Widget {}");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert!(ns.types.contains_key(&Name::new("Widget")));
@@ -391,7 +391,7 @@ mod tests {
             "#,
         );
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let aliases = std::collections::HashMap::new();
 
         let class_ty = |class_name: &str| {
@@ -551,7 +551,7 @@ mod tests {
         let _file_a = db.file("a.baml", "class Foo { x int }");
         let _file_b = db.file("b.baml", "class Foo { y string }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         // First wins (a.baml < b.baml alphabetically)
@@ -585,7 +585,7 @@ mod tests {
             "function greet(z: bool) -> bool { client: \"openai/gpt-4o-mini\"\nprompt: `yo` }",
         );
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         // First wins
@@ -607,7 +607,7 @@ mod tests {
         let _file_a = db.file("a.baml", "class Thing { x int }");
         let _file_b = db.file("b.baml", "enum Thing { A\nB }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
@@ -635,7 +635,7 @@ mod tests {
         let file_c = db.file("c.baml", "type Shared = string");
         let file_d = db.file("d.baml", "function Shared() -> int { 1 }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
@@ -681,7 +681,7 @@ mod tests {
             r#"client Backend = openai.ResponsesClient.new(model = "gpt-4o-mini");"#,
         );
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
         assert_eq!(ns.conflicts().len(), 1);
         assert_eq!(
@@ -700,7 +700,7 @@ mod tests {
         let _type_file = db.file("ns_models/types.baml", "class Shared { value int }");
         let _value_file = db.file("ns_api/functions.baml", "function Shared() -> int { 1 }");
 
-        let package = PackageId::new(&db, Name::new("user"));
+        let package = db.workspace_root().unwrap();
         assert!(package_items(&db, package).conflicts().is_empty());
     }
 
@@ -711,7 +711,7 @@ mod tests {
         let _file_a = db.file("a.baml", "class Foo { x int }");
         let _file_b = db.file("b.baml", "class Bar { y string }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert!(ns.conflicts().is_empty());
@@ -724,7 +724,7 @@ mod tests {
         let _file_a = db.file("a.baml", "class Dup {}");
         let _file_b = db.file("b.baml", "class Dup {}");
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, pkg_id);
 
         assert_eq!(items.conflicts().len(), 1);
@@ -743,7 +743,7 @@ mod tests {
         let file_z = db.file("z.baml", "class Widget { z_field string }");
         let file_a = db.file("a.baml", "class Widget { a_field int }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
@@ -762,7 +762,7 @@ mod tests {
         let mut db = make_db();
         let _file = db.file("mixed.baml", "enum Foo { A\nB }\nclass Foo { x int }");
 
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns_id = NamespaceId::new(&db, db.workspace_root().unwrap(), vec![]);
         let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
@@ -1613,7 +1613,10 @@ function foo(user: User) -> string {
         let file = db.file("ns_llm/client.baml", "class Foo {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert_eq!(
             pkg_info.namespace_path,
             vec![Name::new("llm")],
@@ -1630,7 +1633,10 @@ function foo(user: User) -> string {
         let file = db.file("ns_llm/helpers/utils.baml", "class Bar {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert_eq!(
             pkg_info.namespace_path,
             vec![Name::new("llm")],
@@ -1647,7 +1653,10 @@ function foo(user: User) -> string {
         let file = db.file("ns_llm/ns_openai/client.baml", "class Baz {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert_eq!(
             pkg_info.namespace_path,
             vec![Name::new("llm"), Name::new("openai")],
@@ -1664,7 +1673,10 @@ function foo(user: User) -> string {
         let file = db.file("plain/folder/file.baml", "class Qux {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert!(
             pkg_info.namespace_path.is_empty(),
             "plain folders should not create namespaces"
@@ -1680,7 +1692,10 @@ function foo(user: User) -> string {
         let file = db.file("main.baml", "class Root {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert!(
             pkg_info.namespace_path.is_empty(),
             "flat files should have empty namespace_path"
@@ -1696,7 +1711,10 @@ function foo(user: User) -> string {
         let file = db.file("ns_123bad/file.baml", "class Bad {}");
 
         let pkg_info = file_package(&db, file);
-        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            baml_compiler2_hir::package::wire_name(&db, pkg_info.root).as_str(),
+            "user"
+        );
         assert!(
             pkg_info.namespace_path.is_empty(),
             "ns_ with non-identifier suffix should be skipped"
@@ -1710,7 +1728,7 @@ function foo(user: User) -> string {
         let _root_file = db.file("main.baml", "class Config { key string }");
         let _ns_file = db.file("ns_llm/models.baml", "class Response { text string }");
 
-        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let user_pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, user_pkg_id);
 
         // Root namespace should have Config but not Response
@@ -1734,7 +1752,7 @@ function foo(user: User) -> string {
         let _f1 = db.file("ns_llm/types.baml", "class Response { text string }");
         let _f2 = db.file("ns_http/types.baml", "class Response { status int }");
 
-        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let user_pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, user_pkg_id);
 
         // No conflicts — different namespaces
@@ -1766,7 +1784,7 @@ function foo(user: User) -> string {
         let _root = db.file("main.baml", "class foo { x int }");
         let _ns = db.file("ns_foo/stuff.baml", "class Bar { y string }");
 
-        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let user_pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, user_pkg_id);
 
         assert_eq!(
@@ -1787,7 +1805,7 @@ function foo(user: User) -> string {
         let _root = db.file("main.baml", "class Config { x int }");
         let _ns = db.file("ns_llm/stuff.baml", "class Model { y string }");
 
-        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let user_pkg_id = db.workspace_root().unwrap();
         let items = package_items(&db, user_pkg_id);
 
         assert!(
@@ -2077,7 +2095,7 @@ function foo(user: User) -> string {
 
         // First run: prime all caches.
         {
-            let pkg_id = PackageId::new(&db, Name::new("user"));
+            let pkg_id = db.workspace_root().unwrap();
             let _ = package_items(&db, pkg_id);
         }
 
@@ -2088,7 +2106,7 @@ function foo(user: User) -> string {
         // Second run: collect executed queries.
         events.lock().unwrap().clear();
         {
-            let pkg_id = PackageId::new(&db, Name::new("user"));
+            let pkg_id = db.workspace_root().unwrap();
             let _ = package_items(&db, pkg_id);
         }
 

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
-use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
+use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::wire_name};
 use baml_db::{Name, ProjectDatabase};
 use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
 
@@ -122,11 +122,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
     for source_file in compiler2_all_files(db) {
         let pkg_info = file_package::file_package(db, source_file);
-        let pkg: Name = pkg_info.package.clone();
+        let pkg: Name = wire_name(db, pkg_info.root);
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
 
-        let pkg_id = PackageId::new(db, pkg.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
 
         let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
             let mut aliases = HashMap::new();
@@ -427,7 +426,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), alias.name.clone());
 
                 let qtn = QualifiedTypeName::new(
-                    pkg_info.package.clone(),
+                    pkg.clone(),
                     pkg_info.namespace_path.clone(),
                     alias.name.clone(),
                 );

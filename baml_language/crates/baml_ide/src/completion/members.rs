@@ -105,6 +105,10 @@ fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -
     };
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-    let qtn = baml_type::QualifiedTypeName::new(pkg.package, pkg.namespace_path, data.name.clone());
+    let qtn = baml_type::QualifiedTypeName::new(
+        baml_compiler2_hir::package::wire_name(db, pkg.root),
+        pkg.namespace_path,
+        data.name.clone(),
+    );
     baml_type::type_kind::builtin_companion_of(&qtn).is_some()
 }

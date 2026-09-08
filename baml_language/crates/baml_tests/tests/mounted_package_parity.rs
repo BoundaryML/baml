@@ -28,7 +28,6 @@ use baml_compiler2_emit::{
     MountedPackageLinkError, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
     generate_project_bytecode_with_opt,
 };
-use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
@@ -163,7 +162,11 @@ struct LibraryArtifacts {
 fn library_artifacts() -> LibraryArtifacts {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = package_interface(&db, PackageId::new(&db, Name::new("app"))).clone();
+    let interface = package_interface(
+        &db,
+        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
+    )
+    .clone();
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize app package interface");
     let round_trip = baml_artifact::decode::<PackageInterface>(
@@ -192,8 +195,7 @@ fn source_db(user: &str) -> ProjectDatabase {
 fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new(ROOT));
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     db.file("main.baml", user);
     db
 }

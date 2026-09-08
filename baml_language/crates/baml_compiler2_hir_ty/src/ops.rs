@@ -160,7 +160,7 @@ pub fn operator_method<'db>(
 
     // The interface's own declaration: default body or required signature —
     // both are real function items on the interface.
-    let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("baml"));
+    let package = baml_compiler2_hir::package::root_by_wire_name(db, &Name::new("baml"))?;
     let Some(baml_compiler2_hir::contributions::Definition::Interface(iface)) =
         baml_compiler2_ppir::package_items(db, package)
             .lookup_type(&[Name::new("ops")], &Name::new(dispatch.interface))

@@ -8,7 +8,6 @@
 use std::cell::OnceCell;
 
 use baml_base::{Name, Span, TyAttr};
-use baml_compiler2_hir::package::PackageId;
 use baml_type::{
     ParamTy, Ty, TypeName,
     unify::{
@@ -56,9 +55,9 @@ pub struct CoherenceViolation {
 /// `pkg_id` are reported; dependency-internal conflicts are attributed to the
 /// dependency when *its* coherence is checked, so nothing is double-reported.
 #[salsa::tracked(returns(ref))]
-pub fn package_coherence_diagnostics<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn package_coherence_diagnostics(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> Vec<CoherenceViolation> {
     let mut own = package_impls_with_spans(db, pkg_id);
     // Sort by source position so the overlap attribution tracks a stable textual order
@@ -117,10 +116,10 @@ pub fn package_coherence_diagnostics<'db>(
 
 /// The impls of `pkg` the overlap check compares, each prepared once, drawn from
 /// the canonical `impl_data` substrate.
-fn package_impls_with_spans<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-) -> Vec<PreparedImpl<'db>> {
+fn package_impls_with_spans(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
+) -> Vec<PreparedImpl<'_>> {
     package_impl_locs(db, pkg_id)
         .iter()
         .filter_map(|&loc| {
@@ -192,7 +191,7 @@ impl<'db> PreparedImpl<'db> {
 /// specialization to rescue them). Distinct interfaces never conflict.
 fn impls_conflict<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     a: &PreparedImpl<'db>,
     b: &PreparedImpl<'db>,
     aliases: &std::collections::HashMap<TypeName, Ty>,
@@ -227,7 +226,7 @@ fn impls_conflict<'db>(
 /// pinned ground witness provably violates make the pair disjoint.
 fn impls_overlap<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     a: &ImplData<'db>,
     b: &ImplData<'db>,
     aliases: &std::collections::HashMap<TypeName, Ty>,
@@ -284,7 +283,7 @@ fn impls_overlap<'db>(
 )]
 fn bounds_hold_at_common_instance<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     rule: &ImplData<'db>,
     prefix: char,
     vars: &[ParamTy],

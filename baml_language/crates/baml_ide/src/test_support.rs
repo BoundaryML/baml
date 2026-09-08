@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_base::{Name, SourceFile, SourceRoot, SourceRootKind};
+use baml_base::{SourceFile, SourceRoot, SourceRootKind};
 use baml_db::{ProjectDatabase, SourceRootSpec};
 use text_size::TextSize;
 
@@ -18,11 +18,10 @@ pub(crate) trait TestDbExt {
 impl TestDbExt for ProjectDatabase {
     fn workspace(&mut self, root: &Path) -> SourceRoot {
         self.ensure_stdlib_sources();
-        self.add_source_root(SourceRootSpec {
-            path: root.to_path_buf(),
-            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: SourceRootKind::Workspace,
-        })
+        self.add_source_root(SourceRootSpec::new(
+            root.to_path_buf(),
+            SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"))
     }
 

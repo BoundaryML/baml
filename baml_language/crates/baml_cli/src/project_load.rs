@@ -2,11 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use baml_db::{
-    BAML_TOML, Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec,
+    BAML_TOML, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec,
     discover_baml_files, find_baml_project_root, project_search_dir, project_source_root,
     resolve_project_search_start,
 };
-use baml_type::RESERVED_USER_PACKAGE;
 
 use crate::reporter::Reporter;
 
@@ -369,13 +368,13 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     let manifest = if toml_path.exists() {
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("failed to read {}", toml_path.display()))?;
-        let manifest = crate::manifest::parse(&content)
+        let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-        crate::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::package_name(&manifest, &toml_path)?;
         // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
         // `nmae = ...`) warns rather than silently no-ops, but a
         // forward-compatible manifest still loads.
-        for warning in crate::manifest::unknown_field_warnings(&manifest) {
+        for warning in baml_db::manifest::unknown_field_warnings(&manifest) {
             crate::reporter::print_warning(format_args!("{warning}"));
         }
         Some(content)
@@ -416,11 +415,7 @@ pub(crate) fn workspace_db(root: &Path) -> (ProjectDatabase, SourceRoot) {
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let workspace = db
-        .add_source_root(SourceRootSpec {
-            path: root.to_path_buf(),
-            package: Name::new(RESERVED_USER_PACKAGE),
-            kind: SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(root, SourceRootKind::Workspace))
         .unwrap_or_else(|err| unreachable!("a fresh database accepts one workspace root: {err}"));
     (db, workspace)
 }
@@ -463,9 +458,9 @@ pub(crate) fn build_db_from_sources(
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
         .with_context(|| format!("failed to read {}", toml_path.display()))?;
-    let manifest = crate::manifest::parse(&content)
+    let manifest = baml_db::manifest::parse(&content)
         .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-    crate::manifest::package_name(&manifest, toml_path)
+    Ok(baml_db::manifest::package_name(&manifest, toml_path)?)
 }
 
 /// Resolve the project's name for output-artifact naming (used by `baml
@@ -756,7 +751,11 @@ mod tests {
         assert!(files[0].ends_with("loose.baml"));
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         // The builtin `baml` package is present even with no user files.
-        let baml_pkg = baml_db::baml_compiler2_hir::package::PackageId::new(&db, Name::new("baml"));
+        let baml_pkg = baml_db::baml_compiler2_hir::package::root_by_wire_name(
+            &db,
+            &baml_db::Name::new("baml"),
+        )
+        .unwrap();
         assert!(
             !baml_db::baml_compiler2_hir::package::package_items(&db, baml_pkg)
                 .namespaces

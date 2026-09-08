@@ -114,13 +114,13 @@ pub fn suggest_similar_kinded(
     name: &str,
     limit: usize,
 ) -> Vec<(String, Option<baml_ide::DefinitionKind>)> {
-    use baml_compiler2_hir::package::{PackageId, package_items};
+    use baml_compiler2_hir::package::{package_items, root_by_wire_name};
 
     type Kind = Option<baml_ide::DefinitionKind>;
     let mut all_paths: Vec<(String, Kind)> = Vec::new();
 
     // User package: items (kinded) + namespace dotted paths (no kind).
-    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
+    let user_pkg = user_package(db);
     for entry in baml_ide::list_package_items(db, user_pkg) {
         all_paths.push((entry.fqn(), Some(entry.kind)));
     }
@@ -141,7 +141,9 @@ pub fn suggest_similar_kinded(
     // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_ide::non_workspace_package_names(db) {
         all_paths.push((pkg_name.as_str().to_string(), None));
-        let pkg = PackageId::new(db, pkg_name.clone());
+        let Some(pkg) = root_by_wire_name(db, &pkg_name) else {
+            continue;
+        };
         for entry in baml_ide::list_package_items(db, pkg) {
             all_paths.push((entry.fqn(), Some(entry.kind)));
         }
@@ -212,14 +214,20 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
 /// Handles the package-name prefix routing (user vs. builtin packages) and
 /// delegates within-package path resolution to `baml_ide::resolve_target`.
 ///
+/// The user's package: CLI databases always hold exactly one workspace root
+/// (`project_load::workspace_db` is their single constructor).
+fn user_package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    baml_compiler2_hir::package::sole_workspace_root(db)
+        .unwrap_or_else(|| unreachable!("CLI databases are built by `workspace_db`"))
+}
+
 /// - Empty string → `Package(user)`
 /// - `"baml"` → `Package(baml)`
 /// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
 /// - `"foo.bar.Baz"` → `resolve_target(user_pkg, "foo.bar.Baz")` → `Item`
 pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTarget<'db>> {
     if name.is_empty() {
-        let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-        return Some(ResolvedTarget::Package(user_pkg));
+        return Some(ResolvedTarget::Package(user_package(db)));
     }
 
     // Lowercase primitive/keyword aliases resolve to their builtin `baml`
@@ -239,8 +247,7 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
 
     // Force user-package resolution with `root.` prefix.
     if let Some(rest) = name.strip_prefix("root.") {
-        let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-        return baml_ide::resolve_target(db, user_pkg, rest);
+        return baml_ide::resolve_target(db, user_package(db), rest);
     }
 
     let (first, rest) = name.split_once('.').unwrap_or((name, ""));
@@ -248,7 +255,7 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     // Builtin package shadows user namespace with same name.
     let builtin_packages = baml_ide::non_workspace_package_names(db);
     if builtin_packages.iter().any(|pkg| pkg.as_str() == first) {
-        let pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new(first));
+        let pkg = baml_compiler2_hir::package::root_by_wire_name(db, &baml_db::Name::new(first))?;
         return if rest.is_empty() {
             Some(ResolvedTarget::Package(pkg))
         } else {
@@ -257,8 +264,7 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     }
 
     // User package.
-    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-    if let Some(target) = baml_ide::resolve_target(db, user_pkg, name) {
+    if let Some(target) = baml_ide::resolve_target(db, user_package(db), name) {
         return Some(target);
     }
 
@@ -277,7 +283,7 @@ fn resolve_unqualified_builtin_member<'db>(
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     let (class_name, _) = name.split_once('.')?;
-    let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::root_by_wire_name(db, &baml_db::Name::new("baml"))?;
     let baml_items = baml_compiler2_hir::package::package_items(db, baml_pkg);
     let root_ns: Vec<baml_db::Name> = Vec::new();
     let class_name = baml_db::Name::new(class_name);
@@ -315,11 +321,11 @@ impl DescribeArgs {
 
         // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
-            let mut packages = vec![baml_compiler2_hir::package::sole_workspace_package(&db)];
+            let mut packages = vec![user_package(&db)];
             packages.extend(
                 baml_ide::non_workspace_package_names(&db)
                     .into_iter()
-                    .map(|pkg| baml_compiler2_hir::package::PackageId::new(&db, pkg)),
+                    .filter_map(|pkg| baml_compiler2_hir::package::root_by_wire_name(&db, &pkg)),
             );
             let hits = baml_ide::search_ranked(&db, &packages, name, usize::from(self.limit));
             if self.json {
@@ -404,8 +410,7 @@ impl DescribeArgs {
                 let pkg_name = name.split('.').next().unwrap_or(name);
                 let builtin_names = baml_ide::non_workspace_package_names(&db);
                 if builtin_names.iter().any(|pkg| pkg.as_str() == pkg_name) {
-                    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(&db);
-                    if baml_ide::resolve_target(&db, user_pkg, pkg_name).is_some() {
+                    if baml_ide::resolve_target(&db, user_package(&db), pkg_name).is_some() {
                         eprintln!();
                         eprintln!(
                             "note: your project also defines `{pkg_name}`. \

@@ -796,7 +796,7 @@ impl PlaygroundSeam {
                     .roots()
                     .workspace_roots()
                     .find(|entry| entry.path == root_path)?
-                    .package
+                    .display_name
                     .to_string();
                 let ticket = runtimes
                     .existing(&root_path)?

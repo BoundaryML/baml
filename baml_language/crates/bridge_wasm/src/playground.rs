@@ -624,7 +624,7 @@ pub(crate) fn workspace_root(state: &GlobalState) -> Option<(String, String)> {
         snap.roots().workspace_roots().next().map(|entry| {
             (
                 entry.path.to_string_lossy().into_owned(),
-                entry.package.to_string(),
+                entry.display_name.to_string(),
             )
         })
     })

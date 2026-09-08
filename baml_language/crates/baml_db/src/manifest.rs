@@ -1,9 +1,10 @@
 //! Typed deserialization of the project manifest, `baml.toml`.
 //!
-//! Historically the manifest was poked at as a raw `toml::Table` in two
-//! scattered places — `project_load.rs` for `[package]` and
-//! `run_command.rs` for `[scripts]`. This module replaces that with a
-//! single set of serde structs so every consumer parses the same way.
+//! One set of serde structs for every consumer — the CLI (`[scripts]`,
+//! `[generator.*]`, `[test]`), the project loaders (`[package]`,
+//! `[dependencies]`), and the stdlib installer, which reads the embedded
+//! stdlib packages' own manifests to build their dependency graph. Parsing
+//! the same way everywhere is what keeps "what a package is" single-sourced.
 //!
 //! Design notes:
 //! - **Warn on unknown fields, don't deny.** serde has no built-in "warn",
@@ -14,9 +15,8 @@
 //!   catch-all is the middle ground. (`flatten` and `deny_unknown_fields`
 //!   are mutually exclusive anyway.)
 //! - **`toml::Spanned` for diagnostics.** Generator field values are wrapped
-//!   in `Spanned<String>` so codegen validation (`generate.rs`) can point a
-//!   diagnostic at the exact byte range of an offending value, matching the
-//!   per-item span fidelity the old HIR source map gave us.
+//!   in `Spanned<String>` so codegen validation can point a diagnostic at
+//!   the exact byte range of an offending value.
 
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -24,12 +24,17 @@ use toml::Spanned;
 
 /// The whole `baml.toml`.
 #[derive(Debug, Deserialize)]
-pub(crate) struct BamlToml {
+pub struct BamlToml {
     /// `[package]`. Optional at the type level so the lenient
     /// introspection / `[scripts]` paths can parse a manifest that hasn't
     /// declared a package; the strict loader still requires it (see
     /// [`package_name`]).
     pub package: Option<Package>,
+
+    /// `[dependencies]` — the packages this package reaches, keyed by the
+    /// name it spells them with. Cargo's shape: the key is the edge name.
+    #[serde(default)]
+    pub dependencies: IndexMap<String, DependencySpec>,
 
     /// `[scripts]` — cargo-style aliases for `baml run`.
     #[serde(default)]
@@ -52,7 +57,7 @@ pub(crate) struct BamlToml {
 /// Test profiles deliberately store argv rather than duplicating the test
 /// command's option schema. They are parsed by clap at invocation time.
 #[derive(Debug, Default, Deserialize)]
-pub(crate) struct TestManifest {
+pub struct TestManifest {
     /// Profile used by bare `baml test`. No profile is applied when absent.
     pub default: Option<String>,
 
@@ -65,7 +70,7 @@ pub(crate) struct TestManifest {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct TestProfileManifest {
+pub struct TestProfileManifest {
     /// Argument vector passed through the ordinary `baml test` parser. This is
     /// intentionally an array, never a shell command string.
     #[serde(default)]
@@ -86,10 +91,17 @@ pub(crate) struct TestProfileManifest {
 const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain"];
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct Package {
+pub struct Package {
     /// `[package].name`. Optional here so a missing name produces our own
     /// guidance-rich error rather than a bare serde "missing field".
     pub name: Option<String>,
+
+    /// `[package].prelude` — stdlib-only: the package is implicitly reachable
+    /// from every package, under its own name, with no `[dependencies]`
+    /// entry. The installer honors it for embedded stdlib manifests only; a
+    /// user manifest setting it is warned about and ignored.
+    #[serde(default)]
+    pub prelude: bool,
 
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
@@ -100,7 +112,7 @@ pub(crate) struct Package {
 /// spaces).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum Script {
+pub enum Script {
     /// `dev = "-f main"` — split on whitespace.
     Line(String),
     /// `dev = ["-f", "main"]` — each element is one argument.
@@ -117,12 +129,24 @@ impl Script {
     }
 }
 
+/// One `[dependencies]` entry.
+///
+/// Only path dependencies exist: `x = { path = "../x" }`, resolved relative
+/// to the directory holding this manifest. The edge name is the table key.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct DependencySpec {
+    pub path: String,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
 /// `[generator.<name>]` — code-generation configuration. Values are kept as
 /// spanned values here; validation (and the spans for any diagnostics) is
 /// performed by `generate.rs`, so non-codegen tooling never needs to know
 /// codegen rules.
 #[derive(Debug, Deserialize)]
-pub(crate) struct GeneratorManifest {
+pub struct GeneratorManifest {
     /// e.g. `"python/pydantic"`, `"typescript/node"`, `"go"`. Required for codegen;
     /// `Option` so a missing value yields a precise diagnostic rather than
     /// aborting the whole parse.
@@ -149,32 +173,46 @@ pub(crate) struct GeneratorManifest {
 }
 
 /// Parse `baml.toml` text into the typed manifest.
-pub(crate) fn parse(content: &str) -> Result<BamlToml, toml::de::Error> {
+pub fn parse(content: &str) -> Result<BamlToml, toml::de::Error> {
     toml::from_str(content)
+}
+
+/// Why a manifest's `[package].name` could not be resolved.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ManifestError {
+    #[error(
+        "{path}: missing `[package]` table.\nAdd:\n\n    [package]\n    name = \"<your-project-name>\"\n"
+    )]
+    MissingPackageTable { path: std::path::PathBuf },
+    #[error("{path}: `[package]` is missing `name = \"<your-project-name>\"`.")]
+    MissingPackageName { path: std::path::PathBuf },
+    #[error("{path}: `[package].name` cannot be empty.")]
+    EmptyPackageName { path: std::path::PathBuf },
 }
 
 /// Resolve and validate `[package].name`, reproducing the Cargo-style rule
 /// that a manifest, once written, must name its package. Returns the name so
 /// `baml pack` can reuse it for artifact naming.
-pub(crate) fn package_name(
+pub fn package_name(
     manifest: &BamlToml,
     toml_path: &std::path::Path,
-) -> anyhow::Result<String> {
-    let package = manifest.package.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "{}: missing `[package]` table.\n\
-             Add:\n\n    [package]\n    name = \"<your-project-name>\"\n",
-            toml_path.display()
-        )
-    })?;
-    let name = package.name.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "{}: `[package]` is missing `name = \"<your-project-name>\"`.",
-            toml_path.display()
-        )
-    })?;
+) -> Result<String, ManifestError> {
+    let package = manifest
+        .package
+        .as_ref()
+        .ok_or_else(|| ManifestError::MissingPackageTable {
+            path: toml_path.to_path_buf(),
+        })?;
+    let name = package
+        .name
+        .as_ref()
+        .ok_or_else(|| ManifestError::MissingPackageName {
+            path: toml_path.to_path_buf(),
+        })?;
     if name.trim().is_empty() {
-        anyhow::bail!("{}: `[package].name` cannot be empty.", toml_path.display());
+        return Err(ManifestError::EmptyPackageName {
+            path: toml_path.to_path_buf(),
+        });
     }
     Ok(name.clone())
 }
@@ -183,7 +221,7 @@ pub(crate) fn package_name(
 /// (`[scriptz]`, `nmae = ...`, `outpt_type = ...`) surfaces instead of being
 /// silently ignored. Each warning is non-fatal — forward-compatible
 /// manifests must still load.
-pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
+pub fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
     let mut warnings = Vec::new();
     for key in manifest.unknown.keys() {
         if KNOWN_UNHANDLED_TOP_LEVEL_KEYS.contains(&key.as_str()) {
@@ -196,6 +234,13 @@ pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
     if let Some(pkg) = &manifest.package {
         for key in pkg.unknown.keys() {
             warnings.push(format!("ignoring unrecognized key `{key}` in [package]"));
+        }
+    }
+    for (name, dependency) in &manifest.dependencies {
+        for key in dependency.unknown.keys() {
+            warnings.push(format!(
+                "ignoring unrecognized key `{key}` in [dependencies.{name}]"
+            ));
         }
     }
     for (name, generator) in &manifest.generator {
@@ -227,6 +272,17 @@ mod tests {
         let m = parse("[package]\nname = \"app\"\n[scripts]\ndev = \"-f main\"\n").unwrap();
         assert_eq!(m.package.unwrap().name.as_deref(), Some("app"));
         assert_eq!(m.scripts["dev"].tokens(), vec!["-f", "main"]);
+    }
+
+    #[test]
+    fn parses_path_dependencies_by_edge_name() {
+        let m = parse(
+            "[package]\nname = \"app\"\nprelude = true\n\
+             [dependencies]\nutil = { path = \"../util\" }\n",
+        )
+        .unwrap();
+        assert!(m.package.as_ref().unwrap().prelude);
+        assert_eq!(m.dependencies["util"].path, "../util");
     }
 
     #[test]

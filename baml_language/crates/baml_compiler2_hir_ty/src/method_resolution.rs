@@ -1682,7 +1682,7 @@ fn external_interface_callable(
     interface: &baml_type::QualifiedTypeName,
     name: &Name,
 ) -> Option<std::sync::Arc<crate::callable::ExternalCallable>> {
-    let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
+    let package = baml_compiler2_hir::package::root_by_wire_name(db, interface.package())?;
     let row = crate::package_interface::package_interface(db, package)
         .lookup_type(interface.namespace(), interface.name())?;
     let crate::package_interface::ExportedType::Interface {

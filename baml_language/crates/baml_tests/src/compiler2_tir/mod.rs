@@ -973,14 +973,12 @@ pub(crate) mod support {
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::PackageId;
-
         let mut output = String::new();
         let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_id = pkg_info.root;
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
@@ -1093,7 +1091,7 @@ pub(crate) mod support {
                                 writeln!(output, "}}").ok();
                                 // Render class cycle diagnostic if applicable
                                 let qn = baml_type::QualifiedTypeName::new(
-                                    pkg_info.package.clone(),
+                                    baml_compiler2_hir::package::wire_name(db, pkg_info.root),
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
                                 );
@@ -1135,7 +1133,7 @@ pub(crate) mod support {
                                 }
                                 // Render cycle diagnostic if this alias is in an invalid cycle
                                 let qn = baml_type::QualifiedTypeName::new(
-                                    pkg_info.package.clone(),
+                                    baml_compiler2_hir::package::wire_name(db, pkg_info.root),
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
                                 );
@@ -2168,12 +2166,13 @@ pub(crate) mod support {
 
         let mut output = String::new();
         let pkg_info = file_package(db, file);
+        let package = baml_compiler2_hir::package::wire_name(db, pkg_info.root);
         let prefix = if pkg_info.namespace_path.is_empty() {
-            format!("{}.", pkg_info.package)
+            format!("{package}.")
         } else {
             format!(
                 "{}.{}.",
-                pkg_info.package,
+                package,
                 pkg_info
                     .namespace_path
                     .iter()

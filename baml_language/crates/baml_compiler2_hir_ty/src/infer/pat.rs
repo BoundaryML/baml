@@ -1643,10 +1643,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
         };
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(
-            db,
-            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
-        );
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
         // The class's implements block for THIS interface supplies the
         // `field as class_field` links (default: the same name).
         let block = class_data.implements.iter().find(|block| {

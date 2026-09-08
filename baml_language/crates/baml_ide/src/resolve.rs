@@ -487,7 +487,7 @@ pub fn type_qualifier_at<'db>(
             .map(Name::new)
             .collect();
         let (name, namespace) = path.split_last()?;
-        let baml = baml_compiler2_hir::package::PackageId::new(db, Name::new("baml"));
+        let baml = baml_compiler2_hir::package::root_by_wire_name(db, &Name::new("baml"))?;
         return baml_compiler2_ppir::package_items(db, baml).lookup_type(namespace, name);
     }
 
@@ -978,9 +978,10 @@ pub(crate) fn template_driver_at(
             .as_ref()
             .is_some_and(|spans| hit(spans.literal))
     }) {
-        let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
-        if let Some(Definition::Function(func)) =
-            baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt"))
+        if let Some(package) = baml_compiler2_hir::package::root_by_wire_name(db, &Name::new("ai"))
+            && let Some(Definition::Function(func)) =
+                baml_compiler2_ppir::package_items(db, package)
+                    .lookup_value(&[], &Name::new("prompt"))
         {
             return Some(func);
         }
@@ -1046,8 +1047,9 @@ fn llm_prompt_position_at(
         return None;
     }
 
-    let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
-    match baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt")) {
+    match baml_compiler2_hir::package::root_by_wire_name(db, &Name::new("ai")).and_then(|package| {
+        baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt"))
+    }) {
         Some(Definition::Function(func)) => Some(TemplatePosition::Driver(func)),
         _ => Some(TemplatePosition::DefaultText),
     }
@@ -1248,7 +1250,7 @@ fn declaration_name_at(
         let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
         let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).resolved()?;
         let interface = &facts.interface.name;
-        let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
+        let package = baml_compiler2_hir::package::root_by_wire_name(db, interface.package())?;
         let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)
             .lookup_type(interface.namespace(), interface.name())
         else {
@@ -1448,7 +1450,7 @@ fn constructor_field_at<'db>(
             return None;
         };
 
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
+        let pkg_id = baml_compiler2_hir::package::root_by_wire_name(db, qtn.package())?;
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
         let def = pkg_items.lookup_type(qtn.namespace(), qtn.name())?;
         let Definition::Class(class) = def else {

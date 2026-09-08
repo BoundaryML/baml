@@ -616,7 +616,7 @@ impl TestArgs {
         project_root: &std::path::Path,
     ) -> Result<TestInvocation> {
         let manifest = manifest_text
-            .map(crate::manifest::parse)
+            .map(baml_db::manifest::parse)
             .transpose()
             .with_context(|| {
                 format!(

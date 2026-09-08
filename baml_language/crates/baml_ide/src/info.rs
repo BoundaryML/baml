@@ -814,7 +814,7 @@ fn keyword_type_info(keyword: &str) -> Option<TypeInfo> {
 /// names.
 fn owning_path(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> String {
     let pkg = baml_compiler2_hir::file_package::file_package(db, file);
-    let mut path = pkg.package.as_str().to_string();
+    let mut path = baml_compiler2_hir::package::wire_name(db, pkg.root).to_string();
     for segment in &pkg.namespace_path {
         path.push('.');
         path.push_str(segment.as_str());
@@ -1043,7 +1043,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
         Definition::Function(func_loc) => {
             let file = func_loc.file(db);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let pkg_id = pkg_info.root;
             let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
             let data = item_data::function_data(db, func_loc);
 
@@ -1575,7 +1575,7 @@ pub(crate) fn collect_class_methods_impl(
     // which lowers class methods 1:1 with `class_data.methods` (same order,
     // including auto-derived entries), so positional indices line up.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = pkg_info.root;
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let exported = iface
         .lookup_type(&pkg_info.namespace_path, &class_data.name)
@@ -1640,7 +1640,7 @@ pub(crate) fn class_impl_methods<'db>(
 )> {
     let file = class_loc.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
 
     let mut out = Vec::new();

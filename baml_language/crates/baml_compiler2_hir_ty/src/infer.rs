@@ -5300,14 +5300,16 @@ impl<'db> InferenceContext<'db> {
             | crate::callable::ExternalCallTarget::Method { package, .. } => package,
             crate::callable::ExternalCallTarget::Interface { interface, .. } => interface.package(),
         };
-        let trusted_callsite_lowering =
-            matches!(
-                external.builtin_kind,
-                Some(
-                    baml_compiler2_ast::BuiltinKind::Intrinsic
-                        | baml_compiler2_ast::BuiltinKind::AwaitAny
-                )
-            ) && baml_compiler2_hir::package::is_precompiled_package(self.db, package);
+        let trusted_callsite_lowering = matches!(
+            external.builtin_kind,
+            Some(
+                baml_compiler2_ast::BuiltinKind::Intrinsic
+                    | baml_compiler2_ast::BuiltinKind::AwaitAny
+            )
+        ) && baml_compiler2_hir::package::root_by_wire_name(
+            self.db, package,
+        )
+        .is_some_and(|root| baml_compiler2_hir::package::is_precompiled_stdlib(self.db, root));
         if external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
             && !trusted_callsite_lowering
         {
@@ -5452,7 +5454,7 @@ impl<'db> InferenceContext<'db> {
         };
         let package = baml_compiler2_hir::file_package::file_package(self.db, func.file(self.db));
         let data = baml_compiler2_ppir::item_data::function_data(self.db, func);
-        if package.package.as_str() != "baml"
+        if baml_compiler2_hir::package::wire_name(self.db, package.root).as_str() != "baml"
             || !package
                 .namespace_path
                 .iter()
@@ -9606,7 +9608,7 @@ impl<'db> InferenceContext<'db> {
         let function_data = baml_compiler2_ppir::item_data::function_data(self.db, function);
         let package = baml_compiler2_hir::file_package::file_package(self.db, class.file(self.db));
         let is_output_format = function_data.name.as_str() == "output_format"
-            && package.package.as_str() == "ai"
+            && baml_compiler2_hir::package::wire_name(self.db, package.root).as_str() == "ai"
             && match class_data.name.as_str() {
                 "Context" => package.namespace_path.is_empty(),
                 "SpecCtx" => package
@@ -9971,10 +9973,7 @@ impl<'db> InferenceContext<'db> {
         let db = self.db;
         let data = baml_compiler2_ppir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(
-            db,
-            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
-        );
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
         for block in &data.implements {
             let Some(interface) = crate::interfaces::resolve_ref_to_interface(
                 db,
@@ -13234,7 +13233,7 @@ impl<'db> InferenceContext<'db> {
         }
         let file = self.owner_file?;
         let info = baml_compiler2_hir::file_package::file_package(self.db, file);
-        let pkg = baml_compiler2_hir::package::PackageId::new(self.db, info.package);
+        let pkg = info.root;
         let aliases = self.overlap_alias_map();
         crate::interfaces::first_failing_impl_bound(
             self.db,
@@ -13286,7 +13285,7 @@ impl<'db> InferenceContext<'db> {
                 return aliases;
             };
             let info = baml_compiler2_hir::file_package::file_package(self.db, file);
-            let pkg = baml_compiler2_hir::package::PackageId::new(self.db, info.package);
+            let pkg = info.root;
             let mut packages = vec![pkg];
             packages.extend(baml_compiler2_hir::package::package_dependency_closure(
                 self.db, pkg,
@@ -13303,7 +13302,7 @@ impl<'db> InferenceContext<'db> {
                             loc.file(self.db),
                         );
                         let qtn = baml_type::QualifiedTypeName::new(
-                            def_info.package,
+                            baml_compiler2_hir::package::wire_name(self.db, def_info.root),
                             def_info.namespace_path,
                             name.clone(),
                         );

@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
-    package::PackageId,
+    package::{is_precompiled_stdlib, is_served_from_interface, wire_name},
 };
 use baml_compiler2_mir::{
     BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
@@ -54,10 +54,9 @@ fn build_alias_caches(
     let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        caches.entry(pkg_info.package.clone()).or_insert_with(|| {
-            let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            baml_compiler2_mir::resolved_aliases_for_package(db, pkg_id)
-        });
+        caches
+            .entry(wire_name(db, pkg_info.root))
+            .or_insert_with(|| baml_compiler2_mir::resolved_aliases_for_package(db, pkg_info.root));
     }
     caches
 }
@@ -368,25 +367,27 @@ fn capture_package_exports(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
 ) -> indexmap::IndexMap<Name, PackageExportArtifact> {
-    let package_names: std::collections::BTreeSet<_> = all_files
+    // Keyed by wire name so the artifact map's order is name order.
+    let packages: std::collections::BTreeMap<Name, baml_base::SourceRoot> = all_files
         .iter()
-        .map(|file| file_package(db, *file).package)
+        .map(|file| {
+            let root = file_package(db, *file).root;
+            (wire_name(db, root), root)
+        })
         .collect();
-    package_names
+    packages
         .into_iter()
-        .map(|package_name| {
-            let package_id = PackageId::new(db, package_name.clone());
+        .map(|(package_name, package)| {
             let interface =
-                baml_compiler2_hir_ty::package_interface::package_interface(db, package_id);
+                baml_compiler2_hir_ty::package_interface::package_interface(db, package);
             // Runtime compilers already own the exact stdlib sources, so only
             // mountable packages need to carry a serialized compiler surface.
-            let interface_blob =
-                if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
-                    Vec::new()
-                } else {
-                    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
-                        .expect("PackageInterface artifact serialization into Vec is infallible")
-                };
+            let interface_blob = if package.kind(db) == baml_base::SourceRootKind::Stdlib {
+                Vec::new()
+            } else {
+                baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+                    .expect("PackageInterface artifact serialization into Vec is infallible")
+            };
             let functions = interface
                 .functions
                 .iter()
@@ -733,9 +734,9 @@ fn build_packages<'db>(
     // mounted artifact before walking the consumer's source blocks: otherwise
     // `class Local { implements dep.I {} }` would prove membership at check
     // time but emit neither adopted defaults nor virtual-field links.
-    for package in baml_compiler2_hir::package::external_package_names(db) {
+    for &package_root in db.source_roots().roots(db) {
         let Some(interface) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package_root)
         else {
             continue;
         };
@@ -844,9 +845,8 @@ fn build_packages<'db>(
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let resolved = &alias_caches[&pkg_info.package];
+        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let resolved = &alias_caches[&wire_name(db, pkg_info.root)];
         // Lower a type ref (in the owner's `TypeRefStore`) in this file's
         // namespace, discarding diagnostics (these targets were already validated
         // upstream). `bounds` carries the enclosing impl's/class's generic-param
@@ -1088,7 +1088,7 @@ fn build_packages<'db>(
                 continue;
             };
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(wire_name(db, pkg_info.root))
                 .or_default()
                 .impl_rules
                 .entry(interface_head)
@@ -1807,7 +1807,8 @@ pub fn reuse_throws_mismatches(
             continue;
         }
         let pkg = file_package(db, file);
-        if let Err(detail) = spliced_throws_match(db, file, &previous, &alias_caches[&pkg.package])
+        if let Err(detail) =
+            spliced_throws_match(db, file, &previous, &alias_caches[&wire_name(db, pkg.root)])
         {
             mismatches.insert(rel, detail);
         }
@@ -1911,7 +1912,7 @@ fn decompose_units_after_prefix<'db>(
         let rel = relative_source_path(db, *file);
         rel_to_file.insert(rel.clone(), fi);
         unit_source.push(rel);
-        unit_package.push(file_package(db, *file).package);
+        unit_package.push(wire_name(db, file_package(db, *file).root));
     }
 
     // Ordered owners for the pass-major definition buckets: the k-th class /
@@ -2463,7 +2464,7 @@ fn decompose_units_after_prefix<'db>(
         }
         let mut rule_owners: HashMap<usize, Vec<RuleOwner>> = HashMap::new();
         for (fi, file) in all_files.iter().enumerate() {
-            let resolved = &alias_caches[&file_package(db, *file).package];
+            let resolved = &alias_caches[&wire_name(db, file_package(db, *file).root)];
             for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, *file) {
                 let Some(target) = impl_rule_target(db, *file, impl_loc, resolved) else {
                     continue;
@@ -3264,7 +3265,11 @@ fn generate_impl<'db>(
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
     let mut all_files = compiler2_all_files(db);
     let builtin_count = if base.is_some()
-        && !baml_compiler2_hir::package::precompiled_package_names(db).is_empty()
+        && db
+            .source_roots()
+            .roots(db)
+            .iter()
+            .any(|&root| is_precompiled_stdlib(db, root))
     {
         // A source-less stdlib database has no builtin sources to skip. Any
         // `<builtin>/…` files it does hold are link stubs for ordinary runtime
@@ -3412,7 +3417,11 @@ fn generate_impl<'db>(
     // their compiled package records from the linked prefix after the ordinary
     // source-backed package pass rebuilds the consumer metadata.
     if let Some(base) = base {
-        for pkg_name in baml_compiler2_hir::package::external_package_names(db) {
+        for &root in db.source_roots().roots(db) {
+            if !is_served_from_interface(db, root) {
+                continue;
+            }
+            let pkg_name = wire_name(db, root);
             let Some(base_pkg) = base.packages.get(&pkg_name) else {
                 continue;
             };
@@ -3740,9 +3749,8 @@ fn emit_file_group<'db>(
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let cache = &alias_caches[&pkg_info.package];
+        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let cache = &alias_caches[&wire_name(db, pkg_info.root)];
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
             let store = &class.type_refs;
@@ -3753,7 +3761,7 @@ fn emit_file_group<'db>(
             // byte-identical output or `Switch`/`JumpTable` dispatch silently
             // mismatches; sharing the one renderer is what pins them together.
             let fq_name = baml_type::QualifiedTypeName::new(
-                pkg_info.package.clone(),
+                wire_name(db, pkg_info.root),
                 pkg_info.namespace_path.clone(),
                 class.name.clone(),
             )
@@ -3871,7 +3879,7 @@ fn emit_file_group<'db>(
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(wire_name(db, pkg_info.root))
                 .or_default()
                 .classes
                 .insert(
@@ -3882,23 +3890,17 @@ fn emit_file_group<'db>(
                     ObjectIndex::from_raw(class_obj_idx),
                 );
             classes.insert(fq_name.clone(), field_indices);
-            // MIR TypeName display for user-defined classes omits the `user.`
-            // package prefix in diagnostics/snapshots. Register the same key
-            // so emit-time type checks can do a direct display-name lookup.
-            let display_name = if pkg_info.package.as_str() == "user" {
-                if pkg_info.namespace_path.is_empty() {
-                    class.name.to_string()
-                } else {
-                    let ns: Vec<&str> = pkg_info
-                        .namespace_path
-                        .iter()
-                        .map(baml_base::Name::as_str)
-                        .collect();
-                    format!("{}.{}", ns.join("."), class.name)
-                }
-            } else {
-                fq_name.clone()
-            };
+            // MIR TypeName display for user-defined classes omits the local
+            // package prefix in diagnostics/snapshots (`display_name`). Register
+            // the same key so emit-time type checks can do a direct
+            // display-name lookup.
+            let display_name = baml_type::QualifiedTypeName::new(
+                wire_name(db, pkg_info.root),
+                pkg_info.namespace_path.clone(),
+                class.name.clone(),
+            )
+            .display_name()
+            .to_string();
             class_object_indices
                 .entry(display_name.clone())
                 .or_insert(class_obj_idx);
@@ -3935,7 +3937,7 @@ fn emit_file_group<'db>(
             // fully-qualified name construction identical everywhere so the two
             // never drift.
             let fq_name = baml_type::QualifiedTypeName::new(
-                pkg_info.package.clone(),
+                wire_name(db, pkg_info.root),
                 pkg_info.namespace_path.clone(),
                 enm.name.clone(),
             )
@@ -3971,7 +3973,7 @@ fn emit_file_group<'db>(
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(wire_name(db, pkg_info.root))
                 .or_default()
                 .enums
                 .insert(
@@ -3994,7 +3996,7 @@ fn emit_file_group<'db>(
     // package's impl rules below.
     for file in files {
         let pkg_info = file_package(db, *file);
-        let resolved = &alias_caches[&pkg_info.package];
+        let resolved = &alias_caches[&wire_name(db, pkg_info.root)];
         for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, *file) {
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             let iface_tn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -4010,7 +4012,7 @@ fn emit_file_group<'db>(
             let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
             interface_object_indices.insert(iface_tn, iface_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(wire_name(db, pkg_info.root))
                 .or_default()
                 .interfaces
                 .insert(
@@ -4051,7 +4053,7 @@ fn emit_file_group<'db>(
     let mut emitted_aliases = HashSet::new();
     for file in files {
         let pkg_info = file_package(db, *file);
-        let cache = &alias_caches[&pkg_info.package];
+        let cache = &alias_caches[&wire_name(db, pkg_info.root)];
         for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
             let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -4176,7 +4178,7 @@ fn emit_file_group<'db>(
                     program.let_global_indices.insert(fq_name.clone(), slot);
                 }
                 pkg_lets
-                    .entry(pkg_info.package.to_string())
+                    .entry(wire_name(db, pkg_info.root).to_string())
                     .or_default()
                     .push((fq_name, let_loc, *file));
             }
@@ -4279,7 +4281,7 @@ fn emit_file_group<'db>(
                 if fq_name.contains("$init_test_") {
                     if let Some(&global_slot) = program.function_global_indices.get(&fq_name) {
                         pkg_init_tests
-                            .entry(pkg_info.package.to_string())
+                            .entry(wire_name(db, pkg_info.root).to_string())
                             .or_default()
                             .push((fq_name, global_slot));
                     }
@@ -4423,7 +4425,7 @@ fn compute_throws_type(
         attr: baml_type::TyAttr::default(),
     };
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
     let key = baml_compiler2_hir_ty::package_interface::throw_set_key(
@@ -4576,7 +4578,7 @@ fn compute_function_metadata<'db>(
         .collect();
 
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     // The item this method belongs to, via the firewall (mirrors MIR's enclosing
@@ -4962,7 +4964,7 @@ fn topological_sort_packages(
 ) -> Vec<baml_base::Name> {
     use std::collections::{HashMap, VecDeque};
 
-    use baml_compiler2_hir::package::{PackageId, package_dependencies};
+    use baml_compiler2_hir::package::root_by_wire_name;
 
     let pkg_set: std::collections::HashSet<&baml_base::Name> = pkg_names.iter().collect();
     let mut in_degree: HashMap<baml_base::Name, usize> = HashMap::new();
@@ -4970,9 +4972,11 @@ fn topological_sort_packages(
 
     for name in pkg_names {
         in_degree.entry(name.clone()).or_insert(0);
-        let pkg_id = PackageId::new(db, name.clone());
-        for dep_id in package_dependencies(db, pkg_id) {
-            let dep_name = dep_id.name(db).clone();
+        let Some(root) = root_by_wire_name(db, name) else {
+            continue;
+        };
+        for dependency in root.dependencies(db) {
+            let dep_name = wire_name(db, dependency.root);
             if pkg_set.contains(&dep_name) {
                 *in_degree.entry(name.clone()).or_insert(0) += 1;
                 dependents.entry(dep_name).or_default().push(name.clone());
@@ -5350,7 +5354,7 @@ fn emit_functions_serial<'db>(
         let line_starts = build_line_starts(file.text(db));
         let pkg_info_pass4 = file_package(db, *file);
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
-        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
+        let cache_pass4 = &alias_caches[&wire_name(db, pkg_info_pass4.root)];
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
@@ -5755,7 +5759,7 @@ fn emit_functions_parallel<'db>(
         };
 
         let pkg_info = file_package(db, item.file);
-        let cache = &alias_caches[&pkg_info.package];
+        let cache = &alias_caches[&wire_name(db, pkg_info.root)];
         attach_function_metadata(
             db,
             func_loc,
@@ -6355,7 +6359,7 @@ mod tests {
         sync::atomic::{AtomicU32, Ordering},
     };
 
-    use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
+    use baml_base::{FileId, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
     use salsa::Setter;
 
@@ -6381,8 +6385,10 @@ mod tests {
             let workspace = SourceRoot::new(
                 &db,
                 PathBuf::from("."),
-                Name::new(baml_type::RESERVED_USER_PACKAGE),
                 SourceRootKind::Workspace,
+                None,
+                Vec::new(),
+                None,
                 Vec::new(),
             );
             db.roots = Some(SourceRootTable::new(&db, vec![workspace]));

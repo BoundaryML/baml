@@ -276,15 +276,15 @@ pub(crate) fn package_level_diagnostics(
     db: &ProjectDatabase,
     source_files: &[SourceFile],
 ) -> Vec<Diagnostic> {
-    let mut seen_packages = HashSet::new();
+    // Insertion-ordered so the diagnostics come out in file order, not
+    // hash order.
+    let mut seen_packages: indexmap::IndexSet<baml_base::SourceRoot> = indexmap::IndexSet::new();
     for file in source_files {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        seen_packages.insert(pkg_info.package.clone());
+        seen_packages.insert(baml_compiler2_hir::file_package::file_package(db, *file).root);
     }
     let mut diagnostics = Vec::new();
-    for pkg_name in seen_packages {
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
-        let items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    for package in seen_packages {
+        let items = baml_compiler2_hir::package::package_items(db, package);
         for conflict in items.conflicts() {
             diagnostics.push(conflict.to_diagnostic(db));
         }
@@ -616,7 +616,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
     }
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = pkg_info.root;
     let res_ctx = baml_compiler2_hir_ty::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
     // Salsa-cached per package — previously rebuilt (and cloned per function
@@ -728,8 +728,7 @@ fn check_interfaces(
     // per-file one. Compute it once for the package and surface the violations
     // whose offending impl lives in this file (its conflicting partner may be in
     // another file or a dependency).
-    let package = baml_compiler2_hir::file_package::file_package(db, file).package;
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, package);
+    let pkg_id = baml_compiler2_hir::file_package::file_package(db, file).root;
     for violation in baml_compiler2_hir_ty::interfaces::package_coherence_diagnostics(db, pkg_id) {
         // Anchor the error on whichever conflicting impl lives in *this* file, pointing
         // at its partner. A cross-file pair is reported once per file (each anchored on
@@ -768,9 +767,15 @@ fn check_interfaces(
         let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).resolved() else {
             continue;
         };
-        for mounted_package in baml_compiler2_hir::package::mounted_package_names(db) {
+        for &mounted_package in baml_compiler2_hir::package::package_dependency_closure(db, pkg_id)
+        {
+            // Precompiled stdlib rows are rehydrated like source-backed
+            // facts and take the ordinary coherence road above.
+            if baml_compiler2_hir::package::is_precompiled_stdlib(db, mounted_package) {
+                continue;
+            }
             let Some(interface) =
-                baml_compiler2_hir_ty::package_interface::mounted_interface(db, &mounted_package)
+                baml_compiler2_hir_ty::package_interface::mounted_interface(db, mounted_package)
             else {
                 continue;
             };
@@ -1265,7 +1270,12 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                             return false;
                         };
                         segments.first().is_some_and(|package| {
-                            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package)
+                            baml_compiler2_hir::package::root_by_wire_name(db, package)
+                                .and_then(|root| {
+                                    baml_compiler2_hir_ty::package_interface::mounted_interface(
+                                        db, root,
+                                    )
+                                })
                                 .is_some()
                         })
                     });
@@ -2091,10 +2101,9 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
 /// wording render through it too.
 pub fn display_ty_for_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile, ty: &Ty) -> String {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let package_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let package_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let ctx = TyDisplayContext {
-        current_package: pkg_info.package,
+        current_package: baml_compiler2_hir::package::wire_name(db, pkg_info.root),
         current_namespace: pkg_info.namespace_path,
         package_items,
     };
@@ -2524,11 +2533,10 @@ interface Pair<A, B> {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let root = db
-            .add_source_root(crate::SourceRootSpec {
-                path: std::path::PathBuf::from("."),
-                package: Name::new("user"),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(crate::SourceRootSpec::new(
+                ".",
+                baml_base::SourceRootKind::Workspace,
+            ))
             .expect("fresh workspace root");
         let file = db.add_or_update_file_in(
             root,
@@ -2711,11 +2719,10 @@ function main(value: WrongId) -> int {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let root = db
-            .add_source_root(crate::SourceRootSpec {
-                path: std::path::PathBuf::from("/narrow-eq"),
-                package: Name::new("user"),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(crate::SourceRootSpec::new(
+                "/narrow-eq",
+                baml_base::SourceRootKind::Workspace,
+            ))
             .expect("fresh workspace root");
         db.add_or_update_files_in(
             root,

@@ -15,7 +15,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems},
+    package::{PackageItems, accessible_package},
 };
 use baml_type::{Ty, TyAttr, throw_facts::FunctionThrowFacts};
 
@@ -79,8 +79,7 @@ pub fn file_throw_facts(
     }
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let func_ns = pkg_info.namespace_path;
 
     // Class methods, interface default methods, and `implements`-block
@@ -507,9 +506,8 @@ fn lookup_type_in_scope<'db>(
         if first.as_str() == "root" {
             pkg_items.lookup_type(rest, type_name)
         } else {
-            let pkg_id = PackageId::new(db, first.clone());
-            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-            pkg.lookup_type(rest, type_name)
+            let package = accessible_package(db, pkg_items.root, first)?;
+            baml_compiler2_ppir::package_items(db, package).lookup_type(rest, type_name)
         }
     })
 }

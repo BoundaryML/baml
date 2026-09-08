@@ -269,8 +269,12 @@ fn qualified_name<'db>(db: &'db dyn baml_compiler2_ppir::Db, func: FunctionLoc<'
     let data = baml_compiler2_ppir::item_data::function_data(db, func);
     let pkg = baml_compiler2_hir::file_package::file_package(db, func.file(db));
     Name::new(
-        baml_type::QualifiedTypeName::new(pkg.package, pkg.namespace_path, data.name.clone())
-            .render_user_facing(),
+        baml_type::QualifiedTypeName::new(
+            baml_compiler2_hir::package::wire_name(db, pkg.root),
+            pkg.namespace_path,
+            data.name.clone(),
+        )
+        .render_user_facing(),
     )
 }
 

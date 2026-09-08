@@ -560,11 +560,7 @@ pub fn render_witness_pat(db: &dyn baml_compiler2_ppir::Db, w: &WitnessPat) -> S
     match &w.ctor {
         Ctor::Class(qtn, args) => {
             let names: Vec<baml_type::Name> = {
-                let package =
-                    baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
-                match baml_compiler2_ppir::package_items(db, package)
-                    .lookup_type(qtn.namespace(), qtn.name())
-                {
+                match crate::facts::definition_of(db, qtn) {
                     Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
                         baml_compiler2_ppir::item_data::class_data(db, class_loc)
                             .fields

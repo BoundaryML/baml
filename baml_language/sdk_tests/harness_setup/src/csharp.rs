@@ -91,11 +91,10 @@ fn generate_fixture(
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
-        .add_source_root(SourceRootSpec {
-            path: canonical.clone(),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(
+            canonical.clone(),
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|error| panic!("C# {fixture_name}: cannot add workspace root: {error}"));
     let baml_files = baml_db::discover_baml_files(&canonical);
     assert!(

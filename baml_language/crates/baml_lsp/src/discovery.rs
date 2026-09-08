@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::{Name, SourceRootKind};
+use baml_base::SourceRootKind;
 
 use crate::{
     mutation::RootSpec,
@@ -54,13 +54,13 @@ pub trait ProjectFs: Send + Sync {
     fn discover_roots(&self, folder: &Path) -> Vec<DiscoveredRoot>;
 }
 
-/// The `Workspace` root spec every discovered project gets: one package,
-/// [`baml_type::RESERVED_USER_PACKAGE`], until packages carry real names.
+/// The `Workspace` root spec every discovered project gets: an unnamed
+/// package, until discovery reads `[package].name` from the manifest.
 pub fn workspace_root_spec(path: PathBuf) -> RootSpec {
     RootSpec {
         path,
-        package: Name::new(baml_type::RESERVED_USER_PACKAGE),
         kind: SourceRootKind::Workspace,
+        self_name: None,
     }
 }
 

@@ -81,6 +81,50 @@ macro_rules! builtin {
     };
 }
 
+/// A builtin package's `baml.toml`, embedded at compile time.
+///
+/// The stdlib describes its own package graph the way every package does:
+/// `[package]` names the package and `[dependencies]` lists the packages it
+/// reaches, by the name it spells them with. The loader
+/// (`baml_db::ProjectDatabase::ensure_stdlib_sources`) builds the stdlib
+/// roots and their edges from these, so no compiler code names a stdlib
+/// package or hardcodes its dependencies.
+pub struct BuiltinManifest {
+    /// Package name (the directory under `baml_std/`).
+    pub package: &'static str,
+    /// The manifest text.
+    pub contents: &'static str,
+}
+
+/// Manifest registration macro: package directory under `baml_std/`.
+macro_rules! manifest {
+    ($pkg:literal) => {
+        BuiltinManifest {
+            package: $pkg,
+            contents: include_str!(concat!("../baml_std/", $pkg, "/baml.toml")),
+        }
+    };
+}
+
+/// Every builtin package's manifest. One entry per package directory; the
+/// files of a package listed here are the [`ALL`] entries with that
+/// `package`.
+pub const MANIFESTS: &[BuiltinManifest] = &[
+    manifest!("baml"),
+    manifest!("log"),
+    manifest!("boundary"),
+    manifest!("reflect"),
+    manifest!("testing"),
+    manifest!("assert"),
+    manifest!("ai"),
+    manifest!("openai"),
+    manifest!("anthropic"),
+    manifest!("google"),
+    manifest!("claude_code"),
+    manifest!("aws"),
+    manifest!("vercel"),
+];
+
 /// All builtin `.baml` files, in registration order. Namespaces derived from
 /// `ns_*` folder segments in `relative_path`.
 pub const ALL: &[BuiltinFile] = &[
@@ -254,17 +298,21 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
     })
 }
 
-/// Every package name that user-provided mounts may not claim, in stable
-/// first-appearance order: all builtin packages, followed by the implicit user
-/// package and the two compiler-reserved package names.
+/// Every name a dependency edge may not use, in stable first-appearance
+/// order: the builtin packages (their names are language-fixed edges every
+/// package already has) and the two source-level qualifiers `root` (the
+/// package's own root namespace) and `env` (environment variables).
 ///
-/// This is the single source of truth shared by mount filtering and runtime
-/// reflection, so both paths reject exactly the same aliases.
-pub fn reserved_package_names() -> &'static [&'static str] {
+/// This is the single source of truth shared by the compiler's edge
+/// validation and runtime reflection's mount-alias check, so both reject
+/// exactly the same names. The unnamed-package display default `user` is
+/// deliberately absent: it has no semantics, and a clash with it is caught as
+/// an ordinary spelling collision, not by reservation.
+pub fn reserved_edge_names() -> &'static [&'static str] {
     static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
     NAMES.get_or_init(|| {
         let mut names = stdlib_package_names().to_vec();
-        names.extend([baml_type::RESERVED_USER_PACKAGE, "root", "env"]);
+        names.extend(["root", "env"]);
         names
     })
 }

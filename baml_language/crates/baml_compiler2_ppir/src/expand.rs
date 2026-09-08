@@ -211,7 +211,9 @@ pub struct ExpandCtx<'ctx> {
     pub package_name: &'ctx Name,
     pub namespace_path: &'ctx [Name],
     pub package_items: &'ctx PackageItems<'ctx>,
-    /// All packages' items keyed by package name, for cross-package type resolution.
+    /// The packages this package may spell by a leading path segment (itself
+    /// by its own name, dependencies by their edge names), for cross-package
+    /// type resolution.
     pub all_package_items: &'ctx FxHashMap<Name, &'ctx PackageItems<'ctx>>,
     pub block_attrs: &'ctx FxHashMap<Vec<Name>, Vec<Name>>,
     pub alias_bodies: &'ctx FxHashMap<Vec<Name>, PpirTy>,

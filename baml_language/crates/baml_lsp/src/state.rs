@@ -906,8 +906,10 @@ impl GlobalState {
                             .db
                             .add_source_root(SourceRootSpec {
                                 path: root_path.clone(),
-                                package: spec.package.clone(),
                                 kind: spec.kind,
+                                self_name: spec.self_name.clone(),
+                                interface: None,
+                                dependencies: Vec::new(),
                             })
                             .map_err(|e| LspError::RequestFailed(e.to_string()))?;
                         applied.roots_changed = true;
@@ -1005,7 +1007,7 @@ impl GlobalState {
             .map(|root| RootEntry {
                 root,
                 path: root.path(&self.db).clone(),
-                package: root.package(&self.db),
+                display_name: baml_db::baml_compiler2_hir::package::wire_name(&self.db, root),
                 kind: root.kind(&self.db),
             })
             .collect();

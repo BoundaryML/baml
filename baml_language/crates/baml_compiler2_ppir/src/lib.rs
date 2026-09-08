@@ -21,7 +21,7 @@ use baml_compiler2_hir::{
     contributions::FileSymbolContributions,
     item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
-    package::{PackageId, PackageItems, PackageItemsExtra},
+    package::{PackageItems, PackageItemsExtra, wire_name},
     semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
@@ -88,7 +88,7 @@ pub fn collect_block_attrs(
             };
             let attr_names: Vec<Name> = item_attrs.iter().map(|a| a.name.clone()).collect();
             if !attr_names.is_empty() {
-                let mut full_path = vec![pkg_info.package.clone()];
+                let mut full_path = vec![wire_name(db, pkg_info.root)];
                 full_path.extend(pkg_info.namespace_path.iter().cloned());
                 full_path.push(name.clone());
                 result
@@ -120,7 +120,7 @@ pub fn collect_alias_bodies(
                         attrs: PpirTypeAttrs::default(),
                     },
                 );
-                let mut full_path = vec![pkg_info.package.clone()];
+                let mut full_path = vec![wire_name(db, pkg_info.root)];
                 full_path.extend(pkg_info.namespace_path.iter().cloned());
                 full_path.push(a.name.clone());
                 result.insert(full_path, ty);
@@ -192,17 +192,28 @@ pub fn project_expansion_maps(
 // -- Helpers ------------------------------------------------------------------
 
 /// Build a map of all packages' items for cross-package type classification.
-fn build_all_package_items(
+/// The packages a file in `root` may spell by a leading path segment, keyed by
+/// that spelling: the package itself under its own name (a named package may
+/// qualify its own items — `baml.Array` inside the `baml` package), and each
+/// dependency under the name `root`'s edge gives it. Nothing else resolves,
+/// whatever the database holds.
+fn reachable_package_items(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
 ) -> FxHashMap<Name, &baml_compiler2_hir::package::PackageItems<'_>> {
+    // The HIR (pre-expansion) view: expansion is what PRODUCES this crate's
+    // `package_items`, so reading that here would be a query cycle.
     let mut result = FxHashMap::default();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_name = pkg_info.package.clone();
-        result.entry(pkg_name.clone()).or_insert_with(|| {
-            let pkg_id = PackageId::new(db, pkg_name);
-            baml_compiler2_hir::package::package_items(db, pkg_id)
-        });
+    if let Some(self_name) = root.self_name(db) {
+        result.insert(
+            self_name,
+            baml_compiler2_hir::package::package_items(db, root),
+        );
+    }
+    for dependency in root.dependencies(db) {
+        result
+            .entry(dependency.name.clone())
+            .or_insert_with(|| baml_compiler2_hir::package::package_items(db, dependency.root));
     }
     result
 }
@@ -328,12 +339,11 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
     // Get HIR classification for the file's package (original types only)
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_name = pkg_info.package.clone();
-    let pkg_id = PackageId::new(db, pkg_info.package);
-    let package_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let package_name = wire_name(db, pkg_info.root);
+    let package_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
 
-    // Build cross-package items map for resolving foreign type references
-    let all_package_items = build_all_package_items(db);
+    // The packages this file's package may spell, for foreign type references.
+    let all_package_items = reachable_package_items(db, pkg_info.root);
 
     // Get @@ block attributes and alias bodies. Memoized once per root table
     // so this per-file query doesn't re-scan (and re-lower) every file on
@@ -1006,19 +1016,18 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    // Collect matching files from the package's own roots (`package_files`),
-    // then sort alphabetically by path — so edits to another package's file
-    // set never invalidate this namespace.
-    let package_id = PackageId::new(db, package);
-    let mut matching_files: Vec<SourceFile> =
-        baml_compiler2_hir::package::package_files(db, package_id)
-            .iter()
-            .copied()
-            .filter(|file| {
-                let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-                pkg_info.namespace_path == *ns_path
-            })
-            .collect();
+    // Collect matching files from the package's own root, then sort
+    // alphabetically by path — so edits to another package's file set never
+    // invalidate this namespace.
+    let mut matching_files: Vec<SourceFile> = package
+        .files(db)
+        .iter()
+        .copied()
+        .filter(|file| {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+            pkg_info.namespace_path == *ns_path
+        })
+        .collect();
     matching_files.sort_by_key(|a| a.path(db));
 
     // Uses PPIR's file_symbol_contributions (canonical, includes *$stream types).
@@ -1087,23 +1096,21 @@ pub fn namespace_items<'db>(
 
 /// Canonical package items (original + *$stream types).
 #[salsa::tracked(returns(ref))]
-pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
-    let package_name = package_id.name(db);
-
+pub fn package_items<'db>(db: &'db dyn Db, root: baml_base::SourceRoot) -> PackageItems<'db> {
     // Consumers observe the insertion order of `namespaces`, so namespace
     // discovery must not inherit `HashSet`'s per-process randomized order.
-    // Discovery reads only the package's own roots ([`package_files`]), so
-    // edits to another root's file set never invalidate this fold.
+    // Discovery reads only the package's own root, so edits to another
+    // root's file set never invalidate this fold.
     let mut ns_paths: IndexSet<Vec<Name>> = IndexSet::new();
-    for file in baml_compiler2_hir::package::package_files(db, package_id) {
+    for file in root.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        debug_assert_eq!(pkg_info.package, *package_name);
+        debug_assert_eq!(pkg_info.root, root);
         ns_paths.insert(pkg_info.namespace_path.clone());
     }
     let mut namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>> = IndexMap::new();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
-        let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
+        let ns_id = NamespaceId::new(db, root, ns_path.clone());
         let items = namespace_items(db, ns_id);
         all_conflicts.extend(items.conflicts().iter().cloned());
         namespaces.insert(ns_path, items.clone());
@@ -1121,7 +1128,7 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
     };
 
     PackageItems {
-        package: package_name,
+        root,
         namespaces,
         extra,
     }

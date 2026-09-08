@@ -322,7 +322,10 @@ fn corpus_snapshots() {
         let mut pkg_files: Vec<_> = all_files
             .iter()
             .copied()
-            .filter(|f| file_package(&db, *f).package.as_str() == *pkg)
+            .filter(|f| {
+                baml_compiler2_hir::package::wire_name(&db, file_package(&db, *f).root).as_str()
+                    == *pkg
+            })
             .collect();
         pkg_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
 

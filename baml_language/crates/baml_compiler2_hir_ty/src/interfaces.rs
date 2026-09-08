@@ -12,7 +12,7 @@ mod coherence;
 mod impl_rules;
 
 use baml_base::{Literal, Name};
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_hir::{contributions::Definition, package::root_by_wire_name};
 use baml_type::{
     ParamTy, QualifiedTypeName, Ty, TyAttr,
     normalize::TypeContext as _,
@@ -225,9 +225,9 @@ pub fn interface_declared_param_bounds(
 /// Every type alias visible to `pkg_id` (its own plus its dependency
 /// closure's), resolved to its one-level value through the `hir_ty` road.
 #[salsa::tracked(returns(ref))]
-pub fn package_resolved_aliases<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn package_resolved_aliases(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> std::collections::HashMap<QualifiedTypeName, Ty> {
     let mut aliases = std::collections::HashMap::new();
     let mut packages = vec![pkg_id];
@@ -255,10 +255,7 @@ pub fn enum_variant_names(
     db: &dyn baml_compiler2_ppir::Db,
     enum_qtn: &QualifiedTypeName,
 ) -> Option<Vec<Name>> {
-    let package_id = PackageId::new(db, enum_qtn.package().clone());
-    let items = baml_compiler2_ppir::package_items(db, package_id);
-    let Definition::Enum(enum_loc) = items.lookup_type(enum_qtn.namespace(), enum_qtn.name())?
-    else {
+    let Definition::Enum(enum_loc) = crate::facts::definition_of(db, enum_qtn)? else {
         return None;
     };
     Some(
@@ -273,9 +270,9 @@ pub fn enum_variant_names(
 /// [`package_resolved_aliases`] with every body folded toward the union
 /// canonical form the overlap machinery assumes (see `baml_type::unify`).
 #[salsa::tracked(returns(ref))]
-pub fn normalized_alias_map<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn normalized_alias_map(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> std::collections::HashMap<QualifiedTypeName, Ty> {
     let mut aliases = package_resolved_aliases(db, pkg_id).clone();
     let enum_variants = |qtn: &QualifiedTypeName| enum_variant_names(db, qtn);
@@ -586,8 +583,7 @@ impl<'db> InterfaceDeclScope<'db> {
     ) -> Self {
         let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-        let pkg_items =
-            baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
 
         // `Self` plus the declared params: the frame's universal prefix,
         // without the associated-type slots that follow it.
@@ -1251,7 +1247,7 @@ fn resolved_interface_from_ty(
     let Ty::Interface(qtn, _, _, _) = ty else {
         return None;
     };
-    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_id = root_by_wire_name(db, qtn.package())?;
     let resolved_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let Definition::Interface(loc) = resolved_pkg_items.lookup_type(qtn.namespace(), qtn.name())?
     else {
@@ -1288,8 +1284,7 @@ pub fn interface_requires_cycle<'db>(
         |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
             let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
             let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-            let pkg_items =
-                baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg.package.clone()));
+            let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
             iface
                 .requires
                 .iter()
@@ -1341,8 +1336,7 @@ pub fn interface_closure_locs<'db>(
         out.push(loc);
         let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
         for &parent in &iface.requires {
             if let Some(parent_loc) = resolve_ref_to_interface(
                 db,
@@ -1422,8 +1416,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         }
         let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
         let mut diags = Vec::new();
         let associated_bindings = complete_interface_associated_bindings_from_tys(
             db,
@@ -2499,9 +2492,7 @@ fn projection_interface_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     qtn: &QualifiedTypeName,
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-    let pkg_id = PackageId::new(db, qtn.package().clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-    match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
+    match crate::facts::definition_of(db, qtn)? {
         Definition::Interface(loc) => Some(loc),
         _ => None,
     }

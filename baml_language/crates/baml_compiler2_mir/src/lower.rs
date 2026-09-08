@@ -69,23 +69,21 @@ use baml_type::{
 /// compiler-side.
 pub fn resolved_aliases_for_package(
     db: &dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId,
+    pkg_id: baml_base::SourceRoot,
 ) -> ResolvedAliases {
-    use baml_compiler2_hir::package::package_dependencies;
-
     let mut aliases = collect_type_aliases(db, pkg_id);
-    for &dep_id in package_dependencies(db, pkg_id) {
-        aliases.extend(collect_type_aliases(db, dep_id));
+    for dependency in pkg_id.dependencies(db) {
+        aliases.extend(collect_type_aliases(db, dependency.root));
     }
-    // A *mounted* dependency (a runtime compile's world) has no source files
-    // or HIR items to walk — its aliases arrive through the package-interface
-    // blob, already resolved. Source-declared entries win a name collision;
-    // blob entries only fill the gaps. Without these, every reference to a
-    // mounted alias would be a name the environment cannot see, which
-    // `lower_to_runtime` rejects rather than carrying opaque.
-    for package in baml_compiler2_hir::package::external_package_names(db) {
+    // A dependency served from its interface (a runtime compile's world) has
+    // no source files or HIR items to walk — its aliases arrive through the
+    // package-interface blob, already resolved. Source-declared entries win a
+    // name collision; blob entries only fill the gaps. Without these, every
+    // reference to a mounted alias would be a name the environment cannot
+    // see, which `lower_to_runtime` rejects rather than carrying opaque.
+    for package in baml_compiler2_hir::package::package_dependency_closure(db, pkg_id) {
         let Some(interface) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, *package)
         else {
             continue;
         };
@@ -119,9 +117,9 @@ pub fn resolved_aliases_for_package(
 /// be classified (recursive → pooled as a declaration) or expanded
 /// (non-recursive → inlined) — it survives as a name nothing declares, which
 /// `lower_to_runtime` now rejects.
-fn collect_type_aliases<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
+fn collect_type_aliases(
+    db: &dyn crate::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> HashMap<QualifiedTypeName, Tir2Ty> {
     use baml_compiler2_hir::contributions::Definition;
     let mut aliases = HashMap::new();
@@ -134,11 +132,7 @@ fn collect_type_aliases<'db>(
             }
         }
     }
-    let package_name = pkg_id.name(db);
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        if baml_compiler2_hir::file_package::file_package(db, file).package != package_name {
-            continue;
-        }
+    for &file in pkg_id.files(db) {
         for &loc in baml_compiler2_ppir::item_data::file_type_aliases(db, file) {
             let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
             let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc);
@@ -290,10 +284,7 @@ fn interface_requires_closure_locs<'db>(
         out.push(loc);
         let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
         let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(
-            db,
-            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
-        );
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
         for &parent in &iface.requires {
             if let Some(parent_loc) = resolve_ref_to_interface_loc(
                 db,
@@ -382,7 +373,11 @@ fn qualify_def(
 ) -> QualifiedTypeName {
     let file = def.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
+    QualifiedTypeName::new(
+        wire_name(db, pkg_info.root),
+        pkg_info.namespace_path,
+        name.clone(),
+    )
 }
 
 /// An interned interface bound as the plain interface TYPE - the
@@ -1100,7 +1095,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // bypass and default-adoption do); emit's slot resolution
                 // panics loudly on any that slips through.
                 return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: pkg_info.package.clone(),
+                    package: wire_name(db, pkg_info.root),
                     namespace: pkg_info.namespace_path,
                     display_owner: interface_data(db, iface_loc).name.clone(),
                     decl: func_loc,
@@ -1117,7 +1112,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // NOT (members of the impl, outputs of the match); the
                 // impl's own type variables render as frame indices (`#0`).
                 return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: pkg_info.package.clone(),
+                    package: wire_name(db, pkg_info.root),
                     namespace: pkg_info.namespace_path,
                     display_owner: Name::new(impl_display_segment(db, impl_loc)),
                     decl: func_loc,
@@ -1129,7 +1124,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     }
 
     ItemRef::Free {
-        package: pkg_info.package.clone(),
+        package: wire_name(db, pkg_info.root),
         namespace: pkg_info.namespace_path,
         name,
     }
@@ -1230,7 +1225,7 @@ pub fn native_key_for<'db>(
         }
         None => {
             return ItemRef::Free {
-                package: pkg_info.package.clone(),
+                package: wire_name(db, pkg_info.root),
                 namespace: pkg_info.namespace_path,
                 name,
             }
@@ -1238,7 +1233,7 @@ pub fn native_key_for<'db>(
         }
     };
     ItemRef::Method {
-        package: pkg_info.package.clone(),
+        package: wire_name(db, pkg_info.root),
         namespace: pkg_info.namespace_path,
         class: item,
         name,
@@ -1289,7 +1284,7 @@ fn method_item_ref<'db>(
     // and reaches its `{iface}$for${target}` spelling via `def_to_item_ref`.
     let method_name = function_data(db, func_loc).name.clone();
     ItemRef::Method {
-        package: pkg_info.package,
+        package: wire_name(db, pkg_info.root),
         namespace: pkg_info.namespace_path,
         class,
         name: method_name,
@@ -1310,7 +1305,7 @@ fn resolution_to_item_ref<'db>(
             let pkg_info = file_package(db, func_loc.file(db));
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Free {
-                package: pkg_info.package,
+                package: wire_name(db, pkg_info.root),
                 namespace: pkg_info.namespace_path,
                 name: func_data.name.clone(),
             })
@@ -1329,7 +1324,7 @@ fn resolution_to_item_ref<'db>(
             let pkg_info = file_package(db, iface_loc.file(db));
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
             Some(ItemRef::Method {
-                package: pkg_info.package,
+                package: wire_name(db, pkg_info.root),
                 namespace: pkg_info.namespace_path,
                 class: iface_data.name.clone(),
                 name: method.clone(),
@@ -1429,7 +1424,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_items},
+    package::{is_precompiled_stdlib, package_items, root_by_wire_name, wire_name},
     scope::FileScopeId,
     semantic_index::{
         BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope as MetadataScope,
@@ -1624,7 +1619,7 @@ fn class_type_tags_for_project(
         for class_loc in file_classes(db, *file) {
             let class = class_data(db, *class_loc);
             let class_qtn = QualifiedTypeName::new(
-                pkg_info.package.clone(),
+                wire_name(db, pkg_info.root),
                 pkg_info.namespace_path.clone(),
                 class.name.clone(),
             );
@@ -1635,11 +1630,10 @@ fn class_type_tags_for_project(
         }
     }
 
-    // Mounted packages have no source files, but use the same
-    // content-addressed tag derived from their fully-qualified class name.
-    for pkg_name in baml_compiler2_hir::package::external_package_names(db) {
-        let Some(mounted) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &pkg_name)
+    // Packages served from their interface have no source files, but use the
+    // same content-addressed tag derived from their fully-qualified class name.
+    for &root in db.source_roots().roots(db) {
+        let Some(mounted) = baml_compiler2_hir_ty::package_interface::mounted_interface(db, root)
         else {
             continue;
         };
@@ -1662,11 +1656,8 @@ fn class_type_tags_for_project(
 /// Build the package-invariant [`PackageLoweringData`] once per package,
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
-fn package_lowering_data<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
-) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{package_dependencies, package_dependency_closure};
+fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> PackageLoweringData {
+    use baml_compiler2_hir::package::package_dependency_closure;
     // The canonical (PPIR) item view: includes synthesized `*$stream` classes,
     // whose fields must be projectable like any other class's. TIR already
     // resolves types against this view; using HIR's pre-expansion view here
@@ -1687,10 +1678,9 @@ fn package_lowering_data<'db>(
 
         // Dependency packages first (e.g., "baml" builtins); current-package
         // items overwrite on collision.
-        for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_name = dep_id.name(db);
+        for dependency in pkg_id.dependencies(db) {
             if let Some(mounted) =
-                baml_compiler2_hir_ty::package_interface::mounted_interface(db, &dep_name)
+                baml_compiler2_hir_ty::package_interface::mounted_interface(db, dependency.root)
             {
                 LoweringContext::populate_from_mounted_package(
                     mounted,
@@ -1699,11 +1689,11 @@ fn package_lowering_data<'db>(
                 );
                 continue;
             }
-            let dep_items = package_items(db, dep_id);
+            let dep_items = package_items(db, dependency.root);
             LoweringContext::populate_from_package(
                 db,
                 dep_items,
-                &dep_name,
+                &wire_name(db, dependency.root),
                 &mut population,
                 &resolved_aliases,
             );
@@ -1716,20 +1706,21 @@ fn package_lowering_data<'db>(
         // field layouts when lowering those default bodies. Populate that
         // schema as a lowering-only view; this adds no package dependency and
         // does not make `reflect` a namespace inside `baml`.
-        if pkg_id.name(db).as_str() == "baml" {
-            let reflect_id = PackageId::new(db, Name::new("reflect"));
+        if wire_name(db, pkg_id).as_str() == "baml"
+            && let Some(reflect_id) = root_by_wire_name(db, &Name::new("reflect"))
+        {
             let reflect_items = package_items(db, reflect_id);
             LoweringContext::populate_from_package(
                 db,
                 reflect_items,
-                &reflect_id.name(db),
+                &wire_name(db, reflect_id),
                 &mut population,
                 &resolved_aliases,
             );
         }
 
         let pkg_items = package_items(db, pkg_id);
-        let pkg_name = pkg_id.name(db);
+        let pkg_name = wire_name(db, pkg_id);
         LoweringContext::populate_from_package(
             db,
             pkg_items,
@@ -1753,8 +1744,7 @@ fn package_lowering_data<'db>(
     let mut all_pkgs = vec![pkg_id];
     all_pkgs.extend(package_dependency_closure(db, pkg_id).iter().copied());
     for pkg in all_pkgs {
-        if let Some(mounted) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &pkg.name(db))
+        if let Some(mounted) = baml_compiler2_hir_ty::package_interface::mounted_interface(db, pkg)
         {
             for types_in_ns in mounted.types.values() {
                 for exported in types_in_ns.values() {
@@ -2430,7 +2420,7 @@ impl<'db> LoweringContext<'db> {
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package);
+        let pkg_id = pkg_info.root;
         // The per-param bound CONJUNCTIONS (the dispatch view), from hir_ty's
         // function_generic_bounds - the ONE declaration-bounds road (class
         // prefix, interface Self env with frame-pinned associated slots and
@@ -2557,7 +2547,7 @@ impl<'db> LoweringContext<'db> {
         let tables = crate::inference_provider::ProviderTables::for_let(db, let_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
-        let pkg_id = PackageId::new(db, file_package(db, file).package);
+        let pkg_id = file_package(db, file).root;
 
         // Class/enum/interface schema + resolved aliases, memoized per package
         // (was rebuilt — and every class field re-lowered — per let binding).
@@ -3338,7 +3328,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_id = pkg_info.root;
         let pkg_items = package_items(self.db, pkg_id);
         let generic_params = self.enclosing_generic_params();
         let bindings: FxHashMap<ParamTy, Tir2Ty> = generic_params
@@ -3437,7 +3427,7 @@ impl<'db> LoweringContext<'db> {
         let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
-            pkg_info.package.clone(),
+            wire_name(self.db, pkg_info.root),
             pkg_info.namespace_path,
             iface_data.name.clone(),
         );
@@ -3531,7 +3521,7 @@ impl<'db> LoweringContext<'db> {
                     baml_compiler2_ppir::item_data::interface_data(self.db, *iface_loc);
                 let pkg_info = file_package(self.db, iface_loc.file(self.db));
                 let iface_tn = TypeName::new(
-                    pkg_info.package.clone(),
+                    wire_name(self.db, pkg_info.root),
                     pkg_info.namespace_path,
                     iface_data.name.clone(),
                 );
@@ -3596,7 +3586,7 @@ impl<'db> LoweringContext<'db> {
         let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
-            pkg_info.package.clone(),
+            wire_name(self.db, pkg_info.root),
             pkg_info.namespace_path,
             iface_data.name.clone(),
         );
@@ -3690,8 +3680,7 @@ impl<'db> LoweringContext<'db> {
             return None;
         };
         let pkg_info = baml_compiler2_hir::file_package::file_package(self.db, self.file);
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_info.root);
         let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let target_ty = lower_expr_in_scope(
@@ -3891,8 +3880,9 @@ impl<'db> LoweringContext<'db> {
     /// method named `method`. Mirrors the TIR-side check; used by
     /// `dispatch_target_for_concrete`.
     fn mir_interface_declares_method(&self, iface_qtn: &QualifiedTypeName, method: &Name) -> bool {
-        let pkg_id =
-            baml_compiler2_hir::package::PackageId::new(self.db, iface_qtn.package().clone());
+        let Some(pkg_id) = root_by_wire_name(self.db, iface_qtn.package()) else {
+            return false;
+        };
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
             pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
@@ -3937,12 +3927,13 @@ impl<'db> LoweringContext<'db> {
     /// implementors: an interface with no implementors in this compilation is still
     /// an interface, and one with implementors elsewhere is not more of one.
     fn is_interface_type_name(&self, tn: &TypeName) -> bool {
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, tn.package().clone());
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
-        matches!(
-            pkg_items.lookup_type(tn.namespace(), tn.name()),
-            Some(baml_compiler2_hir::contributions::Definition::Interface(_))
-        ) || matches!(
+        root_by_wire_name(self.db, tn.package()).is_some_and(|pkg_id| {
+            matches!(
+                baml_compiler2_hir::package::package_items(self.db, pkg_id)
+                    .lookup_type(tn.namespace(), tn.name()),
+                Some(baml_compiler2_hir::contributions::Definition::Interface(_))
+            )
+        }) || matches!(
             baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, tn),
             Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface { .. })
         )
@@ -3950,8 +3941,9 @@ impl<'db> LoweringContext<'db> {
 
     fn interface_declares_method_directly(&self, iface_tn: &TypeName, method: &Name) -> bool {
         use baml_compiler2_ppir::item_data::{function_data, interface_data};
-        let pkg_id =
-            baml_compiler2_hir::package::PackageId::new(self.db, iface_tn.package().clone());
+        let Some(pkg_id) = root_by_wire_name(self.db, iface_tn.package()) else {
+            return false;
+        };
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
             pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name())
@@ -4002,8 +3994,7 @@ impl<'db> LoweringContext<'db> {
     /// disagree about what index a field has.
     fn interface_field_index_directly(&self, iface_tn: &TypeName, field: &Name) -> Option<u32> {
         use baml_compiler2_ppir::item_data::interface_data;
-        let pkg_id =
-            baml_compiler2_hir::package::PackageId::new(self.db, iface_tn.package().clone());
+        let pkg_id = root_by_wire_name(self.db, iface_tn.package())?;
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         let Some(def) = pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name()) else {
             if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
@@ -4311,7 +4302,7 @@ impl<'db> LoweringContext<'db> {
         let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_id = pkg_info.root;
         let pkg_items = package_items(self.db, pkg_id);
         lower_expr_in_scope(
             self.db,
@@ -4352,7 +4343,7 @@ impl<'db> LoweringContext<'db> {
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_id = pkg_info.root;
         let pkg_items = package_items(self.db, pkg_id);
 
         let ret_ty = sig
@@ -4833,7 +4824,7 @@ impl<'db> LoweringContext<'db> {
         self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
 
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_id = pkg_info.root;
         let pkg_items = package_items(self.db, pkg_id);
 
         // A lambda param annotation may reference the enclosing function's
@@ -5261,8 +5252,7 @@ impl<'db> LoweringContext<'db> {
         // ── Body-lambda params + closure type from the tag's `body` param. ──
         let tag_sig = baml_compiler2_ppir::function_signature(self.db, tag_func_loc);
         let tag_pkg_info = file_package(self.db, tag_func_loc.file(self.db));
-        let tag_pkg_id = PackageId::new(self.db, tag_pkg_info.package.clone());
-        let tag_pkg_items = package_items(self.db, tag_pkg_id);
+        let tag_pkg_items = package_items(self.db, tag_pkg_info.root);
         let mut body_params: Vec<(Name, RuntimeTy)> = Vec::new();
         let closure_ty = match tag_sig.params.first().map(|p| &p.ty) {
             Some(
@@ -7020,8 +7010,11 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         let db = self.db;
 
-        let pkg_name = class_tn.package();
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let Some(pkg_id) = root_by_wire_name(db, class_tn.package()) else {
+            return RuntimeTy::Null {
+                attr: TyAttr::default(),
+            };
+        };
         let pkg_items_ref = package_items(db, pkg_id);
 
         let namespace: Vec<Name> = class_tn.namespace().clone();
@@ -8744,8 +8737,7 @@ impl<'db> LoweringContext<'db> {
             )
         {
             let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
-            let pkg_id = PackageId::new(self.db, current_pkg.package.clone());
-            let pkg_items = package_items(self.db, pkg_id);
+            let pkg_items = package_items(self.db, current_pkg.root);
             if let Some(iface_loc) = resolve_ref_to_interface_loc(
                 self.db,
                 &target.type_refs,
@@ -9342,7 +9334,7 @@ impl<'db> LoweringContext<'db> {
             Operand::Constant(Constant::Function(item))
                 if item.to_string() == "reflect.Package.current"
         ) {
-            let package = file_package(self.db, self.file).package.to_string();
+            let package = wire_name(self.db, file_package(self.db, self.file).root).to_string();
             self.builder.assign(dest, Rvalue::CurrentPackage(package));
             self.builder.goto(target);
             self.builder.set_current_block(target);
@@ -9736,7 +9728,9 @@ impl<'db> LoweringContext<'db> {
                     ..
                 } => interface.package(),
             };
-            if baml_compiler2_hir::package::is_precompiled_package(self.db, package) {
+            if root_by_wire_name(self.db, package)
+                .is_some_and(|root| is_precompiled_stdlib(self.db, root))
+            {
                 return external.builtin_kind;
             }
         }
@@ -9897,7 +9891,8 @@ impl<'db> LoweringContext<'db> {
                 namespace,
                 name,
             } = &external.target
-            && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
+            && root_by_wire_name(self.db, package)
+                .is_some_and(|root| is_precompiled_stdlib(self.db, root))
             && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && package.as_str() == "log"
             && namespace.is_empty()
@@ -10125,7 +10120,7 @@ impl<'db> LoweringContext<'db> {
     /// as `Tir2Ty::Error`, so it never reaches runtime conversion.
     fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_id = pkg_info.root;
         // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
         // args synthesized by PPIR companions reference `*$stream` classes
         // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
@@ -11943,7 +11938,7 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
     ) -> Option<InterfaceMethodShape> {
         use baml_compiler2_ppir::item_data::{function_data, interface_data};
-        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_tn.package());
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_tn.package())?;
         let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
             iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
@@ -11992,7 +11987,7 @@ impl<'db> LoweringContext<'db> {
                 });
         }
         let iface_pkg_name = iface_tn.package();
-        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name)?;
         let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
             iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
@@ -12332,7 +12327,7 @@ impl<'db> LoweringContext<'db> {
         class_tn: &TypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
         let pkg_name = class_tn.package();
-        let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
+        let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name)?;
         let ns: Vec<Name> = class_tn.namespace().clone();
         let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(&ns, class_tn.name()) else {
             return None;
@@ -12348,8 +12343,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
-        let class_pkg_id = PackageId::new(self.db, class_pkg.package.clone());
-        let class_pkg_items = package_items(self.db, class_pkg_id);
+        let class_pkg_items = package_items(self.db, class_pkg.root);
         let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
         // `target` and the class-side `associated_type_bindings` index the class's
         // own arena; the interface's associated-type defaults index the interface's.
@@ -12490,12 +12484,14 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
+    /// The items of the package a type head spells as `pkg_name`, if the
+    /// database holds one.
     fn resolve_class_pkg_items_by_name(
         &self,
         pkg_name: &Name,
-    ) -> &'db baml_compiler2_hir::package::PackageItems<'db> {
-        let pkg_id = PackageId::new(self.db, pkg_name.clone());
-        package_items(self.db, pkg_id)
+    ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
+        let pkg_id = root_by_wire_name(self.db, pkg_name)?;
+        Some(package_items(self.db, pkg_id))
     }
 }
 
@@ -14250,7 +14246,9 @@ impl<'db> LoweringContext<'db> {
         class_name: &QualifiedTypeName,
         class_type_args: &[Tir2Ty],
     ) -> IndexMap<Name, Tir2Ty> {
-        let pkg_id = PackageId::new(self.db, class_name.package().clone());
+        let Some(pkg_id) = root_by_wire_name(self.db, class_name.package()) else {
+            return IndexMap::new();
+        };
         let pkg_items_for_class = package_items(self.db, pkg_id);
         let Some(Definition::Class(class_loc)) =
             pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())

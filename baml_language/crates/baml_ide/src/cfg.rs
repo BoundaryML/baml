@@ -618,11 +618,11 @@ fn resolve_path_function<'db>(
     caller_file: SourceFile,
     callee_path: &[baml_base::Name],
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-    use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
+    use baml_compiler2_hir::{contributions::Definition, file_package};
     use baml_compiler2_hir_ty::package_interface::ResolvedValue;
 
     let caller_package = file_package::file_package(db, caller_file);
-    let package_id = PackageId::new(db, caller_package.package.clone());
+    let package_id = caller_package.root;
     let resolution =
         baml_compiler2_hir_ty::package_interface::package_resolution_context(db, package_id);
     match resolution.resolve_value(db, callee_path, &caller_package.namespace_path) {
@@ -1004,11 +1004,10 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let root = db
-            .add_source_root(baml_db::SourceRootSpec {
-                path: std::path::PathBuf::from("/cfg-test"),
-                package: baml_base::Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(baml_db::SourceRootSpec::new(
+                std::path::PathBuf::from("/cfg-test"),
+                baml_base::SourceRootKind::Workspace,
+            ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         (db, root)
     }

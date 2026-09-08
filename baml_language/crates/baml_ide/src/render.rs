@@ -145,10 +145,9 @@ fn display_ty_for_file_impl(
     collapse_aliases: bool,
 ) -> String {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let package_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let package_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let ctx = TyDisplayContext {
-        current_package: pkg_info.package,
+        current_package: baml_compiler2_hir::package::wire_name(db, pkg_info.root),
         current_namespace: pkg_info.namespace_path,
         package_items,
         collapse_aliases,

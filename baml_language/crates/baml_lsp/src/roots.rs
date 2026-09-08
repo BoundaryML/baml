@@ -18,7 +18,8 @@ pub const BUILTIN_PREFIX: &str = "<builtin>";
 pub struct RootEntry {
     pub root: SourceRoot,
     pub path: PathBuf,
-    pub package: Name,
+    /// The package's display name (its own name, else the unnamed default).
+    pub display_name: Name,
     pub kind: SourceRootKind,
 }
 

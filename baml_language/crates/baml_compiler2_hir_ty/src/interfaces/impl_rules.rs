@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    package::{root_by_wire_name, wire_name},
+};
 use baml_type::{
     ParamTy, QualifiedTypeName, Ty,
     normalize::TypeContext,
@@ -228,8 +231,7 @@ pub fn impl_data<'db>(
     let block = impl_block_data(db, impl_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let ns = &pkg_info.namespace_path;
 
     // Normalize in-body → free: an in-body impl's generics are the class's and
@@ -1078,8 +1080,8 @@ pub fn validate_impl_signatures<'db>(
     let file = impl_loc.file(db);
     let block = impl_block_data(db, impl_loc);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let current_package = pkg_info.package.clone();
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let current_package = wire_name(db, pkg_info.root);
+    let pkg_id = pkg_info.root;
 
     // The canonical algebra context: hir_ty's fact oracle carrying the impl's
     // own param env (TIR's `GlobalTypeContext` role).
@@ -1093,8 +1095,7 @@ pub fn validate_impl_signatures<'db>(
     let iface_generic_params = crate::lower::interface_declared_params(db, data.interface);
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
-    let iface_pkg_items =
-        baml_compiler2_ppir::package_items(db, PackageId::new(db, iface_pkg_info.package.clone()));
+    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_info.root);
 
     // ── E0116: field-type conformance (in-body impls). ──
     if !iface_data.fields.is_empty()
@@ -1495,14 +1496,14 @@ pub struct ResolvedImpl<'db> {
 
 /// Every `implements` block id declared in a package, as stable `ImplLoc`s.
 #[salsa::tracked(returns(ref))]
-pub fn package_impl_locs<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {
+pub fn package_impl_locs(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
+) -> Vec<baml_compiler2_hir::loc::ImplLoc<'_>> {
     let mut out = Vec::new();
-    // Scan only the package's own files (`package_files`), so edits to
-    // another root's file set never invalidate this query.
-    for file in baml_compiler2_hir::package::package_files(db, pkg_id) {
+    // Scan only the package's own files, so edits to another root's file
+    // set never invalidate this query.
+    for file in pkg_id.files(db) {
         // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible.
         out.extend(
@@ -1569,7 +1570,7 @@ pub fn substitute_interface(
 /// `(interface, concrete implementor)` → impl lookup.
 pub fn get_implements_block<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -1700,7 +1701,9 @@ pub fn implements_interface(
     let realized = baml_type::RealizedTy::try_from(concrete).is_ok()
         && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok();
     for pkg_name in roots {
-        let pkg_id = PackageId::new(db, pkg_name);
+        let Some(pkg_id) = root_by_wire_name(db, &pkg_name) else {
+            continue;
+        };
         let found = if realized {
             get_implements_block(db, pkg_id, concrete, interface, aliases).is_some()
         } else {
@@ -1715,9 +1718,9 @@ pub fn implements_interface(
 
 /// Symbolic universal membership — the type-var-bearing backend of
 /// [`implements_interface`].
-pub fn type_implements_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn type_implements_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     interface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -1748,7 +1751,7 @@ pub fn type_implements_interface<'db>(
 /// matching block is required: several distinct matches return `None`.
 pub fn get_implements_block_symbolic<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     interface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -1783,7 +1786,7 @@ pub fn get_implements_block_symbolic<'db>(
 /// [`get_implements_block`] with an explicit recursion budget.
 fn get_implements_block_within_depth<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -1937,7 +1940,7 @@ fn impl_bounds_hold_symbolic(
 /// Symbolic-capable: `concrete` may carry free vars.
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
@@ -1980,9 +1983,9 @@ pub fn impls_for_type<'db>(
 /// block — the implementor shape matches but a concrete generic bound fails —
 /// return the first failing `(param, required_bound_as_ty, actual_arg)`.
 /// Diagnostic-only.
-pub fn first_failing_impl_bound<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn first_failing_impl_bound(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     requested: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,

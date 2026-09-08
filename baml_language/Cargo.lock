@@ -923,11 +923,14 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "ignore",
+ "indexmap",
  "rayon",
  "salsa",
+ "serde",
  "tempfile",
  "text-size",
  "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]

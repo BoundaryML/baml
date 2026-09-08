@@ -19,7 +19,10 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, is_external_package, package_dependencies},
+    package::{
+        PackageItems, accessible_package, is_precompiled_stdlib, is_served_from_interface,
+        root_by_wire_name, wire_name,
+    },
 };
 use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
 use indexmap::IndexMap;
@@ -273,8 +276,10 @@ pub(crate) fn resolved_exported_function(
 #[derive(Debug, Clone, PartialEq)]
 pub struct PackageResolutionContext<'db> {
     pub own_items: PackageItems<'db>,
-    pub dep_interfaces: Vec<(Name, PackageInterface)>,
-    pub own_package_name: Name,
+    /// The package's dependencies: each edge's name, the package it reaches,
+    /// and that package's interface.
+    pub dep_interfaces: Vec<(Name, baml_base::SourceRoot, PackageInterface)>,
+    pub own: baml_base::SourceRoot,
 }
 
 // ── Salsa Update impls ─────────────────────────────────────────────────────
@@ -350,12 +355,11 @@ impl PackageInterface {
 }
 
 /// The serialized compiler interface of a mounted (source-less) package.
-pub fn mounted_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: &Name,
-) -> Option<&'db PackageInterface> {
-    is_external_package(db, package)
-        .then(|| package_interface(db, PackageId::new(db, package.clone())))
+pub fn mounted_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
+) -> Option<&'_ PackageInterface> {
+    is_served_from_interface(db, package).then(|| package_interface(db, package))
 }
 
 /// A mounted package's structural type row, addressed without source locs.
@@ -363,7 +367,8 @@ pub fn mounted_type_row<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     qtn: &QualifiedTypeName,
 ) -> Option<&'db ExportedType> {
-    mounted_interface(db, qtn.package())?.lookup_type(qtn.namespace(), qtn.name())
+    let package = root_by_wire_name(db, qtn.package())?;
+    mounted_interface(db, package)?.lookup_type(qtn.namespace(), qtn.name())
 }
 
 impl ExportedType {
@@ -423,7 +428,7 @@ fn external_target<'db>(
                 }
             } else {
                 ExternalCallTarget::Method {
-                    package: package.package,
+                    package: wire_name(db, package.root),
                     namespace: package.namespace_path,
                     class: baml_compiler2_ppir::item_data::class_data(db, class)
                         .name
@@ -442,12 +447,12 @@ fn external_target<'db>(
                 method: name.clone(),
             })
             .unwrap_or_else(|| ExternalCallTarget::Free {
-                package: package.package,
+                package: wire_name(db, package.root),
                 namespace: package.namespace_path,
                 name,
             }),
         None => ExternalCallTarget::Free {
-            package: package.package,
+            package: wire_name(db, package.root),
             namespace: package.namespace_path,
             name,
         },
@@ -858,7 +863,7 @@ pub fn file_interface_fragment(
 ) -> FileInterfaceFragment {
     let pkg_info = file_package::file_package(db, file);
     let ns_path = pkg_info.namespace_path.clone();
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     // Lower against the package's resolved items so a per-file fragment matches
     // the whole-package fold.
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
@@ -907,42 +912,45 @@ pub fn file_interface_fragment(
 // ── package_interface Salsa query ──────────────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
-pub fn package_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn package_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> PackageInterface {
-    let pkg_name = pkg_id.name(db);
+    let is_stdlib = pkg_id.kind(db) == baml_base::SourceRootKind::Stdlib;
 
     // Seed short-circuit (B-694). `seeds.by_package(db)` is a *tracked* read of
     // the `SeededStdlibInterface` input: databases that seed (the CLI, the LSP)
     // hold the input from construction (empty until seeded), so this memo records
     // a dependency on the seed map and a later `set_seeded_stdlib_interface`
-    // reliably invalidates it. Only stdlib package names appear in the map, so a
-    // user package never hits the seed and derives normally. Because the entire
-    // stdlib derivation cluster (signature lowering, `callable_throws` /
-    // body inference, throw-set solving) is reachable only through this query,
-    // short-circuiting here skips all of it. This stays ABOVE the fragment fold.
-    if let Some(seeds) = db.seeded_stdlib_interface() {
-        if let Some(bytes) = seeds.by_package(db).get(pkg_name.as_str()) {
-            if let Ok(iface) = borsh::from_slice::<PackageInterface>(bytes) {
-                return iface;
-            }
-            // corrupt/stale seed → fall through to honest derivation
-        }
+    // reliably invalidates it. Only stdlib packages are seeded, keyed by their
+    // language-fixed names, so a user package never hits the seed and derives
+    // normally. Because the entire stdlib derivation cluster (signature
+    // lowering, `callable_throws` / body inference, throw-set solving) is
+    // reachable only through this query, short-circuiting here skips all of
+    // it. This stays ABOVE the fragment fold.
+    if is_stdlib
+        && let Some(name) = pkg_id.self_name(db)
+        && let Some(seeds) = db.seeded_stdlib_interface()
+        && let Some(bytes) = seeds.by_package(db).get(name.as_str())
+        && let Ok(iface) = borsh::from_slice::<PackageInterface>(bytes)
+    {
+        return iface;
     }
 
-    // A mounted package has no source rows. Its serialized interface is the
-    // authoritative compiler surface, so a stale/corrupt blob must never fall
-    // through to an empty interface. ProjectDatabase validates ordinary mounts
-    // before installation; the panic is a last-resort invariant failure for
-    // custom Db implementations that bypass that boundary.
-    if is_external_package(db, &pkg_name)
-        && let Some(mounted) = db.mounted_packages()
-        && let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str())
-    {
-        let mut interface = if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
+    // A package served from its interface has no source rows. Its serialized
+    // interface is the authoritative compiler surface, so a stale/corrupt blob
+    // must never fall through to an empty interface. ProjectDatabase validates
+    // ordinary mounts before installation; the panic is a last-resort
+    // invariant failure for custom Db implementations that bypass that
+    // boundary.
+    if let Some(bytes) = pkg_id.interface(db) {
+        let precompiled = is_precompiled_stdlib(db, pkg_id);
+        let mut interface = if precompiled {
             borsh::from_slice::<PackageInterface>(bytes).unwrap_or_else(|error| {
-                panic!("compiler-built package `{pkg_name}` has an invalid interface: {error}")
+                panic!(
+                    "compiler-built package `{}` has an invalid interface: {error}",
+                    wire_name(db, pkg_id)
+                )
             })
         } else {
             baml_artifact::decode::<PackageInterface>(
@@ -950,21 +958,21 @@ pub fn package_interface<'db>(
                 bytes,
             )
             .unwrap_or_else(|error| {
-                panic!("mounted package `{pkg_name}` has an invalid interface artifact: {error}")
+                panic!(
+                    "mounted package `{}` has an invalid interface artifact: {error}",
+                    wire_name(db, pkg_id)
+                )
             })
         };
-        if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
+        if precompiled {
             mark_precompiled_callables_linkable(&mut interface);
         }
         return interface;
     }
 
     // Honest derivation. Count stdlib-package derivations so a warm run can
-    // assert zero (the seed served every stdlib package). The authoritative set
-    // of stdlib packages is the embedded builtin manifest — a package is stdlib
-    // iff it contributes a `<builtin>/…` file — so this stays in lockstep with
-    // the files that actually ship (no hand-maintained list to drift).
-    if baml_builtins2::stdlib_package_names().contains(&pkg_name.as_str()) {
+    // assert zero (the seed served every stdlib package).
+    if is_stdlib {
         STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -1024,9 +1032,9 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 /// Lower the package's implementation registry into a canonical, loc-free
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
 /// source diagnostics remain owned by the declaration checker.
-fn exported_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+fn exported_impls(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> Vec<ExportedImpl> {
     use baml_compiler2_ppir::item_data::ImplSubjectData;
 
@@ -1101,9 +1109,9 @@ fn exported_impls<'db>(
 /// Winner selection is driven by the resolved `pkg_items.namespaces` (the
 /// deterministic `contribs[0]` pick); per-item *lowering* lives in
 /// `file_interface_fragment`.
-fn fold_package_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+fn fold_package_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
@@ -1226,9 +1234,9 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 /// from its `callable_throws` surface (already transitive: the salsa
 /// fixpoint crosses call and package boundaries).
 #[salsa::tracked(returns(ref))]
-pub fn function_throw_sets<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package_id: PackageId<'db>,
+pub fn function_throw_sets(
+    db: &dyn baml_compiler2_ppir::Db,
+    package_id: baml_base::SourceRoot,
 ) -> FunctionThrowSets {
     let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
     let mut sets = FunctionThrowSets::default();
@@ -1279,24 +1287,23 @@ pub fn function_throw_sets<'db>(
 // ── package_resolution_context Salsa query ─────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
-pub fn package_resolution_context<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-) -> PackageResolutionContext<'db> {
+pub fn package_resolution_context(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
+) -> PackageResolutionContext<'_> {
     let own_items = baml_compiler2_ppir::package_items(db, pkg_id).clone();
-    let deps = package_dependencies(db, pkg_id);
-    let dep_interfaces: Vec<(Name, PackageInterface)> = deps
+    let dep_interfaces: Vec<(Name, baml_base::SourceRoot, PackageInterface)> = pkg_id
+        .dependencies(db)
         .iter()
-        .map(|dep_id| {
-            let name = dep_id.name(db);
-            let iface = package_interface(db, *dep_id).clone();
-            (name, iface)
+        .map(|dependency| {
+            let iface = package_interface(db, dependency.root).clone();
+            (dependency.name.clone(), dependency.root, iface)
         })
         .collect();
     PackageResolutionContext {
         own_items,
         dep_interfaces,
-        own_package_name: pkg_id.name(db),
+        own: pkg_id,
     }
 }
 
@@ -1312,18 +1319,12 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn baml_compiler2_ppir::Db,
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
-        if pkg_name.as_str() == self.own_package_name.as_str() {
-            Some(&self.own_items)
-        } else if self
-            .dep_interfaces
-            .iter()
-            .any(|(n, _)| n.as_str() == pkg_name.as_str())
-        {
-            let pkg_id = PackageId::new(db, pkg_name.clone());
-            Some(baml_compiler2_ppir::package_items(db, pkg_id))
+        let package = accessible_package(db, self.own, pkg_name)?;
+        Some(if package == self.own {
+            &self.own_items
         } else {
-            None
-        }
+            baml_compiler2_ppir::package_items(db, package)
+        })
     }
 
     /// Resolve a type by path. Own-package via `PackageItems`, then deps.
@@ -1364,7 +1365,7 @@ impl<'db> PackageResolutionContext<'db> {
                     return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
                 }
             }
-            for (dep_name, dep_iface) in &self.dep_interfaces {
+            for (dep_name, _, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
                         return Some((ResolvedSource::Builtin, exported.to_ty()));
@@ -1385,7 +1386,7 @@ impl<'db> PackageResolutionContext<'db> {
         if let Some(def) = self.own_items.lookup_type(namespace, item) {
             return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
         }
-        for (_dep_name, dep_iface) in &self.dep_interfaces {
+        for (_dep_name, _, dep_iface) in &self.dep_interfaces {
             if let Some(exported) = dep_iface.lookup_type(namespace, item) {
                 return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
@@ -1426,16 +1427,15 @@ impl<'db> PackageResolutionContext<'db> {
                     return Some(ResolvedValue::Source(def));
                 }
             }
-            for (dep_name, dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_root, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    if is_external_package(db, dep_name) {
+                    if is_served_from_interface(db, *dep_root) {
                         let function = dep_iface.lookup_function(&path[1..path.len() - 1], item)?;
                         return Some(ResolvedValue::Exported(Box::new(
                             resolved_exported_function(function, Vec::new(), Vec::new()),
                         )));
                     }
-                    let dep_pkg_id = PackageId::new(db, dep_name.clone());
-                    let dep_items = baml_compiler2_ppir::package_items(db, dep_pkg_id);
+                    let dep_items = baml_compiler2_ppir::package_items(db, *dep_root);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
                         return Some(ResolvedValue::Source(def));
                     }
@@ -1453,10 +1453,10 @@ impl<'db> PackageResolutionContext<'db> {
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
         let class_pkg = class_name.package();
-        if class_pkg.as_str() == self.own_package_name.as_str() {
+        if wire_name(db, self.own) == *class_pkg {
             self.lookup_own_class_method(db, class_name, method_name)
         } else {
-            for (dep_name, dep_iface) in &self.dep_interfaces {
+            for (dep_name, _, dep_iface) in &self.dep_interfaces {
                 if dep_name != class_pkg {
                     continue;
                 }

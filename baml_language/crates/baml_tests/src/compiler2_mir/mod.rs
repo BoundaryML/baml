@@ -6,7 +6,6 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
@@ -95,7 +94,8 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
     assert_no_diagnostic_errors(&dependency);
     let mut interface = package_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
+        baml_compiler2_hir::package::root_by_wire_name(&dependency, &Name::new("dependency"))
+            .unwrap(),
     )
     .clone();
     let exported = interface
@@ -109,15 +109,10 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
     exported.linkability = ExternalLinkability::Linkable;
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -173,7 +168,8 @@ function forged_type_of<T>() -> reflect.Type {
     assert_no_diagnostic_errors(&dependency);
     let mut interface = package_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
+        baml_compiler2_hir::package::root_by_wire_name(&dependency, &Name::new("dependency"))
+            .unwrap(),
     )
     .clone();
     let mut configured = 0;
@@ -205,15 +201,10 @@ function forged_type_of<T>() -> reflect.Type {
     );
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -826,14 +817,13 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
     baml_db::testing::assert_no_diagnostic_errors(&library);
     let interface = baml_compiler2_hir_ty::package_interface::package_interface(
         &library,
-        baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
+        baml_compiler2_hir::package::root_by_wire_name(&library, &Name::new("app")).unwrap(),
     );
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
         .expect("serialize mounted interface");
 
     let mut db = make_db();
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     let file = db.file(
         "test.baml",
         r#"

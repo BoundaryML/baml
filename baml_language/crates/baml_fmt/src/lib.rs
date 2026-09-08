@@ -34,11 +34,10 @@ pub fn format(source: &str, options: &FormatOptions) -> Result<String, Formatter
 pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml_db::SourceFile) {
     let mut db = ProjectDatabase::new();
     let root = db
-        .add_source_root(SourceRootSpec {
-            path: std::path::PathBuf::from("<fmt>"),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(
+            "<fmt>",
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
     let file =
         db.add_or_update_file_in(root, &std::path::PathBuf::from("<fmt>").join(name), source);

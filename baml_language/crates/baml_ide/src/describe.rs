@@ -1401,7 +1401,7 @@ fn describe_class_method(
         .map(|(idx, &method_loc)| {
             let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let pkg_id = pkg_info.root;
             let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
             let ef = iface
                 .lookup_type(&pkg_info.namespace_path, &class_data.name)
@@ -1526,7 +1526,7 @@ fn collect_method_signature_deps(
     let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = pkg_info.root;
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let Some(methods) = iface
         .lookup_type(&pkg_info.namespace_path, &class.name)
@@ -2310,7 +2310,7 @@ fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::O
 mod tests {
     use std::fmt::Write as _;
 
-    use baml_compiler2_hir::package::sole_workspace_package;
+    use baml_compiler2_hir::package::sole_workspace_root;
 
     use super::SymbolDescription;
     use crate::test_support::{ProjectTest, offset_to_line_col};
@@ -2481,7 +2481,7 @@ class Config {
     #[test]
     fn describe_by_definition_class_in_namespace() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = sole_workspace_root(&project.db).unwrap();
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let ns_path = vec![baml_base::Name::new("llm")];
@@ -2497,7 +2497,7 @@ class Config {
     #[test]
     fn describe_item_member_field() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = sole_workspace_root(&project.db).unwrap();
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let root_ns: Vec<baml_base::Name> = vec![];
@@ -2513,7 +2513,7 @@ class Config {
     #[test]
     fn describe_item_member_nonexistent() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = sole_workspace_root(&project.db).unwrap();
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let root_ns: Vec<baml_base::Name> = vec![];
@@ -2688,7 +2688,7 @@ implement Other for Robot {
     fn named_interface_def(
         project: &ProjectTest,
     ) -> baml_compiler2_hir::contributions::Definition<'_> {
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = sole_workspace_root(&project.db).unwrap();
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
         pkg.lookup_type(&[], &baml_base::Name::new("Named"))
             .unwrap()

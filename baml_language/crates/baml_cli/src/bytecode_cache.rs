@@ -506,14 +506,16 @@ impl CacheContext {
 /// returns the seed verbatim, so re-serializing reproduces the same bytes
 /// (idempotent); on a cold database it materializes the interface once.
 fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
-    use baml_db::{
-        Name, baml_compiler2_hir::package::PackageId,
-        baml_compiler2_hir_ty::package_interface::package_interface,
-    };
+    use baml_db::baml_compiler2_hir_ty::package_interface::package_interface;
     let mut out = std::collections::BTreeMap::new();
-    for name in baml_builtins2::stdlib_package_names().iter().copied() {
-        let pkg_id = PackageId::new(db, Name::new(name));
-        let iface = package_interface(db, pkg_id);
+    for root in db.source_roots() {
+        if root.kind(db) != baml_db::SourceRootKind::Stdlib {
+            continue;
+        }
+        let name = root
+            .self_name(db)
+            .unwrap_or_else(|| unreachable!("stdlib roots are named"));
+        let iface = package_interface(db, root);
         match borsh::to_vec(iface) {
             Ok(bytes) => {
                 out.insert(name.to_string(), bytes);
@@ -3712,7 +3714,6 @@ mod tests {
     fn seeded_stdlib_interface_short_circuits_derivation() {
         use baml_db::{
             Name,
-            baml_compiler2_hir::package::PackageId,
             baml_compiler2_hir_ty::package_interface::{
                 FunctionThrowSets, PackageInterface, package_interface,
             },
@@ -3743,7 +3744,9 @@ mod tests {
         );
         db.set_seeded_stdlib_interface(seed);
 
-        let log_id = PackageId::new(&db, Name::new("log"));
+        let log_id =
+            baml_db::baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("log"))
+                .unwrap();
         let iface = package_interface(&db, log_id);
         assert!(
             iface.functions.is_empty() && iface.types.is_empty(),
@@ -3751,7 +3754,9 @@ mod tests {
         );
 
         // A package that was NOT seeded still derives honestly and is non-empty.
-        let baml_id = PackageId::new(&db, Name::new("baml"));
+        let baml_id =
+            baml_db::baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml"))
+                .unwrap();
         let baml_iface = package_interface(&db, baml_id);
         assert!(
             !baml_iface.functions.is_empty() || !baml_iface.types.is_empty(),

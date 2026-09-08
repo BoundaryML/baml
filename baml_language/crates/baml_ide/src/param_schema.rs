@@ -20,7 +20,7 @@
 use std::collections::BTreeMap;
 
 use baml_base::Literal as LiteralValue;
-use baml_compiler2_hir::{loc::FunctionLoc, package::PackageId};
+use baml_compiler2_hir::{loc::FunctionLoc, package::root_by_wire_name};
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::{Name, ProjectDatabase};
 use baml_type::{FunctionParamMode, QualifiedTypeName, Ty};
@@ -207,7 +207,7 @@ impl<'db> SchemaCx<'db, '_> {
         if qtn.is_local() {
             self.user_iface.lookup_type(qtn.namespace(), qtn.name())
         } else {
-            let pkg_id = PackageId::new(self.db, qtn.package().clone());
+            let pkg_id = root_by_wire_name(self.db, qtn.package())?;
             package_interface(self.db, pkg_id).lookup_type(qtn.namespace(), qtn.name())
         }
     }

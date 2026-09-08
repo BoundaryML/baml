@@ -1,7 +1,7 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
+use baml_compiler2_hir::scope::ScopeKind;
 use baml_compiler2_hir_ty::package_interface::{
     ExportedType, package_interface, package_resolution_context,
 };
@@ -464,7 +464,7 @@ fn function_type_throws_package_interface_exports_effect_params() {
     let scope_id = find_function_scope_id(&db, file, "direct");
     let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let iface = package_interface(&db, db.workspace_root().unwrap());
     let exported = iface
         .lookup_function(&[], &Name::new("direct"))
         .expect("exported function");
@@ -487,7 +487,7 @@ fn package_interface_exports_optional_param_mode() {
         "function Search(query: string, limit: int = 10) -> int { limit }",
     );
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let iface = package_interface(&db, db.workspace_root().unwrap());
     let exported = iface
         .lookup_function(&[], &Name::new("Search"))
         .expect("exported function");
@@ -545,8 +545,6 @@ implements ToJson for Dog {
     // Membership goes through the canonical L1 seam (GlobalTypeContext's
     // `TypeContext::implements_interface`); no type aliases are involved here.
     use baml_type::normalize::TypeContext;
-    let pkg_id = PackageId::new(&db, Name::new("user"));
-    let _ = pkg_id;
     let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
     let dog = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
@@ -575,7 +573,7 @@ fn builtin_equals_compare_visible_from_user_package() {
     let mut db = make_db();
     // A user file so the `user` package exists; `Bare` implements nothing.
     db.file("main.baml", "class Bare { x: int }");
-    let user_pkg = PackageId::new(&db, Name::new("user"));
+    let user_pkg = db.workspace_root().unwrap();
 
     let equals = baml_type::Interface::new(
         QualifiedTypeName::new(
@@ -635,7 +633,7 @@ class SearchService {
 "#,
     );
 
-    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let iface = package_interface(&db, pkg_id);
     let Some(ExportedType::Class { methods, .. }) =
         iface.lookup_type(&[], &Name::new("SearchService"))
@@ -1122,7 +1120,7 @@ fn optional_callback_effect_survives_narrowing_and_invocation() {
 }"#,
     );
 
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.apply_optional(callback: ((value: int) -> int throws __effect_param_0) | null, value: int) -> int throws never {
       { : int
         if (callback != null : bool) : void
@@ -1220,7 +1218,7 @@ fn function_type_throws_package_interface_exports_optional_effect_params() {
     let scope_id = find_function_scope_id(&db, file, "opt");
     let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let iface = package_interface(&db, db.workspace_root().unwrap());
     let exported = iface
         .lookup_function(&[], &Name::new("opt"))
         .expect("exported function");

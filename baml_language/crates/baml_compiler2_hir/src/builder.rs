@@ -157,9 +157,11 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         // Build scope chain: Project → Package → Namespace* → File
         self.push_scope(ScopeKind::Project, None, file_range);
+        // A structural scope: its name is never consulted for resolution; it
+        // carries the package's spelling for dumps and diagnostics.
         self.push_scope(
             ScopeKind::Package,
-            Some(pkg_info.package.clone()),
+            Some(crate::package::wire_name(self.db, pkg_info.root)),
             file_range,
         );
         for ns in &pkg_info.namespace_path {

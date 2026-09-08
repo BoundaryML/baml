@@ -519,7 +519,7 @@ fn reflect.AnyClass.name(self: reflect.AnyClass) -> string {
     }
 
     bb1: {
-        _0 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _2) -> [bb2];
+        _0 = virtual_call to_string as baml.ToString(copy _2) -> [bb2];
     }
 
     bb2: {

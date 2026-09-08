@@ -48,7 +48,6 @@ pub struct StdlibPrefix {
 /// sources. Costs a full stdlib compile, so call it once per process (a build
 /// script) and reuse the result.
 pub fn build_stdlib_prefix(opt: OptLevel) -> StdlibPrefix {
-    use baml_compiler2_hir::package::PackageId;
     use baml_compiler2_hir_ty::package_interface::package_interface;
 
     // Only the stdlib roots matter here: no user file contributes to a
@@ -56,13 +55,17 @@ pub fn build_stdlib_prefix(opt: OptLevel) -> StdlibPrefix {
     // else.
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
-    let interfaces = baml_builtins2::stdlib_package_names()
-        .iter()
-        .map(|name| {
-            let package = PackageId::new(&db, baml_base::Name::new(*name));
-            let bytes = borsh::to_vec(package_interface(&db, package))
+    let interfaces = db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&db) == baml_base::SourceRootKind::Stdlib)
+        .map(|root| {
+            let name = root
+                .self_name(&db)
+                .unwrap_or_else(|| unreachable!("stdlib roots are named"));
+            let bytes = borsh::to_vec(package_interface(&db, root))
                 .expect("a stdlib PackageInterface always serializes");
-            ((*name).to_string(), bytes)
+            (name.to_string(), bytes)
         })
         .collect();
     let program =

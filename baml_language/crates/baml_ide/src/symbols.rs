@@ -133,7 +133,12 @@ impl From<baml_compiler2_ast::ast::FunctionOrigin> for FunctionOrigin {
 /// Extracts LLM metadata (client name, `is_llm`) from `declarative_meta` on the
 /// compiler2 [`Function`](baml_compiler2_hir::item_tree::Function) item tree entry.
 pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
-    let pkg_id = baml_compiler2_hir::package::sole_workspace_package(db);
+    let Some(pkg_id) = baml_compiler2_hir::package::sole_workspace_root(db) else {
+        return FunctionListing {
+            functions: Vec::new(),
+            types: std::collections::BTreeMap::new(),
+        };
+    };
     let pkg = package_items(db, pkg_id);
     let iface = package_interface(db, pkg_id);
     let mut functions = Vec::new();

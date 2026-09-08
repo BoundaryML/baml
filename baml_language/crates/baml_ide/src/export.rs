@@ -55,7 +55,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
     namespace::NamespaceId,
-    package::PackageId,
+    package::wire_name,
 };
 use baml_compiler2_ppir::item_data;
 use baml_type::{
@@ -336,7 +336,7 @@ impl SymbolId {
         Some(Self {
             kind,
             owner: Owner::Path {
-                package: pkg.package.to_string(),
+                package: wire_name(db, pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: name.to_string(),
             },
@@ -376,7 +376,7 @@ impl SymbolId {
         Self {
             kind,
             owner: Owner::Path {
-                package: pkg.package.to_string(),
+                package: wire_name(db, pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: owner_name.to_string(),
             },
@@ -715,7 +715,7 @@ fn function_name(db: &Db, func: FunctionLoc<'_>) -> Name {
 fn interface_qtn(db: &Db, iface: InterfaceLoc<'_>) -> QualifiedTypeName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, iface.file(db));
     QualifiedTypeName::new(
-        pkg.package,
+        wire_name(db, pkg.root),
         pkg.namespace_path,
         item_data::interface_data(db, iface).name.clone(),
     )
@@ -724,7 +724,7 @@ fn interface_qtn(db: &Db, iface: InterfaceLoc<'_>) -> QualifiedTypeName {
 fn class_qtn(db: &Db, class: ClassLoc<'_>) -> QualifiedTypeName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
     QualifiedTypeName::new(
-        pkg.package,
+        wire_name(db, pkg.root),
         pkg.namespace_path,
         item_data::class_data(db, class).name.clone(),
     )
@@ -733,7 +733,7 @@ fn class_qtn(db: &Db, class: ClassLoc<'_>) -> QualifiedTypeName {
 fn enum_qtn(db: &Db, enm: EnumLoc<'_>) -> QualifiedTypeName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, enm.file(db));
     QualifiedTypeName::new(
-        pkg.package,
+        wire_name(db, pkg.root),
         pkg.namespace_path,
         item_data::enum_data(db, enm).name.clone(),
     )
@@ -875,7 +875,7 @@ fn plain_bounds(
 // ── Projection ───────────────────────────────────────────────────────────────
 
 /// Export one package's full surface.
-pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExport {
+pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> PackageExport {
     let impl_index = ImplIndex::build(db);
 
     // Namespaces root-first sorted by path; items types-then-values sorted
@@ -887,7 +887,7 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
 
     let mut items = Vec::new();
     for path in ns_paths {
-        let ns = NamespaceId::new(db, package.name(db), path.clone());
+        let ns = NamespaceId::new(db, package, path.clone());
         let ns_items = baml_compiler2_ppir::namespace_items(db, ns);
         let mut named: Vec<(&Name, Definition<'db>)> = ns_items
             .types
@@ -910,12 +910,15 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
     }
     items.sort_by(|a, b| a.id.cmp(&b.id));
 
-    let package_name = package.name(db);
+    let package_name = wire_name(db, package);
     let mut impls: Vec<ImplExport> = impl_index
         .exports
         .into_iter()
         .filter(|(imp, _)| {
-            baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package == package_name
+            wire_name(
+                db,
+                baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root,
+            ) == package_name
         })
         .map(|(_, export)| export)
         .collect();
@@ -1138,7 +1141,10 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
 fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     let data = impl_facts(db, imp)?;
     let iface_qtn = interface_qtn(db, data.interface);
-    let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
+    let pkg = wire_name(
+        db,
+        baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root,
+    );
 
     let for_ty = TyRef::of(&data.for_ty_pattern);
     // Destructured from the one renderer rather than rebuilt here, so a
@@ -1340,8 +1346,9 @@ mod tests {
         db
     }
 
-    fn package<'db>(db: &'db ProjectDatabase, name: &str) -> PackageId<'db> {
-        PackageId::new(db, Name::new(name))
+    fn package(db: &ProjectDatabase, name: &str) -> baml_base::SourceRoot {
+        baml_compiler2_hir::package::root_by_wire_name(db, &Name::new(name))
+            .expect("package is installed")
     }
 
     /// The whole `assert` package, pretty-printed — small enough to review,

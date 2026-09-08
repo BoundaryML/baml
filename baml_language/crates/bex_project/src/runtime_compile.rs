@@ -2,7 +2,7 @@
 //! boundary.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fmt::Write as _,
     path::{Path, PathBuf},
     sync::Arc,
@@ -16,10 +16,9 @@ use baml_compiler2_emit::emit_units_with_stdlib;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
-    package::PackageId,
 };
 use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_db::{ProjectDatabase, SourceRootSpec, collect_diagnostics};
+use baml_db::{Dependency, ProjectDatabase, SourceRootSpec, collect_diagnostics};
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
@@ -1445,7 +1444,7 @@ struct SessionCompile {
 }
 
 fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
-    let package_id = PackageId::new(db, Name::new("user"));
+    let package_id = db.workspace_root()?;
     let package_items = baml_compiler2_hir::package::package_items(db, package_id);
     let Definition::Let(let_loc) = package_items.lookup_value(&[], &Name::new(name))? else {
         return None;
@@ -2095,15 +2094,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         })?;
         // This local is the transience guarantee: no handle to `db` occurs in
         // either return type, and all retained values below are deep-owned.
-        // The stdlib arrives as precompiled interface blobs below (never as
-        // source), so no `Stdlib` roots are materialized.
+        // The stdlib arrives as precompiled interface blobs (never as source):
+        // its roots are served from those interfaces and hold no files.
         let mut db = ProjectDatabase::new();
+        db.ensure_precompiled_stdlib(&stdlib.interfaces);
         let workspace = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(RUNTIME_VIRTUAL_ROOT),
-                package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         let aliases: Vec<Name> = packages
             .keys()
@@ -2117,52 +2116,33 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(|diagnostic| vec![diagnostic])?;
-        let mounted = enriched
-            .iter()
-            .map(|(name, blob, _)| (name.clone(), blob.clone()))
-            .collect::<BTreeMap<_, _>>();
-        let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
-        db.set_mounted_packages(mounted).map_err(|message| {
+        // One root per mount, served from its interface (the semantic
+        // authority), reached from the consumer under the alias it chose.
+        // Emit needs concrete pool/global slots while producing the consumer's
+        // relocatable units, so the root also holds link-only native stubs;
+        // those units are discarded below so the final artifact keeps the
+        // dependency references unresolved for the runtime linker. The root
+        // is `Dynamic` (runtime-loaded), so it sorts after every statically
+        // compiled root.
+        let mount_error = |alias: &str, error: &dyn std::fmt::Display| {
             vec![RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message,
+                code: "E_RUNTIME_MOUNT".to_string(),
+                message: format!("cannot mount package `{alias}`: {error}"),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
             }]
-        })?;
-        db.set_precompiled_stdlib_packages(stdlib.interfaces);
-        debug_assert!(
-            precompiled_stdlib_names.iter().all(|name| {
-                baml_compiler2_hir::package::is_precompiled_package(&db, &Name::new(name))
-            }),
-            "set_mounted_packages must run before set_precompiled_stdlib_packages"
-        );
-        // Emit needs concrete pool/global slots while producing the consumer's
-        // relocatable units. Materialize link-only native stubs in the mounted
-        // package; the mounted interface remains the semantic authority, and
-        // the stub units are discarded below so the final artifact keeps the
-        // dependency references unresolved for the runtime linker.
-        for (mount_index, (alias, _, stubs)) in enriched.iter().enumerate() {
-            if baml_compiler2_hir::package::is_reserved_package_name(alias) || stubs.is_empty() {
-                continue;
-            }
-            // Stub units live in a `Dynamic` root for the mount's package
-            // (its virtual `<builtin>/<alias>` prefix): runtime-loaded, so it
-            // sorts after every statically compiled root.
-            let stub_root = db
-                .add_source_root(SourceRootSpec {
-                    path: PathBuf::from(format!("{BUILTIN_VIRTUAL_ROOT}/{alias}")),
-                    package: Name::new(alias),
-                    kind: baml_base::SourceRootKind::Dynamic,
-                })
-                .map_err(|error| {
-                    vec![RuntimeCompileDiagnostic {
-                        code: "E_RUNTIME_MOUNT".to_string(),
-                        message: format!("cannot mount package `{alias}`: {error}"),
-                        severity: RuntimeDiagnosticSeverity::Error,
-                        span: None,
-                    }]
-                })?;
+        };
+        for (mount_index, (alias, blob, stubs)) in enriched.iter().enumerate() {
+            let mount_root = db
+                .add_source_root(
+                    SourceRootSpec::new(
+                        format!("{BUILTIN_VIRTUAL_ROOT}/{alias}"),
+                        baml_base::SourceRootKind::Dynamic,
+                    )
+                    .named(Name::new(alias.as_str()))
+                    .served_from(blob.clone()),
+                )
+                .map_err(|error| mount_error(alias, &error))?;
             let stub_files: Vec<(PathBuf, &str)> = stubs
                 .iter()
                 .enumerate()
@@ -2174,11 +2154,19 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 })
                 .collect();
             db.add_or_update_files_in(
-                stub_root,
+                mount_root,
                 stub_files
                     .iter()
                     .map(|(path, source)| (path.as_path(), *source)),
             );
+            db.add_dependency(
+                workspace,
+                Dependency {
+                    name: Name::new(alias.as_str()),
+                    root: mount_root,
+                },
+            )
+            .map_err(|error| mount_error(alias, &error))?;
         }
         for (path, source) in files {
             // Runtime input names are package-relative. Mounting them beneath
@@ -2263,7 +2251,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
         }
 
-        let interface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+        let interface = package_interface(&db, workspace);
         let interface_blob =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
                 .map_err(|error| {
@@ -2392,11 +2380,10 @@ mod tests {
     fn runtime_virtual_paths_derive_packages_and_namespaces() {
         let mut db = ProjectDatabase::new();
         let workspace = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(RUNTIME_VIRTUAL_ROOT),
-                package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
             .unwrap();
 
         let source = db.add_or_update_file_in(
@@ -2405,7 +2392,7 @@ mod tests {
             "",
         );
         let source_package = file_package(&db, source);
-        assert_eq!(source_package.package.as_str(), "user");
+        assert_eq!(source_package.root, workspace);
         assert_eq!(
             source_package
                 .namespace_path
@@ -2416,11 +2403,13 @@ mod tests {
         );
 
         let mount_root = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(format!("{BUILTIN_VIRTUAL_ROOT}/app")),
-                package: Name::new("app"),
-                kind: baml_base::SourceRootKind::Dynamic,
-            })
+            .add_source_root(
+                SourceRootSpec::new(
+                    format!("{BUILTIN_VIRTUAL_ROOT}/app"),
+                    baml_base::SourceRootKind::Dynamic,
+                )
+                .named(Name::new("app")),
+            )
             .unwrap();
         let mount = db.add_or_update_file_in(
             mount_root,
@@ -2428,7 +2417,7 @@ mod tests {
             "",
         );
         let mount_package = file_package(&db, mount);
-        assert_eq!(mount_package.package.as_str(), "app");
+        assert_eq!(mount_package.root, mount_root);
         assert_eq!(
             mount_package
                 .namespace_path

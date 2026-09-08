@@ -591,11 +591,10 @@ mod tests {
 
         let mut db = baml_db::ProjectDatabase::new();
         db.ensure_stdlib_sources();
-        db.add_source_root(baml_db::SourceRootSpec {
-            path: PathBuf::from("/pg-test"),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        db.add_source_root(baml_db::SourceRootSpec::new(
+            PathBuf::from("/pg-test"),
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         let program = db
             .get_bytecode_unchecked()
