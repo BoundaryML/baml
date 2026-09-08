@@ -3233,12 +3233,7 @@ impl BexVm {
             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
             })?;
-        let method = resolver
-            .rule_method_impl(&rule, method_name)
-            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                method: method_name.to_string(),
-            })?
-            .method;
+        let method = resolver.rule_method_impl(&rule, method_name)?.method;
         let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
         // Only `.tys` reaches the callee frame. `method_type_args.values` (the
         // exact `TypeValue`s) is dropped, which is sound here: a type argument
@@ -8611,10 +8606,7 @@ impl BexVm {
                                 method: method_name.clone(),
                             })?;
                         let method = resolver
-                            .rule_method_impl(&rule, method_name.as_str())
-                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            })?
+                            .rule_method_impl(&rule, method_name.as_str())?
                             .method;
                         // `fqn` is the resolved callee's heap pointer (provided
                         // row or adopted interface default) — invoke it directly.

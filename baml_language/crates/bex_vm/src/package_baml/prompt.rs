@@ -258,7 +258,16 @@ impl PromptAssembly {
         let callee = match make_to_string_callee(vm, Value::object(next_ptr)) {
             Err(e) => return NativeCallResult::Error(e.into()),
             Ok(Some(callee)) => callee,
-            Ok(None) => return self.finish(vm),
+            // `pending` was collected by the override pre-order pass; a
+            // dispatch-pass miss is a skew between the two, not a fallback.
+            Ok(None) => {
+                return NativeCallResult::Error(
+                    crate::errors::VmInternalError::OverrideWalkSkew {
+                        interface: "ToString",
+                    }
+                    .into(),
+                );
+            }
         };
         NativeCallResult::YieldToCall {
             callee,

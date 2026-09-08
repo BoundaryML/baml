@@ -3043,9 +3043,16 @@ impl<'db> LoweringContext<'db> {
     /// It is what the type checker actually resolved through — which is the only
     /// thing that answers a *union* receiver, where the serving interface is the one
     /// every arm shares and is not recoverable from the receiver type alone.
-    fn tir_virtual_field_view(&self, key: ExprMetadataKey) -> Option<(InterfaceTypeView, u32)> {
+    /// The interface view and field index a recorded member resolution carries
+    /// when it is a virtual-field read — source or mounted interface alike; every
+    /// other resolution kind is `None`. The one projection both the expression
+    /// road and the path ladder read TIR's answer through.
+    fn virtual_field_view_of(
+        &self,
+        resolution: &crate::inference_provider::MemberResolution<'_>,
+    ) -> Option<(InterfaceTypeView, u32)> {
         use crate::inference_provider::MemberResolution;
-        let (interface, field_index) = match self.tir_resolution(key)? {
+        let (interface, field_index) = match resolution {
             MemberResolution::InterfaceVirtualField {
                 interface,
                 field_index,
@@ -3062,6 +3069,25 @@ impl<'db> LoweringContext<'db> {
             return None;
         };
         Some(((self.wire(tn), args.clone(), assoc.clone()), field_index))
+    }
+
+    fn tir_virtual_field_view(&self, key: ExprMetadataKey) -> Option<(InterfaceTypeView, u32)> {
+        self.virtual_field_view_of(self.tir_resolution(key)?)
+    }
+
+    /// The recorded virtual-field view of member segment `seg_idx` of a path
+    /// ladder (1-based within the path: segment 0 is the root). TIR records
+    /// one resolution per member segment and the writeback finalizes each,
+    /// so a ladder's interface field reads resolve exactly like an
+    /// expression's — through the interface the access was CHECKED against,
+    /// never re-derived from the segment's type.
+    fn tir_path_segment_virtual_field_view(
+        &self,
+        key: ExprMetadataKey,
+        seg_idx: usize,
+    ) -> Option<(InterfaceTypeView, u32)> {
+        let member_index = seg_idx.checked_sub(1)?;
+        self.virtual_field_view_of(self.tir_path_member_resolutions(key)?.get(member_index)?)
     }
 
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
@@ -6870,7 +6896,7 @@ impl<'db> LoweringContext<'db> {
             let seg_idx = offset + 1;
             let is_last = seg_idx + 1 == segments.len();
             let interface_prefix =
-                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg, &current_ty);
+                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg);
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
@@ -6946,6 +6972,20 @@ impl<'db> LoweringContext<'db> {
                 current_place = target_place;
                 current_ty = target_ty;
                 continue;
+            }
+            if let RuntimeTy::Interface(tn, _, _, _) = &current_ty {
+                // An interface-typed prefix with no recorded or derived view:
+                // an access TIR rejected. Loud, like the expression road.
+                self.emit_panic_call(
+                    &format!(
+                        "internal compiler error: MIR failed to resolve field access \
+                         .{seg} against interface '{}': TIR recorded no virtual-field \
+                         view for it",
+                        tn.name(),
+                    ),
+                    expr_id,
+                );
+                return;
             }
             // Dynamic map key fallback
             let key_local = self.builder.temp(RuntimeTy::String {
@@ -11109,7 +11149,7 @@ impl<'db> LoweringContext<'db> {
                 // Fallback for receivers TIR recorded no virtual-field resolution
                 // for. `field` selects among a bounded type variable's bound
                 // conjunction, where the field may come from any conjunct.
-                self.interface_receiver_for_field_access(base, field, &unwrapped_ty)
+                self.interface_receiver_for_field_access(base, field)
                     .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                         self.try_lower_interface_field_access(
                             base_local,
@@ -11138,6 +11178,22 @@ impl<'db> LoweringContext<'db> {
                 );
                 return;
             }
+            if let RuntimeTy::Interface(tn, _, _, _) = &unwrapped_ty {
+                // TIR resolves every accepted interface field access and
+                // records the view; reaching here means the access was
+                // rejected upstream. Fail as loudly as the class arm rather
+                // than emit a dynamic map read on an instance.
+                self.emit_panic_call(
+                    &format!(
+                        "internal compiler error: MIR failed to resolve field access \
+                         .{field_str} against interface '{}': TIR recorded no \
+                         virtual-field view for it",
+                        tn.name(),
+                    ),
+                    expr_id,
+                );
+                return;
+            }
             // Dynamic map access — only valid for map types, unknown, etc.
             let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
@@ -11157,57 +11213,52 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
+    /// The interface view a field access on `base` dispatches through when
+    /// TIR recorded no virtual-field resolution for the access itself:
+    /// the receiver-typed derivation (`interface_dispatch_target_for_expr_member`
+    /// — a written qualifier, a `Self`/bound-conjunction receiver, a
+    /// `default.<field>` root). There is no third rung: guessing a view from
+    /// the receiver's ERASED runtime type was never faithful (it dropped the
+    /// arguments the type carries) and, for a generic interface, fabricated
+    /// the arity-0 reference `interface_instantiation` rejects. A receiver
+    /// with no view here is an access TIR rejected; the caller fails loud.
     fn interface_receiver_for_field_access(
         &self,
         base: AstExprId,
         field: &Name,
-        unwrapped_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
-        if let Some(target) = self.interface_dispatch_target_for_expr_member(base, field) {
-            return Some(target);
-        }
-
-        match unwrapped_ty {
-            RuntimeTy::Class(tn, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Box::new([]), Box::new([])))
-            }
-            RuntimeTy::Interface(tn, _, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Box::new([]), Box::new([])))
-            }
-            _ => None,
-        }
+        self.interface_dispatch_target_for_expr_member(base, field)
     }
 
+    /// The interface view the ladder segment after `prefix_idx` reads
+    /// `member` through. TIR's RECORDED resolution for that segment comes
+    /// first — it names the interface the access was checked against,
+    /// including a union prefix's shared interface, which no derivation from
+    /// the prefix's type can recover — then the receiver-typed derivation
+    /// off the prefix segment's (or root's) type. No erased-`RuntimeTy`
+    /// guess: see [`Self::interface_receiver_for_field_access`].
     fn interface_receiver_for_path_prefix(
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
         member: &Name,
-        current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
+        let key = self.expr_metadata_key(expr_id);
+        if let Some((view, _)) = self.tir_path_segment_virtual_field_view(key, prefix_idx + 1) {
+            return Some(view);
+        }
         if let Some(target) = self
             .tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
             .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
-        if prefix_idx == 0
-            && let Some(target) = self
-                .tir_path_root_type(self.expr_metadata_key(expr_id))
-                .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
-        {
-            return Some(target);
+        if prefix_idx == 0 {
+            return self
+                .tir_path_root_type(key)
+                .and_then(|ty| self.interface_dispatch_target_for_member(ty, member));
         }
-
-        match current_ty {
-            RuntimeTy::Class(tn, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Box::new([]), Box::new([])))
-            }
-            RuntimeTy::Interface(tn, _, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Box::new([]), Box::new([])))
-            }
-            _ => None,
-        }
+        None
     }
 
     fn class_receiver_for_path_prefix(
@@ -11885,10 +11936,7 @@ impl<'db> LoweringContext<'db> {
         if let Some((view, _index)) = self.tir_virtual_field_view(self.expr_metadata_key(target)) {
             return Some(view);
         }
-        let base_ty = self.expr_ty(base).strip_null();
-        // `field` selects among a bounded type variable's bound conjunction, where
-        // the field may be declared by any conjunct.
-        self.interface_receiver_for_field_access(base, field, &base_ty)
+        self.interface_receiver_for_field_access(base, field)
     }
 
     /// The [`VirtualFieldTarget`] an assignment target denotes when it is an
@@ -11920,12 +11968,7 @@ impl<'db> LoweringContext<'db> {
                 let segments = segments.clone();
                 let field = segments.last().expect("checked non-empty").clone();
                 let prefix_idx = segments.len() - 2;
-                let prefix_ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, target, prefix_idx))
-                    .cloned()
-                    .map(|t| self.convert_tir_ty_for_runtime(&t))?;
-                let view = self
-                    .interface_receiver_for_path_prefix(target, prefix_idx, &field, &prefix_ty)?;
+                let view = self.interface_receiver_for_path_prefix(target, prefix_idx, &field)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let root = self.path_receiver_root(target, &segments[0])?;
                 let receiver = self.lower_path_receiver_to_local(

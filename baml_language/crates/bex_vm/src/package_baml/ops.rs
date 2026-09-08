@@ -183,8 +183,9 @@ fn dispatch_op(
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
-        return NativeCallResult::from(unresolved_op(iface, method));
+    let resolved = match resolver.rule_method_impl(&rule, method) {
+        Ok(resolved) => resolved,
+        Err(e) => return NativeCallResult::from(e),
     };
     // The resolved impl's frame realizes fully against its bound args; a failure
     // is a broken compiler/VM invariant, surfaced rather than swallowed.
@@ -204,8 +205,8 @@ fn dispatch_op(
 }
 
 /// The internal error for an operator dispatch the type checker promised could
-/// not miss: no concrete receiver type, no applicable impl, or a rule without
-/// the method.
+/// not miss: no concrete receiver type, or no applicable impl. (Resolving the
+/// method off a found rule reports its own, finer-grained errors.)
 fn unresolved_op(iface: &str, method: &str) -> VmInternalError {
     VmInternalError::UnresolvedVirtualCall {
         method: format!("baml.ops.{iface}.{method}"),
@@ -226,6 +227,11 @@ enum Cmp {
         args: Vec<Value>,
         type_args: Vec<RealizedTy>,
     },
+    /// Resolving a pair's custom `Equals` hit a broken VM invariant (an impl
+    /// default declared but unbound, a frame that does not realize). The
+    /// walk cannot answer the comparison and must not fall back to
+    /// structural equality as if no impl existed.
+    Error(VmInternalError),
 }
 
 const fn step(equal: bool) -> Cmp {
@@ -317,6 +323,7 @@ impl EqualsDriver {
             match self.compare_one(vm, a, b) {
                 Cmp::Continue => {}
                 Cmp::NotEqual => return NativeCallResult::Done(Value::bool(false)),
+                Cmp::Error(e) => return NativeCallResult::from(e),
                 Cmp::Yield {
                     callee,
                     args,
@@ -449,14 +456,18 @@ impl EqualsDriver {
                 }
                 // Dispatch to the enum's custom `Equals.eq` if it has one (`baml.ops.Equals`
                 // applies to enums too), else compare by variant identity.
-                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
-                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
+                match value_concrete_ty(vm, pa)
+                    .map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
-                    return Cmp::Yield {
-                        callee,
-                        args: vec![Value::object(pa), Value::object(pb)],
-                        type_args,
-                    };
+                    Some(Ok(Some((callee, type_args)))) => {
+                        return Cmp::Yield {
+                            callee,
+                            args: vec![Value::object(pa), Value::object(pb)],
+                            type_args,
+                        };
+                    }
+                    Some(Err(e)) => return Cmp::Error(e),
+                    Some(Ok(None)) | None => {}
                 }
                 step(x.index == y.index)
             }
@@ -478,14 +489,18 @@ impl EqualsDriver {
                 }
                 // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
                 // one, else compare structurally (field by field).
-                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
-                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
+                match value_concrete_ty(vm, pa)
+                    .map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
-                    return Cmp::Yield {
-                        callee,
-                        args: vec![Value::object(pa), Value::object(pb)],
-                        type_args,
-                    };
+                    Some(Ok(Some((callee, type_args)))) => {
+                        return Cmp::Yield {
+                            callee,
+                            args: vec![Value::object(pa), Value::object(pb)],
+                            type_args,
+                        };
+                    }
+                    Some(Err(e)) => return Cmp::Error(e),
+                    Some(Ok(None)) | None => {}
                 }
                 for (fx, fy) in x.fields.iter().zip(y.fields.iter()) {
                     self.stack.push((fx.load(), fy.load()));
@@ -633,35 +648,38 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     }
 }
 
-/// Resolve `<concrete> as Equals>::eq` to its callee plus the impl's bound type args, or
-/// `None` when the type has no `Equals` impl (→ the structural/identity fallback). The
-/// concrete type carries any `class_type_args`, so a generic/blanket impl
+/// Resolve `<concrete> as Equals>::eq` to its callee plus the impl's bound type args.
+/// `Ok(None)` when the type has no `Equals` impl (→ the structural/identity
+/// fallback); `Err` when resolution hits a broken VM invariant — the found
+/// rule cannot name its `eq` (see `rule_method_impl`), or the frame does not
+/// realize against its bound args — which must surface rather than be read as
+/// "no impl". The concrete
+/// type carries any `class_type_args`, so a generic/blanket impl
 /// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
 fn resolve_equals_eq(
     vm: &BexVm,
     value: Value,
     concrete: &RealizedTy,
-) -> Option<(HeapPtr, Vec<RealizedTy>)> {
+) -> Result<Option<(HeapPtr, Vec<RealizedTy>)>, VmInternalError> {
     // `Equals` is non-generic — no interface args to select on; off the resolved
-    // rule, `eq` is the concrete method (the impl's own, or the merged default),
+    // rule, `eq` is the concrete method (the impl's own, or the adopted default),
     // invoked with its frame realized against the impl's bound type args.
-    let equals_head = vm.declaration_head(&equals_qtn())?;
+    let Some(equals_head) = vm.declaration_head(&equals_qtn()) else {
+        return Ok(None);
+    };
     let resolver = resolve::ImplResolver::for_value(vm, value);
-    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, equals_head, &[])?;
+    let Some((rule, bound_args)) = resolver.resolve_implements_rule(concrete, equals_head, &[])
+    else {
+        return Ok(None);
+    };
     let method = resolver.rule_method_impl(&rule, "eq")?.method;
     // `fqn` is the resolved callee's heap pointer (the impl method or adopted
-    // default) — invoke it directly.
+    // default) — invoke it directly. Its frame realizes fully against the bound
+    // args (every projection reduced through the impl registry); a failure is
+    // a broken compiler/VM invariant, surfaced as the error it is.
     let callee = method.fqn;
-    // The resolved impl's frame realizes fully against its bound args (every
-    // projection reduced through the impl registry). A failure is a broken
-    // compiler/VM invariant rather than a runtime possibility, so surface it
-    // instead of silently dropping the custom `eq`.
-    let type_args = resolver
-        .realize_frame(&method.frame, &bound_args)
-        .unwrap_or_else(|e| {
-            unreachable!("Equals impl frame did not realize against bound args: {e}")
-        });
-    Some((callee, type_args))
+    let type_args = resolver.realize_frame(&method.frame, &bound_args)?;
+    Ok(Some((callee, type_args)))
 }
 
 /// The `baml.ops.Equals` interface name.

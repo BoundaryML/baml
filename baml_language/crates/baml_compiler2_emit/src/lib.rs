@@ -1894,10 +1894,20 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // Assemble: clean files verbatim from `prev_units`, dirty files fresh. A
     // clean unit's PACKAGE-LEVEL fragment (declaration maps, interface blob —
     // whole-package products on the carrier) is recomputed so a clean carrier
-    // never goes stale, but its IMPL RULES stay the cached unit's own: a rule
-    // is a pure function of its declaring file (provided-only method tables),
-    // and its body offsets index the cached unit's `code` bucket, which a
-    // fresh dirty-only emit cannot see. The tail is placed once, below.
+    // never goes stale, but its IMPL RULES stay the cached unit's own: a
+    // rule's method table is provided-only, and its body offsets index the
+    // cached unit's `code` bucket, which a fresh dirty-only emit cannot see.
+    //
+    // A rule is NOT a pure function of its declaring file, though: its
+    // `interface_assoc` completion and its positional `field_links` are
+    // derived from the INTERFACE's declaration, which may live in another
+    // file. Keeping the cached rule is sound only because the CLI's dirty
+    // partition dirties every file that spells the interface's name
+    // (`syntactic_type_names`) whenever the interface's signature moves, so
+    // a clean unit here has, by construction, an interface that did not
+    // change shape. (A mounted dependency's interface changing shape is the
+    // open half — it rides the dependency fingerprint, not this partition.)
+    // The tail is placed once, below.
     let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
         .iter()
         .map(|u| (u.source_file.as_str(), u))
@@ -2697,6 +2707,20 @@ fn decompose_units_after_prefix<'db>(
                     .push((target.coherence_key(), fi));
             }
         }
+        // A Stage-6 clean file's functions are never pooled by this emit;
+        // their rule-table references are past-the-pool placeholders the
+        // placement registry knows by identity — the ONLY object indices a
+        // provided body may legitimately point outside the walked range at.
+        let clean_placeholders: HashSet<usize> = coords
+            .placements
+            .values()
+            .filter_map(|placement| match placement {
+                PlacedFunction::ReusedClean {
+                    placeholder_object, ..
+                } => Some(*placeholder_object),
+                PlacedFunction::Live { .. } | PlacedFunction::Spliced { .. } => None,
+            })
+            .collect();
         // Per unit, rules grouped by interface (insertion order = package/
         // interface iteration order, deterministic).
         let mut unit_rules: Vec<indexmap::IndexMap<String, Vec<ProgramImplRuleFrag>>> =
@@ -2733,26 +2757,52 @@ fn decompose_units_after_prefix<'db>(
                                  `ImplCoherenceKey` must gain it too)"
                             ))
                         })?;
+                    // A rule declared by a SPLICED file (the stdlib prefix, a
+                    // mounted dependency's stubs) rides the prefix image's own
+                    // units: this decomposition neither walks its bodies nor
+                    // emits its unit, so it is skipped by attribution — never
+                    // inferred from where a body index happens to land.
+                    if fi < prefix_files {
+                        continue;
+                    }
                     // Provided-method bodies must be this unit's own pooled
-                    // code objects. A placeholder index (Stage 6 clean file)
-                    // means the declaring unit is not re-emitted: its CACHED
-                    // unit already carries this rule, so the fresh fragment
-                    // skips it (the reuse assembly keeps cached rules for
-                    // clean units).
+                    // code objects. A clean placeholder (Stage 6) means the
+                    // declaring unit is not re-emitted: its CACHED unit
+                    // already carries this rule, so the fresh fragment skips
+                    // it (the reuse assembly keeps cached rules for clean
+                    // units). Every other way a body can fall outside the
+                    // walked range — the spliced prefix, the `$init` tail, an
+                    // unclaimed index — is a miswired rule and fails the
+                    // decomposition instead of being read as "clean".
                     let mut methods = Vec::with_capacity(rule.methods.len());
                     let mut clean_body = false;
                     for (name, method) in &rule.methods {
                         let idx = method.fqn.raw();
-                        let local = idx
-                            .checked_sub(prefix_objects)
-                            .and_then(|i| obj_localref.get(i));
-                        match local {
+                        if clean_placeholders.contains(&idx) {
+                            clean_body = true;
+                            break;
+                        }
+                        if idx < prefix_objects {
+                            return Err(LoweringError::Internal(format!(
+                                "provided body `{name}` of `{iface_fq}` rule lives in the \
+                                 spliced prefix (object {idx}), which no user unit owns"
+                            )));
+                        }
+                        if idx >= tail_start {
+                            return Err(LoweringError::Internal(format!(
+                                "provided body `{name}` of `{iface_fq}` rule lives in the \
+                                 `$init` tail (object {idx})"
+                            )));
+                        }
+                        match obj_localref.get(idx - prefix_objects) {
                             Some(LocalRef::Code(k)) => {
-                                debug_assert_eq!(
-                                    obj_owner[idx], fi,
-                                    "provided body owned by a different file than its rule's \
-                                     `implements` block",
-                                );
+                                if obj_owner[idx] != fi {
+                                    return Err(LoweringError::Internal(format!(
+                                        "provided body `{name}` of `{iface_fq}` rule is owned \
+                                         by file {} but its `implements` block is in file {fi}",
+                                        obj_owner[idx]
+                                    )));
+                                }
                                 methods.push((
                                     name.clone(),
                                     ProgramMethodImplFrag {
@@ -2763,13 +2813,16 @@ fn decompose_units_after_prefix<'db>(
                             }
                             Some(other) => {
                                 return Err(LoweringError::Internal(format!(
-                                    "provided body of `{iface_fq}` rule is a non-code object \
-                                     ({other:?})"
+                                    "provided body `{name}` of `{iface_fq}` rule is a \
+                                     non-code object ({other:?})"
                                 )));
                             }
                             None => {
-                                clean_body = true;
-                                break;
+                                return Err(LoweringError::Internal(format!(
+                                    "provided body `{name}` of `{iface_fq}` rule is object \
+                                     {idx}, which this decomposition never walked and no \
+                                     clean placeholder claims"
+                                )));
                             }
                         }
                     }
@@ -3568,10 +3621,38 @@ fn generate_impl<'db>(
                             "stdlib splice: global slot {slot} does not hold an object",
                         )));
                     };
-                    debug_assert!(
-                        matches!(base.objects.get(idx.into_raw()), Some(Object::Function(_))),
-                        "stdlib splice: global slot {slot} does not hold a function",
-                    );
+                    // The replay is ordinal, so it is only as sound as the
+                    // enumeration agreement between this compiler and the one
+                    // that produced `base`. Verify each pairing by the one
+                    // spelling both sides derive from the declaration: a
+                    // skew (a stale artifact that passed the header checks,
+                    // a future skip-set drift) would otherwise map every
+                    // later declaration onto the wrong object silently, and
+                    // the default backfill below would then overwrite correct
+                    // spliced defaults.
+                    let expected = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+                    let actual = match base.objects.get(idx.into_raw()) {
+                        Some(Object::Function(function)) => &function.name,
+                        Some(other) => {
+                            return Err(LoweringError::Internal(format!(
+                                "stdlib splice: global slot {slot} holds a {} object, not a \
+                                 function",
+                                obj_variant_name(other)
+                            )));
+                        }
+                        None => {
+                            return Err(LoweringError::Internal(format!(
+                                "stdlib splice: global slot {slot} points past the pool",
+                            )));
+                        }
+                    };
+                    if *actual != expected {
+                        return Err(LoweringError::Internal(format!(
+                            "stdlib splice: global slot {slot} holds `{actual}` where this \
+                             compiler enumerates `{expected}` — the precompiled stdlib's \
+                             declaration order disagrees with this build's",
+                        )));
+                    }
                     let interface_body_slot =
                         baml_compiler2_mir::function_is_interface_body(db, func_loc)
                             .then_some(slot);
@@ -3934,8 +4015,12 @@ fn emit_file_group<'db>(
                 // spelling enters no name map here. The spelling must still
                 // be unique — decompose renders it as the unit
                 // export/import key and enforces that there.
-                let prev = interface_body_slots.insert(func_loc, global_idx);
-                debug_assert!(prev.is_none(), "one declaration slotted twice");
+                if interface_body_slots.insert(func_loc, global_idx).is_some() {
+                    return Err(LoweringError::Internal(format!(
+                        "interface body `{}` slotted twice in Pass 1",
+                        def_to_item_ref(db, Definition::Function(func_loc))
+                    )));
+                }
             } else {
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
                 // Insertion-unique: two definitions rendering to one key would

@@ -1155,17 +1155,24 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         .map(|(name, _)| name.clone())
         .collect();
     for name in interface_body_names {
-        program
-            .function_indices
-            .remove(&name)
-            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
-        // Same invariant as the sibling: a name in `function_indices` is in
-        // `function_global_indices` — an internal inconsistency, never an
-        // unresolved IMPORT.
+        program.function_indices.remove(&name).ok_or_else(|| {
+            LinkError::InvalidUnit(format!(
+                "interface body `{name}` vanished from `function_indices` mid-scrub"
+            ))
+        })?;
+        // A name in `function_indices` must be in `function_global_indices`
+        // too. `link` writes both together, but decoded/cached units are not
+        // validated for it, so the inconsistency is a bad unit — never an
+        // unresolved IMPORT, and never a panic on data this function did not
+        // construct.
         program
             .function_global_indices
             .remove(&name)
-            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
+            .ok_or_else(|| {
+                LinkError::InvalidUnit(format!(
+                    "interface body `{name}` is in `function_indices` but has no global slot"
+                ))
+            })?;
     }
     Ok(program)
 }
@@ -1249,16 +1256,17 @@ fn merge_package_fragment(
                     ))
                 })?;
                 // The shadow-aware placement is only as trustworthy as the
-                // unit: require the target to actually BE a function object,
-                // so a corrupt unit fails the link instead of confusing the
-                // VM at dispatch.
+                // unit: require the target to actually BE an interface-body
+                // function — a rule's provided method is never a named
+                // function — so a corrupt or stale unit fails the link
+                // instead of confusing the VM at dispatch.
                 if !matches!(
                     program.objects.get(abs),
-                    Some(crate::types::Object::Function(_))
+                    Some(crate::types::Object::Function(function)) if function.is_interface_body
                 ) {
                     return Err(LinkError::InvalidUnit(format!(
-                        "impl rule for `{iface_fq}` method `{name}` resolves to a \
-                         non-function object"
+                        "impl rule for `{iface_fq}` method `{name}` resolves to an object \
+                         that is not an interface body"
                     )));
                 }
                 methods.insert(

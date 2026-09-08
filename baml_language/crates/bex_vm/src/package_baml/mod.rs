@@ -267,9 +267,7 @@ pub(super) fn shim_rule_method(
     else {
         return Ok(None);
     };
-    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
-        return Ok(None);
-    };
+    let resolved = resolver.rule_method_impl(&rule, method)?;
     let type_args = resolver.realize_frame(&resolved.method.frame, &bound_args)?;
     Ok(Some(ShimRuleMethod {
         callee: resolved.method.fqn,
