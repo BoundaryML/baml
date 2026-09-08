@@ -193,7 +193,13 @@ def main() -> int:
                 if channel in {"nightly", "nightly dispatch"}
                 else []
             )
-            oncall_text = f"\nOn call: {' '.join(mentions)}" if mentions else ""
+            oncall_text = (
+                f"\n{' '.join(mentions)} is current oncall, please investigate; "
+                "see also <https://github.com/BoundaryML/baml/blob/canary/"
+                "baml_language/RELEASING.md|RELEASING.md>."
+                if mentions
+                else ""
+            )
             if failures:
                 failure_text = "\n".join(
                     format_failure(failure) for failure in failures
