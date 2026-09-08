@@ -14,7 +14,6 @@ Both the nightly and canary release channels follow this process:
       1. uploads the toolchain to a GitHub release and assigns its tag to the source commit, e.g. `baml-language-0.18.0` or `baml-language-0.18.1-nightly.20260906.a`
       2. publishes bridge packages and the version manifest (e.g. `pkg.boundaryml.com/manifest/v1/version/0.18.0.json`); the version manifest must be available before the Go package publishes
    4. after required publishing, package checks, and documentation succeed, makes the new release available via `baml toolchain update` by updating the `pkg.boundaryml.com` channel manifest (`canary.json` or `nightly.json`)
-   5. runs further artifact verification
 3. Reports success or failure in Slack `#general`.
 4. Users can now pick up the new toolchain with `baml toolchain update`.
 
