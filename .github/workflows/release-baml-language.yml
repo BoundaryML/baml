@@ -2290,6 +2290,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-mise
             mise.toml
+            tools/bctl_src/oncall
             tools/notify-release-failure.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
@@ -2302,6 +2303,6 @@ jobs:
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
-          CHANNEL: ${{ needs.plan.outputs.channel }}
+          CHANNEL: ${{ needs.plan.outputs.channel || inputs.channel }}
           RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}
         run: uv run --script tools/notify-release-failure.py

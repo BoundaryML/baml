@@ -3,10 +3,12 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#   "pyyaml==6.0.3",
 #   "slack-sdk==3.41.0",
 # ]
 # ///
 
+import base64
 import json
 import os
 import sys
@@ -21,6 +23,9 @@ from zoneinfo import ZoneInfo
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
+
+from bctl_src.oncall.parser import parse
+from bctl_src.oncall.slack import email_for, lookup_user_id
 
 GITHUB_API_TIMEOUT_SECONDS = 30
 SLACK_SECTION_TEXT_LIMIT = 2800
@@ -146,6 +151,47 @@ def notification_source_url(repository: str) -> str:
     return f"https://github.com/search?{urlencode({'q': query, 'type': 'code'})}"
 
 
+def current_oncall_mentions(
+    repository: str, github_token: str, slack_client: WebClient
+) -> list[str]:
+    try:
+        # Read the current roster, including shift swaps made after the release
+        # commit was pinned. Assign the alert using today's Pacific date.
+        payload, _ = get_json(
+            f"https://api.github.com/repos/{repository}/contents/"
+            "tools/bctl_src/oncall/data/schedule.oncall?ref=canary",
+            github_token,
+        )
+        schedule = parse(base64.b64decode(payload["content"]).decode())
+        today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        current = max(
+            (shift for shift in schedule.shifts if shift.date <= today),
+            key=lambda shift: shift.date,
+            default=None,
+        )
+        if current is None:
+            raise RuntimeError("no on-call shift covers today")
+        # Match bctl oncall notify-failure: founders are an escalation rotation.
+        names = dict.fromkeys(
+            current.assignments[rotation]
+            for rotation in schedule.roster.rotations_in_order()
+            if rotation != "oncall-founders"
+        )
+        if not names:
+            raise RuntimeError("no primary on-call assignee")
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        print(f"Could not read current on-call schedule: {error}", file=sys.stderr)
+        return []
+
+    mentions = []
+    for name in names:
+        try:
+            mentions.append(f"<@{lookup_user_id(slack_client, email_for(name))}>")
+        except (SlackClientError, OSError, KeyError) as error:
+            print(f"Could not look up on-call user {name}: {error}", file=sys.stderr)
+    return mentions
+
+
 def main() -> int:
     """Notify Slack of the current release result."""
     try:
@@ -155,6 +201,7 @@ def main() -> int:
         github_token = required_env("GH_TOKEN")
         slack_channel = required_env("SLACK_CHANNEL")
         slack_token = required_env("SLACK_BOT_TOKEN")
+        slack_client = WebClient(token=slack_token)
 
         version = os.environ.get("VERSION") or "unknown version"
         channel = os.environ.get("CHANNEL") or "unknown channel"
@@ -167,6 +214,12 @@ def main() -> int:
             f"/attempts/{run_attempt}"
         )
         if failures or not release_succeeded:
+            mentions = (
+                current_oncall_mentions(repository, github_token, slack_client)
+                if channel in {"nightly", "nightly dispatch"}
+                else []
+            )
+            oncall_text = f"\nOn call: {' '.join(mentions)}" if mentions else ""
             if failures:
                 failure_text = "\n".join(
                     format_failure(failure) for failure in failures
@@ -175,7 +228,7 @@ def main() -> int:
                 failure_text = "• Required release completion gate did not succeed"
             message = (
                 f"❌ BAML {channel} release failed: {version}, "
-                f"started at {format_pacific_time(started_at)}\n\n"
+                f"started at {format_pacific_time(started_at)}{oncall_text}\n\n"
                 f"*Failures:*\n{failure_text}"
             )
         else:
@@ -214,7 +267,7 @@ def main() -> int:
             }
         )
 
-        WebClient(token=slack_token).chat_postMessage(
+        slack_client.chat_postMessage(
             channel=slack_channel,
             text=f"{message}\n\n{footer}",
             blocks=blocks,
