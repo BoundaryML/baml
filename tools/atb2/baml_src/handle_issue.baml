@@ -217,7 +217,10 @@ function handle_issue(
             { "proposal_id": review.proposal_id }.to_json(),
             thread,
         );
-        push_branch(sb, expected_head = review.expected_head);
+        if (!push_review_fix(sb, review, started, fix, thread)) {
+            keep_branch = true;
+            return out;
+        };
         let pr = match (issue.status) {
             let s: InProgress => s.pr ?? "",
             _ => "",
@@ -251,7 +254,14 @@ function handle_issue(
         return with_design_doc(issue, doc);
     };
     //# push the branch and open the PR
-    let pr = push_and_open_pr(sb, draft);
+    let pr = push_and_open_pr(sb, draft) catch (e) {
+        PushError => {
+            keep_branch = true;
+            write_outcome(sb, stopped_outcome(sb, started, reason = e.message, report = fix));
+            tell_thread(thread, ":x: " + e.message + ". The local fix is preserved; no PR was opened.");
+            return out;
+        },
+    };
     write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
     let progressed = handoff_issue_pr(issue, pr, doc, thread);
     tell_thread(
@@ -1694,6 +1704,42 @@ function head_sha(sb: Sandbox) -> string {
 
 /// Live only. Export objects without credentials, then push from fresh trusted
 /// metadata to a fixed repository with a lease captured before agent execution.
+/// A push failure is a completed failed round, never an unhandled worker panic.
+function push_review_fix(
+    sb: Sandbox,
+    review: Review,
+    started: baml.time.Instant,
+    fix: FixReport,
+    thread: SlackRef?,
+) -> bool {
+    push_branch(sb, expected_head = review.expected_head) catch (e) {
+        PushError => {
+            write_outcome(sb, stopped_outcome(sb, started, reason = e.message, report = fix));
+            tell_thread(
+                thread,
+                ":x: " + e.message + ". The local fix is preserved; nothing was confirmed pushed.",
+            );
+            return false;
+        },
+    };
+    true
+}
+
+class PushError {
+    message: string,
+}
+
+function check_push_result(exit_code: int) -> null {
+    if (exit_code != 0) {
+        throw PushError { message: match (exit_code) {
+            77 => "GitHub rejected the push credential; verify repository access and Contents write permission",
+            65 => "Outgoing security scan failed; no push attempted",
+            _ => "Trusted push failed; check the branch head, repository rules, and runner diagnostics",
+        } };
+    };
+    null
+}
+
 function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     let push = run_with(
         Cmd {
@@ -1711,10 +1757,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
         },
         sandbox_env(true),
     );
-    if (!push.ok) {
-        baml.sys.panic("trusted push failed");
-    };
-    null
+    check_push_result(push.exit_code)
 }
 
 /// Live only. Pushes the branch and opens a PR — or updates the

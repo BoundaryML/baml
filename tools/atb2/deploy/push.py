@@ -16,6 +16,23 @@ scan_spec.loader.exec_module(push_scan)
 REPOSITORY = 'https://github.com/BoundaryML/baml.git'
 
 
+class PushFailure(Exception):
+    # Fixed messages only. Never return Git/scanner stderr or credential values.
+    def __init__(self, message, code=1):
+        super().__init__(message)
+        self.code = code
+
+
+def push_failure(error):
+    detail = (error.stderr or b'').lower()
+    if any(marker in detail for marker in (
+        b'error: 401', b'error: 403', b'authentication failed',
+        b'permission to boundaryml/baml.git denied', b'could not read username',
+    )):
+        return PushFailure('GitHub rejected the push credential; verify repository access and Contents write permission', 77)
+    return PushFailure('GitHub push rejected; verify the branch head, repository rules, and connectivity')
+
+
 def trusted_env(home, token):
     # No ambient Git configuration, askpass, SSH agent, executable PATH, or
     # repository-provided credential helper is used by the credential process.
@@ -46,7 +63,7 @@ def main():
         raise ValueError('push requires an isolated checkout')
     if not re.fullmatch(r'[0-9a-f]{40}|', expected): raise ValueError('invalid expected head')
     token = os.environ.get('GH_TOKEN') or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN')
-    if not token: raise ValueError('GitHub credential missing')
+    if not token: raise PushFailure('GitHub push credential is missing', 77)
     with tempfile.TemporaryDirectory(prefix='atb2-push-') as tmp:
         folder = Path(tmp)
         env = trusted_env(folder, token)
@@ -73,18 +90,27 @@ def main():
         git('--git-dir=trusted.git', 'cat-file', '-e', commit + '^{commit}', stdout=subprocess.DEVNULL)
         if expected:
             git('--git-dir=trusted.git', 'merge-base', '--is-ancestor', expected, commit, stdout=subprocess.DEVNULL)
-        push_scan.scan(git, scan_base, commit, folder)
+        try:
+            push_scan.scan(git, scan_base, commit, folder)
+        except Exception:
+            raise PushFailure('Outgoing security scan failed; no push attempted', 65) from None
         # Exact source SHA, fixed URL and exact destination ref. No origin or
         # URL rewrites from the checkout; an empty lease only permits creation.
-        git('--git-dir=trusted.git', '-c', 'protocol.https.allow=always', 'push',
-            '--force-with-lease=refs/heads/' + branch + ':' + expected,
-            REPOSITORY, commit + ':refs/heads/' + branch, credentialed=True, stdout=subprocess.DEVNULL)
+        try:
+            git('--git-dir=trusted.git', '-c', 'protocol.https.allow=always', 'push',
+                '--force-with-lease=refs/heads/' + branch + ':' + expected,
+                REPOSITORY, commit + ':refs/heads/' + branch, credentialed=True, stdout=subprocess.DEVNULL)
+        except subprocess.CalledProcessError as error:
+            raise push_failure(error) from None
         print(commit)
     return 0
 
 
 if __name__ == '__main__':
     try: sys.exit(main())
+    except PushFailure as error:
+        print('atb2: ' + str(error), file=sys.stderr)
+        sys.exit(error.code)
     except Exception:
-        print('atb2: trusted push failed; no credential diagnostics are shown', file=sys.stderr)
+        print('atb2: trusted push preparation failed; no credential diagnostics are shown', file=sys.stderr)
         sys.exit(1)

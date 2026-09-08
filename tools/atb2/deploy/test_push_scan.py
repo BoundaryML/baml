@@ -67,4 +67,23 @@ class PushCredentialTests(unittest.TestCase):
         self.assertIn('push', calls[-1][0])
         self.assertEqual(calls[-1][1]['GH_TOKEN'], 'credential-fixture')
 
+class PushFailureTests(unittest.TestCase):
+    def test_auth_rejection_is_actionable_without_leaking_git_stderr(self):
+        spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
+        push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)
+        error = subprocess.CalledProcessError(128, ['git', 'push'], stderr=b'credential-fixture: The requested URL returned error: 403')
+        failure = push.push_failure(error)
+        self.assertEqual(failure.code, 77)
+        self.assertIn('Contents write permission', str(failure))
+        self.assertNotIn('credential-fixture', str(failure))
+
+    def test_branch_rejection_is_not_misreported_as_an_auth_failure(self):
+        spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
+        push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)
+        error = subprocess.CalledProcessError(1, ['git', 'push'], stderr=b'credential-fixture: stale info')
+        failure = push.push_failure(error)
+        self.assertEqual(failure.code, 1)
+        self.assertIn('branch head', str(failure))
+        self.assertNotIn('credential-fixture', str(failure))
+
 if __name__=='__main__': unittest.main()

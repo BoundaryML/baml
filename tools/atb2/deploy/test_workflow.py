@@ -19,7 +19,7 @@ CLI = Path(os.environ.get('BAML_CLI', str(Path.home() / '.atb2/target/debug/baml
 
 @unittest.skipUnless(CLI.is_file(), 'canary baml-cli required')
 class WorkflowTests(unittest.TestCase):
-    def run_expression(self, expression, respond, reject_feedback=False):
+    def run_expression(self, expression, respond, reject_feedback=False, push_exit_code=None):
         calls = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -47,6 +47,13 @@ class WorkflowTests(unittest.TestCase):
                 code = code[:start] + 'function assess_feedback(fb: Feedback) -> FeedbackAssessment { FeedbackAssessment { actionable: false, reason: "No concrete behavior" } }' + code[end:]
                 code = code.replace("assess_feedback@parse(", "baml.json.from_string<FeedbackAssessment>(")
                 path.write_text(code)
+            if push_exit_code is not None:
+                path = root / 'baml_src/handle_issue.baml'
+                code = path.read_text()
+                start = code.index('function push_branch(')
+                end = code.index('\n}', start) + 2
+                code = code[:start] + f'function push_branch(sb: Sandbox, expected_head: string? = null) -> null {{ check_push_result({push_exit_code}) }}' + code[end:]
+                path.write_text(code)
             with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 # Production still requires HTTPS. This substitution exists only
@@ -64,6 +71,26 @@ class WorkflowTests(unittest.TestCase):
                     server.shutdown(); thread.join()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return calls
+
+    def test_denied_push_writes_an_outcome_and_returns_to_the_worker(self):
+        expression = '''
+            let branch = "fixture-push";
+            let sb = Sandbox { branch: branch, worktree: atb2_home() + "/worktrees/fixture",
+                run_dir: run_dir_for(branch), reused_branch: true, base_head: null, source_head: "" };
+            baml.fs.mkdir(sb.run_dir, baml.fs.MkdirOptions { recursive: true });
+            baml.fs.mkdir(sb.worktree, baml.fs.MkdirOptions { recursive: true });
+            baml.fs.write(sb.worktree + "/preserved", "fix");
+            let review = Review { branch: branch, feedback: "fix", expected_head: null, proposal_id: null };
+            assert.equal(push_review_fix(sb, review, baml.time.Instant.now(), sample_report(), null), false);
+            let result = baml.json.from_string<HandleOutcome>(baml.fs.read(sb.run_dir + "/outcome.json"));
+            assert.contains(result.reason ?? "", "GitHub rejected the push credential");
+            assert.is_true(result.report != null);
+            assert.equal(round_outcome(branch, 3), "agent_stopped");
+            assert.equal(baml.fs.read(sb.worktree + "/preserved"), "fix");
+            check_push_result(0);
+        '''
+        calls = self.run_expression(expression, lambda *_: (200, []), push_exit_code=77)
+        self.assertEqual(calls, [])
 
     def test_vague_feedback_is_terminal_without_an_issue_or_notification(self):
         terminal = []
