@@ -2233,8 +2233,8 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       csharp_platform_matrix_json: ${{ needs.build-matrix.outputs.csharp }}
 
-  notify-release-result:
-    name: Notify Slack of release result
+  notify-slack:
+    name: Notify Slack
     needs:
       - plan
       - build-matrix
@@ -2298,8 +2298,6 @@ jobs:
           install_args: uv
       - name: Notify Slack of the release result
         env:
-          # Code search follows the default branch (canary) and finds the invocation as lines move.
-          NOTIFICATION_SOURCE_URL: "https://github.com/search?q=repo%3ABoundaryML%2Fbaml%20path%3A.github%2Fworkflows%2Frelease-baml-language.yml%20%22notify-release-failure%22&type=code"
           GH_TOKEN: ${{ github.token }}
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
