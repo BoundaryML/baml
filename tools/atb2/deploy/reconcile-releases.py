@@ -17,6 +17,7 @@ from urllib.parse import urlencode, urlsplit
 REPO = 'BoundaryML/baml'
 VERSION = re.compile(r'baml-language-((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\Z')
 SHA = re.compile(r'[0-9a-f]{40}\Z')
+CURSOR = re.compile(r'[A-Za-z0-9_.:-]{1,80}\Z')
 
 
 def request(host, path, token=None, method='GET', body=None, apikey=None):
@@ -101,7 +102,12 @@ class Reconciler:
         return self.manifests[version]
     def run(self):
         releases = None
-        after = ''
+        # The scan resumes from the persisted cursor so a large prefix of
+        # still-unresolved rows cannot starve later merged issues forever.
+        cursor = self.folder/'scan-cursor'
+        try: after = cursor.read_text()
+        except OSError: after = ''
+        if not CURSOR.fullmatch(after): after = ''
         for _ in range(100):
             query = {'select':'id,status,merge_sha,merged_at','dataset':'eq.live','state':'eq.merged',
                      'fixed_in':'is.null','order':'id','limit':'100'}
@@ -127,8 +133,13 @@ class Reconciler:
                         self.store(urlencode({'id':'eq.'+row['id'],'dataset':'eq.live','state':'eq.merged','fixed_in':'is.null','merge_sha':'eq.'+sha}),{'fixed_in':version})
                 except (ValueError, OSError, subprocess.SubprocessError, KeyError):
                     print('atb2: one release resolution could not be verified; will retry',flush=True)
-            if len(rows) < 100: return
-        raise ValueError('issue pagination incomplete')
+            if len(rows) < 100:
+                # A completed scan restarts from the top next hour, retrying
+                # every row that is still unresolved.
+                cursor.write_text('')
+                return
+            cursor.write_text(after)
+        print('atb2: issue scan window exhausted; next run resumes from the saved cursor',flush=True)
 
 
 def main():

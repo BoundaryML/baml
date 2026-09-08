@@ -341,11 +341,14 @@ loopback store fixture; no model requests or production credentials are used.
    shepherd approve it. Verify fix creation, PR creation, shared babysitter
    activity and eventual manually merged status on both surfaces.
 
-Part 6 is a separate follow-up PR: record the release version containing a fix,
-map stored feedback IDs back to issues, and poll from ordinary CLI commands at
-most daily. Show “Your issue … was fixed in …; update using baml toolchain update”
-until the installed toolchain contains the fix. That notice is not required to
-start babysitting or process feedback end to end, and is not implemented here.
+Part 6a is implemented here: the hourly reconciler records the first verified
+release containing each merged fix, and `feedback_resolutions(report_ids uuid[])`
+maps stored report UUIDs to issue state and fixed version — see “Published
+feedback fixes” below, and apply its part 6a SQL migration before deploying
+this layer. Only the CLI side is a separate follow-up: poll at most daily and
+show “Your issue … was fixed in …; update using baml toolchain update” until the
+installed toolchain contains the fix. That notice is not required to start
+babysitting or process feedback end to end.
 
 ## Slack intake and issue approval
 

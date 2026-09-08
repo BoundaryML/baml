@@ -40,6 +40,11 @@ function run_pipeline(
         s.trim()
     });
     let report = PipelineReport { ingested: 0, issues_created: 0, handled: 0, merged: 0, skipped: [] };
+    //# release resolution: every Live entrypoint reconciles; the indexer
+    // rate-limits itself to one attempt per hour on the volume
+    if (mode == HandleMode.Live && db_configured()) {
+        reconcile_feedback_releases();
+    };
     if (!db_configured()) {
         report.skipped.push(
             "store: FEEDBACK_SUPABASE_URL/KEY unset; nothing is remembered between runs",
@@ -158,9 +163,6 @@ function failed_run(what: string) -> PipelineReport {
 function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
     while (true) {
         //# one run; a store, intake or Slack failure ends this run only
-        if (mode == HandleMode.Live && db_configured()) {
-            reconcile_feedback_releases();
-        };
         let r = run_pipeline(mode = mode) catch (e) {
             StoreError => failed_run("store"),
             IntakeError => failed_run("intake"),
