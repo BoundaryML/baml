@@ -60,8 +60,15 @@ function scoped_type_bindings.$init_test_ns_scoped_type_bindings_scoped_type_bin
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "an agent spec takes a scoped runtime type"
+    load_const "a descriptor keeps its own binding past a sibling rebinding"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scoped_type_bindings"
+    load_const "an agent spec takes a scoped runtime type"
+    make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -338,6 +345,33 @@ function scoped_type_bindings.risky(v: #0, fail: bool) -> int {
     load_type #0
     init_instance<1> user.scoped_type_bindings.Boom .payload
     throw
+}
+
+function scoped_type_bindings.sibling_bindings(a: reflect.Type, b: reflect.Type, both: bool) -> reflect.Type[] {
+    load_var a
+    bind_type 0
+    load_type scoped_type_bindings.Wrapper<#0>
+    store_var first
+    load_var b
+    bind_type 0
+    load_type scoped_type_bindings.Wrapper<#0>
+    bind_type 1
+    load_type #1[]
+    store_var second
+    load_var both
+    pop_jump_if_true L0
+    load_var second
+    load_type reflect.Type
+    alloc_array 1
+    jump L1
+
+  L0:
+    load_var2 4 5
+    load_type reflect.Type
+    alloc_array 2
+
+  L1:
+    return
 }
 
 function scoped_type_bindings.throws_boom(t: reflect.Type) -> int {

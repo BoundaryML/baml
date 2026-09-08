@@ -189,6 +189,37 @@ test "values and effects leave a block only through binding-free types" {
     assert.is_true(reflect.Type.of_value(returns_through_the_declared_type(int_t, false)) == int_t)
 }
 
+// Sibling blocks reuse one frame slot for their bindings. A descriptor
+// computed under the first binding keeps that binding wherever it is
+// consumed, even after the second block has rebound the slot and even when
+// the consumer sits on a later branch.
+function sibling_bindings(a: reflect.Type, b: reflect.Type, both: bool) -> reflect.Type[] {
+    let first: reflect.Type = {
+        type T = unreflect(a)
+        reflect.Type.of<Wrapper<T>>()
+    }
+    let second: reflect.Type = {
+        type U = unreflect(b)
+        type V = Wrapper<U>
+        reflect.Type.of<V[]>()
+    }
+    if (both) {
+        [first, second]
+    } else {
+        [second]
+    }
+}
+
+test "a descriptor keeps its own binding past a sibling rebinding" {
+    let int_t = reflect.Type.of<int>()
+    let string_t = reflect.Type.of<string>()
+    let pair = sibling_bindings(int_t, string_t, true)
+    assert.is_true(pair[0] == reflect.Type.of<Wrapper<int>>())
+    assert.is_true(pair[1] == reflect.Type.of<Wrapper<string>[]>())
+    let single = sibling_bindings(int_t, string_t, false)
+    assert.is_true(single[0] == reflect.Type.of<Wrapper<string>[]>())
+}
+
 // The Agent scenario: the spec slot takes the bound name, and the program
 // dispatches through the inherent `Agent.run<Out>` and parses the reflected
 // output type. A scripted `ai.Client` answers with a fixed payload, so the

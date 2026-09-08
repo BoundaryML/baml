@@ -3,7 +3,8 @@
 //! This module provides:
 //! - CFG predecessor computation
 //! - Dominator tree computation (Cooper-Harvey-Kennedy algorithm)
-//! - Def-use information collection
+//! - Def-use information collection, over locals and over the frame type-arg
+//!   slots an rvalue's templates read (rebound by `BindType`)
 //! - Local classification (Virtual vs Real)
 //! - Jump threading (redirect targets for empty goto-only blocks)
 //! - Phi-like local detection (locals assigned in all predecessors, used once at join)
@@ -16,8 +17,8 @@ use std::collections::{HashMap, HashSet};
 
 pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
-    BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator, UnaryOp,
+    AggregateKind, BinOp, BlockId, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place,
+    Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_type::{Literal, RuntimeTy};
 
@@ -164,6 +165,8 @@ impl<'db> AnalysisResult<'db> {
 
         // Step 3: Compute dominators
         let dominators = compute_dominators(body, &rpo, &predecessors);
+        #[cfg(debug_assertions)]
+        assert_rebound_slots_dominate_their_reads(body);
 
         // Step 4: Collect def-use information
         let def_use = collect_def_use(body);
@@ -245,8 +248,16 @@ impl<'db> AnalysisResult<'db> {
 // CFG Analysis
 // ============================================================================
 
-/// Build predecessor map for all blocks.
+/// Build predecessor map for all blocks over the terminator edges.
 fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockId>> {
+    build_predecessors_with(body, &|block| successors_of(body, block))
+}
+
+/// Build predecessor map for all blocks over the edges `successors` yields.
+fn build_predecessors_with(
+    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
+) -> HashMap<BlockId, Vec<BlockId>> {
     let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
 
     // Initialize with empty vecs
@@ -254,13 +265,10 @@ fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockI
         preds.insert(block.id, Vec::new());
     }
 
-    // Collect predecessor edges from terminators
     for block in &body.blocks {
-        if let Some(term) = &block.terminator {
-            for succ in term.successors() {
-                if let Some(pred_list) = preds.get_mut(&succ) {
-                    pred_list.push(block.id);
-                }
+        for succ in successors(block.id) {
+            if let Some(pred_list) = preds.get_mut(&succ) {
+                pred_list.push(block.id);
             }
         }
     }
@@ -270,7 +278,7 @@ fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockI
 
 /// DFS helper for computing postorder.
 fn rpo_dfs(
-    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
     block_id: BlockId,
     visited: &mut HashSet<BlockId>,
     postorder: &mut Vec<BlockId>,
@@ -280,17 +288,23 @@ fn rpo_dfs(
     }
     visited.insert(block_id);
 
-    let block = body.block(block_id);
-    if let Some(term) = &block.terminator {
-        for succ in term.successors() {
-            rpo_dfs(body, succ, visited, postorder);
-        }
+    for succ in successors(block_id) {
+        rpo_dfs(successors, succ, visited, postorder);
     }
     postorder.push(block_id);
 }
 
-/// Compute reverse postorder (depth-first, postorder reversed).
+/// Compute reverse postorder (depth-first, postorder reversed) over the
+/// terminator edges.
 fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
+    compute_rpo_with(body, &|block| successors_of(body, block))
+}
+
+/// Compute reverse postorder over the edges `successors` yields.
+fn compute_rpo_with(
+    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
+) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
@@ -299,7 +313,7 @@ fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
     // try-body entry blocks. Layout order does not affect exception-table
     // correctness (the table lists each region's protected blocks' exact PC
     // ranges), so this is purely about code locality and readability.
-    rpo_dfs(body, body.entry, &mut visited, &mut postorder);
+    rpo_dfs(successors, body.entry, &mut visited, &mut postorder);
 
     // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
     // like division-by-zero where there's no Call/Await with an unwind
@@ -307,7 +321,12 @@ fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
     // blocks in the reversed RPO.
     let mut handler_postorder = Vec::new();
     for region in &body.catch_regions {
-        rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
+        rpo_dfs(
+            successors,
+            region.handler,
+            &mut visited,
+            &mut handler_postorder,
+        );
     }
     handler_postorder.append(&mut postorder);
 
@@ -658,6 +677,12 @@ fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
         Place::Local(local) => f(*local),
         Place::Capture(_) => {
             // Captures are not locals — nothing to walk.
+            // BUG: that also makes a capture read invisible to the cross-block
+            // virtualization checks, so inside a closure
+            // `let before = x; if (c) { x = 5 }; before` re-reads `x` at the
+            // tail and yields 5 (reproduced 2026-09-03). Same shape as the
+            // frame type-arg slots: `Capture(k)` is a read resource and a
+            // capture-rooted `Assign` on a def→use path is its clobber.
         }
         Place::Field { base, .. } => walk_place_locals(base, f),
         Place::Index { base, index, .. } => {
@@ -727,6 +752,199 @@ fn walk_rvalue_locals(rvalue: &Rvalue<'_>, f: &mut impl FnMut(Local)) {
         }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             walk_operand_locals(value, f);
+        }
+    }
+}
+
+/// Walk every frame type-arg slot an rvalue reads — the `TypeArgRef` leaves of
+/// each template it carries — calling `f` for each.
+///
+/// Frame type-arg slots are a read resource next to locals: a `BindType`
+/// intrinsic rewrites one, and every template naming that slot re-reads it
+/// each time it is evaluated. Matched exhaustively on purpose, like
+/// [`walk_rvalue_locals`]: a template-bearing variant that defaulted into the
+/// "reads nothing" group would let virtual emission sink its evaluation past
+/// a rebinding and silently produce the later type.
+fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
+    match rvalue {
+        Rvalue::Array(element, _) => element.for_each_type_arg_ref(f),
+        Rvalue::Map(key, value, _) => {
+            key.for_each_type_arg_ref(f);
+            value.for_each_type_arg_ref(f);
+        }
+        Rvalue::Aggregate { kind, .. } => match kind {
+            AggregateKind::Class {
+                type_arg_templates, ..
+            } => {
+                for template in type_arg_templates {
+                    template.for_each_type_arg_ref(f);
+                }
+            }
+            AggregateKind::Array | AggregateKind::EnumVariant { .. } => {}
+        },
+        Rvalue::IsType { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
+        Rvalue::MakeClosure {
+            type_arg_templates, ..
+        }
+        | Rvalue::MakeGenericFunction {
+            type_arg_templates, ..
+        }
+        | Rvalue::MakeGenericFunctionFromValue {
+            type_arg_templates, ..
+        } => {
+            for template in type_arg_templates {
+                template.for_each_type_arg_ref(f);
+            }
+        }
+        Rvalue::MakeVirtualBoundMethod {
+            iface, type_args, ..
+        } => {
+            iface.for_each_type_arg_ref(f);
+            for template in type_args {
+                template.for_each_type_arg_ref(f);
+            }
+        }
+        Rvalue::MakeVirtualFunction { self_ty, iface, .. } => {
+            self_ty.for_each_type_arg_ref(f);
+            iface.for_each_type_arg_ref(f);
+        }
+        Rvalue::VirtualFieldAccess { iface, .. } => iface.for_each_type_arg_ref(f),
+        Rvalue::LoadType(template) => template.for_each_type_arg_ref(f),
+        Rvalue::Use(_)
+        | Rvalue::BinaryOp { .. }
+        | Rvalue::UnaryOp { .. }
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Len(_)
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::CurrentPackage(_) => {}
+    }
+}
+
+/// [`walk_rvalue_type_slots`] over a whole statement.
+#[cfg(debug_assertions)]
+fn walk_statement_type_slots(kind: &StatementKind<'_>, f: &mut impl FnMut(u32)) {
+    match kind {
+        StatementKind::Assign { value, .. } => walk_rvalue_type_slots(value, f),
+        StatementKind::VirtualFieldStore { iface, .. } => iface.for_each_type_arg_ref(f),
+        // A `BindType` operand is a type *value* in a local, not a slot read.
+        StatementKind::Drop(_)
+        | StatementKind::FreshCell(_)
+        | StatementKind::Intrinsic { .. }
+        | StatementKind::Nop => {}
+    }
+}
+
+/// [`walk_rvalue_type_slots`] over a terminator's templates.
+#[cfg(debug_assertions)]
+fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMut(u32)) {
+    match terminator {
+        Terminator::NarrowBind { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
+        Terminator::VirtualCall { iface, .. } => iface.for_each_type_arg_ref(f),
+        Terminator::Spawn { future_ty, .. } => {
+            future_ty.returns.for_each_type_arg_ref(f);
+            future_ty.throws.for_each_type_arg_ref(f);
+        }
+        // Call type arguments are `LoadType` temps, read where they are defined.
+        Terminator::Goto { .. }
+        | Terminator::Branch { .. }
+        | Terminator::Switch { .. }
+        | Terminator::Return
+        | Terminator::Call { .. }
+        | Terminator::Unreachable
+        | Terminator::SysOp { .. }
+        | Terminator::Await { .. }
+        | Terminator::AwaitAny { .. }
+        | Terminator::Throw { .. }
+        | Terminator::Rethrow { .. }
+        | Terminator::ThrowIfPanic { .. }
+        | Terminator::ShortCircuit { .. } => {}
+    }
+}
+
+/// Debug tripwire for the lowering invariant the cross-block virtualization
+/// check leans on: a frame type-arg slot this body rebinds is read only where
+/// some `BindType` of it has already run, i.e. one that dominates the read.
+/// Slots with no writer in this body belong to the caller (generic arguments,
+/// a captured layout) and are outside the check.
+///
+/// Exception entry is control flow too: a handler runs after any block of its
+/// protected region raises. The CFG the emitter lays out carries only the
+/// unwind edges of calls — a call-free panic (division, indexing) reaches its
+/// handler through the exception table alone — so dominance here is computed
+/// over that CFG plus one edge from every protected block to its handler. A
+/// block reachable neither way never runs, and its reads are vacuous.
+#[cfg(debug_assertions)]
+fn assert_rebound_slots_dominate_their_reads(body: &MirFunctionBody<'_>) {
+    let mut writers: HashMap<u32, Vec<(BlockId, usize)>> = HashMap::new();
+    for block in &body.blocks {
+        for (idx, stmt) in block.statements.iter().enumerate() {
+            if let StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                ..
+            } = &stmt.kind
+                && let Ok(slot) = u32::try_from(*slot)
+            {
+                writers.entry(slot).or_default().push((block.id, idx));
+            }
+        }
+    }
+    if writers.is_empty() {
+        return;
+    }
+    let mut handlers_of: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+    for region in &body.catch_regions {
+        for &protected in &region.body_blocks {
+            handlers_of
+                .entry(protected)
+                .or_default()
+                .push(region.handler);
+        }
+    }
+    let successors = |block: BlockId| {
+        let mut successors = successors_of(body, block);
+        if let Some(handlers) = handlers_of.get(&block) {
+            successors.extend(handlers.iter().copied());
+        }
+        successors
+    };
+    let rpo = compute_rpo_with(body, &successors);
+    let predecessors = build_predecessors_with(body, &successors);
+    let dominators = compute_dominators(body, &rpo, &predecessors);
+    let bound_before = |slot: u32, block: BlockId, position: usize| {
+        if !dominators.idom.contains_key(&block) {
+            return true;
+        }
+        writers.get(&slot).is_none_or(|sites| {
+            sites.iter().any(|&(writer_block, writer_idx)| {
+                if writer_block == block {
+                    writer_idx < position
+                } else {
+                    dominators.dominates(writer_block, block)
+                }
+            })
+        })
+    };
+    for block in &body.blocks {
+        for (idx, stmt) in block.statements.iter().enumerate() {
+            walk_statement_type_slots(&stmt.kind, &mut |slot| {
+                assert!(
+                    bound_before(slot, block.id, idx),
+                    "frame type-arg slot {slot} is read at {:?}[{idx}] before any `BindType` of it has run",
+                    block.id
+                );
+            });
+        }
+        if let Some(terminator) = &block.terminator {
+            walk_terminator_type_slots(terminator, &mut |slot| {
+                assert!(
+                    bound_before(slot, block.id, block.statements.len()),
+                    "frame type-arg slot {slot} is read by the terminator of {:?} before any `BindType` of it has run",
+                    block.id
+                );
+            });
         }
     }
 }
@@ -1601,7 +1819,7 @@ fn can_be_virtual(
         // we refuse to virtualize.
         let reads = collect_transitive_reads(&def.rvalue, def_use, def.block, def_idx);
 
-        for read_local in &reads {
+        for read_local in &reads.locals {
             if let Some(read_du) = def_use.get(read_local) {
                 // Parameters have an implicit entry definition not tracked
                 // in all_defs, so any explicit def means multiple definitions.
@@ -1615,6 +1833,32 @@ fn can_be_virtual(
                     return false;
                 }
             }
+        }
+
+        // BUG: a captured local (`is_captured`) has one MIR definition here even
+        // though every closure sharing its cell can write it, so its read is
+        // sunk across a call that runs such a closure:
+        // `let before = x; g(); before` with `g = () => { x = 5 }` returns 5
+        // (reproduced 2026-09-03). Cells need a resource model whose clobbers
+        // include calls, not only assignments.
+        //
+        // Frame type-arg slots are not locals, so the multiple-definitions
+        // proxy above says nothing about them: sibling blocks reuse a slot, and
+        // a `BindType` between the def and the use rebinds what a template of
+        // the rvalue resolves through, so re-evaluating at the use would
+        // observe the later binding. Only paths that bypass the definition
+        // count — a loop that rebinds at its scope top re-evaluates the
+        // definition too, so sinking within an iteration stays sound.
+        if !reads.type_slots.is_empty()
+            && type_slot_rebound_between(
+                body,
+                predecessors,
+                def.block,
+                use_loc.block,
+                &reads.type_slots,
+            )
+        {
+            return false;
         }
 
         // Preserve the existing protection for values used directly in a loop
@@ -1707,29 +1951,68 @@ fn use_repeats_without_definition(
     def_block: BlockId,
     use_block: BlockId,
 ) -> bool {
-    let Some(terminator) = body.block(use_block).terminator.as_ref() else {
-        return false;
-    };
+    reachable_avoiding(successors_of(body, use_block), def_block, |block| {
+        successors_of(body, block)
+    })
+    .contains(&use_block)
+}
 
-    let mut worklist = terminator.successors();
+fn successors_of(body: &MirFunctionBody<'_>, block: BlockId) -> Vec<BlockId> {
+    body.block(block)
+        .terminator
+        .as_ref()
+        .map_or_else(Vec::new, Terminator::successors)
+}
+
+/// Every block reachable from `start` by repeatedly following `next`, never
+/// entering `barrier` (so never yielding it either).
+fn reachable_avoiding(
+    start: Vec<BlockId>,
+    barrier: BlockId,
+    next: impl Fn(BlockId) -> Vec<BlockId>,
+) -> HashSet<BlockId> {
+    let mut worklist = start;
     let mut visited = HashSet::new();
-
     while let Some(block) = worklist.pop() {
-        if block == def_block {
+        if block == barrier || !visited.insert(block) {
             continue;
         }
-        if block == use_block {
-            return true;
-        }
-        if !visited.insert(block) {
-            continue;
-        }
-        if let Some(terminator) = body.block(block).terminator.as_ref() {
-            worklist.extend(terminator.successors());
-        }
+        worklist.extend(next(block));
     }
+    visited
+}
 
-    false
+/// Whether a `BindType` of a slot in `slots` lies on some path from `def_block`
+/// to `use_block` that does not pass back through `def_block`.
+///
+/// The blocks on such paths are exactly those reachable from `def_block`'s
+/// successors and able to reach `use_block`, both without entering
+/// `def_block` — two reachability sweeps, not path enumeration. Whole blocks
+/// are scanned, `use_block` included when a cycle brings the use back to
+/// itself, so a rebinding placed after the use that a later iteration would
+/// observe counts too. The def block's own tail and the use block's own head
+/// are the caller's same-block side-effect scans.
+fn type_slot_rebound_between(
+    body: &MirFunctionBody<'_>,
+    predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    def_block: BlockId,
+    use_block: BlockId,
+    slots: &HashSet<u32>,
+) -> bool {
+    let predecessors_of = |block: BlockId| predecessors.get(&block).cloned().unwrap_or_default();
+    let forward = reachable_avoiding(successors_of(body, def_block), def_block, |block| {
+        successors_of(body, block)
+    });
+    let backward = reachable_avoiding(predecessors_of(use_block), def_block, predecessors_of);
+    forward.intersection(&backward).any(|block| {
+        body.block(*block).statements.iter().any(|stmt| {
+            matches!(
+                &stmt.kind,
+                StatementKind::Intrinsic { op: IntrinsicOp::BindType(slot), .. }
+                    if u32::try_from(*slot).is_ok_and(|slot| slots.contains(&slot))
+            )
+        })
+    })
 }
 
 /// Whether evaluating this rvalue reads through any field/index projection.
@@ -1808,7 +2091,7 @@ fn has_side_effects_between<'db>(
 
     for stmt_idx in start..end {
         let stmt = &block.statements[stmt_idx];
-        if has_side_effect(&stmt.kind, &rvalue_reads) {
+        if has_side_effect(&stmt.kind, &rvalue_reads.locals) {
             return true;
         }
     }
@@ -1816,11 +2099,21 @@ fn has_side_effects_between<'db>(
     false
 }
 
-/// Collect all locals that an rvalue reads from, transitively.
+/// Everything evaluating an rvalue reads, transitively: the locals it names and
+/// the frame type-arg slots its templates resolve through.
+#[derive(Debug, Default)]
+struct RvalueReads {
+    locals: HashSet<Local>,
+    /// Frame type-arg slots (`TypeArgRef` leaves) of every carried template.
+    type_slots: HashSet<u32>,
+}
+
+/// Collect everything an rvalue reads from, transitively.
 ///
 /// If the rvalue reads from local X, and X is defined as the result of an
 /// expression that reads from Y, we include both X and Y. This is necessary
-/// because inlining X will re-evaluate its definition, which reads from Y.
+/// because inlining X will re-evaluate its definition, which reads from Y —
+/// and reads through whatever frame type-arg slots Y's templates name.
 ///
 /// We only follow definitions that occur before `def_block:def_stmt_idx` to
 /// avoid including dependencies on values computed later.
@@ -1829,16 +2122,19 @@ fn collect_transitive_reads(
     def_use: &HashMap<Local, LocalDefUse>,
     def_block: BlockId,
     def_stmt_idx: usize,
-) -> HashSet<Local> {
-    let mut locals = HashSet::new();
+) -> RvalueReads {
+    let mut reads = RvalueReads::default();
     let mut worklist: Vec<Local> = Vec::new();
 
     // First, collect direct reads
     walk_rvalue_locals(rvalue, &mut |local| worklist.push(local));
+    walk_rvalue_type_slots(rvalue, &mut |slot| {
+        reads.type_slots.insert(slot);
+    });
 
     // Then, transitively expand
     while let Some(local) = worklist.pop() {
-        if locals.insert(local) {
+        if reads.locals.insert(local) {
             // New local - check if it has a definition with an rvalue we should follow
             // Only follow if the definition is in the same block AND before the current statement
             if let Some(du) = def_use.get(&local) {
@@ -1848,6 +2144,9 @@ fn collect_transitive_reads(
                     if let StatementRef::Statement(idx) = def.statement_ref {
                         if def.block == def_block && idx < def_stmt_idx {
                             walk_rvalue_locals(&def.rvalue, &mut |local| worklist.push(local));
+                            walk_rvalue_type_slots(&def.rvalue, &mut |slot| {
+                                reads.type_slots.insert(slot);
+                            });
                         }
                     }
                 }
@@ -1855,7 +2154,7 @@ fn collect_transitive_reads(
         }
     }
 
-    locals
+    reads
 }
 
 /// Check if a statement has side effects that would prevent inlining.
@@ -2608,6 +2907,161 @@ mod tests {
 
     fn analyzed_classification(body: &MirFunctionBody<'_>, local: Local) -> LocalClassification {
         AnalysisResult::analyze(body, 0, OptLevel::One).classifications[&local]
+    }
+
+    fn block(
+        id: usize,
+        statements: Vec<Statement<'static>>,
+        terminator: Terminator<'static>,
+    ) -> BasicBlock<'static> {
+        BasicBlock {
+            id: BlockId(id),
+            statements,
+            terminator: Some(terminator),
+            span: None,
+            terminator_span: None,
+        }
+    }
+
+    fn goto(target: usize) -> Terminator<'static> {
+        Terminator::Goto {
+            target: BlockId(target),
+        }
+    }
+
+    fn branch(then_block: usize, else_block: usize) -> Terminator<'static> {
+        Terminator::Branch {
+            condition: Operand::Constant(Constant::Bool(true)),
+            then_block: BlockId(then_block),
+            else_block: BlockId(else_block),
+        }
+    }
+
+    /// `type T = …` on frame slot `slot`; the operand is immaterial here.
+    fn bind_type(slot: usize) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                args: vec![Operand::Constant(Constant::Null)],
+            },
+            span: None,
+        }
+    }
+
+    /// `reflect.Type.of<T>()` for the `T` bound on frame slot `slot`.
+    fn load_type_slot(destination: Local, slot: u32) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::LoadType(baml_type::TyTemplate::TypeArgRef(slot)),
+            },
+            span: None,
+        }
+    }
+
+    fn copy_into(destination: Local, source: Local) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::copy_local(source)),
+            },
+            span: None,
+        }
+    }
+
+    /// Two sequential binding blocks reuse one frame slot; the descriptor
+    /// computed under the first is consumed after the second has rebound it.
+    fn sibling_rebinding_body(rebinds_between: bool) -> MirFunctionBody<'static> {
+        let between = if rebinds_between {
+            vec![bind_type(0)]
+        } else {
+            vec![]
+        };
+        MirFunctionBody {
+            blocks: vec![
+                block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
+                block(1, between, goto(2)),
+                block(2, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![int_local_decl(None), int_local_decl(None)],
+            catch_regions: vec![],
+        }
+    }
+
+    #[test]
+    fn a_sibling_rebinding_of_a_read_slot_keeps_the_descriptor_materialized() {
+        let body = sibling_rebinding_body(true);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    #[test]
+    fn a_slot_bound_once_lets_its_descriptor_sink_across_blocks() {
+        let body = sibling_rebinding_body(false);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// A loop whose body rebinds the slot at its scope top and recomputes the
+    /// descriptor each iteration: the only path from the definition back to
+    /// the rebinding re-executes the definition, so sinking stays sound.
+    #[test]
+    fn a_rebinding_reached_only_through_the_definition_does_not_block_sinking() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![], goto(1)),
+                block(1, vec![], branch(2, 4)),
+                block(2, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(3)),
+                block(3, vec![copy_into(Local(2), Local(1))], goto(1)),
+                block(4, vec![], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// The descriptor is computed before a loop and consumed inside it, and the
+    /// loop body rebinds the slot after the use: the second iteration's use
+    /// would observe the rebinding, so the descriptor must be materialized.
+    #[test]
+    fn a_rebinding_after_the_use_inside_a_cycle_keeps_the_descriptor_materialized() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
+                block(1, vec![], branch(2, 3)),
+                block(
+                    2,
+                    vec![copy_into(Local(2), Local(1)), bind_type(0)],
+                    goto(1),
+                ),
+                block(3, vec![], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
     }
 
     #[test]

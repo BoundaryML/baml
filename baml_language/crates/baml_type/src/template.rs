@@ -262,6 +262,74 @@ fn walk_template<N: Clone>(
     }
 }
 
+/// Read-only pre-order traversal: the immutable sibling of [`walk_template`],
+/// arm for arm, so the two cannot disagree about where children live.
+/// `visitor` sees every node, parents before children.
+fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&TyTemplate<N>)) {
+    visitor(template);
+    let mut child = |template: &TyTemplate<N>| visit_template(template, visitor);
+    match template {
+        TyTemplate::List(inner, _) => child(inner),
+        TyTemplate::Map { key, value, .. } => {
+            child(key);
+            child(value);
+        }
+        TyTemplate::Union(members, _) | TyTemplate::Class(_, members, _) => {
+            members.iter().for_each(&mut child);
+        }
+        TyTemplate::Interface(_, args, associated_bindings, _) => {
+            args.iter().for_each(&mut child);
+            associated_bindings
+                .iter()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().for_each(|param| child(&param.ty));
+            child(ret);
+            child(throws);
+        }
+        TyTemplate::Future(value, error, _) => {
+            child(value);
+            child(error);
+        }
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            child(base);
+            interface.generics.iter().for_each(&mut child);
+            interface
+                .associated_types
+                .iter()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::TypeArgRef(_)
+        | TyTemplate::Int { .. }
+        | TyTemplate::Bigint { .. }
+        | TyTemplate::Float { .. }
+        | TyTemplate::String { .. }
+        | TyTemplate::Bool { .. }
+        | TyTemplate::Null { .. }
+        | TyTemplate::Uint8Array { .. }
+        | TyTemplate::Media(..)
+        | TyTemplate::Literal(..)
+        | TyTemplate::Enum(..)
+        | TyTemplate::EnumVariant(..)
+        | TyTemplate::RustType { .. }
+        | TyTemplate::Type { .. }
+        | TyTemplate::Resource { .. }
+        | TyTemplate::PromptAst { .. }
+        | TyTemplate::Void { .. }
+        | TyTemplate::TypeAlias(..)
+        | TyTemplate::Unknown { .. }
+        | TyTemplate::Never { .. } => {}
+    }
+}
+
 fn class_origin_args<'a, N: Clone + PartialEq>(
     origin: Option<&'a TyTemplate<N>>,
     class_name: &N,
@@ -630,6 +698,17 @@ impl TyTemplateInterface {
 /// the same bound as [`TyTemplate::substitute_symbolic`] rather than the
 /// stronger one reduction requires.
 impl<N: Clone> TyTemplateInterface<N> {
+    /// [`TyTemplate::for_each_type_arg_ref`] over every template position of
+    /// the constraint: the generic arguments, then the associated-type bindings.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        for generic in &self.generics {
+            generic.for_each_type_arg_ref(f);
+        }
+        for (_, binding) in &self.associated_types {
+            binding.for_each_type_arg_ref(f);
+        }
+    }
+
     /// Compile-time counterpart to [`Self::substitute`] (see
     /// [`TyTemplate::substitute_symbolic`]): resolve frame refs but leave
     /// unresolved positions symbolic, producing a `RuntimeInterface`.
@@ -792,6 +871,20 @@ impl<N: Clone> TyTemplate<N> {
     /// answers the same at either head.
     pub fn is_fully_concrete(&self) -> bool {
         <&RealizedTy<N>>::try_from(self).is_ok()
+    }
+
+    /// Calls `f` with the frame slot of every [`TyTemplate::TypeArgRef`] leaf,
+    /// in traversal order. A slot referenced more than once is reported once
+    /// per reference.
+    ///
+    /// These are exactly the frame type-arg slots evaluating the template reads,
+    /// which is what a pass that moves or repeats an evaluation has to respect.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        visit_template(self, &mut |template| {
+            if let TyTemplate::TypeArgRef(index) = template {
+                f(*index);
+            }
+        });
     }
 
     /// A lossy [`Ty`] view for rendering only: frame refs become
