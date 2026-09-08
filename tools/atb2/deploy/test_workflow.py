@@ -83,14 +83,16 @@ class WorkflowTests(unittest.TestCase):
             let review = Review { branch: branch, feedback: "fix", expected_head: null, proposal_id: null };
             assert.equal(push_review_fix(sb, review, baml.time.Instant.now(), sample_report(), null), false);
             let result = baml.json.from_string<HandleOutcome>(baml.fs.read(sb.run_dir + "/outcome.json"));
-            assert.contains(result.reason ?? "", "GitHub rejected the push credential");
+            assert.contains(result.reason ?? "", "GitHub rejected");
             assert.is_true(result.report != null);
             assert.equal(round_outcome(branch, 3), "agent_stopped");
             assert.equal(baml.fs.read(sb.worktree + "/preserved"), "fix");
             check_push_result(0);
         '''
-        calls = self.run_expression(expression, lambda *_: (200, []), push_exit_code=77)
-        self.assertEqual(calls, [])
+        for code in (77, 78):
+            with self.subTest(exit_code=code):
+                calls = self.run_expression(expression, lambda *_: (200, []), push_exit_code=code)
+                self.assertEqual(calls, [])
 
     def test_vague_feedback_is_terminal_without_an_issue_or_notification(self):
         terminal = []

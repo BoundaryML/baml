@@ -25,6 +25,10 @@ class PushFailure(Exception):
 
 def push_failure(error):
     detail = (error.stderr or b'').lower()
+    if b'workflow' in detail and any(marker in detail for marker in (
+        b'refusing to allow', b'without', b'permission', b'scope',
+    )):
+        return PushFailure('GitHub rejected a workflow-file update; the token needs Workflows write permission', 78)
     if any(marker in detail for marker in (
         b'error: 401', b'error: 403', b'authentication failed',
         b'permission to boundaryml/baml.git denied', b'could not read username',

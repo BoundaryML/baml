@@ -77,6 +77,20 @@ class PushFailureTests(unittest.TestCase):
         self.assertIn('Contents write permission', str(failure))
         self.assertNotIn('credential-fixture', str(failure))
 
+    def test_workflow_permission_rejection_is_specific_and_redacted(self):
+        spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
+        push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)
+        for diagnostic in (
+            b"refusing to allow a Personal Access Token to create or update workflow `.github/workflows/private.yml` without `workflow` scope",
+            b"refusing to allow a GitHub App to create or update workflow `.github/workflows/private.yml` without `workflows` permission",
+        ):
+            error = subprocess.CalledProcessError(1, ['git', 'push'], stderr=diagnostic + b' credential-fixture')
+            failure = push.push_failure(error)
+            self.assertEqual(failure.code, 78)
+            self.assertIn('Workflows write permission', str(failure))
+            self.assertNotIn('credential-fixture', str(failure))
+            self.assertNotIn('private.yml', str(failure))
+
     def test_branch_rejection_is_not_misreported_as_an_auth_failure(self):
         spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
         push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)

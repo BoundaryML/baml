@@ -1733,6 +1733,7 @@ function check_push_result(exit_code: int) -> null {
     if (exit_code != 0) {
         throw PushError { message: match (exit_code) {
             77 => "GitHub rejected the push credential; verify repository access and Contents write permission",
+            78 => "GitHub rejected a workflow-file update; the token needs Workflows write permission",
             65 => "Outgoing security scan failed; no push attempted",
             _ => "Trusted push failed; check the branch head, repository rules, and runner diagnostics",
         } };
