@@ -25,6 +25,14 @@ class LauncherTests(unittest.TestCase):
     identity = {"INFISICAL_CLIENT_ID": "identity-fixture", "INFISICAL_CLIENT_SECRET": "secret-fixture",
                 "INFISICAL_PROJECT_ID": "test-project"}
 
+    def test_dedicated_github_token_overrides_stale_legacy_token(self):
+        rows = [{"key": "ATB2_GITHUB_TOKEN", "value": "new-fixture"},
+                {"key": "GH_TOKEN", "value": "old-fixture"}]
+        with patch.object(launcher.subprocess, "run", return_value=self.export(rows)):
+            env = launcher.runtime_environment(self.source)
+        self.assertEqual(env["ATB2_GITHUB_TOKEN"], "new-fixture")
+        self.assertEqual(env["GH_TOKEN"], "new-fixture")
+
     def test_user_login_ignores_machine_credentials_and_stays_outside_runtime(self):
         source = {**self.identity, "INFISICAL_TOKEN": "stale-token", "ATB2_INFISICAL_AUTH": "user"}
         with patch.object(launcher.os, "lstat", return_value=SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o700)), \

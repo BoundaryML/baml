@@ -706,10 +706,10 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
     env
 }
 
-/// The token gh and git push with: GH_TOKEN, GITHUB_TOKEN, or the old
-/// bot's ATB_GITHUB_TOKEN (Infisical boundary-tools).
+/// Prefer the dedicated atb2 credential, with legacy names as fallbacks.
 function github_token() -> string? {
-    baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN")
+    baml.env.get("ATB2_GITHUB_TOKEN") ?? baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN")
+        ?? baml.env.get("ATB_GITHUB_TOKEN")
 }
 
 /// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that

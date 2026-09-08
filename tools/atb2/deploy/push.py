@@ -62,7 +62,7 @@ def main():
     if readonly or root != Path(cwd) or root.parent != Path('/data/worktrees'):
         raise ValueError('push requires an isolated checkout')
     if not re.fullmatch(r'[0-9a-f]{40}|', expected): raise ValueError('invalid expected head')
-    token = os.environ.get('GH_TOKEN') or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN')
+    token = os.environ.get('ATB2_GITHUB_TOKEN') or os.environ.get('GH_TOKEN') or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN')
     if not token: raise PushFailure('GitHub push credential is missing', 77)
     with tempfile.TemporaryDirectory(prefix='atb2-push-') as tmp:
         folder = Path(tmp)
