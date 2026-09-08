@@ -1,14 +1,22 @@
 # BAML Language Releases
 
-The BAML language release process runs as follows:
+To see the status of the latest ongoing release, visit the status page for [`release-baml-language.yml`](https://github.com/BoundaryML/baml/actions/workflows/release-baml-language.yml). Release failure/success is automatically posted to Slack.
 
-1. A human or agent merges a PR into `canary` that bumps the language release version and updates the corresponding package versions.
-2. Once CI passes for that commit, GitHub Actions starts a canary release from that exact source. Nightly releases use a separate daily schedule to select a green commit.
-3. The release workflow builds the toolchain and SDKs, then publishes packages and downloadable artifacts. During publication, it creates the GitHub release and attaches the version tag to the source commit.
-4. Once publishing and the required checks of published packages succeed, the workflow publishes the matching developer documentation and advances the channel to the new release.
-5. The workflow runs further artifact verification and reports the result in Slack. The current oncall follows the release through to completion and fixes any failures.
+**The current oncall is responsible for getting a canary release out every Friday and for investigating all failed releases.**
 
-**The current oncall is responsible for getting a canary release out every Friday and for keeping the release workflows working.** Merging the version bump starts the release; oncall owns the outcome.
+Both the nightly and canary release channels follow this process:
+
+1. Something triggers the release. (This is the primary difference between nightly and canary).
+2. `release-baml-language.yml` runs:
+   1. builds artifacts in parallel where possible
+   2. waits for `all-builds` to confirm that all builds succeeded
+   3. publishes individual artifacts:
+      1. uploads the toolchain to a GitHub release and assigns its tag to the source commit, e.g. `baml-language-0.18.0` or `baml-language-0.18.1-nightly.20260906.a`
+      2. publishes bridge packages and the version manifest (e.g. `pkg.boundaryml.com/manifest/v1/version/0.18.0.json`); the version manifest must be available before the Go package publishes
+   4. after required publishing, package checks, and documentation succeed, makes the new release available via `baml toolchain update` by updating the `pkg.boundaryml.com` channel manifest (`canary.json` or `nightly.json`)
+   5. runs further artifact verification
+3. Reports success or failure in Slack `#general`.
+4. Users can now pick up the new toolchain with `baml toolchain update`.
 
 ## Table of contents
 
@@ -19,19 +27,20 @@ The BAML language release process runs as follows:
 
 ## Nightly release
 
-1. Around midnight Pacific time, the [nightly dispatcher](../.github/workflows/nightly-release.yml) chooses the newest eligible commit on `canary` that has passed CI. Nights with no new eligible changes normally produce no release.
-2. The dispatcher uses the commit's existing `baml-language-source-<sha>` tag, created by CI, to start [release-baml-language.yml](../.github/workflows/release-baml-language.yml) with the `nightly` channel and the computed release version. The tag itself does not trigger the release.
-3. After the builds succeed, the workflow publishes artifacts and creates the GitHub release and tag `baml-language-<version>`, such as `baml-language-0.18.1-nightly.20260907.a`, at the source commit. The nightly channel advances after the required publishing, checks, and documentation steps succeed.
-4. Users who selected nightly with `baml toolchain use nightly` can then pick up the new release with `baml toolchain update`.
+Nightly releases are numbered like `0.18.1-nightly.20260906.a`
 
-Nightly versions use the next patch after the canary version, followed by the Pacific date that just ended and a letter distinguishing additional cuts that day.
+1. Around midnight Pacific time, the [nightly dispatcher workflow](../.github/workflows/nightly-release.yml) chooses the newest eligible commit on `canary` that has passed CI. Humans/agents can also manually trigger nightly releases.
+2. The dispatcher uses the commit's existing `baml-language-source-<sha>` tag, created by CI, to start [release-baml-language.yml](../.github/workflows/release-baml-language.yml) for the `nightly` channel.
+3. `release-baml-language.yml` runs, first building everything, then publishing the individual pieces, and updating the nightly channel manifest once its prerequisites succeed.
+   1. It computes the nightly release version before building, e.g. `0.18.1-nightly.20260906.a`.
+4. Users with `baml toolchain use nightly` can now pick up the new release with `baml toolchain update`.
 
 ## Canary release
 
-1. Merge a PR into `canary` that bumps the BAML language version in [release.toml](release.toml) and the corresponding versions throughout the repo. [Example](https://github.com/BoundaryML/baml/pull/4629).
-2. Once CI passes for that commit, automation creates the `baml-language-source-<sha>` tag and starts [release-baml-language.yml](../.github/workflows/release-baml-language.yml) with the `canary` channel and the new version. The channel is explicitly requested, rather than inferred from the tag.
-3. After the builds succeed, the workflow publishes artifacts and creates the GitHub release and tag `baml-language-<version>`, such as `baml-language-0.18.0`, at the source commit. The canary channel advances after the required publishing, checks, and documentation steps succeed.
-4. Users who selected canary with `baml toolchain use canary` can then pick up the new release with `baml toolchain update`.
+1. Merge a PR into `canary` to bump the release version in 20+ files in the repo: [release.toml](release.toml) and every BAML bridge's release version metadata, e.g. `pyproject.toml` or `package.json`. [Example](https://github.com/BoundaryML/baml/pull/4629).
+2. Once post-merge CI passes, automation creates the `baml-language-source-<sha>` tag and starts [release-baml-language.yml](../.github/workflows/release-baml-language.yml) with the `canary` channel and the new version.
+3. `release-baml-language.yml` runs, first building everything, then publishing the individual pieces, and updating the canary channel manifest once its prerequisites succeed.
+4. Users with `baml toolchain use canary` can now pick up the new release with `baml toolchain update`.
 
 ## What gets published
 
