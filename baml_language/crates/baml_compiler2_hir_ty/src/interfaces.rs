@@ -1831,6 +1831,7 @@ fn projection_poisoned(ty: &Ty) -> bool {
 /// qualifier was already an error type and must not double-report).
 pub fn determine_member_interface(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     base: &Ty,
     explicit_interface: Option<Ty>,
@@ -1838,14 +1839,16 @@ pub fn determine_member_interface(
     ns: MemberNamespace,
 ) -> (Determination, Vec<TirTypeError>) {
     let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
-    determine_member_interface_with_facts(db, &facts, base, explicit_interface, member, ns)
+    determine_member_interface_with_facts(db, viewer, &facts, base, explicit_interface, member, ns)
 }
 
 /// [`determine_member_interface`] against an ALREADY-BUILT fact oracle. A
 /// caller that holds one (inference does) reuses it rather than rebuilding
-/// the param env per projection.
+/// the param env per projection. `viewer` is the asking package: the impls
+/// that can declare the member are the ones it can see.
 pub fn determine_member_interface_with_facts(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'_>,
     base: &Ty,
     explicit_interface: Option<Ty>,
@@ -1871,7 +1874,7 @@ pub fn determine_member_interface_with_facts(
         }
     };
     (
-        determine_interface(db, facts, base, explicit, member, ns),
+        determine_interface(db, viewer, facts, base, explicit, member, ns),
         Vec::new(),
     )
 }
@@ -1886,6 +1889,7 @@ pub fn determine_member_interface_with_facts(
 /// triple, or the interface's own pin for `member` - is namespace-specific.
 pub fn lower_projection(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     base: Ty,
     explicit_interface: Option<Ty>,
@@ -1893,6 +1897,7 @@ pub fn lower_projection(
 ) -> ProjectionLowering {
     let (determination, mut diagnostics) = determine_member_interface(
         db,
+        viewer,
         scope_bounds,
         &base,
         explicit_interface,
@@ -1949,6 +1954,7 @@ pub fn lower_projection(
 
 fn determine_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'db>,
     base: &Ty,
     explicit: Option<baml_type::Interface>,
@@ -2016,7 +2022,7 @@ fn determine_interface<'db>(
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::EnumVariant(..) => match explicit {
-            None => determine_concrete(db, facts, &base, member, ns),
+            None => determine_concrete(db, viewer, facts, &base, member, ns),
             Some(qualifier) => match concrete_realized_interface(db, &base, &qualifier) {
                 Some(realized) => Determination::Determined(realized),
                 None => Determination::SubjectDoesNotImplementQualifier {
@@ -2250,6 +2256,7 @@ fn resolve_through_roots(
 /// transitively requires, mirroring the symbolic road).
 fn determine_concrete<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'db>,
     base: &Ty,
     member: &Name,
@@ -2260,7 +2267,7 @@ fn determine_concrete<'db>(
         return Determination::Poisoned;
     };
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
-    for interface in crate::impls::impl_views_for_type(db, base) {
+    for interface in crate::impls::impl_views_for_type(db, viewer, base) {
         if interface_declares_member(db, &interface.name, member, ns)
             && !declarers.contains(&interface)
         {

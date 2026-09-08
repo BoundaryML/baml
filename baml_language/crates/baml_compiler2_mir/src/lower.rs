@@ -3829,22 +3829,26 @@ impl<'db> LoweringContext<'db> {
         // reduce through the oracle before becoming dispatch types (the
         // requires-closure rule).
         let recv = widen_literal_bases(recv);
-        baml_compiler2_hir_ty::impls::impl_views_for_type(self.db, &recv)
-            .into_iter()
-            .map(|view| {
-                (
-                    self.wire(&view.name),
-                    view.generics
-                        .iter()
-                        .map(|ty| self.resolve_ty_projections(ty))
-                        .collect(),
-                    view.associated_types
-                        .iter()
-                        .map(|(name, ty)| (name.clone(), self.resolve_ty_projections(ty)))
-                        .collect(),
-                )
-            })
-            .collect()
+        baml_compiler2_hir_ty::impls::impl_views_for_type(
+            self.db,
+            baml_compiler2_hir::file_package::file_package(self.db, self.file).root,
+            &recv,
+        )
+        .into_iter()
+        .map(|view| {
+            (
+                self.wire(&view.name),
+                view.generics
+                    .iter()
+                    .map(|ty| self.resolve_ty_projections(ty))
+                    .collect(),
+                view.associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), self.resolve_ty_projections(ty)))
+                    .collect(),
+            )
+        })
+        .collect()
     }
 
     /// The interface a *concrete* receiver provides `method` through — the realized

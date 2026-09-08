@@ -253,6 +253,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     .collect();
     let projection = baml_compiler2_hir_ty::interfaces::lower_projection(
         &db,
+        db.workspace_root().expect("workspace root"),
         &bounds,
         baml_type::Ty::TypeVar(param, baml_type::TyAttr::default()),
         None,

@@ -216,7 +216,7 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
 ///
 /// The user's package: CLI databases always hold exactly one workspace root
 /// (`project_load::workspace_db` is their single constructor).
-fn user_package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+pub(crate) fn user_package(db: &ProjectDatabase) -> baml_db::SourceRoot {
     baml_compiler2_hir::package::sole_workspace_root(db)
         .unwrap_or_else(|| unreachable!("CLI databases are built by `workspace_db`"))
 }
@@ -440,7 +440,9 @@ impl DescribeArgs {
             }
             Some(ResolvedTarget::Item(def)) => {
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) = describe::describe_by_definition(&db, &files, def) else {
+                let Some(desc) =
+                    describe::describe_by_definition(&db, user_package(&db), &files, def)
+                else {
                     eprintln!("no symbol found: {name}");
                     print_did_you_mean(&db, name);
                     return Ok(crate::ExitCode::Other);
@@ -469,7 +471,7 @@ impl DescribeArgs {
                 // `shapes/`), or be a local (parameter, let binding). Scan
                 // the compiler-visible files and show every match.
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let matches = describe::describe(&db, &files, name);
+                let matches = describe::describe(&db, user_package(&db), &files, name);
 
                 if matches.is_empty() {
                     eprintln!("no symbol found: {name}");

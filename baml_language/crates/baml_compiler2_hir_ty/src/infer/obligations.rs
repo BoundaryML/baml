@@ -466,7 +466,7 @@ impl<'db> InferenceContext<'db> {
             return None;
         }
         let mut applicable = None;
-        for facts in crate::impls::all_impl_facts(self.db) {
+        for facts in crate::impls::all_impl_facts(self.db, self.viewer()) {
             if !crate::impls::provides_concrete_members(
                 baml_compiler2_hir::package::lang_roots(self.db),
                 &facts.interface.name,

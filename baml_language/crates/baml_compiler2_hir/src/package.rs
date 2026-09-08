@@ -98,6 +98,17 @@ pub fn sole_workspace_root(db: &dyn crate::Db) -> Option<SourceRoot> {
     roots.first().copied()
 }
 
+/// The packages `viewer` can see: itself, then its dependency closure in
+/// deterministic order. Every "which impls (or items) exist?" question is
+/// asked from a package and answered over exactly this set — never the
+/// whole database, which also holds packages `viewer` cannot name.
+#[salsa::tracked(returns(ref))]
+pub fn visible_packages(db: &dyn crate::Db, viewer: SourceRoot) -> Vec<SourceRoot> {
+    std::iter::once(viewer)
+        .chain(package_dependency_closure(db, viewer).iter().copied())
+        .collect()
+}
+
 /// The dependency edge of `root` named `name`, if it has one.
 ///
 /// The ONE place a source-level package spelling becomes a package: `baml`

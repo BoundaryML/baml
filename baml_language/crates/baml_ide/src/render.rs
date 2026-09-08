@@ -24,6 +24,7 @@ use baml_compiler2_hir::{
     package::{PackageItems, Spelling, lang_roots, sole_workspace_root, spelling},
     type_ref::{TypeRefId, TypeRefStore},
 };
+use baml_compiler2_hir_ty::render::Viewpoint;
 use baml_compiler2_ppir::item_data::{
     FunctionData, GenericParamData, InterfaceData, InterfaceMethodSigData,
 };
@@ -41,6 +42,8 @@ struct TyDisplayContext<'db> {
     current_namespace: Vec<Name>,
     package_items: &'db PackageItems<'db>,
     spelling: &'db Spelling,
+    /// How this package spells other packages: the viewer's edge names.
+    viewpoint: Viewpoint<'db>,
     lang: LangRoots,
     /// When set, collapse builtin companion classes to their lowercase
     /// primitive/keyword alias (`baml.String` → `string`, `baml.json.json` →
@@ -61,12 +64,18 @@ impl TyDisplayContext<'_> {
         if qtn.root() == self.current_root && self.can_use_bare_name(qtn) {
             return qtn.name().to_string();
         }
+        if qtn.root() != self.current_root {
+            // Cross-package: spelled the way this package writes it (its
+            // edge name), or by provenance when it has no edge to it.
+            return self.viewpoint.path(qtn);
+        }
 
-        // Everything non-bare spells the full canonical path — real package
-        // names, never the `root.` source shorthand (correct only inside the
-        // defining package, and signatures are read from outside it).
-        // Runtime-minted declarations carry no spelling caveat any more:
-        // their identity is the type tag, so the written name IS the name.
+        // An own-package name that is not bare here spells the full canonical
+        // path — the real package name, never the `root.` source shorthand
+        // (correct only inside the defining package, and signatures are read
+        // from outside it). Runtime-minted declarations carry no spelling
+        // caveat any more: their identity is the type tag, so the written
+        // name IS the name.
         canonical_path_in(self.spelling, qtn)
     }
 
@@ -177,6 +186,7 @@ fn display_ty_for_file_impl(
         current_namespace: pkg_info.namespace_path,
         package_items,
         spelling: spelling(db),
+        viewpoint: Viewpoint::user_facing(db, pkg_info.root),
         lang: lang_roots(db),
         collapse_aliases,
     };

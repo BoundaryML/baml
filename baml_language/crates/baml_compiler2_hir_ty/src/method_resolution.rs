@@ -415,6 +415,7 @@ pub(crate) fn member_roots<'db>(
 /// impls-for-receiver step (pinned pending).
 pub fn lookup_interface_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
@@ -422,7 +423,7 @@ pub fn lookup_interface_member<'db>(
     let Some((roots, existential)) = member_roots(db, facts, receiver) else {
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
-        return lookup_impl_member(db, facts, receiver, name);
+        return lookup_impl_member(db, viewer, facts, receiver, name);
     };
     let mut declarers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
     let push = |declarers: &mut Vec<(InferInterface, InterfaceMember<'db>)>,
@@ -545,11 +546,12 @@ pub(crate) fn declared_method_self_restriction<'db>(
 /// (E0121, TIR's rule).
 pub fn concrete_member_ambiguity<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
 ) -> Option<(Vec<InferInterface>, bool)> {
-    match lookup_impl_member(db, facts, receiver, name) {
+    match lookup_impl_member(db, viewer, facts, receiver, name) {
         InterfaceMemberLookup::Ambiguous { sources, is_field } => Some((sources, is_field)),
         _ => None,
     }
@@ -569,6 +571,7 @@ pub fn concrete_member_ambiguity<'db>(
 /// interface signature either way.
 fn lookup_impl_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
@@ -611,7 +614,7 @@ fn lookup_impl_member<'db>(
                 .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
                 .collect(),
         );
-        let lookup = lookup_impl_member(db, facts, &probe, name);
+        let lookup = lookup_impl_member(db, viewer, facts, &probe, name);
         return substitute_lookup_class_args(lookup, &frame, args);
     }
     // A literal receiver resolves against its base primitive's impls, the
@@ -629,7 +632,7 @@ fn lookup_impl_member<'db>(
         _ => receiver,
     };
     let mut providers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
-    for resolved in impls_for_receiver(db, receiver) {
+    for resolved in impls_for_receiver(db, viewer, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
             continue;
         }
@@ -918,12 +921,13 @@ fn assoc_bound_roots<'db>(
 /// this check.
 fn impls_for_receiver<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     receiver: &Ty,
 ) -> Vec<crate::impls::ResolvedImpl<'db>> {
     let Ok(closed) = baml_type::interned::ClosedTy::try_from(receiver) else {
         return Vec::new();
     };
-    crate::impls::impls_for_type(db, &closed.to_plain())
+    crate::impls::impls_for_type(db, viewer, &closed.to_plain())
 }
 
 /// A matched impl's generic params realized through the match, in
@@ -1321,6 +1325,7 @@ pub enum MemberSource {
 /// source position can name one.
 pub fn member_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &baml_type::interned::ClosedTy,
 ) -> Vec<MemberCandidate<'db>> {
@@ -1392,7 +1397,7 @@ pub fn member_candidates<'db>(
             // Total: the receiver arrived closed, so enumeration needs no
             // disposition here (contrast `impls_for_receiver`, whose
             // inference-side callers can still be open).
-            for resolved in crate::impls::impls_for_type(db, &receiver.to_plain()) {
+            for resolved in crate::impls::impls_for_type(db, viewer, &receiver.to_plain()) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }
@@ -1449,12 +1454,14 @@ pub fn type_member_candidates<'db>(
             // `(C as I).member` with the qualifier inferred, so the methods of
             // the interfaces C's impls provide belong to the type's member
             // surface (fields do not — see above). Enumerated in an empty
-            // param env: a declaration's members do not depend on where the
-            // reader stands, and an impl whose bounds an empty env cannot
-            // discharge is one a bare qualifier cannot reach either.
+            // param env and from the declaring package's viewpoint: a
+            // declaration's members do not depend on where the reader
+            // stands, and an impl whose bounds an empty env cannot discharge
+            // is one a bare qualifier cannot reach either.
             let facts = Facts::new(db);
             let self_ty = crate::lower::class_self_ty(db, class);
-            for resolved in crate::impls::impls_for_type(db, &self_ty) {
+            let declaring = baml_compiler2_hir::file_package::file_package(db, class.file(db)).root;
+            for resolved in crate::impls::impls_for_type(db, declaring, &self_ty) {
                 if !env_discharges_rigid_bounds(db, &facts, &resolved) {
                     continue;
                 }
@@ -1855,6 +1862,7 @@ pub enum UnionMemberLookup<'db> {
 
 pub fn lookup_union_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     union_ty: &Ty,
     members: &[Ty],
@@ -1862,7 +1870,7 @@ pub fn lookup_union_member<'db>(
 ) -> UnionMemberLookup<'db> {
     let mut shared: Option<Vec<InferInterface>> = None;
     for arm in members {
-        let arm_ifaces = union_arm_interfaces(db, facts, arm, 4);
+        let arm_ifaces = union_arm_interfaces(db, viewer, facts, arm, 4);
         shared = Some(match shared {
             None => arm_ifaces,
             Some(mut current) => {
@@ -1915,6 +1923,7 @@ pub fn lookup_union_member<'db>(
 /// contributes its matched impls' realized interfaces.
 fn union_arm_interfaces<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     arm: &Ty,
     fuel: u32,
@@ -1950,7 +1959,7 @@ fn union_arm_interfaces<'db>(
         }
         _ => {
             let mut out = Vec::new();
-            for resolved in impls_for_receiver(db, arm) {
+            for resolved in impls_for_receiver(db, viewer, arm) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }

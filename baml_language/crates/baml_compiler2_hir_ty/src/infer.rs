@@ -1487,6 +1487,7 @@ fn infer_body_impl<'db>(
     let mut ctx = InferenceContext::new(
         db,
         index,
+        owner.file(db),
         owner_scope,
         lower,
         param_tys,
@@ -1505,7 +1506,6 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Let(_) => None,
     };
     ctx.body_owner_id = Some(owner);
-    ctx.owner_file = Some(owner.file(db));
     ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
     if let BodyOwnerId::ParameterDefaults(function) = owner {
         // The defaults arena has no single root: each parameter's default
@@ -1818,7 +1818,9 @@ struct InferenceContext<'db> {
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
-    owner_file: Option<baml_base::SourceFile>,
+    /// The file whose body this context infers; its package is the viewer
+    /// every visibility question is asked from.
+    owner_file: baml_base::SourceFile,
     /// The pattern-reachability oracle's pre-folded alias map, built once
     /// The enclosing scope's PLAIN bound env for the written-type
     /// well-formedness judgment on body annotations, built lazily like
@@ -1852,6 +1854,7 @@ impl<'db> InferenceContext<'db> {
     fn new(
         db: &'db dyn baml_compiler2_ppir::Db,
         index: &'db FileSemanticIndex<'db>,
+        owner_file: baml_base::SourceFile,
         owner_scope: Option<FileScopeId>,
         lower: LowerCtx<'db>,
         param_tys: Vec<Ty>,
@@ -1911,7 +1914,7 @@ impl<'db> InferenceContext<'db> {
             provisional_checks: Vec::new(),
             pending_truthy_conditions: Vec::new(),
             diverges: Diverges::Maybe,
-            owner_file: None,
+            owner_file,
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
@@ -6199,6 +6202,7 @@ impl<'db> InferenceContext<'db> {
             let union_members = union_members.to_vec();
             match crate::method_resolution::lookup_union_member(
                 self.db,
+                self.viewer(),
                 &self.facts,
                 &resolved,
                 &union_members,
@@ -6253,6 +6257,7 @@ impl<'db> InferenceContext<'db> {
         if candidate.is_some()
             && let Some((sources, is_field)) = crate::method_resolution::concrete_member_ambiguity(
                 self.db,
+                self.viewer(),
                 &self.facts,
                 &resolved,
                 member,
@@ -6277,6 +6282,7 @@ impl<'db> InferenceContext<'db> {
             // ground registry fails safe on such types).
             match crate::method_resolution::lookup_interface_member(
                 self.db,
+                self.viewer(),
                 &self.facts,
                 &resolved,
                 member,
@@ -6847,15 +6853,17 @@ impl<'db> InferenceContext<'db> {
                 had_expected_type: had_context,
                 generic_params,
                 binding_name: initializer_binding_name(body, expr),
-                function_shape: (!has_phantom_param).then(|| {
-                    generic_function_value_shape(
-                        &self.viewpoint(),
-                        signature,
-                        user_params,
-                        receiver_is_bound,
-                        false,
-                    )
-                }),
+                function_shape: (!has_phantom_param)
+                    .then(|| {
+                        generic_function_value_shape(
+                            &self.viewpoint(),
+                            signature,
+                            user_params,
+                            receiver_is_bound,
+                            false,
+                        )
+                    })
+                    .flatten(),
                 annotation_ty: (specialization_example_is_safe && !has_phantom_param)
                     .then(|| inferred.clone()),
                 specialization_example_is_safe,
@@ -6971,15 +6979,17 @@ impl<'db> InferenceContext<'db> {
                         had_expected_type: had_context,
                         generic_params,
                         binding_name: initializer_binding_name(body, expr),
-                        function_shape: (!has_phantom_param).then(|| {
-                            generic_function_value_shape(
-                                &self.viewpoint(),
-                                signature,
-                                user_params,
-                                false,
-                                false,
-                            )
-                        }),
+                        function_shape: (!has_phantom_param)
+                            .then(|| {
+                                generic_function_value_shape(
+                                    &self.viewpoint(),
+                                    signature,
+                                    user_params,
+                                    false,
+                                    false,
+                                )
+                            })
+                            .flatten(),
                         annotation_ty: (specialization_example_is_safe && !has_phantom_param)
                             .then(|| function_value_ty(signature, &instantiation)),
                         specialization_example_is_safe,
@@ -7045,7 +7055,12 @@ impl<'db> InferenceContext<'db> {
                         generic_params,
                         binding_name: initializer_binding_name(body, expr),
                         function_shape: (!has_phantom_param)
-                            .then(|| rendered_plain(&shape_ty).spell(&self.viewpoint())),
+                            .then(|| {
+                                self.viewpoint()
+                                    .source_text(&rendered_plain(&shape_ty))
+                                    .ok()
+                            })
+                            .flatten(),
                         annotation_ty: (specialization_example_is_safe && !has_phantom_param).then(
                             || {
                                 crate::method_resolution::instantiate_external_signature(
@@ -7511,6 +7526,7 @@ impl<'db> InferenceContext<'db> {
         let interface_plain = self.materialize_ty(&interface);
         let (determination, diagnostics) = crate::interfaces::determine_member_interface_with_facts(
             self.db,
+            self.viewer(),
             &self.facts,
             &qself_plain,
             Some(interface_plain),
@@ -7760,6 +7776,7 @@ impl<'db> InferenceContext<'db> {
             if let crate::method_resolution::InterfaceMemberLookup::Found(interface_member) =
                 crate::method_resolution::lookup_interface_member(
                     self.db,
+                    self.viewer(),
                     &self.facts,
                     &receiver,
                     member,
@@ -7864,6 +7881,7 @@ impl<'db> InferenceContext<'db> {
         }
         let (determination, _) = crate::interfaces::determine_member_interface_with_facts(
             self.db,
+            self.viewer(),
             &self.facts,
             &rendered_plain(&qself),
             None,
@@ -9718,6 +9736,7 @@ impl<'db> InferenceContext<'db> {
             // - see the callee road's twin check.
             if let Some((sources, is_field)) = crate::method_resolution::concrete_member_ambiguity(
                 self.db,
+                self.viewer(),
                 &self.facts,
                 &resolved,
                 member,
@@ -9791,6 +9810,7 @@ impl<'db> InferenceContext<'db> {
         }
         match crate::method_resolution::lookup_interface_member(
             self.db,
+            self.viewer(),
             &self.facts,
             &resolved,
             member,
@@ -9885,6 +9905,7 @@ impl<'db> InferenceContext<'db> {
     ) -> (Ty, Option<MemberResolution<'db, Ty>>) {
         match crate::method_resolution::lookup_union_member(
             self.db,
+            self.viewer(),
             &self.facts,
             union_ty,
             members,
@@ -10096,13 +10117,13 @@ impl<'db> InferenceContext<'db> {
     /// The viewpoint this body's diagnostics spell types from: its own file's
     /// package.
     fn viewpoint(&self) -> crate::render::Viewpoint<'db> {
-        match self.owner_file {
-            Some(file) => crate::render::Viewpoint::user_facing(
-                self.db,
-                baml_compiler2_hir::file_package::file_package(self.db, file).root,
-            ),
-            None => crate::render::Viewpoint::canonical(self.db),
-        }
+        crate::render::Viewpoint::user_facing(self.db, self.viewer())
+    }
+
+    /// The package this body belongs to: what its member lookups can see and
+    /// the viewpoint its diagnostics render from.
+    fn viewer(&self) -> baml_base::SourceRoot {
+        baml_compiler2_hir::file_package::file_package(self.db, self.owner_file).root
     }
 
     fn qualified_interface_display(&self, iface: &baml_type::interned::InferInterface) -> String {
@@ -11955,10 +11976,13 @@ impl<'db> InferenceContext<'db> {
                             } else {
                                 None
                             };
-                        let annotation_example = annotation_ty.map(|ty| {
+                        // Insertable source: an example naming a package this
+                        // package cannot spell is no example.
+                        let annotation_example = annotation_ty.and_then(|ty| {
                             let finalized = self.finalize_ty(&ty);
-                            rendered_plain(&diagnostic_example_ty(&finalized))
-                                .spell(&self.viewpoint())
+                            self.viewpoint()
+                                .source_text(&rendered_plain(&diagnostic_example_ty(&finalized)))
+                                .ok()
                         });
                         (
                             TirTypeError::GenericFunctionValueNotSpecialized {
@@ -13326,8 +13350,7 @@ impl<'db> InferenceContext<'db> {
         if actual.has_infer() || expected.has_infer() {
             return None;
         }
-        let file = self.owner_file?;
-        let info = baml_compiler2_hir::file_package::file_package(self.db, file);
+        let info = baml_compiler2_hir::file_package::file_package(self.db, self.owner_file);
         let pkg = info.root;
         let aliases = self.overlap_alias_map();
         crate::interfaces::first_failing_impl_bound(
@@ -13375,10 +13398,7 @@ impl<'db> InferenceContext<'db> {
             use baml_compiler2_hir::contributions::Definition;
             use baml_type::normalize::TypeContext as _;
             let mut aliases = std::collections::HashMap::new();
-            let Some(file) = self.owner_file else {
-                return aliases;
-            };
-            let info = baml_compiler2_hir::file_package::file_package(self.db, file);
+            let info = baml_compiler2_hir::file_package::file_package(self.db, self.owner_file);
             let pkg = info.root;
             let mut packages = vec![pkg];
             packages.extend(baml_compiler2_hir::package::package_dependency_closure(
@@ -14187,7 +14207,7 @@ fn generic_function_value_shape(
     user_params: &[baml_type::ParamTy],
     receiver_is_bound: bool,
     concrete_example: bool,
-) -> String {
+) -> Option<String> {
     let mut instantiation: Vec<Ty> = signature
         .generic_params
         .iter()
@@ -14211,7 +14231,7 @@ fn generic_function_value_shape(
     } else {
         ty
     };
-    rendered_plain(&ty).spell(vp)
+    vp.source_text(&rendered_plain(&ty)).ok()
 }
 
 fn external_generic_function_value_ty(

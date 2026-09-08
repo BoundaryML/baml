@@ -382,13 +382,14 @@ pub async fn try_call_by_name(
 /// instead of repeating the root bookkeeping. It is test support only —
 /// production code adds roots and files explicitly.
 pub trait TestDbExt {
-    /// Install the stdlib sources and add the `Workspace` root at `root` for
-    /// the reserved `user` package.
+    /// Install the stdlib sources (if not yet installed) and add an unnamed
+    /// `Workspace` root at `root` — the package the default spelling `user`
+    /// displays.
     ///
     /// # Panics
     ///
-    /// Panics if the database already has a `Workspace` root (or `root` is
-    /// otherwise rejected — see [`baml_db::SourceRootError`]).
+    /// Panics if `root` is rejected (see [`baml_db::SourceRootError`]), or if
+    /// a non-stdlib root was added before the stdlib.
     fn workspace(&mut self, root: &Path) -> SourceRoot;
 
     /// Add a source-bearing `Dependency` root for `package` at

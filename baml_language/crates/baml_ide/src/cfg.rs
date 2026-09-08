@@ -549,6 +549,7 @@ fn call_sites_by_source_expr<'db>(
 ) -> Vec<(u32, CfgCallTarget<'db>)> {
     use baml_compiler2_ast::Expr;
 
+    let viewer = baml_compiler2_hir::file_package::file_package(db, caller.file(db)).root;
     let inference = Some(baml_compiler2_hir_ty::infer::infer_body(
         db,
         baml_compiler2_hir::body::BodyOwnerId::Function(caller),
@@ -564,7 +565,7 @@ fn call_sites_by_source_expr<'db>(
 
         if let Some(inference) = inference {
             if let Some(loc) =
-                resolved_call_function(db, inference, body, callee, dispatch_bindings)
+                resolved_call_function(db, viewer, inference, body, callee, dispatch_bindings)
             {
                 calls.push((
                     expr_id.into_raw().into_u32(),
@@ -633,6 +634,7 @@ fn resolve_path_function<'db>(
 
 fn resolved_call_function<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     inference: &baml_compiler2_hir_ty::infer::InferenceResult<'db>,
     body: &baml_compiler2_ast::ExprBody,
     callee: baml_compiler2_ast::ExprId,
@@ -670,7 +672,7 @@ fn resolved_call_function<'db>(
                 _ => None,
             }?;
             let concrete = dispatch_bindings.get(receiver)?;
-            interface_method_impl_loc(db, concrete, *interface, method)
+            interface_method_impl_loc(db, viewer, concrete, *interface, method)
         }
         Some(
             MemberResolution::Field { .. }
@@ -753,8 +755,11 @@ fn dispatch_bindings_for_call(
     bindings
 }
 
+/// `viewer` is the calling function's package: the impl providing the
+/// method is looked up among the impls that package can see.
 fn interface_method_impl_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     method_name: &baml_base::Name,
@@ -762,7 +767,7 @@ fn interface_method_impl_loc<'db>(
     let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
         baml_compiler2_ppir::item_data::function_data(db, *func_loc).name == *method_name
     };
-    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, concrete)
+    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, viewer, concrete)
         .into_iter()
         .filter_map(|resolved| resolved.source_block())
         .filter(|block| {

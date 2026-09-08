@@ -344,6 +344,7 @@ pub struct RefSite {
 /// Returns an empty Vec if no symbol with that name exists.
 pub fn describe(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     name: &str,
 ) -> Vec<SymbolDescription> {
@@ -361,7 +362,7 @@ pub fn describe(
     if !top_level.is_empty() {
         return top_level
             .into_iter()
-            .filter_map(|sym| describe_symbol(db, files, sym))
+            .filter_map(|sym| describe_symbol(db, viewer, files, sym))
             .collect();
     }
 
@@ -373,7 +374,7 @@ pub fn describe(
     if !members.is_empty() {
         return members
             .into_iter()
-            .filter_map(|sym| describe_symbol(db, files, sym))
+            .filter_map(|sym| describe_symbol(db, viewer, files, sym))
             .collect();
     }
 
@@ -387,6 +388,7 @@ pub fn describe(
 /// using the same `describe_top_level()` internals.
 pub fn describe_by_definition(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     definition: Definition<'_>,
 ) -> Option<SymbolDescription> {
@@ -411,7 +413,7 @@ pub fn describe_by_definition(
         container_name: None,
     };
 
-    describe_top_level(db, files, &sym)
+    describe_top_level(db, viewer, files, &sym)
 }
 
 /// Describe a member (field, variant) within a known parent item.
@@ -476,19 +478,23 @@ pub fn describe_item_member(
 /// Build a full `SymbolDescription` for a single `SymbolInfo`.
 fn describe_symbol(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
     if sym.kind.is_member() {
         describe_member(db, files, sym)
     } else {
-        describe_top_level(db, files, sym)
+        describe_top_level(db, viewer, files, sym)
     }
 }
 
 /// Describe a top-level symbol (class, function, enum, etc.).
+/// `viewer` is the package the description is read from: the interface
+/// implementations it lists are the ones that package can see.
 fn describe_top_level(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
@@ -533,7 +539,7 @@ fn describe_top_level(
             let (members, implementations) = match definition {
                 Some(Definition::Interface(iface_loc)) => (
                     collect_interface_members(db, iface_loc),
-                    collect_interface_impls(db, iface_loc),
+                    collect_interface_impls(db, viewer, iface_loc),
                 ),
                 _ => (Vec::new(), Vec::new()),
             };
@@ -1194,9 +1200,10 @@ fn collect_interface_members(
 /// projects each block into its display spelling and location.
 fn collect_interface_impls(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
 ) -> Vec<ImplRow> {
-    baml_compiler2_hir_ty::impls::impls_naming_interface(db, iface_loc)
+    baml_compiler2_hir_ty::impls::impls_naming_interface(db, viewer, iface_loc)
         .iter()
         .filter_map(|&block| {
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
@@ -2331,12 +2338,22 @@ mod tests {
 
     impl DescribeExt for ProjectTest {
         fn describe(&self, name: &str) -> Vec<SymbolDescription> {
-            super::describe(&self.db, &self.files, name)
+            super::describe(
+                &self.db,
+                sole_workspace_root(&self.db).expect("workspace root"),
+                &self.files,
+                name,
+            )
         }
 
         fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
             let files = baml_compiler2_hir::compiler2_all_files(&self.db);
-            super::describe(&self.db, &files, name)
+            super::describe(
+                &self.db,
+                sole_workspace_root(&self.db).expect("workspace root"),
+                &files,
+                name,
+            )
         }
 
         fn format_description(&self, desc: &SymbolDescription) -> String {
@@ -2494,7 +2511,13 @@ class Config {
         let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
-        let desc = super::describe_by_definition(&project.db, &files, def).unwrap();
+        let desc = super::describe_by_definition(
+            &project.db,
+            sole_workspace_root(&project.db).expect("workspace root"),
+            &files,
+            def,
+        )
+        .unwrap();
         assert_eq!(desc.name, "Config");
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Class);
     }

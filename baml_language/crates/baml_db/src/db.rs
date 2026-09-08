@@ -172,10 +172,9 @@ pub struct ProjectDatabase {
     seeded_callable_throws: Option<SeededCallableThrows>,
     /// The stdlib packages every non-`Stdlib` root implicitly depends on,
     /// under their own names — the `[package] prelude = true` packages of
-    /// the embedded stdlib manifests. Filled by the stdlib installer and
-    /// added to every root's edges (see [`Self::add_source_root`]); empty
-    /// until the stdlib is installed, after which existing roots are
-    /// retrofitted so the invariant holds whatever the installation order.
+    /// the embedded stdlib manifests. Filled by the stdlib installer, which
+    /// runs before any other root exists, and added to every later root's
+    /// edges at creation (see [`Self::add_source_root`]).
     stdlib_prelude: Arc<[Dependency]>,
     /// Maps canonical file paths to their live `SourceFile` handles (every
     /// root's files, stdlib included).
@@ -433,9 +432,30 @@ impl ProjectDatabase {
 
     /// The one stdlib installer: create (or reuse) the roots of
     /// [`stdlib_layout`] in dependency order, each with its manifest-declared
-    /// edges, record the prelude, and retrofit the prelude onto every
-    /// non-`Stdlib` root added before the stdlib was.
+    /// edges, and record the prelude every later root receives at creation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a non-`Stdlib` root already exists: the stdlib is installed
+    /// first, so its roots are the lowest ids in the database and the root
+    /// order the type algebra sorts by agrees with the table order emit
+    /// iterates.
     fn install_stdlib(&mut self, provenance: impl Fn(&str) -> StdlibProvenance) {
+        // The stdlib is installed before any other root, so the stdlib roots
+        // are the lowest ids in the database: the root order the type algebra
+        // sorts by (creation order) and the table order emit iterates agree
+        // that the stdlib comes first, and every later root receives the
+        // prelude edges at creation instead of by retrofit.
+        let late = self
+            .roots_by_path
+            .values()
+            .find(|root| root.kind(self) != SourceRootKind::Stdlib);
+        assert!(
+            late.is_none(),
+            "the stdlib must be installed before any other source root is added (found {:?} at {})",
+            late.map(|root| root.kind(self)),
+            late.map_or_else(String::new, |root| root.path(self).display().to_string()),
+        );
         let layout = stdlib_layout();
         let mut roots: HashMap<&'static str, SourceRoot> = HashMap::new();
         for package in &layout.packages {
@@ -501,27 +521,6 @@ impl ProjectDatabase {
             })
             .collect();
         self.stdlib_prelude = Arc::from(prelude);
-        // A root added before the stdlib got no prelude edges; give it them
-        // now so "every non-stdlib package reaches the prelude" holds
-        // regardless of installation order.
-        let live: Vec<SourceRoot> = self.roots_by_path.values().copied().collect();
-        for root in live {
-            if root.kind(self) == SourceRootKind::Stdlib {
-                continue;
-            }
-            let current = root.dependencies(self);
-            let missing: Vec<Dependency> = self
-                .stdlib_prelude
-                .iter()
-                .filter(|edge| !current.iter().any(|have| have.name == edge.name))
-                .cloned()
-                .collect();
-            if !missing.is_empty() {
-                let mut edges = missing;
-                edges.extend(current.iter().cloned());
-                root.set_dependencies(self).to(edges);
-            }
-        }
     }
 
     /// The prelude edges every non-`Stdlib` root carries (empty until the
@@ -1363,7 +1362,6 @@ mod tests {
     #[test]
     fn stdlib_sources_are_idempotent_and_first() {
         let mut db = ProjectDatabase::new();
-        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
         db.ensure_stdlib_sources();
         let roots_before = db.source_roots();
         let file_count = db.file_map.len();
@@ -1371,13 +1369,15 @@ mod tests {
         assert_eq!(db.source_roots(), roots_before);
         assert_eq!(db.file_map.len(), file_count);
 
-        // Stdlib roots precede the workspace root regardless of insertion order.
+        // Installed first, the stdlib roots are the lowest ids: the order the
+        // type algebra sorts by (creation) and the table order agree.
+        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
         assert_eq!(db.source_roots().last().copied(), Some(workspace));
         assert!(
             db.source_roots()
                 .iter()
-                .take(roots_before.len() - 1)
-                .all(|root| root.kind(&db) == SourceRootKind::Stdlib)
+                .take(roots_before.len())
+                .all(|root| root.kind(&db) == SourceRootKind::Stdlib && *root < workspace)
         );
         // One stdlib root per builtin package, holding all of its files.
         for name in baml_builtins2::stdlib_package_names() {
@@ -1392,14 +1392,22 @@ mod tests {
             assert_eq!(db.root_files(root).len(), expected);
         }
         assert_eq!(db.workspace_root(), Some(workspace));
-        // The workspace root, added before the stdlib, was retrofitted with
-        // the prelude edges.
+        // A root created after the stdlib receives the prelude edges at
+        // creation.
         let prelude: Vec<&str> = workspace
             .dependencies(&db)
             .iter()
             .map(|edge| edge.name.as_str())
             .collect();
         assert!(prelude.contains(&"baml") && prelude.contains(&"reflect"));
+    }
+
+    #[test]
+    #[should_panic(expected = "the stdlib must be installed before any other source root")]
+    fn stdlib_refuses_to_install_after_other_roots() {
+        let mut db = ProjectDatabase::new();
+        db.add_source_root(workspace_spec("/ws")).unwrap();
+        db.ensure_stdlib_sources();
     }
 
     #[test]

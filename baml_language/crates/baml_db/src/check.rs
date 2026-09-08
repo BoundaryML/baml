@@ -2070,19 +2070,17 @@ struct TyDisplayContext<'db> {
     current_root: baml_base::SourceRoot,
     current_namespace: Vec<Name>,
     package_items: &'db PackageItems<'db>,
-    spelling: &'db baml_compiler2_hir::package::Spelling,
+    /// How this package spells other packages: the viewer's edge names.
+    viewpoint: baml_compiler2_hir_ty::render::Viewpoint<'db>,
 }
 
 impl TyDisplayContext<'_> {
     fn display_qtn(&self, qtn: &DeclName) -> String {
         if qtn.root() != self.current_root {
-            // Cross-package: the package prefix disambiguates, spelled as
-            // this program spells that package.
-            return std::iter::once(self.spelling.of(qtn.root()).as_str())
-                .chain(qtn.namespace().iter().map(Name::as_str))
-                .chain(std::iter::once(qtn.name().as_str()))
-                .collect::<Vec<_>>()
-                .join(".");
+            // Cross-package: the package prefix disambiguates, spelled the
+            // way this package writes it (its edge name), or by provenance
+            // when it has no edge to that package.
+            return self.viewpoint.path(qtn);
         }
 
         if self.can_use_bare_name(qtn) {
@@ -2141,7 +2139,7 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile, t
         current_root: pkg_info.root,
         current_namespace: pkg_info.namespace_path,
         package_items,
-        spelling: baml_compiler2_hir::package::spelling(db),
+        viewpoint: baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, pkg_info.root),
     };
     ty.render_with(&ctx)
 }

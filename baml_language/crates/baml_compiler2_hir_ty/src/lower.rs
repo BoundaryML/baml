@@ -601,6 +601,7 @@ impl<'db> LowerCtx<'db> {
                     (Ok(base), Ok(explicit)) => {
                         let lowered = crate::interfaces::lower_projection(
                             self.db,
+                            self.package_items.root,
                             &self.plain_bounds_env(),
                             base,
                             explicit,
@@ -881,6 +882,7 @@ impl<'db> LowerCtx<'db> {
                 };
                 let lowered = crate::interfaces::lower_projection(
                     self.db,
+                    self.package_items.root,
                     &self.plain_bounds_env(),
                     ty_plain,
                     None,
@@ -994,6 +996,7 @@ impl<'db> LowerCtx<'db> {
                     };
                     let lowered = crate::interfaces::lower_projection(
                         self.db,
+                        self.package_items.root,
                         &self.plain_bounds_env(),
                         ty_plain,
                         None,
@@ -1034,6 +1037,7 @@ impl<'db> LowerCtx<'db> {
                 }
                 let lowered = crate::interfaces::lower_projection(
                     self.db,
+                    self.package_items.root,
                     &self.plain_bounds_env(),
                     head_plain,
                     None,

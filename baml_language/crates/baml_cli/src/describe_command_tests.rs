@@ -9,7 +9,7 @@ use baml_db::{ProjectDatabase, baml_compiler2_hir};
 use baml_ide::ResolvedTarget;
 
 use crate::describe_command::{
-    definition_line_range, dispatch, write_description, write_keyword, write_listing,
+    definition_line_range, dispatch, user_package, write_description, write_keyword, write_listing,
 };
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -173,7 +173,8 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
             capture_listing(&entries)
         }
         Some(ResolvedTarget::Item(def)) => {
-            if let Some(desc) = baml_ide::describe_by_definition(db, &files, def) {
+            if let Some(desc) = baml_ide::describe_by_definition(db, user_package(db), &files, def)
+            {
                 capture_description(db, &desc, 30)
             } else {
                 format!("NO DESCRIPTION: {name}\n")
@@ -193,7 +194,7 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
         }
         None => {
             // Fallback: substring describe (CLI behavior).
-            let descs = baml_ide::describe(db, &files, name);
+            let descs = baml_ide::describe(db, user_package(db), &files, name);
             if descs.is_empty() {
                 format!("NOT FOUND: {name}\n")
             } else {
@@ -294,7 +295,7 @@ fn render_namespace_listing_llm() {
 fn render_describe_class() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Point");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Point");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -304,7 +305,7 @@ fn render_describe_class() {
 fn render_describe_enum() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Color");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Color");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -331,7 +332,7 @@ class Person {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Named");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Named");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -389,7 +390,7 @@ implement Named for Robot {
 
 fn describe_named(db: &ProjectDatabase) -> baml_ide::SymbolDescription {
     let files = baml_compiler2_hir::compiler2_all_files(db);
-    let mut descs = baml_ide::describe(db, &files, "Named");
+    let mut descs = baml_ide::describe(db, user_package(db), &files, "Named");
     assert_eq!(descs.len(), 1);
     descs.remove(0)
 }
@@ -477,7 +478,7 @@ class IntDecoder {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "IntDecoder");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "IntDecoder");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(
@@ -540,7 +541,7 @@ class IntDecoder {
 fn render_describe_function_with_docstring() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "ExtractPoint");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "ExtractPoint");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -559,7 +560,7 @@ fn render_describe_ns_item() {
     let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_by_definition(&db, &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, user_package(&db), &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -675,7 +676,7 @@ fn render_assert_package_listing() {
 fn render_describe_builtin_string() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "String");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "String");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -686,7 +687,7 @@ fn render_describe_builtin_string() {
 fn render_describe_builtin_deep_copy() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "deep_copy");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "deep_copy");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -713,7 +714,7 @@ fn render_describe_builtin_item_by_definition() {
     let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_by_definition(&db, &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, user_package(&db), &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -972,7 +973,7 @@ class Wrapper<T> {
 fn render_describe_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "User");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "User");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -983,7 +984,7 @@ fn render_describe_class_with_methods() {
 fn render_describe_class_with_static_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Counter");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Counter");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(output.contains("methods:"));
@@ -997,7 +998,7 @@ fn render_describe_class_with_static_methods() {
 fn render_describe_generic_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Wrapper");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Wrapper");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -1040,7 +1041,7 @@ keep this line
 "##,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "PromptFn");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "PromptFn");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
 
@@ -1192,7 +1193,7 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 fn render_describe_methods_respect_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "String");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "String");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1254,13 +1255,13 @@ fn render_describe_methods_respect_budget() {
 fn render_describe_budget_hint_covers_dependencies_and_references() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let point = baml_ide::describe(&db, &files, "Point");
+    let point = baml_ide::describe(&db, user_package(&db), &files, "Point");
     assert_eq!(point.len(), 1);
     assert_reported_budget_is_minimum(&db, &point[0], 0);
 
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let wrapper = baml_ide::describe(&db, &files, "Wrapper");
+    let wrapper = baml_ide::describe(&db, user_package(&db), &files, "Wrapper");
     assert_eq!(wrapper.len(), 1);
     assert_reported_budget_is_minimum(&db, &wrapper[0], 0);
 }
@@ -1271,7 +1272,7 @@ fn render_describe_budget_hint_covers_dependencies_and_references() {
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "User");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "User");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1310,7 +1311,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
 fn render_describe_no_hint_when_full() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, &files, "Point");
+    let descs = baml_ide::describe(&db, user_package(&db), &files, "Point");
     assert_eq!(descs.len(), 1);
     // Point has only a few lines; budget of 30 is sufficient.
     let output = capture_description(&db, &descs[0], 30);

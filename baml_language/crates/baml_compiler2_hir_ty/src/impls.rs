@@ -425,12 +425,14 @@ pub fn package_impl_locs(
 ///
 /// Matching is nominal on the head's qualified name (implements is nominal):
 /// every generic instantiation of `Foo` names `Foo`, so instantiations are not
-/// distinguished here. Order is deterministic — packages sorted by name (via
-/// `all_packages`), blocks in source order within each. Mounted and
-/// precompiled packages ship no source blocks, so their impls are not listed.
+/// distinguished here. Only the packages `viewer` can see are searched
+/// ([`baml_compiler2_hir::package::visible_packages`]), in that deterministic order, blocks in source
+/// order within each. Mounted and precompiled packages ship no source
+/// blocks, so their impls are not listed.
 #[salsa::tracked(returns(ref))]
 pub fn impls_naming_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
     let name = &baml_compiler2_ppir::item_data::interface_data(db, interface).name;
@@ -440,7 +442,7 @@ pub fn impls_naming_interface<'db>(
         name,
     );
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, viewer) {
         for &block in package_impl_locs(db, package) {
             let Some(facts) = impl_facts(db, block).resolved() else {
                 continue;
@@ -1015,6 +1017,7 @@ pub(crate) fn mounted_interface_instantiation(
 /// variables).
 pub fn impl_views_for_type(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<baml_type::Interface> {
     // Enumeration takes the plain goal directly; the interned form is only
@@ -1023,7 +1026,7 @@ pub fn impl_views_for_type(
     let Some(interned) = try_interned_ty(concrete) else {
         return Vec::new();
     };
-    impls_for_type(db, concrete)
+    impls_for_type(db, viewer, concrete)
         .into_iter()
         .map(|resolved| {
             let view = resolved.implemented_view(db, &interned);
@@ -1073,6 +1076,7 @@ pub fn direct_requires_closure_plain(
 /// (`lookup_impl_member` does).
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<ResolvedImpl<'db>> {
     // A literal-typed value implements what its base primitive does -
@@ -1091,9 +1095,9 @@ pub fn impls_for_type<'db>(
             baml_type::PrimitiveType::from_literal(literal),
             attr.clone(),
         );
-        return impls_for_type(db, &widened);
+        return impls_for_type(db, viewer, &widened);
     }
-    impls_for_type_cached(db, ImplTypeKey::new(db, concrete.clone()))
+    impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
         .iter()
         .map(|cached| match &cached.origin {
             CachedResolvedImplOrigin::Source { block } => {
@@ -1190,6 +1194,8 @@ fn derived_impl_allows(
 // other reference to its pool entry.
 #[salsa::interned]
 struct ImplTypeKey<'db> {
+    /// The asking package: candidates come from what it can see.
+    viewer: baml_base::SourceRoot,
     #[returns(ref)]
     concrete: baml_type::Ty,
 }
@@ -1206,9 +1212,10 @@ fn impls_for_type_cycle_result<'db>(
 
 /// Memoized ground candidate assembly. Concrete primitive/container types recur
 /// throughout one project (especially through operator and interface lookup),
-/// while their impl set is a pure Salsa-dependent function of the type and
-/// package inputs. Cache that scan once instead of re-walking every impl block
-/// for every expression that mentions the same receiver type.
+/// while their impl set is a pure Salsa-dependent function of the type, the
+/// asking package, and package inputs. Cache that scan once instead of
+/// re-walking every visible impl block for every expression that mentions the
+/// same receiver type.
 #[salsa::tracked(returns(ref), cycle_result = impls_for_type_cycle_result)]
 fn impls_for_type_cached<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -1224,10 +1231,10 @@ fn impls_for_type_cached<'db>(
     }
     let eq = AliasOnlyFacts::memoized(db);
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, type_key.viewer(db)) {
         // Do not short-circuit this iterator: `impl_facts` dependencies are
         // registered lazily as source rows are visited. This memoized query
-        // must exhaust every package so later fact changes invalidate it.
+        // must exhaust every visible package so later fact changes invalidate it.
         for (origin, facts) in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
@@ -1305,16 +1312,6 @@ fn impls_for_type_cached<'db>(
         }
     }
     out
-}
-
-/// Every package contributing files to the compilation, deduplicated.
-///
-/// Reads the source-root table (every root IS one package, source-backed or
-/// served from its interface) — never the files themselves, so adding or
-/// removing a file cannot invalidate the package set.
-#[salsa::tracked(returns(ref))]
-fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<baml_base::SourceRoot> {
-    db.source_roots().roots(db).clone()
 }
 
 fn package_impl_candidates(
@@ -1446,13 +1443,16 @@ pub(crate) fn impl_candidates<'db>(
     out
 }
 
-/// Every impl block in the project, for the method PROBE's candidate
+/// Every impl block `viewer` can see, for the method PROBE's candidate
 /// assembly: the receiver's interface is unknown there, so no name
-/// filter applies - all packages, the same walk the ground registry
-/// (`impls_for_type`) does.
-pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts<'_>> {
+/// filter applies - every visible package, the same walk the ground
+/// registry (`impls_for_type`) does.
+pub(crate) fn all_impl_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+) -> Vec<&ImplFacts<'_>> {
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, viewer) {
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block).resolved() {
                 out.push(facts);
