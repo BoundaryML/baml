@@ -14,13 +14,16 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
 
 GITHUB_API_TIMEOUT_SECONDS = 30
+SLACK_SECTION_TEXT_LIMIT = 2800
 SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}
 
 
@@ -132,6 +135,17 @@ def format_failure(failure: Failure) -> str:
     return f"• {job} — job concluded {conclusion}"
 
 
+def notification_source_url(repository: str) -> str:
+    workflow_path = (
+        required_env("GITHUB_WORKFLOW_REF")
+        .removeprefix(f"{repository}/")
+        .rsplit("@", 1)[0]
+    )
+    # GitHub code search follows the repository's default branch (canary).
+    query = f'repo:{repository} path:"{workflow_path}" "{Path(__file__).name}"'
+    return f"https://github.com/search?{urlencode({'q': query, 'type': 'code'})}"
+
+
 def main() -> int:
     """Notify Slack of the current release result."""
     try:
@@ -162,19 +176,48 @@ def main() -> int:
             message = (
                 f"❌ BAML {channel} release failed: {version}, "
                 f"started at {format_pacific_time(started_at)}\n\n"
-                f"*Failures:*\n{failure_text}\n\n"
-                f"*Run:* <{run_url}|View workflow run>"
+                f"*Failures:*\n{failure_text}"
             )
         else:
             message = (
                 f"✅ BAML {channel} release succeeded: {version}, "
-                f"started at {format_pacific_time(started_at)}\n\n"
-                f"*Run:* <{run_url}|View workflow run>"
+                f"started at {format_pacific_time(started_at)}"
             )
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        paragraph[: SLACK_SECTION_TEXT_LIMIT - 3] + "..."
+                        if len(paragraph) > SLACK_SECTION_TEXT_LIMIT
+                        else paragraph
+                    ),
+                },
+            }
+            for paragraph in message.split("\n\n")
+        ]
+        footer = (
+            f"<{run_url}|View workflow run> · "
+            f"<{notification_source_url(repository)}|View notification source>"
+        )
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": footer,
+                    }
+                ],
+            }
+        )
 
         WebClient(token=slack_token).chat_postMessage(
             channel=slack_channel,
-            text=message,
+            text=f"{message}\n\n{footer}",
+            blocks=blocks,
             unfurl_links=False,
         )
         return 0
