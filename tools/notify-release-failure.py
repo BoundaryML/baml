@@ -9,13 +9,11 @@
 
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -134,26 +132,6 @@ def format_failure(failure: Failure) -> str:
     return f"• {job} — job concluded {conclusion}"
 
 
-def notification_source_url(repository: str) -> str:
-    workflow_path = (
-        required_env("GITHUB_WORKFLOW_REF")
-        .removeprefix(f"{repository}/")
-        .rsplit("@", 1)[0]
-    )
-    # Match the line number to the checked-out revision, which can differ from
-    # the workflow revision when the release explicitly checks out source_sha.
-    source_sha = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], text=True
-    ).strip()
-    url = f"https://github.com/{repository}/blob/{source_sha}/{workflow_path}"
-    for line_number, line in enumerate(
-        Path(workflow_path).read_text().splitlines(), start=1
-    ):
-        if line.strip() == "run: uv run --script tools/notify-release-failure.py":
-            return f"{url}#L{line_number}"
-    return url
-
-
 def main() -> int:
     """Notify Slack of the current release result."""
     try:
@@ -163,6 +141,7 @@ def main() -> int:
         github_token = required_env("GH_TOKEN")
         slack_channel = required_env("SLACK_CHANNEL")
         slack_token = required_env("SLACK_BOT_TOKEN")
+        notification_source_url = required_env("NOTIFICATION_SOURCE_URL")
 
         version = os.environ.get("VERSION") or "unknown version"
         channel = os.environ.get("CHANNEL") or "unknown channel"
@@ -198,7 +177,7 @@ def main() -> int:
         ]
         footer = (
             f"<{run_url}|View workflow run> · "
-            f"<{notification_source_url(repository)}|View notification source>"
+            f"<{notification_source_url}|View notification source>"
         )
         blocks.append(
             {

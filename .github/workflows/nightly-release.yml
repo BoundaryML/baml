@@ -305,7 +305,6 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/setup-mise
-            .github/workflows/nightly-release.yml
             mise.toml
             tools/notify-release-failure.py
           sparse-checkout-cone-mode: false
@@ -315,6 +314,8 @@ jobs:
           install_args: uv
       - name: Notify Slack of nightly dispatch failure
         env:
+          # Code search follows the default branch (canary) and finds the invocation as lines move.
+          NOTIFICATION_SOURCE_URL: "https://github.com/search?q=repo%3ABoundaryML%2Fbaml%20path%3A.github%2Fworkflows%2Fnightly-release.yml%20%22notify-release-failure%22&type=code"
           GH_TOKEN: ${{ github.token }}
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
