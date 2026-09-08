@@ -24,26 +24,26 @@ class Done {
 ///
 /// `T[]` and `string` implement it at the bottom of this file.
 interface Iterable {
-  /// The type of the elements yielded by the iterator.
-  type Item
-  /// The type of error iterating can throw.
-  ///
-  /// Defaults to `never`, so an implementation that cannot fail may leave it
-  /// out entirely.
-  type Error = never
+    /// The type of the elements yielded by the iterator.
+    type Item
+    /// The type of error iterating can throw.
+    ///
+    /// Defaults to `never`, so an implementation that cannot fail may leave it
+    /// out entirely.
+    type Error = never
 
-  /// Creates an iterator over the value.
-  ///
-  /// The return type is the interface rather than a concrete class, so the
-  /// implementor picks its own iterator type: `T[]` returns a
-  /// `baml.iter.ArrayIterator`, while every iterator in this file returns
-  /// `self`.
-  ///
-  /// That last part is worth remembering. Calling `iter` on something that is
-  /// already an iterator hands back the same, shared iterator. It does not
-  /// rewind a partly-consumed one, and two callers will pull from the same
-  /// cursor.
-  function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
+    /// Creates an iterator over the value.
+    ///
+    /// The return type is the interface rather than a concrete class, so the
+    /// implementor picks its own iterator type: `T[]` returns a
+    /// `baml.iter.ArrayIterator`, while every iterator in this file returns
+    /// `self`.
+    ///
+    /// That last part is worth remembering. Calling `iter` on something that is
+    /// already an iterator hands back the same, shared iterator. It does not
+    /// rewind a partly-consumed one, and two callers will pull from the same
+    /// cursor.
+    function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
 }
 
 /// Implemented by types that produce a sequence of values, often from some
@@ -71,404 +71,458 @@ interface Iterable {
 /// the whole chain fallible and says so in its type. Python and JavaScript
 /// track nothing of the sort — there a throwing callback simply propagates.
 interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
-  /// The type of the elements yielded by the iterator.
-  type Item
-  /// The type of error iterating can throw.
-  ///
-  /// Defaults to `never`. An adapter's `Error` is the union of its source's and
-  /// of any callback's, which is how a fallible step propagates down a chain.
-  type Error = never
+    /// The type of the elements yielded by the iterator.
+    type Item
+    /// The type of error iterating can throw.
+    ///
+    /// Defaults to `never`. An adapter's `Error` is the union of its source's and
+    /// of any callback's, which is how a fallible step propagates down a chain.
+    type Error = never
 
-  /// Advances the iterator and returns the next element, or `baml.iter.Done`
-  /// once there are none left.
-  ///
-  /// This is the one method an implementor must write; the rest of the
-  /// interface is defined in terms of it.
-  ///
-  /// Calling `next` again after it has returned `Done` is allowed. The leaf
-  /// iterators here (`ArrayIterator`, `Range`, `Repeat`) and the adapters that
-  /// latch (`take`, `take_while`) keep returning `Done`; the other adapters
-  /// just ask their source again, so what happens is whatever the source does.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if an error occurs while iterating. Depends on the
-  ///   implementation.
-  function next(self) -> Self.Item | Done throws Self.Error
+    /// Advances the iterator and returns the next element, or `baml.iter.Done`
+    /// once there are none left.
+    ///
+    /// This is the one method an implementor must write; the rest of the
+    /// interface is defined in terms of it.
+    ///
+    /// Calling `next` again after it has returned `Done` is allowed. The leaf
+    /// iterators here (`ArrayIterator`, `Range`, `Repeat`) and the adapters that
+    /// latch (`take`, `take_while`) keep returning `Done`; the other adapters
+    /// just ask their source again, so what happens is whatever the source does.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if an error occurs while iterating. Depends on the
+    ///   implementation.
+    function next(self) -> Self.Item | Done throws Self.Error
 
-  /// Returns an iterator that applies `fn` to each element — Python's `map`,
-  /// JavaScript's `Iterator.prototype.map`.
-  ///
-  /// `fn` is applied exactly once per element that is actually pulled, in
-  /// order, so a chain that ends early never touches the elements it skipped.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Map` yielding `R`, of the same length as `self`.
-  function map<R, E2>(self, fn: (Self.Item) -> R throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
-    Map<Self.Item, R, Self.Error, E2> { source: self, func: fn }
-  }
-
-  /// Returns an iterator over the elements for which `predicate` is `true`, in
-  /// order.
-  ///
-  /// A rejected element is skipped, not a stopping point — use
-  /// `baml.iter.Iterator.take_while` to stop at the first failure instead.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Filter` yielding the kept elements.
-  function filter<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
-    Filter<Self.Item, Self.Error, E2> { source: self, predicate: predicate }
-  }
-
-  /// Returns an iterator over the non-null results of `fn`: `map` and `filter`
-  /// in one pass.
-  ///
-  /// `null` is the skip signal, so the produced item type `R` is the
-  /// non-optional one. An iterator whose own items you want to keep as `null`
-  /// cannot be expressed this way — filter and map it in two steps instead.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.FilterMap` yielding the non-null results, in order.
-  function filter_map<R, E2>(self, fn: (Self.Item) -> R? throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
-    FilterMap<Self.Item, R, Self.Error, E2> { source: self, func: fn }
-  }
-
-  /// Returns an iterator over the elements of the iterables `fn` produces, laid
-  /// end to end.
-  ///
-  /// Each inner sequence is drained before the next outer element is pulled,
-  /// and one that is empty contributes nothing. Three error types meet here —
-  /// the source's, `fn`'s `E2`, and the inner iterables' `E3` — and the result
-  /// throws all of them.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.FlatMap` yielding `R`.
-  function flat_map<R, E2, E3>(self, fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Self.Error | E2 | E3> throws never {
-    FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {} }
-  }
-
-  /// Returns an iterator over every `n`th element, starting with the first.
-  ///
-  /// The elements kept are those at positions `0`, `n`, `2n`, and so on. The
-  /// skipped ones are still pulled from the source — and so may still throw —
-  /// they are simply discarded.
-  ///
-  /// # Parameters
-  ///
-  /// - `n`: how far to advance between yielded elements. Values below `1` mean
-  ///   "advance by one", i.e. yield everything.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.StepBy`.
-  function step_by(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
-    StepBy<Self.Item, Self.Error> { source: self, n: n, first: true }
-  }
-
-  /// Returns an iterator over all of `self`'s elements followed by all of
-  /// `other`'s.
-  ///
-  /// `other.iter()` is called right away, when the chain is built; only the
-  /// advancing is deferred. The two sides may have different error types, and
-  /// the result throws either.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Chain`.
-  function chain<E2>(self, other: Iterable<Item = Self.Item, Error = E2>) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
-    Chain<Self.Item, Self.Error, E2> { first: self, other: other.iter(), first_done: false }
-  }
-
-  /// Returns an iterator with one element of look-ahead.
-  ///
-  /// Unlike the other adapters this returns the concrete `baml.iter.Peekable`
-  /// class rather than the `Iterator` interface, because `peek` lives on the
-  /// class: an existential would hide it.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Peekable` yielding exactly what `self` yields, plus a `peek`
-  /// that reads the next element without consuming it.
-  function peekable(self) -> Peekable<Self.Item, Self.Error> throws never {
-    Peekable<Self.Item, Self.Error> { source: self, buffer: Done {}, has_buffer: false }
-  }
-
-  /// Returns an iterator over at most the first `n` elements.
-  ///
-  /// Once `n` elements have been yielded the source is no longer advanced, and
-  /// if the source ends first this ends with it. For `n <= 0` it yields
-  /// nothing. A slot is spent only once the source has actually yielded an
-  /// element, so a source that throws and is then retried does not silently
-  /// lose one.
-  ///
-  /// This is the usual way to bound an unbounded iterator such as
-  /// `Repeat.new(v)` or a wide `Range`.
-  ///
-  /// # Parameters
-  ///
-  /// - `n`: the greatest number of elements to yield.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Take` yielding at most `n` elements.
-  ///
-  /// # Examples
-  ///
-  /// ```baml
-  /// baml.iter.Repeat.new(0).take(5).collect()   // [0, 0, 0, 0, 0]
-  /// baml.iter.Range.new(0, 10).take(3).collect() // [0, 1, 2]
-  /// ```
-  function take(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
-    Take<Self.Item, Self.Error> { source: self, remaining: n }
-  }
-
-  /// Returns an iterator over everything after the first `n` elements.
-  ///
-  /// For `n <= 0` every element is yielded; a source with fewer than `n`
-  /// elements yields nothing. The skipped elements are pulled from the source
-  /// and discarded — they are not free, and they can still throw. A skip is
-  /// counted only once the source has actually yielded, so a throw the caller
-  /// retries does not consume part of the count.
-  ///
-  /// # Parameters
-  ///
-  /// - `n`: how many leading elements to discard.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.Skip`.
-  ///
-  /// # Examples
-  ///
-  /// ```baml
-  /// baml.iter.Range.new(0, 5).skip(2).collect() // [2, 3, 4]
-  /// ```
-  function skip(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
-    Skip<Self.Item, Self.Error> { source: self, remaining: n }
-  }
-
-  /// Returns an iterator over the leading run of elements for which
-  /// `predicate` is `true`.
-  ///
-  /// The element that fails the predicate is consumed from the source and is
-  /// not yielded. Unlike `filter`, iteration **stops** at the first failure
-  /// rather than skipping it, and the stop latches: the source is never
-  /// advanced again, however often `next` is called.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.TakeWhile`.
-  ///
-  /// # Examples
-  ///
-  /// ```baml
-  /// // stops at 5, so 6 and 8 are never yielded
-  /// [2, 4, 5, 6, 8].iter().take_while((x: int) -> bool { x % 2 == 0 }).collect() // [2, 4]
-  /// ```
-  function take_while<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
-    TakeWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, done: false }
-  }
-
-  /// Returns an iterator over everything from the first element `predicate`
-  /// rejects onwards.
-  ///
-  /// That first rejected element is itself yielded — it is the start of the
-  /// kept run, not a discarded boundary. The predicate is not consulted again
-  /// afterwards, so later elements it would have matched are still yielded.
-  ///
-  /// # Returns
-  ///
-  /// A `baml.iter.SkipWhile`.
-  ///
-  /// # Examples
-  ///
-  /// ```baml
-  /// // stops skipping at 3, so the trailing 1 and 2 are kept
-  /// [1, 2, 3, 1, 2].iter().skip_while((x: int) -> bool { x < 3 }).collect() // [3, 1, 2]
-  /// ```
-  function skip_while<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
-    SkipWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, skipping: true }
-  }
-
-  /// Consumes the rest of this iterator into an array, in order.
-  ///
-  /// The *rest*: elements already pulled from a partly-consumed iterator are
-  /// not included, and an already-exhausted iterator collects to `[]`.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails. The elements gathered so
-  ///   far are lost, since the array is only returned on success.
-  function collect(self) -> Self.Item[] throws Self.Error {
-    let r: Self.Item[] = [];
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => r.push(x),
-      }
+    /// Returns an iterator that applies `fn` to each element — Python's `map`,
+    /// JavaScript's `Iterator.prototype.map`.
+    ///
+    /// `fn` is applied exactly once per element that is actually pulled, in
+    /// order, so a chain that ends early never touches the elements it skipped.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Map` yielding `R`, of the same length as `self`.
+    function map<R, E2>(
+        self,
+        fn: (Self.Item) -> R throws E2,
+    ) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
+        Map<Self.Item, R, Self.Error, E2> { source: self, func: fn }
     }
-    r
-  }
 
-  /// Folds every remaining element into an accumulator, left to right.
-  ///
-  /// The accumulator starts at `initial` and each call to `fn` replaces it with
-  /// the result; `initial` is what comes back for an empty iterator. Because
-  /// the seed is required and its type `A` is independent of the item type,
-  /// this is the operation Rust calls `Iterator::fold` and Python calls
-  /// `functools.reduce` — not Rust's `reduce`.
-  ///
-  /// # Parameters
-  ///
-  /// - `fn`: combines the accumulator so far with the next element.
-  /// - `initial`: the starting accumulator, and the result for an empty
-  ///   iterator.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  /// - `E2` if `fn` throws. The fold stops there; the partial accumulator is
-  ///   not recoverable.
-  ///
-  /// ALIASES: fold
-  function reduce<A, E2>(self, fn: (A, Self.Item) -> A throws E2, initial: A) -> A throws Self.Error | E2 {
-    let acc: A = initial;
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => { acc = fn(acc, x); },
-      }
+    /// Returns an iterator over the elements for which `predicate` is `true`, in
+    /// order.
+    ///
+    /// A rejected element is skipped, not a stopping point — use
+    /// `baml.iter.Iterator.take_while` to stop at the first failure instead.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Filter` yielding the kept elements.
+    function filter<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+        Filter<Self.Item, Self.Error, E2> { source: self, predicate: predicate }
     }
-    acc
-  }
 
-  /// Consumes the rest of this iterator and returns how many elements there
-  /// were, `0` if it was already exhausted.
-  ///
-  /// Every element is actually pulled — there is no size hint to short circuit
-  /// with — so counting a chain runs the whole chain, callbacks included.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  function count(self) -> int throws Self.Error {
-    let n: int = 0;
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => { n += 1; },
-      }
+    /// Returns an iterator over the non-null results of `fn`: `map` and `filter`
+    /// in one pass.
+    ///
+    /// `null` is the skip signal, so the produced item type `R` is the
+    /// non-optional one. An iterator whose own items you want to keep as `null`
+    /// cannot be expressed this way — filter and map it in two steps instead.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.FilterMap` yielding the non-null results, in order.
+    function filter_map<R, E2>(
+        self,
+        fn: (Self.Item) -> R? throws E2,
+    ) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
+        FilterMap<Self.Item, R, Self.Error, E2> { source: self, func: fn }
     }
-    n
-  }
 
-  /// Calls `fn` on each remaining element, in order, for its side effects.
-  ///
-  /// A `for (.. in ..)` loop is generally preferable; this is for the end of a
-  /// long chain of calls. It runs to exhaustion — there is no way for `fn` to
-  /// stop it early. Use `baml.iter.Iterator.some` or a `for` loop with a
-  /// `break` when you need to.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  /// - `E2` if `fn` throws, which ends the traversal at that element.
-  function for_each<E2>(self, fn: (Self.Item) -> void throws E2) -> void throws Self.Error | E2 {
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => { fn(x); },
-      }
+    /// Returns an iterator over the elements of the iterables `fn` produces, laid
+    /// end to end.
+    ///
+    /// Each inner sequence is drained before the next outer element is pulled,
+    /// and one that is empty contributes nothing. Three error types meet here —
+    /// the source's, `fn`'s `E2`, and the inner iterables' `E3` — and the result
+    /// throws all of them.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.FlatMap` yielding `R`.
+    function flat_map<R, E2, E3>(
+        self,
+        fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2,
+    ) -> Iterator<Item = R, Error = Self.Error | E2 | E3> throws never {
+        FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {  } }
     }
-  }
 
-  /// Whether `predicate` holds for any remaining element — Python's `any`,
-  /// JavaScript's `some`.
-  ///
-  /// Short circuits at the first `true`, leaving the iterator positioned just
-  /// after the matching element so it can be inspected further. An empty
-  /// iterator gives `false`, the empty disjunction.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  /// - `E2` if `predicate` throws.
-  ///
-  /// ALIASES: any
-  function some<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => {
-          if (predicate(x)) {
-            return true;
-          }
-        },
-      }
+    /// Returns an iterator over every `n`th element, starting with the first.
+    ///
+    /// The elements kept are those at positions `0`, `n`, `2n`, and so on. The
+    /// skipped ones are still pulled from the source — and so may still throw —
+    /// they are simply discarded.
+    ///
+    /// # Parameters
+    ///
+    /// - `n`: how far to advance between yielded elements. Values below `1` mean
+    ///   "advance by one", i.e. yield everything.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.StepBy`.
+    function step_by(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+        StepBy<Self.Item, Self.Error> { source: self, n: n, first: true }
     }
-    false
-  }
 
-  /// Whether `predicate` holds for every remaining element — Python's `all`,
-  /// JavaScript's `every`.
-  ///
-  /// Short circuits at the first `false`. An empty iterator gives `true` — the
-  /// empty conjunction — which is worth remembering when the iterator may have
-  /// been exhausted already.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  /// - `E2` if `predicate` throws.
-  ///
-  /// ALIASES: all
-  function every<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => {
-          if (!predicate(x)) {
-            return false;
-          }
-        },
-      }
+    /// Returns an iterator over all of `self`'s elements followed by all of
+    /// `other`'s.
+    ///
+    /// `other.iter()` is called right away, when the chain is built; only the
+    /// advancing is deferred. The two sides may have different error types, and
+    /// the result throws either.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Chain`.
+    function chain<E2>(
+        self,
+        other: Iterable<Item = Self.Item, Error = E2>,
+    ) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+        Chain<Self.Item, Self.Error, E2> { first: self, other: other.iter(), first_done: false }
     }
-    true
-  }
 
-  /// The first remaining element for which `predicate` is `true`, or `null` if
-  /// the iterator runs out first.
-  ///
-  /// Short circuits: the matching element is consumed, and the iterator is left
-  /// positioned just after it.
-  ///
-  /// The result is `Self.Item?`, so — unlike `next`, which uses the distinct
-  /// `baml.iter.Done` sentinel — an iterator whose items are themselves
-  /// nullable cannot tell a found `null` from no match. Use
-  /// `baml.iter.Iterator.filter` followed by `next` when that distinction
-  /// matters.
-  ///
-  /// # Throws
-  ///
-  /// - `Self.Error` if advancing the iterator fails.
-  /// - `E2` if `predicate` throws.
-  function find<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Self.Item? throws Self.Error | E2 {
-    while (true) {
-      match (self.next()) {
-        Done => { break; },
-        let x: Self.Item => {
-          if (predicate(x)) {
-            return x;
-          }
-        },
-      }
+    /// Returns an iterator with one element of look-ahead.
+    ///
+    /// Unlike the other adapters this returns the concrete `baml.iter.Peekable`
+    /// class rather than the `Iterator` interface, because `peek` lives on the
+    /// class: an existential would hide it.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Peekable` yielding exactly what `self` yields, plus a `peek`
+    /// that reads the next element without consuming it.
+    function peekable(self) -> Peekable<Self.Item, Self.Error> throws never {
+        Peekable<Self.Item, Self.Error> { source: self, buffer: Done {  }, has_buffer: false }
     }
-    null
-  }
+
+    /// Returns an iterator over at most the first `n` elements.
+    ///
+    /// Once `n` elements have been yielded the source is no longer advanced, and
+    /// if the source ends first this ends with it. For `n <= 0` it yields
+    /// nothing. A slot is spent only once the source has actually yielded an
+    /// element, so a source that throws and is then retried does not silently
+    /// lose one.
+    ///
+    /// This is the usual way to bound an unbounded iterator such as
+    /// `Repeat.new(v)` or a wide `Range`.
+    ///
+    /// # Parameters
+    ///
+    /// - `n`: the greatest number of elements to yield.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Take` yielding at most `n` elements.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// baml.iter.Repeat.new(0).take(5).collect()   // [0, 0, 0, 0, 0]
+    /// baml.iter.Range.new(0, 10).take(3).collect() // [0, 1, 2]
+    /// ```
+    function take(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+        Take<Self.Item, Self.Error> { source: self, remaining: n }
+    }
+
+    /// Returns an iterator over everything after the first `n` elements.
+    ///
+    /// For `n <= 0` every element is yielded; a source with fewer than `n`
+    /// elements yields nothing. The skipped elements are pulled from the source
+    /// and discarded — they are not free, and they can still throw. A skip is
+    /// counted only once the source has actually yielded, so a throw the caller
+    /// retries does not consume part of the count.
+    ///
+    /// # Parameters
+    ///
+    /// - `n`: how many leading elements to discard.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.Skip`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// baml.iter.Range.new(0, 5).skip(2).collect() // [2, 3, 4]
+    /// ```
+    function skip(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+        Skip<Self.Item, Self.Error> { source: self, remaining: n }
+    }
+
+    /// Returns an iterator over the leading run of elements for which
+    /// `predicate` is `true`.
+    ///
+    /// The element that fails the predicate is consumed from the source and is
+    /// not yielded. Unlike `filter`, iteration **stops** at the first failure
+    /// rather than skipping it, and the stop latches: the source is never
+    /// advanced again, however often `next` is called.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.TakeWhile`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// // stops at 5, so 6 and 8 are never yielded
+    /// [2, 4, 5, 6, 8].iter().take_while((x: int) -> bool { x % 2 == 0 }).collect() // [2, 4]
+    /// ```
+    function take_while<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+        TakeWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, done: false }
+    }
+
+    /// Returns an iterator over everything from the first element `predicate`
+    /// rejects onwards.
+    ///
+    /// That first rejected element is itself yielded — it is the start of the
+    /// kept run, not a discarded boundary. The predicate is not consulted again
+    /// afterwards, so later elements it would have matched are still yielded.
+    ///
+    /// # Returns
+    ///
+    /// A `baml.iter.SkipWhile`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// // stops skipping at 3, so the trailing 1 and 2 are kept
+    /// [1, 2, 3, 1, 2].iter().skip_while((x: int) -> bool { x < 3 }).collect() // [3, 1, 2]
+    /// ```
+    function skip_while<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+        SkipWhile<Self.Item, Self.Error, E2> { source: self, predicate: predicate, skipping: true }
+    }
+
+    /// Consumes the rest of this iterator into an array, in order.
+    ///
+    /// The *rest*: elements already pulled from a partly-consumed iterator are
+    /// not included, and an already-exhausted iterator collects to `[]`.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails. The elements gathered so
+    ///   far are lost, since the array is only returned on success.
+    function collect(self) -> Self.Item[] throws Self.Error {
+        let r: Self.Item[] = [];
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => r.push(x),
+            }
+        }
+        r
+    }
+
+    /// Folds every remaining element into an accumulator, left to right.
+    ///
+    /// The accumulator starts at `initial` and each call to `fn` replaces it with
+    /// the result; `initial` is what comes back for an empty iterator. Because
+    /// the seed is required and its type `A` is independent of the item type,
+    /// this is the operation Rust calls `Iterator::fold` and Python calls
+    /// `functools.reduce` — not Rust's `reduce`.
+    ///
+    /// # Parameters
+    ///
+    /// - `fn`: combines the accumulator so far with the next element.
+    /// - `initial`: the starting accumulator, and the result for an empty
+    ///   iterator.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    /// - `E2` if `fn` throws. The fold stops there; the partial accumulator is
+    ///   not recoverable.
+    ///
+    /// ALIASES: fold
+    function reduce<A, E2>(
+        self,
+        fn: (A, Self.Item) -> A throws E2,
+        initial: A,
+    ) -> A throws Self.Error | E2 {
+        let acc: A = initial;
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    acc = fn(acc, x);
+                },
+            }
+        }
+        acc
+    }
+
+    /// Consumes the rest of this iterator and returns how many elements there
+    /// were, `0` if it was already exhausted.
+    ///
+    /// Every element is actually pulled — there is no size hint to short circuit
+    /// with — so counting a chain runs the whole chain, callbacks included.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    function count(self) -> int throws Self.Error {
+        let n: int = 0;
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    n += 1;
+                },
+            }
+        }
+        n
+    }
+
+    /// Calls `fn` on each remaining element, in order, for its side effects.
+    ///
+    /// A `for (.. in ..)` loop is generally preferable; this is for the end of a
+    /// long chain of calls. It runs to exhaustion — there is no way for `fn` to
+    /// stop it early. Use `baml.iter.Iterator.some` or a `for` loop with a
+    /// `break` when you need to.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    /// - `E2` if `fn` throws, which ends the traversal at that element.
+    function for_each<E2>(self, fn: (Self.Item) -> void throws E2) -> void throws Self.Error | E2 {
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    fn(x);
+                },
+            }
+        }
+    }
+
+    /// Whether `predicate` holds for any remaining element — Python's `any`,
+    /// JavaScript's `some`.
+    ///
+    /// Short circuits at the first `true`, leaving the iterator positioned just
+    /// after the matching element so it can be inspected further. An empty
+    /// iterator gives `false`, the empty disjunction.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    /// - `E2` if `predicate` throws.
+    ///
+    /// ALIASES: any
+    function some<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> bool throws Self.Error | E2 {
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    if (predicate(x)) {
+                        return true;
+                    }
+                },
+            }
+        }
+        false
+    }
+
+    /// Whether `predicate` holds for every remaining element — Python's `all`,
+    /// JavaScript's `every`.
+    ///
+    /// Short circuits at the first `false`. An empty iterator gives `true` — the
+    /// empty conjunction — which is worth remembering when the iterator may have
+    /// been exhausted already.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    /// - `E2` if `predicate` throws.
+    ///
+    /// ALIASES: all
+    function every<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> bool throws Self.Error | E2 {
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    if (!predicate(x)) {
+                        return false;
+                    }
+                },
+            }
+        }
+        true
+    }
+
+    /// The first remaining element for which `predicate` is `true`, or `null` if
+    /// the iterator runs out first.
+    ///
+    /// Short circuits: the matching element is consumed, and the iterator is left
+    /// positioned just after it.
+    ///
+    /// The result is `Self.Item?`, so — unlike `next`, which uses the distinct
+    /// `baml.iter.Done` sentinel — an iterator whose items are themselves
+    /// nullable cannot tell a found `null` from no match. Use
+    /// `baml.iter.Iterator.filter` followed by `next` when that distinction
+    /// matters.
+    ///
+    /// # Throws
+    ///
+    /// - `Self.Error` if advancing the iterator fails.
+    /// - `E2` if `predicate` throws.
+    function find<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> Self.Item? throws Self.Error | E2 {
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let x: Self.Item => {
+                    if (predicate(x)) {
+                        return x;
+                    }
+                },
+            }
+        }
+        null
+    }
 }
 
 /// Flattens an iterator of iterables into an iterator over their elements.

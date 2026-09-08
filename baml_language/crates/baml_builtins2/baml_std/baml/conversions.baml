@@ -23,9 +23,9 @@
 /// `implements baml.ToString {}` with no override is valid and renders exactly
 /// like a non-implementor.
 interface ToString {
-  function to_string(self) -> string throws never {
-    root._to_string_default(self)
-  }
+    function to_string(self) -> string throws never {
+        root._to_string_default(self)
+    }
 }
 
 /// Renders a reflected type's name.
@@ -98,9 +98,9 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
 /// `implements baml.ToJson {}` with no override is valid and renders exactly
 /// like a non-implementor.
 interface ToJson {
-  function to_json(self) -> baml.json.json throws baml.json.SerializationError {
-    root._to_json_default(self)
-  }
+    function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        root._to_json_default(self)
+    }
 }
 
 /// (internal) The default structural json rendering `baml.json.from` uses for
@@ -161,7 +161,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.Serializa
 /// method may not return `Self`, so the structural fallback lives in
 /// `baml.json.to` instead.
 interface FromJson {
-  function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError
 }
 
 /// (internal) Dispatches `from_json` on the target type `T`, honoring a

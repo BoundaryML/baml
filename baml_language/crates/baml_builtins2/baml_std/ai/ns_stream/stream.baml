@@ -48,7 +48,10 @@
 interface StreamingClient requires root.Client {
     /// InvokeError, not just Failure | UnknownError: a streaming invocation
     /// preserves Timeout/Cancelled/CompilationError exactly like Client.invoke.
-    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.InvokeError
+    function invoke_stream(
+        self,
+        input: root.ModelTurnInput,
+    ) -> TurnStream throws root.errors.InvokeError
 }
 
 /// One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:

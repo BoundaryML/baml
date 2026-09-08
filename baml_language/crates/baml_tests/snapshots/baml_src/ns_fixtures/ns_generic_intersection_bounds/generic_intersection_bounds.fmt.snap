@@ -11,7 +11,7 @@ source: crates/baml_tests/src/corpus.rs
 // first, silently weakening every bound written with `&`.
 
 interface Named {
-    name: string
+    name: string,
 }
 
 interface Sized {

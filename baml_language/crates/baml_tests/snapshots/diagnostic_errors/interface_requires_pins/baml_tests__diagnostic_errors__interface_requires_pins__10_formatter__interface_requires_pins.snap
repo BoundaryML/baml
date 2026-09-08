@@ -11,7 +11,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
 interface HasKey {
     type Key
-    key: Self.Key
+    key: Self.Key,
 }
 
 interface Entity requires HasKey<Key = string> {

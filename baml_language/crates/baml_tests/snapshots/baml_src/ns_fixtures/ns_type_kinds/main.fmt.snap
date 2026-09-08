@@ -10,7 +10,8 @@ enum Color {
     Blue,
 }
 
-interface Marker {}
+interface Marker {
+}
 
 type Callback = (value: int) -> bool throws never;
 

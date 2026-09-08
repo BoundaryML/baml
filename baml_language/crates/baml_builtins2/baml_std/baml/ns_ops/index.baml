@@ -32,7 +32,7 @@
 interface Index<Idx> requires root.Concrete {
     /// The element type. Unbounded, deliberately: an element may be any type at
     /// all, including ones that are not `baml.Concrete`.
-    type Output;
+    type Output
     /// Reads the element of `self` at `idx`.
     ///
     /// The standard library's containers index as Python does: a list or

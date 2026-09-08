@@ -12,7 +12,7 @@ source: crates/baml_tests/src/corpus.rs
 // This project must compile with ZERO diagnostics — the snapshot locks that.
 
 interface Failure {
-  function is_transient(self) -> bool throws never
+    function is_transient(self) -> bool throws never
 }
 
 class QuotaExceeded {

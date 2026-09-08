@@ -24,9 +24,7 @@ interface Read {
     }
 
     /// Consume all remaining bytes through EOF and decode strict UTF-8.
-    function text(
-        self,
-    ) -> string throws root.errors.Io | root.errors.ParseError {
+    function text(self) -> string throws root.errors.Io | root.errors.ParseError {
         let data = self.bytes();
         string.from_utf8(data) catch (e) {
             root.errors.InvalidArgument => {

@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // See `compiles/generic_intersection_bounds` for the accepted shapes.
 
 interface Named {
-    name: string
+    name: string,
 }
 
 interface Sized {

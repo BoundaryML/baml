@@ -16,7 +16,6 @@ function deep_copy<T>(value: T) -> T throws never {
 /// Use it to test whether a type is concrete, or as a bound restricting a type
 /// parameter to concrete types.
 interface Concrete {
-
 }
 
 implement<T> Concrete for T {

@@ -909,19 +909,19 @@ implements Summable for float[] {
 /// structural `float[]` type. Both reject the empty array rather than inventing
 /// a value for it.
 interface FloatStats {
-  /// The arithmetic mean (average) of `self`.
-  ///
-  /// # Throws
-  /// - `baml.errors.InvalidArgument` when `self` is empty — the mean of no
-  ///   elements is undefined.
-  function mean(self) -> float throws root.errors.InvalidArgument
+    /// The arithmetic mean (average) of `self`.
+    ///
+    /// # Throws
+    /// - `baml.errors.InvalidArgument` when `self` is empty — the mean of no
+    ///   elements is undefined.
+    function mean(self) -> float throws root.errors.InvalidArgument
 
-  /// The median of `self`: the middle element once the values are ordered, or
-  /// the mean of the two middle elements when the count is even.
-  ///
-  /// # Throws
-  /// - `baml.errors.InvalidArgument` when `self` is empty.
-  function median(self) -> float throws root.errors.InvalidArgument
+    /// The median of `self`: the middle element once the values are ordered, or
+    /// the mean of the two middle elements when the count is even.
+    ///
+    /// # Throws
+    /// - `baml.errors.InvalidArgument` when `self` is empty.
+    function median(self) -> float throws root.errors.InvalidArgument
 }
 
 implements FloatStats for float[] {

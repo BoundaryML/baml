@@ -47,7 +47,7 @@
 interface Add<Rhs extends root.Concrete> requires root.Concrete {
     /// The sum's type. In the primitive impls, `int` with `int` is `int`, any
     /// `bigint` mix is `bigint`, and any `float` mix is `float`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// Adds `rhs` to `self`.
     function add(self, rhs: Rhs) -> Self.Output throws never
 }
@@ -64,7 +64,7 @@ interface Add<Rhs extends root.Concrete> requires root.Concrete {
 interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
     /// The difference's type. In the primitive impls, `int` with `int` is
     /// `int`, any `bigint` mix is `bigint`, and any `float` mix is `float`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// Subtracts `rhs` from `self`.
     function sub(self, rhs: Rhs) -> Self.Output throws never
 }
@@ -80,7 +80,7 @@ interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
 interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
     /// The product's type. In the primitive impls, `int` with `int` is `int`,
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// Multiplies `self` by `rhs`.
     function mul(self, rhs: Rhs) -> Self.Output throws never
 }
@@ -109,7 +109,7 @@ interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
 interface Divide<Rhs extends root.Concrete> requires root.Concrete {
     /// The quotient's type. In the primitive impls, `int` with `int` is `int`,
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// Divides `self` by `rhs`.
     function div(self, rhs: Rhs) -> Self.Output throws never
 }
@@ -129,7 +129,7 @@ interface Divide<Rhs extends root.Concrete> requires root.Concrete {
 interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
     /// The remainder's type. In the primitive impls, `int` with `int` is `int`,
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// The remainder of dividing `self` by `rhs`.
     function rem(self, rhs: Rhs) -> Self.Output throws never
 }
@@ -147,7 +147,7 @@ interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
 interface Negate requires root.Concrete {
     /// The negation's type. Every primitive impl stays within its own type:
     /// `int` to `int`, `float` to `float`, `bigint` to `bigint`.
-    type Output extends root.Concrete;
+    type Output extends root.Concrete
     /// Negates `self`.
     function neg(self) -> Self.Output throws never
 }
