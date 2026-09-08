@@ -305,6 +305,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/setup-mise
+            .github/workflows/nightly-release.yml
             mise.toml
             tools/notify-release-failure.py
           sparse-checkout-cone-mode: false

@@ -2289,6 +2289,7 @@ jobs:
           ref: ${{ needs.plan.outputs.source_sha || github.sha }}
           sparse-checkout: |
             .github/actions/setup-mise
+            .github/workflows/release-baml-language.yml
             mise.toml
             tools/notify-release-failure.py
           sparse-checkout-cone-mode: false
