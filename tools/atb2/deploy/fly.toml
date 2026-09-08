@@ -4,7 +4,7 @@
 # target, run dirs). One machine on purpose: a Fly volume attaches to one
 # machine, and the pipeline and the requests share the same build cache.
 #
-#   fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
+#   fly deploy tools/atb2 --config deploy/fly.toml
 #   (from the repo root; the build context is tools/atb2; CI does this on
 #    every push to canary touching tools/atb2)
 #
@@ -25,20 +25,22 @@ app = "atb2-runner"
 primary_region = "sjc"
 
 [build]
-  dockerfile = "deploy/Dockerfile"
-  # relative to the build context, tools/atb2
+  dockerfile = "Dockerfile"
+  # relative to this config file; build context is tools/atb2
 
 [env]
   ATB2_HOME = "/data"
   # pin the canary revision the runner builds (a commit sha); unset = origin/canary head
   # ATB2_CANARY_REV = ""
   ATB2_DATASET = "live"
+  ATB2_SLACK_CHANNEL = "C0B36EDQEN6"
+  ATB2_POSTHOG_PROJECT_ID = "490278"
   ATB2_POLL_S = "60"
   INFISICAL_PROJECT_ID = "bdd280e2-259c-4750-9b16-a8597a67214c"
   INFISICAL_ENV = "prod"
 
 [processes]
-  runner = "main_ingress(every_s = 300)"
+  runner = "main_ingress(every_s=300)"
 
 # a panic ends the process; Fly restarts it and the loops resume from the store
 [[restart]]

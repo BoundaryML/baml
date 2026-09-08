@@ -120,7 +120,7 @@ function slack_post(text: string, thread: SlackRef?) -> SlackRef {
 /// notification for an issue opens its thread; later ones reply in it.
 /// Always logs the event, Slack or not.
 function notify(kind: string, issue: Issue, text: string, payload: json) -> null {
-    let thread = if (slack_configured()) {
+    let thread = if (slack_configured() && kind != "issue_created") {
         issue_thread(issue.id) ?? feedback_thread(issue)
     } else {
         null
@@ -166,7 +166,7 @@ function issue_link(issue: Issue) -> string {
     }
 }
 
-function issue_created_text(issue: Issue) -> string {
+function issue_created_text(issue: Issue, mapping: string? = null) -> string {
     let n = issue.feedback_ids.length();
     "ISSUE: *"
         + issue.title
@@ -197,7 +197,9 @@ function issue_created_text(issue: Issue) -> string {
                 null => "",
                 let s: string => {
                     " · shepherd: "
-                        + match (shepherd_slack_id(issue.shepherd)) {
+                        + match (
+                            shepherd_id_in(issue.shepherd, mapping ?? baml.env.get("ATB2_SHEPHERDS") ?? "")
+                        ) {
                             null => s,
                             let user: string => "<@" + user + ">",
                         }

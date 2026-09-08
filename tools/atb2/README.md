@@ -137,7 +137,7 @@ By hand, from the repo root:
 fly apps create atb2-runner                                            # once (exists)
 fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
 fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
-fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
+fly deploy tools/atb2 --config deploy/fly.toml
 ```
 
 ## Tests
