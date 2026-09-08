@@ -23,6 +23,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
 
 GITHUB_API_TIMEOUT_SECONDS = 30
+SLACK_SECTION_TEXT_LIMIT = 2800
 SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}
 
 
@@ -184,7 +185,17 @@ def main() -> int:
             )
 
         blocks = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": paragraph}}
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        paragraph[: SLACK_SECTION_TEXT_LIMIT - 3] + "..."
+                        if len(paragraph) > SLACK_SECTION_TEXT_LIMIT
+                        else paragraph
+                    ),
+                },
+            }
             for paragraph in message.split("\n\n")
         ]
         footer = (
