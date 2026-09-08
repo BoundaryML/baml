@@ -7,7 +7,7 @@ class Boom {
     m string
 }
 
-function boom() -> int throws user.Boom {
+function boom() -> int throws root.Boom {
     throw Boom { m: "x" }
 }
 

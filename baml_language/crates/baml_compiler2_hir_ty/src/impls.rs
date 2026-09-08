@@ -34,10 +34,10 @@
 
 use baml_compiler2_hir::{
     loc::ImplLoc,
-    package::{is_precompiled_stdlib, root_by_wire_name},
+    package::{is_precompiled_stdlib, lang_roots},
 };
 use baml_type::{
-    Name, ParamTy, TypeName,
+    DeclName, Name, ParamTy,
     interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
     normalize::{TypeContext, equivalent_interned},
 };
@@ -482,18 +482,19 @@ impl<'db> AliasOnlyFacts<'db> {
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
-    /// A name-based context represents a declaration by its own name, so this
-    /// is the identity — no resolution step, and never `None`.
-    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
-        Some(qtn.clone())
+    fn well_known(&self, head: baml_type::normalize::WellKnownHead) -> Option<DeclName> {
+        baml_type::normalize::well_known_decl(
+            baml_compiler2_hir::package::lang_roots(self.db),
+            head,
+        )
     }
-    fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
+    fn alias_def(&self, name: &DeclName) -> Option<baml_type::Ty> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_alias_def(self.db, name),
             |facts| facts.alias_def(name),
         )
     }
-    fn enum_variants(&self, name: &TypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, name: &DeclName) -> Option<Vec<Name>> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_enum_variants(self.db, name),
             |facts| facts.enum_variants(name),
@@ -981,7 +982,7 @@ pub(crate) fn mounted_interface_instantiation(
     if generic_params.len() != target.generics.len() {
         debug_assert!(
             false,
-            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
             generic_params.len(),
@@ -1147,7 +1148,7 @@ pub fn impls_for_type<'db>(
             //
             // Read off the declared header: realization substitutes into the
             // arguments and never touches the name.
-            provides_concrete_members(&resolved.facts.interface().name)
+            provides_concrete_members(lang_roots(db), &resolved.facts.interface().name)
         })
         .collect()
 }
@@ -1156,8 +1157,8 @@ pub fn impls_for_type<'db>(
 /// concrete-receiver lookup. `AnyClass` is reachable only after explicit
 /// narrowing, so its blanket default methods must stay out of both the ground
 /// registry and the inference-variable method probe.
-pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
-    !interface.is_reflect_root_type("AnyClass")
+pub(crate) fn provides_concrete_members(lang: baml_base::LangRoots, interface: &DeclName) -> bool {
+    !interface.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "AnyClass")
 }
 
 /// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.
@@ -1168,9 +1169,9 @@ pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
 fn derived_impl_allows(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &TypeName,
+    interface: &DeclName,
 ) -> bool {
-    if !interface.is_reflect_root_type("AnyClass") {
+    if !interface.is_lang_root_type(lang_roots(db), baml_base::LangPackage::Reflect, "AnyClass") {
         return true;
     }
     let Ok(concrete_closed) = baml_type::interned::ClosedTy::try_from(concrete) else {
@@ -1425,17 +1426,15 @@ fn precompiled_impl_facts(
 pub(crate) fn impl_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     goal: &Ty,
-    interface_name: &TypeName,
+    interface_name: &DeclName,
 ) -> Vec<&'db ImplFacts<'db>> {
-    let mut names: Vec<Name> = vec![interface_name.package().clone()];
-    collect_packages(goal, &mut names);
-    names.sort();
-    names.dedup();
+    let lang = lang_roots(db);
+    let mut roots: Vec<baml_base::SourceRoot> = vec![interface_name.root()];
+    collect_packages(lang, goal, &mut roots);
+    roots.sort();
+    roots.dedup();
     let mut out = Vec::new();
-    for name in names {
-        let Some(package) = root_by_wire_name(db, &name) else {
-            continue;
-        };
+    for package in roots {
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block).resolved()
                 && facts.interface.name == *interface_name
@@ -1574,26 +1573,24 @@ fn search_roots(
     concrete: &Ty,
     interface: &InferInterface,
 ) -> Vec<baml_base::SourceRoot> {
-    let mut names: Vec<Name> = vec![interface.name.package().clone()];
-    collect_packages(concrete, &mut names);
+    let lang = lang_roots(db);
+    let mut roots: Vec<baml_base::SourceRoot> = vec![interface.name.root()];
+    collect_packages(lang, concrete, &mut roots);
     for arg in &interface.generics {
-        collect_packages(arg, &mut names);
+        collect_packages(lang, arg, &mut roots);
     }
-    names.sort();
-    names.dedup();
-    names
-        .into_iter()
-        .filter_map(|name| root_by_wire_name(db, &name))
-        .collect()
+    roots.sort();
+    roots.dedup();
+    roots
 }
 
-fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
+fn collect_packages(lang: baml_base::LangRoots, ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
     match ty.kind() {
         InferTy::Class(qtn, ..)
         | InferTy::Interface(qtn, ..)
         | InferTy::Enum(qtn, _)
         | InferTy::EnumVariant(qtn, ..)
-        | InferTy::TypeAlias(qtn, _) => out.push(qtn.package().clone()),
+        | InferTy::TypeAlias(qtn, _) => out.push(qtn.root()),
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
@@ -1612,12 +1609,14 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
             | InferTy::Future(..)
             | InferTy::Literal(..)
     ) {
-        out.push(Name::new("baml"));
+        if let Some(baml) = lang.get(baml_base::LangPackage::Baml) {
+            out.push(baml);
+        }
     }
     let mut children = Vec::new();
     baml_type::interned::for_each_child(ty.kind(), |child| children.push(child.clone()));
     for child in children {
-        collect_packages(&child, out);
+        collect_packages(lang, &child, out);
     }
 }
 

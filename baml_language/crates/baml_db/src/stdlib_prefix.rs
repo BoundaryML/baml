@@ -48,7 +48,7 @@ pub struct StdlibPrefix {
 /// sources. Costs a full stdlib compile, so call it once per process (a build
 /// script) and reuse the result.
 pub fn build_stdlib_prefix(opt: OptLevel) -> StdlibPrefix {
-    use baml_compiler2_hir_ty::package_interface::package_interface;
+    use baml_compiler2_hir_ty::package_interface::export_interface;
 
     // Only the stdlib roots matter here: no user file contributes to a
     // stdlib package, so the database carries the stdlib sources and nothing
@@ -63,7 +63,7 @@ pub fn build_stdlib_prefix(opt: OptLevel) -> StdlibPrefix {
             let name = root
                 .self_name(&db)
                 .unwrap_or_else(|| unreachable!("stdlib roots are named"));
-            let bytes = borsh::to_vec(package_interface(&db, root))
+            let bytes = borsh::to_vec(&export_interface(&db, root))
                 .expect("a stdlib PackageInterface always serializes");
             (name.to_string(), bytes)
         })

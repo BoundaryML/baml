@@ -254,28 +254,39 @@ fn resolved_function<'db>(
 
 /// The fully-qualified name of `func` when it is an io sysop
 /// (`$rust_io_function`), else `None`.
-fn io_sysop_of<'db>(db: &'db dyn baml_compiler2_ppir::Db, func: FunctionLoc<'db>) -> Option<Name> {
+fn io_sysop_of<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+    func: FunctionLoc<'db>,
+) -> Option<Name> {
     let body = baml_compiler2_hir::body::function_body(db, func);
     match body.as_ref() {
-        FunctionBody::Builtin(BuiltinKind::Io) => Some(qualified_name(db, func)),
+        FunctionBody::Builtin(BuiltinKind::Io) => Some(qualified_name(db, viewer, func)),
         _ => None,
     }
 }
 
-/// `func`'s user-facing dotted name (`baml.env.get`), rendered through the
-/// type system's own qualifier so the package half follows the one rule
-/// (dependency packages qualify; the user's own package never does).
-fn qualified_name<'db>(db: &'db dyn baml_compiler2_ppir::Db, func: FunctionLoc<'db>) -> Name {
+/// `func`'s user-facing dotted name (`baml.env.get`) as seen from `viewer`:
+/// a dependency package qualifies by its spelling, the viewer's own package
+/// never does.
+fn qualified_name<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+    func: FunctionLoc<'db>,
+) -> Name {
     let data = baml_compiler2_ppir::item_data::function_data(db, func);
     let pkg = baml_compiler2_hir::file_package::file_package(db, func.file(db));
-    Name::new(
-        baml_type::QualifiedTypeName::new(
-            baml_compiler2_hir::package::wire_name(db, pkg.root),
-            pkg.namespace_path,
-            data.name.clone(),
-        )
-        .render_user_facing(),
-    )
+    let mut parts: Vec<&str> = Vec::new();
+    let spelled;
+    if pkg.root != viewer {
+        spelled = baml_compiler2_hir::package::spelling(db)
+            .of(pkg.root)
+            .clone();
+        parts.push(spelled.as_str());
+    }
+    parts.extend(pkg.namespace_path.iter().map(Name::as_str));
+    parts.push(data.name.as_str());
+    Name::new(parts.join("."))
 }
 
 /// Whether `func` transitively reaches an io sysop, and which one.
@@ -287,6 +298,7 @@ fn qualified_name<'db>(db: &'db dyn baml_compiler2_ppir::Db, func: FunctionLoc<'
 /// body already on the path is a cycle, which adds nothing either way.
 fn io_sysop_reached_from<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     func: FunctionLoc<'db>,
     visited: &mut HashSet<FunctionLoc<'db>>,
 ) -> Option<Name> {
@@ -295,7 +307,7 @@ fn io_sysop_reached_from<'db>(
         if !visited.insert(func) {
             continue;
         }
-        if let Some(sysop) = io_sysop_of(db, func) {
+        if let Some(sysop) = io_sysop_of(db, viewer, func) {
             return Some(sysop);
         }
         // Reversed so the first-written callee is explored first — the search
@@ -320,6 +332,7 @@ pub fn let_init_io_diagnostics<'db>(
     let_loc: LetLoc<'db>,
 ) -> Vec<(TextRange, TirTypeError)> {
     let calls = body_evaluated_calls(db, BodyOwnerId::Let(let_loc));
+    let viewer = baml_compiler2_hir::file_package::file_package(db, let_loc.file(db)).root;
     if calls.is_empty() {
         return Vec::new();
     }
@@ -328,10 +341,10 @@ pub fn let_init_io_diagnostics<'db>(
     // is walked once, and the FIRST hop that reaches io is the one reported.
     let mut visited: HashSet<FunctionLoc<'db>> = HashSet::new();
     for (callee_expr, func) in calls {
-        let direct = io_sysop_of(db, *func);
+        let direct = io_sysop_of(db, viewer, *func);
         let sysop = match &direct {
             Some(sysop) => Some(sysop.clone()),
-            None => io_sysop_reached_from(db, *func, &mut visited),
+            None => io_sysop_reached_from(db, viewer, *func, &mut visited),
         };
         let Some(sysop) = sysop else { continue };
 
@@ -347,7 +360,7 @@ pub fn let_init_io_diagnostics<'db>(
                 is_client: matches!(data.origin, baml_compiler2_ast::ast::LetOrigin::Client),
                 sysop,
                 // A direct call needs no "via": the hop IS the sysop.
-                via: direct.is_none().then(|| qualified_name(db, *func)),
+                via: direct.is_none().then(|| qualified_name(db, viewer, *func)),
             },
         )];
     }

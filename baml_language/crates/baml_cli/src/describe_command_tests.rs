@@ -570,8 +570,9 @@ fn render_describe_ns_item() {
 #[test]
 fn render_builtin_package_listing() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Baml)
+        .unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -594,8 +595,9 @@ fn render_builtin_package_listing() {
 #[test]
 fn render_builtin_namespace_env() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Baml)
+        .unwrap();
     let ns_path = vec![baml_db::Name::new("env")];
     let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
@@ -632,8 +634,9 @@ fn describe_reflect_type_and_intrinsic() {
 #[test]
 fn render_builtin_namespace_ai_internal() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("ai")).unwrap();
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Ai)
+        .unwrap();
     let ns_path = vec![baml_db::Name::new("internal")];
     let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
@@ -645,9 +648,9 @@ fn render_builtin_namespace_ai_internal() {
 #[test]
 fn render_testing_package_listing() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("testing"))
-            .unwrap();
+    let pkg_id = baml_compiler2_hir::package::spelling(&db)
+        .root(&baml_db::Name::new("testing"))
+        .unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -658,8 +661,9 @@ fn render_testing_package_listing() {
 #[test]
 fn render_assert_package_listing() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("assert")).unwrap();
+    let pkg_id = baml_compiler2_hir::package::spelling(&db)
+        .root(&baml_db::Name::new("assert"))
+        .unwrap();
     let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -699,8 +703,9 @@ fn render_describe_log_info_builtin() {
 #[test]
 fn render_describe_builtin_item_by_definition() {
     let db = simple_project();
-    let pkg_id =
-        baml_compiler2_hir::package::root_by_wire_name(&db, &baml_db::Name::new("baml")).unwrap();
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Baml)
+        .unwrap();
     let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
 
     let root_ns: Vec<baml_db::Name> = vec![];

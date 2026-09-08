@@ -9,18 +9,22 @@ use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
-use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::wire_name};
+use baml_compiler2_hir::{
+    compiler2_all_files, file_package,
+    loc::FunctionLoc,
+    package::{Spelling, spelling},
+};
 use baml_db::{Name, ProjectDatabase};
-use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
+use baml_type::{DeclName, Freshness, ParamTy, Ty as TirTy, TyAttr};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build a `cg::Name` from a `QualifiedTypeName`. Preserves `pkg`, the full
+/// Build a `cg::Name` from a `DeclName`. Preserves `pkg`, the full
 /// namespace path, and the bare name (including any `$stream` suffix).
-fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
-    qtn.clone()
+fn name_from_qtn(spelling: &Spelling, qtn: &DeclName) -> cg::Name {
+    spelling.wire(qtn)
 }
 
 /// Is this lowered type function-shaped (directly or through union arms)?
@@ -113,16 +117,17 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     let mut alias_caches: HashMap<
         Name,
         (
-            HashMap<QualifiedTypeName, TirTy>,
-            std::collections::HashSet<QualifiedTypeName>,
+            HashMap<DeclName, TirTy>,
+            std::collections::HashSet<DeclName>,
         ),
     > = HashMap::new();
+    let spelling = spelling(db);
 
     let mut pending_methods: Vec<PendingMethod> = Vec::new();
 
     for source_file in compiler2_all_files(db) {
         let pkg_info = file_package::file_package(db, source_file);
-        let pkg: Name = wire_name(db, pkg_info.root);
+        let pkg: Name = spelling.of(pkg_info.root).clone();
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
 
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
@@ -142,8 +147,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let resolved = baml_type::ResolvedAliases::from_aliases(aliases);
             (resolved.aliases, resolved.recursive)
         });
-        let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
-        let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;
+        let alias_map: &HashMap<DeclName, TirTy> = alias_map;
+        let recursive_aliases: &std::collections::HashSet<DeclName> = recursive_aliases;
 
         let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
 
@@ -281,7 +286,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
                         &ctx.lower_type_ref(type_refs, id),
                     );
-                    convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+                    convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
                 };
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
@@ -425,8 +430,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             ) {
                 let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), alias.name.clone());
 
-                let qtn = QualifiedTypeName::new(
-                    pkg.clone(),
+                let qtn = DeclName::in_root(
+                    pkg_info.root,
                     pkg_info.namespace_path.clone(),
                     alias.name.clone(),
                 );
@@ -520,7 +525,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let lower = |id| {
                 let tir_ty =
                     baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(type_refs, id));
-                convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+                convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
             // The compiler injects a `client: ai.Client? = null` override onto
@@ -621,14 +626,15 @@ fn resolve_type_ref(
     id: Option<baml_compiler2_hir::type_ref::TypeRefId>,
     file: baml_base::SourceFile,
     generic_params: &[ParamTy],
-    alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
+    alias_map: &HashMap<DeclName, TirTy>,
+    recursive_aliases: &std::collections::HashSet<DeclName>,
 ) -> Option<cg::Ty> {
     let id = id?;
     let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
         .with_frame(generic_params.to_vec());
     let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
     Some(convert_tir_to_codegen_ty(
+        spelling(db),
         &tir_ty,
         alias_map,
         recursive_aliases,
@@ -646,12 +652,17 @@ fn resolve_type_ref(
 fn resolve_throws<'db>(
     db: &'db ProjectDatabase,
     func_loc: FunctionLoc<'db>,
-    alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
+    alias_map: &HashMap<DeclName, TirTy>,
+    recursive_aliases: &std::collections::HashSet<DeclName>,
 ) -> Option<cg::Ty> {
     match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
         TirTy::Never { .. } => None,
-        ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
+        ty => Some(convert_tir_to_codegen_ty(
+            spelling(db),
+            ty,
+            alias_map,
+            recursive_aliases,
+        )),
     }
 }
 
@@ -662,18 +673,19 @@ fn resolve_throws<'db>(
 /// the way to generators. Canonicalization is centralized on `CodegenTy` and
 /// recursively normalizes every container.
 fn convert_tir_to_codegen_ty(
+    spelling: &Spelling,
     ty: &TirTy,
-    _alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    _recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
+    _alias_map: &HashMap<DeclName, TirTy>,
+    _recursive_aliases: &std::collections::HashSet<DeclName>,
 ) -> cg::Ty {
-    convert_tir_leaf(ty).canonicalize()
+    convert_tir_leaf(spelling, ty).canonicalize()
 }
 
-fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
+fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy) -> cg::Ty {
     // Each recursive invocation reads the attribute from its own source node,
     // so nested SAP/streaming annotations survive the codegen boundary.
     let attr = || ty.attr().clone();
-    let convert = |ty: &TirTy| convert_tir_leaf(ty);
+    let convert = |ty: &TirTy| convert_tir_leaf(spelling, ty);
     match ty {
         TirTy::Int { .. } => cg::Ty::Int { attr: attr() },
         TirTy::Bigint { .. } => cg::Ty::Bigint { attr: attr() },
@@ -687,12 +699,12 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
             cg::Ty::Literal(literal.clone(), Freshness::Regular, attr())
         }
         TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
-            name_from_qtn(qtn),
+            name_from_qtn(spelling, qtn),
             type_args.iter().map(convert).collect(),
             attr(),
         ),
         TirTy::Interface(qtn, generics, associated_types, _) => cg::Ty::Interface(
-            name_from_qtn(qtn),
+            name_from_qtn(spelling, qtn),
             generics.iter().map(convert).collect(),
             associated_types
                 .iter()
@@ -700,11 +712,11 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
                 .collect(),
             attr(),
         ),
-        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn), attr()),
+        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(spelling, qtn), attr()),
         TirTy::EnumVariant(qtn, variant, _) => {
-            cg::Ty::EnumVariant(name_from_qtn(qtn), variant.clone(), attr())
+            cg::Ty::EnumVariant(name_from_qtn(spelling, qtn), variant.clone(), attr())
         }
-        TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(qtn), attr()),
+        TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(spelling, qtn), attr()),
         TirTy::List(inner, _) => cg::Ty::List(Box::new(convert(inner)), attr()),
         TirTy::Map {
             key: k, value: v, ..
@@ -801,7 +813,12 @@ mod tests {
         );
 
         assert_eq!(
-            convert_tir_to_codegen_ty(&tir, &HashMap::new(), &std::collections::HashSet::new(),),
+            convert_tir_to_codegen_ty(
+                &Spelling::from_pairs([]),
+                &tir,
+                &HashMap::new(),
+                &std::collections::HashSet::new(),
+            ),
             cg::Ty::List(Box::new(cg::Ty::String { attr: inner_attr }), outer_attr,)
         );
     }
@@ -835,12 +852,11 @@ mod tests {
 
     #[test]
     fn test_name_from_qtn_preserves_full_path() {
-        let qtn = QualifiedTypeName::new(
-            Name::new("user"),
-            vec![Name::new("foo")],
-            Name::new("Sentiment"),
-        );
-        let cg_name = name_from_qtn(&qtn);
+        let mut db = ProjectDatabase::new();
+        db.workspace(Path::new("/tmp/symbol_pool_qtn_path"));
+        let root = baml_compiler2_hir::package::sole_workspace_root(&db).expect("workspace root");
+        let qtn = DeclName::in_root(root, vec![Name::new("foo")], Name::new("Sentiment"));
+        let cg_name = name_from_qtn(spelling(&db), &qtn);
         assert_eq!(cg_name.package().as_str(), "user");
         assert_eq!(
             cg_name.namespace(),
@@ -854,8 +870,11 @@ mod tests {
 
     #[test]
     fn test_name_from_qtn_stream_suffix() {
-        let qtn = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Resume$stream"));
-        let cg_name = name_from_qtn(&qtn);
+        let mut db = ProjectDatabase::new();
+        db.workspace(Path::new("/tmp/symbol_pool_qtn_stream"));
+        let root = baml_compiler2_hir::package::sole_workspace_root(&db).expect("workspace root");
+        let qtn = DeclName::in_root(root, vec![], Name::new("Resume$stream"));
+        let cg_name = name_from_qtn(spelling(&db), &qtn);
         assert!(cg_name.is_stream());
         assert_eq!(cg_name.bare_name(), "Resume");
     }

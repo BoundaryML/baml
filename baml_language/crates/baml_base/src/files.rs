@@ -109,6 +109,27 @@ impl std::fmt::Debug for SourceRoot {
     }
 }
 
+/// Session-local order: by salsa id, i.e. creation order.
+///
+/// The type algebra requires `Ord` on a nominal head (`baml_type::Head`) to
+/// sort union members into canonical form and to pick a μ-binder's rendering
+/// representative, and a package IS a root, so the root must be orderable.
+/// This order is deterministic for every artifact-producing path (stdlib
+/// roots in manifest order, then the workspace root, then runtime mounts in
+/// alias order) and is never serialized or rendered: every artifact boundary
+/// spells a root by name and orders by that spelling.
+impl PartialOrd for SourceRoot {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SourceRoot {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        salsa::plumbing::AsId::as_id(self).cmp(&salsa::plumbing::AsId::as_id(other))
+    }
+}
+
 /// Input: the ordered set of source roots in the database.
 ///
 /// Order invariant (enforced by the concrete database): all `Stdlib` roots,

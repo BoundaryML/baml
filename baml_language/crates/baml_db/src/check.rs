@@ -44,7 +44,7 @@ use baml_compiler_diagnostics::{
 };
 use baml_compiler2_hir::{file_semantic_index, package::PackageItems, scope::ScopeKind};
 use baml_compiler2_hir_ty::diagnostics::TirTypeError;
-use baml_type::{QualifiedTypeName, Ty, TyRenderStrategy};
+use baml_type::{DeclName, Ty, TyRenderStrategy};
 use text_size::TextRange;
 
 use crate::ProjectDatabase;
@@ -382,6 +382,10 @@ impl ProjectDatabase {
 pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Diagnostic> {
     let file_id = file.file_id(db);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+        db,
+        baml_compiler2_hir::file_package::file_package(db, file).root,
+    );
 
     // ── 1. Parse errors ───────────────────────────────────────────────────────
     //
@@ -514,7 +518,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
                     )
             {
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                    message: error.to_string(),
+                    message: error.render(&vp),
                     error,
                     range,
                     severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
@@ -551,7 +555,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
                 baml_compiler2_hir_ty::init_io::let_init_io_diagnostics(db, let_loc)
             {
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                    message: error.to_string(),
+                    message: error.render(&vp),
                     error,
                     range,
                     severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
@@ -566,7 +570,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
                 baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)
             {
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                    message: error.to_string(),
+                    message: error.render(&vp),
                     error,
                     range,
                     severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
@@ -581,7 +585,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
                 baml_compiler2_hir_ty::lower::interface_lowering_diagnostics(db, iface_loc)
             {
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                    message: error.to_string(),
+                    message: error.render(&vp),
                     error,
                     range,
                     severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
@@ -605,7 +609,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
             baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(db, alias_loc)
         {
             let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
-                message: error.to_string(),
+                message: error.render(&vp),
                 error,
                 range,
                 severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
@@ -721,6 +725,10 @@ fn check_interfaces(
     use baml_compiler2_hir_ty::interfaces::ImplDataError;
 
     let mut diagnostics = Vec::new();
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+        db,
+        baml_compiler2_hir::file_package::file_package(db, file).root,
+    );
 
     // ── 1. Coherence (E0132) ─────────────────────────────────────────────────
     //
@@ -788,7 +796,8 @@ fn check_interfaces(
                 }
                 let partner = format!(
                     "implement {} for {}",
-                    mounted.interface.name, mounted.for_ty_pattern
+                    vp.path(&mounted.interface.name),
+                    mounted.for_ty_pattern.render_with(&vp)
                 );
                 let message = if overlap == baml_compiler2_hir_ty::coherence::Overlap::Unknown {
                     format!(
@@ -899,7 +908,7 @@ dependency's `{partner}`)"
                     diagnostics.push(
                         Diagnostic::error(
                             tir_type_error_to_diagnostic_id(error),
-                            error.to_string(),
+                            error.render(&vp),
                         )
                         .with_primary_span(span)
                         .with_phase(DiagnosticPhase::Type),
@@ -921,7 +930,7 @@ dependency's `{partner}`)"
         for (error, loc) in structural.into_iter().flatten().chain(signatures) {
             for span in impl_diagnostic_spans(loc, sm) {
                 diagnostics.push(
-                    Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.to_string())
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.render(&vp))
                         .with_primary_span(span)
                         .with_phase(DiagnosticPhase::Type),
                 );
@@ -1270,13 +1279,17 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                             return false;
                         };
                         segments.first().is_some_and(|package| {
-                            baml_compiler2_hir::package::root_by_wire_name(db, package)
-                                .and_then(|root| {
-                                    baml_compiler2_hir_ty::package_interface::mounted_interface(
-                                        db, root,
-                                    )
-                                })
-                                .is_some()
+                            baml_compiler2_hir::package::accessible_package(
+                                db,
+                                pkg_items.root,
+                                package,
+                            )
+                            .and_then(|root| {
+                                baml_compiler2_hir_ty::package_interface::mounted_interface(
+                                    db, root,
+                                )
+                            })
+                            .is_some()
                         })
                     });
                     if has_mounted_bound {
@@ -1297,8 +1310,15 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                         )
                         .into_iter()
                         .filter_map(|loc| {
-                            baml_compiler2_hir_ty::interfaces::interface_loc_qtn(db, loc)
-                                .map(|qtn| qtn.render_user_facing())
+                            baml_compiler2_hir_ty::interfaces::interface_loc_qtn(db, loc).map(
+                                |qtn| {
+                                    baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+                                        db,
+                                        pkg_items.root,
+                                    )
+                                    .path(&qtn)
+                                },
+                            )
                         })
                         .collect();
                     if sources.is_empty() {
@@ -1493,14 +1513,16 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
 ///
 #[cfg(test)]
 fn tir_rendered_to_diagnostic(
+    vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
     rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
     file_id: FileId,
 ) -> Diagnostic {
     let message = DiagnosticText::from(rendered.message.clone());
-    tir_rendered_to_diagnostic_with_message(rendered, file_id, message)
+    tir_rendered_to_diagnostic_with_message(vp, rendered, file_id, message)
 }
 
 fn tir_rendered_to_diagnostic_with_message(
+    vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
     rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
     file_id: FileId,
     message: DiagnosticText,
@@ -1520,7 +1542,7 @@ fn tir_rendered_to_diagnostic_with_message(
         rendered.severity,
         baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning
     );
-    let mut diag = new_tir_diagnostic(&rendered.error, message, span, warning);
+    let mut diag = new_tir_diagnostic(vp, &rendered.error, message, span, warning);
     let diag = if let Some(member) = &unknown_member_access_member {
         diag.annotations.clear();
         diag.with_primary(
@@ -1551,10 +1573,15 @@ fn tir_rendered_to_diagnostic_for_file(
     rendered: baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic,
 ) -> Diagnostic {
     let message = rich_source_aware_tir_type_error_message(db, file, &rendered.error);
-    tir_rendered_to_diagnostic_with_message(rendered, file.file_id(db), message)
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+        db,
+        baml_compiler2_hir::file_package::file_package(db, file).root,
+    );
+    tir_rendered_to_diagnostic_with_message(&vp, rendered, file.file_id(db), message)
 }
 
 fn new_tir_diagnostic(
+    vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
     error: &TirTypeError,
     message: DiagnosticText,
     span: Span,
@@ -1576,7 +1603,7 @@ fn new_tir_diagnostic(
             .with_phase(DiagnosticPhase::Type);
     }
     if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
-        return runtime_type::cannot_construct_reflection_kind(&class_name.render_user_facing())
+        return runtime_type::cannot_construct_reflection_kind(&vp.path(class_name))
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
@@ -1586,7 +1613,7 @@ fn new_tir_diagnostic(
     } = error
     {
         return runtime_type::cannot_construct_builtin_companion(
-            &class_name.render_user_facing(),
+            &vp.path(class_name),
             companion.builtin,
             companion.origin,
             companion.carries_methods,
@@ -1815,7 +1842,10 @@ fn source_aware_tir_type_error_message(
             "`$id` at a call site expects `boundary.LocalId`, got {}",
             ty(got)
         ),
-        _ => error.to_string(),
+        _ => error.render(&baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+            db,
+            baml_compiler2_hir::file_package::file_package(db, file).root,
+        )),
     }
 }
 
@@ -2037,17 +2067,22 @@ fn tir_type_error_to_diagnostic_id(
 /// for cross-package types). Implements [`TyRenderStrategy`] so the
 /// structural walk lives once in `baml_type`.
 struct TyDisplayContext<'db> {
-    current_package: Name,
+    current_root: baml_base::SourceRoot,
     current_namespace: Vec<Name>,
     package_items: &'db PackageItems<'db>,
+    spelling: &'db baml_compiler2_hir::package::Spelling,
 }
 
 impl TyDisplayContext<'_> {
-    fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
-        if qtn.package() != &self.current_package {
-            // Cross-package: keep the dependency package prefix to disambiguate,
-            // but never the implicit `user` package.
-            return qtn.render_user_facing();
+    fn display_qtn(&self, qtn: &DeclName) -> String {
+        if qtn.root() != self.current_root {
+            // Cross-package: the package prefix disambiguates, spelled as
+            // this program spells that package.
+            return std::iter::once(self.spelling.of(qtn.root()).as_str())
+                .chain(qtn.namespace().iter().map(Name::as_str))
+                .chain(std::iter::once(qtn.name().as_str()))
+                .collect::<Vec<_>>()
+                .join(".");
         }
 
         if self.can_use_bare_name(qtn) {
@@ -2064,7 +2099,7 @@ impl TyDisplayContext<'_> {
         format!("root.{path}")
     }
 
-    fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
+    fn can_use_bare_name(&self, qtn: &DeclName) -> bool {
         if qtn.namespace() == &self.current_namespace {
             return true;
         }
@@ -2080,8 +2115,8 @@ impl TyDisplayContext<'_> {
     }
 }
 
-impl TyRenderStrategy for TyDisplayContext<'_> {
-    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
+impl TyRenderStrategy<DeclName> for TyDisplayContext<'_> {
+    fn qtn(&self, qtn: &DeclName) -> String {
         self.display_qtn(qtn)
     }
 
@@ -2103,9 +2138,10 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile, t
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let package_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let ctx = TyDisplayContext {
-        current_package: baml_compiler2_hir::package::wire_name(db, pkg_info.root),
+        current_root: pkg_info.root,
         current_namespace: pkg_info.namespace_path,
         package_items,
+        spelling: baml_compiler2_hir::package::spelling(db),
     };
     ty.render_with(&ctx)
 }
@@ -2150,10 +2186,19 @@ mod tests {
         }
     }
 
+    static EMPTY_SPELLING: std::sync::LazyLock<baml_compiler2_hir::package::Spelling> =
+        std::sync::LazyLock::new(|| baml_compiler2_hir::package::Spelling::from_pairs([]));
+
+    /// A viewpoint over no packages: enough for diagnostics that spell only
+    /// primitive types.
+    fn dummy_viewpoint() -> baml_compiler2_hir_ty::render::Viewpoint<'static> {
+        baml_compiler2_hir_ty::render::Viewpoint::over(&EMPTY_SPELLING, None)
+    }
+
     #[test]
     fn tir_warning_severity_maps_to_warning_diagnostic() {
         let rendered = dummy_rendered(DiagnosticSeverity::Warning);
-        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        let diag = tir_rendered_to_diagnostic(&dummy_viewpoint(), rendered, dummy_file_id());
         assert_eq!(
             diag.severity,
             Severity::Warning,
@@ -2164,7 +2209,7 @@ mod tests {
     #[test]
     fn tir_error_severity_maps_to_error_diagnostic() {
         let rendered = dummy_rendered(DiagnosticSeverity::Error);
-        let diag = tir_rendered_to_diagnostic(rendered, dummy_file_id());
+        let diag = tir_rendered_to_diagnostic(&dummy_viewpoint(), rendered, dummy_file_id());
         assert_eq!(
             diag.severity,
             Severity::Error,

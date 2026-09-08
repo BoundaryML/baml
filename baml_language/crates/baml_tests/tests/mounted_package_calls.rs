@@ -28,7 +28,7 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_mounted_units};
-use baml_compiler2_hir_ty::package_interface::package_interface;
+use baml_compiler2_hir_ty::package_interface::export_interface;
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
@@ -139,9 +139,11 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     db.file("<builtin>/app/lib.baml", LIB);
     assert_no_diagnostic_errors(&db);
 
-    let iface = package_interface(
+    let iface = export_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
     assert!(
         matches!(
@@ -150,7 +152,7 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
         ),
         "canonical PPIR companions must be part of the mounted export surface"
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize app interface");
 
     let units = emit_units(&db, OPT).expect("library fixture emits units");
@@ -513,11 +515,13 @@ function intrinsic_type<T>() -> reflect.Type throws never {
 "#,
     );
     assert_no_diagnostic_errors(&lib_db);
-    let iface = package_interface(
+    let iface = export_interface(
         &lib_db,
-        baml_compiler2_hir::package::root_by_wire_name(&lib_db, &Name::new("app")).unwrap(),
+        baml_compiler2_hir::package::spelling(&lib_db)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize builtin app interface");
 
     let mut db = ProjectDatabase::new();

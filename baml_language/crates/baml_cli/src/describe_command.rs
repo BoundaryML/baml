@@ -114,7 +114,7 @@ pub fn suggest_similar_kinded(
     name: &str,
     limit: usize,
 ) -> Vec<(String, Option<baml_ide::DefinitionKind>)> {
-    use baml_compiler2_hir::package::{package_items, root_by_wire_name};
+    use baml_compiler2_hir::package::{package_items, spelling};
 
     type Kind = Option<baml_ide::DefinitionKind>;
     let mut all_paths: Vec<(String, Kind)> = Vec::new();
@@ -141,7 +141,7 @@ pub fn suggest_similar_kinded(
     // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_ide::non_workspace_package_names(db) {
         all_paths.push((pkg_name.as_str().to_string(), None));
-        let Some(pkg) = root_by_wire_name(db, &pkg_name) else {
+        let Some(pkg) = spelling(db).root(&pkg_name) else {
             continue;
         };
         for entry in baml_ide::list_package_items(db, pkg) {
@@ -255,7 +255,7 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     // Builtin package shadows user namespace with same name.
     let builtin_packages = baml_ide::non_workspace_package_names(db);
     if builtin_packages.iter().any(|pkg| pkg.as_str() == first) {
-        let pkg = baml_compiler2_hir::package::root_by_wire_name(db, &baml_db::Name::new(first))?;
+        let pkg = baml_compiler2_hir::package::spelling(db).root(&baml_db::Name::new(first))?;
         return if rest.is_empty() {
             Some(ResolvedTarget::Package(pkg))
         } else {
@@ -283,7 +283,7 @@ fn resolve_unqualified_builtin_member<'db>(
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     let (class_name, _) = name.split_once('.')?;
-    let baml_pkg = baml_compiler2_hir::package::root_by_wire_name(db, &baml_db::Name::new("baml"))?;
+    let baml_pkg = baml_compiler2_hir::package::lang_roots(db).get(baml_db::LangPackage::Baml)?;
     let baml_items = baml_compiler2_hir::package::package_items(db, baml_pkg);
     let root_ns: Vec<baml_db::Name> = Vec::new();
     let class_name = baml_db::Name::new(class_name);
@@ -325,7 +325,7 @@ impl DescribeArgs {
             packages.extend(
                 baml_ide::non_workspace_package_names(&db)
                     .into_iter()
-                    .filter_map(|pkg| baml_compiler2_hir::package::root_by_wire_name(&db, &pkg)),
+                    .filter_map(|pkg| baml_compiler2_hir::package::spelling(&db).root(&pkg)),
             );
             let hits = baml_ide::search_ranked(&db, &packages, name, usize::from(self.limit));
             if self.json {

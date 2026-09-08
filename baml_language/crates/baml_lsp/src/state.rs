@@ -1007,7 +1007,9 @@ impl GlobalState {
             .map(|root| RootEntry {
                 root,
                 path: root.path(&self.db).clone(),
-                display_name: baml_db::baml_compiler2_hir::package::wire_name(&self.db, root),
+                display_name: baml_db::baml_compiler2_hir::package::spelling(&self.db)
+                    .of(root)
+                    .clone(),
                 kind: root.kind(&self.db),
             })
             .collect();

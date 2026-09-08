@@ -82,9 +82,10 @@ fn gen_member_enum(family: &Family, member: &Member, child_idx: usize) -> TokenS
     let docs = member_docs(family, member);
     let derives = nondoc_attrs(&family.master_attrs);
     let name = &member.name;
-    // Declared with the master's generics *including* defaults, so a bare `Ty`
-    // in type position keeps meaning `Ty<TypeName>` at every existing use site.
-    let generics = &family.generics;
+    // Declared with the master's generics *including* defaults (overridden by
+    // the member's own `head:` when it declares one), so a bare member name in
+    // type position denotes the head its layer works in.
+    let generics = member.declaration_generics(&family.generics);
     quote! {
         #(#docs)*
         #(#derives)*
@@ -763,7 +764,8 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
 
     let fields = replace_idents(sat.fields.to_token_stream(), &map);
     let derives = satellite_attrs(&family.master_attrs);
-    let generics = &sat.generics;
+    // A satellite twin defaults its head like the member it accompanies.
+    let generics = member.declaration_generics(&sat.generics);
     let (impl_g, ty_g, where_c) = sat.generics.split_for_impl();
     let methods = sat.methods.as_ref().map(|body| {
         let body = replace_idents(body.clone(), &map);

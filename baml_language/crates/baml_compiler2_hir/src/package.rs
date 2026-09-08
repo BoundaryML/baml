@@ -7,8 +7,9 @@
 //! within a package into a single lookup structure — the top-level
 //! cross-file query used by the TIR layer for name resolution.
 
-use baml_base::{Name, SourceRoot, SourceRootKind, Span};
+use baml_base::{LangPackage, LangRoots, Name, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_type::{DeclName, RESERVED_USER_PACKAGE, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -83,16 +84,16 @@ pub fn workspace_roots(db: &dyn crate::Db) -> Vec<SourceRoot> {
 
 /// The sole workspace root, if there is one.
 ///
-/// Stopgap for the single-workspace-root state: the compiler's type heads
-/// still spell a package by name (see [`wire_name`]), so a database holds at
-/// most one `Workspace` root until heads carry the root itself. Callers that
-/// need "the user's package" without a request file to derive it from use
-/// this, so the multi-root sweep has one seam to widen.
+/// Stopgap for the single-workspace-root state: every unnamed package spells
+/// as the one default name (see [`Spelling`]), and the CLI and LSP still
+/// model exactly one project, so they install at most one `Workspace` root.
+/// Callers that need "the user's package" without a request file to derive
+/// it from use this, so the multi-root sweep has one seam to widen.
 pub fn sole_workspace_root(db: &dyn crate::Db) -> Option<SourceRoot> {
     let roots = workspace_roots(db);
     debug_assert!(
         roots.len() <= 1,
-        "multiple workspace roots in one database require root-carrying type heads"
+        "multiple workspace roots in one database need a viewpoint, not a sole root"
     );
     roots.first().copied()
 }
@@ -111,17 +112,21 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
 }
 
 /// The package `root` spells as `name`: itself, when `name` is its own
-/// [`wire_name`] (a package may qualify its own items by name), else the
+/// declared name (a named package may qualify its own items by it), else the
 /// dependency reached by the edge named `name`. Anything else is invisible.
-///
-/// The self-by-name half reads the interim wire name; once heads carry the
-/// root it reads `self_name` alone, so an unnamed package has no name to
-/// spell itself by besides `root`.
+/// An unnamed package has no name to spell itself by besides `root`.
 pub fn accessible_package(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
-    if wire_name(db, root) == *name {
+    if root.self_name(db).is_some_and(|own| own == *name) {
         return Some(root);
     }
     dependency_named(db, root, name)
+}
+
+/// Where the language packages are installed in this database.
+pub fn lang_roots(db: &dyn crate::Db) -> LangRoots {
+    db.lang_roots_input()
+        .map(|input| input.roots(db))
+        .unwrap_or_default()
 }
 
 /// The full transitive dependency closure of `root` (excluding itself), in
@@ -169,40 +174,212 @@ pub fn is_precompiled_stdlib(db: &dyn crate::Db, root: SourceRoot) -> bool {
     root.kind(db) == SourceRootKind::Stdlib && root.interface(db).is_some()
 }
 
-// ── The wire-name seam ───────────────────────────────────────────────────────
+// ── Spelling ─────────────────────────────────────────────────────────────────
 
-/// The name `root`'s items are spelled with in every name-keyed structure of
-/// this database: its own name, else the unnamed-package default.
+/// How every root in the database is spelled on the wire: its own name if it
+/// declares one, else the one name every dependency edge reaching it uses,
+/// else — for a nameless root nothing depends on, the primary package of a
+/// project with no manifest — the default [`RESERVED_USER_PACKAGE`].
 ///
-/// Interim seam. Type heads still identify a package by name
-/// (`QualifiedTypeName`'s package field), so every root must have exactly one
-/// spelling and the spelling must be unique per database — the database
-/// enforces that at root creation. When heads carry the root itself, this
-/// function and [`roots_by_wire_name`] are deleted and a package is spelled
-/// per viewpoint through its consumer's edge name.
-pub fn wire_name(db: &dyn crate::Db, root: SourceRoot) -> Name {
-    root.self_name(db)
-        .unwrap_or_else(|| Name::new(baml_type::RESERVED_USER_PACKAGE))
+/// This is the boundary's table. Compile-time heads carry the root itself
+/// ([`DeclName`]) and never a spelling; the spelling is consulted exactly
+/// where a head leaves the session — emit, package-interface export,
+/// describe/export output, canonical dumps — and where one enters it (a
+/// package-interface blob, a throw-fact seed). Today every root in the
+/// database is compiled into one program, so the table is database-wide and
+/// viewpoint-free; when emit compiles a root's closure alone it becomes
+/// per-closure.
+///
+/// A spelling two roots share, or a root reached under two names, is a
+/// [`collision`](Self::collisions): a boundary that needs the table injective
+/// reports it; a renderer may still spell the root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spelling {
+    by_root: IndexMap<SourceRoot, Name>,
+    by_name: IndexMap<Name, SourceRoot>,
+    collisions: Vec<SpellingCollision>,
 }
 
-/// Every live root keyed by its [`wire_name`], in table order.
-#[salsa::tracked(returns(ref))]
-pub fn roots_by_wire_name(db: &dyn crate::Db) -> IndexMap<Name, SourceRoot> {
-    let mut index: IndexMap<Name, SourceRoot> = IndexMap::new();
-    for &root in db.source_roots().roots(db) {
-        let name = wire_name(db, root);
-        let previous = index.insert(name.clone(), root);
-        debug_assert!(
-            previous.is_none(),
-            "two live roots share the wire name `{name}`; the database must reject the second"
-        );
+/// Why a [`Spelling`] is not injective.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpellingCollision {
+    /// Two or more roots spell the same; the table holds the first.
+    SharedName { name: Name, roots: Vec<SourceRoot> },
+    /// A nameless root is reached under several edge names; the table holds
+    /// the first.
+    ManyNames { root: SourceRoot, names: Vec<Name> },
+}
+
+impl std::fmt::Display for SpellingCollision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SharedName { name, roots } => write!(
+                f,
+                "{} packages are spelled `{name}`; name them in their manifests",
+                roots.len()
+            ),
+            Self::ManyNames { names, .. } => write!(
+                f,
+                "an unnamed package is depended on under {} different names ({}); name it in \
+                 its manifest",
+                names.len(),
+                names
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
     }
-    index
 }
 
-/// The root spelled `name` (the inverse of [`wire_name`]).
-pub fn root_by_wire_name(db: &dyn crate::Db, name: &Name) -> Option<SourceRoot> {
-    roots_by_wire_name(db).get(name).copied()
+impl Spelling {
+    /// A table from explicit `(root, spelling)` pairs, collisions included —
+    /// for callers that hold the roots and their names outside a database
+    /// (tests, tooling over an explicit graph).
+    pub fn from_pairs(pairs: impl IntoIterator<Item = (SourceRoot, Name)>) -> Self {
+        let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
+        let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
+        let mut collisions = Vec::new();
+        for (root, name) in pairs {
+            by_root.insert(root, name.clone());
+            match by_name.entry(name) {
+                indexmap::map::Entry::Vacant(slot) => {
+                    slot.insert(root);
+                }
+                indexmap::map::Entry::Occupied(slot) => {
+                    collisions.push(SpellingCollision::SharedName {
+                        name: slot.key().clone(),
+                        roots: vec![*slot.get(), root],
+                    });
+                }
+            }
+        }
+        Self {
+            by_root,
+            by_name,
+            collisions,
+        }
+    }
+
+    /// The spelling of a live root.
+    pub fn of(&self, root: SourceRoot) -> &Name {
+        self.by_root
+            .get(&root)
+            .unwrap_or_else(|| unreachable!("every live root is in the spelling table: {root:?}"))
+    }
+
+    /// The root spelled `name`, if the table holds one.
+    pub fn root(&self, name: &Name) -> Option<SourceRoot> {
+        self.by_name.get(name).copied()
+    }
+
+    /// Every root with its spelling, in table order.
+    pub fn roots(&self) -> impl Iterator<Item = (SourceRoot, &Name)> + '_ {
+        self.by_root.iter().map(|(root, name)| (*root, name))
+    }
+
+    /// The wire name of a compile-time head.
+    pub fn wire(&self, decl: &DeclName) -> TypeName {
+        TypeName::new(
+            self.of(decl.root()).clone(),
+            decl.namespace().clone(),
+            decl.name().clone(),
+        )
+    }
+
+    /// The compile-time head a wire name denotes as seen from `viewpoint`:
+    /// the artifact's own root is `viewpoint`; a dependency is the root
+    /// `viewpoint` spells that way ([`accessible_package`]), else the root
+    /// the program spells that way if it lies in `viewpoint`'s dependency
+    /// closure — an interface names its transitive dependencies' types too
+    /// (a field's type, a throw set), under the spelling the program gives
+    /// them. `None` is the explicit unreachable-from-here outcome.
+    pub fn resolve(
+        &self,
+        db: &dyn crate::Db,
+        viewpoint: SourceRoot,
+        name: &TypeName,
+    ) -> Option<DeclName> {
+        let root = if name.is_local() {
+            viewpoint
+        } else if let Some(root) = accessible_package(db, viewpoint, name.package()) {
+            root
+        } else {
+            let root = self.root(name.package())?;
+            package_dependency_closure(db, viewpoint)
+                .contains(&root)
+                .then_some(root)?
+        };
+        Some(DeclName::in_root(
+            root,
+            name.namespace().clone(),
+            name.name().clone(),
+        ))
+    }
+
+    /// Why the table is not injective, if it is not.
+    pub fn collisions(&self) -> &[SpellingCollision] {
+        &self.collisions
+    }
+}
+
+/// The [`Spelling`] of every live root.
+#[salsa::tracked(returns(ref))]
+pub fn spelling(db: &dyn crate::Db) -> Spelling {
+    let roots = db.source_roots().roots(db);
+    // Every name a root is reached by, in table order of the depending root.
+    let mut edge_names: IndexMap<SourceRoot, Vec<Name>> = IndexMap::new();
+    for &from in roots {
+        for dependency in from.dependencies(db) {
+            let names = edge_names.entry(dependency.root).or_default();
+            if !names.contains(&dependency.name) {
+                names.push(dependency.name.clone());
+            }
+        }
+    }
+    let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
+    let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
+    let mut collisions = Vec::new();
+    for &root in roots {
+        let name = match root.self_name(db) {
+            Some(own) => own,
+            None => match edge_names.get(&root).map(Vec::as_slice) {
+                Some([only]) => only.clone(),
+                Some(names @ [first, ..]) => {
+                    collisions.push(SpellingCollision::ManyNames {
+                        root,
+                        names: names.to_vec(),
+                    });
+                    first.clone()
+                }
+                Some([]) | None => Name::new(RESERVED_USER_PACKAGE),
+            },
+        };
+        by_root.insert(root, name.clone());
+        match by_name.entry(name) {
+            indexmap::map::Entry::Vacant(slot) => {
+                slot.insert(root);
+            }
+            indexmap::map::Entry::Occupied(slot) => {
+                let name = slot.key().clone();
+                match collisions.iter_mut().find(|collision| {
+                    matches!(collision, SpellingCollision::SharedName { name: n, .. } if *n == name)
+                }) {
+                    Some(SpellingCollision::SharedName { roots, .. }) => roots.push(root),
+                    _ => collisions.push(SpellingCollision::SharedName {
+                        name,
+                        roots: vec![*slot.get(), root],
+                    }),
+                }
+            }
+        }
+    }
+    Spelling {
+        by_root,
+        by_name,
+        collisions,
+    }
 }
 
 // ── Package items ────────────────────────────────────────────────────────────
@@ -377,9 +554,7 @@ fn is_allowed_builtin_namespace_shadow(
     def: Definition<'_>,
 ) -> bool {
     root.kind(db) == SourceRootKind::Stdlib
-        && root
-            .self_name(db)
-            .is_some_and(|name| name.as_str() == "boundary")
+        && lang_roots(db).is(LangPackage::Boundary, root)
         && ns_path.len() == 1
         && ns_path[0].as_str() == "id"
         && def.kind() == DefinitionKind::Function
@@ -409,6 +584,7 @@ mod tests {
         storage: salsa::Storage<TestDb>,
         next_file_id: AtomicU32,
         roots: Option<SourceRootTable>,
+        lang_roots: Option<crate::inputs::LangRootsInput>,
     }
 
     impl Default for TestDb {
@@ -417,6 +593,7 @@ mod tests {
                 storage: salsa::Storage::default(),
                 next_file_id: AtomicU32::new(0),
                 roots: None,
+                lang_roots: None,
             };
             db.roots = Some(SourceRootTable::new(&db, Vec::new()));
             db
@@ -481,6 +658,17 @@ mod tests {
                     builtin.contents,
                 );
             }
+            let lang = baml_base::LangPackage::ALL
+                .into_iter()
+                .filter_map(|package| {
+                    roots
+                        .get(package.manifest_name())
+                        .map(|&root| (package, root))
+                })
+                .fold(baml_base::LangRoots::default(), |lang, (package, root)| {
+                    lang.with(package, root)
+                });
+            db.lang_roots = Some(crate::inputs::LangRootsInput::new(&db, lang));
             (db, roots)
         }
     }
@@ -490,6 +678,10 @@ mod tests {
 
     #[salsa::db]
     impl Db for TestDb {
+        fn lang_roots_input(&self) -> Option<crate::inputs::LangRootsInput> {
+            self.lang_roots
+        }
+
         fn source_roots(&self) -> SourceRootTable {
             self.roots.expect("table present from construction")
         }

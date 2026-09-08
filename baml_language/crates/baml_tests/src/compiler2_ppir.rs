@@ -79,11 +79,10 @@ mod tests {
         );
 
         let package_id = db.workspace_root().unwrap();
-        let interface =
-            baml_compiler2_hir_ty::package_interface::package_interface(&db, package_id);
-        let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, interface)
+        let interface = baml_compiler2_hir_ty::package_interface::export_interface(&db, package_id);
+        let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, &interface)
             .expect("package interface encodes");
-        let decoded: PackageInterface =
+        let decoded: PackageInterface<baml_type::TypeName> =
             baml_artifact::decode(ArtifactKind::PackageInterface, &artifact)
                 .expect("current package interface decodes");
         let declaration_order: Vec<_> = decoded.types[&Vec::<Name>::new()]
@@ -96,11 +95,14 @@ mod tests {
         let legacy = baml_artifact::encode_with_format_for_test(
             1,
             ArtifactKind::PackageInterface,
-            interface,
+            &interface,
         )
         .expect("legacy package interface envelope encodes");
         assert!(matches!(
-            baml_artifact::decode::<PackageInterface>(ArtifactKind::PackageInterface, &legacy),
+            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+                ArtifactKind::PackageInterface,
+                &legacy
+            ),
             Err(baml_artifact::Error::Incompatible {
                 artifact_format: 1,
                 runtime_format: baml_artifact::FORMAT_VERSION,

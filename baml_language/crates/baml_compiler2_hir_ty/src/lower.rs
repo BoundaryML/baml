@@ -26,13 +26,13 @@
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::{accessible_package, is_served_from_interface, wire_name},
+    package::{accessible_package, is_served_from_interface},
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
 use baml_compiler2_ppir::item_data::MethodOwner;
 use baml_type::{
-    Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy, TyAttr,
-    TypeName,
+    DeclName, Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy,
+    TyAttr,
     interned::{InferTy, Ty},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -706,7 +706,7 @@ impl<'db> LowerCtx<'db> {
         base: &LoweringTy,
         member: &Name,
     ) -> Option<LoweringInterface> {
-        let declares = |name: &TypeName| {
+        let declares = |name: &DeclName| {
             crate::interfaces::interface_declares_member(
                 self.db,
                 name,
@@ -1108,7 +1108,8 @@ impl<'db> LowerCtx<'db> {
                 self.record_arity(short, args.len(), data.generic_params.len());
                 enforce_arity(&mut args, data.generic_params.len());
                 let qtn = self.qualify(def, short);
-                let ty = class_lowering_ty(qtn, args);
+                let ty =
+                    class_lowering_ty(baml_compiler2_hir::package::lang_roots(self.db), qtn, args);
                 // The `baml.Map<K, V>` spelling bridges to the structural
                 // map (B-1080), so it gets the same key validation as the
                 // `map<k, v>` syntax.
@@ -1270,7 +1271,8 @@ impl<'db> LowerCtx<'db> {
                 // `baml.future.Future`) are a property of the SPELLING, so a
                 // mounted `baml` must lower it identically to a source-visible
                 // one.
-                let ty = class_lowering_ty(qtn, args);
+                let ty =
+                    class_lowering_ty(baml_compiler2_hir::package::lang_roots(self.db), qtn, args);
                 // The `baml.Map<K, V>` spelling bridges to the structural
                 // map, so it gets the same key validation as the
                 // `map<k, v>` syntax.
@@ -1575,20 +1577,16 @@ impl<'db> LowerCtx<'db> {
     }
 
     /// `LowerCtx::qualify`, exposed for constructor typing.
-    pub fn qualify_definition(&self, def: Definition<'db>, short: &Name) -> TypeName {
+    pub fn qualify_definition(&self, def: Definition<'db>, short: &Name) -> DeclName {
         self.qualify(def, short)
     }
 
     /// TIR's `qualify_def`: the qualified name comes from the DEFINITION's
     /// file, while the short name is what the user wrote (which is what
     /// keeps `$stream` companions distinct from their base).
-    fn qualify(&self, def: Definition<'db>, short: &Name) -> TypeName {
+    fn qualify(&self, def: Definition<'db>, short: &Name) -> DeclName {
         let info = baml_compiler2_hir::file_package::file_package(self.db, def.file(self.db));
-        TypeName::new(
-            wire_name(self.db, info.root),
-            info.namespace_path,
-            short.clone(),
-        )
+        DeclName::in_root(info.root, info.namespace_path, short.clone())
     }
 }
 
@@ -1693,8 +1691,12 @@ enum BuiltinScalar {
     Null,
 }
 
-fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural> {
-    if qtn.is_local() || qtn.package().as_str() != "baml" {
+fn builtin_structural(
+    lang: baml_base::LangRoots,
+    qtn: &DeclName,
+    arity: usize,
+) -> Option<BuiltinStructural> {
+    if !lang.is(baml_base::LangPackage::Baml, qtn.root()) {
         return None;
     }
     if qtn.namespace().len() == 1
@@ -1743,9 +1745,13 @@ fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural>
 /// bridges (`builtin_structural`) applied. The single constructor for class
 /// types in the lowering chain, shared by annotation lowering and
 /// `class_self_ty`.
-pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy {
+pub fn class_lowering_ty(
+    lang: baml_base::LangRoots,
+    qtn: DeclName,
+    mut args: Vec<LoweringTy>,
+) -> LoweringTy {
     let attr = TyAttr::default;
-    match builtin_structural(&qtn, args.len()) {
+    match builtin_structural(lang, &qtn, args.len()) {
         Some(BuiltinStructural::Future) => {
             let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
@@ -1780,9 +1786,9 @@ pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy
 /// [`class_lowering_ty`]'s interned-vocabulary twin, for types minted inside
 /// inference (instantiated class heads, pattern heads): same bridge decision,
 /// handle children.
-pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
+pub fn class_ty(lang: baml_base::LangRoots, qtn: DeclName, mut args: Vec<Ty>) -> Ty {
     let attr = TyAttr::default;
-    match builtin_structural(&qtn, args.len()) {
+    match builtin_structural(lang, &qtn, args.len()) {
         Some(BuiltinStructural::Future) => {
             let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
@@ -1819,10 +1825,10 @@ pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
 pub fn class_qualified_name<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
-) -> TypeName {
+) -> DeclName {
     let package = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-    TypeName::new(
-        wire_name(db, package.root),
+    DeclName::in_root(
+        package.root,
         package.namespace_path,
         baml_compiler2_ppir::item_data::class_data(db, class)
             .name
@@ -1843,7 +1849,11 @@ pub fn class_self_ty<'db>(
         .map(|param| LoweringTy::TypeVar(param, TyAttr::default()))
         .collect();
     // Hole-free by construction, so the reject fold is a pure narrowing.
-    reject_holes(&class_lowering_ty(class_qualified_name(db, class), args))
+    reject_holes(&class_lowering_ty(
+        baml_compiler2_hir::package::lang_roots(db),
+        class_qualified_name(db, class),
+        args,
+    ))
 }
 
 /// A generic frame from bare interface param names (no `Self` slot -
@@ -1981,9 +1991,9 @@ pub fn qualify_def<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     def: baml_compiler2_hir::contributions::Definition<'db>,
     name: &Name,
-) -> baml_type::QualifiedTypeName {
+) -> baml_type::DeclName {
     let info = baml_compiler2_hir::file_package::file_package(db, def.file(db));
-    baml_type::QualifiedTypeName::new(wire_name(db, info.root), info.namespace_path, name.clone())
+    DeclName::in_root(info.root, info.namespace_path, name.clone())
 }
 
 /// The root generic frame for a class.
@@ -2355,10 +2365,10 @@ pub fn interface_scope_bounds<'db>(
 pub fn interface_qualified_name<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> TypeName {
+) -> DeclName {
     let package = baml_compiler2_hir::file_package::file_package(db, interface.file(db));
-    TypeName::new(
-        wire_name(db, package.root),
+    DeclName::in_root(
+        package.root,
         package.namespace_path,
         baml_compiler2_ppir::item_data::interface_data(db, interface)
             .name
@@ -2551,7 +2561,7 @@ pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty)
     fn visit(
         facts: &crate::facts::Facts<'_>,
         ty: &Ty,
-        seen_aliases: &mut FxHashSet<TypeName>,
+        seen_aliases: &mut FxHashSet<DeclName>,
     ) -> bool {
         match ty.kind() {
             InferTy::Unknown { .. } => true,
@@ -2640,7 +2650,13 @@ pub fn signature_lowering_diagnostics<'db>(
         match &lowered {
             // The compiler-derived builtin interface is a VALUE type,
             // never a bound (E0154).
-            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+            LoweringTy::Interface(qtn, ..)
+                if qtn.is_lang_root_type(
+                    baml_compiler2_hir::package::lang_roots(db),
+                    baml_base::LangPackage::Reflect,
+                    "AnyFunction",
+                ) =>
+            {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2758,7 +2774,13 @@ fn judge_constraint_head(
         ctx.lower_type_ref_at_with_diagnostics(store, bound, TypePosition::ConstraintHead);
     extend_lowering_diagnostics(out, source_map, diagnostics);
     match &lowered {
-        LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+        LoweringTy::Interface(qtn, ..)
+            if qtn.is_lang_root_type(
+                baml_compiler2_hir::package::lang_roots(db),
+                baml_base::LangPackage::Reflect,
+                "AnyFunction",
+            ) =>
+        {
             out.push((
                 source_map.span(bound),
                 TirTypeError::BuiltinInterfaceNotABound {

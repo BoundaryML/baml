@@ -11,25 +11,50 @@
 //!
 //! Lives in `baml_type` (not the TIR crate) because every layer touches it:
 //! TIR extracts and solves, the workspace database carries seeds as a salsa
-//! input, and the cache manifest serializes it (hence the borsh derives —
-//! `Ty` and `Name` are both borsh-ready).
+//! input, and the cache manifest serializes it (hence the borsh derives).
+//!
+//! Generic over the head like the types it holds: the solver works at the
+//! compile-time head ([`DeclName`](crate::DeclName), the default), the cache
+//! manifest persists the wire head (`FunctionThrowFacts<TypeName>`), and the
+//! seed boundary re-spells between them through the file's root.
 
 use std::collections::BTreeSet;
 
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::Ty;
+use crate::{DeclName, Ty};
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct FunctionThrowFacts {
+pub struct FunctionThrowFacts<N: Clone + Ord = DeclName> {
     /// Solver key (`throw_set_key` form: namespace-qualified short name).
     pub key: Name,
     /// Direct throw facts: declared `throws` clause (when closed) or facts
     /// collected from the body, exactly as the solver seeds its nodes.
-    pub direct: BTreeSet<Ty>,
+    pub direct: BTreeSet<Ty<N>>,
     /// Same-package call targets (edges of the propagation graph).
     pub call_edges: BTreeSet<Name>,
     /// A closed declared `throws` clause acts as a propagation firewall.
     pub has_declared_contract: bool,
+}
+
+impl<N: Clone + Ord> FunctionThrowFacts<N> {
+    /// These facts with every head replaced by what `f` resolves it to,
+    /// failing on the first head `f` rejects — the seed boundary's re-spelling
+    /// between the wire head and the compile-time head.
+    pub fn try_map_heads<M: Clone + Ord, E>(
+        &self,
+        f: &mut impl FnMut(&N) -> Result<M, E>,
+    ) -> Result<FunctionThrowFacts<M>, E> {
+        Ok(FunctionThrowFacts {
+            key: self.key.clone(),
+            direct: self
+                .direct
+                .iter()
+                .map(|ty| ty.try_map_heads(f))
+                .collect::<Result<BTreeSet<_>, E>>()?,
+            call_edges: self.call_edges.clone(),
+            has_declared_contract: self.has_declared_contract,
+        })
+    }
 }

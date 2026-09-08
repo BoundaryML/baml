@@ -9,7 +9,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, RealizedTy, Ty};
+use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
@@ -26,7 +26,7 @@ pub struct RuntimeMountedClass {
     pub name: Name,
     pub tag: baml_type::typetag::TypeTag,
     pub docstring: Option<String>,
-    pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
+    pub fields: Vec<(Name, Ty<TypeName>, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,8 +60,12 @@ pub struct RuntimeTypeMount {
     pub ty: RealizedTy,
     pub classes: Vec<RuntimeMountedClass>,
     pub enums: Vec<RuntimeMountedEnum>,
-    pub witnesses: Vec<(Interface, Vec<(Name, Name)>)>,
+    pub witnesses: Vec<MountedWitness>,
 }
+
+/// One interface a mounted type witnesses, with the `(field, method)` links
+/// its implementation is read through.
+pub type MountedWitness = (Interface<TypeName>, Vec<(Name, Name)>);
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimePackageMount {

@@ -28,7 +28,7 @@ use baml_compiler2_emit::{
     MountedPackageLinkError, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
     generate_project_bytecode_with_opt,
 };
-use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, export_interface};
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
@@ -155,21 +155,22 @@ fn library_db() -> ProjectDatabase {
 
 struct LibraryArtifacts {
     blob: Vec<u8>,
-    interface: PackageInterface,
+    interface: PackageInterface<baml_type::TypeName>,
     units: Vec<CompilationUnit>,
 }
 
 fn library_artifacts() -> LibraryArtifacts {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = package_interface(
+    let interface = export_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
-    )
-    .clone();
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("app"))
+            .unwrap(),
+    );
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize app package interface");
-    let round_trip = baml_artifact::decode::<PackageInterface>(
+    let round_trip = baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
         baml_artifact::ArtifactKind::PackageInterface,
         &blob,
     )

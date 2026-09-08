@@ -371,6 +371,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
         let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
         baml_db::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
         // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
         // `nmae = ...`) warns rather than silently no-ops, but a
         // forward-compatible manifest still loads.
@@ -460,6 +461,7 @@ pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
         .with_context(|| format!("failed to read {}", toml_path.display()))?;
     let manifest = baml_db::manifest::parse(&content)
         .with_context(|| format!("failed to parse {}", toml_path.display()))?;
+    baml_db::manifest::reject_stdlib_only_tables(&manifest, toml_path)?;
     Ok(baml_db::manifest::package_name(&manifest, toml_path)?)
 }
 
@@ -751,11 +753,9 @@ mod tests {
         assert!(files[0].ends_with("loose.baml"));
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         // The builtin `baml` package is present even with no user files.
-        let baml_pkg = baml_db::baml_compiler2_hir::package::root_by_wire_name(
-            &db,
-            &baml_db::Name::new("baml"),
-        )
-        .unwrap();
+        let baml_pkg = baml_db::baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_db::LangPackage::Baml)
+            .unwrap();
         assert!(
             !baml_db::baml_compiler2_hir::package::package_items(&db, baml_pkg)
                 .namespaces

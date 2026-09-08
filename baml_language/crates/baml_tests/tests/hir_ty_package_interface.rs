@@ -4,7 +4,7 @@ use baml_base::Name;
 use baml_compiler2_hir_ty::{
     callable::{ExternalCallTarget, ExternalLinkability},
     package_interface::{
-        ExportedType, ResolvedValue, package_interface, package_resolution_context,
+        ExportedType, ResolvedValue, export_interface, package_resolution_context,
     },
 };
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
@@ -99,9 +99,11 @@ fn library_blob_with_format(artifact_format: u32) -> Vec<u8> {
     baml_artifact::encode_with_format_for_test(
         artifact_format,
         baml_artifact::ArtifactKind::PackageInterface,
-        package_interface(
+        &export_interface(
             &db,
-            baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new("app"))
+                .unwrap(),
         ),
     )
     .expect("package interface serializes")
@@ -133,13 +135,15 @@ fn mounted_interface_skew_is_rejected_before_installation() {
 fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = package_interface(
+    let interface = export_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
-    let bytes = borsh::to_vec(interface).expect("serialize");
+    let bytes = borsh::to_vec(&interface).expect("serialize");
     let decoded = borsh::from_slice(&bytes).expect("deserialize");
-    assert_eq!(interface, &decoded);
+    assert_eq!(interface, decoded);
 
     let ExportedType::Interface {
         generic_params,
@@ -205,7 +209,11 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let (_, ty) = context
         .resolve_type(&db, &[Name::new("app"), Name::new("View")], &[])
         .expect("mounted interface type resolves");
-    assert!(matches!(ty, baml_type::Ty::Interface(ref qtn, ..) if qtn.package().as_str() == "app"));
+    assert!(matches!(
+        ty,
+        baml_type::Ty::Interface(ref qtn, ..)
+            if baml_compiler2_hir::package::spelling(&db).of(qtn.root()).as_str() == "app"
+    ));
     let baml_type::Ty::Interface(qtn, args, pins, _) = ty else {
         unreachable!()
     };
@@ -256,7 +264,9 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         projection
             .diagnostics
             .iter()
-            .map(ToString::to_string)
+            .map(|diagnostic| {
+                diagnostic.render(&baml_compiler2_hir_ty::render::Viewpoint::canonical(&db))
+            })
             .collect::<Vec<_>>()
     );
 
@@ -414,7 +424,8 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, user_alias);
     assert!(user_errors.is_empty(), "{user_errors:?}");
     assert_eq!(
-        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias).render_canonical(),
+        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias)
+            .render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(&db)),
         "reflect.Signature"
     );
 }
@@ -449,7 +460,9 @@ function raw_only_value_is_available() -> string throws never {
     let context = package_resolution_context(&db, user_pkg);
     let reflect_items = baml_compiler2_ppir::package_items(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("reflect")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("reflect"))
+            .unwrap(),
     );
     assert!(
         reflect_items
@@ -574,9 +587,11 @@ function value() -> int throws never {
     assert_no_diagnostic_errors(&library);
     let blob = baml_artifact::encode(
         baml_artifact::ArtifactKind::PackageInterface,
-        package_interface(
+        &export_interface(
             &library,
-            baml_compiler2_hir::package::root_by_wire_name(&library, &Name::new("native")).unwrap(),
+            baml_compiler2_hir::package::spelling(&library)
+                .root(&Name::new("native"))
+                .unwrap(),
         ),
     )
     .expect("native package interface serializes");

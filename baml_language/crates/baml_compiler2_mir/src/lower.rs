@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
 use baml_type::{
-    ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy, TyAttr,
-    TyTemplate, TyTemplateInterface, TypeName,
+    DeclName, ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy,
+    TyAttr, TyTemplate, TyTemplateInterface, TypeName,
 };
 use indexmap::IndexMap;
 
@@ -120,7 +120,7 @@ pub fn resolved_aliases_for_package(
 fn collect_type_aliases(
     db: &dyn crate::Db,
     pkg_id: baml_base::SourceRoot,
-) -> HashMap<QualifiedTypeName, Tir2Ty> {
+) -> HashMap<DeclName, Tir2Ty> {
     use baml_compiler2_hir::contributions::Definition;
     let mut aliases = HashMap::new();
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
@@ -128,7 +128,14 @@ fn collect_type_aliases(
         for (name, def) in &ns.types {
             if let Definition::TypeAlias(loc) = def {
                 let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc);
-                aliases.insert(qualify_def(db, Definition::TypeAlias(*loc), name), value);
+                aliases.insert(
+                    baml_compiler2_hir_ty::lower::qualify_def(
+                        db,
+                        Definition::TypeAlias(*loc),
+                        name,
+                    ),
+                    value,
+                );
             }
         }
     }
@@ -137,7 +144,11 @@ fn collect_type_aliases(
             let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
             let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc);
             aliases.insert(
-                qualify_def(db, Definition::TypeAlias(loc), &data.name),
+                baml_compiler2_hir_ty::lower::qualify_def(
+                    db,
+                    Definition::TypeAlias(loc),
+                    &data.name,
+                ),
                 value,
             );
         }
@@ -374,7 +385,7 @@ fn qualify_def(
     let file = def.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     QualifiedTypeName::new(
-        wire_name(db, pkg_info.root),
+        spelling(db).of(pkg_info.root).clone(),
         pkg_info.namespace_path,
         name.clone(),
     )
@@ -443,7 +454,7 @@ enum TemplateMode {
 
 fn lower_tir_template(
     ty: &Tir2Ty,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generic_layout: &RuntimeGenericLayout,
     mode: TemplateMode,
 ) -> Option<TyTemplate> {
@@ -462,7 +473,7 @@ fn lower_tir_template(
             Some(TyTemplate::AssociatedTypeProjection {
                 base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
                 interface: Box::new(baml_type::TyTemplateInterface {
-                    name: interface.name.clone(),
+                    name: resolved.wire(&interface.name),
                     generics: interface
                         .generics
                         .iter()
@@ -515,7 +526,7 @@ fn lower_tir_template(
         Tir2Ty::Class(qtn, type_args, attr) => {
             if mode == TemplateMode::Pattern || type_args.iter().any(tir_contains_symbolic) {
                 Some(TyTemplate::class(
-                    qtn.clone(),
+                    resolved.wire(qtn),
                     type_args
                         .iter()
                         .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
@@ -526,7 +537,7 @@ fn lower_tir_template(
                 let resolved_args: Vec<RuntimeTy> =
                     type_args.iter().map(|ty| resolved.convert(ty)).collect();
                 Some(realized_leaf_template(&RuntimeTy::Class(
-                    qtn.clone(),
+                    resolved.wire(qtn),
                     resolved_args.into(),
                     attr.clone(),
                 )))
@@ -540,7 +551,7 @@ fn lower_tir_template(
                     .any(|(_, ty)| tir_contains_symbolic(ty))
             {
                 Some(TyTemplate::interface(
-                    qtn.clone(),
+                    resolved.wire(qtn),
                     type_args
                         .iter()
                         .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
@@ -565,7 +576,7 @@ fn lower_tir_template(
                     .map(|(name, ty)| (name.clone(), resolved.convert(ty)))
                     .collect();
                 Some(realized_leaf_template(&RuntimeTy::Interface(
-                    qtn.clone(),
+                    resolved.wire(qtn),
                     resolved_args.into(),
                     resolved_bindings,
                     attr.clone(),
@@ -615,11 +626,46 @@ fn lower_tir_template(
     }
 }
 
+/// The compile-time → wire crossing for one program: alias expansion plus the
+/// re-spelling of every head through the program's [`Spelling`]. MIR is where
+/// the type checker's root-headed types become the runtime's name-headed
+/// ones, and this is the one object that does it.
+#[derive(Clone, Copy)]
+pub struct RuntimeLowering<'a> {
+    pub aliases: &'a ResolvedAliases,
+    pub spelling: &'a Spelling,
+}
+
+impl RuntimeLowering<'_> {
+    /// A compile-time type as the runtime carries it.
+    pub fn convert(&self, ty: &Tir2Ty) -> RuntimeTy {
+        self.aliases
+            .convert(ty)
+            .map_heads(&mut |decl| self.spelling.wire(decl))
+    }
+
+    /// A compile-time head as the wire spells it.
+    pub fn wire(&self, decl: &DeclName) -> TypeName {
+        self.spelling.wire(decl)
+    }
+
+    /// The compile-time head a wire name denotes in this program, if the
+    /// program has a package spelled that way.
+    pub fn decl(&self, name: &TypeName) -> Option<DeclName> {
+        let root = self.spelling.root(name.package())?;
+        Some(DeclName::in_root(
+            root,
+            name.namespace().clone(),
+            name.name().clone(),
+        ))
+    }
+}
+
 /// Convert a `Tir2Ty` to `TyTemplate`, mapping each type variable to its
 /// canonical runtime frame index.
 pub fn tir2_to_template(
     ty: &Tir2Ty,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> TyTemplate {
     let ty = baml_type_runtime::erase_typevars_matching(ty, &|param| {
@@ -643,7 +689,7 @@ pub fn tir2_to_template(
 /// code.
 fn tir2_to_template_in_frame(
     ty: &Tir2Ty,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> Option<TyTemplate> {
     if baml_type_runtime::contains_error_recovery(ty) {
@@ -675,7 +721,7 @@ pub(crate) fn tir2_interface_to_template(
     name: &baml_type::TypeName,
     args: &[Tir2Ty],
     assoc: &[(Name, Tir2Ty)],
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> TyTemplateInterface {
     TyTemplateInterface::new(
@@ -735,7 +781,7 @@ fn runtime_ty_is_enum_only(ty: &RuntimeTy, enum_name: &TypeName) -> bool {
 /// when a type variable has no runtime frame slot.
 fn tir2_to_pattern_template(
     ty: &Tir2Ty,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> Option<TyTemplate> {
     let generic_layout = RuntimeGenericLayout::new(generic_params);
@@ -1095,7 +1141,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // bypass and default-adoption do); emit's slot resolution
                 // panics loudly on any that slips through.
                 return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: wire_name(db, pkg_info.root),
+                    package: spelling(db).of(pkg_info.root).clone(),
                     namespace: pkg_info.namespace_path,
                     display_owner: interface_data(db, iface_loc).name.clone(),
                     decl: func_loc,
@@ -1112,7 +1158,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // NOT (members of the impl, outputs of the match); the
                 // impl's own type variables render as frame indices (`#0`).
                 return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: wire_name(db, pkg_info.root),
+                    package: spelling(db).of(pkg_info.root).clone(),
                     namespace: pkg_info.namespace_path,
                     display_owner: Name::new(impl_display_segment(db, impl_loc)),
                     decl: func_loc,
@@ -1124,7 +1170,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     }
 
     ItemRef::Free {
-        package: wire_name(db, pkg_info.root),
+        package: spelling(db).of(pkg_info.root).clone(),
         namespace: pkg_info.namespace_path,
         name,
     }
@@ -1159,15 +1205,19 @@ fn impl_display_segment<'db>(
     let target_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
     format!(
         "<({} as {})>",
-        render_with_frame_indices(&target_ty, &impl_params),
-        render_with_frame_indices(&iface_ty, &impl_params),
+        render_with_frame_indices(db, &target_ty, &impl_params),
+        render_with_frame_indices(db, &iface_ty, &impl_params),
     )
 }
 
 /// Render `ty` canonically with the impl frame's type variables spelled as
 /// their frame indices (`#0`) instead of their declared names — the declared
 /// names are the block's private spelling, not part of its identity.
-fn render_with_frame_indices(ty: &baml_type::Ty, frame: &[baml_type::ParamTy]) -> String {
+fn render_with_frame_indices(
+    db: &dyn crate::Db,
+    ty: &baml_type::Ty,
+    frame: &[baml_type::ParamTy],
+) -> String {
     use baml_type::interned::ClosedTy;
     fn rewrite(ty: &ClosedTy, frame: &[baml_type::ParamTy]) -> ClosedTy {
         if let baml_type::interned::InferTy::TypeVar(param, attr) = ty.kind()
@@ -1185,7 +1235,7 @@ fn render_with_frame_indices(ty: &baml_type::Ty, frame: &[baml_type::ParamTy]) -
     }
     rewrite(&ClosedTy::from_plain(ty), frame)
         .to_plain()
-        .render_canonical()
+        .render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db))
 }
 
 /// The codegen-lockstep NATIVE KEY for a builtin body: the dot-free
@@ -1225,7 +1275,7 @@ pub fn native_key_for<'db>(
         }
         None => {
             return ItemRef::Free {
-                package: wire_name(db, pkg_info.root),
+                package: spelling(db).of(pkg_info.root).clone(),
                 namespace: pkg_info.namespace_path,
                 name,
             }
@@ -1233,7 +1283,7 @@ pub fn native_key_for<'db>(
         }
     };
     ItemRef::Method {
-        package: wire_name(db, pkg_info.root),
+        package: spelling(db).of(pkg_info.root).clone(),
         namespace: pkg_info.namespace_path,
         class: item,
         name,
@@ -1284,7 +1334,7 @@ fn method_item_ref<'db>(
     // and reaches its `{iface}$for${target}` spelling via `def_to_item_ref`.
     let method_name = function_data(db, func_loc).name.clone();
     ItemRef::Method {
-        package: wire_name(db, pkg_info.root),
+        package: spelling(db).of(pkg_info.root).clone(),
         namespace: pkg_info.namespace_path,
         class,
         name: method_name,
@@ -1305,7 +1355,7 @@ fn resolution_to_item_ref<'db>(
             let pkg_info = file_package(db, func_loc.file(db));
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Free {
-                package: wire_name(db, pkg_info.root),
+                package: spelling(db).of(pkg_info.root).clone(),
                 namespace: pkg_info.namespace_path,
                 name: func_data.name.clone(),
             })
@@ -1324,7 +1374,7 @@ fn resolution_to_item_ref<'db>(
             let pkg_info = file_package(db, iface_loc.file(db));
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
             Some(ItemRef::Method {
-                package: wire_name(db, pkg_info.root),
+                package: spelling(db).of(pkg_info.root).clone(),
                 namespace: pkg_info.namespace_path,
                 class: iface_data.name.clone(),
                 name: method.clone(),
@@ -1363,7 +1413,7 @@ fn resolution_to_item_ref<'db>(
                     name: name.clone(),
                 },
                 ExternalCallTarget::Interface { interface, method } => ItemRef::Method {
-                    package: interface.package().clone(),
+                    package: spelling(db).of(interface.root()).clone(),
                     namespace: interface.namespace().clone(),
                     class: interface.name().clone(),
                     name: method.clone(),
@@ -1424,7 +1474,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     loc::{FunctionLoc, LetLoc},
-    package::{is_precompiled_stdlib, package_items, root_by_wire_name, wire_name},
+    package::{Spelling, is_precompiled_stdlib, lang_roots, package_items, spelling},
     scope::FileScopeId,
     semantic_index::{
         BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope as MetadataScope,
@@ -1612,17 +1662,18 @@ fn class_type_tags_for_project(
     use baml_compiler2_ppir::item_data::{class_data, file_classes};
     let all_files = compiler2_all_files(db);
     let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
+    let spelling = spelling(db);
 
     for file in &all_files {
         let pkg_info = file_package(db, *file);
 
         for class_loc in file_classes(db, *file) {
             let class = class_data(db, *class_loc);
-            let class_qtn = QualifiedTypeName::new(
-                wire_name(db, pkg_info.root),
+            let class_qtn = spelling.wire(&DeclName::in_root(
+                pkg_info.root,
                 pkg_info.namespace_path.clone(),
                 class.name.clone(),
-            );
+            ));
             let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
             // Use entry to avoid overwriting if the same class appears via multiple paths
             // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
@@ -1643,8 +1694,9 @@ fn class_type_tags_for_project(
                     qtn, ..
                 } = exported
                 {
+                    let qtn = spelling.wire(qtn);
                     let type_tag = baml_type::typetag::class_type_tag(&qtn.render_dotted(false));
-                    tags.entry(qtn.clone()).or_insert(type_tag);
+                    tags.entry(qtn).or_insert(type_tag);
                 }
             }
         }
@@ -1665,6 +1717,10 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
     use baml_compiler2_ppir::package_items;
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
+    let runtime = RuntimeLowering {
+        aliases: &resolved_aliases,
+        spelling: spelling(db),
+    };
 
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();
@@ -1682,21 +1738,11 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
             if let Some(mounted) =
                 baml_compiler2_hir_ty::package_interface::mounted_interface(db, dependency.root)
             {
-                LoweringContext::populate_from_mounted_package(
-                    mounted,
-                    &mut population,
-                    &resolved_aliases,
-                );
+                LoweringContext::populate_from_mounted_package(mounted, &mut population, &runtime);
                 continue;
             }
             let dep_items = package_items(db, dependency.root);
-            LoweringContext::populate_from_package(
-                db,
-                dep_items,
-                &wire_name(db, dependency.root),
-                &mut population,
-                &resolved_aliases,
-            );
+            LoweringContext::populate_from_package(db, dep_items, &mut population, &runtime);
         }
 
         // `reflect.AnyClass` keeps its ratified reflection-backed default methods
@@ -1706,28 +1752,16 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
         // field layouts when lowering those default bodies. Populate that
         // schema as a lowering-only view; this adds no package dependency and
         // does not make `reflect` a namespace inside `baml`.
-        if wire_name(db, pkg_id).as_str() == "baml"
-            && let Some(reflect_id) = root_by_wire_name(db, &Name::new("reflect"))
+        let lang = lang_roots(db);
+        if lang.is(baml_base::LangPackage::Baml, pkg_id)
+            && let Some(reflect_id) = lang.get(baml_base::LangPackage::Reflect)
         {
             let reflect_items = package_items(db, reflect_id);
-            LoweringContext::populate_from_package(
-                db,
-                reflect_items,
-                &wire_name(db, reflect_id),
-                &mut population,
-                &resolved_aliases,
-            );
+            LoweringContext::populate_from_package(db, reflect_items, &mut population, &runtime);
         }
 
         let pkg_items = package_items(db, pkg_id);
-        let pkg_name = wire_name(db, pkg_id);
-        LoweringContext::populate_from_package(
-            db,
-            pkg_items,
-            &pkg_name,
-            &mut population,
-            &resolved_aliases,
-        );
+        LoweringContext::populate_from_package(db, pkg_items, &mut population, &runtime);
     }
 
     // Collect every interface-declared method name in scope (own package +
@@ -1896,6 +1930,8 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
+    /// How every root is spelled on the wire this program is emitted to.
+    spelling: &'db Spelling,
 
     /// All method names declared by in-scope interfaces — see
     /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
@@ -1968,12 +2004,59 @@ struct LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
-    fn baml_iter_qtn(name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
+    /// The crossing from this program's compile-time types to the wire.
+    fn runtime(&self) -> RuntimeLowering<'db> {
+        RuntimeLowering {
+            aliases: self.resolved_aliases,
+            spelling: self.spelling,
+        }
+    }
+
+    /// A compile-time head as the wire spells it.
+    fn wire(&self, decl: &DeclName) -> TypeName {
+        self.spelling.wire(decl)
+    }
+
+    /// The compile-time head a wire name denotes in this program.
+    fn decl(&self, name: &TypeName) -> Option<DeclName> {
+        self.runtime().decl(name)
+    }
+
+    /// Where the language packages are installed.
+    fn lang(&self) -> baml_base::LangRoots {
+        lang_roots(self.db)
+    }
+
+    /// The viewpoint this function's diagnostics and display strings spell
+    /// types from: its own file's package.
+    fn viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
+        baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+            self.db,
+            file_package(self.db, self.file).root,
+        )
+    }
+
+    /// The mounted row a wire head names, when this program has its package.
+    fn mounted_row(
+        &self,
+        name: &TypeName,
+    ) -> Option<&'db baml_compiler2_hir_ty::package_interface::ExportedType> {
+        let decl = self.decl(name)?;
+        baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, &decl)
+    }
+
+    /// `baml.iter.<name>` as a compile-time head, or `None` without the stdlib.
+    fn baml_iter_decl(&self, name: &str) -> Option<DeclName> {
+        let baml = self.lang().get(baml_base::LangPackage::Baml)?;
+        Some(DeclName::in_root(
+            baml,
+            vec![Name::new("iter")],
+            Name::new(name),
+        ))
     }
 
     fn baml_iter_type_name(name: &str) -> TypeName {
-        Self::baml_iter_qtn(name)
+        TypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
     }
 
     /// A `baml.ops.<name>` interface name (`Equals`, `Compare`, …).
@@ -2028,11 +2111,11 @@ impl<'db> LoweringContext<'db> {
 
     fn interface_view_for_class_tir_ty(
         &self,
-        class_qtn: &QualifiedTypeName,
+        class_qtn: &DeclName,
         class_args: &[Tir2Ty],
         target_tn: &TypeName,
     ) -> Option<InterfaceTypeView> {
-        let class_tn = class_qtn.clone();
+        let class_tn = self.wire(class_qtn);
         let class_loc = self.resolve_class_loc_by_type_name(&class_tn)?;
         let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
         let class_params = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
@@ -2071,7 +2154,7 @@ impl<'db> LoweringContext<'db> {
         // `Iterable` view).
         if let Tir2Ty::Interface(qtn, args, assoc, _) = actual_ty {
             return self
-                .interface_closure_type_name_views(qtn, args, assoc)?
+                .interface_closure_type_name_views(&self.wire(qtn), args, assoc)?
                 .into_iter()
                 .find(|(tn, _, _)| tn == target_tn);
         }
@@ -2094,7 +2177,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         match ty {
             Tir2Ty::Interface(qtn, args, assoc, _) => {
-                let iface_tn = qtn.clone();
+                let iface_tn = self.wire(qtn);
                 self.interface_closure_type_name_views(&iface_tn, args, assoc)?
                     .into_iter()
                     .find(|(tn, _, _)| tn == target_tn)
@@ -2164,14 +2247,17 @@ impl<'db> LoweringContext<'db> {
 
         let iterator_tn = Self::baml_iter_type_name("Iterator");
         let iter_method = Name::new("iter");
-        let iter_local = self
-            .builder
-            .temp(self.convert_tir_ty_for_runtime(&Tir2Ty::Interface(
-                Self::baml_iter_qtn("Iterator"),
+        let iter_local = self.builder.temp(match self.baml_iter_decl("Iterator") {
+            Some(iterator) => self.convert_tir_ty_for_runtime(&Tir2Ty::Interface(
+                iterator,
                 Box::new([]),
                 iterable_assoc.clone(),
                 TyAttr::default(),
-            )));
+            )),
+            None => RuntimeTy::Unknown {
+                attr: TyAttr::default(),
+            },
+        });
         // `collection.iter()`: open-world virtual dispatch on the collection's
         // `Iterable` view — the VM resolves the impl from the runtime concrete
         // type (containers included; array/map values carry their element types).
@@ -2264,27 +2350,21 @@ impl<'db> LoweringContext<'db> {
     fn populate_from_package(
         db: &'db dyn crate::Db,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-        pkg_name: &Name,
         out: &mut PackagePopulation<'_>,
-        resolved_aliases: &ResolvedAliases,
+        resolved: &RuntimeLowering<'_>,
     ) {
         for (ns_names, ns) in &pkg_items.namespaces {
-            // Build module_path: [pkg_name] ++ ns_names
-            let mut module_path: Vec<Name> = vec![pkg_name.clone()];
-            module_path.extend(ns_names.iter().cloned());
-
             for def in ns.types.values() {
                 match def {
                     Definition::Class(class_loc) => {
                         let cfile = class_loc.file(db);
                         let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
 
-                        let class_qtn = QualifiedTypeName::new(
-                            pkg_name.clone(),
+                        let tn = resolved.wire(&DeclName::in_root(
+                            pkg_items.root,
                             ns_names.clone(),
                             class_data.name.clone(),
-                        );
-                        let tn = class_qtn.clone();
+                        ));
 
                         let mut fields = IndexMap::new();
                         let mut field_types = IndexMap::new();
@@ -2319,7 +2399,7 @@ impl<'db> LoweringContext<'db> {
                                     ),
                                     None,
                                 );
-                                let field_ty = resolved_aliases.convert(&tir_ty);
+                                let field_ty = resolved.convert(&tir_ty);
                                 field_types.insert(name.to_string(), field_ty.clone());
                                 Some((idx, field_ty))
                             };
@@ -2339,11 +2419,11 @@ impl<'db> LoweringContext<'db> {
                     }
                     Definition::Enum(enum_loc) => {
                         let enum_data = baml_compiler2_ppir::item_data::enum_data(db, *enum_loc);
-                        let enum_qtn = QualifiedTypeName::new(
-                            pkg_name.clone(),
+                        let enum_qtn = resolved.wire(&DeclName::in_root(
+                            pkg_items.root,
                             ns_names.clone(),
                             enum_data.name.clone(),
-                        );
+                        ));
 
                         let mut variants = IndexMap::new();
                         for (idx, variant) in enum_data.variants.iter().enumerate() {
@@ -2361,7 +2441,7 @@ impl<'db> LoweringContext<'db> {
     fn populate_from_mounted_package(
         mounted: &baml_compiler2_hir_ty::package_interface::PackageInterface,
         out: &mut PackagePopulation<'_>,
-        resolved_aliases: &ResolvedAliases,
+        resolved: &RuntimeLowering<'_>,
     ) {
         use baml_compiler2_hir_ty::package_interface::ExportedType;
 
@@ -2373,17 +2453,19 @@ impl<'db> LoweringContext<'db> {
                         let mut field_types = IndexMap::new();
                         for (idx, (name, ty, _attrs)) in fields.iter().enumerate() {
                             field_indices.insert(name.to_string(), idx);
-                            field_types.insert(name.to_string(), resolved_aliases.convert(ty));
+                            field_types.insert(name.to_string(), resolved.convert(ty));
                         }
-                        out.class_fields.insert(qtn.clone(), field_indices);
-                        out.class_field_types.insert(qtn.clone(), field_types);
+                        out.class_fields.insert(resolved.wire(qtn), field_indices);
+                        out.class_field_types
+                            .insert(resolved.wire(qtn), field_types);
                     }
                     ExportedType::Enum { qtn, variants } => {
                         let mut variant_indices = IndexMap::new();
                         for (idx, variant) in variants.iter().enumerate() {
                             variant_indices.insert(variant.to_string(), idx);
                         }
-                        out.enum_variants.insert(qtn.clone(), variant_indices);
+                        out.enum_variants
+                            .insert(resolved.wire(qtn), variant_indices);
                     }
                     ExportedType::Interface { .. } | ExportedType::TypeAlias { .. } => {}
                 }
@@ -2510,6 +2592,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
+            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -2587,6 +2670,7 @@ impl<'db> LoweringContext<'db> {
             enum_variants: &pkg_data.enum_variants,
             class_type_tags,
             resolved_aliases: &pkg_data.resolved_aliases,
+            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -2904,7 +2988,7 @@ impl<'db> LoweringContext<'db> {
         let Tir2Ty::Interface(tn, args, assoc, _) = interface else {
             return None;
         };
-        Some(((tn.clone(), args.clone(), assoc.clone()), field_index))
+        Some(((self.wire(tn), args.clone(), assoc.clone()), field_index))
     }
 
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
@@ -2978,7 +3062,7 @@ impl<'db> LoweringContext<'db> {
         // throw away the information needed to resolve the type at run time.
         let resolved = self.resolve_ty_projections(ty);
         let runtime_ready = Self::erase_compiler_only_ty(resolved);
-        self.resolved_aliases.convert(&runtime_ready)
+        self.runtime().convert(&runtime_ready)
     }
 
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
@@ -3138,9 +3222,11 @@ impl<'db> LoweringContext<'db> {
                 .get(qtn)
                 .and_then(|target| self.interface_dispatch_target_for_member(target, member)),
             Tir2Ty::Union(members, _) => self.union_virtual_dispatch_view(members, member),
-            Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => {
-                Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
-            }
+            Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => Some((
+                self.wire(qtn),
+                type_args.clone(),
+                associated_bindings.clone(),
+            )),
             // `T extends A & B` — the generic-parameter axis.
             Tir2Ty::TypeVar(name, _) => {
                 let conjuncts: Vec<Tir2Ty> = self
@@ -3197,7 +3283,10 @@ impl<'db> LoweringContext<'db> {
     /// or a field. Selects which conjunct of a bound list a member access dispatches
     /// through.
     fn interface_closure_declares_member(&self, iface_tn: &TypeName, member: &Name) -> bool {
-        if self.mir_interface_declares_method(iface_tn, member) {
+        if self
+            .decl(iface_tn)
+            .is_some_and(|decl| self.mir_interface_declares_method(&decl, member))
+        {
             return true;
         }
         self.interface_closure_type_name_views(iface_tn, &[], &[])
@@ -3427,7 +3516,7 @@ impl<'db> LoweringContext<'db> {
         let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
-            wire_name(self.db, pkg_info.root),
+            self.spelling.of(pkg_info.root).clone(),
             pkg_info.namespace_path,
             iface_data.name.clone(),
         );
@@ -3521,7 +3610,7 @@ impl<'db> LoweringContext<'db> {
                     baml_compiler2_ppir::item_data::interface_data(self.db, *iface_loc);
                 let pkg_info = file_package(self.db, iface_loc.file(self.db));
                 let iface_tn = TypeName::new(
-                    wire_name(self.db, pkg_info.root),
+                    self.spelling.of(pkg_info.root).clone(),
                     pkg_info.namespace_path,
                     iface_data.name.clone(),
                 );
@@ -3586,7 +3675,7 @@ impl<'db> LoweringContext<'db> {
         let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
-            wire_name(self.db, pkg_info.root),
+            self.spelling.of(pkg_info.root).clone(),
             pkg_info.namespace_path,
             iface_data.name.clone(),
         );
@@ -3698,7 +3787,7 @@ impl<'db> LoweringContext<'db> {
     fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<RuntimeTy>)> {
         match ty {
             Tir2Ty::Class(qtn, type_args, _) => Some((
-                qtn.clone(),
+                self.wire(qtn),
                 type_args
                     .iter()
                     .map(|arg| self.convert_tir_ty_for_runtime(arg))
@@ -3744,7 +3833,7 @@ impl<'db> LoweringContext<'db> {
             .into_iter()
             .map(|view| {
                 (
-                    view.name.clone(),
+                    self.wire(&view.name),
                     view.generics
                         .iter()
                         .map(|ty| self.resolve_ty_projections(ty))
@@ -3820,7 +3909,10 @@ impl<'db> LoweringContext<'db> {
             return None;
         }
         for (name, generics, associated) in self.l1_impl_views_for_recv(recv_ty) {
-            if self.mir_interface_declares_method(&name, method) {
+            if self
+                .decl(&name)
+                .is_some_and(|decl| self.mir_interface_declares_method(&decl, method))
+            {
                 return Some((name, generics, associated));
             }
         }
@@ -3866,7 +3958,10 @@ impl<'db> LoweringContext<'db> {
         let mut declarers = Vec::new();
         for view in roots
             .into_iter()
-            .filter(|view| self.mir_interface_declares_method(&view.0, method))
+            .filter(|view| {
+                self.decl(&view.0)
+                    .is_some_and(|decl| self.mir_interface_declares_method(&decl, method))
+            })
             .map(|view| self.interface_view_declaring_method(&view, method))
         {
             if !declarers.contains(&view) {
@@ -3879,11 +3974,8 @@ impl<'db> LoweringContext<'db> {
     /// Whether `iface_qtn` or any interface in its `requires` closure declares a
     /// method named `method`. Mirrors the TIR-side check; used by
     /// `dispatch_target_for_concrete`.
-    fn mir_interface_declares_method(&self, iface_qtn: &QualifiedTypeName, method: &Name) -> bool {
-        let Some(pkg_id) = root_by_wire_name(self.db, iface_qtn.package()) else {
-            return false;
-        };
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
+    fn mir_interface_declares_method(&self, iface_qtn: &DeclName, method: &Name) -> bool {
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, iface_qtn.root());
         let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
             pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
         else {
@@ -3927,21 +4019,21 @@ impl<'db> LoweringContext<'db> {
     /// implementors: an interface with no implementors in this compilation is still
     /// an interface, and one with implementors elsewhere is not more of one.
     fn is_interface_type_name(&self, tn: &TypeName) -> bool {
-        root_by_wire_name(self.db, tn.package()).is_some_and(|pkg_id| {
+        self.decl(tn).map(|decl| decl.root()).is_some_and(|pkg_id| {
             matches!(
                 baml_compiler2_hir::package::package_items(self.db, pkg_id)
                     .lookup_type(tn.namespace(), tn.name()),
                 Some(baml_compiler2_hir::contributions::Definition::Interface(_))
             )
         }) || matches!(
-            baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, tn),
+            self.mounted_row(tn),
             Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface { .. })
         )
     }
 
     fn interface_declares_method_directly(&self, iface_tn: &TypeName, method: &Name) -> bool {
         use baml_compiler2_ppir::item_data::{function_data, interface_data};
-        let Some(pkg_id) = root_by_wire_name(self.db, iface_tn.package()) else {
+        let Some(pkg_id) = self.decl(iface_tn).map(|decl| decl.root()) else {
             return false;
         };
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
@@ -3952,7 +4044,7 @@ impl<'db> LoweringContext<'db> {
                 required_methods,
                 default_methods,
                 ..
-            }) = baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, iface_tn)
+            }) = self.mounted_row(iface_tn)
             {
                 return required_methods.iter().any(|m| m.name == *method)
                     || default_methods.iter().any(|m| m.name == *method);
@@ -3994,13 +4086,13 @@ impl<'db> LoweringContext<'db> {
     /// disagree about what index a field has.
     fn interface_field_index_directly(&self, iface_tn: &TypeName, field: &Name) -> Option<u32> {
         use baml_compiler2_ppir::item_data::interface_data;
-        let pkg_id = root_by_wire_name(self.db, iface_tn.package())?;
+        let pkg_id = self.decl(iface_tn)?.root();
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         let Some(def) = pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name()) else {
             if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
                 fields,
                 ..
-            }) = baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, iface_tn)
+            }) = self.mounted_row(iface_tn)
             {
                 let index = fields.iter().position(|(name, _, _)| name == field)?;
                 return Some(u32::try_from(index).expect("interface field count fits u32"));
@@ -4290,7 +4382,7 @@ impl<'db> LoweringContext<'db> {
         // to a `TypeVar` rather than an unresolved `Unknown`. Erasing generics
         // here would make a `: T` pattern a constant-false test, violating the
         // type contract.
-        self.resolved_aliases
+        self.runtime()
             .convert(&self.lower_type_annotation_tir(ty_expr))
     }
 
@@ -4431,11 +4523,11 @@ impl<'db> LoweringContext<'db> {
                                 .lookup_type(&pkg_info.namespace_path, cn)
                                 .map(|def| {
                                     let tir_ty = Tir2Ty::Class(
-                                        qualify_def(self.db, def, cn),
+                                        baml_compiler2_hir_ty::lower::qualify_def(self.db, def, cn),
                                         Box::new([]),
                                         baml_type::TyAttr::default(),
                                     );
-                                    self.resolved_aliases.convert(&tir_ty)
+                                    self.runtime().convert(&tir_ty)
                                 })
                         })
                         .unwrap_or(RuntimeTy::Null {
@@ -4633,11 +4725,11 @@ impl<'db> LoweringContext<'db> {
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
-        let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
+        let ret_ty = self.runtime().convert(&coercion.target_return);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None);
 
         for param in &coercion.target_params {
-            let param_ty = self.resolved_aliases.convert(&param.ty);
+            let param_ty = self.runtime().convert(&param.ty);
             adapter_builder.declare_local(param.name.clone(), param_ty, None);
         }
 
@@ -4861,7 +4953,7 @@ impl<'db> LoweringContext<'db> {
         // closure value's captured args reconstructs its signature exactly.
         let sig_frame_params = self.enclosing_generic_params();
         let sig_template = |this: &Self, tir_ty: &Tir2Ty| {
-            tir2_to_template(tir_ty, this.resolved_aliases, &sig_frame_params)
+            tir2_to_template(tir_ty, &this.runtime(), &sig_frame_params)
         };
         // TIR infers the lambda's whole function type: every parameter type,
         // the return type, and — for an unannotated clause — the throws
@@ -4893,7 +4985,7 @@ impl<'db> LoweringContext<'db> {
             _ => None,
         };
         let inferred_template = |this: &Self, tir_ty: &Tir2Ty| {
-            tir2_to_template_in_frame(tir_ty, this.resolved_aliases, &sig_frame_params)
+            tir2_to_template_in_frame(tir_ty, &this.runtime(), &sig_frame_params)
         };
         // The return type, written or inferred. This types the return place as
         // well as the signature: `_0` holds the lambda's result, so declaring
@@ -4903,7 +4995,7 @@ impl<'db> LoweringContext<'db> {
                 let tir_ty = lower_sig_ty(self, te);
                 (
                     sig_template(self, &tir_ty),
-                    tir_ty.render_user_facing(),
+                    tir_ty.render_with(&self.viewpoint()),
                     self.convert_tir_ty_for_runtime(&tir_ty),
                 )
             }
@@ -4913,7 +5005,7 @@ impl<'db> LoweringContext<'db> {
             {
                 Some((tir_ty, template)) => (
                     template,
-                    tir_ty.render_user_facing(),
+                    tir_ty.render_with(&self.viewpoint()),
                     self.convert_tir_ty_for_runtime(tir_ty),
                 ),
                 // Inference has no answer to give (an already-diagnosed
@@ -4946,7 +5038,7 @@ impl<'db> LoweringContext<'db> {
                     (
                         self.convert_tir_ty_for_runtime(&tir_ty),
                         sig_template(self, &tir_ty),
-                        tir_ty.render_user_facing(),
+                        tir_ty.render_with(&self.viewpoint()),
                     )
                 }
                 None => match inferred_sig
@@ -4957,7 +5049,7 @@ impl<'db> LoweringContext<'db> {
                     Some((tir_ty, template)) => (
                         self.convert_tir_ty_for_runtime(tir_ty),
                         template,
-                        tir_ty.render_user_facing(),
+                        tir_ty.render_with(&self.viewpoint()),
                     ),
                     None => (
                         baml_type::RuntimeTy::Null {
@@ -5275,7 +5367,7 @@ impl<'db> LoweringContext<'db> {
                         &FxHashMap::default(),
                         None,
                     );
-                    body_params.push((name, self.resolved_aliases.convert(&tir_ty)));
+                    body_params.push((name, self.runtime().convert(&tir_ty)));
                 }
                 let tir_ty = lower_expr_in_scope(
                     self.db,
@@ -5286,7 +5378,7 @@ impl<'db> LoweringContext<'db> {
                     &FxHashMap::default(),
                     None,
                 );
-                self.resolved_aliases.convert(&tir_ty)
+                self.runtime().convert(&tir_ty)
             }
             _ => RuntimeTy::Null {
                 attr: TyAttr::default(),
@@ -6711,7 +6803,9 @@ impl<'db> LoweringContext<'db> {
                             .as_ref()
                             .and_then(|ty| self.dispatch_target_for_concrete(ty, &method_name))
                     })
-                    && self.mir_interface_declares_method(&view.0, &method_name)
+                    && self
+                        .decl(&view.0)
+                        .is_some_and(|decl| self.mir_interface_declares_method(&decl, &method_name))
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local = self.lower_path_receiver_to_local(
@@ -6742,7 +6836,7 @@ impl<'db> LoweringContext<'db> {
                 .as_ref()
             {
                 let enum_ref = ItemRef::EnumType {
-                    package: qtn.package().clone(),
+                    package: self.spelling.of(qtn.root()).clone(),
                     namespace: qtn.namespace().clone(),
                     name: qtn.name().clone(),
                 };
@@ -7010,7 +7104,7 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         let db = self.db;
 
-        let Some(pkg_id) = root_by_wire_name(db, class_tn.package()) else {
+        let Some(pkg_id) = spelling(db).root(class_tn.package()) else {
             return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
@@ -7053,7 +7147,7 @@ impl<'db> LoweringContext<'db> {
         // Build a TyTemplate with `TypeArgRef(N)` for each class-level
         // generic param, then substitute `class_type_args` so a field
         // declared as `T` resolves to the concrete receiver-side binding.
-        let template = tir2_to_template(&tir_ty, self.resolved_aliases, &class_generic_params);
+        let template = tir2_to_template(&tir_ty, &self.runtime(), &class_generic_params);
         template.substitute_symbolic(class_type_args)
     }
 
@@ -7528,7 +7622,7 @@ impl<'db> LoweringContext<'db> {
             &Self::baml_ops_qtn("Compare"),
             &[],
             &[],
-            self.resolved_aliases,
+            &self.runtime(),
             &[],
         );
         // Ordering always produces `bool`: TIR's ordering arm types it that way,
@@ -9334,7 +9428,10 @@ impl<'db> LoweringContext<'db> {
             Operand::Constant(Constant::Function(item))
                 if item.to_string() == "reflect.Package.current"
         ) {
-            let package = wire_name(self.db, file_package(self.db, self.file).root).to_string();
+            let package = self
+                .spelling
+                .of(file_package(self.db, self.file).root)
+                .to_string();
             self.builder.assign(dest, Rvalue::CurrentPackage(package));
             self.builder.goto(target);
             self.builder.set_current_block(target);
@@ -9718,19 +9815,17 @@ impl<'db> LoweringContext<'db> {
 
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
         if let Some(external) = self.external_callee(callee) {
-            let package = match &external.target {
+            let package_root = match &external.target {
                 baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { package, .. }
                 | baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { package, .. } => {
-                    package
+                    self.spelling.root(package)
                 }
                 baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface {
                     interface,
                     ..
-                } => interface.package(),
+                } => Some(interface.root()),
             };
-            if root_by_wire_name(self.db, package)
-                .is_some_and(|root| is_precompiled_stdlib(self.db, root))
-            {
+            if package_root.is_some_and(|root| is_precompiled_stdlib(self.db, root)) {
                 return external.builtin_kind;
             }
         }
@@ -9891,7 +9986,9 @@ impl<'db> LoweringContext<'db> {
                 namespace,
                 name,
             } = &external.target
-            && root_by_wire_name(self.db, package)
+            && self
+                .spelling
+                .root(package)
                 .is_some_and(|root| is_precompiled_stdlib(self.db, root))
             && external.builtin_kind == Some(BuiltinKind::Intrinsic)
             && package.as_str() == "log"
@@ -10215,7 +10312,7 @@ impl<'db> LoweringContext<'db> {
         // drift apart again (C1). They were previously byte-for-byte twins; a
         // missing `Tir2Ty::Interface` arm in both voided generic interface args
         // to `Box<void>` (BEP-044 wf3 #6/#7).
-        tir2_to_template(ty, self.resolved_aliases, generic_params)
+        tir2_to_template(ty, &self.runtime(), generic_params)
     }
 
     /// Return the list of generic parameter names in scope for the
@@ -11268,7 +11365,9 @@ impl<'db> LoweringContext<'db> {
         // field access (no such method) falls through to the field path below
         // without evaluating the receiver expression twice.
         if let Some(view) = self.dispatch_target_for_member_access(expr_id, base, field)
-            && self.mir_interface_declares_method(&view.0, field)
+            && self
+                .decl(&view.0)
+                .is_some_and(|decl| self.mir_interface_declares_method(&decl, field))
         {
             let recv_op = self.lower_to_operand(base);
             let recv_local = self.builder.temp(self.expr_ty(base));
@@ -11285,7 +11384,7 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
         {
             let enum_ref = ItemRef::EnumType {
-                package: qtn.package().clone(),
+                package: self.spelling.of(qtn.root()).clone(),
                 namespace: qtn.namespace().clone(),
                 name: qtn.name().clone(),
             };
@@ -11713,7 +11812,7 @@ impl<'db> LoweringContext<'db> {
             iface_tn,
             iface_type_args,
             iface_assoc,
-            self.resolved_aliases,
+            &self.runtime(),
             &generic_params,
         );
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
@@ -11812,7 +11911,7 @@ impl<'db> LoweringContext<'db> {
             &decl_tn,
             &decl_args,
             &decl_assoc,
-            self.resolved_aliases,
+            &self.runtime(),
             &generic_params,
         );
         self.builder.assign(
@@ -11977,7 +12076,7 @@ impl<'db> LoweringContext<'db> {
             required_methods,
             default_methods,
             ..
-        }) = baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, iface_tn)
+        }) = self.mounted_row(iface_tn)
         {
             return required_methods
                 .iter()
@@ -12058,7 +12157,7 @@ impl<'db> LoweringContext<'db> {
                 &decl_tn,
                 &decl_args,
                 &decl_assoc,
-                self.resolved_aliases,
+                &self.runtime(),
                 &generic_params,
             ),
             field_index,
@@ -12270,20 +12369,16 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
     ) -> Option<Vec<InterfaceTypeView>> {
-        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         if !self.is_interface_type_name(iface_tn) {
             return None;
         }
+        let iface_decl = self.decl(iface_tn)?;
         // The root view is the request itself, verbatim; only the
         // `requires` EXPANSION goes through hir_ty's realized closure (its
         // plain entry — interning and the closed exit live at that
         // boundary).
         let root = baml_type::Interface::new(
-            baml_type::TypeName::new(
-                iface_tn.package().clone(),
-                iface_ns,
-                iface_tn.name().clone(),
-            ),
+            iface_decl,
             iface_type_args.to_vec().into_boxed_slice(),
             iface_assoc.to_vec().into_boxed_slice(),
         );
@@ -12305,7 +12400,7 @@ impl<'db> LoweringContext<'db> {
                 // carry the reduced members, exactly as TIR's eager
                 // substitution emitted them.
                 (
-                    reference.name.clone(),
+                    self.wire(&reference.name),
                     reference
                         .generics
                         .iter()
@@ -12490,7 +12585,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         pkg_name: &Name,
     ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
-        let pkg_id = root_by_wire_name(self.db, pkg_name)?;
+        let pkg_id = self.spelling.root(pkg_name)?;
         Some(package_items(self.db, pkg_id))
     }
 }
@@ -13457,7 +13552,7 @@ impl<'db> LoweringContext<'db> {
                         else {
                             unreachable!("guarded by matches! above");
                         };
-                        let enum_name = qtn.clone();
+                        let enum_name = this.wire(qtn);
                         let variant = variant.clone();
                         match switch_kind.as_ref() {
                             None => {
@@ -14177,7 +14272,7 @@ impl<'db> LoweringContext<'db> {
                 // type variable, which no value-level test can decide, so such
                 // a walk fails every such pattern closed.
                 let generic_params = self.enclosing_generic_params();
-                let header = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
+                let header = tir2_to_pattern_template(ty, &self.runtime(), &generic_params);
                 self.emit_pattern_template_test(scrutinee, header, success, failure);
             }
             // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
@@ -14192,7 +14287,7 @@ impl<'db> LoweringContext<'db> {
             // `TypeArgRef` frame slots, resolved at runtime.
             Tir2Ty::Interface(..) => {
                 let generic_params = self.enclosing_generic_params();
-                let guard = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
+                let guard = tir2_to_pattern_template(ty, &self.runtime(), &generic_params);
                 self.emit_pattern_template_test(scrutinee, guard, success, failure);
             }
             // Singleton-valued types pin a specific runtime value, so emit
@@ -14213,7 +14308,7 @@ impl<'db> LoweringContext<'db> {
                 );
             }
             _ => {
-                let resolved = self.resolved_aliases.convert(ty);
+                let resolved = self.runtime().convert(ty);
                 self.emit_is_type_branch(scrutinee, resolved, success, failure);
             }
         }
@@ -14243,10 +14338,10 @@ impl<'db> LoweringContext<'db> {
 
     fn lookup_tir_class_fields(
         &self,
-        class_name: &QualifiedTypeName,
+        class_name: &TypeName,
         class_type_args: &[Tir2Ty],
     ) -> IndexMap<Name, Tir2Ty> {
-        let Some(pkg_id) = root_by_wire_name(self.db, class_name.package()) else {
+        let Some(pkg_id) = self.decl(class_name).map(|decl| decl.root()) else {
             return IndexMap::new();
         };
         let pkg_items_for_class = package_items(self.db, pkg_id);
@@ -14342,7 +14437,7 @@ impl<'db> LoweringContext<'db> {
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
-        match self.resolved_aliases.convert(tir_ty) {
+        match self.runtime().convert(tir_ty) {
             RuntimeTy::Class(tn, _, _) => Some(tn),
             _ => None,
         }
@@ -14353,10 +14448,10 @@ impl<'db> LoweringContext<'db> {
         let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
             return None;
         };
-        let fields = self.lookup_tir_class_fields(qtn, type_args);
+        let fields = self.lookup_tir_class_fields(&self.wire(qtn), type_args);
         fields
             .get(field)
-            .map(|field_ty| self.resolved_aliases.convert(field_ty))
+            .map(|field_ty| self.runtime().convert(field_ty))
     }
 
     fn project_class_pattern_field(
@@ -14718,7 +14813,7 @@ impl<'db> LoweringContext<'db> {
                         unreachable!("guarded by matches! above");
                     };
                     let enum_ref = ItemRef::EnumType {
-                        package: qtn.package().clone(),
+                        package: self.spelling.of(qtn.root()).clone(),
                         namespace: qtn.namespace().clone(),
                         name: qtn.name().clone(),
                     };
@@ -14793,16 +14888,13 @@ impl<'db> LoweringContext<'db> {
                     // unresolvable and fails closed like a projection.
                     if baml_type_runtime::contains_typevar(&pat_tir_ty) {
                         let generic_params = self.enclosing_generic_params();
-                        let guard = tir2_to_pattern_template(
-                            &pat_tir_ty,
-                            self.resolved_aliases,
-                            &generic_params,
-                        );
+                        let guard =
+                            tir2_to_pattern_template(&pat_tir_ty, &self.runtime(), &generic_params);
                         self.emit_pattern_template_test(scrutinee, guard, success, failure);
                         return;
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
-                    let annotation_ty = self.resolved_aliases.convert(&pat_tir_ty);
+                    let annotation_ty = self.runtime().convert(&pat_tir_ty);
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
@@ -15062,7 +15154,7 @@ impl<'db> LoweringContext<'db> {
                     self.resolve_type_annotation(narrow)
                 } else {
                     self.tir_pat_type(self.pat_metadata_key(pat_id))
-                        .map(|ty| self.resolved_aliases.convert(ty))
+                        .map(|ty| self.runtime().convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self.builder.declare_local(Some(name.clone()), ty, None);
@@ -15354,7 +15446,7 @@ impl LoweringContext<'_> {
         };
         if let Some(ty_expr) = ascription_ty {
             if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
-                let resolved = self.resolved_aliases.convert(tir_ty);
+                let resolved = self.runtime().convert(tir_ty);
                 return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
             }
             let resolved = self.resolve_type_annotation(&ty_expr);
@@ -15364,12 +15456,12 @@ impl LoweringContext<'_> {
             AstPattern::Wildcard => None,
             AstPattern::Bind { .. } => {
                 let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
-                let resolved = self.resolved_aliases.convert(tir_ty);
+                let resolved = self.runtime().convert(tir_ty);
                 self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
             }
             AstPattern::Type(_) => {
                 if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
-                    let resolved = self.resolved_aliases.convert(tir_ty);
+                    let resolved = self.runtime().convert(tir_ty);
                     return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
                 }
                 if let AstPattern::Type(ty_expr) = pat {

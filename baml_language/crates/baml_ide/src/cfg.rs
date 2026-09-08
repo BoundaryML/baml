@@ -497,7 +497,7 @@ fn function_display_name(
             // for-target is the subject a reader knows the method by.
             match baml_compiler2_hir_ty::impls::impl_facts(db, block)
                 .resolved()
-                .map(|facts| crate::render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
+                .map(|facts| crate::render::display_owner_ty(db, &facts.for_ty_pattern.to_plain()))
             {
                 Some(subject) => format!("{}.{}", subject, data.name),
                 None => crate::symbols::playground_function_name_for_file(

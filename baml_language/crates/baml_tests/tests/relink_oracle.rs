@@ -56,14 +56,14 @@ fn relink_seeded(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
-    use baml_compiler2_hir_ty::throw_facts::file_throw_facts;
+    use baml_compiler2_hir_ty::throw_facts::export_file_throw_facts;
     let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
     for sf in prev_db.workspace_files() {
         let path = sf.path(&prev_db).display().to_string();
         let rel = path.trim_start_matches(&format!("{ROOT}/")).to_string();
         if clean.contains(&rel.as_str()) {
-            seeds.insert(path, file_throw_facts(&prev_db, sf).0.clone());
+            seeds.insert(path, export_file_throw_facts(&prev_db, sf));
         }
     }
     let mut db = build_db(ROOT, files);

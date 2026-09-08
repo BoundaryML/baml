@@ -524,9 +524,7 @@ fn collect_constructor_key_usages(
             continue;
         };
 
-        let Some(pkg_id) = baml_compiler2_hir::package::root_by_wire_name(db, qtn.package()) else {
-            continue;
-        };
+        let pkg_id = qtn.root();
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
         let Some(Definition::Class(obj_class)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
         else {

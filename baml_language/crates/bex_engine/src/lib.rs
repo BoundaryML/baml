@@ -7052,7 +7052,7 @@ impl BexEngine {
                     item,
                 ))
             };
-        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty, EngineError> {
+        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
             let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
             Ok(baml_type::Ty::from(&mapped))
         };

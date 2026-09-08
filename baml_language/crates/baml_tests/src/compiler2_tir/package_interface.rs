@@ -468,7 +468,9 @@ fn enriched_interface_borsh_round_trips() {
     // The stdlib exercises the gnarly idioms — round-trip it too.
     let stdlib = package_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
     );
     let bytes = borsh::to_vec(stdlib).expect("serialize stdlib interface");
     let decoded: PackageInterface = borsh::from_slice(&bytes).expect("deserialize stdlib");
@@ -492,12 +494,16 @@ fn enriched_interface_derivation_is_deterministic() {
 
     let baml1 = borsh::to_vec(package_interface(
         &db1,
-        baml_compiler2_hir::package::root_by_wire_name(&db1, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db1)
+            .root(&Name::new("baml"))
+            .unwrap(),
     ))
     .expect("serialize");
     let baml2 = borsh::to_vec(package_interface(
         &db2,
-        baml_compiler2_hir::package::root_by_wire_name(&db2, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db2)
+            .root(&Name::new("baml"))
+            .unwrap(),
     ))
     .expect("serialize");
     assert_eq!(baml1, baml2, "stdlib derivation must be deterministic");
@@ -511,7 +517,9 @@ fn stdlib_interfaces_derive_enriched() {
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
         let iface = package_interface(
             &db,
-            baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new(name)).unwrap(),
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new(name))
+                .unwrap(),
         );
         assert!(
             iface.namespaces.contains(&Vec::new()),
@@ -523,7 +531,9 @@ fn stdlib_interfaces_derive_enriched() {
     // Iterable<Item = Self.Item, Error = Self.Error>`.
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
     );
     let ExportedType::Interface {
         requires,
@@ -864,7 +874,9 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
     // The source-backed row IS exported…
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
     );
     assert!(
         matches!(
@@ -999,7 +1011,9 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
         let _ = &package_interface(
             &db,
-            baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new(name)).unwrap(),
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new(name))
+                .unwrap(),
         )
         .impls;
     }
@@ -1007,7 +1021,9 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
     // Spot-check `implement Equals for int` (baml.ops).
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml")).unwrap(),
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
     );
     assert!(!baml.impls.is_empty(), "the stdlib exports impl rows");
     let row = baml
@@ -1075,7 +1091,9 @@ pub(super) mod mounted {
         assert_no_diagnostic_errors(&db);
         let iface = package_interface(
             &db,
-            baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("app")).unwrap(),
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new("app"))
+                .unwrap(),
         );
         assert!(
             iface.types.values().any(|ns| !ns.is_empty()),

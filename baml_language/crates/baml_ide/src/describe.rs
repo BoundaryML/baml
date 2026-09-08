@@ -824,7 +824,7 @@ fn describe_locals(
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
                                 .and_then(|pattern| inference?.type_of_pat.get(&pattern).cloned())
-                                .map(|ty| render::display_ty(&ty))
+                                .map(|ty| render::display_ty(db, &ty))
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
@@ -834,7 +834,7 @@ fn describe_locals(
                             pat_id,
                         ) => inference
                             .and_then(|inference| inference.type_of_pat.get(&pat_id).cloned())
-                            .map(|ty| render::display_ty(&ty))
+                            .map(|ty| render::display_ty(db, &ty))
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
                             unreachable!("Parameters are skipped above")
@@ -1204,7 +1204,7 @@ fn collect_interface_impls(
             let file = block.file(db);
             let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
             Some(ImplRow {
-                display: render_impl_row(facts),
+                display: render_impl_row(db, facts),
                 file,
                 file_path: file_path_string(db, file),
                 span: source_map.span,
@@ -1220,19 +1220,24 @@ fn collect_interface_impls(
 /// SHORT name deliberately — every row sits under the interface it names, so
 /// repeating the full path would be noise; the variation a reader scans for
 /// is the instantiation and the implementor.
-fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
+fn render_impl_row(
+    db: &dyn baml_compiler2_ppir::Db,
+    facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>,
+) -> String {
     let iface = facts.interface.to_plain();
     let mut head = iface.name.name().as_str().to_string();
     let mut args: Vec<String> = iface
         .generics
         .iter()
-        .map(render::display_addressable_ty)
+        .map(|ty| render::display_addressable_ty(db, ty))
         .collect();
-    args.extend(
-        iface.associated_types.iter().map(|(name, ty)| {
-            format!("{} = {}", name.as_str(), render::display_addressable_ty(ty))
-        }),
-    );
+    args.extend(iface.associated_types.iter().map(|(name, ty)| {
+        format!(
+            "{} = {}",
+            name.as_str(),
+            render::display_addressable_ty(db, ty)
+        )
+    }));
     if !args.is_empty() {
         head.push('<');
         head.push_str(&args.join(", "));
@@ -1240,7 +1245,7 @@ fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> Strin
     }
     format!(
         "implement {head} for {}",
-        render::display_addressable_ty(&facts.for_ty_pattern.to_plain())
+        render::display_addressable_ty(db, &facts.for_ty_pattern.to_plain())
     )
 }
 
@@ -1568,7 +1573,7 @@ fn canonical_fqn(
     let def = def?;
     let name = baml_base::Name::new(&sym.name);
     let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &name);
-    let fqn = qtn.render_addressable();
+    let fqn = render::addressable_path(db, &qtn);
     (fqn != sym.name).then_some(fqn)
 }
 
@@ -1922,11 +1927,11 @@ fn collect_type_ref_deps(
 fn collect_qtn_dep(
     db: &dyn baml_compiler2_ppir::Db,
     files: &[SourceFile],
-    qtn: &baml_type::QualifiedTypeName,
+    qtn: &baml_type::DeclName,
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
-    if !qtn.is_local() {
+    if Some(qtn.root()) != baml_compiler2_hir::package::sole_workspace_root(db) {
         return;
     }
     let short = qtn.name().as_str().to_string();

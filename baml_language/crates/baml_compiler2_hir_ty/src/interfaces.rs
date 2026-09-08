@@ -12,9 +12,9 @@ mod coherence;
 mod impl_rules;
 
 use baml_base::{Literal, Name};
-use baml_compiler2_hir::{contributions::Definition, package::root_by_wire_name};
+use baml_compiler2_hir::contributions::Definition;
 use baml_type::{
-    ParamTy, QualifiedTypeName, Ty, TyAttr,
+    DeclName, ParamTy, Ty, TyAttr,
     normalize::TypeContext as _,
     pattern_overlap::TypeVarBoundsMap,
     unify::{AliasEquivCtx, TypeBindings, contains_bound_typevar},
@@ -141,7 +141,7 @@ pub(crate) fn interface_self_param(
 pub(crate) fn collapse_self_assoc_projections(
     ty: &Ty,
     self_tys: &[&Ty],
-    iface: Option<&QualifiedTypeName>,
+    iface: Option<&DeclName>,
     iface_args: &[Ty],
     pins: &[(Name, Ty)],
 ) -> Ty {
@@ -228,7 +228,7 @@ pub fn interface_declared_param_bounds(
 pub fn package_resolved_aliases(
     db: &dyn baml_compiler2_ppir::Db,
     pkg_id: baml_base::SourceRoot,
-) -> std::collections::HashMap<QualifiedTypeName, Ty> {
+) -> std::collections::HashMap<DeclName, Ty> {
     let mut aliases = std::collections::HashMap::new();
     let mut packages = vec![pkg_id];
     packages.extend(baml_compiler2_hir::package::package_dependency_closure(
@@ -253,7 +253,7 @@ pub fn package_resolved_aliases(
 /// folding), or `None` if `qtn` is not an enum.
 pub fn enum_variant_names(
     db: &dyn baml_compiler2_ppir::Db,
-    enum_qtn: &QualifiedTypeName,
+    enum_qtn: &DeclName,
 ) -> Option<Vec<Name>> {
     let Definition::Enum(enum_loc) = crate::facts::definition_of(db, enum_qtn)? else {
         return None;
@@ -273,9 +273,9 @@ pub fn enum_variant_names(
 pub fn normalized_alias_map(
     db: &dyn baml_compiler2_ppir::Db,
     pkg_id: baml_base::SourceRoot,
-) -> std::collections::HashMap<QualifiedTypeName, Ty> {
+) -> std::collections::HashMap<DeclName, Ty> {
     let mut aliases = package_resolved_aliases(db, pkg_id).clone();
-    let enum_variants = |qtn: &QualifiedTypeName| enum_variant_names(db, qtn);
+    let enum_variants = |qtn: &DeclName| enum_variant_names(db, qtn);
     for body in aliases.values_mut() {
         *body = baml_type::unify::nf(body, &enum_variants);
     }
@@ -310,7 +310,7 @@ struct InterfaceTypeAssocLowering<'a, 'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterfaceImplOrigin {
     /// `implements I { … }` written in the class body.
-    InBodyClass { class_qtn: QualifiedTypeName },
+    InBodyClass { class_qtn: DeclName },
     /// `implement<…> I for <for_target>` — any out-of-body impl (concrete class, generic, or
     /// non-class target).
     OutOfBody,
@@ -321,7 +321,7 @@ pub enum InterfaceImplOrigin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedInterface<'db> {
     pub loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    pub qtn: QualifiedTypeName,
+    pub qtn: DeclName,
 }
 
 /// Whether `arg` (already [normalized](baml_type::normalize::TypeContext::normalize)) implements
@@ -852,12 +852,12 @@ pub fn realize_associated_default(
 pub fn existential_associated_default(
     db: &dyn baml_compiler2_ppir::Db,
     res_ctx: &crate::package_interface::PackageResolutionContext<'_>,
-    qtn: &QualifiedTypeName,
+    qtn: &DeclName,
     args: &[Ty],
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
-    let items = res_ctx.items_for_package(db, qtn.package())?;
+    let items = res_ctx.items_for_root(db, qtn.root())?;
     let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
         return None;
     };
@@ -992,7 +992,7 @@ fn lower_interface_type_associated_bindings(
 pub fn match_ty_patterns(
     pairs: &[(&Ty, &Ty)],
     generic_params: &[ParamTy],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
     for (pattern, concrete) in pairs {
@@ -1007,7 +1007,7 @@ pub fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[ParamTy],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     if let Ty::TypeVar(name, _) = pattern
@@ -1016,9 +1016,7 @@ pub fn match_ty_pattern_into(
         return bind_type_var(name, concrete, bindings, aliases);
     }
 
-    if !contains_bound_typevar(pattern, generic_params)
-        && AliasEquivCtx(aliases).equivalent(pattern, concrete)
-    {
+    if !contains_bound_typevar(pattern, generic_params) && aliases.equivalent(pattern, concrete) {
         return Some(());
     }
 
@@ -1031,7 +1029,7 @@ pub fn match_ty_pattern_into(
             |param: &ParamTy| generic_params.contains(param) && !bindings.contains_key(param);
         if !baml_type_runtime::contains_typevar_where(pattern, &unbound) {
             let substituted = baml_type::unify::substitute_ty(pattern, bindings);
-            if AliasEquivCtx(aliases).equivalent(&substituted, concrete) {
+            if aliases.equivalent(&substituted, concrete) {
                 return Some(());
             }
         }
@@ -1116,7 +1114,7 @@ pub fn match_ty_pattern_into(
             match_ty_pattern_into(p_ret, c_ret, generic_params, aliases, bindings)?;
             match_ty_pattern_into(p_throws, c_throws, generic_params, aliases, bindings)
         }
-        _ if AliasEquivCtx(aliases).equivalent(pattern, concrete) => Some(()),
+        _ if aliases.equivalent(pattern, concrete) => Some(()),
         _ => None,
     }
 }
@@ -1125,7 +1123,7 @@ fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
     generic_params: &[ParamTy],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     let Some((pattern_head, pattern_tail)) = pattern_members.split_first() else {
@@ -1173,10 +1171,10 @@ fn bind_type_var(
     param: &ParamTy,
     concrete: &Ty,
     bindings: &mut TypeBindings,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
 ) -> Option<()> {
     match bindings.get(param) {
-        Some(existing) if AliasEquivCtx(aliases).equivalent(existing, concrete) => Some(()),
+        Some(existing) if aliases.equivalent(existing, concrete) => Some(()),
         Some(_) => None,
         None => {
             bindings.insert(param.clone(), concrete.clone());
@@ -1247,7 +1245,7 @@ fn resolved_interface_from_ty(
     let Ty::Interface(qtn, _, _, _) = ty else {
         return None;
     };
-    let pkg_id = root_by_wire_name(db, qtn.package())?;
+    let pkg_id = qtn.root();
     let resolved_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let Definition::Interface(loc) = resolved_pkg_items.lookup_type(qtn.namespace(), qtn.name())?
     else {
@@ -1540,7 +1538,7 @@ pub fn interface_requires<'db>(
     if sub.name == sup.name {
         return false;
     }
-    let Some(pkg_items) = res_ctx.items_for_package(db, sub.name.package()) else {
+    let Some(pkg_items) = res_ctx.items_for_root(db, sub.name.root()) else {
         return false;
     };
     let Some(Definition::Interface(sub_loc)) =
@@ -1605,7 +1603,7 @@ fn collect_type_generic_bound_errors<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
     ty: &baml_type::LoweringTy,
-    seen_aliases: &mut FxHashSet<QualifiedTypeName>,
+    seen_aliases: &mut FxHashSet<DeclName>,
     errors: &mut Vec<TirTypeError>,
 ) {
     use baml_type::normalize::TypeContext as _;
@@ -2365,7 +2363,7 @@ fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty 
 /// collapsed to a `bool`, for callers that only need existence.
 pub fn interface_declares_member(
     db: &dyn baml_compiler2_ppir::Db,
-    qtn: &QualifiedTypeName,
+    qtn: &DeclName,
     member: &Name,
     ns: MemberNamespace,
 ) -> bool {
@@ -2465,7 +2463,7 @@ fn mounted_declared_kind(
 /// diagnostics word themselves differently) ask here instead.
 pub fn interface_declared_kind(
     db: &dyn baml_compiler2_ppir::Db,
-    qtn: &QualifiedTypeName,
+    qtn: &DeclName,
     name: &Name,
     ns: MemberNamespace,
 ) -> Option<InterfaceMemberKind> {
@@ -2490,7 +2488,7 @@ pub fn interface_declared_kind(
 
 fn projection_interface_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    qtn: &QualifiedTypeName,
+    qtn: &DeclName,
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     match crate::facts::definition_of(db, qtn)? {
         Definition::Interface(loc) => Some(loc),
@@ -2506,10 +2504,10 @@ pub fn interface_base_without_member_pin(
     db: &dyn baml_compiler2_ppir::Db,
     base_ty: &Ty,
     member: &Name,
-) -> Option<QualifiedTypeName> {
+) -> Option<DeclName> {
     use baml_type::normalize::TypeContext as _;
     let facts = crate::facts::Facts::new(db);
-    let mut seen: FxHashSet<QualifiedTypeName> = FxHashSet::default();
+    let mut seen: FxHashSet<DeclName> = FxHashSet::default();
     let mut current = base_ty.clone();
     loop {
         match current {
@@ -2531,8 +2529,8 @@ pub fn interface_base_without_member_pin(
 mod tests {
     use super::*;
 
-    fn qtn(namespace: &[&str], name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(
+    fn qtn(namespace: &[&str], name: &str) -> DeclName {
+        crate::test_heads::new(
             Name::new("user"),
             namespace.iter().map(|part| Name::new(*part)).collect(),
             Name::new(name),
@@ -2578,7 +2576,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &good)],
                 &params,
-                &std::collections::HashMap::default()
+                &crate::test_heads::no_aliases()
             )
             .is_some()
         );
@@ -2586,7 +2584,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &bad)],
                 &params,
-                &std::collections::HashMap::default()
+                &crate::test_heads::no_aliases()
             )
             .is_none()
         );
@@ -2597,14 +2595,24 @@ mod tests {
         let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
         let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
         let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
-        let aliases = std::collections::HashMap::default();
+        let aliases: std::collections::HashMap<DeclName, Ty> = std::collections::HashMap::default();
 
         assert!(
-            match_ty_patterns(&[(&side, &side_left)], &[], &aliases).is_some(),
+            match_ty_patterns(
+                &[(&side, &side_left)],
+                &[],
+                &crate::test_heads::alias_ctx(&aliases)
+            )
+            .is_some(),
             "`Side.Left` should match a `for Side` pattern",
         );
         assert!(
-            match_ty_patterns(&[(&side, &other)], &[], &aliases).is_none(),
+            match_ty_patterns(
+                &[(&side, &other)],
+                &[],
+                &crate::test_heads::alias_ctx(&aliases)
+            )
+            .is_none(),
             "a variant of a *different* enum must not match",
         );
     }
@@ -2624,7 +2632,7 @@ mod tests {
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
             &params,
-            &std::collections::HashMap::default(),
+            &crate::test_heads::no_aliases(),
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&param("T")), Some(&int()));
@@ -2655,7 +2663,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &same_short_name)],
                 &[],
-                &std::collections::HashMap::default()
+                &crate::test_heads::no_aliases()
             )
             .is_none(),
             "same short name in different namespaces must not match"
@@ -2671,7 +2679,7 @@ mod tests {
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
             &params,
-            &std::collections::HashMap::default(),
+            &crate::test_heads::no_aliases(),
         )
         .expect("union members should be matched by type, not position");
         assert_eq!(bindings.get(&param("T")), Some(&int()));

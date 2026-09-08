@@ -2,11 +2,12 @@
 
 use baml_base::Name;
 use baml_compiler2_hir::scope::ScopeKind;
-use baml_compiler2_hir_ty::package_interface::{
-    ExportedType, package_interface, package_resolution_context,
+use baml_compiler2_hir_ty::{
+    package_interface::{ExportedType, package_interface, package_resolution_context},
+    render::Viewpoint,
 };
 use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
-use baml_type::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr};
+use baml_type::{FunctionParamMode, Ty, TyAttr};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -474,7 +475,9 @@ fn function_type_throws_package_interface_exports_effect_params() {
         vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
     );
     assert_eq!(
-        exported.params[0].ty.render_canonical(),
+        exported.params[0]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
         "(value: int) -> string throws __effect_param_0"
     );
 }
@@ -546,13 +549,14 @@ implements ToJson for Dog {
     // `TypeContext::implements_interface`); no type aliases are involved here.
     use baml_type::normalize::TypeContext;
     let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
+    let user_root = db.workspace_root().expect("workspace root");
     let dog = Ty::Class(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
+        baml_type::DeclName::in_root(user_root, vec![], Name::new("Dog")),
         Box::new([]),
         TyAttr::default(),
     );
     let to_json = baml_type::Interface::new(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson")),
+        baml_type::DeclName::in_root(user_root, vec![], Name::new("ToJson")),
         Box::new([]),
         Box::new([]),
     );
@@ -574,29 +578,24 @@ fn builtin_equals_compare_visible_from_user_package() {
     // A user file so the `user` package exists; `Bare` implements nothing.
     db.file("main.baml", "class Bare { x: int }");
     let user_pkg = db.workspace_root().unwrap();
+    let baml_root = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_base::LangPackage::Baml)
+        .expect("stdlib installed");
 
     let equals = baml_type::Interface::new(
-        QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("ops")],
-            Name::new("Equals"),
-        ),
+        baml_type::DeclName::in_root(baml_root, vec![Name::new("ops")], Name::new("Equals")),
         Box::new([]),
         Box::new([]),
     );
     let compare = baml_type::Interface::new(
-        QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("ops")],
-            Name::new("Compare"),
-        ),
+        baml_type::DeclName::in_root(baml_root, vec![Name::new("ops")], Name::new("Compare")),
         Box::new([]),
         Box::new([]),
     );
     let int_ty = Ty::int();
     let u8_ty = Ty::uint8array();
     let bare = Ty::Class(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bare")),
+        baml_type::DeclName::in_root(user_pkg, vec![], Name::new("Bare")),
         Box::new([]),
         TyAttr::default(),
     );
@@ -649,7 +648,7 @@ class SearchService {
     let own_method = res_ctx
         .lookup_class_method(
             &db,
-            &QualifiedTypeName::new(Name::new("user"), vec![], Name::new("SearchService")),
+            &baml_type::DeclName::in_root(pkg_id, vec![], Name::new("SearchService")),
             &Name::new("Run"),
         )
         .expect("own method");
@@ -659,8 +658,18 @@ class SearchService {
         !matches!(own_method.function.params[0].ty, Ty::Error { .. }),
         "implicit self should be reified before lowering"
     );
-    assert_eq!(own_method.function.params[1].ty.to_string(), "string");
-    assert_eq!(own_method.function.params[2].ty.to_string(), "int");
+    assert_eq!(
+        own_method.function.params[1]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
+        "string"
+    );
+    assert_eq!(
+        own_method.function.params[2]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
+        "int"
+    );
     assert_eq!(
         own_method.function.params[2].mode,
         FunctionParamMode::Optional
@@ -718,7 +727,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         lambda_inference
             .type_of_expr
             .get(&root_expr)
-            .map(|ty| ty.to_string()),
+            .map(|ty| ty.render_with(&Viewpoint::canonical(&db))),
         Some("int".to_string())
     );
 }
@@ -1063,7 +1072,10 @@ interface Encoder {
     assert!(fields.diagnostics.is_empty(), "{:?}", fields.diagnostics);
     assert_eq!(fields.fields.len(), 1);
     assert_eq!(fields.fields[0].0.as_str(), "limit");
-    assert_eq!(fields.fields[0].1.render_canonical(), "int");
+    assert_eq!(
+        fields.fields[0].1.render_with(&Viewpoint::canonical(&db)),
+        "int"
+    );
 
     let methods = resolve_interface_required_methods(&db, iface_loc);
     assert_eq!(methods.len(), 2);
@@ -1075,7 +1087,7 @@ interface Encoder {
     // `Self` stays symbolic: the receiver is the rigid `Self` variable and the
     // declared throws is a projection through the interface bound.
     assert_eq!(
-        encode.function_ty.render_canonical(),
+        encode.function_ty.render_with(&Viewpoint::canonical(&db)),
         "(self: Self, value: string) -> string throws (Self as user.Encoder).Error"
     );
 
@@ -1086,7 +1098,11 @@ interface Encoder {
     let (param, bounds) = &pick.generic_params[0];
     assert_eq!(param.name().as_str(), "T");
     assert_eq!(bounds.len(), 1);
-    assert_eq!(bounds[0].name.render_user_facing(), "Encoder");
+    let viewer = baml_compiler2_hir::file_package::file_package(&db, file).root;
+    assert_eq!(
+        baml_compiler2_hir_ty::render::Viewpoint::user_facing(&db, viewer).path(&bounds[0].name),
+        "Encoder"
+    );
 }
 
 /// An optional callback parameter is a callback slot too: its omitted
@@ -1228,7 +1244,9 @@ fn function_type_throws_package_interface_exports_optional_effect_params() {
         vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
     );
     assert_eq!(
-        exported.params[0].ty.render_canonical(),
+        exported.params[0]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
         "((value: int) -> string throws __effect_param_0) | null"
     );
 }

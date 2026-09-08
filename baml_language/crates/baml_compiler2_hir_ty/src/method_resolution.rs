@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
+    DeclName, Literal, MediaKind, Name, ParamTy, TyAttr,
     interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
@@ -99,11 +99,13 @@ pub(crate) fn external_class_for_type(
     facts: &Facts<'_>,
     receiver: &Ty,
     fuel: u32,
-) -> Option<(TypeName, Vec<Ty>)> {
+) -> Option<(DeclName, Vec<Ty>)> {
+    let lang = facts.lang();
+    let baml = lang.get(baml_base::LangPackage::Baml)?;
     let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
         (
-            TypeName::new(
-                Name::new("baml"),
+            DeclName::in_root(
+                baml,
                 namespace.iter().map(Name::new).collect(),
                 Name::new(name),
             ),
@@ -134,7 +136,11 @@ pub(crate) fn external_class_for_type(
         }
         InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
         InferTy::Type { .. } => (
-            TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type")),
+            DeclName::in_root(
+                lang.get(baml_base::LangPackage::Reflect)?,
+                Vec::new(),
+                Name::new("Type"),
+            ),
             Vec::new(),
         ),
         InferTy::Media(kind, _) => {
@@ -168,9 +174,10 @@ pub(crate) fn receiver_class<'db>(
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(ClassLoc<'db>, Vec<Ty>)> {
+    let lang = facts.lang();
     let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        let qtn = TypeName::new(
-            Name::new("baml"),
+        let qtn = DeclName::in_root(
+            lang.get(baml_base::LangPackage::Baml)?,
             namespace.iter().map(Name::new).collect(),
             Name::new(name),
         );
@@ -206,7 +213,11 @@ pub(crate) fn receiver_class<'db>(
         }
         InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
         InferTy::Type { .. } => {
-            let qtn = TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type"));
+            let qtn = DeclName::in_root(
+                lang.get(baml_base::LangPackage::Reflect)?,
+                Vec::new(),
+                Name::new("Type"),
+            );
             match facts.definition_of(&qtn) {
                 Some(Definition::Class(class)) => Some((class, Vec::new())),
                 _ => None,
@@ -299,7 +310,7 @@ pub enum MemberDeclarer<'db> {
     ExternalMethod(std::sync::Arc<crate::callable::ExternalCallable>),
     /// A virtual field declared by a mounted interface.
     ExternalVirtualField {
-        interface: baml_type::QualifiedTypeName,
+        interface: baml_type::DeclName,
         realized: InferInterface,
         field_index: u32,
     },
@@ -593,6 +604,7 @@ fn lookup_impl_member<'db>(
             .map(|param| ParamTy::new(param.index(), Name::new(format!("$probe${}", param.name()))))
             .collect();
         let probe = crate::lower::class_ty(
+            facts.lang(),
             crate::lower::class_qualified_name(db, class),
             frame
                 .iter()
@@ -1679,10 +1691,10 @@ fn exported_signature_breaks_one_self(
 
 fn external_interface_callable(
     db: &dyn baml_compiler2_ppir::Db,
-    interface: &baml_type::QualifiedTypeName,
+    interface: &baml_type::DeclName,
     name: &Name,
 ) -> Option<std::sync::Arc<crate::callable::ExternalCallable>> {
-    let package = baml_compiler2_hir::package::root_by_wire_name(db, interface.package())?;
+    let package = interface.root();
     let row = crate::package_interface::package_interface(db, package)
         .lookup_type(interface.namespace(), interface.name())?;
     let crate::package_interface::ExportedType::Interface {
@@ -1725,7 +1737,7 @@ pub(crate) fn interface_instantiation(
     if data.generic_params.len() != target.generics.len() {
         debug_assert!(
             false,
-            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
             data.generic_params.len(),

@@ -20,8 +20,8 @@ use baml_base::{
     Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable,
 };
 use baml_compiler2_hir::{
-    inputs::{SeededCallableThrows, SeededStdlibInterface, SeededThrowFacts},
-    package::{package_dependency_closure, wire_name},
+    inputs::{LangRootsInput, SeededCallableThrows, SeededStdlibInterface, SeededThrowFacts},
+    package::package_dependency_closure,
 };
 use salsa::Setter;
 
@@ -85,13 +85,6 @@ pub enum SourceRootError {
     /// A live root already sits at this (canonical) path.
     #[error("a source root already exists at this path")]
     PathTaken(SourceRoot),
-    /// Another live root is already spelled this way. Type heads still
-    /// identify a package by its wire name (see
-    /// `baml_compiler2_hir::package::wire_name`), so every live root needs a
-    /// spelling of its own — which is also why a database holds at most one
-    /// unnamed root.
-    #[error("package spelling `{name}` is already taken by another source root")]
-    WireNameTaken { name: Name, by: SourceRoot },
     /// The edge name is one no package may declare: a stdlib package's name
     /// (already an implicit edge of every package) or a source-level
     /// qualifier (`root`, `env`).
@@ -159,6 +152,12 @@ pub struct ProjectDatabase {
     /// seed map through a **tracked** dependency: mutating via the setter bumps
     /// the revision and correctly invalidates dependents.
     seeded_throw_facts: Option<SeededThrowFacts>,
+
+    /// Where the language packages live (`baml`, `reflect`, ...): the one
+    /// place a package is found by its manifest name. `None` until the
+    /// stdlib is installed; created once by [`Self::install_stdlib`] and
+    /// re-pointed through its Salsa setter on every later install.
+    lang_roots: Option<LangRootsInput>,
     /// Stdlib packages' typed interfaces seeded from a previous compile
     /// (bytecode cache). Same present-from-construction discipline as
     /// `seeded_throw_facts`, so `package_interface::package_interface` reads
@@ -228,6 +227,10 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
 
     fn seeded_callable_throws(&self) -> Option<SeededCallableThrows> {
         self.seeded_callable_throws
+    }
+
+    fn lang_roots_input(&self) -> Option<LangRootsInput> {
+        self.lang_roots
     }
 }
 
@@ -365,6 +368,7 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             source_roots: None,
             seeded_throw_facts: None,
+            lang_roots: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
             stdlib_prelude: Arc::from(Vec::new()),
@@ -471,6 +475,22 @@ impl ProjectDatabase {
             }
             roots.insert(package.name, root);
         }
+        let lang = baml_base::LangPackage::ALL
+            .into_iter()
+            .filter_map(|package| {
+                roots
+                    .get(package.manifest_name())
+                    .map(|&root| (package, root))
+            })
+            .fold(baml_base::LangRoots::default(), |lang, (package, root)| {
+                lang.with(package, root)
+            });
+        match self.lang_roots {
+            Some(input) => {
+                input.set_roots(self).to(lang);
+            }
+            None => self.lang_roots = Some(LangRootsInput::new(self, lang)),
+        }
         let prelude: Vec<Dependency> = layout
             .packages
             .iter()
@@ -539,19 +559,10 @@ impl ProjectDatabase {
         if let Some(&existing) = self.roots_by_path.get(&path) {
             return Err(SourceRootError::PathTaken(existing));
         }
-        let name = self_name
-            .clone()
-            .unwrap_or_else(|| Name::new(baml_type::RESERVED_USER_PACKAGE));
-        if let Some(&by) = self
-            .roots_by_path
-            .values()
-            .find(|root| wire_name(self, **root) == name)
-        {
-            return Err(SourceRootError::WireNameTaken { name, by });
-        }
-        if let Some(bytes) = &interface {
-            Self::validate_interface(kind, bytes)?;
-        }
+        let wire_interface = interface
+            .as_deref()
+            .map(|bytes| Self::decode_interface(kind, bytes))
+            .transpose()?;
         let dependencies = self.complete_dependencies(kind, dependencies)?;
 
         // Revive the tombstoned input if a root lived at this path before —
@@ -588,6 +599,20 @@ impl ProjectDatabase {
         roots.insert(at, root);
         table.set_roots(self).to(roots);
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
+
+        // A served-from-interface root's blob must resolve from the root it
+        // now is: every head it spells names the root itself or a package
+        // reached by one of its edges. A blob that names anything else is
+        // not mountable here, and the root does not stay.
+        if let Some(wire) = wire_interface
+            && let Err(error) =
+                baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
+        {
+            self.remove_source_root(root);
+            return Err(SourceRootError::InvalidInterface {
+                message: error.to_string(),
+            });
+        }
         Ok(root)
     }
 
@@ -675,20 +700,25 @@ impl ProjectDatabase {
     /// A served-from-interface root's bytes must decode: a precompiled stdlib
     /// package is raw `borsh(PackageInterface)`, anything else a versioned
     /// `baml_artifact`.
-    fn validate_interface(kind: SourceRootKind, bytes: &[u8]) -> Result<(), SourceRootError> {
+    fn decode_interface(
+        kind: SourceRootKind,
+        bytes: &[u8],
+    ) -> Result<
+        baml_compiler2_hir_ty::package_interface::PackageInterface<baml_type::TypeName>,
+        SourceRootError,
+    > {
         use baml_compiler2_hir_ty::package_interface::PackageInterface;
         let decoded = if kind == SourceRootKind::Stdlib {
-            borsh::from_slice::<PackageInterface>(bytes).map_err(|error| error.to_string())
+            borsh::from_slice::<PackageInterface<baml_type::TypeName>>(bytes)
+                .map_err(|error| error.to_string())
         } else {
-            baml_artifact::decode::<PackageInterface>(
+            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
                 baml_artifact::ArtifactKind::PackageInterface,
                 bytes,
             )
             .map_err(|error| error.to_string())
         };
-        decoded
-            .map(drop)
-            .map_err(|message| SourceRootError::InvalidInterface { message })
+        decoded.map_err(|message| SourceRootError::InvalidInterface { message })
     }
 
     /// Remove a source root: its files are tombstoned (see
@@ -1030,7 +1060,10 @@ impl ProjectDatabase {
     /// call before *or* after queries have run.
     pub fn set_seeded_throw_facts(
         &mut self,
-        by_path: BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+        by_path: BTreeMap<
+            String,
+            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+        >,
     ) {
         let seeds = self.seeded_throw_facts.unwrap_or_else(|| {
             unreachable!("SeededThrowFacts input is created in ProjectDatabase::new")
@@ -1067,7 +1100,7 @@ impl ProjectDatabase {
     /// infers honestly.
     pub fn set_seeded_callable_throws(
         &mut self,
-        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty>>,
+        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
     ) {
         let seeds = self.seeded_callable_throws.unwrap_or_else(|| {
             unreachable!("SeededCallableThrows input is created in ProjectDatabase::new")
@@ -1511,21 +1544,16 @@ mod tests {
             db.add_source_root(workspace_spec("/ws")),
             Err(SourceRootError::PathTaken(workspace))
         );
-        // Two unnamed roots would share the unnamed default spelling.
-        assert_eq!(
-            db.add_source_root(workspace_spec("/ws2")),
-            Err(SourceRootError::WireNameTaken {
-                name: Name::new(baml_type::RESERVED_USER_PACKAGE),
-                by: workspace
-            })
-        );
+        // Spellings are not an identity: two roots may share one, and the
+        // boundary that needs the spelling table injective reports it.
         let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
+        let dep2 = db.add_source_root(dependency_spec("/dep2", "dep")).unwrap();
         assert_eq!(
-            db.add_source_root(dependency_spec("/dep2", "dep")),
-            Err(SourceRootError::WireNameTaken {
+            baml_compiler2_hir::package::spelling(&db).collisions(),
+            &[baml_compiler2_hir::package::SpellingCollision::SharedName {
                 name: Name::new("dep"),
-                by: dep
-            })
+                roots: vec![dep, dep2],
+            }]
         );
         // Dependency roots sort before the workspace root; Dynamic roots
         // (runtime-loaded) sort after it, whatever the insertion order.
@@ -1535,7 +1563,7 @@ mod tests {
                     .named(Name::new("mount")),
             )
             .unwrap();
-        assert_eq!(db.source_roots(), vec![dep, workspace, dynamic]);
+        assert_eq!(db.source_roots(), vec![dep, dep2, workspace, dynamic]);
 
         // Edges: the target must be live, the name unique per root, and the
         // graph acyclic.
@@ -1583,7 +1611,7 @@ mod tests {
         ));
         let blob = baml_artifact::encode(
             baml_artifact::ArtifactKind::PackageInterface,
-            &baml_compiler2_hir_ty::package_interface::PackageInterface {
+            &baml_compiler2_hir_ty::package_interface::PackageInterface::<baml_type::TypeName> {
                 types: std::iter::empty().collect(),
                 functions: std::iter::empty().collect(),
                 throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),

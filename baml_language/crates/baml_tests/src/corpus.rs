@@ -323,7 +323,9 @@ fn corpus_snapshots() {
             .iter()
             .copied()
             .filter(|f| {
-                baml_compiler2_hir::package::wire_name(&db, file_package(&db, *f).root).as_str()
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(file_package(&db, *f).root)
+                    .as_str()
                     == *pkg
             })
             .collect();

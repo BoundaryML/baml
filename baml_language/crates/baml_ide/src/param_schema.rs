@@ -20,10 +20,10 @@
 use std::collections::BTreeMap;
 
 use baml_base::Literal as LiteralValue;
-use baml_compiler2_hir::{loc::FunctionLoc, package::root_by_wire_name};
+use baml_compiler2_hir::loc::FunctionLoc;
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::{Name, ProjectDatabase};
-use baml_type::{FunctionParamMode, QualifiedTypeName, Ty};
+use baml_type::{FunctionParamMode, Ty};
 use serde::Serialize;
 
 /// Bounds recursion through deeply-nested anonymous types
@@ -161,6 +161,7 @@ pub(crate) fn function_param_schemas(
     }
     let mut cx = SchemaCx {
         db,
+        user_root: baml_compiler2_hir::file_package::file_package(db, function.file(db)).root,
         user_iface: iface,
         table,
     };
@@ -190,6 +191,7 @@ pub(crate) fn function_param_schemas(
 
 struct SchemaCx<'db, 't> {
     db: &'db ProjectDatabase,
+    user_root: baml_base::SourceRoot,
     user_iface: &'db PackageInterface,
     /// Named types encountered so far, shared across every function of the
     /// project update. Doubles as the occurs-check for recursive types: a
@@ -203,12 +205,25 @@ impl<'db> SchemaCx<'db, '_> {
     /// the user interface, dependency types (stdlib/builtins) via that
     /// package's own Salsa-cached interface. A miss is expected mid-edit and
     /// for undeclared packages — callers degrade to `Unsupported`.
-    fn lookup_type(&self, qtn: &QualifiedTypeName) -> Option<&'db ExportedType> {
-        if qtn.is_local() {
+    fn lookup_type(&self, qtn: &baml_type::DeclName) -> Option<&'db ExportedType> {
+        if qtn.root() == self.user_root {
             self.user_iface.lookup_type(qtn.namespace(), qtn.name())
         } else {
-            let pkg_id = root_by_wire_name(self.db, qtn.package())?;
-            package_interface(self.db, pkg_id).lookup_type(qtn.namespace(), qtn.name())
+            package_interface(self.db, qtn.root()).lookup_type(qtn.namespace(), qtn.name())
+        }
+    }
+
+    /// The canonical path a named type is tabled under.
+    fn key(&self, qtn: &baml_type::DeclName) -> String {
+        crate::render::canonical_path(self.db, qtn)
+    }
+
+    fn unsupported(&self, ty: &Ty) -> FieldSchema {
+        FieldSchema::Unsupported {
+            display: ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+                self.db,
+                self.user_root,
+            )),
         }
     }
 
@@ -217,7 +232,7 @@ impl<'db> SchemaCx<'db, '_> {
     /// regardless of how the type graph is shaped.
     fn field_schema(&mut self, ty: &Ty, depth: usize) -> FieldSchema {
         if depth >= MAX_DEPTH {
-            return unsupported(ty);
+            return self.unsupported(ty);
         }
         match ty {
             Ty::String { .. } => FieldSchema::String,
@@ -231,33 +246,33 @@ impl<'db> SchemaCx<'db, '_> {
             },
             Ty::Literal(lit, _, _) => match literal_value(lit) {
                 Some(value) => FieldSchema::Literal { value },
-                None => unsupported(ty),
+                None => self.unsupported(ty),
             },
             Ty::Enum(qtn, _) => match self.lookup_type(qtn) {
                 Some(ExportedType::Enum { variants, .. }) => {
-                    let name = qtn.render_dotted(false);
+                    let name = self.key(qtn);
                     let values = variants.iter().map(ToString::to_string).collect();
                     self.table
                         .entry(name.clone())
                         .or_insert(TypeSchema::Enum { values });
                     FieldSchema::Ref { name }
                 }
-                _ => unsupported(ty),
+                _ => self.unsupported(ty),
             },
             Ty::EnumVariant(qtn, variant, _) => match self.lookup_type(qtn) {
                 Some(ExportedType::Enum { .. }) => FieldSchema::EnumVariant {
-                    name: qtn.render_dotted(false),
+                    name: self.key(qtn),
                     value: variant.to_string(),
                 },
-                _ => unsupported(ty),
+                _ => self.unsupported(ty),
             },
             Ty::Class(qtn, args, _) => {
                 // Generic instantiations are out of scope: the `$baml` marker
                 // encodes `typeArgs: []`, which the engine treats as unbound.
                 if !args.is_empty() {
-                    return unsupported(ty);
+                    return self.unsupported(ty);
                 }
-                let name = qtn.render_dotted(false);
+                let name = self.key(qtn);
                 if self.table.contains_key(&name) {
                     return FieldSchema::Ref { name };
                 }
@@ -283,7 +298,7 @@ impl<'db> SchemaCx<'db, '_> {
                             .insert(name.clone(), TypeSchema::Class { fields });
                         FieldSchema::Ref { name }
                     }
-                    _ => unsupported(ty),
+                    _ => self.unsupported(ty),
                 }
             }
             // Aliases are never pre-expanded by TIR lowering
@@ -293,7 +308,7 @@ impl<'db> SchemaCx<'db, '_> {
             // the target per reference site, which blows up on alias DAGs
             // just like the class-graph case.
             Ty::TypeAlias(qtn, _) => {
-                let name = qtn.render_dotted(false);
+                let name = self.key(qtn);
                 if self.table.contains_key(&name) {
                     return FieldSchema::Ref { name };
                 }
@@ -313,7 +328,7 @@ impl<'db> SchemaCx<'db, '_> {
                             .insert(name.clone(), TypeSchema::Alias { schema });
                         FieldSchema::Ref { name }
                     }
-                    _ => unsupported(ty),
+                    _ => self.unsupported(ty),
                 }
             }
             Ty::List(item, _) => FieldSchema::List {
@@ -347,14 +362,8 @@ impl<'db> SchemaCx<'db, '_> {
             // Everything non-data: functions, interfaces, type variables,
             // opaque runtime types, and the TIR sentinels (`Unknown`/`Error`/…)
             // that reliably appear while the user is mid-edit.
-            _ => unsupported(ty),
+            _ => self.unsupported(ty),
         }
-    }
-}
-
-fn unsupported(ty: &Ty) -> FieldSchema {
-    FieldSchema::Unsupported {
-        display: ty.render_user_facing(),
     }
 }
 

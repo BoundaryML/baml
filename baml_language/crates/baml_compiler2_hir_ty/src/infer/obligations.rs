@@ -467,7 +467,10 @@ impl<'db> InferenceContext<'db> {
         }
         let mut applicable = None;
         for facts in crate::impls::all_impl_facts(self.db) {
-            if !crate::impls::provides_concrete_members(&facts.interface.name) {
+            if !crate::impls::provides_concrete_members(
+                baml_compiler2_hir::package::lang_roots(self.db),
+                &facts.interface.name,
+            ) {
                 continue;
             }
             let snapshot = self.table.snapshot();

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    package::{PackageItems, package_items, root_by_wire_name, wire_name},
+    package::{PackageItems, lang_roots, package_items, spelling},
 };
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
@@ -154,7 +154,7 @@ pub fn resolve_builtin_type_target<'db>(
         target.push_str(member_path);
     }
 
-    let package = root_by_wire_name(db, &Name::new(baml_base::BAML_PACKAGE))?;
+    let package = lang_roots(db).get(baml_base::LangPackage::Baml)?;
     resolve_target(db, package, &target)
 }
 
@@ -228,7 +228,7 @@ pub fn list_package_items(
     package_id: baml_base::SourceRoot,
 ) -> Vec<ListingEntry> {
     let pkg = package_items(db, package_id);
-    let package_name = wire_name(db, package_id);
+    let package_name = spelling(db).of(package_id).clone();
     collect_entries_from_package(db, pkg, &package_name)
 }
 
@@ -283,7 +283,7 @@ pub fn list_namespace_items(
     namespace_path: &[Name],
 ) -> Option<Vec<ListingEntry>> {
     let pkg = package_items(db, package_id);
-    let package_name = wire_name(db, package_id);
+    let package_name = spelling(db).of(package_id).clone();
 
     // Check that the requested namespace path exists or has children.
     let has_exact = pkg.namespaces.contains_key(namespace_path);
@@ -345,7 +345,7 @@ pub fn non_workspace_package_names(db: &dyn baml_compiler2_ppir::Db) -> Vec<Name
             | baml_base::SourceRootKind::Dynamic => true,
             baml_base::SourceRootKind::Workspace => false,
         })
-        .map(|root| wire_name(db, *root))
+        .map(|root| spelling(db).of(*root).clone())
         .collect();
     names.sort();
     names.dedup();
@@ -571,7 +571,7 @@ class Baz {
     #[test]
     fn list_package_items_builtin_fqns_include_package_name() {
         let project = make_multi_ns_project();
-        let pkg_id = root_by_wire_name(&project.db, &Name::new("baml")).unwrap();
+        let pkg_id = spelling(&project.db).root(&Name::new("baml")).unwrap();
         let entries = list_package_items(&project.db, pkg_id);
 
         assert!(
@@ -871,10 +871,9 @@ function summarize_structured(input: string) -> Summary {
     fn non_workspace_package_names_excludes_workspace_and_is_sorted() {
         let project = make_multi_ns_project();
         let names = non_workspace_package_names(&project.db);
-        let workspace = baml_compiler2_hir::package::wire_name(
-            &project.db,
-            sole_workspace_root(&project.db).unwrap(),
-        );
+        let workspace = spelling(&project.db)
+            .of(sole_workspace_root(&project.db).unwrap())
+            .clone();
 
         assert!(
             names.iter().all(|name| *name != workspace),

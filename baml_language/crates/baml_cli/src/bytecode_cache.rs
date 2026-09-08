@@ -506,7 +506,7 @@ impl CacheContext {
 /// returns the seed verbatim, so re-serializing reproduces the same bytes
 /// (idempotent); on a cold database it materializes the interface once.
 fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
-    use baml_db::baml_compiler2_hir_ty::package_interface::package_interface;
+    use baml_db::baml_compiler2_hir_ty::package_interface::export_interface;
     let mut out = std::collections::BTreeMap::new();
     for root in db.source_roots() {
         if root.kind(db) != baml_db::SourceRootKind::Stdlib {
@@ -515,8 +515,8 @@ fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<
         let name = root
             .self_name(db)
             .unwrap_or_else(|| unreachable!("stdlib roots are named"));
-        let iface = package_interface(db, root);
-        match borsh::to_vec(iface) {
+        let iface = export_interface(db, root);
+        match borsh::to_vec(&iface) {
             Ok(bytes) => {
                 out.insert(name.to_string(), bytes);
             }
@@ -640,16 +640,20 @@ pub(crate) struct ReusePlan {
     /// are never re-walked); dirty/added files' facts are the ones the dirty-set
     /// pass already walked, folded in so the downstream demand hits the seed
     /// instead of re-walking those bodies a second time.
-    pub(crate) seeded_throw_facts:
-        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    pub(crate) seeded_throw_facts: std::collections::BTreeMap<
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+    >,
     /// Per-function `callable_throws` seeds projected from the clean files'
     /// cached interface fragments (Phase 2), keyed by full source path then by
     /// item-tree `LocalItemId::as_u32`. Injected before the first typecheck so a
     /// clean function's throws are served without inferring its (or any
     /// transitively-clean callee's) body. Empty under
     /// `BAML_NO_CALLABLE_THROWS_CACHE=1`.
-    pub(crate) seeded_callable_throws:
-        std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+    pub(crate) seeded_callable_throws: std::collections::BTreeMap<
+        String,
+        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
+    >,
     /// Clean files' opaque diagnostics blobs carried from the previous manifest,
     /// by rel_path. Rehydrated to serve those files' diagnostics without
     /// re-checking, and copied verbatim into the next manifest.
@@ -1108,8 +1112,10 @@ struct DirtyPartition {
     /// path. Seeded so the downstream `file_throw_facts` demand hits the seed
     /// instead of re-walking each body a second time (the partition already
     /// walked them, and the facts are content-derived so the value is honest).
-    fresh_throw_facts:
-        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    fresh_throw_facts: std::collections::BTreeMap<
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+    >,
     /// Every current user file with its rel path — the single walk this pass
     /// makes over the source set, handed back so [`CacheContext::plan_reuse`]
     /// need not list them again on the warm hot path.
@@ -1117,7 +1123,7 @@ struct DirtyPartition {
 }
 
 fn throw_fn_names(
-    facts: &[baml_type::throw_facts::FunctionThrowFacts],
+    facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>],
 ) -> impl Iterator<Item = String> + '_ {
     facts
         .iter()
@@ -1174,7 +1180,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
     // one the recompute would produce. Keyed by absolute path, like the seed.
     let mut fresh_throw_facts: std::collections::BTreeMap<
         String,
-        Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
     > = std::collections::BTreeMap::new();
 
     for (sf, rel) in &current {
@@ -1195,9 +1201,10 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 }
                 // An added function may shadow an existing callee, so callers'
                 // transitive throws can move — seed the taint closure.
-                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
-                throws_taint.extend(throw_fn_names(&fresh.0));
-                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
+                let fresh =
+                    baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, *sf);
+                throws_taint.extend(throw_fn_names(&fresh));
+                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh);
             }
             Some(entry) => {
                 if entry.content_hash == content_hash(sf.text(db)) {
@@ -1210,12 +1217,13 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 // stored ones, seed the taint closure with both the fresh and
                 // the stored function names — a rename/removal shifts which
                 // callers resolve where.
-                let fresh = baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(db, *sf);
-                if fresh.0 != entry.throw_facts {
-                    throws_taint.extend(throw_fn_names(&fresh.0));
+                let fresh =
+                    baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, *sf);
+                if fresh != entry.throw_facts {
+                    throws_taint.extend(throw_fn_names(&fresh));
                     throws_taint.extend(throw_fn_names(&entry.throw_facts));
                 }
-                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
+                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh);
                 if file_has_impl_construct(db, *sf)
                     || entry
                         .referenced_names
@@ -1381,7 +1389,10 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
 fn project_callable_throws_seeds(
     clean_fragments: &std::collections::BTreeMap<String, Vec<u8>>,
     root: Option<&PathBuf>,
-) -> std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>> {
+) -> std::collections::BTreeMap<
+    String,
+    std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
+> {
     if CacheContext::callable_throws_cache_disabled() {
         return std::collections::BTreeMap::new();
     }
@@ -1391,15 +1402,16 @@ fn project_callable_throws_seeds(
         if fragment_bytes.is_empty() {
             continue;
         }
-        let fragment: CallableThrowsFragment = match borsh::from_slice(fragment_bytes) {
-            Ok(f) => f,
-            Err(e) => {
-                cache_debug(format_args!(
-                    "interface fragment for `{rel}` undecodable: {e}"
-                ));
-                continue;
-            }
-        };
+        let fragment: CallableThrowsFragment<baml_type::TypeName> =
+            match borsh::from_slice(fragment_bytes) {
+                Ok(f) => f,
+                Err(e) => {
+                    cache_debug(format_args!(
+                        "interface fragment for `{rel}` undecodable: {e}"
+                    ));
+                    continue;
+                }
+            };
         if fragment.by_id.is_empty() {
             continue;
         }
@@ -1535,7 +1547,7 @@ impl CacheContext {
         let root = workspace_root_path(db);
         let mut seeded_throw_facts: std::collections::BTreeMap<
             String,
-            Vec<baml_type::throw_facts::FunctionThrowFacts>,
+            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
         > = manifest
             .files
             .iter()
@@ -1700,11 +1712,9 @@ impl CacheContext {
                     sig_referenced_names,
                     // Free: seeded files return their seeds verbatim, dirty
                     // files were extracted (and memoized) during the compile.
-                    throw_facts: baml_db::baml_compiler2_hir_ty::throw_facts::file_throw_facts(
-                        db, sf,
-                    )
-                    .0
-                    .clone(),
+                    throw_facts:
+                        baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, sf)
+                            .clone(),
                     // Fresh blob if the gate re-checked this file, else the
                     // carried clean blob, else empty. A re-checked file always
                     // wins so a stale/poison carry can't persist.
@@ -2087,10 +2097,10 @@ impl CacheContext {
                 continue; // file removed — never seeded
             };
             let honest =
-                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::export_callable_throws_fragment(
                     db, sf,
                 );
-            let honest_bytes = borsh::to_vec(honest).map_err(|e| {
+            let honest_bytes = borsh::to_vec(&honest).map_err(|e| {
                 anyhow::anyhow!(
                     "honest interface fragment for `{}` failed to serialize: {e}",
                     entry.rel_path
@@ -2234,10 +2244,10 @@ impl CacheContext {
             && !fragment.is_empty()
         {
             let honest =
-                baml_db::baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(
+                baml_db::baml_compiler2_hir_ty::package_interface::export_callable_throws_fragment(
                     honest_db, sf,
                 );
-            let honest_bytes = borsh::to_vec(honest)?;
+            let honest_bytes = borsh::to_vec(&honest)?;
             if honest_bytes != *fragment {
                 anyhow::bail!(
                     "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served a STALE \
@@ -3288,8 +3298,12 @@ mod tests {
 
         // Seed f's key with g's throw `Ty`, keyed by (abs path, f's LocalItemId).
         let abs_path = file.path(&db).display().to_string();
+        let spelling = baml_db::baml_compiler2_hir::package::spelling(&db);
         let mut by_id = std::collections::BTreeMap::new();
-        by_id.insert(f_id.as_u32(), g_throws.clone());
+        by_id.insert(
+            f_id.as_u32(),
+            g_throws.map_heads(&mut |decl| spelling.wire(decl)),
+        );
         let mut by_path = std::collections::BTreeMap::new();
         by_path.insert(abs_path, by_id);
         db.set_seeded_callable_throws(by_path);
@@ -3727,7 +3741,7 @@ mod tests {
         // process-global honest-derivation counter (racy under parallel tests).
         let mut db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
 
-        let sentinel = PackageInterface {
+        let sentinel = PackageInterface::<baml_type::TypeName> {
             types: Default::default(),
             functions: Default::default(),
             throw_sets: FunctionThrowSets {
@@ -3744,9 +3758,9 @@ mod tests {
         );
         db.set_seeded_stdlib_interface(seed);
 
-        let log_id =
-            baml_db::baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("log"))
-                .unwrap();
+        let log_id = baml_db::baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("log"))
+            .unwrap();
         let iface = package_interface(&db, log_id);
         assert!(
             iface.functions.is_empty() && iface.types.is_empty(),
@@ -3754,9 +3768,9 @@ mod tests {
         );
 
         // A package that was NOT seeded still derives honestly and is non-empty.
-        let baml_id =
-            baml_db::baml_compiler2_hir::package::root_by_wire_name(&db, &Name::new("baml"))
-                .unwrap();
+        let baml_id = baml_db::baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_db::LangPackage::Baml)
+            .unwrap();
         let baml_iface = package_interface(&db, baml_id);
         assert!(
             !baml_iface.functions.is_empty() || !baml_iface.types.is_empty(),

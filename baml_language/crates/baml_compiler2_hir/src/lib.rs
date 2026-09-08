@@ -98,6 +98,14 @@ pub trait Db: salsa::Database {
     fn seeded_callable_throws(&self) -> Option<inputs::SeededCallableThrows> {
         None
     }
+
+    /// Where the language packages are installed (see
+    /// [`package::lang_roots`]). Defaults to `None`: a database with no
+    /// stdlib knows no language package, and every identity test against
+    /// one is `false`.
+    fn lang_roots_input(&self) -> Option<inputs::LangRootsInput> {
+        None
+    }
 }
 
 // ── compiler2_all_files ───────────────────────────────────────────────────────

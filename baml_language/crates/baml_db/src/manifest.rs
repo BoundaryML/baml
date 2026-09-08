@@ -188,6 +188,40 @@ pub enum ManifestError {
     MissingPackageName { path: std::path::PathBuf },
     #[error("{path}: `[package].name` cannot be empty.")]
     EmptyPackageName { path: std::path::PathBuf },
+    #[error(
+        "{path}: `[dependencies]` is not supported in a project manifest yet: package imports are \
+         pending a design pass. Remove the table; a project reaches the standard library implicitly."
+    )]
+    DependenciesUnsupported { path: std::path::PathBuf },
+    #[error(
+        "{path}: `[package].prelude` is reserved for the standard library's own manifests. Remove it."
+    )]
+    PreludeUnsupported { path: std::path::PathBuf },
+}
+
+/// Refuse the manifest tables only the standard library's own manifests may
+/// carry. Package imports are not user surface area until they get a design
+/// pass, so a project manifest with `[dependencies]` (or the stdlib-only
+/// `[package].prelude`) is an error, not a silently ignored table.
+pub fn reject_stdlib_only_tables(
+    manifest: &BamlToml,
+    toml_path: &std::path::Path,
+) -> Result<(), ManifestError> {
+    if !manifest.dependencies.is_empty() {
+        return Err(ManifestError::DependenciesUnsupported {
+            path: toml_path.to_path_buf(),
+        });
+    }
+    if manifest
+        .package
+        .as_ref()
+        .is_some_and(|package| package.prelude)
+    {
+        return Err(ManifestError::PreludeUnsupported {
+            path: toml_path.to_path_buf(),
+        });
+    }
+    Ok(())
 }
 
 /// Resolve and validate `[package].name`, reproducing the Cargo-style rule
@@ -369,6 +403,29 @@ mod tests {
         assert_eq!(
             g.get_ref().sdk_import_path.as_ref().unwrap().get_ref(),
             "example.com/project/baml_sdk"
+        );
+    }
+
+    #[test]
+    fn project_manifests_may_not_declare_dependencies_or_prelude() {
+        let path = std::path::Path::new("baml.toml");
+        let ok = parse("[package]\nname = \"app\"\n").unwrap();
+        assert_eq!(reject_stdlib_only_tables(&ok, path), Ok(()));
+        let deps =
+            parse("[package]\nname = \"app\"\n[dependencies]\nutil = { path = \"../util\" }\n")
+                .unwrap();
+        assert_eq!(
+            reject_stdlib_only_tables(&deps, path),
+            Err(ManifestError::DependenciesUnsupported {
+                path: path.to_path_buf()
+            })
+        );
+        let prelude = parse("[package]\nname = \"app\"\nprelude = true\n").unwrap();
+        assert_eq!(
+            reject_stdlib_only_tables(&prelude, path),
+            Err(ManifestError::PreludeUnsupported {
+                path: path.to_path_buf()
+            })
         );
     }
 

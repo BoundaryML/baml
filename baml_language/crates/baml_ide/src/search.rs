@@ -16,7 +16,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    package::{package_items, wire_name},
+    package::{package_items, sole_workspace_root, spelling},
 };
 use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
@@ -296,7 +296,11 @@ fn ranked_candidates(
     let mut out = Vec::new();
     for &package in packages {
         db.unwind_if_revision_cancelled();
-        let prefix = baml_type::addressable_package(&wire_name(db, package)).to_string();
+        let prefix = if Some(package) == sole_workspace_root(db) {
+            baml_type::ADDRESSABLE_USER_PACKAGE.to_string()
+        } else {
+            spelling(db).of(package).to_string()
+        };
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {

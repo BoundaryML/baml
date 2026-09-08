@@ -6,7 +6,7 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
+use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
@@ -92,12 +92,12 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        baml_compiler2_hir::package::root_by_wire_name(&dependency, &Name::new("dependency"))
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
             .unwrap(),
-    )
-    .clone();
+    );
     let exported = interface
         .functions
         .values_mut()
@@ -166,12 +166,12 @@ function forged_type_of<T>() -> reflect.Type {
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        baml_compiler2_hir::package::root_by_wire_name(&dependency, &Name::new("dependency"))
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
             .unwrap(),
-    )
-    .clone();
+    );
     let mut configured = 0;
     for exported in interface
         .functions
@@ -815,11 +815,13 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "function accept<T>(value: T) -> T { value }",
     );
     baml_db::testing::assert_no_diagnostic_errors(&library);
-    let interface = baml_compiler2_hir_ty::package_interface::package_interface(
+    let interface = baml_compiler2_hir_ty::package_interface::export_interface(
         &library,
-        baml_compiler2_hir::package::root_by_wire_name(&library, &Name::new("app")).unwrap(),
+        baml_compiler2_hir::package::spelling(&library)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize mounted interface");
 
     let mut db = make_db();

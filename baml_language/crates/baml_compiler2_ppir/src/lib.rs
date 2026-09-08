@@ -21,9 +21,10 @@ use baml_compiler2_hir::{
     contributions::FileSymbolContributions,
     item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
-    package::{PackageItems, PackageItemsExtra, wire_name},
+    package::{PackageItems, PackageItemsExtra},
     semantic_index::FileSemanticIndex,
 };
+use baml_type::DeclName;
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use indexmap::{IndexMap, IndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -74,7 +75,7 @@ fn expansion_map_files(
 pub fn collect_block_attrs(
     db: &dyn crate::Db,
     roots: baml_base::SourceRootTable,
-) -> FxHashMap<Vec<Name>, Vec<Name>> {
+) -> FxHashMap<DeclName, Vec<Name>> {
     let mut result = FxHashMap::default();
     for file in expansion_map_files(db, roots) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -88,11 +89,10 @@ pub fn collect_block_attrs(
             };
             let attr_names: Vec<Name> = item_attrs.iter().map(|a| a.name.clone()).collect();
             if !attr_names.is_empty() {
-                let mut full_path = vec![wire_name(db, pkg_info.root)];
-                full_path.extend(pkg_info.namespace_path.iter().cloned());
-                full_path.push(name.clone());
+                let decl =
+                    DeclName::in_root(pkg_info.root, pkg_info.namespace_path.clone(), name.clone());
                 result
-                    .entry(full_path)
+                    .entry(decl)
                     .or_insert_with(Vec::new)
                     .extend(attr_names);
             }
@@ -106,7 +106,7 @@ pub fn collect_block_attrs(
 pub fn collect_alias_bodies(
     db: &dyn crate::Db,
     roots: baml_base::SourceRootTable,
-) -> FxHashMap<Vec<Name>, PpirTy> {
+) -> FxHashMap<DeclName, PpirTy> {
     let mut result = FxHashMap::default();
     for file in expansion_map_files(db, roots) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -120,10 +120,12 @@ pub fn collect_alias_bodies(
                         attrs: PpirTypeAttrs::default(),
                     },
                 );
-                let mut full_path = vec![wire_name(db, pkg_info.root)];
-                full_path.extend(pkg_info.namespace_path.iter().cloned());
-                full_path.push(a.name.clone());
-                result.insert(full_path, ty);
+                let decl = DeclName::in_root(
+                    pkg_info.root,
+                    pkg_info.namespace_path.clone(),
+                    a.name.clone(),
+                );
+                result.insert(decl, ty);
             }
         }
     }
@@ -144,9 +146,9 @@ pub fn collect_alias_bodies(
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProjectExpansionMaps {
     /// `@@` block attributes per type, keyed by fully-qualified path.
-    pub block_attrs: FxHashMap<Vec<Name>, Vec<Name>>,
+    pub block_attrs: FxHashMap<DeclName, Vec<Name>>,
     /// Type alias bodies keyed by fully-qualified path.
-    pub alias_bodies: FxHashMap<Vec<Name>, PpirTy>,
+    pub alias_bodies: FxHashMap<DeclName, PpirTy>,
 }
 
 /// # Safety
@@ -339,7 +341,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
     // Get HIR classification for the file's package (original types only)
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_name = wire_name(db, pkg_info.root);
     let package_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
 
     // The packages this file's package may spell, for foreign type references.
@@ -391,7 +392,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 stream_class.fields.retain_mut(|field| {
                     let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
-                        package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
                         package_items,
                         all_package_items: &all_package_items,
@@ -453,7 +453,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     .iter()
                     .filter_map(|method| {
                         let ctx = ExpandCtx {
-                            package_name: &package_name,
                             namespace_path: &pkg_info.namespace_path,
                             package_items,
                             all_package_items: &all_package_items,
@@ -511,7 +510,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 );
 
                 let ctx = ExpandCtx {
-                    package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
@@ -560,7 +558,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
             // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
                 let ctx = ExpandCtx {
-                    package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,

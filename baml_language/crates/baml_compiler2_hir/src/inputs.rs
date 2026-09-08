@@ -9,11 +9,17 @@
 
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
 /// the full source-file path string (`SourceFile::path` display form).
+///
+/// Seeds are wire data (the cache manifest persists them), so their heads are
+/// spelled: the reader re-spells them into the file's root through the
+/// [`Spelling`](crate::package::Spelling) before use.
 #[salsa::input]
 pub struct SeededThrowFacts {
     #[returns(ref)]
-    pub by_path:
-        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    pub by_path: std::collections::BTreeMap<
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+    >,
 }
 
 /// Input: exact per-function `callable_throws` results from a previous compile,
@@ -30,7 +36,18 @@ pub struct SeededThrowFacts {
 #[salsa::input]
 pub struct SeededCallableThrows {
     #[returns(ref)]
-    pub by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+    pub by_path: std::collections::BTreeMap<
+        String,
+        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
+    >,
+}
+
+/// Input: where the language packages ([`baml_base::LangPackage`]) are
+/// installed — the compiler's `core`/`std`. Set once by the stdlib installer,
+/// which is the one place a package is found by its manifest name.
+#[salsa::input]
+pub struct LangRootsInput {
+    pub roots: baml_base::LangRoots,
 }
 
 /// Input: the stdlib packages' resolved `PackageInterface`s from a previous
