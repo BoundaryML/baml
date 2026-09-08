@@ -1,4 +1,4 @@
-# BAML v1 Releases
+# BAML Language Releases
 
 The BAML language release process runs as follows:
 
@@ -14,7 +14,7 @@ The BAML language release process runs as follows:
 
 - [Nightly release](#nightly-release): scheduled releases, version tags, and updating a nightly toolchain.
 - [Canary release](#canary-release): version-bump PRs, release tags, and updating a canary toolchain.
-- [What gets published](#what-gets-published): released artifacts, package destinations, and architectures.
+- [What gets published](#what-gets-published): released toolchains, bridges, editor extensions, and documentation.
 - [BAML wrapper releases](#baml-wrapper-releases): the wrapper's separate version, publication, and package manager follow-through.
 
 ## Nightly release
@@ -37,27 +37,28 @@ Nightly versions use the next patch after the canary version, followed by the Pa
 
 Canary and nightly releases ship the language toolchain and SDKs under the selected release version, with registry-specific version formatting where needed.
 
-- GitHub release: `baml-language-<version>-<target>` toolchain archives containing `baml-cli`, `baml-pack-host`, the VS Code extension, and playground assets (x64-linux-gnu, aarch64-linux-gnu, x64-linux-musl, aarch64-linux-musl, x64-darwin, aarch64-darwin, x64-windows, aarch64-windows).
-- GitHub release: `baml-language-<version>.vsix` VS Code extension (platform independent).
-- GitHub release: `libbaml_cffi` shared libraries, named `baml_cffi` on Windows (x64-linux-gnu, aarch64-linux-gnu, x64-linux-musl, aarch64-linux-musl, x64-darwin, aarch64-darwin, x64-windows, aarch64-windows).
-- PyPI: `baml-bridge` wheels (x64-linux-gnu, aarch64-linux-gnu, x64-linux-musl, aarch64-linux-musl, x64-darwin, aarch64-darwin, x64-windows, aarch64-windows).
-- npm: `@boundaryml/baml-bridge` and its platform packages (x64-linux-gnu, aarch64-linux-gnu, x64-linux-musl, aarch64-linux-musl, x64-darwin, aarch64-darwin, x64-windows, aarch64-windows). Canary publishes under `latest`; nightly publishes under `nightly`.
-- npm: `@boundaryml/baml-bridge-web` (WebAssembly, `wasm32-unknown-unknown`), using the same npm tags.
-- Maven Central: `com.boundaryml:baml-bridge`, including main, sources, Javadoc, and native JARs (x64-linux-gnu, aarch64-linux-gnu, x64-darwin, aarch64-darwin, x64-windows; experimental builds for x64-linux-musl, aarch64-linux-musl, and aarch64-windows may be omitted if they fail).
-- Maven Central: `com.boundaryml:baml-bridge-kotlin`, `com.boundaryml:baml-gradle-plugin`, and the `com.boundaryml.baml` plugin marker (JVM). Canary also publishes the plugin to the Gradle Plugin Portal.
-- NuGet: `baml-bridge`, including native runtimes (x64-linux-gnu, aarch64-linux-gnu, x64-linux-musl, aarch64-linux-musl, x64-darwin, aarch64-darwin, x64-windows, aarch64-windows).
-- crates.io: `baml_bridge` (source crate; uses the shared native libraries listed above).
-- Go: [`github.com/boundaryml/baml-go`](https://github.com/BoundaryML/baml-go) version tag (source module; uses the shared native libraries listed above).
-- Swift: [`BoundaryML/baml-swift`](https://github.com/BoundaryML/baml-swift) version tag and `BamlBridgeFFI-<version>.xcframework.zip` on the GitHub release (x64-darwin, aarch64-darwin, aarch64-ios, x64-ios-simulator, aarch64-ios-simulator).
-- GitHub release: SHA-256 checksum files for toolchain archives, the VS Code extension, and shared native libraries.
-- `pkg.boundaryml.com`: version and channel manifests, the download page, and `install.sh` / `install.ps1` installers.
-- `developer.boundaryml.com`: the generated developer reference for the released toolchain.
-
-Publication happens across several destinations. Packages and the GitHub release can become visible before the whole release succeeds. The toolchain channel advances only after its required publishing, public-package checks, and documentation steps complete; further artifact verification runs afterward.
+- Toolchain: `baml toolchain use 0.18.0`
+  - CLI itself (per-architecture, packaged in the GitHub release).
+  - `pkg.boundaryml.com` release manifests: `/manifest/v1/canary.json`, `/manifest/v1/nightly.json`, and `/manifest/v1/version/<version>.json`.
+- VS Code extension: `.vsix` (platform independent, packaged in the GitHub release and toolchain archives).
+- BAML bridges
+  - CFFI dynamic library: `.dylib`, `.so`, `.dll` (per-architecture, packaged in the GitHub release).
+  - Python package: PyPI `baml-bridge`, installed with `uv add baml-bridge` (per-architecture wheels).
+  - `typescript/node` npm package: `@boundaryml/baml-bridge` (with per-architecture native packages).
+  - `typescript/web` npm package: `@boundaryml/baml-bridge-web` (platform-independent WebAssembly).
+    - Includes bridges for browsers (Chrome, Firefox) and Cloudflare Workers.
+  - Java package: Maven Central `com.boundaryml:baml-bridge` (with per-architecture native JARs).
+  - Kotlin package: Maven Central `com.boundaryml:baml-bridge-kotlin`.
+  - Gradle plugin: Maven Central `com.boundaryml:baml-gradle-plugin` and the `com.boundaryml.baml` plugin marker; also published to the Gradle Plugin Portal for canary releases.
+  - C# package: NuGet `baml-bridge` (one package containing per-architecture native libraries).
+  - Rust crate: crates.io `baml_bridge`.
+  - Go release: the bridge runtime is pushed to `github.com/BoundaryML/baml-go` under a new version tag.
+  - Swift release: the bridge runtime is pushed to `github.com/BoundaryML/baml-swift` under a new version tag, with `BamlBridgeFFI-<version>.xcframework.zip` published on the GitHub release (macOS, iOS, and iOS Simulator).
+- Documentation: the generated developer reference at `developer.boundaryml.com`.
 
 # BAML wrapper releases
 
-The wrapper is the `baml` command that installs, selects, and launches language toolchains. It has an independent version and is shared by the canary and nightly channels. Updating the wrapper does not itself change the user's selected language toolchain.
+The wrapper is the `baml` command that installs, selects, and launches language toolchains. It is versioned independently.
 
 1. Prepare a PR that bumps the wrapper version in its [package manifest](crates/baml/Cargo.toml) when wrapper changes need to ship. For a first wrapper release, talk to Paulo or Avery before changing that version, as the manifest requests.
 2. Merge the PR into `canary`. The next language release containing the bump, whether canary or nightly, also publishes the wrapper if its version differs from the currently published wrapper. A wrapper-only bump does not by itself trigger an immediate canary release.
