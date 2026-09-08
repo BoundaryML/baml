@@ -34,6 +34,11 @@ pub enum ScopedTypeEscapeKind {
     /// A thrown type an inferred `throws` clause or an enclosing `catch`
     /// would publish: catch it inside the block instead.
     Thrown,
+    /// A type still being inferred would become the escaping type: an outer
+    /// binding's element type, or a block value whose inference variable
+    /// the block leaves undecided. The remedy is an annotation on the
+    /// binding the value flows into.
+    Inferred,
 }
 
 /// The syntactic context an irrefutable-pattern rule fires in.

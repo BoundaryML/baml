@@ -1747,6 +1747,10 @@ struct InferenceContext<'db> {
     /// `ObligationCause`: obligations born inside a structural `sub`
     /// recursion anchor their eventual diagnostic here.
     obligation_anchor: Option<ExprId>,
+    /// Escapes refused with no anchor to report at (a relation reached from
+    /// a pattern walk or a bound replay): each waits for the block that
+    /// binds its parameter to close and is reported at that block's tail.
+    anchorless_escapes: Vec<(baml_type::ParamTy, Ty)>,
     /// The function whose body this run infers, when the owner IS a
     /// function - the resolver for owner-scoped receivers (`default`
     /// inside an `implements` block, like `self`).
@@ -1857,6 +1861,7 @@ impl<'db> InferenceContext<'db> {
             deferred_subs: Vec::new(),
             obligations: Vec::new(),
             obligation_anchor: None,
+            anchorless_escapes: Vec::new(),
             body_owner: None,
             defaults_owner: false,
             chain_nullable: Vec::new(),
@@ -3164,10 +3169,23 @@ impl<'db> InferenceContext<'db> {
         if self.scoped_type_bindings.len() == checkpoint {
             return block_ty;
         }
+        let outer_universe =
+            u32::try_from(checkpoint).unwrap_or_else(|_| unreachable!("block depth fits in u32"));
+        let at = tail.unwrap_or(block);
+        let closing: Vec<baml_type::ParamTy> = self.scoped_type_bindings[checkpoint..]
+            .iter()
+            .map(|binding| binding.parameter.clone())
+            .collect();
+        for (param, value) in std::mem::take(&mut self.anchorless_escapes) {
+            if closing.contains(&param) {
+                self.report_scoped_type_escape(at, &param, &value, ScopedTypeEscapeKind::Inferred);
+            } else {
+                self.anchorless_escapes.push((param, value));
+            }
+        }
+        self.generalize_closing_scope(outer_universe, &closing, at);
         self.scoped_type_bindings.truncate(checkpoint);
-        self.table.close_scopes_to(
-            u32::try_from(checkpoint).unwrap_or_else(|_| unreachable!("block depth fits in u32")),
-        );
+        self.table.close_scopes_to(outer_universe);
         let narrowed: Vec<(BindingId, Ty)> = self
             .flow
             .iter()
@@ -3182,7 +3200,6 @@ impl<'db> InferenceContext<'db> {
         let Some(escaped) = self.escaping_scoped_param(&block_ty) else {
             return block_ty;
         };
-        let at = tail.unwrap_or(block);
         match expected {
             // Nobody reads the value, so its slot takes the top type: no
             // reader can observe the binding through it.
@@ -3243,6 +3260,82 @@ impl<'db> InferenceContext<'db> {
             }
         });
         escaped
+    }
+
+    /// rustc's leak check at a scope exit. A variable minted inside the
+    /// block outlives it (as the block's value, in an outer binding's
+    /// bounds, in a deferred obligation), so once the block's parameters
+    /// die it may not be solved to one of them. A variable whose bounds
+    /// already mention a closing parameter IS a value of that parameter and
+    /// is solved now, while the parameter is still open, so the block's
+    /// value check sees it; one whose bounds mention a closing parameter
+    /// but cannot decide it escapes (E0171 at `at`, `Error` fill); every
+    /// other open variable moves out to the enclosing universe, where the
+    /// ordinary universe check keeps the closed parameters out of it.
+    fn generalize_closing_scope(
+        &mut self,
+        outer_universe: u32,
+        closing: &[baml_type::ParamTy],
+        at: ExprId,
+    ) {
+        loop {
+            let mut progressed = false;
+            for var in self.table.unsolved_vars_deeper_than(outer_universe) {
+                let bounds = self.table.var_bounds(var);
+                let decides_a_closing_param = bounds
+                    .lowers
+                    .iter()
+                    .chain(bounds.uppers.iter())
+                    .any(|ty| self.closing_param_in(ty, closing).is_some());
+                if decides_a_closing_param && self.try_solve_bounded_var(var, &bounds) {
+                    progressed = true;
+                }
+            }
+            if !progressed {
+                break;
+            }
+        }
+        for var in self.table.unsolved_vars_deeper_than(outer_universe) {
+            let bounds = self.table.var_bounds(var);
+            let escaped = bounds
+                .lowers
+                .iter()
+                .chain(bounds.uppers.iter())
+                .find_map(|ty| {
+                    self.closing_param_in(ty, closing)
+                        .map(|param| (param, ty.clone()))
+                });
+            match escaped {
+                Some((param, value)) => {
+                    let value = self.table.resolve_completely(&value);
+                    self.report_scoped_type_escape(
+                        at,
+                        &param,
+                        &value,
+                        ScopedTypeEscapeKind::Inferred,
+                    );
+                    self.table.solve(var, Ty::error());
+                }
+                None => self.table.demote_to(var, outer_universe),
+            }
+        }
+    }
+
+    /// The first parameter of `closing` that `ty` mentions through solved
+    /// variables.
+    fn closing_param_in(
+        &mut self,
+        ty: &Ty,
+        closing: &[baml_type::ParamTy],
+    ) -> Option<baml_type::ParamTy> {
+        let ty = self.table.resolve_completely(ty);
+        let mut found = None;
+        scoped_params_in(&ty, &mut |param| {
+            if found.is_none() && closing.contains(param) {
+                found = Some(param.clone());
+            }
+        });
+        found
     }
 
     /// The first block-scoped parameter `ty` mentions (through solved
@@ -4095,8 +4188,14 @@ impl<'db> InferenceContext<'db> {
         let Some(param) = self.table.escaping_scoped_param(var, ty) else {
             return false;
         };
-        if let Some(at) = self.obligation_anchor {
-            self.report_scoped_type_escape(at, &param, ty, ScopedTypeEscapeKind::Value);
+        match self.obligation_anchor {
+            Some(at) => {
+                self.report_scoped_type_escape(at, &param, ty, ScopedTypeEscapeKind::Inferred);
+            }
+            // Reached from a road with no anchor (a pattern walk, a bound
+            // replay): the block that binds the parameter reports it when
+            // it closes rather than filling `Error` in silence.
+            None => self.anchorless_escapes.push((param, ty.clone())),
         }
         self.table.solve(var, Ty::error());
         true

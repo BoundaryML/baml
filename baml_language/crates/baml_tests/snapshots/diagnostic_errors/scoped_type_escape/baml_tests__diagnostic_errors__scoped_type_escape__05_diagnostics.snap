@@ -53,7 +53,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_escape.baml:69:17]
  69 │         xs.push(as_t<T>(1))
     ·                 ─────┬────
-    ·                      ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ·                      ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
     ╰────
 
   [type] E0171
@@ -131,4 +131,31 @@ source: crates/baml_tests/src/generated_tests.rs
  123 │     return as_t<T>(1)
      ·            ─────┬────
      ·                 ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:136:9]
+ 136 │         ident(as_t<T>(42))
+     ·         ─────────┬────────
+     ·                  ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:151:9]
+ 151 │         [ident(as_t<T>(42))]
+     ·         ──────────┬─────────
+     ·                   ╰── this has type `T[]`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:162:13]
+ 162 │     ys.push(as_t<T>(1))
+     ·             ─────┬────
+     ·                  ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
      ╰────

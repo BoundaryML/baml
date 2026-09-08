@@ -1569,6 +1569,9 @@ fn new_tir_diagnostic(
             ScopedTypeEscapeKind::Thrown => format!(
                 "this throws `{value}`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation"
             ),
+            ScopedTypeEscapeKind::Inferred => format!(
+                "the type inferred here would be `{value}`; give the binding it flows into a type that does not mention `{name}`, such as `unknown`"
+            ),
         };
         return runtime_type::scoped_type_escapes_block(name.as_str())
             .with_primary(span, label)

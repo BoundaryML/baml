@@ -178,6 +178,16 @@ function returns_through_the_declared_type(t: reflect.Type, early: bool) -> unkn
     as_t<T>(2)
 }
 
+// An annotated `unknown[]` gives the list literal its element type before
+// the block closes, so the `T`-typed element is stored as an `unknown`.
+function collected_as_unknown_list(t: reflect.Type) -> unknown[] {
+    let vs: unknown[] = {
+        type T = unreflect(t);
+        [ident(as_t<T>(42))]
+    }
+    vs
+}
+
 test "values and effects leave a block only through binding-free types" {
     let int_t = reflect.Type.of<int>()
     let string_t = reflect.Type.of<string>()
@@ -187,6 +197,9 @@ test "values and effects leave a block only through binding-free types" {
     assert.is_true(narrowing_ends_with_the_block(string_t, "s"))
     assert.is_true(reflect.Type.of_value(returns_through_the_declared_type(int_t, true)) == int_t)
     assert.is_true(reflect.Type.of_value(returns_through_the_declared_type(int_t, false)) == int_t)
+    let collected = collected_as_unknown_list(int_t)
+    assert.is_true(reflect.Type.of_value(collected) == reflect.Type.of<unknown[]>())
+    assert.is_true(reflect.Type.of_value(collected[0]) == int_t)
 }
 
 // Sibling blocks reuse one frame slot for their bindings. A descriptor

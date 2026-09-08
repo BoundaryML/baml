@@ -11,6 +11,9 @@ class user.Boom$stream {
 function user.as_t(v: unknown) -> T  [expr] {
   {  } match (v) { x: T => x, _ => throw "not a T" }
 }
+function user.block_local_list_before_the_binding(t: reflect.Type) -> int  [expr] {
+  { let ys = []; type T = unreflect(t); ys.push(as_t(1)) } ys.length()
+}
 function user.body_value_against_a_narrower_return(t: reflect.Type) -> int  [expr] {
   { type T = unreflect(t) } as_t(1)
 }
@@ -52,6 +55,12 @@ function user.thrown_list_without_a_clause(t: reflect.Type) -> string  [expr] {
 }
 function user.unannotated_block_value(t: reflect.Type) -> unknown  [expr] {
   { let escaped = { type T = unreflect(t) } as_t(1) } escaped
+}
+function user.value_through_a_nested_open_variable(t: reflect.Type) -> unknown[]  [expr] {
+  { let vs = { type T = unreflect(t) } [ident(as_t(42))] } vs
+}
+function user.value_through_an_open_variable(t: reflect.Type) -> string  [expr] {
+  { let v = { type T = unreflect(t) } ident(as_t(42)); let s: string = v } s
 }
 
 --- captures ---

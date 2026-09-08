@@ -122,3 +122,43 @@ function return_against_a_narrower_type(t: reflect.Type) -> int {
     type T = unreflect(t)
     return as_t<T>(1)
 }
+
+// The block's value is a callee's still-open instantiation variable whose
+// only bound is `T`. Left open past the brace it would outlive the binding:
+// the later `string` context cannot solve it (a rigid `T` is not a
+// `string`), but nothing after the brace can name `T` either, so the
+// conflict has nowhere to be reported and `s` silently holds whatever `t`
+// was. Deciding the variable at the brace makes it a `T`, judged as the
+// block's value.
+function value_through_an_open_variable(t: reflect.Type) -> string {
+    let v = {
+        type T = unreflect(t);
+        ident(as_t<T>(42))
+    }
+    let s: string = v
+    s
+}
+
+// The same variable one constructor down. `vs` could legitimately be an
+// `unknown[]` holding this element, but only an annotation can say so:
+// `let` takes its initializer's type, and lists are invariant, so a `T[]`
+// inferred here can never widen to the `unknown[]` the return wants.
+// `let vs: unknown[] = { … }` is the legal spelling (pinned in
+// `ns_scoped_type_bindings`).
+function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
+    let vs = {
+        type T = unreflect(t);
+        [ident(as_t<T>(42))]
+    }
+    vs
+}
+
+// A list created BEFORE the binding statement runs cannot carry `T` even
+// though it dies with the block: its element type is fixed when the list is
+// allocated, and `T`'s frame slot is bound only when the statement executes.
+function block_local_list_before_the_binding(t: reflect.Type) -> int {
+    let ys = []
+    type T = unreflect(t)
+    ys.push(as_t<T>(1))
+    ys.length()
+}

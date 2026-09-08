@@ -278,6 +278,21 @@ function scoped_type_bindings.caught_inside(t: reflect.Type) -> int {
     return
 }
 
+function scoped_type_bindings.collected_as_unknown_list(t: reflect.Type) -> unknown[] {
+    load_var t
+    bind_type 0
+    load_type #0
+    load_const 42
+    call user.scoped_type_bindings.as_t
+    store_var _4
+    load_type #0
+    load_var _4
+    call user.scoped_type_bindings.ident
+    load_type unknown
+    alloc_array 1
+    return
+}
+
 function scoped_type_bindings.ident(v: #0) -> #0 {
     load_var v
     return

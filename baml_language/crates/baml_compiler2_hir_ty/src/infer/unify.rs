@@ -257,7 +257,11 @@ impl InferenceTable {
     /// [`InferenceTable::close_scopes_to`] live one universe deeper and may
     /// be solved to `param`; variables minted outside may not (rustc's
     /// universe check on placeholders - an outer `let xs = []` must not
-    /// become `T[]` through a push inside the block).
+    /// become `T[]` through a push inside the block). The scope opens at
+    /// the STATEMENT, not the block: a value created earlier in the same
+    /// block has its type fixed at allocation, and the parameter's frame
+    /// slot is bound only when the statement runs, so that value cannot
+    /// carry `T` even though it dies with the block.
     pub fn bind_scoped_param(&mut self, param: &ParamTy) {
         self.universe += 1;
         self.scoped_params.insert(param.index(), self.universe);
@@ -269,6 +273,46 @@ impl InferenceTable {
     pub fn close_scopes_to(&mut self, depth: u32) {
         debug_assert!(depth <= self.universe, "scopes close innermost first");
         self.universe = depth;
+    }
+
+    /// The root of every still-open class minted deeper than `depth`: the
+    /// variables a closing block leaves behind, in index order.
+    pub fn unsolved_vars_deeper_than(&mut self, depth: u32) -> Vec<InferVar> {
+        let len = u32::try_from(self.vars.len())
+            .unwrap_or_else(|_| unreachable!("variable count fits in u32"));
+        let mut out = Vec::new();
+        for index in 0..len {
+            let key = VarKey(InferVar::new(index));
+            if self.vars.find(key).0.index() != index {
+                continue;
+            }
+            if let VarValue::Unsolved { universe, .. } = self.vars.probe_value(key)
+                && universe > depth
+            {
+                out.push(InferVar::new(index));
+            }
+        }
+        out
+    }
+
+    /// Moves `var`'s open class out to `depth`: the block that minted it
+    /// has closed, so the class is observable from the enclosing scope and
+    /// may no longer take that block's parameters as a solution. A class
+    /// already at or above `depth`, or solved, is left alone.
+    pub fn demote_to(&mut self, var: InferVar, depth: u32) {
+        let VarValue::Unsolved { policy, universe } = self.vars.probe_value(VarKey(var)) else {
+            return;
+        };
+        if universe <= depth {
+            return;
+        }
+        self.vars.union_value(
+            VarKey(var),
+            VarValue::Unsolved {
+                policy,
+                universe: depth,
+            },
+        );
     }
 
     /// The first block-scoped parameter in `ty` (through solved variables)
@@ -297,6 +341,11 @@ impl InferenceTable {
             for_each_child(ty.kind(), |child| {
                 walk(scoped_params, universe, child, escaped);
             });
+        }
+        // No body binds a scoped parameter in the common case, and this
+        // sits on every solve and bound deposit: skip the resolution walk.
+        if self.scoped_params.is_empty() {
+            return None;
         }
         let VarValue::Unsolved { universe, .. } = self.vars.probe_value(VarKey(var)) else {
             return None;
@@ -1188,6 +1237,43 @@ mod tests {
         table.unify(&Ty::infer_var(later), &Ty::int()).unwrap();
         table.rollback_to(snapshot);
         assert_eq!(table.escaping_scoped_param(later, &scoped), Some(param));
+    }
+
+    #[test]
+    fn a_closing_block_leaves_its_open_variables_to_the_enclosing_universe() {
+        let mut table = InferenceTable::new();
+        let param = ParamTy::new(
+            super::super::SCOPED_PARAM_BIT | 9,
+            baml_type::Name::new("T"),
+        );
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+        let before = table.new_var();
+        table.bind_scoped_param(&param);
+        let inner = table.new_var();
+        let solved = table.new_var();
+        assert_eq!(table.escaping_scoped_param(inner, &scoped), None);
+        assert_eq!(
+            table.escaping_scoped_param(before, &scoped),
+            Some(param.clone())
+        );
+        assert_eq!(table.unsolved_vars_deeper_than(0), vec![inner, solved]);
+
+        // Closing: a class the block leaves open moves out, and from there
+        // the closed parameter is an escape for it too.
+        table.close_scopes_to(0);
+        table.demote_to(inner, 0);
+        assert_eq!(table.unsolved_vars_deeper_than(0), vec![solved]);
+        assert_eq!(
+            table.escaping_scoped_param(inner, &scoped),
+            Some(param.clone())
+        );
+        // Demotion never lifts a class deeper or touches a solved one.
+        table.demote_to(before, 0);
+        assert_eq!(table.escaping_scoped_param(before, &scoped), Some(param));
+        table.unify(&Ty::infer_var(solved), &Ty::int()).unwrap();
+        table.demote_to(solved, 0);
+        assert!(table.is_solved(solved));
+        assert!(table.unsolved_vars_deeper_than(0).is_empty());
     }
 
     #[test]
