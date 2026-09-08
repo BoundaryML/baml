@@ -8,7 +8,6 @@
 # ]
 # ///
 
-import base64
 import json
 import os
 import sys
@@ -151,18 +150,10 @@ def notification_source_url(repository: str) -> str:
     return f"https://github.com/search?{urlencode({'q': query, 'type': 'code'})}"
 
 
-def current_oncall_mentions(
-    repository: str, github_token: str, slack_client: WebClient
-) -> list[str]:
+def current_oncall_mentions(slack_client: WebClient) -> list[str]:
     try:
-        # Read the current roster, including shift swaps made after the release
-        # commit was pinned. Assign the alert using today's Pacific date.
-        payload, _ = get_json(
-            f"https://api.github.com/repos/{repository}/contents/"
-            "tools/bctl_src/oncall/data/schedule.oncall?ref=canary",
-            github_token,
-        )
-        schedule = parse(base64.b64decode(payload["content"]).decode())
+        schedule_path = Path(__file__).parent / "bctl_src/oncall/data/schedule.oncall"
+        schedule = parse(schedule_path.read_text())
         today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
         current = max(
             (shift for shift in schedule.shifts if shift.date <= today),
@@ -215,7 +206,7 @@ def main() -> int:
         )
         if failures or not release_succeeded:
             mentions = (
-                current_oncall_mentions(repository, github_token, slack_client)
+                current_oncall_mentions(slack_client)
                 if channel in {"nightly", "nightly dispatch"}
                 else []
             )
