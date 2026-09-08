@@ -285,8 +285,8 @@ jobs:
             -f source_ci_run_id="$SOURCE_CI_RUN_ID"
           echo "Dispatched a nightly release for $SOURCE_SHA (CI run $SOURCE_CI_RUN_ID)."
 
-  notify-slack:
-    name: Notify Slack on failure
+  notify-nightly-dispatch-failure:
+    name: Notify Slack of nightly dispatch failure
     needs: [dispatch-nightly]
     # Only on failure. The sibling notifier in release-baml-language.yml runs
     # `always()` because it fans in from forty jobs and one of them can go green
@@ -296,7 +296,7 @@ jobs:
     if: ${{ always() && github.repository == 'BoundaryML/baml' && needs.dispatch-nightly.result == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: boundary-tools-dev
+    environment: infisical-github-baml-language-release
     permissions:
       actions: read
       contents: read
@@ -313,7 +313,7 @@ jobs:
       - uses: ./.github/actions/setup-mise
         with:
           install_args: uv
-      - name: Find failures and notify Slack
+      - name: Notify Slack of nightly dispatch failure
         env:
           GH_TOKEN: ${{ github.token }}
           SLACK_CHANNEL: "#general"

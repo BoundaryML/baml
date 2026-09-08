@@ -184,27 +184,29 @@ def main() -> int:
             message = (
                 f"❌ BAML {channel} release failed: {version}, "
                 f"started at {format_pacific_time(started_at)}\n\n"
-                f"*Failures:*\n{failure_text}\n\n"
-                f"*Run:* <{run_url}|View workflow run>"
+                f"*Failures:*\n{failure_text}"
             )
         else:
             message = (
                 f"✅ BAML {channel} release succeeded: {version}, "
-                f"started at {format_pacific_time(started_at)}\n\n"
-                f"*Run:* <{run_url}|View workflow run>"
+                f"started at {format_pacific_time(started_at)}"
             )
 
         blocks = [
             {"type": "section", "text": {"type": "mrkdwn", "text": paragraph}}
             for paragraph in message.split("\n\n")
         ]
+        footer = (
+            f"<{run_url}|View workflow run> · "
+            f"<{notification_source_url(repository)}|View notification source>"
+        )
         blocks.append(
             {
                 "type": "context",
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": f"<{notification_source_url(repository)}|Notification source: release workflow step>",
+                        "text": footer,
                     }
                 ],
             }
@@ -212,7 +214,7 @@ def main() -> int:
 
         WebClient(token=slack_token).chat_postMessage(
             channel=slack_channel,
-            text=message,
+            text=f"{message}\n\n{footer}",
             blocks=blocks,
             unfurl_links=False,
         )

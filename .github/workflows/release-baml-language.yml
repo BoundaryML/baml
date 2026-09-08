@@ -2233,8 +2233,8 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       csharp_platform_matrix_json: ${{ needs.build-matrix.outputs.csharp }}
 
-  notify-slack:
-    name: Notify Slack
+  notify-release-result:
+    name: Notify Slack of release result
     needs:
       - plan
       - build-matrix
@@ -2279,7 +2279,7 @@ jobs:
     # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
     if: ${{ always() && inputs.dry_run == false && (needs.plan.outputs.source_branch == 'canary' || (needs.plan.result == 'failure' && github.ref_type == 'tag' && github.ref_name == format('baml-language-source-{0}', inputs.source_sha))) }}
     runs-on: ubuntu-latest
-    environment: boundary-tools-dev
+    environment: infisical-github-baml-language-release
     permissions:
       actions: read
       contents: read
