@@ -352,15 +352,10 @@ pub fn version() -> &'static str {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-/// Where the materialized stdlib stubs live, so goto-definition into the
-/// stdlib can open a real file: `BAML_STDLIB_DIR`, else `<exe dir>/../stdlib`
-/// (the toolchain copy `baml ide install` writes), else the in-repo
-/// `baml_std/` checkout the binary was built from (a compile-time path, so it
-/// exists only on the build machine — the dev fallback), else none (the
-/// protocol layer then declines stdlib navigation targets). Runs before
-/// `initialize`, so a client-supplied
-/// `initializationOptions.bamlClient.stdlibDir` — if the protocol layer
-/// consumes one — is its concern, not the host's.
+/// Locate legacy stdlib files so incoming file URIs can alias embedded sources.
+/// Checks `BAML_STDLIB_DIR`, then `<exe dir>/../stdlib` from older installs,
+/// then the build-time `baml_std/` checkout. Clients can override this through
+/// `initializationOptions.bamlClient.stdlibDir`.
 fn resolve_stdlib_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("BAML_STDLIB_DIR") {
         let dir = PathBuf::from(dir);
