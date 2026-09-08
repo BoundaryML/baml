@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
 
-from bctl_src.oncall.parser import parse
+from bctl_src.oncall.current import current_oncall
 from bctl_src.oncall.slack import email_for, lookup_user_id
 
 GITHUB_API_TIMEOUT_SECONDS = 30
@@ -152,24 +152,7 @@ def notification_source_url(repository: str) -> str:
 
 def current_oncall_mentions(slack_client: WebClient) -> list[str]:
     try:
-        schedule_path = Path(__file__).parent / "bctl_src/oncall/data/schedule.oncall"
-        schedule = parse(schedule_path.read_text())
-        today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
-        current = max(
-            (shift for shift in schedule.shifts if shift.date <= today),
-            key=lambda shift: shift.date,
-            default=None,
-        )
-        if current is None:
-            raise RuntimeError("no on-call shift covers today")
-        # Match bctl oncall notify-failure: founders are an escalation rotation.
-        names = dict.fromkeys(
-            current.assignments[rotation]
-            for rotation in schedule.roster.rotations_in_order()
-            if rotation != "oncall-founders"
-        )
-        if not names:
-            raise RuntimeError("no primary on-call assignee")
+        names = current_oncall()
     except (OSError, ValueError, KeyError, RuntimeError) as error:
         print(f"Could not read current on-call schedule: {error}", file=sys.stderr)
         return []
