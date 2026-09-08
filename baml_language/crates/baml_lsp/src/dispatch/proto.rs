@@ -12,8 +12,7 @@ use lsp_types::{DocumentSymbol, SymbolKind};
 use crate::{paths, position_codec::PositionCodec, snapshot::Snapshot};
 
 /// The LSP location for an ide-layer location, in the session's encoding.
-/// `None` when the target has no client-openable presentation (a stdlib file
-/// without a materialized directory).
+/// `None` when the target path cannot be represented as a URI.
 pub(super) fn location(
     snap: &Snapshot,
     target: baml_ide::resolve::Location,

@@ -1,0 +1,17 @@
+{
+  "devDependencies": {
+    "@types/vscode": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "main": "src/stdlib-documents.ts",
+  "name": "@b/pkg-lsp",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "types": "src/stdlib-documents.ts",
+  "version": "0.1.0"
+}

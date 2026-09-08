@@ -95,7 +95,8 @@
     ]
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.0"
+    "vscode-languageclient": "^9.0.0",
+    "@b/pkg-lsp": "workspace:*"
   },
   "description": "BAML, the Programming Language for AI.",
   "devDependencies": {

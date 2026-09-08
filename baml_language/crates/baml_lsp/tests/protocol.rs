@@ -659,14 +659,12 @@ fn closing_a_vanished_file_removes_it_and_clears_markers() {
     assert!(h.state.file_text(&h.ws.join("keep.baml")).is_some());
 }
 
-/// A stdlib file presents under the materialized directory and maps back to
-/// its virtual database path; opening it tracks nothing.
+/// Stdlib documents map back to the database and never create editor overlays.
 #[test]
 fn stdlib_paths_round_trip_through_the_materialized_directory() {
     let stdlib_temp = tempfile::tempdir().unwrap();
     // Deliberately the non-canonical spelling: the owner canonicalizes it.
     let mut h = Harness::with_stdlib_dir(Some(stdlib_temp.path().to_path_buf()));
-    let canonical_dir = stdlib_temp.path().canonicalize().unwrap();
     let s = SessionKey(1);
     h.init_session(s, &[]);
 
@@ -685,15 +683,7 @@ fn stdlib_paths_round_trip_through_the_materialized_directory() {
         .map(|entry| entry.path.join("prelude.baml"))
         .expect("a stdlib root");
     let uri = baml_lsp::paths::uri_for_db_path(h.state.roots(), &db_path).unwrap();
-    // Prefix-compare as URIs: both sides then pass through the same URL
-    // normalization. A `Path::starts_with` against the canonical directory
-    // would fail on Windows, where `canonicalize` spells it with the `\\?\`
-    // verbatim prefix and the URL round trip (correctly) drops it.
-    assert!(
-        uri.as_str()
-            .starts_with(Url::from_file_path(&canonical_dir).unwrap().as_str()),
-        "{uri}"
-    );
+    assert_eq!(uri.scheme(), "baml-stdlib");
     assert_eq!(
         baml_lsp::paths::canonical_document_path(h.state.roots(), &uri).unwrap(),
         db_path
@@ -1245,7 +1235,7 @@ fn document_symbols_nest_members_with_distinct_ranges() {
 fn workspace_symbols_cover_user_and_materialized_stdlib() {
     let temp = tempfile::tempdir().unwrap();
     let stdlib_dir = temp.path().canonicalize().unwrap();
-    let mut harness = Harness::with_stdlib_dir(Some(stdlib_dir.clone()));
+    let mut harness = Harness::with_stdlib_dir(Some(stdlib_dir));
     harness.fs.add_project(&harness.ws);
     harness
         .fs
@@ -1266,7 +1256,7 @@ fn workspace_symbols_cover_user_and_materialized_stdlib() {
         "user symbol found, got: {symbols:?}"
     );
 
-    // A stdlib symbol resolves to a URI under the materialized directory.
+    // Even with a legacy disk directory configured, use read-only documents.
     let response = harness
         .request(
             SessionKey(1),
@@ -1281,9 +1271,90 @@ fn workspace_symbols_cover_user_and_materialized_stdlib() {
         .unwrap_or_else(|| panic!("stdlib symbol found, got: {symbols:?}"));
     let uri = stdlib_hit["location"]["uri"].as_str().unwrap();
     assert!(
-        uri.starts_with(Url::from_file_path(&stdlib_dir).unwrap().as_str()),
-        "stdlib URI maps under the materialized dir, got: {uri}"
+        uri.starts_with("baml-stdlib:/"),
+        "stdlib URI uses the document provider, got: {uri}"
     );
+}
+
+#[test]
+fn stdlib_source_and_nested_navigation_without_disk_sources() {
+    let mut h = Harness::new();
+    let session = SessionKey(1);
+    h.fs.add_project(&h.ws);
+    let text = "function main() -> string { baml.env.get_or_panic(\"KEY\") }";
+    h.fs.write(h.ws.join("main.baml"), text);
+    h.init_session(session, &[]);
+    h.settle();
+    let target = h
+        .request(
+            session,
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": h.uri("main.baml") },
+                "position": { "line": 0, "character": text.find("get_or_panic").unwrap() + 2 }
+            }),
+        )
+        .unwrap();
+    let uri = Url::parse(target["uri"].as_str().unwrap()).unwrap();
+    assert_eq!(uri.as_str(), "baml-stdlib:/baml/ns_env/env.baml");
+    let response = h
+        .request(session, "baml/stdlibSource", json!({ "uri": uri }))
+        .unwrap();
+    let content = response["content"].as_str().unwrap();
+    assert_eq!(
+        content,
+        include_str!("../../baml_builtins2/baml_std/baml/ns_env/env.baml")
+    );
+    let offset = content.find("root.sys.panic").unwrap() + "root.sys.".len();
+    let codec = baml_lsp::position_codec::PositionCodec::new(
+        content,
+        baml_lsp::position_codec::PositionEncoding::UTF16,
+    );
+    let params = json!({ "textDocument": { "uri": uri }, "position": codec.offset_to_position(offset.try_into().unwrap()) });
+    let nested = h
+        .request(session, "textDocument/definition", params.clone())
+        .unwrap();
+    assert!(
+        nested["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("baml-stdlib:/baml/ns_sys/")
+    );
+    assert!(
+        !h.request(session, "textDocument/hover", params)
+            .unwrap()
+            .is_null()
+    );
+    for method in [
+        "textDocument/semanticTokens/full",
+        "textDocument/documentSymbol",
+    ] {
+        assert!(
+            !h.request(session, method, json!({ "textDocument": { "uri": uri } }))
+                .unwrap()
+                .is_null()
+        );
+    }
+    h.open(session, &uri, 1, "invalid replacement");
+    h.change(session, &uri, 2, "changed");
+    h.settle();
+    let path = baml_lsp::paths::canonical_document_path(h.state.roots(), &uri).unwrap();
+    assert!(h.state.open_document(&path).is_none());
+    assert_eq!(
+        h.request(session, "baml/stdlibSource", json!({ "uri": uri }))
+            .unwrap(),
+        response
+    );
+    for invalid in [
+        "file:///etc/passwd",
+        "baml-stdlib:/missing.baml",
+        "baml-stdlib://host/baml/ns_env/env.baml",
+    ] {
+        assert!(
+            h.request(session, "baml/stdlibSource", json!({ "uri": invalid }))
+                .is_err()
+        );
+    }
 }
 
 #[test]

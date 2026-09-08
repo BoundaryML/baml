@@ -23,7 +23,8 @@
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.7.0",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@^25.1.2",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "@b/pkg-lsp": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.4",

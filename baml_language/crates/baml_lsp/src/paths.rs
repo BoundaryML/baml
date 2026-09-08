@@ -11,9 +11,8 @@
 //!   buffer under a symlinked directory shares its root's prefix.
 //! - **Stdlib mapping.** The database stores stdlib files under the virtual
 //!   `<builtin>/<pkg>/…` prefix (a wire contract shared with emitted
-//!   bytecode); when the host materialized the stubs on disk,
-//!   [`crate::roots::RootsView`] swaps that prefix for the directory in both
-//!   directions.
+//!   bytecode). Read-only documents use `baml-stdlib:/<pkg>/...` URIs.
+//!   Legacy materialized paths remain accepted as input aliases.
 //!
 //! The Windows lowercase folding the previous server applied is deliberately
 //! absent: the database does not fold case, and the owner's root index must
@@ -25,7 +24,12 @@ use std::path::{Path, PathBuf};
 
 use lsp_types::Url;
 
-use crate::{error::LspError, roots::RootsView};
+use crate::{
+    error::LspError,
+    roots::{BUILTIN_PREFIX, RootsView},
+};
+
+pub const STDLIB_SCHEME: &str = "baml-stdlib";
 
 /// One physical identity for a filesystem path.
 ///
@@ -68,8 +72,28 @@ fn lexically_normalize(path: &Path) -> PathBuf {
 }
 
 /// The database path for a document URI: physical identity, then the stdlib
-/// mapping. Non-`file:` URIs are `InvalidPath`.
+/// mapping. Stdlib document URIs retain their virtual database identity.
 pub fn canonical_document_path(roots: &RootsView, uri: &Url) -> Result<PathBuf, LspError> {
+    if uri.scheme() == STDLIB_SCHEME {
+        let invalid = || LspError::InvalidPath {
+            path: PathBuf::from(uri.as_str()),
+            message: "invalid stdlib URI".to_owned(),
+        };
+        if uri.has_host() || uri.query().is_some() || uri.fragment().is_some() {
+            return Err(invalid());
+        }
+        let path = uri.path().strip_prefix('/').ok_or_else(invalid)?;
+        let decoded = percent_encoding::percent_decode_str(path)
+            .decode_utf8()
+            .map_err(|_| invalid())?;
+        if decoded
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == ".." || part.contains('\\'))
+        {
+            return Err(invalid());
+        }
+        return Ok(PathBuf::from(format!("{BUILTIN_PREFIX}/{decoded}")));
+    }
     let path = url_to_file_path(uri).ok_or_else(|| LspError::InvalidPath {
         path: PathBuf::from(uri.as_str()),
         message: "not a file URI".to_owned(),
@@ -77,12 +101,21 @@ pub fn canonical_document_path(roots: &RootsView, uri: &Url) -> Result<PathBuf, 
     Ok(roots.to_db_path(&canonical_physical_path(&path)))
 }
 
-/// The URI a client can open for a database path. `None` when the path has
-/// no presentation (a stdlib file with no materialized directory) or cannot
-/// be spelled as a `file:` URL.
-pub fn uri_for_db_path(roots: &RootsView, db_path: &Path) -> Option<Url> {
-    let presentation = roots.to_presentation_path(db_path)?;
-    file_path_to_url(&presentation)
+/// The URI a client can open for a database path.
+/// Stdlib sources always use read-only virtual documents.
+pub fn uri_for_db_path(_roots: &RootsView, db_path: &Path) -> Option<Url> {
+    if let Ok(rest) = db_path.strip_prefix(BUILTIN_PREFIX) {
+        let mut uri = Url::parse("baml-stdlib:/").ok()?;
+        {
+            let mut segments = uri.path_segments_mut().ok()?;
+            segments.clear();
+            for component in rest.components() {
+                segments.push(component.as_os_str().to_str()?);
+            }
+        }
+        return Some(uri);
+    }
+    file_path_to_url(db_path)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -195,29 +228,15 @@ mod tests {
     }
 
     #[test]
-    fn stdlib_round_trip_through_a_materialized_directory() {
+    fn stdlib_round_trips_with_or_without_a_materialized_directory() {
         let temp = tempfile::tempdir().unwrap();
-        // The view stores the canonical directory, as the owner does.
-        let stdlib_dir = temp.path().canonicalize().unwrap();
-        let roots = roots(Some(stdlib_dir.clone()));
-
-        let db_path = Path::new("<builtin>/std/prelude.baml");
-        let uri = uri_for_db_path(&roots, db_path).expect("materialized stdlib has a URI");
-        // Compare as URIs: both sides then pass through the same URL
-        // normalization. Comparing `uri.to_file_path()` against the joined
-        // path would fail on Windows, where `canonicalize` spells the
-        // directory with the `\\?\` verbatim prefix and the URL round trip
-        // (correctly) drops it.
-        assert_eq!(
-            uri,
-            Url::from_file_path(stdlib_dir.join("std").join("prelude.baml")).unwrap()
-        );
-        assert_eq!(canonical_document_path(&roots, &uri).unwrap(), db_path);
-    }
-
-    #[test]
-    fn stdlib_without_a_directory_has_no_uri() {
-        assert!(uri_for_db_path(&roots(None), Path::new("<builtin>/std/prelude.baml")).is_none());
+        for directory in [None, Some(temp.path().canonicalize().unwrap())] {
+            let roots = roots(directory);
+            let path = Path::new("<builtin>/baml/ns_env/env.baml");
+            let uri = uri_for_db_path(&roots, path).unwrap();
+            assert_eq!(uri.as_str(), "baml-stdlib:/baml/ns_env/env.baml");
+            assert_eq!(canonical_document_path(&roots, &uri).unwrap(), path);
+        }
     }
 
     #[test]
