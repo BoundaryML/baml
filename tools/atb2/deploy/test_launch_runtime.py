@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import stat
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -22,6 +24,49 @@ class LauncherTests(unittest.TestCase):
 
     identity = {"INFISICAL_CLIENT_ID": "identity-fixture", "INFISICAL_CLIENT_SECRET": "secret-fixture",
                 "INFISICAL_PROJECT_ID": "test-project"}
+
+    def test_user_login_ignores_machine_credentials_and_stays_outside_runtime(self):
+        source = {**self.identity, "INFISICAL_TOKEN": "stale-token", "ATB2_INFISICAL_AUTH": "user"}
+        with patch.object(launcher.os, "lstat", return_value=SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o700)), \
+             patch.object(launcher.subprocess, "run", return_value=self.export([
+                 {"key": "GH_TOKEN", "value": "app-fixture"},
+                 {"key": "INFISICAL_TOKEN", "value": "excluded"}])) as run:
+            env = launcher.runtime_environment(source)
+        run.assert_called_once()
+        self.assertIn("export", run.call_args.args[0])
+        exporter = run.call_args.kwargs["env"]
+        self.assertEqual(exporter["HOME"], "/data/infisical-home")
+        for key in ("INFISICAL_TOKEN", "INFISICAL_CLIENT_ID", "INFISICAL_CLIENT_SECRET"):
+            self.assertNotIn(key, exporter)
+            self.assertNotIn(key, env)
+        self.assertEqual(env["HOME"], "/data/home")
+        self.assertEqual(env["GH_TOKEN"], "app-fixture")
+        self.assertNotIn("ATB2_INFISICAL_AUTH", env)
+
+    def test_user_login_rejects_unsafe_storage_before_export(self):
+        safe = SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o711)
+        unsafe = [SimpleNamespace(st_uid=1000, st_mode=stat.S_IFDIR | 0o700),
+                  SimpleNamespace(st_uid=0, st_mode=stat.S_IFLNK | 0o700),
+                  SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o755)]
+        for info in unsafe:
+            with self.subTest(info=info), patch.object(launcher.os, "lstat", side_effect=[safe, info]), \
+                 patch.object(launcher.subprocess, "run") as run:
+                with self.assertRaises(ValueError):
+                    launcher.runtime_environment({**self.identity, "ATB2_INFISICAL_AUTH": "user"})
+                run.assert_not_called()
+
+    def test_unsafe_endpoint_is_rejected_before_credentials_are_sent(self):
+        for endpoint in ('http://example.invalid', 'https://user:pass@example.invalid', 'https://example.invalid/#fragment'):
+            with self.subTest(endpoint=endpoint), patch.object(launcher.subprocess, "run") as run:
+                with self.assertRaises(ValueError):
+                    launcher.runtime_environment({**self.identity, "INFISICAL_API_URL": endpoint})
+                run.assert_not_called()
+
+    def test_invalid_auth_mode_fails_closed(self):
+        with patch.object(launcher.subprocess, "run") as run:
+            with self.assertRaises(ValueError):
+                launcher.runtime_environment({"ATB2_INFISICAL_AUTH": "typo"})
+            run.assert_not_called()
 
     def test_universal_auth_keeps_credentials_in_root_children_only(self):
         login = subprocess.CompletedProcess([], 0, "fresh-token\n", "private diagnostic")

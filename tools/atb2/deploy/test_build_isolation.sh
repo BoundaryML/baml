@@ -42,6 +42,11 @@ EOF
 cat > /data/bootstrap/repo/baml_language/src/main.rs <<'EOF'
 use std::{env, fs, process::Command};
 fn main() {
+    if env::args().any(|a| a == "--version") {
+        assert_eq!(Command::new("id").arg("-u").output().unwrap().stdout, b"1001\n");
+        println!("baml 0.0.0");
+        return;
+    }
     assert_eq!(Command::new("id").arg("-u").output().unwrap().stdout, b"1000\n");
     assert_eq!(env::var("HOME").unwrap(), "/data/home");
     assert_eq!(env::var("FEEDBACK_SUPABASE_KEY").unwrap(), "exported-app-placeholder");
@@ -52,6 +57,10 @@ fn main() {
     assert!(!String::from_utf8_lossy(&raw_env).contains("machine-placeholder"));
     assert_eq!(fs::read_to_string("/data/home/.credentials.json").unwrap(), "test-login-placeholder");
     assert!(fs::read("/data/bootstrap/isolation-passed").is_err());
+    // Session persistence must work beneath the root-owned volume directory.
+    fs::create_dir_all("/data/agent-sessions/test-session").unwrap();
+    fs::write("/data/agent-sessions/test-session/turn.lock", "fixture").unwrap();
+    assert!(fs::create_dir("/data/unprepared-directory").is_err());
     assert!(!Command::new("setpriv").args(["--reuid=0", "id"]).status().unwrap().success());
     println!("runtime isolation passed");
 }
@@ -91,6 +100,28 @@ mv -fT /tmp/fake-infisical /usr/local/bin/infisical
 /usr/local/bin/atb2-bootstrap
 test "$(cat /data/bootstrap/isolation-passed)" = ok
 test "$(stat -c %a /data/home)" = 700
+
+# Starting the service must not publish any version. The first request does.
+python3 - <<'PYTEST'
+import pathlib, subprocess, time
+for _ in range(100):
+    if pathlib.Path('/data/cli-build/request.sock').exists(): break
+    time.sleep(.05)
+assert not list(pathlib.Path('/data/cli-cache').glob('*/*/baml-cli'))
+command = ['setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
+           'python3', '-I', '/usr/local/lib/atb2/cli-cache-service.py', '0.0.0']
+path = pathlib.Path(subprocess.check_output(command, text=True).strip())
+assert path.is_file() and path.stat().st_uid == 0 and path.stat().st_mode & 0o222 == 0
+# Even deleting the builder source artifact cannot cause a build on a cache hit.
+original = pathlib.Path('/data/bootstrap/target/debug/baml-cli')
+saved = original.with_name('saved-cli')
+original.rename(saved)
+try:
+    assert subprocess.check_output(command, text=True).strip() == str(path)
+finally:
+    saved.rename(original)
+print('PASS: lazy publication and build-free cache hit through runtime socket')
+PYTEST
 
 # A pinned cache remains usable even with no git remote and no network.
 setpriv --reuid=1001 --regid=1001 --clear-groups git -C /data/bootstrap/repo remote remove origin
