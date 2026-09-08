@@ -51,6 +51,10 @@ approves an issue by reacting to its announcement; authorized shepherds approve
 babysitter fixes by reacting to the exact proposal message.
 
 No GitHub OAuth, session key, or Supabase service-role key is needed by this app.
-Private proposals and run transcripts stay in the store; `/proposals/[id]`,
-`/runs`, and `/runs/[id]` provide Slack instructions without reading private data.
-The existing SQL can remain in place; no schema changes are needed for this UI.
+New `/proposals/[id]` pages read the deliberately public proposed-fix summary
+from lifecycle events with the anon key. The full implementation plan, raw CI
+logs and run transcripts remain private. Summary text is rendered as plain text,
+without executing HTML or loading embedded images. Slack announcements link to
+the proposal page; approval still happens on the exact Slack message.
+`/runs` and `/runs/[id]` continue to provide Slack instructions.
+No schema changes or new secrets are needed for proposal summaries.

@@ -1,3 +1,4 @@
+import { validProposalId } from "./proposals";
 import type { IssueEvent } from "./db";
 
 // Deliberately render known lifecycle fields only, never arbitrary event payloads
@@ -12,9 +13,10 @@ export function activityText(event: IssueEvent): string {
     case "fixed_dry_run": return "Dry-run fix passed; nothing pushed.";
     case "merged": return "PR merged.";
     case "babysit_started": return "Babysitter investigating CI and reviewer feedback.";
-    case "babysit_proposed": return "CI or reviewer feedback needs a fix. Review and approve the proposed fix on Slack.";
-    case "babysit_approved": return "Fix approved; implementing the plan and running tests.";
-    case "babysit_pushing": return "Approved fix passed tests; pushing to the PR branch.";
+    case "babysit_proposed": return "CI or reviewer feedback needs a fix. View the proposed fix, then approve on Slack.";
+    case "babysit_proposal_posted": return "Proposal posted to Slack for approval.";
+    case "babysit_approved": return "Fix approved; implementing the plan.";
+    case "babysit_pushing": return "Approved fix is being scanned and pushed; CI will validate it.";
     case "babysit_round": return event.payload.result === "fixed"
       ? "Fix completed; checking the updated PR." : "Fix attempt stopped; human attention required.";
     case "babysit_result": {
@@ -34,5 +36,5 @@ export function activityText(event: IssueEvent): string {
 }
 export function eventProposalPath(event: IssueEvent): string | null {
   const id = event.payload.proposal_id;
-  return typeof id === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(id) ? `/proposals/${id}` : null;
+  return typeof id === "string" && validProposalId(id) ? `/proposals/${id}` : null;
 }

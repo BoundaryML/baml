@@ -16,7 +16,7 @@ PR, the PR gets to green. Written in BAML against canary's toolchain
 |---------|---------------------|--------------|
 | ingest  | `intake.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
-| handle  | `handle_issue.baml` | design pass, fix pass, secret scan, a PR; a `runs` row and a thread reply |
+| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
 
 `pipeline.baml` runs them end to end; `store.baml` is the Supabase layer;
@@ -143,6 +143,15 @@ made once on the machine (`fly ssh console -a atb2-runner`, then
 and stored under `/data/home` on the runner's persistent volume. The Claude
 credential is not stored in Infisical or CI and is not passed by atb2.
 
+For a demo, `ATB2_INFISICAL_AUTH=user` explicitly selects a saved personal
+Infisical CLI login instead of the configured machine credentials. Log in as
+root with `HOME=/data/infisical-home` and the CLI's file vault. That directory
+must be owned by root with mode `0700`; `/data` must be owned by root and not
+writable by other users. The launcher validates these boundaries before reading
+the login and still passes only allowlisted application settings to the runtime.
+This mode uses the person's project access and may require a later interactive
+login. Omit the setting to keep Universal Auth for unattended operation.
+
 By hand, from the repo root:
 
 ```sh
@@ -228,10 +237,10 @@ no approval rights. Approval is available only in Slack. The website links to th
 configured Slack channel and has no sign-in, approval endpoints, or privileged
 store credential. Private proposals and run transcripts are not published there.
 
-The runner consumes an approval once, implements its plan, scans outgoing commits
-for secrets, announces the push in Slack, and pushes with a lease bound to the
+The runner consumes an approval once, implements its plan, independently runs the
+gate, announces the impending push in Slack, and pushes with a lease bound to the
 approved PR head. If the head or feedback changed before execution, it creates a
-new proposal. A concurrent push rejects the lease. A failed scan, blocked plan,
+new proposal. A concurrent push rejects the lease. A failed gate, blocked plan,
 or interrupted execution never retries a consumed approval automatically; a human
 can request babysitting again. New feedback after a successful push requires a new
 approval. The final message reports checks and remaining configured-reviewer
@@ -354,12 +363,6 @@ checks for sensitive paths, credential patterns, special/binary files, DDL,
 conflict markers, piped installers, and unpinned workflow actions. A scan failure
 stops the push and requires human attention.
 
-CLI versions are built only when an issue with repros needs one. The root-owned
-cache service delegates builds to the credential-free builder UID and publishes
-immutable executables under `/data/cli-cache/<version>/<revision>/baml-cli`.
-Cache hits never build or fetch. Sandboxes mount this cache read-only.
-PR CI is the build/test gate; fixes do not automatically rebuild the CLI or run
-the full local workspace gate before pushing.
 ## Published feedback fixes
 
 The hourly controller indexer backfills merge SHAs from GitHub for merged live
@@ -430,3 +433,23 @@ private `claim_promo` RPC and delivers it by DM. A retry returns the same claime
 code, so a failed DM does not consume a second one. Codes never appear in the
 thread. Apply the part 7b SQL, then load codes through the Supabase dashboard.
 Add the bot's `im:write` scope for `conversations.open`, reinstall it, and test DM delivery before inviting users to claim codes.
+
+### Shared CLI versions and PR validation
+
+On a cache miss, a credential-free builder publishes the requested `baml-cli` to
+`/data/cli-cache/<version>/<source-revision>/baml-cli`. `index.json` lists the
+available executables. The cache retains older versions/revisions and refuses
+to overwrite an existing key with different bytes. Only root publishes this
+cache; every sandbox sees it read-only. Versions are built lazily when an issue with repros requests them, from the
+corresponding `baml-language-<version>` tag. If the bootstrap compiler already
+matches, it is copied instead of rebuilt. Cache hits perform no build or fetch.
+Agent-written executables never enter the shared cache. The currently installed CLI
+remains at `/data/target/debug/baml-cli`.
+
+Fix agents no longer start with a CLI rebuild, and the controller no longer
+runs a local workspace test gate. Agents may run focused checks and must report
+what they actually tested. After per-proposal approval, the trusted push scans
+outgoing commits, verifies the exact branch head, and pushes. Slack receives a
+push notification; the babysitter then watches that PR's CI and reviewer
+feedback. Each subsequent fix still requires a fresh approval. A cached CLI
+represents its recorded revision, never unbuilt edits in the checkout.

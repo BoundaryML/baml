@@ -1,3 +1,6 @@
+import { InvestigationPrompt } from "./investigation-prompt";
+import { investigationPrompt } from "@/lib/investigation";
+import { CodeBlock, FormattedText } from "@/components/code";
 import Link from "next/link";
 import { ArrowLeft, Check, CircleDashed, ExternalLink, Loader2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -82,23 +85,26 @@ export function IssueDetail({ issue }: { issue: Issue }) {
             <DifficultyBadge difficulty={issue.difficulty} />
             <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
             <span>·</span>
-            <span>seen on v{issue.version}</span>
+            <span>BAML version: {issue.version || "unknown"}</span>
             <span>·</span>
             <span>
               {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
             </span>
           </div>
         </div>
-        <div className="w-full lg:w-[380px] shrink-0 rounded-lg border bg-card p-4">
+        <div className="w-full lg:w-[380px] shrink-0 space-y-3">
+          <InvestigationPrompt prompt={investigationPrompt(issue)} />
+          <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
           <PipelineStripLabeled stages={stages} />
+          </div>
         </div>
       </div>
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
         <div className="space-y-8 min-w-0">
           <Section title="Description">
-            <p className="text-sm leading-relaxed">{issue.description}</p>
+            <FormattedText text={issue.description} />
           </Section>
 
           {st.state === "rejected" && (
@@ -129,9 +135,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                     {Object.entries(r.files).map(([name, content]) => (
                       <div key={name}>
                         <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground border-t">{name}</div>
-                        <pre className="px-3 py-2 text-xs font-mono bg-code-bg text-code-fg overflow-x-auto">
-                          {content}
-                        </pre>
+                        <CodeBlock text={content} language={name} />
                       </div>
                     ))}
                   </div>
@@ -142,15 +146,13 @@ export function IssueDetail({ issue }: { issue: Issue }) {
 
           {issue.resolution_plan && (
             <Section title="Resolution plan (triage)">
-              <p className="text-sm leading-relaxed">{issue.resolution_plan}</p>
+              <FormattedText text={issue.resolution_plan} />
             </Section>
           )}
 
           {issue.design_doc && (
             <Section title="Design doc (agent)">
-              <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed rounded-md border p-3 bg-muted/30">
-                {issue.design_doc}
-              </pre>
+              <FormattedText text={issue.design_doc} />
             </Section>
           )}
 
@@ -164,7 +166,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                     <div className="text-xs text-muted-foreground">
                       @{c.author} · {new Date(c.at).toLocaleString()}
                     </div>
-                    <p className="mt-1 text-sm">{c.body}</p>
+                    <FormattedText text={c.body} />
                   </div>
                 ))}
               </div>

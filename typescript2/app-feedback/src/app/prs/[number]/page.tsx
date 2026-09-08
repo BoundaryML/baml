@@ -14,7 +14,7 @@ export default async function PrPage({ params, searchParams }: {
   return <main className="max-w-4xl mx-auto p-8 space-y-6"><LiveUpdates />
     <div><h1 className="text-2xl font-semibold">Babysitter · PR #{number}</h1>
       <a className="underline" href={`https://github.com/BoundaryML/baml/pull/${number}`}>View PR on GitHub</a>
-      <p className="text-sm text-muted-foreground">{dataset} · Updates every 30 seconds. Each proposed fix requires approval. Plans and diagnostics require maintainer sign-in.</p>
-    </div><Activity events={events} />
+      <p className="text-sm text-muted-foreground">{dataset} · Updates every 30 seconds. Each proposed fix requires approval. Review proposed fixes here and approve them on Slack.</p>
+    </div><Activity events={events} dataset={dataset} />
   </main>;
 }

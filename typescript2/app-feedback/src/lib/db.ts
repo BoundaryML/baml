@@ -11,6 +11,7 @@
 // Without them the pages render the mock dataset, so the UI can be built
 // and previewed with nothing provisioned; the header says which it is.
 
+import { validProposalId } from "./proposals";
 import { ISSUES, findIssue } from "./mock-data";
 import type { Comment, HandleOutcome, Issue } from "./types";
 
@@ -146,12 +147,21 @@ export async function loadIssueEvents(id: string, dataset: "live" | "eval" = "li
   );
 }
 
-/** Public lifecycle metadata; private plans stay in the store and Slack. */
+/** Public lifecycle and proposed-fix summaries; raw diagnostics stay private. */
 export async function loadPrEvents(number: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
   if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error("Invalid PR number");
   if (dataSource === "mock") return [];
   const pr = `https://github.com/BoundaryML/baml/pull/${number}`;
   return rest<IssueEvent[]>(
     `events?select=id,kind,payload,slack_ts,created_at&payload->>pr=eq.${encodeURIComponent(pr)}&dataset=eq.${dataset}&order=created_at,id`,
+  );
+}
+
+/** Only the deliberately public summary and lifecycle, never the private proposal table. */
+export async function loadProposalEvents(id: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
+  if (!validProposalId(id)) throw new Error("Invalid proposal ID");
+  if (dataSource === "mock") return [];
+  return rest<IssueEvent[]>(
+    `events?select=id,kind,payload,slack_ts,created_at&payload->>proposal_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id&limit=100`,
   );
 }

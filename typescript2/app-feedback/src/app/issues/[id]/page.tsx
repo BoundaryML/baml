@@ -18,5 +18,5 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
   const events = await loadIssueEvents(id, issue.dataset);
   const pr = "pr" in issue.status ? issue.status.pr : null;
   const number = pr?.match(/^https:\/\/github\.com\/BoundaryML\/baml\/pull\/([1-9][0-9]{0,9})$/)?.[1];
-  return <><LiveUpdates /><ApproveIssue issue={issue} /><IssueDetail issue={issue} />{number && <Link href={`/prs/${number}?dataset=${issue.dataset}`}>PR #{number} babysitter activity</Link>}<Activity events={events} /></>;
+  return <><LiveUpdates /><ApproveIssue issue={issue} /><IssueDetail issue={issue} />{number && <Link href={`/prs/${number}?dataset=${issue.dataset}`}>PR #{number} babysitter activity</Link>}<Activity events={events} dataset={issue.dataset} /></>;
 }
