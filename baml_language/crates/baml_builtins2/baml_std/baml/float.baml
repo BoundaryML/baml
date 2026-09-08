@@ -98,14 +98,8 @@ class Float {
     /// `(-0.0).signum()` is `-1.0` and `(0.0).signum()` is `1.0`. NaN returns
     /// `1.0`, matching the total order, which places NaN above every number.
     ///
-    /// Native because no BAML-level operator can see the sign of a zero. The
-    /// total order deliberately treats `-0.0` and `0.0` as one value — `==`
-    /// reports them equal and `-0.0 < 0.0` is false — and `1.0 / 0.0` throws
-    /// `DivisionByZero` rather than yielding a signed infinity. `to_string` is
-    /// the only other surface that reveals the sign.
-    ///
-    /// Note this is the one place `float` exposes a distinction the ordering
-    /// hides; it is the sign bit, not an order relation.
+    /// Note this exposes the sign bit and has different semantics from the ordering relation:
+    /// while `0.0 == -0.0`, `(0.0).signum() != (-0.0).signum()`.
     ///
     /// # Examples
     ///
@@ -280,7 +274,7 @@ class Float {
     ///
     /// Every boundary case falls out of that division:
     ///
-    /// - `self < 0` gives NaN, since `ln` of a negative is NaN.
+    /// - `self < 0` gives NaN.
     /// - `self == 0` with `base > 1` gives `-inf`: `-inf / positive`.
     /// - `self == 0` with `0 < base < 1` gives `+inf`; `ln(base)` is negative,
     ///   so the sign flips relative to the case above.
@@ -292,12 +286,11 @@ class Float {
     ///   match `ln(self)`, since `±finite / +0.0` is `±inf`.
     /// - `base == 1` with `self == 1` gives NaN: `0 / 0`.
     ///
-    /// The result is a ratio of two logarithms, so it need not be correctly
-    /// rounded even when the exact answer is representable:
+    /// The result is a ratio of two logarithms, so it may not be precise even
+    /// when the exact answer is representable. For example,
     /// `(1000.0).log(10.0)` yields `2.9999999999999996` rather than `3.0`.
-    /// Prefer `log10` for base 10 and `ln` for base `e`; both were measured
-    /// more accurate on the cases tested, though Rust bounds the precision of
-    /// none of them.
+    /// Prefer `log10` for base 10 and `ln` for base `e`; both tend to be more
+    /// accurate, though they still don't guarantee perfect precision.
     ///
     /// # Examples
     ///
@@ -316,16 +309,7 @@ class Float {
 
     /// Returns `e ** self`, the natural exponential of `self`.
     ///
-    /// Computed as `float.e().pow(self)`, and **not** correctly rounded. It
-    /// carries no accuracy bound: `pow` has no documented precision guarantee
-    /// (Rust's float transcendentals are explicitly non-deterministic across
-    /// platforms and versions), and `float.e()` is itself a rounded constant
-    /// whose error is amplified by `self`. Measured against a correctly
-    /// rounded `exp` this was 1 ulp out at `2.0`, 29 at `100.0` and 310 at
-    /// `700.0`, growing roughly linearly with the exponent.
-    ///
-    /// Use it where a relative error of about `self * 1e-16` is acceptable,
-    /// not where the closest double to `e ** self` is required.
+    /// Precision and determinism are not guaranteed and may vary depending on platform and version.
     ///
     /// # Examples
     ///
@@ -344,12 +328,9 @@ class Float {
 
     /// Returns the natural logarithm (base `e`) of `self`.
     ///
-    /// Defined as `self.log(float.e())`. `ln(e)` is `1.0`, so the division
-    /// `log` performs adds no error of its own and `ln` is exactly as accurate
-    /// as `log` — which Rust does not formally bound.
+    /// Like `log`, returns `NaN` for `self < 0` and negative infinity for `self == 0`.
     ///
-    /// Boundaries follow `log`: `self < 0` → NaN, `self == 0` → `-∞`,
-    /// `self == 1` → `0.0`.
+    /// Precision and determinism are not guaranteed and may vary depending on platform and version.
     ///
     /// # Examples
     ///
@@ -365,11 +346,9 @@ class Float {
 
     /// Returns the base-2 logarithm of `self`.
     ///
-    /// A readability alias for `self.log(2.0)`, with exactly its accuracy and
-    /// therefore no guarantee: Rust does not bound the precision of its float
-    /// logarithms. On the cases tested it was measured exact for powers of two
-    /// and within one ulp elsewhere, but that is an observation, not a
-    /// contract. Same boundaries as `ln`.
+    /// Like `log`, returns `NaN` for `self < 0` and negative infinity for `self == 0`.
+    ///
+    /// Precision and determinism are not guaranteed and may vary depending on platform and version.
     ///
     /// # Examples
     ///
@@ -385,12 +364,10 @@ class Float {
 
     /// Returns the base-10 logarithm of `self`.
     ///
-    /// Binds the platform's `log10` rather than computing `ln(self) / ln(10)`,
-    /// which loses the last bits at clean inputs — `(1000.0).log(10.0)` yields
-    /// `2.9999999999999996` rather than `3.0`. On every case tested `log10`
-    /// returned the correctly rounded result where the ratio did not, but Rust
-    /// documents no precision guarantee for either, so this is a measured
-    /// improvement rather than a promise. Same boundaries as `ln`.
+    /// Like `log`, returns `NaN` for `self < 0` and negative infinity for `self == 0`.
+    ///
+    /// Tends to be more precise than `log` with base `10.0`, however
+    /// precision and determinism are not guaranteed and may vary depending on platform and version.
     ///
     /// # Examples
     ///
@@ -406,10 +383,10 @@ class Float {
 
     /// Returns the real cube root of `self`.
     ///
-    /// Defined for negative inputs, unlike `self.pow(1.0 / 3.0)`: `pow` rounds
-    /// `1.0 / 3.0` to a double before exponentiating, so it returns NaN for a
+    /// Defined for negative inputs, unlike `self.pow(1.0 / 3.0)`:
+    /// Since a `float` must lossily round `1.0 / 3.0`, `pow` will return NaN for a
     /// negative base and misses perfect cubes (`(1000.0).pow(1.0 / 3.0)` yields
-    /// `9.999999999999998`).
+    /// `9.999999999999998` instead of `10.0`).
     ///
     /// # Examples
     ///
@@ -636,7 +613,7 @@ class Float {
     }
 
     /// Returns the machine epsilon: the difference between `1.0` and the next
-    /// larger representable float, approximately `2.220446049250313e-16`.
+    /// largest representable float, approximately `2.220446049250313e-16`.
     ///
     /// This is the standard tolerance unit for approximate float comparison,
     /// e.g. `(a - b).abs() < float.epsilon() * scale`. It is *not* the smallest
