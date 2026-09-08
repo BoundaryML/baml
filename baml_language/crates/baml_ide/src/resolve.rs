@@ -155,6 +155,14 @@ pub fn symbol_at(
         };
     }
 
+    if token
+        .parent()
+        .is_some_and(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+        && crate::syntax::dotted_chain_to(&token).len() > 1
+    {
+        return qualified_item_at(db, file, offset, &token);
+    }
+
     if let Some(target) = local_at(db, file, offset, &name) {
         return Some(target);
     }
