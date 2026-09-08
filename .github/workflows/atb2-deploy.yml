@@ -88,4 +88,4 @@ jobs:
         if: env.FLY_API_TOKEN != ''
         run: |
           flyctl apps list --json | grep -q '"atb2-runner"' || { echo "the Fly app atb2-runner does not exist yet; see tools/atb2/README.md"; exit 1; }
-          flyctl deploy tools/atb2 --config tools/atb2/deploy/fly.toml --remote-only --ha=false
+          flyctl deploy tools/atb2 --config deploy/fly.toml --remote-only --ha=false

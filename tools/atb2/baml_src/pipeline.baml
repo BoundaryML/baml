@@ -297,7 +297,7 @@ function untriaged_feedback() -> Feedback[] {
             "feedback",
             "select=*&issue_ids=eq.%7B%7D&dataset="
                 + eq(dataset())
-                + "&order=created_at,id&limit=100&offset="
+                + "&order=received_at,id&limit=100&offset="
                 + offset.to_string(),
         );
         for (let row in rows) {
