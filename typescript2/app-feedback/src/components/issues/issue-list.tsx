@@ -10,6 +10,7 @@ import type { Difficulty, Issue, StatusState, Subsystem } from "@/lib/types";
 import { progress, relativeTime, stageInfo } from "@/lib/pipeline";
 import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStrip } from "./pipeline-strip";
+import { StatTiles } from "./stat-tiles";
 
 type ViewMode = "list" | "board";
 
@@ -122,10 +123,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
   const [showEval, setShowEval] = useState(false);
   const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length, [issues]);
 
+  const datasetIssues = useMemo(() => issues.filter((i) => showEval || i.dataset !== "eval"), [issues, showEval]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return issues
-      .filter((i) => showEval || i.dataset !== "eval")
+    return datasetIssues
       .filter((i) => view === "board" || status === "all" || i.status.state === status)
       .filter((i) => subsystem === "all" || i.subsystem === subsystem)
       .filter((i) => difficulty === "all" || i.difficulty === difficulty)
@@ -141,10 +143,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           ? a.updated_at.localeCompare(b.updated_at)
           : b.updated_at.localeCompare(a.updated_at),
       );
-  }, [issues, status, subsystem, difficulty, query, oldestFirst, view, showEval]);
+  }, [datasetIssues, status, subsystem, difficulty, query, oldestFirst, view]);
 
   return (
     <div className="space-y-4">
+      <StatTiles issues={datasetIssues} />
       <div className="flex flex-col gap-3">
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
           {view === "list" ? (

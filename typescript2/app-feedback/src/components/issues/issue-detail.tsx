@@ -75,34 +75,24 @@ export function IssueDetail({ issue }: { issue: Issue }) {
         <ArrowLeft className="h-4 w-4" /> All issues
       </Link>
 
-      <div className="mt-3 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="font-mono text-xs text-muted-foreground">{issue.id}</div>
-          <h1 className="mt-1 text-2xl font-semibold leading-tight">{issue.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <StatusBadge issue={issue} />
-            <SubsystemBadge subsystem={issue.subsystem} />
-            <DifficultyBadge difficulty={issue.difficulty} />
-            <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
-            <span>·</span>
-            <span>BAML version: {issue.version || "unknown"}</span>
-            <span>·</span>
-            <span>
-              {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
-            </span>
+      <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
+        <div className="min-w-0 space-y-8">
+          <div className="min-w-0">
+            <div className="font-mono text-xs text-muted-foreground">{issue.id}</div>
+            <h1 className="mt-1 text-2xl font-semibold leading-tight">{issue.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <StatusBadge issue={issue} />
+              <SubsystemBadge subsystem={issue.subsystem} />
+              <DifficultyBadge difficulty={issue.difficulty} />
+              <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
+              <span>·</span>
+              <span>BAML version: {issue.version || "unknown"}</span>
+              <span>·</span>
+              <span>
+                {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="w-full lg:w-[380px] shrink-0 space-y-3">
-          <InvestigationPrompt prompt={investigationPrompt(issue)} />
-          <div className="rounded-lg border bg-card p-4">
-          <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
-          <PipelineStripLabeled stages={stages} />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
-        <div className="space-y-8 min-w-0">
           <Section title="Description">
             <FormattedText text={issue.description} />
           </Section>
@@ -175,6 +165,11 @@ export function IssueDetail({ issue }: { issue: Issue }) {
         </div>
 
         <aside className="space-y-6">
+          <InvestigationPrompt prompt={investigationPrompt(issue)} />
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
+            <PipelineStripLabeled stages={stages} />
+          </div>
           <Section title="Timeline">
             <ol className="relative border-l ml-2.5 space-y-4">
               {stages.map((s) => (
