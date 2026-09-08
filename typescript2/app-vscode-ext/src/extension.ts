@@ -1,5 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  STDLIB_SCHEME,
+  STDLIB_SOURCE_METHOD,
+  StdlibDocuments,
+  type StdlibSourceResult,
+} from '@b/pkg-lsp';
 import * as vscode from 'vscode';
 import {
   LanguageClient,
@@ -21,7 +27,7 @@ import { WebviewPanel } from './panels/WebviewPanel';
 //
 // The server multiplexes projects: it receives the window's workspace
 // folders, discovers every BAML project underneath them, and serves ALL
-// `.baml` documents — including materialized stdlib sources, which belong
+// `.baml` documents, including read-only stdlib documents, which belong
 // to no project and previously caused the extension to spawn a doomed
 // sibling server per stdlib directory (its `baml.openBamlPanel`
 // registration collided with the first client's and start() rejected).
@@ -30,6 +36,8 @@ import { WebviewPanel } from './panels/WebviewPanel';
 // window instead of one arbitrary project.
 
 let client: LanguageClient | undefined;
+let stdlibDocuments: StdlibDocuments;
+let stdlibConnection: vscode.Disposable | undefined;
 let clientStartFailed = false;
 let knownProjects: string[] = [];
 let currentServerState: 'starting' | 'running' | 'stopped' | 'error' =
@@ -198,11 +206,14 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
   const clientOptions: LanguageClientOptions = {
     // Every `.baml` document in the window — project files, files outside
     // any project (the server mints provisional roots for those), and
-    // materialized stdlib sources alike. No `workspaceFolder` pin: the
+    // read-only stdlib documents alike. No `workspaceFolder` pin: the
     // client library forwards ALL workspace folders in `initialize` and
     // `workspace/didChangeWorkspaceFolders`, and the server discovers
     // projects underneath them.
-    documentSelector: [{ language: 'baml', scheme: 'file' }],
+    documentSelector: [
+      { language: 'baml', scheme: 'file' },
+      { language: 'baml', scheme: STDLIB_SCHEME },
+    ],
     initializationOptions: {
       bamlClient: {
         capabilities: [
@@ -248,11 +259,21 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
         updateStatusBar('starting');
         break;
       case State.Running:
+        stdlibConnection?.dispose();
+        stdlibConnection = stdlibDocuments.connect((uri, token) =>
+          created.sendRequest<StdlibSourceResult>(
+            STDLIB_SOURCE_METHOD,
+            { uri },
+            token,
+          ),
+        );
         clientStartFailed = false;
         updateStatusBar('running');
         validateServerCompatibility(created);
         break;
       case State.Stopped:
+        stdlibConnection?.dispose();
+        stdlibConnection = undefined;
         knownProjects = [];
         updateStatusBar(clientStartFailed ? 'error' : 'stopped');
         break;
@@ -330,6 +351,8 @@ function validateServerCompatibility(client: LanguageClient) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  stdlibDocuments = new StdlibDocuments(vscode);
+  context.subscriptions.push(stdlibDocuments);
   const config = vscode.workspace.getConfiguration('baml');
   playgroundDir = getPlaygroundDir(context);
   wrapperPath =

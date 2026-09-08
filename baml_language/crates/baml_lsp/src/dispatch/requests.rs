@@ -470,8 +470,6 @@ pub(super) fn goto_definition(
     let Some(target) = baml_ide::definition_at(snap.db(), file, offset) else {
         return Ok(None);
     };
-    // A stdlib target with no materialized directory has no URI to open —
-    // "no definition" is the honest answer, not an error.
     Ok(super::proto::location(snap, target).map(lsp_types::GotoDefinitionResponse::Scalar))
 }
 
@@ -929,4 +927,43 @@ mod tests {
             Some(std::path::Path::new("/toolchain/stdlib"))
         );
     }
+}
+
+pub(super) enum StdlibSourceRequest {}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(super) struct StdlibSourceParams {
+    uri: lsp_types::Url,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(super) struct StdlibSourceResult {
+    content: String,
+}
+
+impl lsp_types::request::Request for StdlibSourceRequest {
+    type Params = StdlibSourceParams;
+    type Result = StdlibSourceResult;
+    const METHOD: &'static str = "baml/stdlibSource";
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "dispatch-table signature: handlers own their params"
+)]
+pub(super) fn stdlib_source(
+    snap: &crate::snapshot::Snapshot,
+    params: StdlibSourceParams,
+) -> Result<StdlibSourceResult, LspError> {
+    if params.uri.scheme() != crate::paths::STDLIB_SCHEME {
+        return Err(LspError::InvalidParams("expected a stdlib URI".to_owned()));
+    }
+    let path = crate::paths::canonical_document_path(snap.roots(), &params.uri)?;
+    let file = snap
+        .db()
+        .get_file(&path)
+        .ok_or(LspError::FileNotFound(path))?;
+    Ok(StdlibSourceResult {
+        content: file.text(snap.db()).clone(),
+    })
 }
