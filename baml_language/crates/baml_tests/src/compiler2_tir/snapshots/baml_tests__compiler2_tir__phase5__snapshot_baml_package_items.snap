@@ -7,7 +7,7 @@ namespace baml:
   class Bigint { methods: [abs, isqrt, pow, ilog, to_int, parse, random, _random_byte_count, _random_in_range] }
   class Bool { methods: [random] }
   type Concrete
-  class Float { methods: [is_nan, is_infinite, is_finite, abs, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf] }
+  class Float { methods: [is_nan, is_infinite, is_finite, abs, signum, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, exp, ln, log2, log10, cbrt, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf, max_finite, min_finite, epsilon] }
   type FloatStats
   type FromJson
   class Int { methods: [abs, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, _random_in_range, max_value, min_value] }
