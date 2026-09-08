@@ -9,3 +9,7 @@
 
 !deploy/sandbox.py
 !deploy/push.py
+
+!deploy/cache-cli.py
+!deploy/cli-cache-service.py
+!deploy/build-version.py

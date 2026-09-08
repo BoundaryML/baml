@@ -3,6 +3,8 @@
 import json
 import os
 import resource
+from urllib.parse import urlsplit
+import stat
 import subprocess
 import sys
 
@@ -28,9 +30,20 @@ FIXED_ENV = {
 
 def runtime_environment(source):
     env = {key: source[key] for key in RUNTIME_KEYS if key in source}
+    auth = source.get("ATB2_INFISICAL_AUTH", "machine")
+    if auth not in ("machine", "user"):
+        raise ValueError("invalid Infisical authentication mode")
+    if auth == "user":
+        # Only explicitly selected demo logins may replace machine authentication.
+        # Reject symlinks and writable parents before trusting persisted CLI state.
+        for path in ("/data", "/data/infisical-home"):
+            info = os.lstat(path)
+            forbidden = 0o077 if path.endswith("infisical-home") else 0o022
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & forbidden:
+                raise ValueError("Infisical login directory must be private to root")
     client_id = source.get("INFISICAL_CLIENT_ID")
     client_secret = source.get("INFISICAL_CLIENT_SECRET")
-    if client_id or client_secret or source.get("INFISICAL_TOKEN"):
+    if auth == "user" or client_id or client_secret or source.get("INFISICAL_TOKEN"):
         project = source.get("INFISICAL_PROJECT_ID")
         if not project:
             raise ValueError("INFISICAL_PROJECT_ID is required")
@@ -40,10 +53,17 @@ def runtime_environment(source):
             "PATH": FIXED_ENV["PATH"], "HOME": "/root", "LANG": "C.UTF-8",
             "INFISICAL_DISABLE_UPDATE_CHECK": "true",
         }
+        if auth == "user":
+            export_env["HOME"] = "/data/infisical-home"
         for key in ("INFISICAL_API_URL", "INFISICAL_DOMAIN"):
             if key in source:
+                url = urlsplit(source[key])
+                if url.scheme != 'https' or not url.hostname or url.username or url.password or url.fragment:
+                    raise ValueError('Infisical endpoint must use HTTPS without embedded credentials')
                 export_env[key] = source[key]
-        if client_id or client_secret:
+        if auth == "user":
+            pass  # The root exporter uses its saved CLI session, never inherited tokens.
+        elif client_id or client_secret:
             if not client_id or not client_secret:
                 raise ValueError("both Infisical Universal Auth credentials are required")
             login_env = {

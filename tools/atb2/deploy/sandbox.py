@@ -70,6 +70,12 @@ def command(cwd, argv, extra=None):
     baseline = DATA / 'agent-cache/repo/target/debug/baml-cli'
     if root != DATA / 'repo' and baseline.is_file():
         args += ['--ro-bind', str(baseline), str(baseline)]
+    # Shared versioned executables are root-published and read-only in every sandbox.
+    cli_cache = DATA / 'cli-cache'
+    if cli_cache.exists():
+        if cli_cache.is_symlink() or cli_cache.stat().st_uid != 0 or cli_cache.stat().st_mode & 0o022:
+            raise ValueError('unsafe shared CLI cache')
+        args += ['--ro-bind', str(cli_cache), str(cli_cache)]
     # The installed compiler is safe to expose read-only to repro checks.
     if Path('/data/target/debug/baml-cli').is_file():
         args += ['--ro-bind', '/data/target/debug/baml-cli', '/data/target/debug/baml-cli']
@@ -88,7 +94,7 @@ class CredentialStore:
     def token(self):
         # Different conversations have separate broker processes. Serialize
         # refreshes across them as well as across this server's threads.
-        with self.lock, self.path.with_name('.atb2-oauth.lock').open('a', opener=lambda path, flags: os.open(path, flags, 0o600)) as lock:
+        with self.lock, open(self.path.with_name('.atb2-oauth.lock'), 'a', opener=lambda path, flags: os.open(path, flags | os.O_NOFOLLOW, 0o600)) as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             data = json.loads(self.path.read_text())
             auth = data['claudeAiOauth']
@@ -126,6 +132,7 @@ class BrokerHandler(http.server.BaseHTTPRequestHandler):
         if (self.path not in ('/v1/messages', '/v1/messages?beta=true', '/v1/messages/count_tokens', '/v1/messages/count_tokens?beta=true')
             or self.headers.get('Authorization') != 'Bearer ' + self.server.client_token):
             self.send_error(403); return
+        started = False
         try:
             size = int(self.headers.get('Content-Length', '-1'))
             if size < 0 or size > 8 * 1024 * 1024 or self.headers.get('Transfer-Encoding'):
@@ -148,6 +155,7 @@ class BrokerHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header('Content-Type', response.getheader('Content-Type', 'application/json'))
                 self.end_headers()
+                started = True
                 while True:
                     chunk = response.read1(65536)
                     if not chunk: break
@@ -155,7 +163,10 @@ class BrokerHandler(http.server.BaseHTTPRequestHandler):
             finally: conn.close()
         except Exception:
             # Never log request bodies, tokens, upstream diagnostics or errors.
-            with contextlib.suppress(Exception): self.send_error(502, 'Claude broker unavailable')
+            if started:
+                self.close_connection = True
+            else:
+                with contextlib.suppress(Exception): self.send_error(502, 'Claude broker unavailable')
 
 
 @contextlib.contextmanager

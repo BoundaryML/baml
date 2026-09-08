@@ -12,7 +12,7 @@ fi
 # runtime directories retain their contents, including the persistent CLI login.
 chown root:root /data
 chmod 711 /data
-for name in home repo target cargo rustup worktrees runs merge repro-check agent-cache bootstrap; do
+for name in home repo target cargo rustup worktrees runs merge repro-check agent-cache agent-sessions bootstrap; do
   dir="/data/$name"
   if [ -L "$dir" ]; then
     echo "atb2: refusing symlink at $dir" >&2
@@ -92,5 +92,7 @@ with os.fdopen(fd, "w") as out:
     out.write(revision + "\n")
 os.replace(tmp, "/data/target/.baml-cli-rev")
 '
+# Start the credential-free cache service; it builds nothing until an issue asks.
+env -i PATH="$PATH" /usr/bin/python3 -I /usr/local/lib/atb2/cli-cache-service.py &
 # Fetch secrets while still root, then replace the environment before setpriv.
 exec /usr/bin/python3 -I /usr/local/bin/atb2-launch-runtime.py "$@"

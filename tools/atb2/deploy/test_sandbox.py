@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -22,6 +23,23 @@ push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)
 
 
 class BrokerTests(unittest.TestCase):
+    def test_saved_login_uses_private_lock_and_returns_cached_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '.credentials.json'
+            path.write_text(json.dumps({'claudeAiOauth': {
+                'accessToken': 'private-fixture', 'expiresAt': (time.time() + 3600) * 1000}}))
+            with patch.object(sandbox.http.client, 'HTTPSConnection') as connection:
+                self.assertEqual(sandbox.CredentialStore(path).token(), 'private-fixture')
+                connection.assert_not_called()
+            self.assertEqual((path.parent / '.atb2-oauth.lock').stat().st_mode & 0o777, 0o600)
+
+    def test_login_lock_refuses_symlinks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '.credentials.json'
+            (path.parent / '.atb2-oauth.lock').symlink_to(path.parent / 'other')
+            with self.assertRaises(OSError):
+                sandbox.CredentialStore(path).token()
+
     def test_broker_replaces_auth_and_refuses_other_destinations(self):
         seen = []
         class Credentials:
@@ -46,6 +64,25 @@ class BrokerTests(unittest.TestCase):
             self.assertEqual(send('/v1/messages',broker.client_token),(200,b'{"ok":true}'))
         self.assertEqual(len(seen),1)
         self.assertEqual(seen[0][2]['Authorization'],'Bearer private-fixture')
+
+    def test_upstream_failure_after_headers_does_not_append_an_http_error(self):
+        class Credentials:
+            def token(self): return 'private-fixture'
+        class Response:
+            status = 200
+            def getheader(self, *_): return 'text/event-stream'
+            def read1(self, _): raise OSError('private-upstream-diagnostic')
+        class Connection:
+            def request(self, *_): pass
+            def getresponse(self): return Response()
+            def close(self): pass
+        with sandbox.broker(Credentials()) as broker:
+            broker.connect = Connection
+            req = urllib.request.Request('http://127.0.0.1:'+str(broker.server_port)+'/v1/messages',
+                data=b'{}', headers={'Authorization':'Bearer '+broker.client_token})
+            with urllib.request.urlopen(req) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b'')
 
     def test_broker_errors_never_echo_credentials(self):
         class Credentials:
@@ -141,6 +178,25 @@ print('isolated')'''
     def test_linked_worktrees_are_refused(self):
         (self.work/'.git').write_text('gitdir: /data/repo/.git/worktrees/unsafe')
         with self.assertRaises(ValueError): sandbox.workspace(str(self.work))
+
+    def test_shared_cli_is_readable_but_not_writable_from_sandbox(self):
+        cache = Path('/data/cli-cache')
+        cache.mkdir(exist_ok=True)
+        cache.chmod(0o755)
+        fixture = cache / 'test-readonly'
+        fixture.write_text('cached fixture')
+        fixture.chmod(0o444)
+        self.addCleanup(fixture.unlink)
+        code = """from pathlib import Path
+p = Path('/data/cli-cache/test-readonly')
+assert p.read_text() == 'cached fixture'
+assert not Path('/data/cli-build/request.sock').exists()
+try: p.write_text('poison')
+except OSError: pass
+else: raise AssertionError('shared cache was writable')
+"""
+        result = self.isolated('/usr/bin/python3', '-c', code)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_workspace_caches_cannot_poison_other_sessions(self):
         with tempfile.TemporaryDirectory(dir='/data/worktrees') as other:
