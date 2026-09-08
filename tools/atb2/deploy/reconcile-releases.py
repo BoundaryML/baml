@@ -119,7 +119,9 @@ class Reconciler:
                     sha, merged_at = row.get('merge_sha'), row.get('merged_at')
                     # Backfill pre-feature merged issues from the PR API itself.
                     if not sha:
-                        match = re.fullmatch(r'https://github.com/BoundaryML/baml/pull/([1-9][0-9]{0,9})',row['status'].get('pr',''))
+                        status = row.get('status')
+                        match = re.fullmatch(r'https://github.com/BoundaryML/baml/pull/([1-9][0-9]{0,9})',
+                                             status.get('pr','') if isinstance(status,dict) else '')
                         if not match: continue
                         pr = self.api(f'/repos/{REPO}/pulls/{match[1]}')
                         sha, merged_at = pr.get('merge_commit_sha'), pr.get('merged_at')
@@ -131,7 +133,7 @@ class Reconciler:
                     version = first_fixed_version(sha,merged_at,releases,self.contains,self.manifest)
                     if version:
                         self.store(urlencode({'id':'eq.'+row['id'],'dataset':'eq.live','state':'eq.merged','fixed_in':'is.null','merge_sha':'eq.'+sha}),{'fixed_in':version})
-                except (ValueError, OSError, subprocess.SubprocessError, KeyError):
+                except (ValueError, OSError, subprocess.SubprocessError, KeyError, AttributeError, TypeError):
                     print('atb2: one release resolution could not be verified; will retry',flush=True)
             if len(rows) < 100:
                 # A completed scan restarts from the top next hour, retrying

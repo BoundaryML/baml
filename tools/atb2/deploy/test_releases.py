@@ -26,8 +26,8 @@ def scan_reconciler(folder, rows, contained_sha):
     return rec
 
 
-def merged_row(id, sha):
-    return {'id':id,'status':{},'merge_sha':sha,'merged_at':'2026-09-01T00:00:00Z','fixed_in':None}
+def merged_row(id, sha, status={}):
+    return {'id':id,'status':status,'merge_sha':sha,'merged_at':'2026-09-01T00:00:00Z','fixed_in':None}
 class ReleaseTests(unittest.TestCase):
     def test_catalog_excludes_drafts_nightlies_and_other_products(self):
         rows=[{'tag_name':tag,'draft':draft,'prerelease':pre,'published_at':'2026-09-06T00:00:00Z'} for tag,draft,pre in [
@@ -57,6 +57,19 @@ class ReleaseTests(unittest.TestCase):
             rec.run()
             self.assertEqual(rows[10_000]['fixed_in'],'0.19.0')
             self.assertEqual(rows[10_049]['fixed_in'],'0.19.0')
+            self.assertEqual((folder/'scan-cursor').read_text(),'')
+    def test_malformed_status_rows_cannot_abort_the_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            # A null and a non-object status (both possible in the store) must be
+            # skipped, not abort the run and re-poison every later hourly scan.
+            rows = [merged_row('I-00000',None,status=None),
+                    merged_row('I-00001',None,status='merged'),
+                    merged_row('I-00002','b'*40)]
+            scan_reconciler(folder,rows,'b'*40).run()
+            self.assertIsNone(rows[0]['fixed_in'])
+            self.assertIsNone(rows[1]['fixed_in'])
+            self.assertEqual(rows[2]['fixed_in'],'0.19.0')
             self.assertEqual((folder/'scan-cursor').read_text(),'')
     def test_corrupt_cursor_falls_back_to_a_full_rescan(self):
         with tempfile.TemporaryDirectory() as tmp:
