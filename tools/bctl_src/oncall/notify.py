@@ -76,7 +76,12 @@ def compose_handoff(
 
         footer = "\n\n_To swap shifts or update the roster, see <https://github.com/BoundaryML/baml/tree/canary/tools/bctl_src/oncall/README.md|the oncall README>._"
 
-        body = f"""*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}{upcoming_block}{footer}"""
+        reminder = (
+            "\n\nPlease prepare the changelog and put out this week's BAML release. "
+            "See <https://github.com/BoundaryML/baml/blob/canary/"
+            "baml_language/RELEASING.md|RELEASING.md> for the release steps."
+        )
+        body = f"""*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}{reminder}{upcoming_block}{footer}"""
 
         msgs.append((sched.slack_config.notification_channel, body))
     return msgs

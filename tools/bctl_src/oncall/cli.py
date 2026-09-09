@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import typer
 from rich.console import Console
@@ -125,10 +126,8 @@ def notify(
             console.print(f"[red]error[/] {loc}{e.message}")
         raise typer.Exit(1)
     try:
-        # `date.today()` is local-tz; UTC drift can shift the perceived day
-        # by up to ~1h around midnight. Fine — handoffs run on a weekly cron
-        # well away from any boundary.
-        msgs = compose_handoff(sched, datetime.date.today(), wc)
+        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        msgs = compose_handoff(sched, today, wc)
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
@@ -179,11 +178,12 @@ def notify_failure(
         parse_error = str(e)
         console.print(f"[yellow]warn[/]: schedule unparseable ({e}); posting without @-mention")
 
-    target_channel = channel or (sched.slack_config.notification_channel if sched else "#oncall")
+    target_channel = channel or (sched.slack_config.notification_channel if sched else "#general")
 
     oncall_names: list[str] = []
     if sched is not None:
-        current = _current_shift(sched, datetime.date.today())
+        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        current = _current_shift(sched, today)
         if current is not None:
             name = current.assignments.get("oncall-releases")
             if name:

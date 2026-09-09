@@ -1,6 +1,6 @@
 # BEGIN_ONCALL_METADATA
 # slack_config:
-#   notification_channel: "#oncall"
+#   notification_channel: "#general"
 #
 # roster_by_rotation:
 #   oncall-releases: [antonio, kai, paulo, sam, vbv, aaron, avery]
