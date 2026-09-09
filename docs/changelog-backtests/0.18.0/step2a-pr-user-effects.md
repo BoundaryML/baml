@@ -253,7 +253,7 @@ A PR can contain several independently classified effects. Intermediate API name
 
 ## [#4606](https://github.com/BoundaryML/baml/pull/4606)
 
-- **C18 · FEATURE:** Files, TCP streams, and process pipes implement `baml.io.Read` and `baml.io.Write`. Readers share `bytes()` and `text()`. Writers share `write()`, which retries partial writes until all bytes are accepted.
+- **C18 · FEATURE:** Files, TCP streams, and process pipes implement `baml.io.Read` and `baml.io.Write`. Readers share `bytes()` and `text()`. Writers share `write()`, which retries partial writes until all bytes are accepted. Byte buffers gain `index_of()` for locating a byte.
 - **C68 · BREAKING_CHANGE:** Reads now take a byte limit and return null at EOF. Replace file.read_bytes with file.read and file.write_bytes with file.write. Process stdin is a WritePipe: replace write_stdin and close_stdin with stdin.write and stdin.close. TCP read/write no longer accept per-call timeout parameters; use baml.future.with_timeout.
 
 ## [#4599](https://github.com/BoundaryML/baml/pull/4599)

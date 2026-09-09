@@ -110,7 +110,7 @@ Iterators gain `take`, `skip`, `take_while`, and `skip_while`. These adapters ar
 
 **FEATURE** · [#4606](https://github.com/BoundaryML/baml/pull/4606)
 
-Files, TCP streams, and process pipes implement `baml.io.Read` and `baml.io.Write`. Readers share `bytes()` and `text()`. Writers share `write()`, which retries partial writes until all bytes are accepted.
+Files, TCP streams, and process pipes implement `baml.io.Read` and `baml.io.Write`. Readers share `bytes()` and `text()`. Writers share `write()`, which retries partial writes until all bytes are accepted. Byte buffers gain `index_of()` for locating a byte.
 
 ## C19: Use throwing expressions in prompts
 
