@@ -7,6 +7,10 @@
  */
 import { flushEvents } from './native.js';
 export const supportsSyncStreamPulls = true;
+/** Test-only diagnostics (e.g. `_hostValueCount`) are opt-in per process. */
+export function diagnosticsEnabled() {
+    return process.env.BAML_BRIDGE_DIAGNOSTICS === '1';
+}
 export function handleExitPanic(code, _fallbackPanic) {
     flushEvents();
     process.exit(code);

@@ -42,7 +42,7 @@
 //! layer rather than worked around here.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Arc, LazyLock, Mutex, MutexGuard, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
@@ -193,22 +193,8 @@ fn drop_registry_entry(host_value_key: u64) {
 /// held the entry cleans it up; the other is a benign no-op.
 pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
-    if let Some(tsfn) = HOST_VALUE_RELEASE_CALLBACK.get() {
-        // Fire-and-forget: the TS callback removes the map entry on the
-        // libuv loop. `QueueFull` would mean an enormous backlog of
-        // releases — log it (so it's visible in stress tests) and move
-        // on. The dropped Arc has no further engine-side state and a
-        // missed map entry just delays JS-error GC by an extra cycle.
-        let status = tsfn.call(
-            HandleKey::from_u64(host_value_key),
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
-        if status != Status::Ok {
-            log::warn!(
-                "host_release_callback: host-value-release tsfn returned {status:?} \
-                 for key {host_value_key}; TS-side map entry will leak until next GC",
-            );
-        }
+    if let Some(channel) = HOST_VALUE_RELEASE.get() {
+        channel.enqueue(host_value_key);
     }
 }
 
@@ -226,35 +212,118 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 // signal (the engine's `host_release_dispatch::fire(key)` fires Rust's
 // `host_release_callback`, which notifies TS to remove its map entry).
 //
-// Release is a fire-and-forget tsfn call on the libuv loop — TS removes the
-// entry once napi schedules the callback. A lookup that races a release
-// returns the (about-to-be-released) reference, which only delays GC of
-// that value by one tick; no correctness issue. The TS map never
-// silently leaks: every key minted via `mint_host_value_key` corresponds
-// to an `Arc<HostValueArc>` on the engine side whose `Drop` is guaranteed
-// to fire the release callback.
+// Release notifications are coalesced rather than queued one per key. The
+// engine's GC drain releases host values in bursts far larger than any
+// bounded tsfn queue, and a notification dropped on `QueueFull` would leak
+// the TS map entry for the life of the process. So [`host_release_callback`]
+// only parks the key in the [`ReleaseChannel`] and makes sure a single
+// zero-payload wakeup is on its way; on the JS thread the wakeup pulls keys in
+// batches of [`RELEASE_BATCH`], and a batch is forgotten only once the TS
+// callback returned normally (a throw keeps it for the next wakeup). The
+// wakeup tsfn is unbounded — `QueueFull` cannot happen — and weak, so the
+// channel never keeps Node alive; a wakeup lost at teardown is harmless
+// because the TS map dies with the process. A lookup that races a release
+// returns the (about-to-be-released) reference, which only delays GC of that
+// value; no correctness issue. The TS map never silently leaks: every key
+// minted via `mint_host_value_key` corresponds to an `Arc<HostValueArc>` on
+// the engine side whose `Drop` is guaranteed to fire the release callback.
 
-/// Threadsafe handle to the TS-installed release callback. Set once at
-/// module load via [`register_host_value_release_callback`].
-type HostValueReleaseTsfn = ThreadsafeFunction<
-    HandleKey,
-    (),
-    HandleKey,
-    Status,
-    false,
-    true,
-    HOST_VALUE_RELEASE_QUEUE_SIZE,
->;
+/// Keys handed to the TS release callback per wakeup.
+const RELEASE_BATCH: usize = 1024;
 
-/// Upper bound on queued, not-yet-delivered host-value-release notifications.
-/// Generous because each notification is tiny (one `HandleKey`) and bursts
-/// can happen during engine GC sweeps. `Status::QueueFull` from
-/// `tsfn.call` is logged but not otherwise surfaced — the TS map entry
-/// stays until the process exits, but the engine's `HostValueArc` has
-/// already dropped so there's no further engine state to clean up.
-const HOST_VALUE_RELEASE_QUEUE_SIZE: usize = 4096;
+/// The wakeup carries no payload (`T = ()`); the JS-thread transform installed
+/// by [`register_host_value_release_callback`] turns it into the next batch.
+type ReleaseWakeupTsfn = ThreadsafeFunction<(), (), Vec<HandleKey>, Status, false, true>;
 
-static HOST_VALUE_RELEASE_CALLBACK: OnceLock<Arc<HostValueReleaseTsfn>> = OnceLock::new();
+#[derive(Default)]
+struct PendingReleases {
+    keys: HashSet<u64>,
+    /// The batch currently handed to JS. Stays in `keys` until acknowledged.
+    in_flight: Vec<u64>,
+    /// A wakeup is queued or being delivered; `enqueue` must not post another.
+    scheduled: bool,
+}
+
+/// Coalescing release channel from the engine to the TS host-value map.
+struct ReleaseChannel {
+    wakeup: ReleaseWakeupTsfn,
+    pending: Mutex<PendingReleases>,
+}
+
+/// Installed once at SDK module init by [`register_host_value_release_callback`].
+static HOST_VALUE_RELEASE: OnceLock<ReleaseChannel> = OnceLock::new();
+
+impl ReleaseChannel {
+    fn pending(&self) -> MutexGuard<'_, PendingReleases> {
+        self.pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Any thread: park `key` and ensure exactly one wakeup is in flight.
+    fn enqueue(&self, key: u64) {
+        let mut pending = self.pending();
+        pending.keys.insert(key);
+        if pending.scheduled {
+            return;
+        }
+        pending.scheduled = true;
+        drop(pending);
+        self.wake();
+    }
+
+    /// Post the zero-payload wakeup. Caller has set `scheduled`.
+    fn wake(&self) {
+        let status = self.wakeup.call_with_return_value(
+            (),
+            ThreadsafeFunctionCallMode::NonBlocking,
+            |delivered, _env| {
+                if let Some(channel) = HOST_VALUE_RELEASE.get() {
+                    channel.acknowledge(delivered);
+                }
+                Ok(())
+            },
+        );
+        if status != Status::Ok {
+            // `Closing` is env teardown, where the map dies anyway. Anything
+            // else is unexpected for an unbounded queue; clear `scheduled` so
+            // the next release retries instead of parking forever.
+            if status != Status::Closing {
+                log::warn!("host-value release wakeup failed with status {status:?}");
+            }
+            self.pending().scheduled = false;
+        }
+    }
+
+    /// JS thread: the batch for the wakeup being delivered.
+    fn next_batch(&self) -> Vec<HandleKey> {
+        let mut pending = self.pending();
+        let batch: Vec<u64> = pending.keys.iter().copied().take(RELEASE_BATCH).collect();
+        pending.in_flight.clone_from(&batch);
+        batch.into_iter().map(HandleKey::from_u64).collect()
+    }
+
+    /// JS thread: the TS callback returned. Forget the batch on success, keep
+    /// it for a retry on a throw, and re-wake while anything remains.
+    fn acknowledge(&self, delivered: napi::Result<()>) {
+        let mut pending = self.pending();
+        let in_flight = std::mem::take(&mut pending.in_flight);
+        match delivered {
+            Ok(()) => {
+                for key in in_flight {
+                    pending.keys.remove(&key);
+                }
+            }
+            Err(err) => log::warn!("host-value release callback threw: {err}; batch will be retried"),
+        }
+        if pending.keys.is_empty() {
+            pending.scheduled = false;
+            return;
+        }
+        drop(pending);
+        self.wake();
+    }
+}
 
 /// Mint a fresh host-value key, drawing from the shared callable+opaque
 /// counter so the engine sees one globally-unique keyspace. Returned to
@@ -269,43 +338,40 @@ pub fn mint_host_value_key() -> HandleKey {
     HandleKey::from_u64(next_key())
 }
 
-/// Install the TS-side release callback. First-call-wins; subsequent
+/// Install the TS-side batch release callback. First-call-wins; subsequent
 /// calls are a no-op (matching the bridge_cffi dispatch-registration
-/// semantics). The callback fires for *every* `HostValueArc` release —
-/// for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
-/// key), so Rust doesn't need to distinguish kinds here.
+/// semantics). The callback receives every released key — for callable keys
+/// it's a TS-side no-op (`Map.delete` on an absent key), so Rust doesn't need
+/// to distinguish kinds here — and must be idempotent, since a batch whose
+/// delivery threw is handed over again on the next wakeup.
 ///
-/// The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
-/// function`). Holding it strong would pin the libuv loop for the
-/// lifetime of the process (the tsfn is parked in a `OnceLock` and never
-/// dropped), preventing the Node process from exiting even after all
-/// host work is done. Weak is correct here: the callback is a *release*
-/// notification — purely informational from the engine's side. Pending
-/// notifications that never deliver because the loop has already exited
-/// are harmless; the engine has already dropped its `Arc<HostValueArc>`,
-/// and the TS-side map entry would be torn down with the process
-/// anyway.
-///
-/// Note this is the inverse of `register_host_callable`'s dispatch tsfn,
-/// which is `weak::<false>()` — that one pins the loop because a hung
-/// host callback awaiting completion *must* keep the loop alive so the
-/// JS callback can actually run.
+/// The wakeup tsfn is weak (`napi_unref_threadsafe_function`): it is parked
+/// in a `OnceLock` for the life of the process, and holding it strong would
+/// keep Node from exiting after all host work is done. A release is purely
+/// informational from the engine's side, so a wakeup that never delivers
+/// because the loop already exited is harmless.
 ///
 /// Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
 /// exactly once at SDK module init, before any host call is dispatched.
-#[napi(ts_args_type = "callback: (key: HandleKey) => void")]
-pub fn register_host_value_release_callback(
-    callback: Function<'_, HandleKey, ()>,
-) -> napi::Result<()> {
-    let tsfn: HostValueReleaseTsfn = callback
+#[napi(ts_args_type = "callback: (keys: Array<HandleKey>) => void")]
+pub fn register_host_value_release_callback(callback: Function<'_, (), ()>) -> napi::Result<()> {
+    let wakeup: ReleaseWakeupTsfn = callback
         .build_threadsafe_function()
         .callee_handled::<false>()
         .weak::<true>()
-        .max_queue_size::<HOST_VALUE_RELEASE_QUEUE_SIZE>()
-        .build()?;
+        // Runs on the JS thread for each delivered wakeup: pick the batch.
+        .build_callback(|_wakeup| {
+            Ok(HOST_VALUE_RELEASE
+                .get()
+                .map(ReleaseChannel::next_batch)
+                .unwrap_or_default())
+        })?;
     // First-call-wins; ignore the `Err(_)` from `set` on later calls
     // (caller is responsible for not re-registering).
-    let _ = HOST_VALUE_RELEASE_CALLBACK.set(Arc::new(tsfn));
+    let _ = HOST_VALUE_RELEASE.set(ReleaseChannel {
+        wakeup,
+        pending: Mutex::default(),
+    });
     Ok(())
 }
 

@@ -56,4 +56,11 @@ export declare function lookupHostValue(key: bigint): unknown;
  * to the same Node process that originated it.
  */
 export declare function tryRehydrateHostValueByKey(handle: unknown): unknown;
+/**
+ * Diagnostic: number of JS values currently held for the engine (thrown
+ * host errors awaiting their engine-side release). Lets the SDK test suites
+ * observe the release channel; opt-in per `platform.diagnosticsEnabled`
+ * (`BAML_BRIDGE_DIAGNOSTICS=1` on Node), not a public API.
+ */
+export declare function _hostValueCount(): number;
 //# sourceMappingURL=host_value_registry.d.ts.map

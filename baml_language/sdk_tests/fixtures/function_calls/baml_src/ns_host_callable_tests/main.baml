@@ -339,3 +339,23 @@ function call_with_typed_throws_propagating(
 ) -> string throws ValidationError {
     callback(x)
 }
+
+// Catch `n` host throws and keep every caught error alive until the call
+// returns, so the host values they carry are released to the host in one
+// burst rather than trickling out per iteration. Exercises the host's
+// release channel with a burst larger than any bounded notification queue.
+function collect_thrown_errors(
+    callback: (int) -> string throws baml.errors.HostCallable,
+    n: int,
+) -> int {
+    let caught: baml.errors.HostCallable[] = [];
+    for (let i = 0; i < n; i += 1) {
+        callback(i) catch (e) {
+            _ => {
+                caught.push(e);
+                ""
+            }
+        };
+    }
+    caught.length()
+}
