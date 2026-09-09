@@ -2,6 +2,11 @@ name: BAML SDK Release - Build Python
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -26,6 +31,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # Targets and their runner/manylinux/architecture/container come from
@@ -68,17 +77,6 @@ jobs:
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}
     steps:
-      - name: Setup build environment (ARM64 Windows)
-        if: matrix._.target == 'aarch64-pc-windows-msvc'
-        shell: powershell
-        run: |
-          # rustup is not preinstalled on aarch64 Windows runners
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
-              .\rustup-init.exe --default-toolchain stable -y
-              Remove-Item "rustup-init.exe"
-              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
-          }
 
       - uses: actions/checkout@v7
         with:
@@ -97,22 +95,22 @@ jobs:
           fi
           scripts/baml-language-version stamp --plan release-plan.json
 
-      # NOTE: we deliberately do NOT use ./.github/actions/setup-mise here.
-      # The host Python version pins the abi3 floor of the resulting wheel,
-      # so we want a specific Python (3.10, matching the abi3-py310 target)
-      # rather than whatever mise.toml's `python` is pinned to today.
+      # Preserve the host Python versions used for the abi3 build through mise.
+      # ARM64 Windows needs Python 3.11; other platforms use 3.10.
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: ./.github/actions/setup-mise
         with:
-          # abi3-py310 produces one interpreter-agnostic wheel per platform,
-          # so a single Python is enough for the whole 3.10..3.13+ range.
-          # ARM64 Windows: setup-python doesn't ship a 3.10 build for that
-          # architecture, so use 3.11 there. The wheel is still abi3-py310
-          # (built against the 3.10 stable ABI), so this only affects which
-          # interpreter hosts the build.
-          python-version: ${{ matrix._.target == 'aarch64-pc-windows-msvc' && '3.11' || '3.10' }}
-          architecture: ${{ matrix._.architecture }}
-          allow-prereleases: true
+          install_args: python@${{ matrix._.target == 'aarch64-pc-windows-msvc' && '3.11' || '3.10' }}
+      - name: Setup Rust and R2 sccache
+        uses: ./.github/actions/setup-rust
+        with:
+          enable-cross: 'false'
+          skip-protoc: 'true'
+
+      - name: Locate mise sccache for the wheel container
+        id: wheel-cache
+        if: runner.os == 'Linux'
+        run: echo "binary=$(command -v sccache)" >> "$GITHUB_OUTPUT"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -121,6 +119,13 @@ jobs:
           XWIN_VERSION: "16"
         with:
           target: ${{ matrix._.target }}
+          # Use the same mise-installed sccache and R2 credentials in manylinux
+          # containers. maturin-action's own sccache input uses GitHub caching.
+          sccache: false
+          docker-options: >-
+            -v ${{ steps.wheel-cache.outputs.binary }}:/usr/local/bin/sccache:ro
+            -e BAML_SCCACHE_R2_ACCESS_KEY_ID
+            -e BAML_SCCACHE_R2_SECRET_ACCESS_KEY
           command: build
           working-directory: baml_language/sdks/python
           # No --manifest-path: that flag would make maturin resolve the
@@ -139,6 +144,7 @@ jobs:
           # Explicit musl images bypass maturin-action's implicit GHCR defaults.
           container: ${{ matrix._.container }}
           before-script-linux: |
+            export PATH="$GITHUB_WORKSPACE/tools:$PATH"
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
             else

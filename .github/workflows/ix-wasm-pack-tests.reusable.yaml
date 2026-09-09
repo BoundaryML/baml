@@ -7,8 +7,12 @@
 name: WASM Pack Tests (Reusable)
 
 on:
-  workflow_call: {}
-
+  workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 permissions:
   contents: read
 
@@ -21,6 +25,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -40,7 +46,6 @@ jobs:
           # tracked files still hard-reset to the SHA. No-op on hosted runners.
           clean: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           set -euo pipefail
@@ -61,14 +66,8 @@ jobs:
           done
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

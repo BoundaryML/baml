@@ -42,6 +42,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   build:
     name: "Build the matrix and the site"
@@ -82,11 +86,8 @@ jobs:
         working-directory: baml_language
         run: rustup show
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "stdlib-matrix-baml-cli"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
@@ -94,10 +95,12 @@ jobs:
       # Two workspaces, deliberately. The extractor reads the repo-pinned
       # `typescript` and `@types/node` resolved against the ROOT package.json,
       # while the web app lives in typescript2's separate pnpm workspace.
-      - name: "Setup Node for the root workspace"
-        uses: ./.github/actions/setup-node
+      - name: Setup Node for the root workspace
+        uses: ./.github/actions/setup-mise
         with:
-          enable-turbo-cache: "false"
+          install_args: node npm:pnpm@9.12.0
+      - name: Install root workspace dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: "Setup Node for the web app"
         uses: ./.github/actions/setup-node2

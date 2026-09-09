@@ -47,6 +47,11 @@ name: BAML Release - Build bridge_cffi
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -71,6 +76,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
@@ -125,17 +134,6 @@ jobs:
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
-      - name: Setup build environment (ARM64 Windows)
-        if: matrix._.target == 'aarch64-pc-windows-msvc'
-        shell: powershell
-        run: |
-          # rustup is not preinstalled on aarch64 Windows runners
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
-              .\rustup-init.exe --default-toolchain stable -y
-              Remove-Item "rustup-init.exe"
-              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
-          }
 
       - uses: actions/checkout@v7
         with:
@@ -158,8 +156,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix._.target }}
-          enable-cache: false
-          skip-protoc: true
+          skip-protoc: 'true'
 
       - name: Exclude optional AWS-LC jitter exports on Windows
         if: contains(matrix._.target, 'windows-msvc')

@@ -12,6 +12,11 @@ name: BAML SDK Release - Build Node.js
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -42,6 +47,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
@@ -140,39 +147,14 @@ jobs:
         with:
           install_args: "sccache direnv node npm:pnpm"
 
-      - name: Set up Node.js (container)
-        if: matrix._.container
-        # The manylinux container has no system node/npm and mise doesn't expose
-        # npm on PATH here, but pnpm/action-setup shells out to npm. Provide a real
-        # node/npm first (this is what the setup-node composite did in the original
-        # all-green run).
-        uses: actions/setup-node@v7
+
+
+      - name: Setup Rust and R2 sccache
+        uses: ./.github/actions/setup-rust
         with:
-          node-version: 22
-
-      - name: Set up pnpm (container)
-        if: matrix._.container
-        # mise's npm backend doesn't expose pnpm inside the manylinux container
-        # (it works on every hosted runner); install it with the official action.
-        # No version here: the action reads packageManager from package.json (as
-        # the setup-node composite did), avoiding a hardcoded/conflicting version.
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Rust toolchain
-        working-directory: baml_language
-        run: |
-          set -euo pipefail
-          # Hosted runners ship rustup, but the manylinux cross container does not,
-          # so bootstrap it there (setup-rust used to handle this case).
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-            export PATH="$HOME/.cargo/bin:$PATH"
-          fi
-          # rust-toolchain.toml pins the channel; install it and add this job's
-          # cross target (setup-rust used to do this via its `targets:` input).
-          rustup show
-          rustup target add ${{ matrix._.target }}
+          targets: ${{ matrix._.target }}
+          enable-cross: 'false'
+          skip-protoc: 'true'
 
       - name: Build tools setup
         if: matrix._.before

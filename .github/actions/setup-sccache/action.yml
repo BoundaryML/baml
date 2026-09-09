@@ -1,0 +1,28 @@
+name: Setup R2 sccache
+description: Load the existing .envrc cache configuration, with a local fallback when R2 credentials are absent.
+runs:
+  using: composite
+  steps:
+    - name: Install sccache and direnv
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: sccache direnv
+    - name: Load .envrc
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        set -euo pipefail
+        direnv allow .envrc
+        direnv export gha >> "$GITHUB_ENV"
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+    - name: Build native Windows wrapper
+      if: runner.os == 'Windows'
+      shell: bash
+      working-directory: ${{ github.workspace }}/baml_language
+      run: |
+        set -euo pipefail
+        RUSTC_WRAPPER= cargo build --locked -p tools_sccache
+        echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+    - name: Verify sccache
+      shell: bash
+      run: sccache --version

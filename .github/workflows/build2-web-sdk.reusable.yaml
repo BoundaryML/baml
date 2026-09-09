@@ -6,6 +6,11 @@ name: BAML SDK Release - Build Web
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -27,6 +32,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -67,11 +74,8 @@ jobs:
           rustup show
           rustup target add wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-          save-if: false
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       - name: Install package dependencies
         working-directory: baml_language/sdks/typescript/bridge_typescript_web

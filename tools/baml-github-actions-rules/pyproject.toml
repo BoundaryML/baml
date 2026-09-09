@@ -1,0 +1,8 @@
+[project]
+name = "baml-github-actions-rules"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["PyYAML==6.0.3", "tree-sitter==0.25.2", "tree-sitter-bash==0.25.1"]
+
+[tool.ruff]
+line-length = 100

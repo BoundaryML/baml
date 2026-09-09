@@ -1,47 +1,18 @@
-# This action is specifically for typescript2/ which is a separate pnpm workspace.
-# For the main repo workspace (typescript/, engine/, etc.), use setup-node instead.
-#
-# Key differences from setup-node:
-# - Defaults to typescript2/ working directory and lockfile
-# - No Turbo cache (typescript2 doesn't use Turbo for caching)
-# - Uses Node 24 and actions/setup-node@v7
-
-name: 'Setup Node.js for typescript2'
-description: 'Setup Node.js with pnpm for the typescript2 workspace'
-
+# typescript2 is a separate pnpm workspace from the legacy root workspace.
+name: Setup Node.js for typescript2
+description: Install the pinned Node.js and pnpm tools through mise, then project dependencies.
 inputs:
   working-directory:
-    description: 'Directory containing pnpm-lock.yaml and where to run pnpm install'
+    description: Directory containing pnpm-lock.yaml
     required: false
-    default: 'typescript2'
-  pnpm-version:
-    description: 'pnpm version to install'
-    required: false
-    # Keep in sync with typescript2/package.json `packageManager` and the
-    # root mise.toml `npm:pnpm` entry.
-    default: '11.1.3'
-
+    default: typescript2
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v6
+    - name: Install Node.js and pnpm
+      uses: ./.github/actions/setup-mise
       with:
-        version: ${{ inputs.pnpm-version }}
-        # Point at typescript2/package.json explicitly — otherwise the action
-        # reads the root package.json (which pins a different pnpm version for
-        # the legacy workspace) and aborts on the mismatch.
-        package_json_file: ${{ inputs.working-directory }}/package.json
-        run_install: false
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: pnpm
-        cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
-        registry-url: 'https://registry.npmjs.org'
-
+        install_args: node@24 npm:pnpm
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash

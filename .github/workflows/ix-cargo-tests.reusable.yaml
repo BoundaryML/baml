@@ -87,20 +87,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -202,20 +190,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       - name: "Fetch cargo dependencies"
         run: cargo fetch
@@ -396,7 +372,6 @@ jobs:
                 "install-args": "sccache direnv go cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -407,7 +382,6 @@ jobs:
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -418,7 +392,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -429,7 +402,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -440,7 +412,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -456,7 +427,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -467,7 +437,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -478,7 +447,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -493,7 +461,6 @@ jobs:
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": LINUX_RUNNER,
-                "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
               {
@@ -504,7 +471,6 @@ jobs:
                 "install-args": "sccache direnv go cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -515,7 +481,6 @@ jobs:
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -526,7 +491,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -537,7 +501,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -548,7 +511,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -559,7 +521,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -570,7 +531,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -581,7 +541,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -592,7 +551,6 @@ jobs:
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -606,7 +564,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
-                "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
               {
@@ -617,7 +574,6 @@ jobs:
                 "install-args": "sccache direnv go cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -628,7 +584,6 @@ jobs:
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -639,7 +594,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -650,7 +604,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -661,7 +614,6 @@ jobs:
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -672,7 +624,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -683,7 +634,6 @@ jobs:
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
               {
@@ -694,7 +644,6 @@ jobs:
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
-                "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
             ];
@@ -828,11 +777,11 @@ jobs:
         with:
           ruby-version: "3.2.2"
 
-      - name: "Install .NET SDK"
+      - name: Install .NET SDK
         if: matrix.sdk-label == 'csharp'
-        uses: actions/setup-dotnet@v5
+        uses: ./.github/actions/setup-mise
         with:
-          dotnet-version: 10.0.301
+          install_args: dotnet
 
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'
@@ -893,37 +842,12 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: ${{ matrix.rust-cache-key }}
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
-        working-directory: baml_language
-
-      # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
-      # .exe. See the matching step in the gating cargo-tests.reusable.yaml
-      # for why.
-      - name: "Build native sccache wrapper"
-        if: matrix.os-label == 'windows'
-        run: |
-          set -euo pipefail
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-          # CARGO_BUILD_JOBS oversubscription only matters for the Windows build.
-          echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
         working-directory: baml_language
 
       # Windows Python only: setup.ps1 builds one baml_bridge wheel and strips
@@ -1051,20 +975,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-wasm"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1162,20 +1074,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-msrv"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1243,20 +1143,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1323,20 +1211,8 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

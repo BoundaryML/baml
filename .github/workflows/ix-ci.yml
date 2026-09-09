@@ -139,9 +139,15 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-wasm-pack-tests.reusable.yaml
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   webview-tests:
     name: "Webview Tests"
     needs: determine_changes
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-webview-tests.reusable.yaml
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}

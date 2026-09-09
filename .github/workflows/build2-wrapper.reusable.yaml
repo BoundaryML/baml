@@ -2,6 +2,11 @@ name: BAML Release - Build wrapper
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       source_sha:
         description: "Exact repository commit to build"
@@ -20,6 +25,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -64,11 +71,8 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-wrapper-${{ matrix.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
+          enable-cross: 'false'
+          skip-protoc: 'true'
       - name: Setup musl cross toolchain
         if: ${{ matrix.libc == 'musl' }}
         uses: ./.github/actions/setup-musl-cross

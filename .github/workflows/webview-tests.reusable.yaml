@@ -2,7 +2,11 @@ name: Webview Tests (Reusable)
 
 on:
   workflow_call:
-
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 permissions:
   contents: read
 
@@ -13,6 +17,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   typecheck:
@@ -27,21 +35,14 @@ jobs:
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -85,21 +86,14 @@ jobs:
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -133,21 +127,14 @@ jobs:
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+      - name: Load R2 sccache configuration
+        uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

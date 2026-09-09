@@ -37,6 +37,11 @@ name: BAML SDK Release - Build Java
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -60,6 +65,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # The java build matrix is generated from the platform contract
@@ -142,11 +151,8 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix._.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-java-${{ matrix._.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
+          enable-cross: 'false'
+          skip-protoc: 'true'
 
       - name: Setup cross (musl targets)
         # musl builds run inside `cross` containers (mirroring

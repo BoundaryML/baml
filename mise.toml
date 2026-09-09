@@ -28,6 +28,7 @@ ninja = "1.13.2"
 "cargo:prek" = "0.3.13"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
+"cargo:cargo-codspeed" = "4.7.0"
 # Build cargo-shear with the engine's pinned Rust toolchain.
 "cargo:cargo-shear" = { version = "latest", install_env = { RUSTUP_TOOLCHAIN = "1.98.0" } }
 "cargo:https://github.com/astral-sh/hawk" = { version = "rev:42b09e72b2bf79f75aa8ce5f4563576f2dedf4c1", crate = "cargo-hawk", locked = true, install_env = { RUSTC_BOOTSTRAP = "1", RUSTUP_TOOLCHAIN = "1.97.1" } }
@@ -47,8 +48,10 @@ protoc = "27.1"
 
 # Node tools
 "npm:pnpm" = "11.1.3"
+"npm:@napi-rs/cli" = "3.7.0"
 "npm:@infisical/cli" = "latest"
 
+flyctl = "latest"
 actionlint = "latest"
 ast-grep = "0.44.1"
 
@@ -76,3 +79,11 @@ description = "Show unresolved PR review threads for the current branch PR"
 [settings]
 experimental = true
 # idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]
+
+[tasks.github-actions-lint]
+description = "Check BAML v1 GitHub Actions setup and caching conventions"
+run = "uv run --project tools/baml-github-actions-rules --frozen python tools/baml-github-actions-rules/rules.py"
+
+[tasks.github-actions-lint-test]
+description = "Test the Python GitHub Actions convention linter"
+run = "uv run --project tools/baml-github-actions-rules --frozen python -m unittest discover -s tools/baml-github-actions-rules -p 'test_*.py'"

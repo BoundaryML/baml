@@ -69,8 +69,10 @@ jobs:
         if: env.FLY_API_TOKEN == ''
         run: echo "FLY_API_TOKEN is not set; skipping the runner deploy"
 
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # 1.5
-        if: env.FLY_API_TOKEN != ''
+      - if: env.FLY_API_TOKEN != ''
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: flyctl
 
       - name: Deploy
         if: env.FLY_API_TOKEN != ''
