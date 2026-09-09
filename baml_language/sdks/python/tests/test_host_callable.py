@@ -13,9 +13,6 @@ Run with:
 
 from __future__ import annotations
 
-import gc
-import weakref
-
 import pytest
 
 import baml_bridge.proto as _proto
@@ -25,7 +22,6 @@ from baml_bridge import (
     BamlRuntime,
     call_function_sync,
     call_function,
-    flush_events,
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
@@ -93,48 +89,6 @@ def test_lambda_round_trip():
         rt, "CallCb", {"callback": lambda x: f"lambda-{x}", "x": 12}
     )
     assert result.result() == "lambda-12"
-
-
-@pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic. v1 leaks until the engine collects.",
-    strict=False,
-)
-def test_release_fires_on_drop():
-    """The Rust side drops its `HostValueArc` once the engine GCs the
-    `Object::HostClosure` it allocated for the callable; the release
-    callback then removes the Python callable from the registry, and
-    dropping the user's last reference makes it collectible.
-
-    `flush_events()` clears the event-sink arg-snapshot clone; the
-    remaining clone sits on the engine's heap and only goes away when
-    GC walks it. Driving extra BAML calls *eventually* triggers GC,
-    but a single one usually doesn't — hence xfail-strict-false. The
-    release path itself is exercised directly by the `bex_external_types`
-    unit tests in `host_value::tests::drop_fires_release_once_at_last_clone`.
-    """
-    rt = _make_runtime()
-
-    class CallableObj:
-        def __call__(self, x: int) -> str:
-            return str(x)
-
-    cb = CallableObj()
-    wr = weakref.ref(cb)
-    result = call_function_sync(rt, "CallCb", {"callback": cb, "x": 3})
-    assert result.result() == "3"
-    del cb
-    flush_events()
-    # Drive enough calls to nudge the engine's GC heuristic. Even with
-    # this, a single-callable program may stay below the threshold.
-    for _ in range(64):
-        _ = call_function_sync(rt, "CallCb", {"callback": lambda _x: "", "x": 0})
-    flush_events()
-    gc.collect()
-    assert wr() is None, (
-        "expected the host callable to be released after BAML drops its HostClosure"
-    )
 
 
 def test_multiple_callables_have_distinct_keys():

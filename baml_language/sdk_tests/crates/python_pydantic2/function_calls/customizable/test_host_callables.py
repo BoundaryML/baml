@@ -20,7 +20,9 @@ from typing import Any, Generator
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_bridge import flush_events
 from baml_sdk.baml import BamlError
+from baml_sdk.baml.sys import collect_garbage
 from baml_sdk.host_callable_tests import (
     Person,
     ValidationError,
@@ -229,19 +231,20 @@ def test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry():
     assert ei1.value is not ei2.value
 
 
-@pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic, so for now the callable leaks until the engine "
-    "collects.",
-    strict=False,
-)
 def test_host_callables_release_fires_on_drop_of_callable():
-    """After BAML finishes invoking the callable and the engine GCs the
+    """After BAML finishes invoking the callable and the engine collects the
     `Object::HostClosure` it allocated, the registered release callback
     removes the Python callable from the bridge's host-value table.
     Dropping the user's last reference then leaves the object
     unreachable for the cycle collector.
+
+    Keeping the default runtime installed must not keep dead callbacks
+    alive. A single BAML call rarely trips the engine's own GC heuristic,
+    so `baml.sys.collect_garbage` makes the ownership handoff
+    deterministic: its collection safepoint drains the queued host release
+    and the bridge drops its registry entry. `flush_events()` first clears
+    the event sink's argument-snapshot clone, which would otherwise keep
+    the closure reachable.
     """
 
     class CallableObj:
@@ -252,9 +255,16 @@ def test_host_callables_release_fires_on_drop_of_callable():
     wr = weakref.ref(cb)
     result = call_with_callback(callback=cb, x=3)
     assert result == "3"
-    del cb
+    del cb, result
+    flush_events()
+    collect_garbage()
+    flush_events()
     gc.collect()
-    assert wr() is None, "host callable should be released after BAML drops it"
+    assert wr() is None, (
+        "host callable should be released after BAML collected its HostClosure"
+    )
+    # The runtime is still usable after the release.
+    assert call_int_callback(callback=lambda x: x + 1, x=1) == 2
 
 
 def test_host_callables_lambda_round_trip():
