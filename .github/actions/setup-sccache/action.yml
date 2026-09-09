@@ -12,6 +12,31 @@ runs:
         set -euo pipefail
         direnv allow .envrc
         direnv export gha >> "$GITHUB_ENV"
+    # cross 0.2.5 filters environment variables and runs without the host PATH.
+    # mise's Linux sccache is a static musl binary, usable in the older GNU images.
+    # Container options apply to both Cross.toml and generated CROSS_CONFIG files.
+    - name: Configure cross container cache
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sccache_binary=$(mise which sccache)
+        wrapper="$GITHUB_WORKSPACE/tools/baml-sccache"
+        test -x "$sccache_binary"
+        test -x "$wrapper"
+        options=(
+          --volume "$sccache_binary:/usr/local/bin/sccache:ro"
+          --volume "$wrapper:/usr/local/bin/baml-sccache:ro"
+          --env RUSTC_WRAPPER=/usr/local/bin/baml-sccache
+          --env SCCACHE_SERVER_UDS=/tmp/baml-cross-sccache.sock
+          --env SCCACHE_ERROR_LOG=/tmp/baml-cross-sccache.log
+        )
+        # Forward names, never serialize credentials into GITHUB_ENV or argv.
+        for variable in SCCACHE_IDLE_TIMEOUT SCCACHE_BUCKET SCCACHE_REGION SCCACHE_ENDPOINT SCCACHE_S3_KEY_PREFIX SCCACHE_BASEDIRS BAML_SCCACHE_R2_ACCESS_KEY_ID BAML_SCCACHE_R2_SECRET_ACCESS_KEY; do
+          options+=(--env "$variable")
+        done
+        printf -v cache_options '%q ' "${options[@]}"
+        printf 'CROSS_CONTAINER_OPTS=%s %s\n' "${CROSS_CONTAINER_OPTS:-}" "$cache_options" >> "$GITHUB_ENV"
     # Cargo cannot use a .cmd wrapper for long Windows compiler command lines.
     # This is the sole uncached bootstrap: compile the wrapper before using it.
     - name: Build native Windows cache wrapper

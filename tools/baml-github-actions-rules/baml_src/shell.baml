@@ -2,7 +2,45 @@
 // This is deliberately a convention checker, not a shell interpreter. It does not
 // execute scripts or infer arbitrary variable values. Command substitutions are
 // scanned separately so an installer inside $(...) cannot hide in an assignment.
-function shell_commands(script: string) -> string[][] {
+class HereDocument {
+    delimiter: string,
+    expand: bool,
+    strip_tabs: bool,
+    executable: bool,
+}
+
+// Match the closing parenthesis without counting literal parentheses in quotes.
+function substitution_end(script: string, start: int) -> int {
+    let depth = 1;
+    let quote = "";
+    let escaped = false;
+    let i = start;
+    while (i < script.length()) {
+        let c = script.at(i) ?? "";
+        if (escaped) {
+            escaped = false;
+        } else if (c == "\\" && quote != "'") {
+            escaped = true;
+        } else if (quote != "") {
+            if (c == quote) {
+                quote = "";
+            }
+        } else if (c == "'" || c == "\"") {
+            quote = c;
+        } else if (c == "(") {
+            depth += 1;
+        } else if (c == ")") {
+            depth -= 1;
+            if (depth == 0) {
+                return i;
+            }
+        }
+        i += 1;
+    }
+    i
+}
+
+function shell_commands(script: string, substitutions_only: bool = false) -> string[][] {
     let commands: string[][] = [];
     let words: string[] = [];
     let word = "";
@@ -10,8 +48,52 @@ function shell_commands(script: string) -> string[][] {
     let comment = false;
     let escaped = false;
     let i = 0;
+    let here_documents: HereDocument[] = [];
     while (i < script.length()) {
         let c = script.at(i) ?? "";
+        if (c == "\n" && quote == "" && !escaped && here_documents.length() > 0) {
+            if (word != "") {
+                words.push(word);
+                word = "";
+            }
+            if (words.length() > 0) {
+                commands.push(words);
+                words = [];
+            }
+            comment = false;
+            i += 1;
+            for (let document in here_documents) {
+                let body = "";
+                while (i < script.length()) {
+                    let end = i + (script.slice(i, script.length()).index_of("\n") ?? (script.length() - i));
+                    let line = script.slice(i, end);
+                    if (line.ends_with("\r")) {
+                        line = line.slice(0, line.length() - 1);
+                    }
+                    if (document.strip_tabs) {
+                        while (line.starts_with("\t")) {
+                            line = line.slice(1, line.length());
+                        }
+                    }
+                    i = end + 1;
+                    if (line == document.delimiter) {
+                        break;
+                    }
+                    body += line + "\n";
+                }
+                if (document.executable) {
+                    commands = commands.concat(shell_commands(body));
+                } else if (document.expand) {
+                    commands = commands.concat(shell_commands(body, substitutions_only = true));
+                }
+            }
+            here_documents = [];
+            continue;
+        }
+        if (substitutions_only && !(c == "$" && script.at(i + 1) == "(") && c != "`") {
+            i += 1;
+            continue;
+        }
         if (comment) {
             if (c == "\n") {
                 comment = false;
@@ -33,18 +115,17 @@ function shell_commands(script: string) -> string[][] {
             escaped = true;
         } else if (c == "$" && script.at(i + 1) == "(" && quote != "'") {
             let start = i + 2;
-            let depth = 1;
-            i += 2;
-            while (i < script.length() && depth > 0) {
-                if (script.at(i) == "(") {
-                    depth += 1;
-                }
-                if (script.at(i) == ")") {
-                    depth -= 1;
-                }
-                if (depth > 0) {
+            i = substitution_end(script, start);
+            commands = commands.concat(shell_commands(script.slice(start, i)));
+            word += "<substitution>";
+        } else if (c == "`" && quote != "'") {
+            let start = i + 1;
+            i += 1;
+            while (i < script.length() && script.at(i) != "`") {
+                if (script.at(i) == "\\") {
                     i += 1;
                 }
+                i += 1;
             }
             commands = commands.concat(shell_commands(script.slice(start, i)));
             word += "<substitution>";
@@ -56,6 +137,53 @@ function shell_commands(script: string) -> string[][] {
             }
         } else if (c == "'" || c == "\"") {
             quote = c;
+        } else if (c == "<" && script.at(i + 1) == "<" && script.at(i + 2) != "<") {
+            if (word != "") {
+                words.push(word);
+                word = "";
+            }
+            i += 2;
+            let strip_tabs = script.at(i) == "-";
+            if (strip_tabs) {
+                i += 1;
+            }
+            while (script.at(i) == " " || script.at(i) == "\t") {
+                i += 1;
+            }
+            let delimiter = "";
+            let delimiter_quote = "";
+            let expand = true;
+            while (i < script.length()) {
+                let d = script.at(i) ?? "";
+                if (delimiter_quote != "") {
+                    if (d == delimiter_quote) {
+                        delimiter_quote = "";
+                    } else {
+                        delimiter += d;
+                    }
+                } else if (d == "'" || d == "\"") {
+                    delimiter_quote = d;
+                    expand = false;
+                } else if (d == "\\") {
+                    expand = false;
+                    i += 1;
+                    delimiter += script.at(i) ?? "";
+                } else if (d.is_whitespace() || [";", "|", "&", ")"].includes(d)) {
+                    break;
+                } else {
+                    delimiter += d;
+                }
+                i += 1;
+            }
+            here_documents.push(
+                HereDocument {
+                    delimiter,
+                    expand,
+                    strip_tabs,
+                    executable: ["bash", "sh", "zsh"].includes(executable_words(words).at(0) ?? ""),
+                },
+            );
+            i -= 1;
         } else if (c == "#" && word == "") {
             comment = true;
         } else if (c == "\n" || c == ";" || c == "|" || c == "&" || c == "(" || c == ")") {
@@ -92,6 +220,8 @@ function executable_words(words: string[]) -> string[] {
         let w = words[i];
         if (
             [
+                "{",
+                "}",
                 "if",
                 "then",
                 "elif",

@@ -127,7 +127,7 @@ function lint_document(source: Source, ds: Diagnostic[]) -> void {
     }
     validate_canonical(source.path, doc, ds);
     validate_cache_env(source.path, "env", field(doc, "env"), ds);
-    if (source.path.ends_with("/action.yml") || source.path.ends_with("/action.yaml")) {
+    if (("/" + source.path).ends_with("/action.yml") || ("/" + source.path).ends_with("/action.yaml")) {
         let runs = field(doc, "runs");
         let using = string_value(field(runs, "using"));
         if (using == "composite") {

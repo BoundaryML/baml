@@ -127,9 +127,11 @@ test "new YAML and YML workflows and action files are included by default" {
             ".github/actions/new/nested/action.yml",
             ".github/actions/new/action.yaml",
             "tools/other/action.yml",
+            "action.yml",
+            "action.yaml",
         ]
     ) {
-        let text = if (path.includes("/action.")) {
+        let text = if (("/" + path).includes("/action.")) {
             "name: future\nruns:\n  using: composite\n  steps:\n    - uses: actions/setup-node@v7\n"
         } else {
             workflow("      - uses: actions/setup-node@v7\n")
@@ -411,6 +413,10 @@ test "CLI checks untracked actions outside github and ignored future workflows a
         `${root}/tools/future/action.yaml`,
         "name: future\nruns: {using: composite, steps: [{uses: astral-sh/setup-uv@v8}]}\n",
     );
+    baml.fs.write(
+        `${root}/action.yml`,
+        "name: root\nruns: {using: composite, steps: [{uses: actions/setup-node@v7}]}\n",
+    );
     baml.fs.write(`${root}/.gitignore`, ".github/workflows/future.yml\n");
     baml.fs.write(
         `${root}/.github/workflows/future.yml`,
@@ -421,7 +427,8 @@ test "CLI checks untracked actions outside github and ignored future workflows a
     let errors = baml.String.from_utf8(bad.stderr);
     assert.contains(errors, "::error file=tools/future/action.yaml,title=TOOL-ACTION");
     assert.contains(errors, "::error file=.github/workflows/future.yml,title=RUST-CACHE");
-    assert.contains(baml.String.from_utf8(bad.stdout), "2 violations")
+    assert.contains(errors, "::error file=action.yml,title=TOOL-ACTION");
+    assert.contains(baml.String.from_utf8(bad.stdout), "3 violations")
 }
 
 test "repository audit checks missing local actions and R2 forwarding" {
@@ -553,4 +560,82 @@ test "multiline generic cache paths cannot hide a bare Rust target on a later li
         ),
         ["RUST-CACHE"],
     )
+}
+
+test "heredoc data is not an installer but shell stdin and substitutions execute" {
+    assert.equal(
+        command_violation("cat <<'EOF'\ncargo install foo\n$(uv tool install bar)\nEOF\n"),
+        false,
+    );
+    assert.equal(command_violation("cat <<EOF\ncargo install foo\nEOF\n"), false);
+    assert.is_true(command_violation("cat <<EOF\n$(uv tool install bar)\nEOF\n"));
+    assert.is_true(command_violation("bash <<'EOF'\ncargo install foo\nEOF\n"));
+    assert.is_true(command_violation("cat <<'EOF'\nexample\nEOF\ncargo install foo"));
+    assert.is_true(command_violation("cat <<-'EOF'\n\tplain data\n\tEOF\ncargo install foo"));
+    assert.is_true(command_violation("echo `cargo install foo`"));
+    assert.is_true(command_violation("echo \"$(printf '(')\"\ncargo install foo"));
+    assert.is_true(command_violation("{ cargo install foo; }"))
+}
+
+test "cross container setup mounts installed tools and forwards credential names without values" {
+    let root = `/tmp/baml-actions-cross-${baml.sys.pid()}`;
+    baml.fs.mkdir(`${root}/bin`, baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(`${root}/workspace with spaces/tools`, baml.fs.MkdirOptions { recursive: true });
+    defer { baml.fs.remove_dir_all(root); }
+    baml.fs.write(`${root}/bin/mise`, "#!/bin/bash\nprintf '%s/bin/sccache\\n' \"$TEST_ROOT\"\n");
+    baml.fs.write(`${root}/bin/sccache`, "#!/bin/bash\nexit 0\n");
+    baml.fs.write(`${root}/workspace with spaces/tools/baml-sccache`, "#!/bin/bash\nexit 0\n");
+    for (let path in ["bin/mise", "bin/sccache", "workspace with spaces/tools/baml-sccache"]) {
+        baml.fs.chmod(`${root}/${path}`, 493);
+    }
+    let opts = baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 30000, stdin: null };
+    let repo = baml.sys.exec("git", ["rev-parse", "--show-toplevel"], opts);
+    let doc = baml.yaml.parse(
+        baml.fs.read(
+            baml.String.from_utf8(repo.stdout).trim() + "/.github/actions/setup-sccache/action.yml",
+        ),
+    );
+    let step = array(field(field(doc, "runs"), "steps")).find((s) -> {
+        field(s, "name") == "Configure cross container cache"
+    });
+    assert.equal(field(step, "if"), "runner.os == 'Linux'");
+    let script = string_value(field(step, "run"));
+    assert.is_true(script.length() > 0);
+    let result = baml.sys.exec(
+        "bash",
+        ["-c", script],
+        baml.sys.ProcessOptions {
+            ...opts,
+            env: {
+                "PATH": `${root}/bin:/usr/bin:/bin`,
+                "TEST_ROOT": root,
+                "GITHUB_WORKSPACE": `${root}/workspace with spaces`,
+                "GITHUB_ENV": `${root}/environment`,
+                "CROSS_CONTAINER_OPTS": "--network host",
+                "BAML_SCCACHE_R2_SECRET_ACCESS_KEY": "must-never-be-serialized",
+            },
+        },
+    );
+    assert.is_true(result.ok());
+    let output = baml.fs.read(`${root}/environment`);
+    assert.contains(output, "CROSS_CONTAINER_OPTS=--network host --volume ");
+    assert.contains(
+        output,
+        "workspace\\ with\\ spaces/tools/baml-sccache:/usr/local/bin/baml-sccache:ro",
+    );
+    assert.contains(output, "--env RUSTC_WRAPPER=/usr/local/bin/baml-sccache");
+    assert.contains(output, "--env SCCACHE_SERVER_UDS=/tmp/baml-cross-sccache.sock");
+    for (
+        let name in [
+            "SCCACHE_BUCKET",
+            "SCCACHE_ENDPOINT",
+            "SCCACHE_REGION",
+            "SCCACHE_S3_KEY_PREFIX",
+            "BAML_SCCACHE_R2_ACCESS_KEY_ID",
+            "BAML_SCCACHE_R2_SECRET_ACCESS_KEY",
+        ]
+    ) {
+        assert.contains(output, `--env ${name} `);
+    }
+    assert.equal(output.includes("must-never-be-serialized"), false)
 }
