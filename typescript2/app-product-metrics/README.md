@@ -85,6 +85,17 @@ flyctl scale count 1 --app boundary-product-metrics --yes
 
 The Discord OAuth client ID and secret stay in Infisical and are not needed at runtime. The GitHub workflow reads `SLACK_BOUNDARY_BOT_TOKEN` from the protected `boundary-tools-prod` environment. The Luma API key must belong to the Boundary calendar. The Zoom OAuth app must be able to read past meeting instances, report participants, and past-meeting participants. The public Discord invite supplies the approximate community count shown on the dashboard, while the bot paginates guild members to obtain the exact total and count holders of the configured Sheep Council role for daily snapshots; the bot must be installed in the guild with Server Members Intent enabled. The Slack channel ID, schedules, timezone, Discord invite code, expected guild name, GitHub repository, Luma event name, and Sheep Council Zoom meeting ID are non-secret values in `fly.toml` or the GitHub workflow. The Slack bot must be able to post to `#general` and `#sam-sandbox` and needs `chat:write` and `files:write`. Chart delivery uses `files.getUploadURLExternal` followed by the returned upload URL and `files.completeUploadExternal`; it does not use webhooks or the retired `files.upload` method. The PostHog personal API key needs Query Read permission.
 
+## Sheep Council email
+
+Edit [`emails/sheep-council-next.lmx`](emails/sheep-council-next.lmx), then prepare the campaign through the Loops Content API. Every frontmatter key maps directly to a Loops API request: `name`, `campaignGroupId`, and `mailingListId` are the create-campaign fields, while `subject`, `previewText`, `fromName`, `fromEmail`, `replyToEmail`, `emailFormat`, and `contactPropertiesFallbacks` are update-email-message fields. The body is raw LMX passed to Loops unchanged and contains the complete `<Style>` configuration and purple `#6d28d9` emphasis copied from the previous email. `expectedRevisionId` is the only omitted email-message field because the tool fetches its current value from Loops immediately before updating.
+
+```bash
+infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=prod-product-metrics -- pnpm --filter app-product-metrics email:sheep-council
+infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=prod-product-metrics -- pnpm --filter app-product-metrics email:sheep-council -- --apply
+```
+
+The command makes only read requests and prints the API-ready email unless `--apply` is present. Applying is blocked while the source contains `TODO`. It creates or updates only the draft matching `name` and `campaignGroupId`, never schedules or sends the campaign, and fails rather than modifying a sent or scheduled campaign. Use `--file PATH` to load a different LMX source. The API key is read from `LOOPS_EMAIL_CAMPAIGNS_API_KEY` in the `prod-product-metrics` Infisical environment.
+
 ## Weekly metric definitions
 
 - The dashboard and Slack report contain the four most recently completed Monday-to-Monday weeks in `America/Los_Angeles`; each retention comparison uses the immediately preceding week, so the queries cover five weeks of cohort membership.

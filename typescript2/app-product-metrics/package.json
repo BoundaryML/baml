@@ -21,6 +21,7 @@
     "backfill:6-weeks": "tsx scripts/backfill-six-weeks.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
+    "email:sheep-council": "tsx scripts/prepare-sheep-council-email.ts",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
