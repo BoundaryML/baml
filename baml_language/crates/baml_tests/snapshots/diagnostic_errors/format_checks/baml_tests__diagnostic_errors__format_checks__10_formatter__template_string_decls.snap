@@ -59,9 +59,12 @@ function FnTypeParams(
 }
 
 // Trivia around a function returning a backtick string.
-function TriviaTemplate( // open paren trailing
+function // keyword trailing
+    TriviaTemplate // name trailing
+    ( // open paren trailing
     x: string,
-) -> string {
+) // close paren trailing
+    -> string {
     `Hello ${x}`
 }
 

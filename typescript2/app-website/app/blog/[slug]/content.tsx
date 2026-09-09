@@ -8,6 +8,7 @@ import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkToc from 'remark-toc';
 import { mdxComponents } from '../../../lib/mdx';
+import rehypeHighlightCode from '../../../lib/mdx/rehype-highlight-code';
 import rehypePreserveCodeProps from '../../../lib/mdx/rehype-preserve-code-props';
 import remarkCodeMetadata from '../../../lib/mdx/remark-code-metadata';
 
@@ -62,6 +63,7 @@ export async function PostBody({ children }: { children: string }) {
           rehypeSlug,
           rehypeAutolinkHeadings,
           [rehypePreserveCodeProps, { tagName: 'pre' }],
+          rehypeHighlightCode,
           rehypeFixInvalidNesting,
           [rehypeStringify as () => void, { allowDangerousHtml: true }],
         ],
@@ -84,7 +86,7 @@ export async function PostBody({ children }: { children: string }) {
   });
 
   return (
-    <div className="prose flex flex-col flex-1 mx-auto container-sm max-w-screen-md">
+    <div className="prose blog-prose mx-auto w-full max-w-screen-md">
       {content}
     </div>
   );

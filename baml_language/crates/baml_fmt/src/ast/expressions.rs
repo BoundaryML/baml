@@ -3709,18 +3709,11 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // An empty block with no comment trapped inside collapses to `{}`
-        // (e.g. an empty match arm `null => {},` or an empty `if` body).
-        if self.stmts.is_empty() && self.expr.is_none() {
-            let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-            let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-            if !open_trailing.iter().any(EmittableTrivia::is_comment)
-                && !close_leading.iter().any(EmittableTrivia::is_comment)
-            {
-                printer.print_raw_token(&self.open_brace);
-                printer.print_raw_token(&self.close_brace);
-                return PrintInfo::default_single_line();
-            }
+        if self.stmts.is_empty()
+            && self.expr.is_none()
+            && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+        {
+            return PrintInfo::default_single_line();
         }
 
         printer.print_raw_token(&self.open_brace);
@@ -5102,7 +5095,12 @@ impl Printable for ThrowsClause {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
+        printer.print_separator(
+            self.keyword.span(),
+            Some(self.ty.leftmost_token()),
+            shape.indent + printer.config.indent_width,
+            " ",
+        );
         multi_lined |= printer.print(&self.ty, shape).multi_lined;
         PrintInfo { multi_lined }
     }
@@ -5148,32 +5146,7 @@ impl FunctionArrow {
         continuation_indent: usize,
         printer: &mut Printer,
     ) {
-        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.span());
-        let next_leading = next_leftmost
-            .map(|range| printer.trivia.get_for_range_split(range).0)
-            .unwrap_or(&[]);
-        let mut printed_comment = false;
-        let mut continued_on_newline = false;
-
-        for trivia in arrow_trailing.iter().chain(next_leading) {
-            if !trivia.is_comment() {
-                continue;
-            }
-            if !continued_on_newline {
-                printer.print_spaces(1);
-            }
-            printer.print_trivia(trivia);
-            printed_comment = true;
-            continued_on_newline = trivia.single_line_len(printer.input).is_none();
-            if continued_on_newline {
-                printer.print_newline();
-                printer.print_spaces(continuation_indent);
-            }
-        }
-
-        if !printed_comment || !continued_on_newline {
-            printer.print_spaces(1);
-        }
+        printer.print_separator(self.span(), next_leftmost, continuation_indent, " ");
     }
 }
 

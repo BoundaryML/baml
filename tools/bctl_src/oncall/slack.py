@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from slack_sdk import WebClient
 
@@ -19,10 +20,17 @@ def lookup_user_id(wc: WebClient, email: str) -> str:
     return resp["user"]["id"]
 
 
-def post(wc: WebClient, channel: str, text: str) -> None:
+def post(
+    wc: WebClient,
+    channel: str,
+    text: str,
+    *,
+    blocks: list[dict[str, Any]] | None = None,
+) -> None:
     wc.chat_postMessage(
         channel=channel,
         text=text,
+        blocks=blocks,
         unfurl_links=False,
         unfurl_media=False,
     )

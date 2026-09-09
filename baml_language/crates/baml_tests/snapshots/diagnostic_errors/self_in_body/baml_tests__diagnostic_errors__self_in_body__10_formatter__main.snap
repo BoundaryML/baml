@@ -49,7 +49,7 @@ class Box<T> {
 // ── Interface default-method body (the previously-silent hole) ───────────────
 
 interface Tester {
-    function eq(self, other: Self) -> bool throws never
+    function eq(self, other: Self) -> bool throws never;
     function check(self, other: Self) -> bool throws never {
         other is Self
     }
