@@ -18,6 +18,7 @@ PR, the PR gets to green. Written in BAML against canary's toolchain
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
 | handle  | `handle_issue.baml` | design pass, fix pass, the gate, a PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
+| export  | `linear.baml`       | on demand: an issue becomes a Linear issue assigned to its shepherd, with the full description; re-exports update in place |
 
 `pipeline.baml` runs them end to end; `store.baml` is the Supabase layer;
 `models.baml` the shared types.
@@ -36,6 +37,8 @@ atb2 run -e 'run_pipeline(mode = HandleMode.DryRun)'           # no push, no PR
 atb2 run -e 'run_pipeline(stages = "ingest,triage")'           # a subset
 atb2 run -e 'handle_issue(load_issue("ISSUE-…") ?? baml.sys.panic("no such issue"))'
 atb2 run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
+atb2 run -e 'export_issues_to_linear()'                        # open issues -> Linear
+atb2 run -e 'export_issue_to_linear(load_issue("ISSUE-…") ?? baml.sys.panic("no such issue"))'
 ```
 
 Every stage is idempotent against the store; the intakes resume from a
@@ -56,6 +59,7 @@ PostHog trio; `dev` does not). `run_tests.sh` and any live run go through
 | `ATB2_UI_URL` | notifications | links issues to `typescript2/app-feedback` |
 | `ATB2_REVIEWERS`, `ATB2_POLL_S`, `ATB2_MAX_WAIT_S` | merge_issue | see `merge_issue.baml`; fork PRs are refused |
 | `ATB2_MODEL`, `ATB2_HOME`, `ATB2_KEEP_RUNS` | handle_issue | see `handle_issue.baml` |
+| `ATB2_LINEAR_API_KEY`, `ATB2_LINEAR_TEAM`, `ATB2_LINEAR_ASSIGNEES` | Linear export | see `linear.baml`; personal API key (falls back to existing `ATB_LINEAR_TOKEN`), team key or id, optional `github-login:linear-user-id` map (shepherds not mapped are matched by Linear display name, then email) |
 
 The UI (`typescript2/app-feedback`) reads the same project with the anon
 key: `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_ANON_KEY` (server-only variables).
