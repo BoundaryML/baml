@@ -251,6 +251,82 @@ async fn mounted_method_stubs_do_not_shadow_their_owner() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// A host interface whose declaration carries a generic parameter bound, a
+/// `requires` clause, and an associated type with a default, implemented by
+/// runtime-compiled source across a mount. The implementor omits the
+/// defaulted associated type, satisfies `requires` through a second
+/// `implements` block, and binds the bounded parameter to a marker class.
+const MOUNTED_INTERFACE_CONTRACT_SOURCE: &str = r####"
+interface Marker {}
+interface Named {
+  function name(self) -> string throws never
+}
+interface Counter<T extends Marker> requires Named {
+  type Value = int
+  function count(self, at: T) -> int throws never
+  function label(self, at: T) -> string throws never {
+    self.name() + "=" + self.count(at).to_string()
+  }
+}
+
+class Tag {
+  weight int
+  implements Marker {}
+}
+
+function compile_counter_plugin() -> reflect.Package {
+  reflect.Package.compile(
+    { "plugin.baml": `
+class Tally {
+  n int
+  implements app.Named {
+    function name(self) -> string throws never { "tally" }
+  }
+  implements app.Counter<app.Tag> {
+    function count(self, at: app.Tag) -> int throws never { self.n + at.weight }
+  }
+}
+
+function label_tally(n: int) -> string throws never {
+  Tally { n: n }.label(app.Tag { weight: 1 })
+}
+` },
+    packages = { "app": reflect.Package.current() },
+  )
+}
+
+function contract_mount_is_clean() -> bool {
+  compile_counter_plugin().diagnostics().length() == 0
+}
+
+function main() -> string {
+  let pkg = compile_counter_plugin()
+  let label = pkg.get_function<(int) -> string>("root.label_tally")
+    ?? throw "missing label_tally"
+  label(40)
+}
+"####;
+
+/// The mount's interface stub carries the declaration's whole contract
+/// (parameter bounds, `requires`, associated-type bounds and defaults), so a
+/// runtime-compiled implementor may rely on an associated-type default and
+/// the inherited `requires` interface, and the host's default method calls
+/// through it. A stub that dropped the default rejected the implementor for
+/// not binding `Value`.
+#[tokio::test]
+async fn mounted_interface_stub_keeps_its_contract() {
+    let output = baml_test!(
+        baml: MOUNTED_INTERFACE_CONTRACT_SOURCE,
+        entry: "contract_mount_is_clean"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    let output = baml_test!(baml: MOUNTED_INTERFACE_CONTRACT_SOURCE);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("tally=41".into()))
+    );
+}
+
 /// `baml.ToString` is implemented for `reflect.Type` out-of-body in the
 /// stdlib. A runtime compile has no stdlib source to devirtualize that call
 /// against, so it must dispatch — it used to reach the emitter as a static
