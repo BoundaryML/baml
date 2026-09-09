@@ -75,7 +75,7 @@ A temporary project without an installed skill failed `check` under `BAML_AGENT_
 
 The inventory contains 74 PRs, 65 non-v0 followup candidates, 25 retained changelog PRs, and 34 effects: 9 features, 15 breaking changes, and 10 bug fixes. There are no headlines. All effect groups contain at most three PRs. Every syntax/library feature has a code block, every breaking entry has before/after blocks, and the performance-only feature has its source measurements.
 
-The draft frontmatter sets `isPublished: false`. The website’s `get-posts.ts` explicitly excludes such files, including direct post lookup. No tag, package version, release configuration, production publication, or user notification was changed.
+The post frontmatter now sets `isPublished: true` for review in the PR’s website preview. Website Git deployments are enabled for all branches in `typescript2/app-website/vercel.json`. Merging the post into `canary` also makes it eligible for production publication. No tag, package version, or user notification was changed.
 
 The developer portal, package catalog, and CLI catalog returned HTTP 200. Both product and developer `/changelog` URLs returned 308 to the product blog’s release filter, which returned 200. Relative artifact links, PR coverage, Markdown fences, and frontmatter were checked locally.
 

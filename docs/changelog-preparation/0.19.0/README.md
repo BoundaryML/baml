@@ -4,7 +4,7 @@ Prepared using the procedure in [docs/prepare-changelog.md from PR #4784](https:
 
 Assumed cut: September 8, 2026, America/Los_Angeles. Base: `baml-language-0.18.0` (`7622555396a99db466afaea09dea2cad259d4033`). Candidate: canary `5b398f2b60cfa78258ac9534e8322d056564e85f`. The candidate timestamp falls on September 9 UTC; “today” here is the user’s Pacific date. Later canary changes are not included.
 
-The [release draft](../../../typescript2/app-website/blog-releases/2026-09-08-baml-0.19.0.md) is unpublished. This preparation does not bump versions, tag a release, or send notifications. Before publication, compare the actual release SHA with this pinned cut, reconcile any extra changes, update the publication date if needed, and enable the post only after the release is available.
+The [release post](../../../typescript2/app-website/blog-releases/2026-09-08-baml-0.19.0.md) has `isPublished: true` so it can be reviewed in the PR’s website preview. Merging it into `canary` also makes it eligible for production publication. This preparation does not bump versions, tag a release, or send notifications. Before merging, compare the actual release SHA with this pinned cut, reconcile any extra changes, update the publication date if needed, and confirm the release is available.
 
 - [Full inventory](step1a-all-prs.md): all 74 PRs, including inclusion/exclusion decisions.
 - [User-visible PRs](step1b-prs-only-user-visible.md): 25 retained PRs.
