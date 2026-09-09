@@ -17,7 +17,7 @@ pub struct LocalName {
 
 /// A package object on the heap.
 /// Contains lookups for named items defined in the package.
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct Package {
     /// Every source-visible exported declaration name, including aliases that
     /// have no heap object of their own.
@@ -113,7 +113,7 @@ pub struct SessionState {
 }
 
 /// Runtime-only package image grafted into the moving heap.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RuntimePackage {
     /// Linked local object table. Imported entries point into static or other
     /// runtime packages; owned entries point back into this package's graph.

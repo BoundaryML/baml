@@ -211,17 +211,11 @@ pub(super) fn validate_class_witnesses(
         }
     }
 
-    // All aggregate witness checks happen before allocating the class/type
-    // value (C-12, Fail-Before-Type).
-    //
-    // BUG: only intra-batch duplicates are rejected. A witness for `I` on a
-    // class that a static blanket rule (`implement<T extends Bound> I for T`)
-    // already covers is not detected; the resolver tries the static slice first
-    // and returns on the first match, so such a witness is silently shadowed
-    // rather than rejected. Coherence (TYPE_SYSTEM.md, "Interface Coherence")
-    // says at most one implementation per (type, interface) — this should fail
-    // closed at registration by probing `type_implements` for the fresh class
-    // against the static rules before allocating.
+    // Shape and field checks happen before allocating the class/type value
+    // (C-12, Fail-Before-Type). Coherence against the rules that already exist
+    // needs the fresh class's identity and the whole proposed batch, so
+    // `prepare_class_witnesses` checks it once the class is allocated and
+    // before anything about it is published.
     let mut unique_witnesses = std::collections::HashSet::new();
     for witness in &witnesses {
         if !unique_witnesses.insert(witness.interface_ty.clone()) {
@@ -335,28 +329,25 @@ pub(super) fn validate_class_witnesses(
     validated
 }
 
-pub(super) fn register_class_witnesses(
-    vm: &mut BexVm,
-    class_ptr: bex_vm_types::HeapPtr,
+/// Turn the validated witnesses of the fresh class `ty` into impl rules and
+/// check coherence for the whole batch against the rules that already exist,
+/// without publishing anything: a witness the static world already covers
+/// (`implements<T extends Gate> Pick for T` plus a `Gate` witness makes a
+/// `Pick` witness an overlap) is rejected here, never silently shadowed.
+pub(super) fn prepare_class_witnesses(
+    vm: &BexVm,
     ty: &bex_vm_types::RealizedTy,
     witnesses: Vec<ValidatedClassWitness>,
-) {
-    for witness in witnesses {
-        let for_ty_pattern = bex_vm_types::TyTemplate::from(ty.clone());
-        // A witness supplies fields only, so its method table is EMPTY: every
-        // method is the interface's default body, adopted at resolution
-        // (`ImplResolver::rule_method_impl` falls back to the interface's
-        // bound `default_fn` with the `[Self, iface args..]` frame). The
-        // required-method gate in `register_class_witnesses` (the
-        // "cannot be witnessed structurally" rejection) already excluded
-        // any interface with a bodyless required method.
-        // The witness is an ordinary heap `Object::ImplRule` — the resolver
-        // borrows it exactly like a package-owned rule and the collector keeps
-        // its `interface_head`/`methods[].fqn` current — so the side table
-        // holds only a pointer to it, never a copy.
-        let rule = vm.tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
+) -> Result<Vec<RuntimeImplRule>, Diagnostic> {
+    let goals: Vec<_> = witnesses
+        .iter()
+        .map(|witness| (witness.interface_ptr, witness.interface_args.clone()))
+        .collect();
+    let rules: Vec<_> = witnesses
+        .into_iter()
+        .map(|witness| RuntimeImplRule {
             interface_head: witness.interface_ptr,
-            for_ty_pattern,
+            for_ty_pattern: bex_vm_types::TyTemplate::from(ty.clone()),
             generic_param_bounds: Vec::new(),
             interface_args: witness
                 .interface_args
@@ -368,11 +359,77 @@ pub(super) fn register_class_witnesses(
                 .into_iter()
                 .map(|(name, ty)| (name, bex_vm_types::TyTemplate::from(ty)))
                 .collect(),
+            // A witness supplies fields only, so its method table is EMPTY:
+            // every method is the interface's default body, adopted at
+            // resolution (`ImplResolver::rule_method_impl` falls back to the
+            // interface's bound `default_fn` with the `[Self, iface args..]`
+            // frame). The required-method gate at witness construction (the
+            // "cannot be witnessed structurally" rejection) already excluded
+            // any interface with a bodyless required method.
             methods: IndexMap::new(),
             field_links: witness.field_links.into_boxed_slice(),
-        })));
+        })
+        .collect();
+    let resolver = crate::package_baml::resolve::ImplResolver::new(vm).with_staged_rules(&rules);
+    for (interface, args) in goals {
+        resolver
+            .check_sole_implementation(ty, interface, &args)
+            .map_err(|message| compiler_diagnostic(DiagnosticId::OverlappingImplements, message))?;
+    }
+    Ok(rules)
+}
+
+/// Publish prepared witness rules for `class_ptr`. Each rule becomes an
+/// ordinary heap `Object::ImplRule` — the resolver borrows it exactly like a
+/// package-owned rule and the collector keeps its `interface_head`/
+/// `methods[].fqn` current — owned by a private package the class points to
+/// as its owner. The dynamic dispatch table then only *finds* the rules; it
+/// holds no strong reference, and the rules live exactly as long as the class
+/// does — including while only an instance still retains it.
+pub(super) fn register_class_witnesses(
+    vm: &mut BexVm,
+    class_ptr: bex_vm_types::HeapPtr,
+    rules: Vec<RuntimeImplRule>,
+) {
+    if rules.is_empty() {
+        return;
+    }
+    let owner = vm.alloc_private_type_owner();
+    let Object::Class(class) = vm.get_object(class_ptr) else {
+        unreachable!("witnessed class placeholder changed variant")
+    };
+    debug_assert!(class.owner.is_null(), "a fresh runtime class has no owner yet");
+    let local_name = bex_vm_types::types::LocalName {
+        namespace: Vec::new(),
+        name: class.name.item_name().clone(),
+    };
+    let entries: Vec<_> = rules
+        .into_iter()
+        .map(|rule| {
+            let interface = rule.interface_head;
+            let rule = vm.tlab.alloc(Object::ImplRule(Box::new(rule)));
+            (interface, rule)
+        })
+        .collect();
+    let Object::Package(package) = vm.get_object_mut(owner) else {
+        unreachable!("a just-allocated package changed variant")
+    };
+    package.classes.insert(local_name, class_ptr);
+    for (interface, rule) in &entries {
+        package
+            .impl_rules
+            .entry(*interface)
+            .or_default()
+            .push(*rule);
+    }
+    vm.tlab.heap().write_barrier(class_ptr, Value::object(owner));
+    let Object::Class(class) = vm.get_object_mut(class_ptr) else {
+        unreachable!("witnessed class placeholder changed variant")
+    };
+    class.owner = owner;
+    for (interface, rule) in entries {
         vm.dynamic_dispatch.register_rule(
-            witness.interface_ptr,
+            interface,
             crate::package_load::DynRuleEntry {
                 class: class_ptr,
                 rule,
@@ -474,7 +531,10 @@ impl BamlNamespaceClass for PackageReflectImpl {
             Box::new([]),
             baml_type::TyAttr::default(),
         );
-        register_class_witnesses(vm, class_ptr, &ty, witnesses);
+        let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|diagnostic| {
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
+        })?;
+        register_class_witnesses(vm, class_ptr, rules);
         Ok({
             let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
             alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
@@ -1781,3 +1841,109 @@ impl BamlNamespaceMapReflect for PackageReflectImpl {}
 impl BamlNamespacePrimitiveReflect for PackageReflectImpl {}
 
 impl BamlNamespaceUnionReflect for PackageReflectImpl {}
+
+#[cfg(test)]
+mod registration_tests {
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    use bex_vm_types::{RealizedTy, RootHaver, TypeHead};
+
+    use super::*;
+
+    /// BAML observes that a witnessed class keeps working after
+    /// `baml.sys.collect_garbage()`; only Rust can observe *how* — the rule
+    /// is reachable from the class alone, with no root of its own. The blanket
+    /// is real compiler output, not a mock rule.
+    fn vm() -> BexVm {
+        BexVm::from_program(
+            baml_db::testing::compile_source(
+                r#"
+interface Gate {}
+interface Pick {}
+implements<T extends Gate> Pick for T {}
+class Fresh {}
+"#,
+            ),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .unwrap()
+    }
+
+    fn head(vm: &BexVm, name: &str) -> TypeHead {
+        vm.declaration_head(&baml_type::TypeName::from_dotted_path(&format!(
+            "user.{name}"
+        )))
+        .unwrap()
+    }
+
+    /// A fresh anonymous class, as `reflect.class.new` allocates one.
+    fn fresh_class(vm: &mut BexVm) -> TypeHead {
+        let Object::Class(class) = vm.get_object(head(vm, "Fresh").ptr()) else {
+            unreachable!()
+        };
+        let mut class = (**class).clone();
+        class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        class.name = bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Fresh"));
+        let tag = class.type_tag;
+        TypeHead::new(vm.tlab.alloc(Object::Class(Box::new(class))), tag)
+    }
+
+    fn witness(vm: &BexVm, name: &str) -> ValidatedClassWitness {
+        ValidatedClassWitness {
+            interface_ptr: head(vm, name).ptr(),
+            interface_args: Box::new([]),
+            interface_assoc: Box::new([]),
+            field_links: Vec::new(),
+        }
+    }
+
+    fn class_ty(head: TypeHead) -> RealizedTy {
+        RealizedTy::Class(head, Box::new([]), baml_type::TyAttr::default())
+    }
+
+    #[test]
+    #[expect(
+        unsafe_code,
+        reason = "standalone stop-the-world dynamic registration test"
+    )]
+    fn registered_rules_are_owned_by_the_class_without_extra_gc_roots() {
+        let mut vm = vm();
+        let class = fresh_class(&mut vm);
+        let rules = prepare_class_witnesses(&vm, &class_ty(class), vec![witness(&vm, "Pick")])
+            .unwrap();
+        register_class_witnesses(&mut vm, class.ptr(), rules);
+        let rule = vm.dynamic_dispatch.rules_for_class(class.ptr())[0];
+
+        // Root only the class, as an instance would. A major collection moves
+        // every survivor, so the rule appears in the forwarding map iff the
+        // class kept it alive.
+        let heap = Arc::clone(&vm.heap);
+        let mut index = crate::package_load::DynDispatchRoot::new(
+            Arc::clone(&vm.dynamic_dispatch),
+            Arc::clone(&heap),
+        );
+        let (_, _, forwarding) = unsafe {
+            heap.collect_garbage_generational(&[class.ptr()], bex_heap::CollectionLevel::Major)
+        };
+        assert!(forwarding.contains_key(&rule), "the class owns its rule");
+        vm.forward_roots(&forwarding);
+        index.forward_roots(&forwarding);
+        assert_eq!(index.tables.rule_count(), 1);
+        let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
+        assert!(
+            crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
+                &class_ty(moved),
+                head(&vm, "Pick"),
+                &[],
+                &[]
+            )
+        );
+
+        // Nothing reaches the class any more: the rule goes with it.
+        drop(vm);
+        let (_, _, forwarding) =
+            unsafe { heap.collect_garbage_generational(&[], bex_heap::CollectionLevel::Major) };
+        index.forward_roots(&forwarding);
+        assert_eq!(index.tables.rule_count(), 0);
+    }
+}
