@@ -1,4 +1,5 @@
 """Export objects without credentials, then push from fresh trusted Git metadata."""
+import base64
 import importlib.util
 import os
 from pathlib import Path
@@ -6,6 +7,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 
 spec = importlib.util.spec_from_file_location('atb2_sandbox', Path(__file__).with_name('sandbox.py'))
 sandbox = importlib.util.module_from_spec(spec)
@@ -34,7 +37,42 @@ def push_failure(error):
         b'permission to boundaryml/baml.git denied', b'could not read username',
     )):
         return PushFailure('GitHub rejected the push credential; verify repository access and Contents write permission', 77)
-    return PushFailure('GitHub push rejected; verify the branch head, repository rules, and connectivity')
+    if any(marker in detail for marker in (b'stale info', b'non-fast-forward', b'fetch first')):
+        return PushFailure('The PR branch changed; refresh the proposal before pushing', 80)
+    if any(marker in detail for marker in (b'gh006', b'gh013', b'protected branch', b'repository rule')):
+        return PushFailure('GitHub repository rules rejected the push; a maintainer must resolve the restriction', 79)
+    return PushFailure('GitHub rejected the push; the response did not match a known failure category', 76)
+
+
+def github_token():
+    token = (os.environ.get('ATB2_GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+             or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN'))
+    if not token: raise PushFailure('GitHub push credential is missing', 77)
+    return token
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def preflight():
+    # Read-only Git receive-pack discovery. This verifies basic push access,
+    # not branch rules or permission to modify workflow files during a push.
+    auth = base64.b64encode(('x-access-token:' + github_token()).encode()).decode()
+    request = urllib.request.Request(REPOSITORY + '/info/refs?service=git-receive-pack',
+        headers={'Authorization': 'Basic ' + auth, 'User-Agent': 'git/2.43.0'})
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request, timeout=20) as response:
+            if response.status != 200 or response.headers.get('Content-Type') != 'application/x-git-receive-pack-advertisement':
+                raise PushFailure('GitHub push-access check returned an unexpected response', 75)
+    except urllib.error.HTTPError as error:
+        if error.code in (401, 403, 404):
+            raise PushFailure('GitHub push access denied; verify the token and repository access', 77) from None
+        raise PushFailure('GitHub push-access check failed; retry when GitHub is reachable', 75) from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise PushFailure('GitHub push-access check failed; retry when GitHub is reachable', 75) from None
+    return 0
 
 
 def trusted_env(home, token):
@@ -52,6 +90,8 @@ def trusted_env(home, token):
 
 
 def main():
+    if sys.argv[1:] == ['preflight']:
+        return preflight()
     if sys.argv[1:] == ['credential']:
         # git appends get/store/erase, handled below by the shared entry check.
         return 1
@@ -66,8 +106,7 @@ def main():
     if readonly or root != Path(cwd) or root.parent != Path('/data/worktrees'):
         raise ValueError('push requires an isolated checkout')
     if not re.fullmatch(r'[0-9a-f]{40}|', expected): raise ValueError('invalid expected head')
-    token = os.environ.get('ATB2_GITHUB_TOKEN') or os.environ.get('GH_TOKEN') or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN')
-    if not token: raise PushFailure('GitHub push credential is missing', 77)
+    token = github_token()
     with tempfile.TemporaryDirectory(prefix='atb2-push-') as tmp:
         folder = Path(tmp)
         env = trusted_env(folder, token)
@@ -106,6 +145,8 @@ def main():
                 REPOSITORY, commit + ':refs/heads/' + branch, credentialed=True, stdout=subprocess.DEVNULL)
         except subprocess.CalledProcessError as error:
             raise push_failure(error) from None
+        except (subprocess.TimeoutExpired, OSError):
+            raise PushFailure('Push transport failed; verify the remote head before retrying', 75) from None
         print(commit)
     return 0
 
@@ -117,4 +158,4 @@ if __name__ == '__main__':
         sys.exit(error.code)
     except Exception:
         print('atb2: trusted push preparation failed; no credential diagnostics are shown', file=sys.stderr)
-        sys.exit(1)
+        sys.exit(70)

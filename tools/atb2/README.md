@@ -115,6 +115,16 @@ execution therefore requires the Linux runner image, rather than a host CLI.
 Pushes export Git objects without credentials, then use fresh trusted metadata,
 a fixed repository URL and an exact branch lease.
 
+`ATB2_GITHUB_TOKEN` takes precedence over legacy GitHub token names. Live runs
+check basic push access before starting the fix agent. This read-only check
+cannot verify branch rules or workflow-file permissions: updating
+`.github/workflows/` also requires the token's Workflows write permission.
+Push failures preserve the local fix, record a terminal round outcome, and
+report a safe failure category in Slack. Each push also writes `push-status.json`
+in the private run directory with its phase and exit code, never raw Git output
+or credentials. A failed push is not automatically retried: verify the remote
+head and permission settings before requesting a new approved attempt.
+
 Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
 cached executable's recorded revision matches that pin, startup skips the
 GitHub fetch and can proceed while GitHub is unavailable. Unpinned boots

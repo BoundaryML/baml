@@ -50,9 +50,9 @@ class WorkflowTests(unittest.TestCase):
             if push_exit_code is not None:
                 path = root / 'baml_src/handle_issue.baml'
                 code = path.read_text()
-                start = code.index('function push_branch(')
+                start = code.index('function run_with(')
                 end = code.index('\n}', start) + 2
-                code = code[:start] + f'function push_branch(sb: Sandbox, expected_head: string? = null) -> null {{ check_push_result({push_exit_code}) }}' + code[end:]
+                code = code[:start] + f'function run_with(c: Cmd, env: map<string, string>) -> CmdResult {{ CmdResult {{ cmd: "fixture", exit_code: {push_exit_code}, stdout: "", stderr: "private fixture diagnostic", ok: false }} }}' + code[end:]
                 path.write_text(code)
             with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
@@ -85,6 +85,10 @@ class WorkflowTests(unittest.TestCase):
             let result = baml.json.from_string<HandleOutcome>(baml.fs.read(sb.run_dir + "/outcome.json"));
             assert.contains(result.reason ?? "", "GitHub rejected");
             assert.is_true(result.report != null);
+            let status = baml.json.parse(baml.fs.read(sb.run_dir + "/push-status.json"));
+            assert.equal(baml.json.path_or<string>(status, ".phase", ""), "finished");
+            assert.is_true(baml.json.path_or<int>(status, ".exit_code", 0) != 0);
+            assert.is_true(!baml.fs.read(sb.run_dir + "/push-status.json").includes("private fixture diagnostic"));
             assert.equal(round_outcome(branch, 3), "agent_stopped");
             assert.equal(baml.fs.read(sb.worktree + "/preserved"), "fix");
             check_push_result(0);

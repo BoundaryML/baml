@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 spec = importlib.util.spec_from_file_location('scan', Path(__file__).with_name('push-scan.py'))
 scan = importlib.util.module_from_spec(spec)
@@ -96,8 +96,51 @@ class PushFailureTests(unittest.TestCase):
         push = importlib.util.module_from_spec(spec); spec.loader.exec_module(push)
         error = subprocess.CalledProcessError(1, ['git', 'push'], stderr=b'credential-fixture: stale info')
         failure = push.push_failure(error)
-        self.assertEqual(failure.code, 1)
-        self.assertIn('branch head', str(failure))
+        self.assertEqual(failure.code, 80)
+        self.assertIn('branch changed', str(failure))
         self.assertNotIn('credential-fixture', str(failure))
+
+class PushPreflightTests(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
+        self.push = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.push)
+
+    def test_preflight_only_reads_the_fixed_github_endpoint(self):
+        response = MagicMock(status=200, headers={'Content-Type': 'application/x-git-receive-pack-advertisement'})
+        opener = MagicMock(); opener.open.return_value.__enter__.return_value = response
+        with patch.dict(self.push.os.environ, {'ATB2_GITHUB_TOKEN': 'new-fixture', 'GH_TOKEN': 'old-fixture'}, clear=True), patch.object(self.push.urllib.request, 'build_opener', return_value=opener):
+            self.assertEqual(self.push.preflight(), 0)
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_method(), 'GET')
+        self.assertEqual(request.full_url, 'https://github.com/BoundaryML/baml.git/info/refs?service=git-receive-pack')
+        self.assertIsNone(request.data)
+        self.assertEqual(opener.open.call_args.kwargs['timeout'], 20)
+        self.assertEqual(request.get_header('Authorization'), 'Basic ' + self.push.base64.b64encode(b'x-access-token:new-fixture').decode())
+        self.assertIsNone(self.push.NoRedirect().redirect_request(request, None, 302, '', {}, 'https://example.invalid'))
+
+    def test_denied_access_and_transport_errors_are_safe(self):
+        for error, code in (
+            (self.push.urllib.error.HTTPError('private-url', 403, 'credential-fixture', {}, None), 77),
+            (self.push.urllib.error.HTTPError('private-url', 500, 'credential-fixture', {}, None), 75),
+            (self.push.urllib.error.URLError('credential-fixture'), 75),
+        ):
+            opener = MagicMock(); opener.open.side_effect = error
+            with patch.dict(self.push.os.environ, {'ATB2_GITHUB_TOKEN': 'credential-fixture'}, clear=True), patch.object(self.push.urllib.request, 'build_opener', return_value=opener):
+                with self.assertRaises(self.push.PushFailure) as raised: self.push.preflight()
+            self.assertEqual(raised.exception.code, code)
+            self.assertNotIn('credential-fixture', str(raised.exception))
+            self.assertNotIn('private-url', str(raised.exception))
+
+    def test_missing_token_never_contacts_github(self):
+        with patch.dict(self.push.os.environ, {}, clear=True), patch.object(self.push.urllib.request, 'build_opener') as opener:
+            with self.assertRaises(self.push.PushFailure) as raised: self.push.preflight()
+        self.assertEqual(raised.exception.code, 77)
+        opener.assert_not_called()
+
+    def test_rules_and_unknown_errors_are_distinct(self):
+        for diagnostic, code in ((b'GH013 repository rule violations', 79), (b'unknown credential-fixture', 76)):
+            failure = self.push.push_failure(subprocess.CalledProcessError(1, [], stderr=diagnostic))
+            self.assertEqual(failure.code, code)
+            self.assertNotIn('credential-fixture', str(failure))
 
 if __name__=='__main__': unittest.main()

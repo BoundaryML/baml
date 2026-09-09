@@ -115,6 +115,16 @@ function handle_issue(
             return issue;
         };
     };
+    if (mode == HandleMode.Live) {
+        github_push_preflight() catch (e) {
+            PushError => {
+                keep_branch = true;
+                write_outcome(sb, stopped_outcome(sb, started, reason = e.message));
+                tell_thread(thread, ":x: " + e.message + ". No fix agent was started.");
+                return issue;
+            },
+        };
+    };
     let doc = "";
     if (review == null) {
         //# design pass: investigate, propose the fix, write the plan (read-only)
@@ -1735,13 +1745,42 @@ function check_push_result(exit_code: int) -> null {
             77 => "GitHub rejected the push credential; verify repository access and Contents write permission",
             78 => "GitHub rejected a workflow-file update; the token needs Workflows write permission",
             65 => "Outgoing security scan failed; no push attempted",
-            _ => "Trusted push failed; check the branch head, repository rules, and runner diagnostics",
+            70 => "Trusted push preparation failed; inspect the saved push-status.json",
+            75 => "GitHub transport or access check failed; verify the remote head before retrying",
+            76 => "GitHub rejected the push for an unclassified reason; inspect the saved push-status.json",
+            79 => "GitHub repository rules rejected the push; a maintainer must resolve the restriction",
+            80 => "The PR branch changed; refresh the proposal before pushing",
+            _ => "Trusted push failed; inspect the saved push-status.json and verify the remote head",
         } };
     };
     null
 }
 
+/// Basic access only: GitHub validates workflow permissions and branch rules on the real push.
+function github_push_preflight() -> null {
+    let result = run_with(
+        Cmd {
+            program: "/usr/bin/python3",
+            args: ["-I", "/usr/local/lib/atb2/push.py", "preflight"],
+            cwd: atb2_home(),
+            timeout_ms: 30000,
+        },
+        sandbox_env(true),
+    );
+    check_push_result(result.exit_code)
+}
+
+function save_push_status(sb: Sandbox, phase: string, exit_code: int?) -> null {
+    // Only controller-owned metadata; never persist raw Git output or credentials.
+    baml.fs.write(
+        sb.run_dir + "/push-status.json",
+        { "phase": phase, "exit_code": exit_code }.to_json().to_string(),
+    );
+    null
+}
+
 function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
+    save_push_status(sb, "started", null);
     let push = run_with(
         Cmd {
             program: "/usr/bin/python3",
@@ -1758,6 +1797,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
         },
         sandbox_env(true),
     );
+    save_push_status(sb, "finished", push.exit_code);
     check_push_result(push.exit_code)
 }
 
