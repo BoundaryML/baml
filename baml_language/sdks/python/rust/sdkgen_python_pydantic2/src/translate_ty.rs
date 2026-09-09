@@ -189,7 +189,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 )
             }
         }
-        Ty::Void { .. } | Ty::Never { .. } => "None".to_string(),
+        Ty::Void { .. } => "None".to_string(),
+        // A function that never returns (`-> never`) is `NoReturn`, not
+        // `None`: `None` would let callers believe a value comes back.
+        Ty::Never { .. } => "typing.NoReturn".to_string(),
         // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
         // The host-language opaque-handle wrapper is `BamlPyHandle` from the
         // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
@@ -562,6 +565,14 @@ mod tests {
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "None",
+            },
+            Case {
+                label: "never",
+                ty: Ty::Never {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                ctx: ctx(&["lorem"]),
+                expected: "typing.NoReturn",
             },
             Case {
                 label: "baml options",
