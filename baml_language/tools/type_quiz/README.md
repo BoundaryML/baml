@@ -60,3 +60,21 @@ minimal single-file packages; none is fixed at the time of writing.
    with the parenthesised guard split over three and `.to_utf8()` on its own
    line. See `line_of` in `ns_engine/verify.baml`. Same policy as 4: kept as
    the formatter emits it.
+6. **A function type with a `throws` clause does not parse inside call-site
+   angle brackets.** `reflect.Type.of<(int) -> string throws never>()` and
+   `pkg.get_function<() -> reflect.Type throws never>("root.f")` fail with
+   `expected lambda body '{', found '>'`, while `get_function<() -> bool>(…)`
+   and the same type behind a `type` alias both work. The engine's oracle and
+   verifier go through aliases.
+7. **Reflection cannot decompose several kinds.** `unknown`, `never`, a
+   recursive alias, and `reflect.Type` all classify as `primitive`, and the
+   primitive and literal views expose nothing but `to_string`; a class view
+   exposes fields but not type arguments; an interface view exposes nothing
+   about its pins. A faithful `from_reflect` is therefore impossible today,
+   which is why the render round trip compares the compiler's own values
+   (parse-then-print fixed point, and identity with constructor-built types)
+   instead.
+8. **`to_string` on a function type is lossy.** `(x: int, b?: int) -> int
+   throws never` prints as `(int, int) -> int throws never`: names and the
+   optional marker are dropped, so the printed spelling denotes a different
+   function type than the value describes.
