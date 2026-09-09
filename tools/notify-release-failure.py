@@ -190,7 +190,8 @@ def main() -> int:
         if failures or not release_succeeded:
             mentions = current_oncall_mentions(slack_client)
             oncall_text = (
-                f"cc {' '.join(mentions)} to investigate, here's a prompt you can use:\n\n"
+                f"cc current oncall {' '.join(mentions)} to investigate, "
+                "here's a prompt you can use:\n\n"
                 f"```\nInvestigate the BAML release failure for {version}:\n\n"
                 f"- Failed workflow run: {run_url}\n"
                 "- Docs: baml_language/RELEASING.md\n```"
