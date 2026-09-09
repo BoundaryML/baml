@@ -9,14 +9,17 @@ client TestClient = openai.ResponsesClient.new();
 function FunctionWithComments(
     a: string,
     b: int, // comment after param type
-) -> // Comment after arrow
-    string {
+) // Comment before arrow
+    -> // Comment after arrow
+    string // Comment after return type
+{
     client: TestClient
     prompt: `test`
 }
 
 // Another test - comment immediately after arrow
-function CommentAfterArrow() -> // inline comment
+function CommentAfterArrow(
+) -> // inline comment
     string {
     client: TestClient
     prompt: `test`
