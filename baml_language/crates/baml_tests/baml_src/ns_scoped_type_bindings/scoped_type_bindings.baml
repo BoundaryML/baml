@@ -214,6 +214,27 @@ test "an operand is narrowed to a type before it binds" {
     assert.equal(bind_narrowed(1), "not a type")
 }
 
+// A scoped binding is a frame slot keyed by its own identity. It never
+// stands in for a same-named associated type, which is not a slot at all and
+// reduces as a `Self.X` projection over the implementor.
+interface KeyedStore {
+    type Key;
+    function probe(self) -> string throws never {
+        type Key = unreflect(reflect.Type.of<int>())
+        reflect.Type.of<Key>().to_string() + "/" + reflect.Type.of<Self.Key>().to_string()
+    }
+}
+
+class Shelf {
+    implements KeyedStore {
+        type Key = string;
+    }
+}
+
+test "a scoped binding does not shadow a same-named associated type" {
+    assert.equal(Shelf {}.probe(), "int/string")
+}
+
 test "values and effects leave a block only through binding-free types" {
     let int_t = reflect.Type.of<int>()
     let string_t = reflect.Type.of<string>()

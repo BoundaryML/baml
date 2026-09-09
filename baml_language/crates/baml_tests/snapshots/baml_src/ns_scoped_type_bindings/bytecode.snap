@@ -60,22 +60,29 @@ function scoped_type_bindings.$init_test_ns_scoped_type_bindings_scoped_type_bin
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "values and effects leave a block only through binding-free types"
+    load_const "a scoped binding does not shadow a same-named associated type"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "a descriptor keeps its own binding past a sibling rebinding"
+    load_const "values and effects leave a block only through binding-free types"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "an agent spec takes a scoped runtime type"
+    load_const "a descriptor keeps its own binding past a sibling rebinding"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scoped_type_bindings"
+    load_const "an agent spec takes a scoped runtime type"
+    make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -231,6 +238,25 @@ function scoped_type_bindings.DynamicOutput@stream(client: ai.stream.StreamingCl
     load_var2 3 1
     load_var on_event
     call ai.stream.from_spec
+    return
+}
+
+function scoped_type_bindings.KeyedStore.probe(self: scoped_type_bindings.KeyedStore) -> string {
+    load_type int
+    bind_type 1
+    load_type #1
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    load_type (#0 as scoped_type_bindings.KeyedStore).Key
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_const "/"
+    bin_op +
+    load_var _6
+    bin_op +
     return
 }
 

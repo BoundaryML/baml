@@ -453,43 +453,41 @@ fn lower_tir_template(
     mode: TemplateMode,
 ) -> Option<TyTemplate> {
     match ty {
+        // An associated type is never a frame slot (`function_generic_frame`):
+        // `Self.X` stays a structured projection over the `Self` slot and
+        // reduces through the resolver at use. Looking `X` up in the layout by
+        // NAME would hand a same-named parameter appended after the frame — a
+        // block-scoped `type X = …` — the implementor's binding.
         Tir2Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
             ..
-        } => {
-            if matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
-                && let Some(index) = generic_layout.slot_by_name(member)
-            {
-                return Some(TyTemplate::TypeArgRef(index));
-            }
-            Some(TyTemplate::AssociatedTypeProjection {
-                base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
-                interface: Box::new(baml_type::TyTemplateInterface {
-                    name: interface.name.clone(),
-                    generics: interface
-                        .generics
-                        .iter()
-                        .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
-                        .collect::<Option<Vec<_>>>()?
-                        .into(),
-                    associated_types: interface
-                        .associated_types
-                        .iter()
-                        .map(|(name, ty)| {
-                            Some((
-                                name.clone(),
-                                lower_tir_template(ty, resolved, generic_layout, mode)?,
-                            ))
-                        })
-                        .collect::<Option<Vec<_>>>()?
-                        .into(),
-                }),
-                member: member.clone(),
-                attr: TyAttr::default(),
-            })
-        }
+        } => Some(TyTemplate::AssociatedTypeProjection {
+            base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
+            interface: Box::new(baml_type::TyTemplateInterface {
+                name: interface.name.clone(),
+                generics: interface
+                    .generics
+                    .iter()
+                    .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
+                    .collect::<Option<Vec<_>>>()?
+                    .into(),
+                associated_types: interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| {
+                        Some((
+                            name.clone(),
+                            lower_tir_template(ty, resolved, generic_layout, mode)?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?
+                    .into(),
+            }),
+            member: member.clone(),
+            attr: TyAttr::default(),
+        }),
         Tir2Ty::TypeVar(param, _) => {
             if let Some(index) = generic_layout.slot(param) {
                 Some(TyTemplate::TypeArgRef(index))
