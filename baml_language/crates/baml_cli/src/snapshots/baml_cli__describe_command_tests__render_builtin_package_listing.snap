@@ -21,7 +21,7 @@ interface        baml.FromJson                    <builtin>/baml/conversions.bam
 function         baml._from_json_shim             <builtin>/baml/conversions.baml:184
 function         baml.deep_copy                   <builtin>/baml/core.baml:10
 interface        baml.Concrete                    <builtin>/baml/core.baml:18
-class            baml.TaggedString                <builtin>/baml/core.baml:33
+class            baml.TaggedString                <builtin>/baml/core.baml:32
 class            baml.Float                       <builtin>/baml/float.baml:17
 function         baml._trunc_to_int               <builtin>/baml/float.baml:638
 class            baml.Int                         <builtin>/baml/int.baml:33
