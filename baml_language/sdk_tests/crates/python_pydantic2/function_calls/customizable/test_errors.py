@@ -32,7 +32,13 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_bridge import BamlCallContext, BamlCancelledError, call_function, get_runtime
+from baml_bridge import (
+    BamlCallContext,
+    BamlCancelledError,
+    call_function,
+    call_function_sync,
+    get_runtime,
+)
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
@@ -93,6 +99,19 @@ def test_errors_host_invalid_argument_wraps_baml_errors_invalid_argument():
     synthesized host-side rather than thrown from the VM."""
     with pytest.raises(BamlError) as exc_info:
         hello_world(not_a_param=2)  # type: ignore[call-arg]
+    assert isinstance(exc_info.value.value, InvalidArgument)
+
+
+# SDK_PARITY_LINT(skip): calls the Python bridge by name; a generated surface cannot reference an undefined function
+def test_errors_missing_function_is_invalid_argument():
+    """Calling a function the program does not define is a *caller* error:
+    the engine's `FunctionNotFound` is classified as
+    `baml.errors.InvalidArgument` (matching the host-side pre-call arm), not
+    as an `SdkPanic`. With the generated SDK loaded the payload decodes to
+    the generated `InvalidArgument` model."""
+    with pytest.raises(BamlError, match="Function not found") as exc_info:
+        call_function_sync(get_runtime(), "user.missing_function", {})
+    assert exc_info.value.class_name == "baml.errors.InvalidArgument"
     assert isinstance(exc_info.value.value, InvalidArgument)
 
 

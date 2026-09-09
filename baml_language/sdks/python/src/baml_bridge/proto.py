@@ -35,7 +35,13 @@ from .baml_py import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
+from .errors import (
+    BamlCancelledError,
+    BamlError,
+    BamlFailureValue,
+    BamlPanic,
+    attach_baml_traceback,
+)
 from .typemap import BamlTypeMap, get_type_map
 
 
@@ -348,6 +354,22 @@ def _set_inbound_value(
         return
     if isinstance(value, (bytes, bytearray)):
         inbound_value.uint8array_value = bytes(value)
+        return
+    if isinstance(value, BamlFailureValue):
+        # Preserve the builtin class identity when a caught failure is passed
+        # back or rethrown; encoding it as a dict would erase that contract.
+        inbound_value.value_type.class_ty.name = value.class_name
+        cv = inbound_value.class_value
+        cv.SetInParent()
+        for key, item in value.fields.items():
+            _set_inbound_map_entry(
+                cv.fields.add(),
+                key,
+                item,
+                kwarg_name=kwarg_name,
+                registered=registered,
+                cloned_handles=cloned_handles,
+            )
         return
     if isinstance(value, (list, tuple)):
         list_val = inbound_value.list_value
@@ -1269,14 +1291,12 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     return None
 
 
-def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
-    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
-    whose `_handle` points at a still-live entry in this runtime's
-    host-value registry, return the *original* Python exception object.
-    Otherwise return `None` (foreign runtime, released key, or
-    unexpected shape) so the caller falls back to the metadata-bearing
-    `BamlError` wrapper.
-    """
+def _host_callable_handle(decoded: Any) -> Any:
+    """The `_handle` a decoded `baml.errors.HostCallable` carries: a field of
+    the SDK-owned failure payload, a Pydantic private attr, or a generated
+    public field whose wire alias is `_handle`."""
+    if isinstance(decoded, BamlFailureValue):
+        return decoded.fields.get("_handle")
     private = getattr(decoded, "__pydantic_private__", None)
     handle = private.get("_handle") if isinstance(private, dict) else None
     if handle is None and _is_pydantic_model_class(type(decoded)):
@@ -1290,6 +1310,18 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
             if "_handle" in aliases:
                 handle = values.get(name)
                 break
+    return handle
+
+
+def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
+    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
+    whose `_handle` points at a still-live entry in this runtime's
+    host-value registry, return the *original* Python exception object.
+    Otherwise return `None` (foreign runtime, released key, or
+    unexpected shape) so the caller falls back to the metadata-bearing
+    `BamlError` wrapper.
+    """
+    handle = _host_callable_handle(decoded)
     if handle is None:
         return None
     from .baml_py import lookup_host_value
@@ -1321,6 +1353,34 @@ def _outbound_class_fqn(holder) -> Optional[str]:
     return None
 
 
+def _is_builtin_failure_class(fqn: str) -> bool:
+    """`baml.errors.*` / `baml.panics.*`: failures the runtime or the bridge
+    synthesizes, which can surface before any application SDK is imported
+    (an `SdkPanic` from `get_runtime`, a missing-function `InvalidArgument`,
+    a host callback's `HostCallable`)."""
+    return fqn.startswith("baml.errors.") or fqn.startswith("baml.panics.")
+
+
+def _decode_failure_value(holder, type_map: BamlTypeMap) -> Any:
+    """Decode a thrown / panicked value.
+
+    A builtin failure the application typemap has no generated model for
+    decodes to the SDK-owned `BamlFailureValue` instead of failing the whole
+    decode with an "unknown class" error that masks the real diagnostic.
+    Application-defined errors (and builtin failures a generated SDK does
+    model) still use their generated models.
+    """
+    inner = _unwrap_union_variant(holder)
+    if inner.WhichOneof("value") == "class_value":
+        cls = inner.class_value
+        if _is_builtin_failure_class(cls.name) and not type_map.has_class(cls.name):
+            return BamlFailureValue(
+                cls.name,
+                {field.key: decode_value(field.value, type_map) for field in cls.fields},
+            )
+    return decode_value(holder, type_map)
+
+
 def decode_call_result(data: bytes) -> Any:
     """Decode a `BamlOutboundResult` envelope to a Python value, raising
     `BamlError` / `BamlPanic` for the thrown arms (31c / 31f).
@@ -1340,7 +1400,7 @@ def decode_call_result(data: bytes) -> Any:
 
     if which == "error":
         msg = result.error
-        decoded = decode_value(msg.value, type_map)
+        decoded = _decode_failure_value(msg.value, type_map)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
         # type error — surface it as Python's native `TypeError` rather than a
@@ -1389,7 +1449,7 @@ def decode_call_result(data: bytes) -> Any:
         )
         raise attach_baml_traceback(
             panic_type(
-                decode_value(msg.value, type_map),
+                _decode_failure_value(msg.value, type_map),
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )

@@ -89,6 +89,10 @@ class BamlTypeMap:
 
     # — lookup (lazy fallback) —
 
+    def has_class(self, fqn: str) -> bool:
+        """Whether `fqn` has a generated class entry (without importing it)."""
+        return fqn in self._class_cache or fqn in self._class_lazy
+
     def get_class(self, fqn: str) -> Type:
         cached = self._class_cache.get(fqn)
         if cached is not None:

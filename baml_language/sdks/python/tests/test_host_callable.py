@@ -234,7 +234,11 @@ def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
-    with pytest.raises(Exception, match="TypeMismatch"):
+    # `baml.errors.TypeMismatch` surfaces as a native `TypeError` carrying
+    # the engine's diagnostic. (Before builtin failures decoded without a
+    # generated SDK, this matched "TypeMismatch" only because the decode
+    # failed with "Unknown class FQN 'baml.errors.TypeMismatch'".)
+    with pytest.raises(TypeError, match="cannot be bound"):
         call_function_sync(
             rt,
             "ConsumeUnknownCb",
@@ -315,38 +319,12 @@ def test_encode_error_releases_registered_callables(monkeypatch):
 # must surface on the host as `BamlPanic(SdkPanic)`, NOT a catchable
 # `BamlError(HostCallable)`. The engine side is covered by
 # `host_callable_bridge_failure_surfaces_as_internal_error` in
-# `crates/bex_engine/tests/host_value_callable.rs`; these tests pin the
-# Python-side routing.
+# `crates/bex_engine/tests/host_value_callable.rs`; this test pins the
+# Python-side routing. (A *normal* user exception is the opposite case —
+# it rehydrates as the original object; see
+# `test_builtin_failures.py::test_host_callback_exception_keeps_identity_without_generated_models`
+# and the generated-SDK fixture crate.)
 # ---------------------------------------------------------------------------
-
-
-def test_normal_user_exception_routes_to_BamlError_not_BamlPanic():
-    """Regression guard for the BamlError vs BamlPanic dichotomy. A
-    *normal* user exception raised by the lambda is a user-level error
-    (catchable), not a bridge-layer fault — it must surface as
-    `BamlError`, never `BamlPanic`. If a future change accidentally
-    routed every host throw through `send_dispatch_bridge_failure`, the
-    test fails because `BamlPanic` subclasses `BaseException` (not
-    `Exception`), so the `pytest.raises(Exception)` check below would
-    miss it.
-    """
-    from baml_bridge.errors import BamlError, BamlPanic
-
-    rt = _make_runtime()
-
-    def cb(_x: int) -> str:
-        raise ValueError("ordinary user error")
-
-    with pytest.raises(Exception) as exc_info:
-        call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
-
-    assert isinstance(exc_info.value, BamlError), (
-        f"expected BamlError, got {type(exc_info.value).__name__}"
-    )
-    assert not isinstance(exc_info.value, BamlPanic), (
-        "user exceptions must NOT route as BamlPanic — that's reserved "
-        "for bridge-layer faults like missing-callable-for-key"
-    )
 
 
 def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
