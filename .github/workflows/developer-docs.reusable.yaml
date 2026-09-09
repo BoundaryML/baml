@@ -1,29 +1,17 @@
-name: Developer Docs
+name: Developer Docs (Reusable)
 
 on:
-  pull_request:
-  push:
-    branches: [main, canary]
-    paths:
-      - "typescript2/app-developer-docs/**"
-      - "typescript2/pkg-grammar/**"
-      - "typescript2/package.json"
-      - "typescript2/pnpm-lock.yaml"
-      - "typescript2/pnpm-workspace.yaml"
-      - "baml_language/**"
-      - ".envrc"
-      - "mise.toml"
-      - "tools/baml-sccache"
-      - ".github/actions/setup-mise/**"
-      - ".github/actions/setup-node2/**"
-      - ".github/workflows/developer-docs.yml"
-      - ".github/workflows/release-baml-language.yml"
-  workflow_dispatch:
+  workflow_call:
+    secrets:
+      GENERATED_CONTENT_DATABASE_URL:
+        description: Read-only runtime credential for the published documentation store
+        required: false
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
-
+# The caller owns concurrency so this workflow cannot cancel its parent run.
 permissions:
   contents: read
 
@@ -44,10 +32,10 @@ jobs:
         id: changes
         env:
           ACTOR: ${{ github.actor }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -58,11 +46,13 @@ jobs:
           fi
           echo "can-use-secrets=$can_use_secrets" >> "$GITHUB_OUTPUT"
 
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             echo "should-run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # Capture first so a failed diff fails the job instead of passing silently.
+          changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           should_run=false
           while IFS= read -r file; do
             case "$file" in
@@ -77,13 +67,14 @@ jobs:
               tools/baml-sccache | \
               .github/actions/setup-mise/* | \
               .github/actions/setup-node2/* | \
-              .github/workflows/developer-docs.yml | \
+              .github/workflows/developer-docs.reusable.yaml | \
+              .github/workflows/ci.yaml | \
               .github/workflows/release-baml-language.yml)
                 should_run=true
                 break
                 ;;
             esac
-          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          done <<< "$changed_files"
           echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
 
   quality:
@@ -293,8 +284,8 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:4173/cli/$VERSION/commands/not-a-command")" = "404"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4173/cli/v0.0.0-missing)" = "404"
 
-  pre-merge-gate:
-    name: Developer Docs Pre-merge Gate
+  checks:
+    name: Developer Docs Checks
     needs:
       - determine-changes
       - quality
@@ -302,7 +293,7 @@ jobs:
       - snippets
       - database-integration
       - production-path
-    if: always() && github.event_name == 'pull_request'
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: Require affected documentation checks

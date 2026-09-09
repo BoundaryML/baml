@@ -625,6 +625,16 @@ jobs:
     secrets: inherit
     permissions: write-all
 
+  developer-docs:
+    name: "Developer Docs"
+    uses: ./.github/workflows/developer-docs.reusable.yaml
+    permissions:
+      contents: read
+    secrets:
+      GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
   webview-tests:
     name: "Webview Tests"
     needs: determine_changes
@@ -1248,6 +1258,7 @@ jobs:
       - cargo-tests
       - wasm-pack-tests
       - docs
+      - developer-docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate
@@ -1277,6 +1288,7 @@ jobs:
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| developer-docs | ${{ needs.developer-docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1316,6 +1328,7 @@ jobs:
       - cargo-tests
       - wasm-pack-tests
       - docs
+      - developer-docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate

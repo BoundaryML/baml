@@ -164,7 +164,10 @@ test('generated references are live SSR without exhaustive static export', async
       'utf8',
     ),
     readFile(
-      resolve(process.cwd(), '../../.github/workflows/developer-docs.yml'),
+      resolve(
+        process.cwd(),
+        '../../.github/workflows/developer-docs.reusable.yaml',
+      ),
       'utf8',
     ),
     readFile(
