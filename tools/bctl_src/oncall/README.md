@@ -2,7 +2,7 @@
 
 `bctl oncall` manages our on-call roster. The source of truth is a single file, [`data/schedule.oncall`](./data/schedule.oncall), that holds both the roster (who is in which rotation) and the week-by-week shift assignments.
 
-`oncall-releases` is the team's release rotation and includes everyone: antonio, kai, paulo, sam, vbv, aaron, anish, and avery. It replaces the retired founders and Discord rotations. Shifts start on Fridays using the Pacific calendar date. The release oncaller investigates failed releases, prepares the changelog, and puts out the weekly release.
+`oncall-releases` is the team's release rotation and includes everyone: antonio, kai, paulo, sam, vbv, aaron, and avery. It replaces the retired founders and Discord rotations. Shifts start on Fridays using the Pacific calendar date. The release oncaller investigates failed releases, prepares the changelog, and puts out the weekly release.
 
 # Updating `schedule.oncall`
 

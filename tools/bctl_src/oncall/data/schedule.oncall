@@ -3,11 +3,10 @@
 #   notification_channel: "#oncall"
 #
 # roster_by_rotation:
-#   oncall-releases: [antonio, kai, paulo, sam, vbv, aaron, anish, avery]
+#   oncall-releases: [antonio, kai, paulo, sam, vbv, aaron, avery]
 #
 # roster_by_human:
 #   aaron: [oncall-releases]
-#   anish: [oncall-releases]
 #   antonio: [oncall-releases]
 #   avery: [oncall-releases]
 #   kai: [oncall-releases]
@@ -20,17 +19,17 @@
 2026-09-11 oncall-releases=sam
 2026-09-18 oncall-releases=vbv
 2026-09-25 oncall-releases=aaron
-2026-10-02 oncall-releases=anish
-2026-10-09 oncall-releases=avery
-2026-10-16 oncall-releases=antonio
-2026-10-23 oncall-releases=kai
-2026-10-30 oncall-releases=paulo
-2026-11-06 oncall-releases=sam
-2026-11-13 oncall-releases=vbv
-2026-11-20 oncall-releases=aaron
-2026-11-27 oncall-releases=anish
-2026-12-04 oncall-releases=avery
-2026-12-11 oncall-releases=antonio
-2026-12-18 oncall-releases=kai
-2026-12-25 oncall-releases=paulo
-2027-01-01 oncall-releases=sam
+2026-10-02 oncall-releases=avery
+2026-10-09 oncall-releases=antonio
+2026-10-16 oncall-releases=kai
+2026-10-23 oncall-releases=paulo
+2026-10-30 oncall-releases=sam
+2026-11-06 oncall-releases=vbv
+2026-11-13 oncall-releases=aaron
+2026-11-20 oncall-releases=avery
+2026-11-27 oncall-releases=antonio
+2026-12-04 oncall-releases=kai
+2026-12-11 oncall-releases=paulo
+2026-12-18 oncall-releases=sam
+2026-12-25 oncall-releases=vbv
+2027-01-01 oncall-releases=aaron
