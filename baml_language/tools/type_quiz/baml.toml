@@ -1,0 +1,13 @@
+[package]
+name = "type_quiz"
+
+# `default` is what a bare `baml-cli test` (and CI) runs: everything except the
+# opt-in `::live::` testsets, which call a real model to calibrate the grader.
+[test]
+default = "offline"
+
+[test.profiles.offline]
+args = ["-x", "::live::"]
+
+[test.profiles.live]
+args = ["-i", "::live::"]

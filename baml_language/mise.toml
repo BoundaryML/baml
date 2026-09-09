@@ -76,3 +76,15 @@ description = "Run the BAML formatter on the standard library packages"
 run = "cargo run -p baml_cli -- fmt"
 dir = "crates/baml_builtins2/baml_std"
 sources = ["crates/baml_builtins2/baml_std/**/*.baml"]
+
+[tasks.type-quiz-lint]
+description = "Check the structural invariants of tools/type_quiz (layering, banned APIs)"
+run = "tools/type_quiz/lint.sh"
+
+[tasks.type-quiz-test]
+description = "Run the type-quiz conformance suite (offline profile)"
+run = "cargo run -p baml_cli -- test --from tools/type_quiz"
+
+[tasks.fmt-type-quiz]
+description = "Run the BAML formatter on tools/type_quiz"
+run = "cargo run -p baml_cli -- fmt --project tools/type_quiz"
