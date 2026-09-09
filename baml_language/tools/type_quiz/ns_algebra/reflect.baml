@@ -7,9 +7,11 @@
 
 /// The kinds the compiler classifies types into, mirroring `reflect.TypeKind`.
 ///
-/// The compiler files `unknown`, `never`, recursive aliases, and the metatype
-/// under `Primitive`; `expected_kind` encodes that so the conformance suite
-/// notices if the classification changes.
+/// Classification is syntactic: the compiler files `unknown`, `never`,
+/// recursive aliases, and the metatype under `Primitive`, and reports the
+/// kind of a spelling rather than of the canonical type (`1 | int` is a
+/// `Union` although it equals `int`). `expected_kind` encodes that, so the
+/// conformance suite notices if the classification of a spelling changes.
 enum Kind {
     Class,
     Enum,
@@ -36,15 +38,12 @@ function kind_of(t: reflect.Type) -> Kind throws never {
     }
 }
 
-/// The kind the compiler should report for `ty`, or `null` for a type
-/// variable, which has no realized reflection.
+/// The kind the compiler should report for `ty`'s spelling, or `null` for a
+/// type variable, which has no realized reflection.
 function expected_kind(ty: Ty) -> Kind? throws never {
     match (ty) {
-        Prim => Kind.Primitive,
-        Never => Kind.Primitive,
-        Top => Kind.Primitive,
-        Lit => Kind.Literal,
-        EnumLit => Kind.Literal,
+        Prim | Never | Top => Kind.Primitive,
+        Lit | EnumLit => Kind.Literal,
         Union => Kind.Union,
         Array => Kind.Array,
         Map => Kind.Map,
@@ -86,34 +85,22 @@ function to_reflect(ty: Ty) -> reflect.Type? throws never {
         Never => reflect.Type.of<never>(),
         Top => reflect.Type.of<unknown>(),
         let l: Lit => reflect.literal.new(l.value).as_type(),
-        EnumLit => null,
         let u: Union => {
-            let members = u.members.filter_map((m) -> {
+            let members = u.members().filter_map((m) -> {
                 to_reflect(m)
             });
-            if (members.length() != u.members.length()) {
+            if (members.length() != u.members().length()) {
                 return null;
             }
             reflect.union.new(members).as_type() catch (e) {
                 reflect.errors.CompilationError => null,
             }
         },
-        let a: Array => match (to_reflect(a.element)) {
-            let e: reflect.Type => e.array().as_type(),
+        let a: Array => to_reflect(a.element)?.array().as_type(),
+        let m: Map => match (to_reflect(m.value)) {
+            let v: reflect.Type => reflect.map.new(reflect.Type.of<string>(), v).as_type(),
             null => null,
         },
-        let m: Map => match (to_reflect(m.key)) {
-            let k: reflect.Type => match (to_reflect(m.value)) {
-                let v: reflect.Type => reflect.map.new(k, v).as_type(),
-                null => null,
-            },
-            null => null,
-        },
-        Fn => null,
-        Class => null,
-        Enum => null,
-        Iface => null,
-        Alias => null,
-        Var => null,
+        EnumLit | Fn | Class | Enum | Iface | Alias | Var => null,
     }
 }

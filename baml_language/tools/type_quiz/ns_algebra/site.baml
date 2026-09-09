@@ -24,6 +24,8 @@ class SiteNames {
     value: string,
     target: string,
     sink: string,
+    /// The binding that holds the constructed class at the `Field` site.
+    instance: string,
     holder: string,
 }
 
@@ -41,7 +43,7 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     let t = render(target);
     // Spelled through `render` so a union or function target keeps its
     // parentheses inside the element position.
-    let t_array = render(array(target));
+    let t_array = render(Array.new(target));
     match (site) {
         SiteKind.Let => {
             Probe {
@@ -84,7 +86,7 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
                     }
 
                     function ${names.function_name}(${names.value}: ${s}) -> void {
-                        let ${names.sink} = ${names.holder} { ${names.target}: ${names.value} };
+                        let ${names.instance} = ${names.holder} { ${names.target}: ${names.value} };
                     }
                 `,
                 anchor: names.target,

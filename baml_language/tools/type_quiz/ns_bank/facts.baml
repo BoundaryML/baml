@@ -5,11 +5,8 @@
 // whose transfer functions live in the algebra, and the compiler checks the
 // result through the items built on it.
 
-/// A derivation and the seed that continues the stream.
-class Derived {
-    derivation: root.algebra.Derivation,
-    next: root.engine.Seed,
-}
+/// A derivation drawn from a seed.
+type Derived = root.engine.Rolled<root.algebra.Derivation>;
 
 /// A named fact generator. `name` must equal the generating function's name,
 /// which the conformance suite checks by reflection so no fact can be
@@ -19,124 +16,93 @@ class Fact {
     generate: (root.engine.Seed) -> Derived throws never,
 }
 
-function run_fact(fact: Fact, seed: root.engine.Seed) -> Derived throws never {
-    let generate = fact.generate;
-    generate(seed)
-}
-
 // ─── seeded pools ────────────────────────────────────────────────────────────
 
 /// The leaf types facts are built from: distinct concrete builtins, which
 /// the spec says are pairwise unrelated.
 function leaves() -> root.algebra.Ty[] throws never {
     [
-        root.algebra.int(),
-        root.algebra.string(),
-        root.algebra.bool(),
-        root.algebra.float(),
-        root.algebra.bigint(),
+        root.algebra.Prim.int(),
+        root.algebra.Prim.string(),
+        root.algebra.Prim.bool(),
+        root.algebra.Prim.float(),
+        root.algebra.Prim.bigint(),
     ]
 }
 
-class Leaves {
-    tys: root.algebra.Ty[],
-    next: root.engine.Seed,
-}
-
-/// `n` distinct leaves.
-function pick_leaves(seed: root.engine.Seed, n: int) -> Leaves throws never {
-    let remaining = leaves();
-    let tys: root.algebra.Ty[] = [];
-    let s = seed;
-    while (tys.length() < n && remaining.length() > 0) {
-        let d = root.engine.below(s, remaining.length());
-        s = d.next;
-        if let ty: root.algebra.Ty = remaining.remove_at(d.value) {
-            let _ = tys.push(ty);
-        }
-    }
-    Leaves { tys: tys, next: s }
-}
-
-class Literal {
-    literal: root.algebra.Ty,
-    concrete: root.algebra.Ty,
-    next: root.engine.Seed,
+/// `n` distinct leaves; the pool holds five.
+function pick_leaves(
+    seed: root.engine.Seed,
+    n: int,
+) -> root.engine.Rolled<root.algebra.Ty[]> throws never {
+    root.engine.pick_distinct(seed, leaves(), n)
 }
 
 /// A literal type and the concrete type it belongs to.
-function pick_literal(seed: root.engine.Seed) -> Literal throws never {
-    let d = root.engine.below(seed, 3);
-    let n = root.engine.below(d.next, 100);
-    match (d.value) {
+class LiteralPair {
+    literal: root.algebra.Ty,
+    concrete: root.algebra.Ty,
+}
+
+function pick_literal(seed: root.engine.Seed) -> root.engine.Rolled<LiteralPair> throws never {
+    let kind = root.engine.below(seed, 3);
+    let n = root.engine.below(kind.next, 100);
+    let pair = match (kind.value) {
         0 => {
-            Literal {
-                literal: root.algebra.lit(n.value),
-                concrete: root.algebra.int(),
-                next: n.next,
+            LiteralPair {
+                literal: root.algebra.Lit.new(n.value),
+                concrete: root.algebra.Prim.int(),
             }
         },
         1 => {
-            Literal {
-                literal: root.algebra.lit("sheep"),
-                concrete: root.algebra.string(),
-                next: n.next,
+            LiteralPair {
+                literal: root.algebra.Lit.new("sheep"),
+                concrete: root.algebra.Prim.string(),
             }
         },
         _ => {
-            Literal {
-                literal: root.algebra.lit(n.value % 2 == 0),
-                concrete: root.algebra.bool(),
-                next: n.next,
+            LiteralPair {
+                literal: root.algebra.Lit.new(n.value % 2 == 0),
+                concrete: root.algebra.Prim.bool(),
             }
         },
-    }
+    };
+    root.engine.Rolled<LiteralPair> { value: pair, next: n.next }
 }
 
-class NamedDecl {
-    name: string,
-    next: root.engine.Seed,
-}
-
-function pick_type_name(seed: root.engine.Seed) -> NamedDecl throws never {
-    let picked = pick_distinct(seed, type_names(), 1);
-    NamedDecl { name: picked.names[0], next: picked.next }
+function pick_type_name(seed: root.engine.Seed) -> root.engine.Rolled<string> throws never {
+    let picked = root.engine.pick_distinct(seed, type_names(), 1);
+    root.engine.Rolled<string> { value: picked.value[0], next: picked.next }
 }
 
 /// `class Name<T> { value: T }` with a seeded name.
-function box_decl(seed: root.engine.Seed) -> BoxDecl throws never {
+function box_decl(
+    seed: root.engine.Seed,
+) -> root.engine.Rolled<root.algebra.ClassDecl> throws never {
     let n = pick_type_name(seed);
-    BoxDecl {
-        decl: root.algebra.ClassDecl {
-            name: n.name,
+    root.engine.Rolled<root.algebra.ClassDecl> {
+        value: root.algebra.ClassDecl {
+            name: n.value,
             params: ["T"],
-            fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.var("T") }],
+            fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Var.new("T") }],
         },
         next: n.next,
     }
-}
-
-class BoxDecl {
-    decl: root.algebra.ClassDecl,
-    next: root.engine.Seed,
 }
 
 function variant_names() -> string[] throws never {
     ["Left", "Right", "Up", "Down", "North", "South", "Red", "Green"]
 }
 
-class EnumPick {
-    decl: root.algebra.EnumDecl,
-    next: root.engine.Seed,
-}
-
 /// An enum with a seeded name and two or three seeded variants.
-function pick_enum(seed: root.engine.Seed) -> EnumPick throws never {
+function pick_enum(
+    seed: root.engine.Seed,
+) -> root.engine.Rolled<root.algebra.EnumDecl> throws never {
     let n = pick_type_name(seed);
     let count = root.engine.below(n.next, 2);
-    let variants = pick_distinct(count.next, variant_names(), 2 + count.value);
-    EnumPick {
-        decl: root.algebra.EnumDecl { name: n.name, variants: variants.names },
+    let variants = root.engine.pick_distinct(count.next, variant_names(), 2 + count.value);
+    root.engine.Rolled<root.algebra.EnumDecl> {
+        value: root.algebra.EnumDecl { name: n.value, variants: variants.value },
         next: variants.next,
     }
 }
@@ -144,15 +110,15 @@ function pick_enum(seed: root.engine.Seed) -> EnumPick throws never {
 // ─── pair-introducing facts ──────────────────────────────────────────────────
 
 function derived(d: root.algebra.Derivation, next: root.engine.Seed) -> Derived throws never {
-    Derived { derivation: d, next: next }
+    root.engine.Rolled<root.algebra.Derivation> { value: d, next: next }
 }
 
 function never_bottom(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.never(),
-            l.tys[0],
+            root.algebra.Never {  },
+            l.value[0],
             root.algebra.Relation.Sub,
             never_bottom_rule(),
         ),
@@ -164,8 +130,8 @@ function unknown_top(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            l.tys[0],
-            root.algebra.unknown(),
+            l.value[0],
+            root.algebra.Top {  },
             root.algebra.Relation.Sub,
             unknown_top_rule(),
         ),
@@ -175,15 +141,18 @@ function unknown_top(seed: root.engine.Seed) -> Derived throws never {
 
 function identity(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
-    derived(root.algebra.pair(l.tys[0], l.tys[0], root.algebra.Relation.Equiv, identity_rule()), l.next)
+    derived(
+        root.algebra.pair(l.value[0], l.value[0], root.algebra.Relation.Equiv, identity_rule()),
+        l.next,
+    )
 }
 
 function union_member(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 2);
     derived(
         root.algebra.pair(
-            l.tys[0],
-            root.algebra.union([l.tys[0], l.tys[1]]),
+            l.value[0],
+            root.algebra.Union.new(l.value),
             root.algebra.Relation.Sub,
             union_member_rule(),
         ),
@@ -195,8 +164,8 @@ function union_subset(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 3);
     derived(
         root.algebra.pair(
-            root.algebra.union([l.tys[0], l.tys[1]]),
-            root.algebra.union([l.tys[0], l.tys[1], l.tys[2]]),
+            root.algebra.Union.new(l.value.slice(0, 2)),
+            root.algebra.Union.new(l.value),
             root.algebra.Relation.Sub,
             union_subset_rule(),
         ),
@@ -208,8 +177,8 @@ function literal_subtype(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_literal(seed);
     derived(
         root.algebra.pair(
-            l.literal,
-            l.concrete,
+            l.value.literal,
+            l.value.concrete,
             root.algebra.Relation.Sub,
             literal_subtype_of_concrete(),
         ),
@@ -223,19 +192,19 @@ function concrete_atomic(seed: root.engine.Seed) -> Derived throws never {
     let choice = root.engine.below(seed, 2);
     let l = if (choice.value == 0) {
         let order = root.engine.below(choice.next, 2);
-        let tys = if (order.value == 0) {
-            [root.algebra.int(), root.algebra.float()]
+        let tys: root.algebra.Ty[] = if (order.value == 0) {
+            [root.algebra.Prim.int(), root.algebra.Prim.float()]
         } else {
-            [root.algebra.float(), root.algebra.int()]
+            [root.algebra.Prim.float(), root.algebra.Prim.int()]
         };
-        Leaves { tys: tys, next: order.next }
+        root.engine.Rolled<root.algebra.Ty[]> { value: tys, next: order.next }
     } else {
         pick_leaves(choice.next, 2)
     };
     derived(
         root.algebra.pair(
-            l.tys[0],
-            l.tys[1],
+            l.value[0],
+            l.value[1],
             root.algebra.Relation.Unrelated,
             concrete_types_atomic(),
         ),
@@ -245,15 +214,15 @@ function concrete_atomic(seed: root.engine.Seed) -> Derived throws never {
 
 function bool_true_false(seed: root.engine.Seed) -> Derived throws never {
     let order = root.engine.below(seed, 2);
-    let members = if (order.value == 0) {
-        [root.algebra.lit(true), root.algebra.lit(false)]
+    let members: root.algebra.Ty[] = if (order.value == 0) {
+        [root.algebra.Lit.new(true), root.algebra.Lit.new(false)]
     } else {
-        [root.algebra.lit(false), root.algebra.lit(true)]
+        [root.algebra.Lit.new(false), root.algebra.Lit.new(true)]
     };
     derived(
         root.algebra.pair(
-            root.algebra.union(members),
-            root.algebra.bool(),
+            root.algebra.Union.new(members),
+            root.algebra.Prim.bool(),
             root.algebra.Relation.Equiv,
             bool_is_true_or_false(),
         ),
@@ -263,13 +232,15 @@ function bool_true_false(seed: root.engine.Seed) -> Derived throws never {
 
 function enum_variants(seed: root.engine.Seed) -> Derived throws never {
     let e = pick_enum(seed);
-    let members = e.decl.variants.map((v) -> {
-        root.algebra.enum_lit(e.decl, v)
+    // Arrays are invariant, so the variants are widened to `Ty` as they are made.
+    let members = e.value.variants.map((v) -> {
+        let ty: root.algebra.Ty = root.algebra.EnumLit.new(e.value, v);
+        ty
     });
     derived(
         root.algebra.pair(
-            root.algebra.union(members),
-            root.algebra.enum_ty(e.decl),
+            root.algebra.Union.new(members),
+            root.algebra.Enum.new(e.value),
             root.algebra.Relation.Equiv,
             enum_is_union_of_variants(),
         ),
@@ -281,14 +252,14 @@ function literal_absorbed_fact(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_literal(seed);
     let order = root.engine.below(l.next, 2);
     let members = if (order.value == 0) {
-        [l.literal, l.concrete]
+        [l.value.literal, l.value.concrete]
     } else {
-        [l.concrete, l.literal]
+        [l.value.concrete, l.value.literal]
     };
     derived(
         root.algebra.pair(
-            root.algebra.union(members),
-            l.concrete,
+            root.algebra.Union.new(members),
+            l.value.concrete,
             root.algebra.Relation.Equiv,
             literal_absorbed(),
         ),
@@ -300,8 +271,8 @@ function unknown_absorbs_fact(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.union([l.tys[0], root.algebra.unknown()]),
-            root.algebra.unknown(),
+            root.algebra.Union.new([l.value[0], root.algebra.Top {  }]),
+            root.algebra.Top {  },
             root.algebra.Relation.Equiv,
             unknown_absorbs(),
         ),
@@ -313,8 +284,8 @@ function never_omitted(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     derived(
         root.algebra.pair(
-            root.algebra.union([l.tys[0], root.algebra.never()]),
-            l.tys[0],
+            root.algebra.Union.new([l.value[0], root.algebra.Never {  }]),
+            l.value[0],
             root.algebra.Relation.Equiv,
             never_omitted_from_unions(),
         ),
@@ -326,8 +297,8 @@ function union_commutes(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 2);
     derived(
         root.algebra.pair(
-            root.algebra.union([l.tys[0], l.tys[1]]),
-            root.algebra.union([l.tys[1], l.tys[0]]),
+            root.algebra.Union.new(l.value),
+            root.algebra.Union.new(l.value.reverse()),
             root.algebra.Relation.Equiv,
             union_commutative(),
         ),
@@ -339,8 +310,8 @@ function union_associates(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 3);
     derived(
         root.algebra.pair(
-            root.algebra.union([l.tys[0], root.algebra.union([l.tys[1], l.tys[2]])]),
-            root.algebra.union([l.tys[0], l.tys[1], l.tys[2]]),
+            root.algebra.Union.new([l.value[0], root.algebra.Union.new(l.value.slice(1, 3))]),
+            root.algebra.Union.new(l.value),
             root.algebra.Relation.Equiv,
             union_associative(),
         ),
@@ -351,11 +322,11 @@ function union_associates(seed: root.engine.Seed) -> Derived throws never {
 function alias_is_transparent(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     let n = pick_type_name(l.next);
-    let decl = root.algebra.AliasDecl { name: n.name, body: l.tys[0] };
+    let decl = root.algebra.AliasDecl { name: n.value, body: l.value[0] };
     derived(
         root.algebra.pair(
             root.algebra.Alias { decl: decl },
-            l.tys[0],
+            l.value[0],
             root.algebra.Relation.Equiv,
             alias_transparent(),
         ),
@@ -365,18 +336,18 @@ function alias_is_transparent(seed: root.engine.Seed) -> Derived throws never {
 
 /// `type A = leaf | A[]` under a seeded name.
 function list_alias(name: string, leaf: root.algebra.Ty) -> root.algebra.AliasDecl throws never {
-    root.algebra.recursive_alias(name, (self) -> {
-        root.algebra.union([leaf, root.algebra.array(self)])
+    root.algebra.AliasDecl.recursive(name, (self) -> {
+        root.algebra.Union.new([leaf, root.algebra.Array.new(self)])
     })
 }
 
 function equirecursive(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
-    let names = pick_distinct(l.next, type_names(), 2);
+    let names = root.engine.pick_distinct(l.next, type_names(), 2);
     derived(
         root.algebra.pair(
-            root.algebra.Alias { decl: list_alias(names.names[0], l.tys[0]) },
-            root.algebra.Alias { decl: list_alias(names.names[1], l.tys[0]) },
+            root.algebra.Alias { decl: list_alias(names.value[0], l.value[0]) },
+            root.algebra.Alias { decl: list_alias(names.value[1], l.value[0]) },
             root.algebra.Relation.Equiv,
             equirecursive_identity(),
         ),
@@ -387,11 +358,13 @@ function equirecursive(seed: root.engine.Seed) -> Derived throws never {
 function unfolds_once(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     let n = pick_type_name(l.next);
-    let decl = list_alias(n.name, l.tys[0]);
+    let decl = list_alias(n.value, l.value[0]);
     derived(
         root.algebra.pair(
             root.algebra.Alias { decl: decl },
-            root.algebra.union([l.tys[0], root.algebra.array(root.algebra.Alias { decl: decl })]),
+            root.algebra.Union.new(
+                [l.value[0], root.algebra.Array.new(root.algebra.Alias { decl: decl })],
+            ),
             root.algebra.Relation.Equiv,
             partial_unfolding(),
         ),
@@ -400,12 +373,12 @@ function unfolds_once(seed: root.engine.Seed) -> Derived throws never {
 }
 
 function unguarded_member_is_vacuous(seed: root.engine.Seed) -> Derived throws never {
-    let names = pick_distinct(seed, type_names(), 2);
-    let with_member = root.algebra.recursive_alias(names.names[0], (self) -> {
-        root.algebra.union([self, root.algebra.array(self)])
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let with_member = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
+        root.algebra.Union.new([self, root.algebra.Array.new(self)])
     });
-    let plain = root.algebra.recursive_alias(names.names[1], (self) -> {
-        root.algebra.array(self)
+    let plain = root.algebra.AliasDecl.recursive(names.value[1], (self) -> {
+        root.algebra.Array.new(self)
     });
     derived(
         root.algebra.pair(
@@ -420,39 +393,54 @@ function unguarded_member_is_vacuous(seed: root.engine.Seed) -> Derived throws n
 
 function optional_superset(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 3);
-    let names = pick_distinct(l.next, binding_names(), 2);
-    let more = root.algebra.fn(
-        [
-            root.algebra.named(names.names[0], l.tys[0], false),
-            root.algebra.named(names.names[1], l.tys[1], true),
-        ],
-        l.tys[2],
-        root.algebra.never(),
+    let names = root.engine.pick_distinct(l.next, binding_names(), 2);
+    let required = root.algebra.Named.new(names.value[0], l.value[0], false);
+    let more = root.algebra.Fn.new(
+        [],
+        [required, root.algebra.Named.new(names.value[1], l.value[1], true)],
+        l.value[2],
+        root.algebra.Never {  },
     );
-    let fewer = root.algebra.fn(
-        [root.algebra.named(names.names[0], l.tys[0], false)],
-        l.tys[2],
-        root.algebra.never(),
-    );
+    let fewer = root.algebra.Fn.new([], [required], l.value[2], root.algebra.Never {  });
     derived(root.algebra.pair(more, fewer, root.algebra.Relation.Sub, fn_optional_superset()), names.next)
 }
 
 function positional_count(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 2);
-    let one = root.algebra.fn([root.algebra.positional(l.tys[0])], l.tys[1], root.algebra.never());
-    let two = root.algebra.fn(
-        [root.algebra.positional(l.tys[0]), root.algebra.positional(l.tys[0])],
-        l.tys[1],
-        root.algebra.never(),
-    );
+    let one = root.algebra.Fn.new([l.value[0]], [], l.value[1], root.algebra.Never {  });
+    let two = root.algebra.Fn.new([l.value[0], l.value[0]], [], l.value[1], root.algebra.Never {  });
     derived(root.algebra.pair(one, two, root.algebra.Relation.Unrelated, fn_positional_count()), l.next)
+}
+
+/// Two classes with identical fields are still two types: concrete types are
+/// nominal.
+function distinct_classes_same_shape(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let shape = [root.algebra.FieldDecl { name: field.value[0], ty: l.value[0] }];
+    derived(
+        root.algebra.pair(
+            root.algebra.Class.new(
+                root.algebra.ClassDecl { name: names.value[0], params: [], fields: shape },
+                [],
+            ),
+            root.algebra.Class.new(
+                root.algebra.ClassDecl { name: names.value[1], params: [], fields: shape },
+                [],
+            ),
+            root.algebra.Relation.Unrelated,
+            concrete_types_atomic(),
+        ),
+        l.next,
+    )
 }
 
 // ─── context facts ───────────────────────────────────────────────────────────
 
 /// A seeded strict-subtype pair from one of the pair-introducing facts, so
-/// context facts vary in what they wrap.
-function sub_pair(seed: root.engine.Seed) -> Derived throws never {
+/// context facts vary in what they wrap. Not a fact of its own.
+function strict_pair(seed: root.engine.Seed) -> Derived throws never {
     let d = root.engine.below(seed, 5);
     match (d.value) {
         0 => never_bottom(d.next),
@@ -464,104 +452,116 @@ function sub_pair(seed: root.engine.Seed) -> Derived throws never {
 }
 
 function class_arg_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
+    let inner = strict_pair(seed);
     let b = box_decl(inner.next);
-    derived(root.algebra.in_class_arg(inner.derivation, b.decl, generics_invariant()), b.next)
+    derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
 
 function array_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
-    derived(root.algebra.in_array(inner.derivation, generics_invariant()), inner.next)
+    let inner = strict_pair(seed);
+    derived(root.algebra.in_array(inner.value, generics_invariant()), inner.next)
 }
 
 function map_value_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
-    derived(
-        root.algebra.in_map_value(inner.derivation, root.algebra.string(), generics_invariant()),
-        inner.next,
-    )
+    let inner = strict_pair(seed);
+    derived(root.algebra.in_map_value(inner.value, generics_invariant()), inner.next)
 }
 
 function param_contravariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
+    let inner = strict_pair(seed);
     let r = pick_leaves(inner.next, 1);
-    derived(root.algebra.in_fn_param(inner.derivation, r.tys[0], fn_param_contravariant()), r.next)
+    derived(root.algebra.in_fn_param(inner.value, r.value[0], fn_param_contravariant()), r.next)
 }
 
 function return_covariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
-    derived(root.algebra.in_fn_return(inner.derivation, fn_return_covariant()), inner.next)
+    let inner = strict_pair(seed);
+    derived(root.algebra.in_fn_return(inner.value, fn_return_covariant()), inner.next)
 }
 
 function error_covariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
+    let inner = strict_pair(seed);
     let r = pick_leaves(inner.next, 1);
-    derived(root.algebra.in_fn_error(inner.derivation, r.tys[0], fn_error_covariant()), r.next)
+    derived(root.algebra.in_fn_error(inner.value, r.value[0], fn_error_covariant()), r.next)
 }
 
 function box_of_bool(seed: root.engine.Seed) -> Derived throws never {
     let inner = bool_true_false(seed);
     let b = box_decl(inner.next);
-    derived(root.algebra.in_class_arg(inner.derivation, b.decl, generics_invariant()), b.next)
+    derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
 
 function double_contravariance(seed: root.engine.Seed) -> Derived throws never {
-    let inner = sub_pair(seed);
+    let inner = strict_pair(seed);
     let r = pick_leaves(inner.next, 1);
-    let once = root.algebra.in_fn_param(inner.derivation, r.tys[0], fn_param_contravariant());
-    derived(root.algebra.in_fn_param(once, r.tys[0], fn_param_contravariant()), r.next)
+    let once = root.algebra.in_fn_param(inner.value, r.value[0], fn_param_contravariant());
+    derived(root.algebra.in_fn_param(once, r.value[0], fn_param_contravariant()), r.next)
 }
 
 function array_of_unfolded_alias(seed: root.engine.Seed) -> Derived throws never {
     let inner = unfolds_once(seed);
-    derived(root.algebra.in_array(inner.derivation, generics_invariant()), inner.next)
+    derived(root.algebra.in_array(inner.value, generics_invariant()), inner.next)
 }
 
+/// `never | X` against `T | X` for a leaf `X` distinct from `T`: the algebra
+/// declines the step when the extra member could absorb the difference.
 function bottom_beside_member(seed: root.engine.Seed) -> Derived throws never {
     let inner = never_bottom(seed);
     let extra = pick_leaves(inner.next, 2);
-    let other = if (extra.tys[0] == inner.derivation.right) {
-        extra.tys[1]
+    let other = if (extra.value[0] == inner.value.right) {
+        extra.value[1]
     } else {
-        extra.tys[0]
+        extra.value[0]
     };
-    derived(root.algebra.in_union_with(inner.derivation, other, union_member_rule()), extra.next)
+    derived(root.algebra.in_union_with(inner.value, other, union_member_covariant()), extra.next)
 }
 
 // ─── registry ────────────────────────────────────────────────────────────────
 
+function fact(
+    name: string,
+    generate: (root.engine.Seed) -> Derived throws never,
+) -> Fact throws never {
+    Fact { name: name, generate: generate }
+}
+
 function facts() -> Fact[] throws never {
     [
-        Fact { name: "never_bottom", generate: never_bottom },
-        Fact { name: "unknown_top", generate: unknown_top },
-        Fact { name: "identity", generate: identity },
-        Fact { name: "union_member", generate: union_member },
-        Fact { name: "union_subset", generate: union_subset },
-        Fact { name: "literal_subtype", generate: literal_subtype },
-        Fact { name: "concrete_atomic", generate: concrete_atomic },
-        Fact { name: "bool_true_false", generate: bool_true_false },
-        Fact { name: "enum_variants", generate: enum_variants },
-        Fact { name: "literal_absorbed_fact", generate: literal_absorbed_fact },
-        Fact { name: "unknown_absorbs_fact", generate: unknown_absorbs_fact },
-        Fact { name: "never_omitted", generate: never_omitted },
-        Fact { name: "union_commutes", generate: union_commutes },
-        Fact { name: "union_associates", generate: union_associates },
-        Fact { name: "alias_is_transparent", generate: alias_is_transparent },
-        Fact { name: "equirecursive", generate: equirecursive },
-        Fact { name: "unfolds_once", generate: unfolds_once },
-        Fact { name: "unguarded_member_is_vacuous", generate: unguarded_member_is_vacuous },
-        Fact { name: "optional_superset", generate: optional_superset },
-        Fact { name: "positional_count", generate: positional_count },
-        Fact { name: "sub_pair", generate: sub_pair },
-        Fact { name: "class_arg_invariant", generate: class_arg_invariant },
-        Fact { name: "array_invariant", generate: array_invariant },
-        Fact { name: "map_value_invariant", generate: map_value_invariant },
-        Fact { name: "param_contravariant", generate: param_contravariant },
-        Fact { name: "return_covariant", generate: return_covariant },
-        Fact { name: "error_covariant", generate: error_covariant },
-        Fact { name: "box_of_bool", generate: box_of_bool },
-        Fact { name: "double_contravariance", generate: double_contravariance },
-        Fact { name: "array_of_unfolded_alias", generate: array_of_unfolded_alias },
-        Fact { name: "bottom_beside_member", generate: bottom_beside_member },
+        fact("never_bottom", never_bottom),
+        fact("unknown_top", unknown_top),
+        fact("identity", identity),
+        fact("union_member", union_member),
+        fact("union_subset", union_subset),
+        fact("literal_subtype", literal_subtype),
+        fact("concrete_atomic", concrete_atomic),
+        fact("bool_true_false", bool_true_false),
+        fact("enum_variants", enum_variants),
+        fact("literal_absorbed_fact", literal_absorbed_fact),
+        fact("unknown_absorbs_fact", unknown_absorbs_fact),
+        fact("never_omitted", never_omitted),
+        fact("union_commutes", union_commutes),
+        fact("union_associates", union_associates),
+        fact("alias_is_transparent", alias_is_transparent),
+        fact("equirecursive", equirecursive),
+        fact("unfolds_once", unfolds_once),
+        fact("unguarded_member_is_vacuous", unguarded_member_is_vacuous),
+        fact("optional_superset", optional_superset),
+        fact("positional_count", positional_count),
+        fact("distinct_classes_same_shape", distinct_classes_same_shape),
+        fact("class_arg_invariant", class_arg_invariant),
+        fact("array_invariant", array_invariant),
+        fact("map_value_invariant", map_value_invariant),
+        fact("param_contravariant", param_contravariant),
+        fact("return_covariant", return_covariant),
+        fact("error_covariant", error_covariant),
+        fact("box_of_bool", box_of_bool),
+        fact("double_contravariance", double_contravariance),
+        fact("array_of_unfolded_alias", array_of_unfolded_alias),
+        fact("bottom_beside_member", bottom_beside_member),
     ]
+}
+
+/// Helpers that share a fact's signature but are not facts. The registry
+/// check excludes them by name.
+function fact_helpers() -> string[] throws never {
+    ["strict_pair"]
 }

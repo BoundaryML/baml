@@ -8,37 +8,38 @@ function features_of(
     traps: string[],
 ) -> map<string, float> throws never {
     let flow = flow_requires_subtype().name;
-    let own: string[] = [];
-    for (let step in d.steps) {
-        let name = root.algebra.step_rule(step).name;
-        if (name != flow && !own.includes(name)) {
-            let _ = own.push(name);
-        }
-    }
-    let features: map<string, float> = {};
-    let _ = features.set("rules", own.length() * 1.0);
-    let _ = features.set("flips", root.algebra.flips(d) * 1.0);
-    let _ = features.set("size", (root.algebra.size(source) + root.algebra.size(target)) * 1.0);
-    let _ = features.set(
-        "depth",
-        root.algebra.max(root.algebra.depth(source), root.algebra.depth(target)) * 1.0,
-    );
-    let _ = features.set(
-        "width",
-        root.algebra.max(root.algebra.union_width(source), root.algebra.union_width(target)) * 1.0,
-    );
-    let _ = features.set("traps", traps.length() * 1.0);
-    for (let model in traps) {
-        let _ = features.set(`trap:${model}`, 1.0);
-    }
-    let boring = own.length() == 1 && traps.length() == 0;
-    let _ = features.set(
-        "boring",
-        if (boring) {
+    let own = root.algebra.steps(d)
+        .map((step) -> {
+            root.algebra.step_rule(step).name
+        })
+        .filter((name) -> {
+            name != flow
+        })
+        .reduce(
+            (acc, name) -> {
+                if (acc.includes(name)) {
+                    acc
+                } else {
+                    acc.concat([name])
+                }
+            },
+            [],
+        );
+    let features: map<string, float> = {
+        "rules": own.length() * 1.0,
+        "flips": root.algebra.flips(d) * 1.0,
+        "size": (root.algebra.size(source) + root.algebra.size(target)) * 1.0,
+        "depth": root.algebra.depth(source).max(root.algebra.depth(target)) * 1.0,
+        "width": root.algebra.union_width(source).max(root.algebra.union_width(target)) * 1.0,
+        "traps": traps.length() * 1.0,
+        "boring": if (own.length() == 1 && traps.length() == 0) {
             1.0
         } else {
             0.0
         },
-    );
+    };
+    for (let model in traps) {
+        features.set(`trap:${model}`, 1.0);
+    }
     features
 }

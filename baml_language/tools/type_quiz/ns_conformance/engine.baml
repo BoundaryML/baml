@@ -11,8 +11,34 @@ function same_state_same_draw() -> bool throws never {
     root.engine.next(root.engine.seed_from(42)) == root.engine.next(root.engine.seed_from(42))
 }
 
-function zero_aliases_one() -> bool throws never {
-    root.engine.next(root.engine.Seed { state: 0 }) == root.engine.next(root.engine.seed_from(1))
+/// Every `int` denotes a stream: the state is read modulo 2^32 and zero reads
+/// as one, so the multiples of 2^32 and the negatives are all valid.
+function every_int_is_a_stream() -> bool throws never {
+    let one = root.engine.next(root.engine.Seed { state: 1 });
+    root.engine.next(root.engine.Seed { state: 0 }) == one
+        && root.engine.next(root.engine.Seed { state: 4294967296 }) == one
+        && root.engine.next(root.engine.Seed { state: -4294967296 }) == one
+        && root.engine.next(root.engine.Seed { state: -5 }).value >= 1
+        && root.engine.next(root.engine.Seed { state: 4294967296 }).value != 0
+}
+
+/// Known answers for the hash primitives every seed passes through, so a
+/// typo in a magic constant cannot silently change every case in the tool.
+function hash_primitives_match_references() -> bool throws never {
+    root.engine.mul32(4294967295, 4294967295) == 1
+        && root.engine.mul32(65536, 65536) == 0
+        && root.engine.mix32(0) == 0
+        && root.engine.mix32(1) == 1364076727
+        && root.engine.fnv1a32("".to_utf8()) == 2166136261
+        && root.engine.fnv1a32("a".to_utf8()) == 3826002220
+        && root.engine.fnv1a32("foobar".to_utf8()) == 3214735720
+}
+
+/// Neighbouring small seeds must not start neighbouring streams.
+function seed_from_mixes() -> bool throws never {
+    let a = root.engine.next(root.engine.seed_from(1)).value;
+    let b = root.engine.next(root.engine.seed_from(2)).value;
+    (a - b).abs() > 1000000
 }
 
 function draws_stay_in_range() -> bool throws never {
@@ -62,8 +88,16 @@ test "seed: same state, same draw" {
     assert.is_true(same_state_same_draw())
 }
 
-test "seed: zero aliases one" {
-    assert.is_true(zero_aliases_one())
+test "seed: every int denotes a stream" {
+    assert.is_true(every_int_is_a_stream())
+}
+
+test "seed: hash primitives match their reference values" {
+    assert.is_true(hash_primitives_match_references())
+}
+
+test "seed: seed_from mixes neighbouring seeds apart" {
+    assert.is_true(seed_from_mixes())
 }
 
 test "seed: draws stay in range" {

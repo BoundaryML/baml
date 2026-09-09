@@ -31,13 +31,7 @@ function is_numeric(ty: root.algebra.Ty) -> bool throws never {
 
 function positional_arity(ty: root.algebra.Ty) -> int? throws never {
     match (ty) {
-        let f: root.algebra.Fn => {
-            f.params
-                .filter((p) -> {
-                    p is root.algebra.Positional
-                })
-                .length()
-        },
+        let f: root.algebra.Fn => f.positional.length(),
         root.algebra.Prim => null,
         root.algebra.Never => null,
         root.algebra.Top => null,

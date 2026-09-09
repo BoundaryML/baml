@@ -1,8 +1,10 @@
 // Spelling a `Ty` and its declarations as BAML source.
 //
 // This is the one piece of language surface the tool owns. It is kept honest
-// by the conformance suite: the compiler must read every rendering back as
-// the same type, and must print it back as the same text.
+// by the conformance suite: every corpus spelling must be read back by the
+// compiler as the intended type in both the class-field and the
+// `let`-annotation grammars, and printed back as the same text up to the
+// compiler's documented canonicalisations.
 
 /// The source spelling of `ty`.
 function render(ty: Ty) -> string throws never {
@@ -13,14 +15,14 @@ function render(ty: Ty) -> string throws never {
         let l: Lit => render_lit(l.value),
         let e: EnumLit => `${e.decl.name}.${e.variant}`,
         let u: Union => {
-            u.members
+            u.members()
                 .map((m) -> {
-                    render_union_member(m)
+                    render_atom(m)
                 })
                 .join(" | ")
         },
         let a: Array => `${render_atom(a.element)}[]`,
-        let m: Map => `map<${render(m.key)}, ${render(m.value)}>`,
+        let m: Map => `map<string, ${render(m.value)}>`,
         let f: Fn => render_fn(f),
         let c: Class => `${c.decl.name}${render_args(c.args)}`,
         let e: Enum => e.decl.name,
@@ -50,37 +52,28 @@ function render_lit(value: int | string | bool) -> string throws never {
     }
 }
 
-/// A double-quoted string literal with `\\` and `"` escaped. Generated
-/// literals are drawn from name pools, so no other escapes are needed; a
-/// control character here would be a generator bug, not a rendering case.
+/// A double-quoted string literal. Backslash, quote, newline, carriage
+/// return and tab are escaped; other control characters have no escape here
+/// and must not appear in a literal.
 function quote(s: string) -> string throws never {
-    `"${s.replace_all("\\", "\\\\").replace_all("\"", "\\\"")}"`
+    let escaped = s.replace_all("\\", "\\\\")
+        .replace_all("\"", "\\\"")
+        .replace_all("\n", "\\n")
+        .replace_all("\r", "\\r")
+        .replace_all("\t", "\\t");
+    `"${escaped}"`
 }
 
-/// A union member: nested unions and function types need parentheses.
-function render_union_member(ty: Ty) -> string throws never {
-    match (ty) {
-        Union => `(${render(ty)})`,
-        Fn => `(${render(ty)})`,
-        Prim => render(ty),
-        Never => render(ty),
-        Top => render(ty),
-        Lit => render(ty),
-        EnumLit => render(ty),
-        Array => render(ty),
-        Map => render(ty),
-        Class => render(ty),
-        Enum => render(ty),
-        Iface => render(ty),
-        Alias => render(ty),
-        Var => render(ty),
-    }
-}
-
-/// A type in a position that binds tighter than `|` and `->`, such as an
-/// array element.
+/// A type in a position that binds tighter than `|` and `->`: a union member,
+/// an array element, a function's return type. Unions and function types
+/// take parentheses there; everything else is atomic already.
 function render_atom(ty: Ty) -> string throws never {
-    render_union_member(ty)
+    match (ty) {
+        Union | Fn => `(${render(ty)})`,
+        Prim | Never | Top | Lit | EnumLit | Array | Map | Class | Enum | Iface | Alias | Var => {
+            render(ty)
+        },
+    }
 }
 
 function render_args(args: Ty[]) -> string throws never {
@@ -91,38 +84,43 @@ function render_args(args: Ty[]) -> string throws never {
     }
 }
 
+/// The return type is spelled as an atom: in a `let` annotation the grammar
+/// binds `|` looser than `->`, so a bare union return does not parse there.
+/// The `throws` type is delimited by the end of the type and parses bare in
+/// every position.
 function render_fn(f: Fn) -> string throws never {
-    let params = f.params
-        .map((p) -> {
-            render_param(p)
+    let params = f.positional
+        .map((t) -> {
+            render(t)
         })
-        .join(", ");
-    `(${params}) -> ${render(f.ret)} throws ${render(f.error)}`
+        .concat(
+            f.named.map((n) -> {
+                render_named(n)
+            }),
+        );
+    `(${params.join(", ")}) -> ${render_atom(f.ret)} throws ${render(f.error)}`
 }
 
-function render_param(p: Param) -> string throws never {
-    match (p) {
-        let pos: Positional => render(pos.ty),
-        let n: Named => {
-            if (n.optional) {
-                `${n.name}?: ${render(n.ty)}`
-            } else {
-                `${n.name}: ${render(n.ty)}`
-            }
-        },
+function render_named(n: Named) -> string throws never {
+    if (n.optional) {
+        `${n.name}?: ${render(n.ty)}`
+    } else {
+        `${n.name}: ${render(n.ty)}`
     }
 }
 
 /// Generic arguments and pins share one angle-bracket list, arguments first:
 /// `Lorem<int, Item = string>`.
 function render_iface(i: Iface) -> string throws never {
-    let args = i.args.map((a) -> {
-        render(a)
-    });
-    let pins = i.pins.map((p) -> {
-        `${p.name} = ${render(p.ty)}`
-    });
-    let all = args.concat(pins);
+    let all = i.args
+        .map((a) -> {
+            render(a)
+        })
+        .concat(
+            i.pins.map((p) -> {
+                `${p.name} = ${render(p.ty)}`
+            }),
+        );
     if (all.length() == 0) {
         i.decl.name
     } else {
@@ -180,24 +178,20 @@ function render_iface_decl(d: IfaceDecl) -> string throws never {
 }
 
 /// Every declaration `ty` refers to, transitively, in first-seen order.
-///
-/// Recursive aliases are visited once, so cycles terminate. Two declarations
-/// that share a name must render identically, since one file cannot hold
-/// both; anything else is a generator bug. Renderings are compared rather
-/// than the declarations themselves because a recursive alias is a cyclic
-/// value and structural equality would not terminate on it.
+function decls_of(ty: Ty) -> Decl[] throws never {
+    decls_of_all([ty])
+}
+
+/// The declarations of every type in `tys`, deduplicated together, in
+/// first-seen order. Recursive aliases are visited once, so cycles
+/// terminate. Two declarations that share a name must be the same
+/// declaration, since one file cannot hold both; anything else is a
+/// generator bug. (Structural `==` is coinductive and terminates on the
+/// cyclic alias values.)
 ///
 /// # Panics
 ///
 /// - `baml.panics.Unreachable` if two declarations share a name but differ.
-function decls_of(ty: Ty) -> Decl[] throws never {
-    let out: Decl[] = [];
-    let seen: map<string, Decl> = {};
-    collect(ty, out, seen);
-    out
-}
-
-/// The declarations of every type in `tys`, deduplicated together.
 function decls_of_all(tys: Ty[]) -> Decl[] throws never {
     let out: Decl[] = [];
     let seen: map<string, Decl> = {};
@@ -209,53 +203,15 @@ function decls_of_all(tys: Ty[]) -> Decl[] throws never {
 
 function collect(ty: Ty, out: Decl[], seen: map<string, Decl>) -> void throws never {
     match (ty) {
-        Prim => {},
-        Never => {},
-        Top => {},
-        Lit => {},
         let e: EnumLit => visit(e.decl, out, seen),
-        let u: Union => {
-            for (let m in u.members) {
-                collect(m, out, seen);
-            }
-        },
-        let a: Array => collect(a.element, out, seen),
-        let m: Map => {
-            collect(m.key, out, seen);
-            collect(m.value, out, seen);
-        },
-        let f: Fn => {
-            for (let p in f.params) {
-                collect(param_ty(p), out, seen);
-            }
-            collect(f.ret, out, seen);
-            collect(f.error, out, seen);
-        },
-        let c: Class => {
-            visit(c.decl, out, seen);
-            for (let a in c.args) {
-                collect(a, out, seen);
-            }
-        },
+        let c: Class => visit(c.decl, out, seen),
         let e: Enum => visit(e.decl, out, seen),
-        let i: Iface => {
-            visit(i.decl, out, seen);
-            for (let a in i.args) {
-                collect(a, out, seen);
-            }
-            for (let p in i.pins) {
-                collect(p.ty, out, seen);
-            }
-        },
+        let i: Iface => visit(i.decl, out, seen),
         let a: Alias => visit(a.decl, out, seen),
-        Var => {},
+        Prim | Never | Top | Lit | Union | Array | Map | Fn | Var => {},
     }
-}
-
-function param_ty(p: Param) -> Ty throws never {
-    match (p) {
-        let pos: Positional => pos.ty,
-        let n: Named => n.ty,
+    for (let child in children(ty)) {
+        collect(child, out, seen);
     }
 }
 
@@ -263,15 +219,13 @@ function visit(decl: Decl, out: Decl[], seen: map<string, Decl>) -> void throws 
     let name = decl_name(decl);
     match (seen.get(name)) {
         let prior: Decl => {
-            if (render_decl(prior) != render_decl(decl)) {
-                throw baml.panics.Unreachable {
-                    message: `two different declarations named ${name} in one case`,
-                }
+            if (prior != decl) {
+                throw baml.panics.Unreachable { message: `two different declarations named ${name} in one case` }
             }
         },
         null => {
-            let _ = seen.set(name, decl);
-            let _ = out.push(decl);
+            seen.set(name, decl);
+            out.push(decl);
             match (decl) {
                 let d: ClassDecl => {
                     for (let f in d.fields) {

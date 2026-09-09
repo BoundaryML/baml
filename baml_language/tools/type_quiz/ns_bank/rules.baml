@@ -133,6 +133,14 @@ function union_associative() -> root.engine.Rule throws never {
 
 // ─── variance ────────────────────────────────────────────────────────────────
 
+function union_member_covariant() -> root.engine.Rule throws never {
+    rule(
+        "variance/union-member-covariant",
+        section("Variance"),
+        "Union members are covariant: all members are subtypes of the union (as are their subtypes).",
+    )
+}
+
 function generics_invariant() -> root.engine.Rule throws never {
     rule(
         "variance/generics-invariant",
@@ -241,6 +249,7 @@ function rules() -> root.engine.Rule[] throws never {
         unknown_absorbs(),
         union_commutative(),
         union_associative(),
+        union_member_covariant(),
         generics_invariant(),
         fn_param_contravariant(),
         fn_return_covariant(),

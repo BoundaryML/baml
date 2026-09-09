@@ -31,8 +31,7 @@ class FlowItem {
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
             let streams = root.engine.split(seed);
-            let derived = run_fact(self.fact, streams.left);
-            let d = derived.derivation;
+            let d = self.fact.generate(streams.left).value;
             match (root.algebra.knowledge(d)) {
                 root.algebra.Undecided => null,
                 let relation: root.algebra.Relation => {
@@ -87,7 +86,7 @@ class FlowItem {
                         case: root.engine.Case {
                             files: { "case.baml": probe.source },
                             key: key,
-                            trace: d.steps
+                            trace: root.algebra.steps(d)
                                 .map((step) -> {
                                     root.algebra.step_rule(step)
                                 })
@@ -115,10 +114,10 @@ class UnguardedCycleItem {
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
-            let names = pick_distinct(seed, type_names(), 2);
+            let names = root.engine.pick_distinct(seed, type_names(), 2);
             let form = root.engine.below(names.next, 2);
-            let a = names.names[0];
-            let b = names.names[1];
+            let a = names.value[0];
+            let b = names.value[1];
             let source = if (form.value == 0) {
                 `
                     type ${a} = ${a};

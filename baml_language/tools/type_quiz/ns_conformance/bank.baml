@@ -123,7 +123,7 @@ test "spec: every diverging or spec-only item cites a ledger entry" {
 /// Every function in this package with a fact generator's signature, by its
 /// package-local name.
 function fact_shaped_functions() -> string[] throws never {
-    let derived = reflect.Type.of<root.bank.Derived>();
+    let derived = reflect.Type.of<root.engine.Rolled<root.algebra.Derivation>>();
     let seed = reflect.Type.of<root.engine.Seed>();
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
@@ -145,9 +145,11 @@ function local_name(qualified: string) -> string throws never {
 }
 
 function unregistered_facts() -> string[] throws never {
-    let registered = root.bank.facts().map((f) -> {
-        f.name
-    });
+    let registered = root.bank.facts()
+        .map((f) -> {
+            f.name
+        })
+        .concat(root.bank.fact_helpers());
     fact_shaped_functions().filter((name) -> {
         !registered.includes(local_name(name))
     })
