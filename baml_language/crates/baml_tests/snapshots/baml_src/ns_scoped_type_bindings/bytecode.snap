@@ -74,22 +74,29 @@ function scoped_type_bindings.$init_test_ns_scoped_type_bindings_scoped_type_bin
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "a speculatively probed arm naming the binding is not an escape"
+    load_const "the remedy a declaration-site E0168 names compiles and runs"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "a descriptor keeps its own binding past a sibling rebinding"
+    load_const "a speculatively probed arm naming the binding is not an escape"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "an agent spec takes a scoped runtime type"
+    load_const "a descriptor keeps its own binding past a sibling rebinding"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scoped_type_bindings"
+    load_const "an agent spec takes a scoped runtime type"
+    make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -476,6 +483,13 @@ function scoped_type_bindings.sibling_bindings(a: reflect.Type, b: reflect.Type,
     alloc_array 2
 
   L1:
+    return
+}
+
+function scoped_type_bindings.takes_a_parameterized_field(v: scoped_type_bindings.Wrapper<#0>) -> reflect.Type {
+    load_var v
+    load_field .inner
+    call reflect.Type.of_value
     return
 }
 

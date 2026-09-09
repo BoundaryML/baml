@@ -261,6 +261,22 @@ test "values and effects leave a block only through binding-free types" {
     assert.equal(discarded_by_a_wildcard(int_t), 2)
 }
 
+// `unreflect` in a DECLARATION is E0168, and the remedy the diagnostic names
+// is this: bind the runtime type inside a body and reach the declaration
+// through an ordinary type parameter. Pinned so the advice stays followable.
+class ParameterizedField<T> { value Wrapper<T> }
+
+function takes_a_parameterized_field<T>(v: Wrapper<T>) -> reflect.Type throws never {
+    reflect.Type.of_value(v.inner)
+}
+
+test "the remedy a declaration-site E0168 names compiles and runs" {
+    let t = reflect.Type.of<int>()
+    type T = unreflect(t)
+    let site = ParameterizedField<T> { value: Wrapper<T> { inner: as_t<T>(1) } }
+    assert.is_true(takes_a_parameterized_field<T>(site.value) == t)
+}
+
 // An expectation that is a UNION of function types makes the adapter road
 // try each arm speculatively. An arm naming the binding cannot be taken, but
 // that refusal belongs to the attempt, not to the program: the `int` arm

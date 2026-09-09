@@ -20,6 +20,7 @@ use crate::{
         Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId,
         TypeBindingValue, TypeExpr, TypeExprKind, UnaryOp,
     },
+    lowering_diagnostic::TypeExprOwner,
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
@@ -1261,7 +1262,11 @@ impl LoweringContext {
         &mut self,
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ) -> TypeExpr {
-        crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags)
+        crate::lower_type_expr::lower_type_expr_node(
+            type_expr,
+            &mut self.diags,
+            TypeExprOwner::Body,
+        )
     }
 
     /// Lower an associated binding written in this body, collecting its
@@ -1270,7 +1275,11 @@ impl LoweringContext {
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
     ) -> Option<AssociatedTypeBinding> {
-        crate::lower_type_expr::lower_associated_type_binding(binding, &mut self.diags)
+        crate::lower_type_expr::lower_associated_type_binding(
+            binding,
+            &mut self.diags,
+            TypeExprOwner::Body,
+        )
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {

@@ -89,7 +89,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:45:19]
  45 │     value Wrapper<unreflect(reflect.Type.of<string>())>
     ·                   ──────────────────┬─────────────────
-    ·                                     ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                     ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────
 
   [hir] E0168
@@ -98,7 +98,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:49:23]
  49 │     implements Marker<unreflect(reflect.Type.of<string>())> {}
     ·                       ──────────────────┬─────────────────
-    ·                                         ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                         ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────
 
   [hir] E0168
@@ -107,7 +107,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:53:20]
  53 │     value: Wrapper<unreflect(reflect.Type.of<string>())>
     ·                    ──────────────────┬─────────────────
-    ·                                      ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                      ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────
 
   [hir] E0168
@@ -116,7 +116,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:54:14]
  54 │ ) -> Wrapper<unreflect(reflect.Type.of<string>())> {
     ·              ──────────────────┬─────────────────
-    ·                                ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────
 
   [hir] E0168
@@ -125,7 +125,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:58:39]
  58 │ function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null { null }
     ·                                       ──────────────────┬─────────────────
-    ·                                                         ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                                         ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────
 
   [hir] E0168
@@ -134,5 +134,5 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:60:26]
  60 │ type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>
     ·                          ──────────────────┬─────────────────
-    ·                                            ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ·                                            ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
     ╰────

@@ -7,6 +7,19 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
+/// Where a written type lives, which decides what an author can do about a
+/// runtime type appearing in it: a body can introduce a `type T = …;`
+/// binding before the type is written, a declaration cannot - it has no
+/// scope of its own, so the runtime type has to arrive as a type argument.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeExprOwner {
+    /// A type written inside a function, lambda, or block body.
+    Body,
+    /// A type written in a declaration: a field, a signature, a bound, an
+    /// `implements` argument, or a top-level alias.
+    Declaration,
+}
+
 /// Diagnostic emitted during CST → AST lowering.
 ///
 /// These are structural problems ("missing name token", "unparseable type")
@@ -126,7 +139,12 @@ pub enum LoweringDiagnostic {
     /// annotation, a pattern, an item signature, a top-level alias, or nested
     /// inside a binding's static type. The binding is the one spelling that
     /// lifts a runtime type; every other position names the bound `T`.
-    UnreflectOutsideTypeBinding { span: TextRange },
+    /// `owner` decides the remedy: a body can bind the type where it stands,
+    /// a declaration has no scope to bind one in at all.
+    UnreflectOutsideTypeBinding {
+        span: TextRange,
+        owner: TypeExprOwner,
+    },
 
     /// `unreflect(expr)` nested inside the right-hand side of a body
     /// `type T = …` statement (`type T = Wrapper<unreflect(t)>`). The
@@ -541,17 +559,32 @@ impl LoweringDiagnostic {
                 *span,
                 "`_` cannot be inferred here",
             ),
-            LoweringDiagnostic::UnreflectOutsideTypeBinding { span } => {
+            LoweringDiagnostic::UnreflectOutsideTypeBinding { span, owner } => {
                 // One constructor owns E0168's headline (the diagnostics
                 // crate), so the lowering gate and any later reporter can
-                // never drift apart on the message.
+                // never drift apart on the message. Only the remedy differs:
+                // a declaration has no scope to bind a runtime type in, so
+                // pointing it at a `type` statement would name a spelling
+                // that is E0168 there too.
+                let label = match owner {
+                    TypeExprOwner::Body => {
+                        "bind it first with `type T = unreflect(…);`, then write `T` here"
+                    }
+                    // Deliberately does not promise a type parameter: a
+                    // field or a signature can take one, but a top-level
+                    // alias cannot, and every declaration position shares
+                    // the one true remedy - move it into a body.
+                    TypeExprOwner::Declaration => {
+                        "a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`"
+                    }
+                };
                 return baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named()
                     .with_primary(
                         Span {
                             file_id,
                             range: *span,
                         },
-                        "bind it first with `type T = unreflect(…);`, then write `T` here",
+                        label,
                     )
                     .with_phase(DiagnosticPhase::Hir);
             }
