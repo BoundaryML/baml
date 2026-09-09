@@ -105,8 +105,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0097
 
-  × `throws unknown` is imprecise: this function only throws `string | () -> unknown throws never`. BAML infers thrown types automatically, so remove the declaration; write `throws string | () ->
-  │ unknown throws never` only to explicitly bound what may escape
+  × `throws unknown` is imprecise: this function throws `string | () -> unknown throws never`; write `throws string | () -> unknown throws never`
      ╭─[scoped_type_escape.baml:104:74]
  104 │ ╭─▶ function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
  105 │ │       type T = unreflect(t)
@@ -158,4 +157,12 @@ source: crates/baml_tests/src/generated_tests.rs
  162 │     ys.push(as_t<T>(1))
      ·             ─────┬────
      ·                  ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: Undefined
+     ╭─[scoped_type_escape.baml:168:48]
+ 168 │ function erroneous_context(t: reflect.Type) -> Undefined {
+     ·                                                ─────────
      ╰────

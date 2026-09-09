@@ -919,6 +919,10 @@ enum PendingDiag<'db> {
     ImpreciseUnknownThrows {
         at: ExprId,
         inferred_types: Vec<String>,
+        /// Some inferred member is a scoped thrown type's relaxation: the
+        /// clause is required (removing it is E0171), only its spelling is
+        /// wrong.
+        needs_declaration: bool,
     },
     /// Control flow that would escape a `defer` body (BEP-042): `return`
     /// always; `break`/`continue` unless a loop opened INSIDE the defer.
@@ -1580,6 +1584,10 @@ enum Expectation {
     /// and nothing typed by a block-scoped `type T = …` binding can leave
     /// a block through it.
     Discarded,
+    /// The context is an error-recovery sentinel, already diagnosed: the
+    /// value is checked against nothing and reports nothing of its own,
+    /// so a single mistake in a signature does not cascade into the body.
+    Erroneous,
 }
 
 impl Expectation {
@@ -1589,7 +1597,7 @@ impl Expectation {
     /// type until S12 - must not discard the useful structure around it.
     fn has_type(ty: Ty) -> Expectation {
         if matches!(ty.kind(), InferTy::Error { .. }) {
-            Expectation::None
+            Expectation::Erroneous
         } else {
             Expectation::HasType(ty)
         }
@@ -1598,7 +1606,7 @@ impl Expectation {
     fn only_has_type(&self) -> Option<&Ty> {
         match self {
             Expectation::HasType(ty) => Some(ty),
-            Expectation::None | Expectation::Discarded => None,
+            Expectation::None | Expectation::Discarded | Expectation::Erroneous => None,
         }
     }
 
@@ -1617,6 +1625,7 @@ impl Expectation {
             }
             Expectation::None => Expectation::None,
             Expectation::Discarded => Expectation::Discarded,
+            Expectation::Erroneous => Expectation::Erroneous,
         }
     }
 }
@@ -1913,7 +1922,10 @@ impl<'db> InferenceContext<'db> {
                 Some(return_ty) if !return_ty.has_error() => {
                     self.check_expr(body, root, &return_ty);
                 }
-                _ => {
+                Some(_) => {
+                    self.infer_expr(body, root, &Expectation::Erroneous);
+                }
+                None => {
                     self.infer_expr(body, root, &Expectation::None);
                 }
             }
@@ -2021,9 +2033,10 @@ impl<'db> InferenceContext<'db> {
         let actual = match value {
             Some(value) => {
                 let context = expected.as_ref().filter(|expected| !expected.has_error());
-                let expectation = match context {
-                    Some(context) => Expectation::has_type(context.clone()),
-                    None => Expectation::None,
+                let expectation = match (&expected, context) {
+                    (_, Some(context)) => Expectation::has_type(context.clone()),
+                    (Some(_), None) => Expectation::Erroneous,
+                    (None, None) => Expectation::None,
                 };
                 let ty = self.infer_expr(body, value, &expectation);
                 match self.frame_scoped_param(&ty, floor) {
@@ -3220,6 +3233,9 @@ impl<'db> InferenceContext<'db> {
                 self.publish_scoped_value(at, &escaped, &block_ty, context)
             }
             Expectation::None => self.publish_scoped_value(at, &escaped, &block_ty, None),
+            // The context is already diagnosed; a second report here would
+            // only cascade.
+            Expectation::Erroneous => Ty::error(),
         }
     }
 
@@ -3615,7 +3631,10 @@ impl<'db> InferenceContext<'db> {
                     self.check_expr(body, value, declared)
                 }
                 (_, Some(place)) if !place.has_error() => self.check_expr(body, value, place),
-                _ => self.infer_expr(body, value, &Expectation::None),
+                (Some(_), _) | (_, Some(_)) => {
+                    self.infer_expr(body, value, &Expectation::Erroneous)
+                }
+                (None, None) => self.infer_expr(body, value, &Expectation::None),
             },
             Some(op) => {
                 // Compound assignment: `target op value` through the same
@@ -8171,7 +8190,8 @@ impl<'db> InferenceContext<'db> {
                         self.infer_expr(body, lambda_body, &Expectation::Discarded)
                     }
                     Some(ret) if !ret.has_error() => self.check_expr(body, lambda_body, ret),
-                    _ => self.infer_expr(body, lambda_body, &Expectation::None),
+                    Some(_) => self.infer_expr(body, lambda_body, &Expectation::Erroneous),
+                    None => self.infer_expr(body, lambda_body, &Expectation::None),
                 };
                 let mut return_frame = self.return_frames.pop().expect("pushed above");
                 return_frame.candidates.push(body_ty);
@@ -10809,6 +10829,7 @@ impl<'db> InferenceContext<'db> {
                         .push(PendingDiag::ImpreciseUnknownThrows {
                             at: root,
                             inferred_types,
+                            needs_declaration: !relaxed.is_empty(),
                         });
                 } else {
                     // The `unknown` member is meaningful, but any other
@@ -11536,6 +11557,14 @@ impl<'db> InferenceContext<'db> {
                         if !self.finalize_ty(&var).has_error() {
                             continue;
                         }
+                        // A slot SOLVED to `Error` was refused by a road that
+                        // reported (a scoped escape); only a slot still open at
+                        // finalize is "cannot infer".
+                        if let InferTy::InferVar { var: slot, .. } = var.kind()
+                            && self.table.is_solved(*slot)
+                        {
+                            continue;
+                        }
                         diags.push(TirDiagnostic {
                             error: TirTypeError::CannotInferTypeParameter { name },
                             severity: DiagnosticSeverity::Error,
@@ -11585,9 +11614,16 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::ImpreciseUnknownThrows { at, inferred_types } => {
+                    PendingDiag::ImpreciseUnknownThrows {
+                        at,
+                        inferred_types,
+                        needs_declaration,
+                    } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::ImpreciseUnknownThrows { inferred_types },
+                            error: TirTypeError::ImpreciseUnknownThrows {
+                                inferred_types,
+                                needs_declaration,
+                            },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
                             related: Vec::new(),

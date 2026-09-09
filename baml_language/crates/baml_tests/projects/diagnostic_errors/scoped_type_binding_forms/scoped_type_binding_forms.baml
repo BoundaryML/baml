@@ -32,3 +32,18 @@ function operand_solved_to_int() -> int {
     type T = unreflect(v)
     1
 }
+
+// An attribute has no field to attach to in a binding.
+function attribute_on_the_right_hand_side(t: reflect.Type) -> int {
+    type T = unreflect(t) @alias("x")
+    1
+}
+
+// `unreflect` inside a static right-hand side: the statement lifts one
+// runtime type as its whole right-hand side, so compose through a second
+// binding. Parentheses open a function type, so they nest it too.
+function nested_in_a_static_right_hand_side(t: reflect.Type) -> int {
+    type T = Wrapper<unreflect(t)>
+    type U = (unreflect(t))
+    1
+}

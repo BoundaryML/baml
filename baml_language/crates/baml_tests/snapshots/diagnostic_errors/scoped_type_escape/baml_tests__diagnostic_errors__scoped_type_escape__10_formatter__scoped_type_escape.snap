@@ -171,3 +171,10 @@ function block_local_list_before_the_binding(t: reflect.Type) -> int {
     ys.push(as_t<T>(1));
     ys.length()
 }
+
+// A context that is itself an error is already reported; the value it would
+// have taken is not judged again, so the block's `T` is not a second report.
+function erroneous_context(t: reflect.Type) -> Undefined {
+    type T = unreflect(t)
+    as_t<T>(1)
+}

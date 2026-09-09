@@ -354,6 +354,17 @@ function scoped_type_bindings.collected_as_unknown_list(t: reflect.Type) -> unkn
     return
 }
 
+function scoped_type_bindings.discarded_by_a_wildcard(t: reflect.Type) -> int {
+    load_var t
+    bind_type 0
+    load_type #0
+    load_const 1
+    call user.scoped_type_bindings.as_t
+    pop 1
+    load_const 2
+    return
+}
+
 function scoped_type_bindings.ident(v: #0) -> #0 {
     load_var v
     return

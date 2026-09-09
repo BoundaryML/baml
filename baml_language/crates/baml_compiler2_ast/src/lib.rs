@@ -514,7 +514,7 @@ mod tests {
              0\n\
              }";
         let (_, diags) = parse_and_lower_with_diagnostics(source);
-        let markers = diags
+        let outside = diags
             .iter()
             .filter(|diag| {
                 matches!(
@@ -523,7 +523,22 @@ mod tests {
                 )
             })
             .count();
-        assert_eq!(markers, 4, "unexpected diagnostics: {diags:#?}");
+        // The marker nested inside a binding's static type is the one
+        // position with its own advice: the statement it is already in.
+        let nested = diags
+            .iter()
+            .filter(|diag| {
+                matches!(
+                    diag,
+                    crate::LoweringDiagnostic::UnreflectNestedInTypeBinding { .. }
+                )
+            })
+            .count();
+        assert_eq!(
+            (outside, nested),
+            (3, 1),
+            "unexpected diagnostics: {diags:#?}"
+        );
     }
 
     #[test]

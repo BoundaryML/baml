@@ -8,11 +8,17 @@ class user.Wrapper {
 class user.Wrapper$stream {
   inner: T | null
 }
+function user.attribute_on_the_right_hand_side(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } 1
+}
 function user.hole_in_a_static_binding() -> int  [expr] {
   { type T = user.Wrapper<_> } 1
 }
 function user.ident(v: T) -> T  [expr] {
   {  } v
+}
+function user.nested_in_a_static_right_hand_side(t: reflect.Type) -> int  [expr] {
+  { type T = error; type U = error } 1
 }
 function user.operand_solved_to_int() -> int  [expr] {
   { let v = ident(1); type T = unreflect(v) } 1

@@ -5423,10 +5423,52 @@ impl LoweringContext {
             .children()
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
         {
-            Some(type_expr) => match Self::whole_unreflect_marker(&type_expr) {
-                Some(marker) => TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker)),
-                None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
-            },
+            Some(type_expr) => {
+                // The parser folds attributes into the type expression for
+                // field declarations; a binding has no field to attach one
+                // to, so none may be written here.
+                for attr in type_expr
+                    .syntax()
+                    .descendants()
+                    .filter(|node| node.kind() == SyntaxKind::ATTRIBUTE)
+                {
+                    let attr_name = attr
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                        .find(|token| token.kind() == SyntaxKind::WORD)
+                        .map(|token| token.text().to_string())
+                        .unwrap_or_default();
+                    self.diags
+                        .push(LoweringDiagnostic::FieldAttributeInTypePosition {
+                            attr_name,
+                            span: attr.text_range(),
+                        });
+                }
+                match Self::whole_unreflect_marker(&type_expr) {
+                    Some(marker) => {
+                        TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker))
+                    }
+                    None => match type_expr
+                        .syntax()
+                        .descendants()
+                        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+                    {
+                        // `unreflect(…)` somewhere inside a static right-hand
+                        // side: the generic gate's "bind it first" advice would
+                        // point at the statement it is already in.
+                        Some(nested) => {
+                            self.diags
+                                .push(LoweringDiagnostic::UnreflectNestedInTypeBinding {
+                                    span: nested.text_range(),
+                                });
+                            TypeBindingValue::Static(
+                                TypeExprKind::Error { attrs: Vec::new() }.at(nested.text_range()),
+                            )
+                        }
+                        None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
+                    },
+                }
+            }
             None => TypeBindingValue::Static(
                 TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()),
             ),

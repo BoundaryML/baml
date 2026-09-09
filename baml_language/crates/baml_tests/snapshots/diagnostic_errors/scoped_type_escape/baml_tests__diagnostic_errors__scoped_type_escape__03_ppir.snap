@@ -23,6 +23,9 @@ function user.boom_relaxed_wrongly(t: reflect.Type) -> int  [expr] {
 function user.catch_outside_the_block(t: reflect.Type) -> int  [expr] {
   { let n = { type T = unreflect(t) } risky(as_t("x"), true) catch (e) { _ => 0 } } n
 }
+function user.erroneous_context(t: reflect.Type) -> Undefined  [expr] {
+  { type T = unreflect(t) } as_t(1)
+}
 function user.ident(v: T) -> T  [expr] {
   {  } v
 }

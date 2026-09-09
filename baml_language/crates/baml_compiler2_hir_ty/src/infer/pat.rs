@@ -254,6 +254,10 @@ impl<'db> InferenceContext<'db> {
                 let informed = self.pattern_informative_ty(body, pattern);
                 let expectation = match informed.clone() {
                     Some(informed) => Expectation::has_type(informed),
+                    // `let _ = …` binds nothing: nobody reads the value.
+                    None if matches!(body.patterns[pattern], Pattern::Wildcard) => {
+                        Expectation::Discarded
+                    }
                     None => Expectation::None,
                 };
                 let ty = self.infer_expr(body, init, &expectation);

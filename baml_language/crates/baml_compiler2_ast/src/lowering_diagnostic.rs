@@ -128,6 +128,12 @@ pub enum LoweringDiagnostic {
     /// lifts a runtime type; every other position names the bound `T`.
     UnreflectOutsideTypeBinding { span: TextRange },
 
+    /// `unreflect(expr)` nested inside the right-hand side of a body
+    /// `type T = …` statement (`type T = Wrapper<unreflect(t)>`). The
+    /// statement lifts exactly one runtime type, as its whole right-hand
+    /// side; compose through a second binding.
+    UnreflectNestedInTypeBinding { span: TextRange },
+
     /// A `:` type ascription was applied to a pattern that doesn't accept
     /// one. Only `let x: T` and `[…]: T` are supported. Things like
     /// `_: T`, `int: T`, `Class { … }: T`, `(a | b): T`, and progressive
@@ -546,6 +552,17 @@ impl LoweringDiagnostic {
                             range: *span,
                         },
                         "bind it first with `type T = unreflect(…);`, then write `T` here",
+                    )
+                    .with_phase(DiagnosticPhase::Hir);
+            }
+            LoweringDiagnostic::UnreflectNestedInTypeBinding { span } => {
+                return baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named()
+                    .with_primary(
+                        Span {
+                            file_id,
+                            range: *span,
+                        },
+                        "a `type` binding lifts one runtime type as its whole right-hand side; bind this one first with its own `type U = unreflect(…);`, then write `U` here",
                     )
                     .with_phase(DiagnosticPhase::Hir);
             }

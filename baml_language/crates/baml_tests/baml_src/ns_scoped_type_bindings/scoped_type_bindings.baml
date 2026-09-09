@@ -235,6 +235,16 @@ test "a scoped binding does not shadow a same-named associated type" {
     assert.equal(Shelf {}.probe(), "int/string")
 }
 
+// `let _ = { … }` binds nothing, so a `T`-typed value there is discarded
+// exactly as a statement's would be.
+function discarded_by_a_wildcard(t: reflect.Type) -> int {
+    let _ = {
+        type T = unreflect(t)
+        as_t<T>(1)
+    }
+    2
+}
+
 test "values and effects leave a block only through binding-free types" {
     let int_t = reflect.Type.of<int>()
     let string_t = reflect.Type.of<string>()
@@ -248,6 +258,7 @@ test "values and effects leave a block only through binding-free types" {
     assert.is_true(reflect.Type.of_value(collected) == reflect.Type.of<unknown[]>())
     assert.is_true(reflect.Type.of_value(collected[0]) == int_t)
     assert.is_true(binding_named_like_an_effect_param(int_t) == int_t)
+    assert.equal(discarded_by_a_wildcard(int_t), 2)
 }
 
 // Sibling blocks reuse one frame slot for their bindings. A descriptor

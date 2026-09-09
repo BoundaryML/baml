@@ -389,10 +389,6 @@ pub enum DiagnosticId {
     /// the one spelling that lifts a runtime type; every other position names
     /// the bound `T`.
     RuntimeTypeMustBeNamed,
-    /// A value typed by a body-scoped `type T = …` binding would be
-    /// observable outside the block that binds `T`: the block's value, or a
-    /// thrown type an inferred `throws` clause would publish.
-    ScopedTypeEscapesBlock,
     /// `reflect.function.Type.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
     /// declared interface bound, or any at all for a callable with nothing
@@ -400,6 +396,10 @@ pub enum DiagnosticId {
     ReflectSpecializationFailed,
     /// An ordinary inference variable remained unresolved at writeback (E0155).
     TypeMustBeKnown,
+    /// A value typed by a body-scoped `type T = …` binding would be
+    /// observable outside the block that binds `T`: the block's value, or a
+    /// thrown type an inferred `throws` clause would publish.
+    ScopedTypeEscapesBlock,
 }
 
 impl DiagnosticId {
