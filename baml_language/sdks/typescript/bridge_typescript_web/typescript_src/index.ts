@@ -9,6 +9,7 @@ export { BamlStream } from "./shared/stream.js";
 export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
 export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
+export { _hostValueCount } from "./shared/host_value_registry.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
 export type { GenericParams } from "./shared/define_function.js";
 export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
