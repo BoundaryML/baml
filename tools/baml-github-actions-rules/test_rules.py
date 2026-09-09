@@ -112,6 +112,41 @@ class RuleTests(unittest.TestCase):
         self.action([{"uses": "jdx/mise-action@v4"}], ".github/actions/setup-mise-copy/action.yaml")
         self.assertEqual(["tool-action"], self.codes())
 
+    def test_windows_rustup_bootstrap_selects_runner_architecture(self):
+        action = yaml.safe_load((HERE.parents[1] / RUST).read_text())
+        script = action["runs"]["steps"][0]["run"]
+        # Execute the real bootstrap with rustup absent and downloads stubbed.
+        prefix = """
+command() { if [[ "$*" == "-v rustup" ]]; then return 1; else builtin command "$@"; fi; }
+curl() { printf '%s\\n' "$*" >> "$DOWNLOAD_LOG"; }
+"""
+        for arch, target in [("X64", "x86_64"), ("ARM64", "aarch64"), ("X86", None)]:
+            with self.subTest(arch=arch):
+                installer = self.write("rustup-init.exe", "#!/bin/bash\nexit 0\n")
+                installer.chmod(0o755)
+                log = self.root / (arch + ".log")
+                result = subprocess.run(
+                    ["/bin/bash", "-c", prefix + script],
+                    cwd=self.root,
+                    env={
+                        **os.environ,
+                        "RUNNER_OS": "Windows",
+                        "RUNNER_ARCH": arch,
+                        "USERPROFILE": str(self.root),
+                        "GITHUB_PATH": str(self.root / "github-path"),
+                        "DOWNLOAD_LOG": str(log),
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                if target:
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertIn(f"/{target}-pc-windows-msvc/rustup-init.exe", log.read_text())
+                else:
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("Unsupported Windows architecture", result.stderr)
+                    self.assertFalse(log.exists())
+
     def test_rustup_download_is_confined_to_canonical_action(self):
         run = "curl -sSf https://sh.rustup.rs | sh -s -- -y"
         self.action([{"run": run}], RUST)

@@ -30,7 +30,12 @@ runs:
         set -euo pipefail
         if ! command -v rustup >/dev/null 2>&1; then
           if [[ "${RUNNER_OS:-}" == Windows ]]; then
-            curl --fail --location --output rustup-init.exe https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+            case "${RUNNER_ARCH:-}" in
+              X64) rustup_target=x86_64-pc-windows-msvc ;;
+              ARM64) rustup_target=aarch64-pc-windows-msvc ;;
+              *) echo "Unsupported Windows architecture: ${RUNNER_ARCH:-unset}" >&2; exit 1 ;;
+            esac
+            curl --fail --location --output rustup-init.exe "https://static.rust-lang.org/rustup/dist/$rustup_target/rustup-init.exe"
             ./rustup-init.exe --default-toolchain none -y
             rm rustup-init.exe
             echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
