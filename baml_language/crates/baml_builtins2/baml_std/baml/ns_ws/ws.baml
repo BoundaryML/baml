@@ -38,9 +38,9 @@ class WebSocket {
     /// # Throws
     ///
     /// - `baml.errors.InvalidArgument` if `code` is not one an endpoint may
-    ///   send: RFC 6455 allows 1000-1003, 1007-1013, 3000-3999, and 4000-4999.
-    ///   The rest are undefined, or are codes a peer can only ever infer
-    ///   (1004, 1005, 1006, 1015).
+    ///   send (RFC 6455: 1000-1003, 1007-1013, 3000-3999, 4000-4999; not the
+    ///   undefined codes or the inferred-only 1004/1005/1006/1015), or if
+    ///   `reason` exceeds 123 bytes, the most a close frame can carry.
     function close(self, code: int, reason: string) -> void throws root.errors.InvalidArgument {
         $rust_io_function
     }

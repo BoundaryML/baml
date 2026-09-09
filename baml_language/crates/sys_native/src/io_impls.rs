@@ -3335,7 +3335,16 @@ impl io::IoClassWsWebSocket for NativeSysOps {
                         };
                         break Ok(ws_close_event(ws.finish(&mut source, close).await));
                     }
+                    // tokio-tungstenite fuses the stream on any read error —
+                    // every later poll is `None` — so the connection is over
+                    // as of this frame. Publish that now, so `send` and
+                    // `hangup` answer from `close`, then report what ended it.
                     Some(Err(error)) => {
+                        let close = WsClose {
+                            code: 1006,
+                            reason: String::new(),
+                        };
+                        ws.finish(&mut source, close).await;
                         return Err(VmBamlError::Io {
                             message: format!("WebSocket receive failed: {error}"),
                         }
@@ -3412,6 +3421,20 @@ impl io::IoClassWsWebSocket for NativeSysOps {
                 });
             }
         };
+
+        // RFC 6455 §5.5: a control frame carries at most 125 payload bytes,
+        // and a close frame spends two on the status code. Tungstenite checks
+        // this only when reading — `Frame::close` neither checks nor
+        // truncates — so an oversized reason would reach the wire as a
+        // protocol violation for the peer to fail the connection over.
+        if reason.len() > 123 {
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "WebSocket close reason is {} bytes; a close frame carries at most 123",
+                    reason.len()
+                ),
+            });
+        }
 
         SysOpOutput::async_op(async move {
             let ws = ws_resource(&websocket)?;

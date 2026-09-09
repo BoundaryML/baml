@@ -125,12 +125,20 @@ class Server {
 /// // Echo every frame back until the peer closes.
 /// spawn {
 ///     server.serve(my_handler, websocket = (req) -> {
-///         // always accept websocket requests:
+///         // Accept every upgrade. `WsAccept` is `throws never`, so the
+///         // socket's `Io` errors end the loop here rather than escaping.
 ///         (socket) -> {
 ///             while (true) {
-///                 match (socket.next()) {
+///                 let frame = socket.next() catch (_) {
+///                     baml.errors.Io => { break; },
+///                 };
+///                 match (frame) {
 ///                     baml.ws.CloseEvent => { break; },
-///                     let frame: string | uint8array => socket.send(frame),
+///                     let data: string | uint8array => {
+///                         socket.send(data) catch (_) {
+///                             baml.errors.Io => { break; },
+///                         };
+///                     },
 ///                 }
 ///             }
 ///         }
@@ -146,7 +154,7 @@ type WsAccept = (socket: root.ws.WebSocket) -> void throws never;
 /// status here says specifically that this server implements no WebSocket
 /// endpoint, rather than blaming the request.
 function reject_websocket(req: Request) -> Response throws never {
-    Response.new(501, { }, "websocket upgrade is not supported".to_utf8())
+    Response.new(501, {}, "websocket upgrade is not supported".to_utf8())
 }
 
 /// Used to convert an HTTP server into an HTTPS server for secure connections.
