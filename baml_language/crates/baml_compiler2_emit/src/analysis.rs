@@ -2716,6 +2716,7 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
@@ -2780,6 +2781,7 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
@@ -3348,6 +3350,7 @@ mod tests {
 
     fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
+            argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
@@ -3360,6 +3363,7 @@ mod tests {
 
     fn virtual_call_into(target: BlockId) -> Terminator<'static> {
         Terminator::VirtualCall {
+            argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
                 Box::new([]),
@@ -3613,6 +3617,7 @@ mod tests {
                     id: BlockId(1),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,

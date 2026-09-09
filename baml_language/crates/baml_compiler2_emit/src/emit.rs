@@ -1303,6 +1303,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.meta[index].operand = Some(operand);
     }
 
+    /// Record the checked argument layout of an already-emitted call.
+    fn record_call_layout(&mut self, index: usize, layout: Option<&baml_type::CallLayout>) {
+        if let Some(layout) = layout {
+            self.bytecode.call_layouts.insert(index, layout.clone());
+        }
+    }
+
     /// Set `OperandMeta::Var` for an instruction if the slot has a name.
     fn set_var_operand(&mut self, inst_idx: usize, slot: usize) {
         if let Some(name) = self.slot_names.get(slot).filter(|n| !n.is_empty()) {
@@ -2340,6 +2347,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Call {
+                argument_layout,
                 callee,
                 args,
                 ntypeargs,
@@ -2383,29 +2391,38 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // the offending call rather than its final nested operand.
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
+                    self.record_call_layout(inst, argument_layout.as_ref());
                     if let Some(item) = &callee_item {
                         self.set_operand(inst, OperandMeta::Callable(item.to_string()));
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else {
+                    // The runtime callee's parameter list is unknown here, so
+                    // every lowered indirect call must say what it pushed.
+                    assert!(
+                        argument_layout.is_some(),
+                        "indirect calls require an explicit caller layout"
+                    );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
-                    if let Some(runtime_id) = runtime_id {
+                    let instruction = if let Some(runtime_id) = runtime_id {
                         unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                        self.set_debug_span(call_span, false);
-                        self.emit(Instruction::CallIndirectWithRuntimeId);
+                        Instruction::CallIndirectWithRuntimeId
                     } else {
-                        self.set_debug_span(call_span, false);
-                        self.emit(Instruction::CallIndirect);
-                    }
+                        Instruction::CallIndirect
+                    };
+                    self.set_debug_span(call_span, false);
+                    let inst = self.emit(instruction);
+                    self.record_call_layout(inst, argument_layout.as_ref());
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 }
             }
 
             Terminator::VirtualCall {
+                argument_layout,
                 iface,
                 method,
                 args,
@@ -2441,6 +2458,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     Instruction::VirtualCall { nargs, ntypeargs }
                 };
                 let inst = self.emit(instruction);
+                self.record_call_layout(inst, argument_layout.as_ref());
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);

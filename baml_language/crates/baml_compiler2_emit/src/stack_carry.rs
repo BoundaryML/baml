@@ -1750,6 +1750,7 @@ mod tests {
             span: None,
         });
         body.blocks[0].terminator = Some(Terminator::Call {
+            argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
