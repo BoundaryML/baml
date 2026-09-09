@@ -111,10 +111,15 @@ class FlowItem {
             let names = site_names(site_draw.next, reserved);
             let probe = root.algebra.probe(site, flow.source, flow.target, names);
             let compiles = root.algebra.flows(flow.relation);
+            let file = "case.baml";
             let key: root.engine.Verdict = if (compiles) {
                 root.engine.Compiles { tests: [] }
             } else {
-                root.engine.Rejected { codes: [rejection_code(site)], anchor: probe.anchor }
+                root.engine.Rejected {
+                    code: rejection_code(site),
+                    more: [],
+                    at: root.engine.Region { file, start: probe.start, end: probe.end },
+                }
             };
             let traps = models().filter_map((model) -> {
                 let believed = root.algebra.decided(root.algebra.under(d, model))
@@ -127,7 +132,7 @@ class FlowItem {
             });
             let trace = root.algebra.claims(d).concat([flow_claim(site, flow, compiles)]);
             root.engine.Candidate {
-                case: root.engine.Case { files: { "case.baml": probe.source }, key, trace },
+                case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
                 features: features_of(trace, root.algebra.flips(d), [flow.source, flow.target], traps),
                 traps,
             }
@@ -144,7 +149,10 @@ class UnguardedCycleItem {
         }
 
         function status(self) -> root.engine.Status throws never {
-            root.engine.CompilerDiverges { divergence: "CD-001" }
+            root.engine.CompilerDiverges {
+                divergence: "CD-001",
+                contradiction: root.engine.Contradiction.Accepts,
+            }
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
@@ -162,6 +170,18 @@ class UnguardedCycleItem {
                 })
             };
             let ty: root.algebra.Ty = root.algebra.Alias { decl };
+            let source = root.algebra.render_decls(root.algebra.decls_of(ty));
+            let file = "case.baml";
+            // The spec's E0068 is per cycle member, so the two-alias form
+            // expects two. Where the compiler will point is the first alias's
+            // name: its first occurrence in the source is its declaration.
+            let more: string[] = if (form.value == 0) {
+                []
+            } else {
+                ["E0068"]
+            };
+            let prefix = source.slice(0, source.index_of(a) ?? 0);
+            let start = prefix.to_utf8().length();
             let trace = [
                 root.engine.Claim {
                     rule: unguarded_cycle_rejected(),
@@ -170,8 +190,12 @@ class UnguardedCycleItem {
             ];
             root.engine.Candidate {
                 case: root.engine.Case {
-                    files: { "case.baml": root.algebra.render_decls(root.algebra.decls_of(ty)) },
-                    key: root.engine.Rejected { codes: ["E0068"], anchor: a },
+                    files: root.engine.one_file(file, source),
+                    key: root.engine.Rejected {
+                        code: "E0068",
+                        more,
+                        at: root.engine.Region { file, start, end: start + a.to_utf8().length() },
+                    },
                     trace,
                 },
                 features: features_of(trace, 0, [ty], []),

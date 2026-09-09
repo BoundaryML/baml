@@ -1,25 +1,38 @@
-// Ask the compiler. This is the only place the tool learns anything about
-// BAML semantics, and it learns it from `reflect.Package.compile`.
+// Ask the compiler. Together with `oracle.baml`, this is where the tool
+// learns anything about BAML semantics, and it learns it from
+// `reflect.Package.compile`.
 
 /// The compiler said what the key said.
 class Agrees {
 }
 
-/// The compiler rejected the case with codes other than the key's (or the key
-/// said it compiles).
+/// The key said the case compiles; the compiler rejected it.
 class UnexpectedDiagnostics {
     codes: string[],
     messages: string[],
 }
 
-/// The key said `Rejected` but the case compiled.
+/// The key said the case is rejected; the compiler accepted it.
 class UnexpectedCompile {
 }
 
-/// The codes matched but none sat on a line mentioning the anchor.
-class AnchorMismatch {
-    anchor: string,
-    lines: string[],
+/// The compiler rejected the case, but not with the key's codes.
+class OtherCodes {
+    expected: string[],
+    codes: string[],
+    messages: string[],
+}
+
+/// The codes matched, but no diagnostic points inside the key's region.
+class Mislocated {
+    at: Region,
+    diagnostics: Located[],
+}
+
+/// A diagnostic's code and, when it has a span in a file, where it points.
+class Located {
+    code: string,
+    at: Region?,
 }
 
 /// The case compiled but the package's initialisation threw.
@@ -33,29 +46,27 @@ class MissingTests {
     defined: string[],
 }
 
-/// Listed tests that threw or panicked.
+/// Tests of the compiled package that threw or panicked.
 class FailedTests {
-    names: string[],
+    failures: Failure[],
+}
+
+class Failure {
+    name: string,
+    reason: string,
 }
 
 type Outcome = Agrees
     | UnexpectedDiagnostics
     | UnexpectedCompile
-    | AnchorMismatch
+    | OtherCodes
+    | Mislocated
     | InitThrew
     | MissingTests
     | FailedTests;
 
 function agrees(outcome: Outcome) -> bool throws never {
-    match (outcome) {
-        Agrees => true,
-        UnexpectedDiagnostics => false,
-        UnexpectedCompile => false,
-        AnchorMismatch => false,
-        InitThrew => false,
-        MissingTests => false,
-        FailedTests => false,
-    }
+    outcome is Agrees
 }
 
 /// The compiler rejected the sources.
@@ -72,12 +83,26 @@ function compile(files: map<string, string>) -> Compiled throws never {
     }
 }
 
-/// Compile `case` and, if the key says so, run its tests.
+/// Compile `case` and, if the key says it compiles, run its tests.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the case has no files: an empty package
+///   compiles, so a generator that produced one has a bug the verifier must
+///   not paper over.
 function verify(case: Case) -> Outcome throws never {
+    if (case.files.length() == 0) {
+        throw baml.panics.Unreachable { message: "a case must have at least one file" }
+    }
     match (compile(case.files)) {
         let failed: CompileFailed => match (case.key) {
-            Compiles => unexpected(failed.diagnostics),
-            let rejected: Rejected => check_rejection(case.files, rejected, failed.diagnostics),
+            Compiles => {
+                UnexpectedDiagnostics {
+                    codes: codes_of(failed.diagnostics),
+                    messages: messages_of(failed.diagnostics),
+                }
+            },
+            let rejected: Rejected => check_rejection(rejected, failed.diagnostics),
         },
         let threw: InitThrew => threw,
         let package: reflect.Package => match (case.key) {
@@ -87,15 +112,16 @@ function verify(case: Case) -> Outcome throws never {
     }
 }
 
-function unexpected(diagnostics: reflect.Diagnostic[]) -> Outcome throws never {
-    UnexpectedDiagnostics {
-        codes: diagnostics.map((d) -> {
-            d.code
-        }),
-        messages: diagnostics.map((d) -> {
-            d.message
-        }),
-    }
+function codes_of(diagnostics: reflect.Diagnostic[]) -> string[] throws never {
+    diagnostics.map((d) -> {
+        d.code
+    })
+}
+
+function messages_of(diagnostics: reflect.Diagnostic[]) -> string[] throws never {
+    diagnostics.map((d) -> {
+        d.message
+    })
 }
 
 function sorted(values: string[]) -> string[] throws never {
@@ -104,73 +130,55 @@ function sorted(values: string[]) -> string[] throws never {
     })
 }
 
+/// The key's codes must match the diagnostics' as a multiset, and one of the
+/// diagnostics must point inside the key's region.
 function check_rejection(
-    files: map<string, string>,
     expected: Rejected,
     diagnostics: reflect.Diagnostic[],
 ) -> Outcome throws never {
-    if (
-        sorted(
-            diagnostics.map((d) -> {
-                d.code
-            }),
-        )
-            != sorted(expected.codes)
-    ) {
-        return unexpected(diagnostics);
+    let codes = codes_of(diagnostics);
+    if (sorted(codes) != sorted(expected.codes())) {
+        return OtherCodes { expected: expected.codes(), codes, messages: messages_of(diagnostics) };
     }
-    let lines = diagnostics.filter_map((d) -> {
-        line_of(files, d.span)
+    let inside = diagnostics.some((d) -> {
+        within(d, expected.at)
     });
-    if (
-        lines.some((line) -> {
-            line.includes(expected.anchor)
-        })
-    ) {
+    if (inside) {
         Agrees {  }
     } else {
-        AnchorMismatch { anchor: expected.anchor, lines: lines }
+        Mislocated {
+            at: expected.at,
+            diagnostics: diagnostics.map((d) -> {
+                locate(d)
+            }),
+        }
     }
 }
 
-/// The source line containing the start of `span`, or `null` when the span
-/// carries no file or names one that is not in `files`.
-///
-/// Diagnostic offsets are bytes while BAML's string methods index by
-/// character, so the search runs over the UTF-8 bytes and decodes only the
-/// newline-delimited line.
-function line_of(files: map<string, string>, span: reflect.Span?) -> string? throws never {
-    let s = span
-        ?? return null;
-    let name = s.file
-        ?? return null;
-    let bytes = (
-        files.get(name)
-            ?? return null
-    )
-        .to_utf8();
-    let newline = 10;
-    let line_start = match (bytes.slice(0, s.start).reverse().index_of(newline)) {
-        let back: int => s.start - back,
-        null => 0,
-    };
-    let line_end = match (bytes.slice(s.start, bytes.length()).index_of(newline)) {
-        let ahead: int => s.start + ahead,
-        null => bytes.length(),
-    };
-    // A newline is a single-byte code point, so a slice between newlines of
-    // valid UTF-8 is itself valid UTF-8.
-    string.from_utf8(bytes.slice(line_start, line_end)) catch (e) {
-        baml.errors.InvalidArgument => {
-            throw baml.panics.Unreachable {
-            message: "a newline-delimited slice of valid UTF-8 failed to decode",
-        }
+/// Whether `d` points inside `at`.
+function within(d: reflect.Diagnostic, at: Region) -> bool throws never {
+    let span = d.span
+        ?? return false;
+    let file = span.file
+        ?? return false;
+    file == at.file && span.start >= at.start && span.end <= at.end
+}
+
+function locate(d: reflect.Diagnostic) -> Located throws never {
+    let at: Region? = match (d.span) {
+        let span: reflect.Span => match (span.file) {
+            let file: string => Region { file, start: span.start, end: span.end },
+            null => null,
         },
-    }
+        null => null,
+    };
+    Located { code: d.code, at }
 }
 
 type TestTable = map<string, () -> null throws unknown>;
 
+/// Every listed test must exist, and every test the package defines must
+/// pass, listed or not: a compiling case is a whole well-behaved program.
 function run_tests(package: reflect.Package, names: string[]) -> Outcome throws never {
     let tests: TestTable | InitThrew = package.tests() catch_all (e) {
         _ => InitThrew { message: `${e}` },
@@ -184,11 +192,11 @@ function run_tests(package: reflect.Package, names: string[]) -> Outcome throws 
             if (missing.length() > 0) {
                 return MissingTests { names: missing, defined: table.keys() };
             }
-            let failed = names.filter((n) -> {
-                !passes(table, n)
+            let failures = table.keys().filter_map((n) -> {
+                failure_of(table, n)
             });
-            if (failed.length() > 0) {
-                FailedTests { names: failed }
+            if (failures.length() > 0) {
+                FailedTests { failures }
             } else {
                 Agrees {  }
             }
@@ -196,26 +204,28 @@ function run_tests(package: reflect.Package, names: string[]) -> Outcome throws 
     }
 }
 
-function passes(table: TestTable, name: string) -> bool throws never {
+/// Why the test `name` failed, or `null` when it passed or does not exist.
+function failure_of(table: TestTable, name: string) -> Failure? throws never {
     // BUG: `tests()` is declared as `map<string, () -> null throws unknown>`
-    // but its values reflect as `() -> void throws never`, and a run-time
-    // membership test on a function value is exact rather than a subtyping
-    // check, so `if let run: () -> null throws unknown = table.get(name)` and
-    // the matching `is` both fail for a present key. The lookup therefore
-    // goes through `has` and a subscript, which do not test the type.
+    // but its values reflect as `() -> void throws never`, and `void` and
+    // `null` function types are one type statically and two at run time, so
+    // `if let run: () -> null throws unknown = table.get(name)` fails for a
+    // present key. The lookup therefore goes through `has` and a subscript,
+    // which do not test the type. See README, compiler issue 2.
     if (!table.has(name)) {
-        return false;
+        return null;
     }
     let run = table[name];
+    let passed: Failure? = null;
     // Panics are their own channel: `catch_all` covers thrown errors only, so
     // an `assert` failure (`baml.panics.AssertionFailed`) inside the case's
     // test needs the explicit `baml.panics.Panic` arm.
     {
         run();
-        true
+        passed
     } catch (e) {
-        baml.panics.Panic => false,
-        _ => false,
+        baml.panics.Panic => Failure { name, reason: `${e}` },
+        _ => Failure { name, reason: `${e}` },
     }
 }
 
@@ -224,45 +234,62 @@ class ItemReport {
     id: string,
     /// Seeds that produced a case; the rest ended with an unknown judgment.
     produced: int,
-    /// Produced cases the compiler agreed with.
-    agreed: int,
-    disagreements: Disagreement[],
+    /// Produced cases the compiler did not agree with.
+    disagreements: Checked[],
 }
 
-class Disagreement {
+/// A produced case's seed index and what the compiler said about it.
+class Checked {
     index: int,
     outcome: Outcome,
 }
 
 /// Generate and verify `count` seeds of `item`.
 function verify_item(item: Item, count: int) -> ItemReport throws never {
-    let produced = 0;
-    let agreed = 0;
-    let disagreements: Disagreement[] = [];
-    let i = 0;
-    while (i < count) {
-        if let candidate: Candidate = item.generate(seed_for(item.id(), i)) {
-            produced = produced + 1;
-            let outcome = verify(candidate.case);
-            if (agrees(outcome)) {
-                agreed = agreed + 1;
-            } else {
-                let _ = disagreements.push(Disagreement { index: i, outcome: outcome });
-            }
-        }
-        i = i + 1;
+    let id = item.id();
+    let checked: Checked[] = baml.iter.Range.new(0, count)
+        .filter_map((i) -> {
+            let candidate = generate(item, seed_for(id, i))
+                ?? return null;
+            Checked { index: i, outcome: verify(candidate.case) }
+        })
+        .collect();
+    ItemReport {
+        id,
+        produced: checked.length(),
+        disagreements: checked.filter((c) -> {
+            !agrees(c.outcome)
+        }),
     }
-    ItemReport { id: item.id(), produced: produced, agreed: agreed, disagreements: disagreements }
 }
 
-/// Whether `report` is what `status` promises. `Verified` promises that at
-/// least one case was produced and every produced case agrees; the other
-/// statuses promise the opposite, so a compiler that catches up is noticed.
+/// Whether `report` is what `status` promises. Every status promises that
+/// at least one case was produced. `Verified` promises that every produced
+/// case agrees; `CompilerDiverges` that every produced case disagrees in the
+/// declared way, so a compiler that catches up, or breaks differently, is
+/// noticed; `SpecOnly` that every produced case disagrees.
 function conforms(status: Status, report: ItemReport) -> bool throws never {
-    let all_agree = report.produced > 0 && report.disagreements.length() == 0;
+    if (report.produced == 0) {
+        return false;
+    }
+    let all_disagree = report.disagreements.length() == report.produced;
     match (status) {
-        Verified => all_agree,
-        CompilerDiverges => !all_agree,
-        SpecOnly => !all_agree,
+        Verified => report.disagreements.length() == 0,
+        let d: CompilerDiverges => {
+            all_disagree
+                && report.disagreements.every((c) -> {
+                    contradicts(d.contradiction, c.outcome)
+                })
+        },
+        SpecOnly => all_disagree,
+    }
+}
+
+/// Whether `outcome` is the disagreement `contradiction` describes.
+function contradicts(contradiction: Contradiction, outcome: Outcome) -> bool throws never {
+    match (contradiction) {
+        Contradiction.Accepts => outcome is UnexpectedCompile,
+        Contradiction.Rejects => outcome is UnexpectedDiagnostics,
+        Contradiction.Misreports => outcome is OtherCodes || outcome is Mislocated,
     }
 }

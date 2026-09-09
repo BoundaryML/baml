@@ -640,21 +640,85 @@ function flows() -> Flow[] throws never {
             target: returns_int,
             compiles: false,
         },
+        Flow {
+            name: "multibyte literal into its concrete type",
+            source: root.algebra.Lit.new("🐑"),
+            target: root.algebra.Prim.string(),
+            compiles: true,
+        },
+        Flow {
+            name: "multibyte literal into leaf",
+            source: root.algebra.Lit.new("🐑"),
+            target: root.algebra.Prim.int(),
+            compiles: false,
+        },
+        Flow {
+            name: "leaf into multibyte literal",
+            source: root.algebra.Prim.int(),
+            target: root.algebra.Lit.new("🐑"),
+            compiles: false,
+        },
     ]
 }
 
 function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case throws never {
     let p = root.algebra.probe(site, flow.source, flow.target, site_names());
+    let file = "case.baml";
     let key: root.engine.Verdict = if (flow.compiles) {
         root.engine.Compiles { tests: [] }
     } else {
-        root.engine.Rejected { codes: ["E0001"], anchor: p.anchor }
+        root.engine.Rejected {
+            code: "E0001",
+            more: [],
+            at: root.engine.Region { file, start: p.start, end: p.end },
+        }
     };
-    root.engine.Case { files: { "case.baml": p.source }, key: key, trace: [] }
+    root.engine.Case { files: root.engine.one_file(file, p.source), key, trace: [] }
+}
+
+/// What a probe's region must cover at `site`: the flowing expression, or
+/// the whole body at the `Return` site.
+function expected_excerpt(
+    site: root.algebra.SiteKind,
+    names: root.algebra.SiteNames,
+) -> string throws never {
+    match (site) {
+        root.algebra.SiteKind.Return => `{\n    ${names.value}\n}`,
+        root.algebra.SiteKind.Let
+            | root.algebra.SiteKind.CallArgument
+            | root.algebra.SiteKind.Field
+            | root.algebra.SiteKind.ArrayElement =>
+        {
+            names.value
+        },
+    }
+}
+
+/// The bytes of every probe's region decode to exactly the expression the
+/// site says it covers, for every flow.
+function inexact_regions() -> string[] throws never {
+    let names = site_names();
+    flows().flat_map((flow) -> {
+        root.algebra.all_sites().filter_map((site) -> {
+            let p = root.algebra.probe(site, flow.source, flow.target, names);
+            let excerpt = string.from_utf8(p.source.to_utf8().slice(p.start, p.end)) catch (e) {
+                baml.errors.InvalidArgument => "<not a character boundary>",
+            };
+            if (excerpt == expected_excerpt(site, names)) {
+                null
+            } else {
+                `${flow.name} at ${site}: region covers ${excerpt}`
+            }
+        })
+    })
+}
+
+test "sites: every probe's region covers exactly the expression it claims" {
+    assert.equal(inexact_regions().join("\n"), "")
 }
 
 /// Every site must agree with the algebra's verdict for every flow, with the
-/// rejection code and the anchor pinned.
+/// rejection code and the region pinned.
 function site_disagreements() -> string[] throws never {
     flows().flat_map((flow) -> {
         root.algebra.all_sites().filter_map((site) -> {
@@ -668,6 +732,6 @@ function site_disagreements() -> string[] throws never {
     })
 }
 
-test "sites: every site agrees with the algebra on every flow, code and anchor included" {
+test "sites: every site agrees with the algebra on every flow, code and region included" {
     assert.equal(site_disagreements().join("\n"), "")
 }

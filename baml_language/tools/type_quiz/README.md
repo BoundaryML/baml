@@ -27,7 +27,9 @@ map, class argument, function parameter, return, error, union member) to
 another fact, and records the relation that follows. An *item* exercises a
 fact at a flow site, chosen by seed among a binding, a call argument, a
 return, a field initializer, and an array element, flowing the pair forwards
-or backwards so the shape never gives the verdict away. The trace of claims,
+or backwards so the shape never gives the verdict away. A rejected key names
+the diagnostic codes and the byte region of the probe the compiler must point
+inside, which the site computes as it renders. The trace of claims,
 each rule instantiated at the case's types, is the explanation; its last claim
 names which type met which slot. Every item is generated across several seeds
 and checked against the compiler on every run.
@@ -97,7 +99,7 @@ minimal single-file packages; none is fixed at the time of writing.
    `let s = span ?? return null;` becomes two lines with the `??` dangling, and
    `let bytes = (files.get(name) ?? return null).to_utf8();` becomes five,
    with the parenthesised guard split over three and `.to_utf8()` on its own
-   line. See `line_of` in `ns_engine/verify.baml`. Same policy as 4: kept as
+   line. See `within` in `ns_engine/verify.baml`. Same policy as 4: kept as
    the formatter emits it.
 6. **A function type with a `throws` clause does not parse inside call-site
    angle brackets.** `reflect.Type.of<(int) -> string throws never>()` and
@@ -126,3 +128,15 @@ minimal single-file packages; none is fixed at the time of writing.
    into a fresh local first does not help; the same code with `top` a literal
    works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
    which `pick` in `ns_engine/sample.baml` uses.
+10. **A local inferred from a `match` with a `.map` arm is typed wrongly, and
+   a method call on it fails at run time.** With `type Either = Wrapped |
+   string`,
+   `let lines = match (e) { let w: Wrapped => w.values.map((v) -> { v }), let s: string => [s] };`
+   followed by `lines.join(",")` fails with
+   `VM internal error: type error: expected map, got array`, the method having
+   been dispatched as though the local were a map. It reproduces with no
+   captured value, and with either or both arms mapping; all-literal arms are
+   fine. Any of three things avoids it: annotating the local (`let lines:
+   string[] = …`), consuming it through a free function
+   (`baml.Array.length(lines)`), or returning the `match` directly instead of
+   binding it. This package annotates.

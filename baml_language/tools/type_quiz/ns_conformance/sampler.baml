@@ -57,8 +57,157 @@ test "score: a hinge is free up to its allowance and quadratic past it" {
     assert.is_true(hinge_is_free_then_quadratic())
 }
 
+function value_at_cap_is_kept() -> bool throws never {
+    let w = weights_for(
+        "x",
+        root.engine.Weight {
+            weight: -1.0,
+            hinge: root.engine.Hinge { allowance: 0.0, hard_cap: 1.0 },
+        },
+    );
+    root.engine.score(feature("x", 1.0), w) == -1.0
+}
+
+function entries_add_up() -> bool throws never {
+    let w = root.engine.Weights {
+        entries: {
+            "x": root.engine.Weight { weight: 2.0, hinge: null },
+            "y": root.engine.Weight { weight: 3.0, hinge: null },
+        },
+    };
+    let features: map<string, float> = { "x": 1.0, "y": 1.0 };
+    root.engine.score(features, w) == 5.0
+}
+
 test "score: a hard cap rejects the candidate" {
     assert.is_true(hard_cap_rejects())
+}
+
+test "score: a value at the hard cap is kept" {
+    assert.is_true(value_at_cap_is_kept())
+}
+
+test "score: entries add up" {
+    assert.is_true(entries_add_up())
+}
+
+// ─── the sampler's primitives ────────────────────────────────────────────────
+
+function unit_stays_in_range() -> bool throws never {
+    root.engine.streams(root.engine.seed_from(11), 500).every((s) -> {
+        let u = root.engine.unit(s);
+        u >= 0.0 && u < 1.0
+    })
+}
+
+function streams_are_distinct() -> bool throws never {
+    let states = root.engine.streams(root.engine.seed_from(12), 50).map((s) -> {
+        s.state
+    });
+    distinct(
+        states.map((state) -> {
+            state.to_string()
+        }),
+    )
+        .length()
+        == states.length()
+}
+
+/// A candidate with nothing but a score, for the picker.
+function scored(score: float) -> root.engine.Scored throws never {
+    root.engine.Scored {
+        item: "synthetic",
+        candidate: root.engine.Candidate {
+            case: root.engine.Case {
+                files: root.engine.one_file("case.baml", ""),
+                key: root.engine.Compiles { tests: [] },
+                trace: [],
+            },
+            features: {},
+            traps: [],
+        },
+        score,
+    }
+}
+
+function pick_of_nothing_is_null() -> bool throws never {
+    root.engine.pick([], root.engine.seed_from(1)) == null
+}
+
+/// With scores `0` and `ln 3` the second candidate has weight 3 against 1,
+/// so it should be picked about three times in four.
+function picks_of_the_heavier() -> Share throws never {
+    let pair = [scored(0.0), scored(baml.Float.ln(3.0))];
+    let seeds = root.engine.streams(root.engine.seed_from(5), 400);
+    Share {
+        hits: seeds
+            .filter((s) -> {
+                (root.engine.pick(pair, s)?.score ?? -1.0) > 0.5
+            })
+            .length(),
+        total: seeds.length(),
+    }
+}
+
+function draw_respects_count_and_caps() -> bool throws never {
+    let item = root.bank.items()[0];
+    let seed = root.engine.seed_from(8);
+    let capped = weights_for(
+        "size",
+        root.engine.Weight {
+            weight: 0.0,
+            hinge: root.engine.Hinge { allowance: 0.0, hard_cap: 0.0 },
+        },
+    );
+    let some = root.engine.draw(item, seed, root.bank.default_weights(), 5);
+    some.length() > 0
+        && some.length() <= 5
+        && root.engine.draw(item, seed, capped, 5).length() == 0
+        && root.engine.draw(item, seed, root.bank.default_weights(), 0).length() == 0
+}
+
+function schedule_is_balanced_and_seeded() -> bool throws never {
+    let compiling = (kinds: root.engine.VerdictKind[]) -> {
+        kinds
+            .filter((k) -> {
+                k == root.engine.VerdictKind.Compiles
+            })
+            .length()
+    };
+    let even = root.engine.schedule(root.engine.seed_from(9), 120).value;
+    let odd = root.engine.schedule(root.engine.seed_from(9), 7).value;
+    let other = root.engine.schedule(root.engine.seed_from(10), 120).value;
+    even.length() == 120
+        && compiling(even) == 60
+        && odd.length() == 7
+        && compiling(odd) == 4
+        && compiling(other) == 60
+        && even != other
+        && root.engine.schedule(root.engine.seed_from(0), 0).value.length() == 0
+}
+
+test "unit: draws stay in [0, 1)" {
+    assert.is_true(unit_stays_in_range())
+}
+
+test "streams: child streams are distinct" {
+    assert.is_true(streams_are_distinct())
+}
+
+test "pick: nothing from nothing" {
+    assert.is_true(pick_of_nothing_is_null())
+}
+
+test "pick: proportional to exp(score)" {
+    assert.equal(check("heavier candidate picked", picks_of_the_heavier(), 0.65, 0.85), null)
+}
+
+test "draw: respects the count and drops capped candidates" {
+    assert.is_true(draw_respects_count_and_caps())
+}
+
+test "schedule: balanced, seeded, and empty for zero length" {
+    assert.is_true(schedule_is_balanced_and_seeded())
 }
 
 // ─── a seed sweep over the bank ──────────────────────────────────────────────

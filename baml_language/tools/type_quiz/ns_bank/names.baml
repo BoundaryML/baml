@@ -1,8 +1,7 @@
 // Cosmetic name pools. Names never change a verdict; they exist so a learner
 // cannot recognise a case by its identifiers. The conformance suite compiles
 // every pool entry in each position it is used in, so a keyword or a stdlib
-// collision cannot enter a pool unnoticed. Binding names are at least two
-// characters so an anchor is never a letter that occurs in every line.
+// collision cannot enter a pool unnoticed.
 
 function type_names() -> string[] throws never {
     ["Widget", "Ticket", "Parcel", "Beacon", "Ledger", "Orbit", "Kettle", "Harbor"]

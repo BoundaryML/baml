@@ -180,6 +180,19 @@ test "facts: reflection sees the generators" {
     assert.is_true(fact_shaped_functions().length() >= 20)
 }
 
+/// The sweeps in this package pass vacuously over an empty registry, so the
+/// registry must not be empty.
+function registry_is_populated() -> bool throws never {
+    root.bank.items().length() > 0
+        && root.bank.facts().length() > 0
+        && root.bank.rules().length() > 0
+        && root.bank.models().length() > 0
+}
+
+test "bank: the registry is not empty" {
+    assert.is_true(registry_is_populated())
+}
+
 // ─── every rule is isolatable ────────────────────────────────────────────────
 
 /// The last rule of a trace before the flow rule, or the last rule when the

@@ -45,10 +45,27 @@ class Compiles {
 }
 
 /// The compiler rejects the case with exactly these diagnostic codes, at
-/// least one of them on a line that mentions `anchor`.
+/// least one of them pointing inside `at`.
 class Rejected {
-    codes: string[],
-    anchor: string,
+    code: string,
+    /// Further codes beyond the first, when the case expects several.
+    more: string[],
+    /// The region the case's site expects the compiler to point at.
+    at: Region,
+
+    /// Every expected code, the first one first.
+    function codes(self) -> string[] throws never {
+        [self.code].concat(self.more)
+    }
+}
+
+/// A byte range of one of a case's files. Diagnostics report byte offsets,
+/// so regions do too.
+class Region {
+    /// A key of the case's `files`.
+    file: string,
+    start: int,
+    end: int,
 }
 
 type Verdict = Compiles | Rejected;
@@ -70,10 +87,20 @@ function verdict_kind(verdict: Verdict) -> VerdictKind throws never {
 /// A generated quiz case: what the learner sees, what the compiler must say,
 /// and the claims that say why.
 class Case {
-    /// Source text keyed by path, exactly as handed to `reflect.Package.compile`.
+    /// Source text keyed by file name, exactly as handed to
+    /// `reflect.Package.compile`. Keys are plain names: the compiler reports
+    /// a normalised path, so a key with directories would never match a
+    /// diagnostic's file.
     files: map<string, string>,
     key: Verdict,
     trace: Claim[],
+}
+
+/// The files of a case that has just one.
+function one_file(name: string, source: string) -> map<string, string> throws never {
+    let files: map<string, string> = {};
+    files.set(name, source);
+    files
 }
 
 /// A case together with the numbers the sampler scores it by.
@@ -89,10 +116,22 @@ class Candidate {
 class Verified {
 }
 
+/// The way the compiler contradicts the spec on a diverging item.
+enum Contradiction {
+    /// It accepts what the spec rejects.
+    Accepts,
+    /// It rejects what the spec accepts.
+    Rejects,
+    /// It rejects as the spec does, but with other codes or elsewhere.
+    Misreports,
+}
+
 /// The compiler contradicts the spec on this item; `divergence` names the
-/// entry in `COMPILER_DIVERGENCE.md`.
+/// entry in `COMPILER_DIVERGENCE.md` and `contradiction` says how, so the
+/// suite can tell the recorded divergence from a different breakage.
 class CompilerDiverges {
     divergence: string,
+    contradiction: Contradiction,
 }
 
 /// The spec describes something the compiler does not implement; `gap` names

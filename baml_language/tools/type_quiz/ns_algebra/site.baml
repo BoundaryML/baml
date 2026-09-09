@@ -2,7 +2,9 @@
 // source type flows into a slot of the target type. Every site here is a
 // covariant flow, so the probe compiles exactly when the source is a subtype
 // of (or the same type as) the target. Which diagnostic a rejected flow
-// produces at each site is compiler surface and lives in the bank.
+// produces at each site is compiler surface and lives in the bank; where
+// the compiler points is fixed here, as a byte region of the probe, and the
+// conformance suite holds it against the compiler at every site.
 
 enum SiteKind {
     /// `let target: R = value;`
@@ -29,11 +31,19 @@ class SiteNames {
     holder: string,
 }
 
-/// A rendered probe: the source and the name on the line a rejection
-/// should point at.
+/// A rendered probe and the byte region of it that a rejection must point
+/// inside: the flowing expression, or at the `Return` site the function body
+/// the compiler reports as a whole.
 class Probe {
     source: string,
-    anchor: string,
+    start: int,
+    end: int,
+}
+
+/// `head`, `expr`, and `tail` in sequence, with the region of `expr`.
+function around(head: string, expr: string, tail: string) -> Probe throws never {
+    let start = head.to_utf8().length();
+    Probe { source: `${head}${expr}${tail}`, start, end: start + expr.to_utf8().length() }
 }
 
 /// The probe for `site`, with the declarations `source` and `target` need.
@@ -44,63 +54,38 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     // Spelled through `render` so a union or function target keeps its
     // parentheses inside the element position.
     let t_array = render(Array.new(target));
+    let v = names.value;
     match (site) {
         SiteKind.Let => {
-            Probe {
-                source: `
-                    ${decls}function ${names.function_name}(${names.value}: ${s}) -> void {
-                        let ${names.target}: ${t} = ${names.value};
-                    }
-                `,
-                anchor: names.target,
-            }
+            around(
+                `${decls}function ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.target}: ${t} = `,
+                v,
+                `;\n}\n`,
+            )
         },
         SiteKind.CallArgument => {
-            Probe {
-                source: `
-                    ${decls}function ${names.sink}(${names.target}: ${t}) -> void {
-                    }
-
-                    function ${names.function_name}(${names.value}: ${s}) -> void {
-                        ${names.sink}(${names.value});
-                    }
-                `,
-                anchor: names.sink,
-            }
+            around(
+                `${decls}function ${names.sink}(${names.target}: ${t}) -> void {\n}\n\nfunction ${names.function_name}(${v}: ${s}) -> void {\n    ${names.sink}(`,
+                v,
+                `);\n}\n`,
+            )
         },
         SiteKind.Return => {
-            Probe {
-                source: `
-                    ${decls}function ${names.function_name}(${names.value}: ${s}) -> ${t} {
-                        ${names.value}
-                    }
-                `,
-                anchor: names.function_name,
-            }
+            around(`${decls}function ${names.function_name}(${v}: ${s}) -> ${t} `, `{\n    ${v}\n}`, `\n`)
         },
         SiteKind.Field => {
-            Probe {
-                source: `
-                    ${decls}class ${names.holder} {
-                        ${names.target}: ${t},
-                    }
-
-                    function ${names.function_name}(${names.value}: ${s}) -> void {
-                        let ${names.instance} = ${names.holder} { ${names.target}: ${names.value} };
-                    }
-                `,
-                anchor: names.target,
-            }
+            around(
+                `${decls}class ${names.holder} {\n    ${names.target}: ${t},\n}\n\nfunction ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.instance} = ${names.holder} { ${names.target}: `,
+                v,
+                ` };\n}\n`,
+            )
         },
         SiteKind.ArrayElement => {
-            Probe {
-                source: `
-                    ${decls}function ${names.function_name}(${names.value}: ${s}) -> void {
-                        let ${names.target}: ${t_array} = [${names.value}];
-                    }
-                `,
-                anchor: names.target,
-            }
+            around(
+                `${decls}function ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.target}: ${t_array} = [`,
+                v,
+                `];\n}\n`,
+            )
         },
     }
 }
