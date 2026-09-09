@@ -591,13 +591,14 @@ mod tests {
 
         let mut db = baml_db::ProjectDatabase::new();
         db.ensure_stdlib_sources();
-        db.add_source_root(baml_db::SourceRootSpec::new(
-            PathBuf::from("/pg-test"),
-            baml_db::SourceRootKind::Workspace,
-        ))
-        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+        let package = db
+            .add_source_root(baml_db::SourceRootSpec::new(
+                PathBuf::from("/pg-test"),
+                baml_db::SourceRootKind::Workspace,
+            ))
+            .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         let program = db
-            .get_bytecode_unchecked()
+            .get_bytecode_unchecked(package)
             .unwrap_or_else(|e| unreachable!("empty workspace emits: {e}"));
         construct_engine_candidate(program, Arc::new(sys_native::SysOps::native()), revision)
             .unwrap_or_else(|e| unreachable!("empty program constructs an engine: {e}"))

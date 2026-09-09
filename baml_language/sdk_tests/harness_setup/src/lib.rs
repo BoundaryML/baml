@@ -235,7 +235,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 
     let pool = baml_ide::build_symbol_pool(&db);
     let program = db
-        .get_bytecode()
+        .get_bytecode(root)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
     let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));

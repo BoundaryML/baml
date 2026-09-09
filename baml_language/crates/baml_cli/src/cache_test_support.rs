@@ -71,7 +71,8 @@ pub(crate) fn compile_and_store_v1(
     let r1 = resolved(root, files);
     let (db1, pkg1) = project_load::build_db_from_sources(&r1, |_| {});
     let ctx1 = CacheContext::open(&r1).expect("cache opens");
-    let compiled = compile_program_artifacts(&db1, Some(&ctx1), None).expect("v1 compile succeeds");
+    let compiled =
+        compile_program_artifacts(&db1, pkg1, Some(&ctx1), None).expect("v1 compile succeeds");
     let fresh1 = ctx1
         .collect_diagnostics_incremental(&db1, pkg1, None)
         .fresh_by_file;

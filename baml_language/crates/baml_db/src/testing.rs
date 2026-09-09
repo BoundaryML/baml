@@ -116,10 +116,11 @@ pub fn compile_source(source: &str) -> Program {
 
 /// Compile BAML source with a specific optimization level.
 pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
-    let db = setup_test_db(source);
+    let (mut db, root) = workspace_db();
+    db.add_or_update_file_in(root, Path::new("test.baml"), source);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_opt(&db, opt)
+    generate_project_bytecode_with_opt(&db, root, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
@@ -252,7 +253,7 @@ pub fn compile_multi_file_with_prefix(
     );
     assert_no_user_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_stdlib(&db, opt, &prefix.program)
+    generate_project_bytecode_with_stdlib(&db, root, opt, &prefix.program)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
@@ -269,6 +270,6 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
     );
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_opt(&db, OptLevel::One)
+    generate_project_bytecode_with_opt(&db, root, OptLevel::One)
         .expect("generate_project_bytecode should succeed for valid test source")
 }

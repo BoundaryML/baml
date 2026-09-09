@@ -1100,9 +1100,7 @@ fn enum_type_name(ty: &RuntimeTy) -> Option<&TypeName> {
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
-use baml_compiler2_hir::{
-    compiler2_all_files, contributions::Definition, file_package::file_package,
-};
+use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef<'db> {
     use baml_compiler2_ppir::item_data::{
@@ -1638,24 +1636,23 @@ unsafe impl salsa::Update for ProjectClassTypeTags {
 /// emitter assigns by construction — no iteration-order coupling — and a
 /// class keeps its tag regardless of what other code exists.
 ///
-/// This was previously an untracked helper called from every
-/// `LoweringContext` construction — i.e. the whole project's item trees were
-/// walked, and every class name re-rendered and re-hashed, once per lowered
-/// function/let (see `crates/tools_compile_profile/README.md`, July 2026
-/// audit, item #4). `_roots` (the database's one source-root table) is only
-/// the memo key; the body's file/item reads are tracked as dependencies
-/// through `db` as usual.
+/// The tags of every class in `root`'s world
+/// ([`baml_compiler2_hir::package::world_roots`]): everything a body in
+/// `root` can name, and nothing from a workspace root that merely shares the
+/// database — tags are per program and must never be minted across worlds.
+/// Memoized per root; this was previously an untracked helper called from
+/// every `LoweringContext` construction — i.e. the whole project's item trees
+/// were walked, and every class name re-rendered and re-hashed, once per
+/// lowered function/let (see `crates/tools_compile_profile/README.md`, July
+/// 2026 audit, item #4).
 #[salsa::tracked(returns(ref))]
-fn class_type_tags_for_project(
-    db: &dyn crate::Db,
-    _roots: baml_base::SourceRootTable,
-) -> ProjectClassTypeTags {
+fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> ProjectClassTypeTags {
     use baml_compiler2_ppir::item_data::{class_data, file_classes};
-    let all_files = compiler2_all_files(db);
+    let all_files = baml_compiler2_hir::package::world_files(db, root);
     let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
     let spelling = spelling(db);
 
-    for file in &all_files {
+    for file in all_files {
         let pkg_info = file_package(db, *file);
 
         for class_loc in file_classes(db, *file) {
@@ -1674,8 +1671,8 @@ fn class_type_tags_for_project(
 
     // Packages served from their interface have no source files, but use the
     // same content-addressed tag derived from their fully-qualified class name.
-    for &root in db.source_roots().roots(db) {
-        let Some(mounted) = baml_compiler2_hir_ty::package_interface::mounted_interface(db, root)
+    for &member in baml_compiler2_hir::package::world_roots(db, root) {
+        let Some(mounted) = baml_compiler2_hir_ty::package_interface::mounted_interface(db, member)
         else {
             continue;
         };
@@ -2519,8 +2516,8 @@ impl<'db> LoweringContext<'db> {
 
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
-        // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
+        // Memoized per package world (was rebuilt here per lowered body).
+        let class_type_tags = &class_type_tags_within(db, pkg_id).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2629,8 +2626,8 @@ impl<'db> LoweringContext<'db> {
 
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
-        // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
+        // Memoized per package world (was rebuilt here per lowered body).
+        let class_type_tags = &class_type_tags_within(db, pkg_id).tags;
 
         LoweringContext {
             db,
@@ -7099,17 +7096,20 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         let db = self.db;
 
-        let Some(pkg_id) = spelling(db).root(class_tn.package()) else {
+        // A wire name denotes a declaration only from a viewpoint: this
+        // package's own for `Local`, its edges for the rest — never the
+        // database-wide table, where another workspace root may spell itself
+        // the same way.
+        let Some(class) = spelling(db).resolve(db, file_package(db, self.file).root, class_tn)
+        else {
             return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
-        let pkg_items_ref = package_items(db, pkg_id);
-
-        let namespace: Vec<Name> = class_tn.namespace().clone();
+        let pkg_items_ref = package_items(db, class.root());
 
         let Some(Definition::Class(class_loc)) =
-            pkg_items_ref.lookup_type(&namespace, class_tn.name())
+            pkg_items_ref.lookup_type(class.namespace(), class.name())
         else {
             return RuntimeTy::Null {
                 attr: TyAttr::default(),

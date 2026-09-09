@@ -179,12 +179,19 @@ fn library_artifacts() -> LibraryArtifacts {
         interface, round_trip,
         "interface blob must round-trip exactly"
     );
-    let units = emit_units(&db, OPT).expect("emit independent app units");
+    let units = emit_units(&db, package(&db), OPT).expect("emit independent app units");
     LibraryArtifacts {
         blob,
         interface,
         units,
     }
+}
+
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
 }
 
 fn source_db(user: &str) -> ProjectDatabase {
@@ -204,13 +211,13 @@ fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
 fn compile_source(user: &str) -> Program {
     let db = source_db(user);
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_opt(&db, OPT).expect("source-path compile")
+    generate_project_bytecode_with_opt(&db, package(&db), OPT).expect("source-path compile")
 }
 
 fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
     let db = blob_db(user, artifacts.blob.clone());
     assert_no_diagnostic_errors(&db);
-    generate_project_bytecode_with_mounted_units(&db, OPT, &artifacts.units)
+    generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &artifacts.units)
         .expect("blob-path compile and link")
 }
 
@@ -510,9 +517,9 @@ fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
     let artifacts = library_artifacts();
     let source_db = source_db(ARTIFACT_USER);
     assert_no_diagnostic_errors(&source_db);
-    let source_program =
-        generate_project_bytecode_with_opt(&source_db, OPT).expect("source program");
-    let source_units = emit_units(&source_db, OPT).expect("source units");
+    let source_program = generate_project_bytecode_with_opt(&source_db, package(&source_db), OPT)
+        .expect("source program");
+    let source_units = emit_units(&source_db, package(&source_db), OPT).expect("source units");
 
     let blob_db = blob_db(ARTIFACT_USER, artifacts.blob.clone());
     assert_no_diagnostic_errors(&blob_db);
@@ -525,6 +532,7 @@ fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
     let (blob_program, blob_units) =
         baml_compiler2_emit::generate_project_bytecode_with_mounted_units_artifacts(
             &blob_db,
+            package(&blob_db),
             OPT,
             &artifacts.units,
         )
@@ -615,8 +623,9 @@ fn mounted_unit_api_preserves_dependency_link_errors() {
     let mut duplicate_units = artifacts.units.clone();
     duplicate_units.push(unit(&artifacts.units, "<builtin>/app/lib.baml").clone());
     let db = blob_db("function main() -> int { 0 }", artifacts.blob);
-    let error = generate_project_bytecode_with_mounted_units(&db, OPT, &duplicate_units)
-        .expect_err("duplicate dependency export must fail before consumer emit");
+    let error =
+        generate_project_bytecode_with_mounted_units(&db, package(&db), OPT, &duplicate_units)
+            .expect_err("duplicate dependency export must fail before consumer emit");
     assert!(matches!(
         error,
         MountedPackageLinkError::DependencyLink(bex_vm_types::link::LinkError::DuplicateExport(_))

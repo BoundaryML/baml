@@ -163,7 +163,7 @@ pub fn new(
         return Err(RuntimeError::Compilation { message });
     }
     let program = db
-        .get_bytecode_unchecked()
+        .get_bytecode_unchecked(root)
         .map_err(|e| RuntimeError::Compilation {
             message: e.to_string(),
         })?;

@@ -125,6 +125,7 @@ impl CheckArgs {
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
                     db,
+                    package,
                     cache.as_ref(),
                     reuse_plan.as_ref(),
                 ) {

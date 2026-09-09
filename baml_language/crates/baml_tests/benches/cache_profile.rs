@@ -231,9 +231,9 @@ function main() -> int {
 
     fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
         let mut db = ProjectDatabase::new();
-        db.workspace(Path::new("."));
+        let package = db.workspace(Path::new("."));
         db.file("bench.baml", source);
-        let bytecode = generate_project_bytecode(&db).expect("compilation failed");
+        let bytecode = generate_project_bytecode(&db, package).expect("compilation failed");
         let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
             .expect("engine creation failed");
         (db, engine)

@@ -269,9 +269,9 @@ impl PackArgs {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
-            let (db, needs_format_hint) = self.load_standalone(file)?;
+            let (db, package, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(&db)
+            let program = baml_compiler2_emit::generate_project_bytecode(&db, package)
                 .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
@@ -341,6 +341,7 @@ impl PackArgs {
 
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
+            package,
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
@@ -360,7 +361,10 @@ impl PackArgs {
         Ok((session.db, compiled.program, needs_format_hint))
     }
 
-    fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
+    fn load_standalone(
+        &self,
+        file_path: &Path,
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, bool)> {
         let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("failed to read {}", canonical.display()))?;
@@ -368,7 +372,7 @@ impl PackArgs {
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
         let (mut db, workspace) = workspace_db(parent);
         db.add_or_update_file_in(workspace, &canonical, &content);
-        Ok((db, needs_format_hint))
+        Ok((db, workspace, needs_format_hint))
     }
 
     /// Resolve into `(mode, targets)`. Positional `<TARGET>` →

@@ -349,8 +349,13 @@ impl RunArgs {
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
-    fn compile_to_engine(&self, db: &ProjectDatabase, argv: Vec<String>) -> Result<BexEngine> {
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(db)
+    fn compile_to_engine(
+        &self,
+        db: &ProjectDatabase,
+        package: SourceRoot,
+        argv: Vec<String>,
+    ) -> Result<BexEngine> {
+        let bytecode = baml_compiler2_emit::generate_project_bytecode(db, package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         BexEngine::new_with_runtime_compiler(
             bytecode,
@@ -901,6 +906,7 @@ impl RunArgs {
         self.vlog(format_args!("Compiling..."));
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
+            package,
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
@@ -984,7 +990,7 @@ impl RunArgs {
             &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        let engine = self.compile_to_engine(&db, argv)?;
+        let engine = self.compile_to_engine(&db, package, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
@@ -1044,7 +1050,7 @@ impl RunArgs {
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
 
-        let db = if isolated_has_errors {
+        let (db, package) = if isolated_has_errors {
             if discovered_root.is_none() {
                 self.render_and_bail_on_errors(
                     &isolated_diagnostics,
@@ -1072,17 +1078,18 @@ impl RunArgs {
                 "cannot evaluate expression: compilation errors",
                 reporter,
             )?;
-            project.db
+            (project.db, project.package)
         } else {
             self.vlog(format_args!("Expression compiled without project context"));
-            isolated_db
+            (isolated_db, isolated_workspace)
         };
 
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
-        let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
+        let engine =
+            self.compile_to_engine(&db, package, self.build_argv_for_expression(expr_body))?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);

@@ -1111,9 +1111,12 @@ impl ProjectDatabase {
 
     // ── Bytecode ─────────────────────────────────────────────────────────────
 
-    /// Get the compiled bytecode for the project using the compiler2 pipeline.
+    /// The compiled bytecode of `root`'s program — the root and its
+    /// dependency closure, never another workspace root that shares this
+    /// database.
     pub fn get_bytecode(
         &self,
+        root: SourceRoot,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
         // Bytecode generation lowers types through the runtime-conversion
         // boundary (`ResolvedAliases::convert`), which deliberately panics on
@@ -1124,13 +1127,10 @@ impl ProjectDatabase {
         // through the normal check path. (CLI commands gate before calling
         // `generate_project_bytecode` directly; this protects the in-process /
         // runtime-eval callers that go through `get_bytecode`.) The error filter
-        // matches `testing::assert_no_diagnostic_errors` — workspace-file
-        // errors only.
-        let user_file_ids: std::collections::HashSet<FileId> = self
-            .workspace_files()
-            .iter()
-            .map(|f| f.file_id(self))
-            .collect();
+        // matches `testing::assert_no_diagnostic_errors` — errors in the
+        // root's own files only.
+        let user_file_ids: std::collections::HashSet<FileId> =
+            root.files(self).iter().map(|f| f.file_id(self)).collect();
         let error_count = crate::check::collect_compiler2_diagnostics(self)
             .iter()
             .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
@@ -1142,7 +1142,7 @@ impl ProjectDatabase {
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
-        self.get_bytecode_unchecked()
+        self.get_bytecode_unchecked(root)
     }
 
     /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
@@ -1155,8 +1155,9 @@ impl ProjectDatabase {
     /// the gate comment above).
     pub fn get_bytecode_unchecked(
         &self,
+        root: SourceRoot,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        baml_compiler2_emit::generate_project_bytecode(self)
+        baml_compiler2_emit::generate_project_bytecode(self, root)
     }
 }
 

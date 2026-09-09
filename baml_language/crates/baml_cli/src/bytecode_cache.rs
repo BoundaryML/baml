@@ -538,10 +538,11 @@ fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<
 /// it fresh; a failed write just means rebuilding it next run.
 pub(crate) fn compile_program(
     db: &ProjectDatabase,
+    package: SourceRoot,
     cache: Option<&CacheContext>,
     plan: Option<&ReusePlan>,
 ) -> Result<Program, LoweringError> {
-    compile_program_artifacts(db, cache, plan).map(|artifacts| artifacts.program)
+    compile_program_artifacts(db, package, cache, plan).map(|artifacts| artifacts.program)
 }
 
 pub(crate) struct CompiledArtifacts {
@@ -569,11 +570,12 @@ pub(crate) struct CacheStoreStats {
 
 pub(crate) fn compile_program_artifacts(
     db: &ProjectDatabase,
+    package: SourceRoot,
     cache: Option<&CacheContext>,
     plan: Option<&ReusePlan>,
 ) -> Result<CompiledArtifacts, LoweringError> {
     let Some(ctx) = cache else {
-        return generate_project_bytecode(db).map(|program| CompiledArtifacts {
+        return generate_project_bytecode(db, package).map(|program| CompiledArtifacts {
             program,
             units: CompiledUnits::None,
         });
@@ -589,6 +591,7 @@ pub(crate) fn compile_program_artifacts(
     if let Some(plan) = plan {
         match generate_project_bytecode_with_reuse_artifacts(
             db,
+            package,
             CLI_OPT_LEVEL,
             &base,
             &plan.prev_units,
@@ -610,7 +613,7 @@ pub(crate) fn compile_program_artifacts(
             }
         }
     }
-    generate_project_bytecode_with_stdlib_artifacts(db, CLI_OPT_LEVEL, &base).map(
+    generate_project_bytecode_with_stdlib_artifacts(db, package, CLI_OPT_LEVEL, &base).map(
         |(program, units)| CompiledArtifacts {
             program,
             units: CompiledUnits::Fresh(units),
@@ -714,7 +717,7 @@ pub(crate) fn prepare_reuse_plan(
     // across workers first so that derivation is a cheap fold instead of a
     // serial parse of the whole project under one salsa memo claim.
     baml_db::prime_file_indexes_parallel(db);
-    let mismatches = reuse_throws_mismatches(db, &plan.prev_units, &plan.clean_files);
+    let mismatches = reuse_throws_mismatches(db, package, &plan.prev_units, &plan.clean_files);
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
         return Some(plan);
@@ -2546,12 +2549,13 @@ mod tests {
             .map(|path| basename(path))
             .collect();
         let plan = prepare_reuse_plan(&mut db2, pkg2, pending_plan).expect("reuse plan available");
-        let relinked = compile_program(&db2, Some(&ctx2), Some(&plan)).expect("relink compile");
+        let relinked =
+            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("relink compile");
 
         // v2 honest path: an independent fresh database, no reuse plan — the
         // stdlib-spliced full compile the relink must reproduce byte-for-byte.
-        let (db_full, _) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let full = compile_program(&db_full, Some(&ctx2), None).expect("full compile");
+        let (db_full, pkg_full) = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let full = compile_program(&db_full, pkg_full, Some(&ctx2), None).expect("full compile");
         let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
             == borsh::to_vec(&full).expect("ser full");
 
@@ -2596,12 +2600,14 @@ mod tests {
         let served = ctx2
             .collect_diagnostics_incremental(&db2, pkg2, Some(&plan))
             .merged;
-        let (db_honest, _) = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let (db_honest, pkg_honest) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
         let diags_match = diagnostic_sets_equal(&served, &honest);
 
-        let relinked = compile_program(&db2, Some(&ctx2), Some(&plan)).expect("relink compile");
-        let full = compile_program(&db_honest, Some(&ctx2), None).expect("full compile");
+        let relinked =
+            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("relink compile");
+        let full =
+            compile_program(&db_honest, pkg_honest, Some(&ctx2), None).expect("full compile");
         let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
             == borsh::to_vec(&full).expect("ser full");
 
@@ -3524,7 +3530,7 @@ mod tests {
 
     #[test]
     fn referenced_names_carry_layout_sentinel_for_field_reader() {
-        let (db, _) = build_db(&[(
+        let (db, package) = build_db(&[(
             "a.baml",
             "class Point {\n  x int\n  y int\n}\n\
              function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
@@ -3532,6 +3538,7 @@ mod tests {
         let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
         let program = baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib(
             &db,
+            package,
             CLI_OPT_LEVEL,
             &base,
         )
@@ -3606,13 +3613,14 @@ mod tests {
         let plan = prepare_reuse_plan(&mut db2, pkg2, Some(pending)).expect("reuse plan");
         let _ = baml_db::baml_compiler2_emit::take_lowered_files();
         let relinked =
-            compile_program(&db2, Some(&ctx2), Some(&plan)).expect("incremental compile");
+            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("incremental compile");
         let mut lowered = baml_db::baml_compiler2_emit::take_lowered_files();
         lowered.sort();
         assert_eq!(lowered, vec!["b.baml".to_string(), "c.baml".to_string()]);
 
-        let (honest_db, _) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let full = compile_program(&honest_db, Some(&ctx2), None).expect("full compile");
+        let (honest_db, honest_pkg) = crate::project_load::build_db_from_sources(&r, |_| {});
+        let full =
+            compile_program(&honest_db, honest_pkg, Some(&ctx2), None).expect("full compile");
         assert_eq!(
             borsh::to_vec(&relinked).expect("serialize relink"),
             borsh::to_vec(&full).expect("serialize full")
@@ -3640,7 +3648,7 @@ mod tests {
         let r1 = resolved(&root, &initial);
         let (db1, pkg1) = crate::project_load::build_db_from_sources(&r1, |_| {});
         let ctx1 = CacheContext::open(&r1).expect("cache opens");
-        let compiled1 = compile_program_artifacts(&db1, Some(&ctx1), None).expect("compile");
+        let compiled1 = compile_program_artifacts(&db1, pkg1, Some(&ctx1), None).expect("compile");
         let fresh1 = ctx1
             .collect_diagnostics_incremental(&db1, pkg1, None)
             .fresh_by_file;
@@ -3659,7 +3667,8 @@ mod tests {
         let fresh2 = ctx2
             .collect_diagnostics_incremental(&db2, pkg2, Some(&plan))
             .fresh_by_file;
-        let compiled = compile_program_artifacts(&db2, Some(&ctx2), Some(&plan)).expect("compile");
+        let compiled =
+            compile_program_artifacts(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("compile");
         let stats = ctx2
             .store_artifacts_with_manifest(&db2, pkg2, &compiled, &fresh2, Some(&plan))
             .expect("warm store");

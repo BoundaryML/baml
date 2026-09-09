@@ -134,7 +134,7 @@ const OPT: OptLevel = OptLevel::One;
 /// user-independent prefix image).
 fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     let mut db = ProjectDatabase::new();
-    db.workspace(std::path::Path::new("/mounted-calls"));
+    let package = db.workspace(std::path::Path::new("/mounted-calls"));
     db.dependency("app");
     db.file("<builtin>/app/lib.baml", LIB);
     assert_no_diagnostic_errors(&db);
@@ -155,7 +155,7 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize app interface");
 
-    let units = emit_units(&db, OPT).expect("library fixture emits units");
+    let units = emit_units(&db, package, OPT).expect("library fixture emits units");
     (blob, units)
 }
 
@@ -164,12 +164,12 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
 fn consumer_program(user_src: &str) -> Program {
     let (blob, lib_units) = compile_library();
     let mut db = ProjectDatabase::new();
-    db.workspace(std::path::Path::new("/mounted-calls"));
+    let package = db.workspace(std::path::Path::new("/mounted-calls"));
     db.mount("app", blob);
     db.file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_mounted_units(&db, OPT, &lib_units)
+    generate_project_bytecode_with_mounted_units(&db, package, OPT, &lib_units)
         .expect("consumer compiles against the mounted blob")
 }
 

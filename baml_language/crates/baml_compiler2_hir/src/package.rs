@@ -7,7 +7,7 @@
 //! within a package into a single lookup structure — the top-level
 //! cross-file query used by the TIR layer for name resolution.
 
-use baml_base::{LangPackage, LangRoots, Name, SourceRoot, SourceRootKind, Span};
+use baml_base::{LangPackage, LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use baml_type::{DeclName, RESERVED_USER_PACKAGE, TypeName};
 use indexmap::IndexMap;
@@ -90,6 +90,33 @@ pub fn workspace_roots(db: &dyn crate::Db) -> Vec<SourceRoot> {
 pub fn visible_packages(db: &dyn crate::Db, viewer: SourceRoot) -> Vec<SourceRoot> {
     std::iter::once(viewer)
         .chain(package_dependency_closure(db, viewer).iter().copied())
+        .collect()
+}
+
+/// The roots emitted into `root`'s program — `root` and its dependency
+/// closure — in source-root table order (`Stdlib < Dependency < Workspace <
+/// Dynamic`), so the stdlib keeps its user-independent prefix of every index
+/// space. This is the world an emit sees: never the whole database, which
+/// may hold other workspace roots that cannot share a program with this one.
+#[salsa::tracked(returns(ref))]
+pub fn world_roots(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceRoot> {
+    let visible = visible_packages(db, root);
+    db.source_roots()
+        .roots(db)
+        .iter()
+        .copied()
+        .filter(|candidate| visible.contains(candidate))
+        .collect()
+}
+
+/// Every file of [`world_roots`], root by root in table order, each root's
+/// files in its own order — the file set a program built for `root` is
+/// emitted from.
+#[salsa::tracked(returns(ref))]
+pub fn world_files(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceFile> {
+    world_roots(db, root)
+        .iter()
+        .flat_map(|root| root.files(db).iter().copied())
         .collect()
 }
 
@@ -229,9 +256,9 @@ impl std::fmt::Display for SpellingCollision {
 }
 
 impl Spelling {
-    /// A table from explicit `(root, spelling)` pairs, collisions included —
-    /// for callers that hold the roots and their names outside a database
-    /// (tests, tooling over an explicit graph).
+    /// A table from explicit `(root, spelling)` pairs, shared-name collisions
+    /// included — for callers that hold the roots and their names outside a
+    /// database (tests, tooling over an explicit graph).
     pub fn from_pairs(pairs: impl IntoIterator<Item = (SourceRoot, Name)>) -> Self {
         let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
         let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
@@ -317,6 +344,38 @@ impl Spelling {
     pub fn collisions(&self) -> &[SpellingCollision] {
         &self.collisions
     }
+
+    /// This table restricted to `roots`: every root keeps the spelling it has
+    /// here (a root's spelling depends on its own name and the edges reaching
+    /// it, never on which other roots share a program with it), and the
+    /// collisions are judged among `roots` alone — two workspace roots that
+    /// both take the default spelling collide only if one program holds both.
+    /// A root reached under several edge names stays a collision wherever it
+    /// appears.
+    #[must_use]
+    pub fn within(&self, roots: &[SourceRoot]) -> Spelling {
+        let mut restricted =
+            Self::from_pairs(roots.iter().map(|&root| (root, self.of(root).clone())));
+        restricted.collisions.extend(
+            self.collisions
+                .iter()
+                .filter(|collision| match collision {
+                    SpellingCollision::ManyNames { root, .. } => roots.contains(root),
+                    SpellingCollision::SharedName { .. } => false,
+                })
+                .cloned(),
+        );
+        restricted
+    }
+}
+
+/// The [`Spelling`] of the program built for `root`: [`spelling`] restricted
+/// to [`world_roots`], so a shared default spelling between two workspace
+/// roots that never meet in one program is no collision for either program.
+/// Emit judges its wire table by this; rendering keeps the database-wide one.
+#[salsa::tracked(returns(ref))]
+pub fn spelling_within(db: &dyn crate::Db, root: SourceRoot) -> Spelling {
+    spelling(db).within(world_roots(db, root))
 }
 
 /// The [`Spelling`] of every live root.

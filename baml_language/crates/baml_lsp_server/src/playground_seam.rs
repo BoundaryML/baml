@@ -554,6 +554,9 @@ impl PlaygroundSeam {
 
 /// One workspace root's check, as the playground needs it.
 struct RootCheck {
+    /// The root checked, as the database holds it: the package whose program
+    /// a build emits.
+    package: baml_db::SourceRoot,
     revision: SourceRevision,
     diagnostics: Vec<ProjectDiagnostic>,
     has_errors: bool,
@@ -574,6 +577,7 @@ fn check_root_on(snap: &Snapshot, root: &Path) -> Option<RootCheck> {
         snap.roots(),
     );
     Some(RootCheck {
+        package: entry.root,
         revision: snap.revision(),
         diagnostics: crate::playground_notify::flatten_diagnostics(&documents),
         has_errors: candidate.has_errors(),
@@ -776,7 +780,7 @@ impl PlaygroundSeam {
             // The check above is a full sweep of the root, so
             // `get_bytecode`'s own error gate would re-derive exactly what
             // `has_errors` just proved — skip it.
-            match snap.db().get_bytecode_unchecked() {
+            match snap.db().get_bytecode_unchecked(check.package) {
                 Ok(program) => input.program = Some(Box::new(program)),
                 Err(error) => input.emit_error = Some(error.to_string()),
             }

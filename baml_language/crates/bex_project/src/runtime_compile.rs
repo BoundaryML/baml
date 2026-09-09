@@ -2294,6 +2294,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 })?;
         let emitted = emit_units_with_stdlib(
             &db,
+            workspace,
             crate::precompiled_stdlib_config::OPT_LEVEL,
             &stdlib.program,
         )

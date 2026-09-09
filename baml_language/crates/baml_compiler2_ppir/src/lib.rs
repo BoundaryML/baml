@@ -57,10 +57,9 @@ pub struct PpirExpansionItems<'db> {
 /// were held in a separate input they never saw.
 fn expansion_map_files(
     db: &dyn crate::Db,
-    roots: baml_base::SourceRootTable,
+    root: baml_base::SourceRoot,
 ) -> impl Iterator<Item = SourceFile> {
-    roots
-        .roots(db)
+    baml_compiler2_hir::package::world_roots(db, root)
         .iter()
         .filter(|root| match root.kind(db) {
             baml_base::SourceRootKind::Stdlib => false,
@@ -74,10 +73,10 @@ fn expansion_map_files(
 /// Collect all @@ block attributes per type across all non-stdlib files.
 pub fn collect_block_attrs(
     db: &dyn crate::Db,
-    roots: baml_base::SourceRootTable,
+    root: baml_base::SourceRoot,
 ) -> FxHashMap<DeclName, Vec<Name>> {
     let mut result = FxHashMap::default();
-    for file in expansion_map_files(db, roots) {
+    for file in expansion_map_files(db, root) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         // Reuse the memoized CST → AST lowering instead of re-lowering here.
         let items = &baml_compiler2_hir::file_ast(db, file).items;
@@ -105,10 +104,10 @@ pub fn collect_block_attrs(
 /// non-stdlib files.
 pub fn collect_alias_bodies(
     db: &dyn crate::Db,
-    roots: baml_base::SourceRootTable,
+    root: baml_base::SourceRoot,
 ) -> FxHashMap<DeclName, PpirTy> {
     let mut result = FxHashMap::default();
-    for file in expansion_map_files(db, roots) {
+    for file in expansion_map_files(db, root) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         // Reuse the memoized CST → AST lowering instead of re-lowering here.
         let items = &baml_compiler2_hir::file_ast(db, file).items;
@@ -175,19 +174,19 @@ unsafe impl salsa::Update for ProjectExpansionMaps {
     }
 }
 
-/// Compute the project-wide [`ProjectExpansionMaps`] once, memoized by Salsa.
-///
-/// `roots` (the database's one [`baml_base::SourceRootTable`]) is only the
-/// memo key; the body's per-root/per-file reads are tracked as dependencies
-/// through `db` as usual.
+/// The [`ProjectExpansionMaps`] of `root`'s world — the block attributes and
+/// alias bodies of every non-stdlib package the root's files may reference
+/// ([`baml_compiler2_hir::package::world_roots`]) — memoized per root. A
+/// package expands against what it can name, never against another
+/// workspace root that happens to share the database.
 #[salsa::tracked(returns(ref))]
-pub fn project_expansion_maps(
+pub fn expansion_maps_within(
     db: &dyn crate::Db,
-    roots: baml_base::SourceRootTable,
+    root: baml_base::SourceRoot,
 ) -> ProjectExpansionMaps {
     ProjectExpansionMaps {
-        block_attrs: collect_block_attrs(db, roots),
-        alias_bodies: collect_alias_bodies(db, roots),
+        block_attrs: collect_block_attrs(db, root),
+        alias_bodies: collect_alias_bodies(db, root),
     }
 }
 
@@ -346,10 +345,10 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     // The packages this file's package may spell, for foreign type references.
     let all_package_items = reachable_package_items(db, pkg_info.root);
 
-    // Get @@ block attributes and alias bodies. Memoized once per root table
-    // so this per-file query doesn't re-scan (and re-lower) every file on
-    // every file — which made expansion O(files²).
-    let expansion_maps = project_expansion_maps(db, db.source_roots());
+    // Get @@ block attributes and alias bodies. Memoized once per package
+    // world so this per-file query doesn't re-scan (and re-lower) every file
+    // on every file — which made expansion O(files²).
+    let expansion_maps = expansion_maps_within(db, pkg_info.root);
     let block_attrs = &expansion_maps.block_attrs;
     let alias_bodies = &expansion_maps.alias_bodies;
 

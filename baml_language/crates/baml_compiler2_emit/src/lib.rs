@@ -15,11 +15,13 @@ pub use analysis::OptLevel;
 use baml_base::{Name, Span};
 use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
 use baml_compiler2_hir::{
-    compiler2_all_files,
     contributions::Definition,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
-    package::{Spelling, is_precompiled_stdlib, is_served_from_interface, spelling},
+    package::{
+        Spelling, is_precompiled_stdlib, is_served_from_interface, spelling, spelling_within,
+        world_files, world_roots,
+    },
 };
 use baml_compiler2_mir::{
     BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
@@ -643,6 +645,7 @@ fn impl_rule_target<'db>(
 
 fn build_packages<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    roots: &[baml_base::SourceRoot],
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
@@ -766,7 +769,7 @@ fn build_packages<'db>(
     // mounted artifact before walking the consumer's source blocks: otherwise
     // `class Local { implements dep.I {} }` would prove membership at check
     // time but emit neither adopted defaults nor virtual-field links.
-    for &package_root in db.source_roots().roots(db) {
+    for &package_root in roots {
         let Some(interface) =
             baml_compiler2_hir_ty::package_interface::mounted_interface(db, package_root)
         else {
@@ -1529,40 +1532,89 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
-/// Generate bytecode for the entire project (default: `OptLevel::Two`).
-pub fn generate_project_bytecode(db: &dyn crate::Db) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_opt(db, OptLevel::Two)
+/// What one emit compiles: the roots of one program in source-root table
+/// order, their files, and the program's spelling table. A program is built
+/// for one root's world — the root and its dependency closure — never for
+/// the whole database, which may hold other workspace roots that cannot
+/// share a program with this one (§5 invariant 2: emit sees one world).
+struct EmitWorld {
+    roots: Vec<baml_base::SourceRoot>,
+    files: Vec<baml_base::SourceFile>,
+    spelling: Spelling,
 }
 
-/// Generate bytecode for the entire project with a specific optimization level.
+impl EmitWorld {
+    /// The world of `root`'s program.
+    fn of_root(db: &dyn crate::Db, root: baml_base::SourceRoot) -> Self {
+        Self {
+            roots: world_roots(db, root).clone(),
+            files: world_files(db, root).clone(),
+            spelling: spelling_within(db, root).clone(),
+        }
+    }
+
+    /// The stdlib alone: every `Stdlib` root, the user-independent prefix of
+    /// every program's world.
+    fn stdlib(db: &dyn crate::Db) -> Self {
+        let roots: Vec<baml_base::SourceRoot> = db
+            .source_roots()
+            .roots(db)
+            .iter()
+            .copied()
+            .filter(|root| root.kind(db) == baml_base::SourceRootKind::Stdlib)
+            .collect();
+        let files = roots
+            .iter()
+            .flat_map(|root| root.files(db).iter().copied())
+            .collect();
+        let spelling = spelling(db).within(&roots);
+        Self {
+            roots,
+            files,
+            spelling,
+        }
+    }
+}
+
+/// Generate bytecode for `root`'s program (default: `OptLevel::Two`).
+pub fn generate_project_bytecode(
+    db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, root, OptLevel::Two)
+}
+
+/// Generate bytecode for `root`'s program with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_with_opt_coords(db, opt).map(|(program, _)| program)
+    generate_with_opt_coords(db, root, opt).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_opt`] plus the emit's
 /// [`FunctionCoordinates`], for callers that go on to decompose.
 fn generate_with_opt_coords(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<(Program, FunctionCoordinates<'_>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, opt, None, false, None)?;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    let (mut program, coords) = generate_impl(db, &EmitWorld::of_root(db, root), opt, None, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, coords))
 }
 
-/// The conservative source-content identity of this compile's project file
-/// set (profiling streams spec §2.3): any byte change in any project file, or
-/// a compiler version change, yields a new hash. Stdlib stubs are excluded —
+/// The conservative source-content identity of `root`'s program file set
+/// (profiling streams spec §2.3): any byte change in any project file, or a
+/// compiler version change, yields a new hash. Stdlib stubs are excluded —
 /// they are a compiler-build constant already covered by the version input.
-pub fn project_source_content_hash(db: &dyn crate::Db) -> [u8; 32] {
+pub fn project_source_content_hash(db: &dyn crate::Db, root: baml_base::SourceRoot) -> [u8; 32] {
     // The `<builtin>/` path prefix is the wire-contract spelling of "stdlib
     // stub" (and of runtime mount stubs), the same rule `builtin_count`
     // keys on — filtering by root KIND here would diverge for databases
     // that hold both source stdlib and mount-stub roots.
-    let files: Vec<(String, String)> = compiler2_all_files(db)
+    let files: Vec<(String, String)> = world_files(db, root)
         .iter()
         .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
         .map(|file| {
@@ -1591,7 +1643,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, opt, None, true, None).map(|(program, _)| program)
+    generate_impl(db, &EmitWorld::stdlib(db), opt, None, None).map(|(program, _)| program)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1604,10 +1656,11 @@ pub fn generate_stdlib_program(
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_with_stdlib_coords(db, opt, base).map(|(program, _)| program)
+    generate_with_stdlib_coords(db, root, opt, base).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_stdlib`] plus the decomposed symbolic
@@ -1616,11 +1669,12 @@ pub fn generate_project_bytecode_with_stdlib(
 /// (mirrors [`generate_project_bytecode_with_reuse_artifacts`]).
 pub fn generate_project_bytecode_with_stdlib_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, opt, base)?;
-    let units = decompose_units(db, &program, &coords)?;
+    let (program, coords) = generate_with_stdlib_coords(db, root, opt, base)?;
+    let units = decompose_units(db, world_files(db, root), &program, &coords)?;
     Ok((program, units))
 }
 
@@ -1628,11 +1682,13 @@ pub fn generate_project_bytecode_with_stdlib_artifacts(
 /// [`FunctionCoordinates`], for callers that go on to decompose.
 fn generate_with_stdlib_coords<'db>(
     db: &'db dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, opt, Some(base), false, None)?;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    let (mut program, coords) =
+        generate_impl(db, &EmitWorld::of_root(db, root), opt, Some(base), None)?;
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, coords))
 }
 
@@ -1641,12 +1697,13 @@ fn generate_with_stdlib_coords<'db>(
 /// resolution; `dependency_units` provide the matching runtime symbols.
 pub fn generate_project_bytecode_with_mounted_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<Program, MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    generate_impl(db, opt, Some(&base), false, None)
+    generate_impl(db, &EmitWorld::of_root(db, root), opt, Some(&base), None)
         .map(|(program, _)| program)
         .map_err(MountedPackageLinkError::Consumer)
 }
@@ -1658,15 +1715,18 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// into it becomes a symbolic import, exactly as on the stdlib-prefix path.
 pub fn generate_project_bytecode_with_mounted_units_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<(Program, Vec<CompilationUnit>), MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    let (program, coords) = generate_impl(db, opt, Some(&base), false, None)
+    let world = EmitWorld::of_root(db, root);
+    let (program, coords) = generate_impl(db, &world, opt, Some(&base), None)
         .map_err(MountedPackageLinkError::Consumer)?;
-    let units = decompose_units_after_prefix(db, &program, &coords, base.objects.len())
-        .map_err(MountedPackageLinkError::Consumer)?;
+    let units =
+        decompose_units_after_prefix(db, &world.files, &program, &coords, base.objects.len())
+            .map_err(MountedPackageLinkError::Consumer)?;
     Ok((program, units))
 }
 
@@ -1694,12 +1754,13 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_reuse_artifacts(db, opt, base, prev_units, clean_files)
+    generate_project_bytecode_with_reuse_artifacts(db, root, opt, base, prev_units, clean_files)
         .map(|(program, _)| program)
 }
 
@@ -1708,12 +1769,14 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let mismatches = reuse_throws_mismatches(db, prev_units, clean_files);
+    let world = EmitWorld::of_root(db, root);
+    let mismatches = reuse_throws_mismatches(db, root, prev_units, clean_files);
     let effective_clean;
     let clean_files = if mismatches.is_empty() {
         clean_files
@@ -1732,9 +1795,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let (partial, coords) = generate_impl(db, opt, Some(base), false, Some(clean_files))?;
+    let (partial, coords) = generate_impl(db, &world, opt, Some(base), Some(clean_files))?;
 
-    let mut fresh_units = decompose_units(db, &partial, &coords)?;
+    let mut fresh_units = decompose_units(db, &world.files, &partial, &coords)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1811,7 +1874,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     let program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
     let mut program = program;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, assembled))
 }
 
@@ -1821,6 +1884,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
 /// a full link solely for this comparison.
 pub fn reuse_throws_mismatches(
     db: &dyn baml_compiler2_mir::Db,
+    root: baml_base::SourceRoot,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> HashMap<String, String> {
@@ -1832,11 +1896,11 @@ pub fn reuse_throws_mismatches(
             _ => None,
         })
         .collect();
-    let all_files = compiler2_all_files(db);
-    let alias_caches = build_alias_caches(db, &all_files);
+    let all_files = world_files(db, root);
+    let alias_caches = build_alias_caches(db, all_files);
     let mut mismatches = HashMap::new();
 
-    for file in all_files {
+    for &file in all_files {
         let rel = relative_source_path(db, file);
         if !clean_files.contains(&rel) {
             continue;
@@ -1877,10 +1941,11 @@ pub fn reuse_throws_mismatches(
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_opt_coords(db, opt)?;
-    decompose_units(db, &program, &coords)
+    let (program, coords) = generate_with_opt_coords(db, root, opt)?;
+    decompose_units(db, world_files(db, root), &program, &coords)
 }
 
 /// Emit relocatable source units on top of a compiler-built stdlib prefix.
@@ -1892,11 +1957,18 @@ pub fn emit_units(
 /// objects and impl rules instead of copying them into a runtime package.
 pub fn emit_units_with_stdlib(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     stdlib: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, opt, stdlib)?;
-    decompose_units_after_prefix(db, &program, &coords, stdlib.objects.len())
+    let (program, coords) = generate_with_stdlib_coords(db, root, opt, stdlib)?;
+    decompose_units_after_prefix(
+        db,
+        world_files(db, root),
+        &program,
+        &coords,
+        stdlib.objects.len(),
+    )
 }
 
 /// Per-object attribution kind, computed during the pool walk.
@@ -1926,20 +1998,21 @@ enum PoolObjKind {
 /// decomposition cannot attribute to a source file.
 fn decompose_units<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
     program: &Program,
     coords: &FunctionCoordinates<'db>,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    decompose_units_after_prefix(db, program, coords, 0)
+    decompose_units_after_prefix(db, files, program, coords, 0)
 }
 
 #[expect(clippy::too_many_lines)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
     program: &Program,
     coords: &FunctionCoordinates<'db>,
     prefix_objects: usize,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let all_files = compiler2_all_files(db);
     let n_files = all_files.len();
 
     // ---- Per-file identity maps ---------------------------------------------
@@ -2492,7 +2565,7 @@ fn decompose_units_after_prefix<'db>(
             Vec<bex_vm_types::TyTemplate>,
             usize,
         );
-        let alias_caches = build_alias_caches(db, &all_files);
+        let alias_caches = build_alias_caches(db, all_files);
         // Pooled interface object index by declared type name (the bake's
         // `interface_indices` reconstructed from the pool, exactly as
         // `EmitTables::from_stdlib_program` does).
@@ -3299,20 +3372,20 @@ struct FunctionCoordinates<'db> {
 /// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl<'db>(
     db: &'db dyn crate::Db,
+    world: &EmitWorld,
     opt: OptLevel,
     base: Option<&Program>,
-    stdlib_only: bool,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    // Every root in the database is emitted into one program, so the spelling
+    // Every root of the world is emitted into one program, so its spelling
     // table must be injective: a shared spelling would fuse two packages'
     // declarations under one wire name.
-    if let Some(collision) = spelling(db).collisions().first() {
+    if let Some(collision) = world.spelling.collisions().first() {
         return Err(LoweringError::Internal(format!(
             "cannot emit one program from these packages: {collision}"
         )));
     }
-    let mut all_files = compiler2_all_files(db);
+    let all_files: &[baml_base::SourceFile] = &world.files;
     let builtin_count = if base.is_some()
         && db
             .source_roots()
@@ -3330,16 +3403,11 @@ fn generate_impl<'db>(
             .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
             .count()
     };
-    if stdlib_only {
-        // The builtin prefix is user-independent, so compiling "just the
-        // stdlib" is the full pipeline over the builtin files alone.
-        all_files.truncate(builtin_count);
-    }
-    let alias_caches = build_alias_caches(db, &all_files);
+    let alias_caches = build_alias_caches(db, all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
     // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
-    // and the globals table (`compiler2_all_files` puts builtins first for the
+    // and the globals table (`world_files` puts builtins first for the
     // same reason). The precompiled-stdlib splice depends on that prefix.
     let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
     // The provenance-typed placement registry this emit fills — the
@@ -3436,7 +3504,7 @@ fn generate_impl<'db>(
     // populated Salsa's body/signature caches. The artifact is unchanged; only
     // the scheduling avoids a cold whole-package inference traversal before
     // the same bodies are lowered for emit.
-    let package_exports = capture_package_exports(db, &all_files);
+    let package_exports = capture_package_exports(db, all_files);
 
     // --- Pass 6: Retry policies ---
     // Retry policies are now synthesized as Item::Let bindings during CST lowering.
@@ -3449,7 +3517,8 @@ fn generate_impl<'db>(
 
     let interface_default_backfill = build_packages(
         db,
-        &all_files,
+        &world.roots,
+        all_files,
         &alias_caches,
         &tables.interface_object_indices,
         &PackageBuildMetadata {
@@ -3466,7 +3535,7 @@ fn generate_impl<'db>(
     // their compiled package records from the linked prefix after the ordinary
     // source-backed package pass rebuilds the consumer metadata.
     if let Some(base) = base {
-        for &root in db.source_roots().roots(db) {
+        for &root in &world.roots {
             if !is_served_from_interface(db, root) {
                 continue;
             }

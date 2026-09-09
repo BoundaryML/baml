@@ -12,7 +12,7 @@
 use baml_base::{Dependency, Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, Severity};
 use baml_compiler2_emit::{LoweringError, generate_project_bytecode};
-use baml_compiler2_hir::package::{SpellingCollision, spelling};
+use baml_compiler2_hir::package::{SpellingCollision, spelling, spelling_within};
 use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
@@ -92,13 +92,13 @@ fn same_named_declarations_in_two_packages_are_two_types() {
 
 #[test]
 fn emit_keeps_same_named_declarations_apart() {
-    let (mut db, _workspace) = workspace_db();
+    let (mut db, workspace) = workspace_db();
     db.dependency("lib");
     db.file("<builtin>/lib/lib.baml", "class Point { x int }\n");
     db.file("main.baml", "class Point { y string }\n");
     assert_clean(&db);
 
-    let program = generate_project_bytecode(&db).expect("two same-named classes emit");
+    let program = generate_project_bytecode(&db, workspace).expect("two same-named classes emit");
     let tags: Vec<_> = program
         .objects
         .iter()
@@ -117,11 +117,12 @@ fn emit_keeps_same_named_declarations_apart() {
 }
 
 #[test]
-fn unnamed_packages_share_the_default_spelling_and_cannot_emit_together() {
+fn unnamed_packages_collide_only_within_one_program() {
     let (mut db, workspace) = workspace_db();
     // Two unnamed packages nobody depends on: the database holds them (a
-    // spelling is not an identity), the spelling table reports the clash,
-    // and the one place that needs the table injective refuses.
+    // spelling is not an identity) and its table reports the clash — but a
+    // program is emitted for one root's world, and neither is in the
+    // workspace's, so the workspace's own table is injective and it emits.
     let a = db
         .add_source_root(SourceRootSpec::new(
             "<builtin>/a",
@@ -150,10 +151,70 @@ fn unnamed_packages_share_the_default_spelling_and_cannot_emit_together() {
     };
     assert_eq!(name.as_str(), "user");
     assert_eq!(roots.len(), 3);
+    assert!(spelling_within(&db, workspace).collisions().is_empty());
+    generate_project_bytecode(&db, workspace).expect("the workspace's world holds no clash");
+}
 
-    match generate_project_bytecode(&db) {
+#[test]
+fn a_shared_spelling_within_one_program_is_refused() {
+    let (mut db, workspace) = workspace_db();
+    // Two unnamed packages in ONE world spelled by the same edge name: the
+    // workspace reaches `x` as `lib`, and `x` reaches `y` as `lib`. Each
+    // dependent resolves its own edge, but on the wire both would be `lib`,
+    // so the program cannot be emitted.
+    let x = db
+        .add_source_root(SourceRootSpec::new(
+            "<builtin>/x",
+            SourceRootKind::Dependency,
+        ))
+        .expect("unnamed dependency root");
+    let y = db
+        .add_source_root(SourceRootSpec::new(
+            "<builtin>/y",
+            SourceRootKind::Dependency,
+        ))
+        .expect("second unnamed dependency root");
+    db.add_dependency(
+        workspace,
+        Dependency {
+            name: Name::new("lib"),
+            root: x,
+        },
+    )
+    .expect("edge from the workspace");
+    db.add_dependency(
+        x,
+        Dependency {
+            name: Name::new("lib"),
+            root: y,
+        },
+    )
+    .expect("edge from x");
+    db.file("<builtin>/y/y.baml", "class Y { v int }\n");
+    db.file(
+        "<builtin>/x/x.baml",
+        "class X { v int }\nfunction g() -> lib.Y throws never { lib.Y { v: 2 } }\n",
+    );
+    db.file(
+        "main.baml",
+        "function f() -> lib.X throws never { lib.X { v: 1 } }\n",
+    );
+    assert_clean(&db);
+
+    let table = spelling_within(&db, workspace);
+    assert_eq!(table.of(x), table.of(y));
+    let [SpellingCollision::SharedName { name, roots }] = table.collisions() else {
+        panic!(
+            "expected one shared-name collision, got {:?}",
+            table.collisions()
+        );
+    };
+    assert_eq!(name.as_str(), "lib");
+    assert_eq!(roots.len(), 2);
+
+    match generate_project_bytecode(&db, workspace) {
         Err(LoweringError::Internal(message)) => assert!(
-            message.contains("spelled `user`"),
+            message.contains("spelled `lib`"),
             "the refusal names the shared spelling: {message}"
         ),
         other => panic!("emit must refuse a non-injective spelling table, got {other:?}"),
@@ -211,7 +272,7 @@ fn an_unnamed_package_reached_under_two_names_is_a_collision() {
     assert_eq!(names, ["first", "second"]);
     assert!(
         matches!(
-            generate_project_bytecode(&db),
+            generate_project_bytecode(&db, workspace),
             Err(LoweringError::Internal(_))
         ),
         "one root cannot be spelled two ways in one program"

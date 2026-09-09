@@ -129,7 +129,7 @@ impl ProjectSession {
         // recomputing here restores exactly the identity a fresh compile
         // would have stamped.
         program.source_content_hash = Some(
-            baml_db::baml_compiler2_emit::project_source_content_hash(&self.db),
+            baml_db::baml_compiler2_emit::project_source_content_hash(&self.db, self.package),
         );
         Some(program)
     }

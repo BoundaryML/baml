@@ -77,7 +77,10 @@ fn build_db(root: &Path, sources: &ProjectSources) -> ProjectDatabase {
 
 /// Compile a populated database to bytecode, measuring only the compile step.
 fn compile(db: &ProjectDatabase) {
-    let program = generate_project_bytecode(db).expect("benchmark compilation failed");
+    let package = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("`build_db` adds one workspace root"));
+    let program = generate_project_bytecode(db, package).expect("benchmark compilation failed");
     black_box(program);
 }
 
