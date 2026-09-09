@@ -902,8 +902,10 @@ fn build_group(
     }
     // Reject the whole registration before any builder learns its resolved
     // type: a failed attempt must leave the group retryable.
-    let rules = prepare_class_witnesses(vm, &plans[&start_id].ty, witnesses)
-        .map_err(|diagnostic| VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic])))?;
+    let rules =
+        prepare_class_witnesses(vm, &plans[&start_id].ty, witnesses).map_err(|diagnostic| {
+            VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
+        })?;
     for node in group.values() {
         let plan = &plans[&node.id];
         let value = Value::object(vm.tlab.alloc_type(TypeValue::new(plan.ty.clone())));

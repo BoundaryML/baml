@@ -509,8 +509,10 @@ impl Function {
     /// Whether `layout` equals [`Self::argument_layout`], without building it.
     pub fn argument_layout_is(&self, layout: &baml_type::CallLayout) -> bool {
         layout.len() == self.arity
-            && layout.0.iter().enumerate().all(|(index, slot)| {
-                slot.as_deref() == self.optional_param_name(index)
-            })
+            && layout
+                .0
+                .iter()
+                .enumerate()
+                .all(|(index, slot)| slot.as_deref() == self.optional_param_name(index))
     }
 }

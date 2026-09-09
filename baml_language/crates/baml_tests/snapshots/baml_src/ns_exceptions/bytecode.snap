@@ -2684,14 +2684,14 @@ function exceptions.s16_risky_jump2(mode: int) -> int {
     throw
 }
 
-function exceptions.s17_direct_cb(cb: (int) -> string throws never) -> string {
+function exceptions.s17_direct_cb(cb: (int) -> string throws unknown) -> string {
     load_const 1
     load_var cb
     call_indirect
     return
 }
 
-function exceptions.s17_forward_cb(cb: (int) -> string throws never) -> string {
+function exceptions.s17_forward_cb(cb: (int) -> string throws unknown) -> string {
     load_type unknown
     load_var cb
     call user.exceptions.s17_direct_cb

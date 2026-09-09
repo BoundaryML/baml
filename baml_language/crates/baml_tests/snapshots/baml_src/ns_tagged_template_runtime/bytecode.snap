@@ -109,7 +109,7 @@ function tagged_template_runtime.tt_body_param_injection_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws unknown) -> string {
     load_var body
     call_indirect
     store_var t
@@ -159,7 +159,7 @@ function tagged_template_runtime.tt_cstyle_for_flattens_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString throws unknown) -> string {
     load_const "World"
     load_var body
     call_indirect
@@ -347,7 +347,7 @@ function tagged_template_runtime.tt_parts_built_in_order_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_probe(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_probe(body: () -> baml.TaggedString throws unknown) -> string {
     load_var body
     call_indirect
     store_var t
@@ -372,7 +372,7 @@ function tagged_template_runtime.tt_probe(body: () -> baml.TaggedString throws n
     return
 }
 
-function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws unknown) -> string {
     load_var body
     call_indirect
     store_var t

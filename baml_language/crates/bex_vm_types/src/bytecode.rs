@@ -2797,7 +2797,10 @@ mod compact_tests {
         assert_eq!(restored.call_layouts.get(&1), Some(&layout));
         let compact = restored.lower_to_compact();
         assert_eq!(compact.code[2], OpCode::CallIndirect as u8);
-        assert_eq!(compact.call_layouts.into_iter().collect::<Vec<_>>(), vec![(2, layout)]);
+        assert_eq!(
+            compact.call_layouts.into_iter().collect::<Vec<_>>(),
+            vec![(2, layout)]
+        );
     }
 
     #[test]

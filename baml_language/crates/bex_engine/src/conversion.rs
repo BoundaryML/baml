@@ -1918,21 +1918,20 @@ impl BexEngine {
                 }
                 // `throws` is the callable's declared error contract `E`
                 // (`call_host_value<T, E>`). When the parameter pins no
-                // concrete error type the throws lowers to a bottom/unit
-                // shape: an omitted `throws` becomes `Never` (the function-type
-                // lowering's default) and a bare `-> void` throws becomes
-                // `Void`. Neither names an error the host is obligated to
-                // honor — and the host is foreign code that may surface a
-                // native exception regardless (materialized as
-                // `baml.errors.HostCallable`). Normalize both to
-                // `Unknown` so such a throw is accepted opaquely and an
-                // in-BAML `catch` can match it, rather than being rejected as a
-                // `HostContractViolation`. Concrete throws (e.g.
-                // `throws ParseError`) pass through unchanged and stay enforced.
+                // concrete error type the throws lowers to the unit shape
+                // `Void`, which names no error the host is obligated to honor
+                // — and the host is foreign code that may surface a native
+                // exception regardless (materialized as
+                // `baml.errors.HostCallable`). Normalize it to `Unknown` so
+                // such a throw is accepted opaquely and an in-BAML `catch` can
+                // match it, rather than being rejected as a
+                // `HostContractViolation`. Every declared contract passes
+                // through unchanged and stays enforced — including an explicit
+                // `throws never`, which promises BAML the callback cannot
+                // throw at all, so a native throw against it is a violation
+                // like any other off-contract throw.
                 let normalized_throws = match throws {
-                    RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
-                        RuntimeTy::Unknown { attr }
-                    }
+                    RuntimeTy::Void { attr } => RuntimeTy::Unknown { attr },
                     other => other,
                 };
                 // The VM heap stores the callable's signature as `RealizedTy`

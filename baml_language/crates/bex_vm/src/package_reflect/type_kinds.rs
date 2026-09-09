@@ -398,7 +398,10 @@ pub(super) fn register_class_witnesses(
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("witnessed class placeholder changed variant")
     };
-    debug_assert!(class.owner.is_null(), "a fresh runtime class has no owner yet");
+    debug_assert!(
+        class.owner.is_null(),
+        "a fresh runtime class has no owner yet"
+    );
     let local_name = bex_vm_types::types::LocalName {
         namespace: Vec::new(),
         name: class.name.item_name().clone(),
@@ -422,7 +425,9 @@ pub(super) fn register_class_witnesses(
             .or_default()
             .push(*rule);
     }
-    vm.tlab.heap().write_barrier(class_ptr, Value::object(owner));
+    vm.tlab
+        .heap()
+        .write_barrier(class_ptr, Value::object(owner));
     let Object::Class(class) = vm.get_object_mut(class_ptr) else {
         unreachable!("witnessed class placeholder changed variant")
     };
@@ -1909,8 +1914,8 @@ class Fresh {}
     fn registered_rules_are_owned_by_the_class_without_extra_gc_roots() {
         let mut vm = vm();
         let class = fresh_class(&mut vm);
-        let rules = prepare_class_witnesses(&vm, &class_ty(class), vec![witness(&vm, "Pick")])
-            .unwrap();
+        let rules =
+            prepare_class_witnesses(&vm, &class_ty(class), vec![witness(&vm, "Pick")]).unwrap();
         register_class_witnesses(&mut vm, class.ptr(), rules);
         let rule = vm.dynamic_dispatch.rules_for_class(class.ptr())[0];
 

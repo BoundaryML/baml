@@ -37,7 +37,10 @@ impl fmt::Display for LayoutMismatch {
                 write!(f, "expected {expected} required arguments, got {got}")
             }
             Self::UnknownOptional(name) => {
-                write!(f, "call supplies optional parameter `{name}` the callee does not declare")
+                write!(
+                    f,
+                    "call supplies optional parameter `{name}` the callee does not declare"
+                )
             }
         }
     }
@@ -111,7 +114,10 @@ impl CallLayout {
             .iter()
             .map(|slot| match slot {
                 None => required.next(),
-                Some(name) => self.0.iter().position(|caller| caller.as_ref() == Some(name)),
+                Some(name) => self
+                    .0
+                    .iter()
+                    .position(|caller| caller.as_ref() == Some(name)),
             })
             .collect())
     }
@@ -137,7 +143,10 @@ mod tests {
             CallLayout::positional(1).map_to(&target).unwrap(),
             vec![Some(0), None, None, None]
         );
-        assert_eq!(target.map_to(&target).unwrap(), vec![Some(0), Some(1), Some(2), Some(3)]);
+        assert_eq!(
+            target.map_to(&target).unwrap(),
+            vec![Some(0), Some(1), Some(2), Some(3)]
+        );
     }
 
     #[test]

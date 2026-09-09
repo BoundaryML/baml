@@ -406,7 +406,7 @@ function lambdas.lambdas_annotated_return_uses_closure_contract() -> int[] {
     return
 }
 
-function lambdas.lambdas_callback_return_name(callback: (bool) -> #0 throws never) -> string {
+function lambdas.lambdas_callback_return_name(callback: (bool) -> #0 throws unknown) -> string {
     load_var callback
     call reflect.signature
     load_field .returns

@@ -1190,7 +1190,9 @@ impl CalleeParams<'_> {
         match self {
             Self::Function(function) => function.argument_layout(),
             Self::Host(host) => baml_type::CallLayout::from_modes(
-                host.params.iter().map(|param| (param.name.clone(), param.mode)),
+                host.params
+                    .iter()
+                    .map(|param| (param.name.clone(), param.mode)),
             ),
         }
     }
@@ -3013,11 +3015,12 @@ impl BexVm {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
                 params: (*hc.params).clone().into(),
-                // A host callable's declared bottom/unit throws is normalized to
+                // A host callable's undeclared (unit) throws is normalized to
                 // `unknown` when the closure is bound (see the engine's
-                // conversion): foreign code may surface a native exception no
-                // matter what it declares, so its error contract is opaque
-                // rather than empty. Nothing here can be `void`.
+                // conversion): foreign code may surface a native exception, so
+                // an unstated error contract is opaque rather than empty. A
+                // declared contract — `never` included — is kept and enforced.
+                // Nothing here can be `void`.
                 throws: (*hc.throws_ty).clone(),
                 ret: (*hc.ret_ty).clone(),
                 // Host closures are FFI-constructed; they carry no docs.
