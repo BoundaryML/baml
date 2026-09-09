@@ -42,7 +42,7 @@ pub mod playground_ws;
 
 use std::{
     io::{BufRead, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -380,33 +380,56 @@ fn resolve_stdlib_dir() -> Option<PathBuf> {
         .then(|| std::fs::canonicalize(&checkout).unwrap_or(checkout))
 }
 
-/// Build the `SysOps` every playground engine runs on: the native platform,
-/// with exactly three namespaces intercepted so fetch logs, env prompts and
-/// `baml.io` reads reach the webview.
+/// The platform every playground engine runs on, built per project root.
 ///
-/// The base is `native()`, not an empty builder. A playground run is an
-/// ordinary program run — it must have the whole platform, and the set of
-/// operations it needs is not enumerable here. Building up from
-/// `SysOpsBuilder::new()` left everything unlisted throwing `Unsupported`,
-/// which broke `baml.time.Instant.now` and so every test run, since
-/// `testing.run_test` times each one.
-fn build_playground_sys_ops(
-    broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
-    run_store: &Arc<bex_events::run::InMemoryRunStore>,
-    env_state: &Arc<PlaygroundEnvState>,
-    io_state: &Arc<PlaygroundIoState>,
-) -> sys_ops::SysOps {
-    use sys_native::SysOpsExt as _;
+/// The playground intercepts exactly three namespaces so fetch logs, env
+/// prompts and `baml.io` reads reach the webview; everything else is the
+/// native platform. One process serves every open project, so an engine's
+/// relative paths resolve against its own project root rather than the
+/// process's directory, which is never changed.
+pub struct PlaygroundPlatform {
+    broadcast_tx: tokio::sync::broadcast::Sender<WsOutMessage>,
+    run_store: Arc<bex_events::run::InMemoryRunStore>,
+    env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
+}
 
-    let http_state = Arc::new(PlaygroundHttpState::new(
-        broadcast_tx.clone(),
-        run_store.clone(),
-    ));
-    sys_ops::SysOpsBuilder::from_ops(sys_ops::SysOps::native())
-        .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
-        .with_env_instance(Arc::new(PlaygroundEnv(env_state.clone())))
-        .with_io_instance(Arc::new(PlaygroundIo(io_state.clone())))
-        .build()
+impl PlaygroundPlatform {
+    pub fn new(
+        broadcast_tx: tokio::sync::broadcast::Sender<WsOutMessage>,
+        run_store: Arc<bex_events::run::InMemoryRunStore>,
+        env_state: Arc<PlaygroundEnvState>,
+        io_state: Arc<PlaygroundIoState>,
+    ) -> Self {
+        Self {
+            broadcast_tx,
+            run_store,
+            env_state,
+            io_state,
+        }
+    }
+
+    /// The `SysOps` for an engine of the project at `root`.
+    ///
+    /// The base is the native platform, not an empty builder. A playground
+    /// run is an ordinary program run — it must have the whole platform, and
+    /// the set of operations it needs is not enumerable here. Building up
+    /// from `SysOpsBuilder::new()` left everything unlisted throwing
+    /// `Unsupported`, which broke `baml.time.Instant.now` and so every test
+    /// run, since `testing.run_test` times each one.
+    pub fn for_root(&self, root: &Path) -> sys_ops::SysOps {
+        use sys_native::SysOpsExt as _;
+
+        let http_state = Arc::new(PlaygroundHttpState::new(
+            self.broadcast_tx.clone(),
+            self.run_store.clone(),
+        ));
+        sys_ops::SysOpsBuilder::from_ops(sys_ops::SysOps::native_in(root.to_path_buf()))
+            .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
+            .with_env_instance(Arc::new(PlaygroundEnv(self.env_state.clone())))
+            .with_io_instance(Arc::new(PlaygroundIo(self.io_state.clone())))
+            .build()
+    }
 }
 
 /// Who the playground is opened for.
@@ -508,8 +531,6 @@ fn run_server_inner(
         );
     }));
 
-    apply_single_workspace_cwd(&workspace_roots)?;
-
     tracing::info!("baml-lsp v{} starting", version());
     deadlock_watchdog::spawn();
 
@@ -552,11 +573,11 @@ fn run_server_inner(
         broadcast_tx.clone(),
         run_store.clone(),
     ));
-    let sys_ops = Arc::new(build_playground_sys_ops(
-        &broadcast_tx,
-        &run_store,
-        &env_state,
-        &io_state,
+    let platform = Arc::new(PlaygroundPlatform::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+        env_state.clone(),
+        io_state.clone(),
     ));
 
     // Bind the playground port before anything advertises it. Browser mode is
@@ -600,7 +621,7 @@ fn run_server_inner(
         runtimes,
         playground_sender.clone(),
         env_state.clone(),
-        sys_ops,
+        platform,
     );
     {
         // The pipeline task and its debounce timer need the tokio context.
@@ -945,26 +966,6 @@ fn apply_cli_workspace_roots(state: &mut GlobalState, session: SessionKey, roots
     }
 }
 
-/// Run playground/LSP work from inside the project when exactly one root was
-/// named on the command line. BAML's own filesystem operations resolve
-/// relative paths against the process's current directory, so a run started
-/// from the playground must see the project as its working directory — not
-/// wherever the terminal (or the editor's spawn) happened to be.
-fn apply_single_workspace_cwd(workspace_roots: &[PathBuf]) -> anyhow::Result<()> {
-    let [root] = workspace_roots else {
-        return Ok(());
-    };
-    let cwd = if root.is_file() {
-        root.parent().unwrap_or(root)
-    } else {
-        root
-    };
-    std::env::set_current_dir(cwd)
-        .with_context(|| format!("Failed to set current directory to {}", cwd.display()))?;
-    tracing::info!(path = %cwd.display(), "working directory");
-    Ok(())
-}
-
 fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
     if workspace_roots.iter().all(|root| root.is_absolute()) {
         return Ok(workspace_roots);
@@ -1007,12 +1008,8 @@ mod tests {
             broadcast_tx.clone(),
             run_store.clone(),
         ));
-        let sys_ops = Arc::new(build_playground_sys_ops(
-            &broadcast_tx,
-            &run_store,
-            &env_state,
-            &io_state,
-        ));
+        let platform = PlaygroundPlatform::new(broadcast_tx, run_store, env_state, io_state);
+        let sys_ops = Arc::new(platform.for_root(Path::new("/sysops-test")));
 
         let mut db = baml_db::ProjectDatabase::new();
         db.ensure_stdlib_sources();
@@ -1198,5 +1195,81 @@ mod tests {
                 .expect("workspace roots should absolutize");
 
         assert_eq!(roots, vec![cwd.join("relative-workspace"), absolute]);
+    }
+
+    /// Two projects served by one process each read their own files: an
+    /// engine's relative paths resolve against its project root, and the
+    /// process never changes directory to make that so.
+    #[tokio::test]
+    async fn playground_engines_resolve_paths_against_their_own_project() {
+        let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(8);
+        let run_store = Arc::new(bex_events::run::InMemoryRunStore::new(
+            bex_events::run::RunRetentionPolicy::default(),
+        ));
+        let env_state = Arc::new(PlaygroundEnvState::new(
+            broadcast_tx.clone(),
+            run_store.clone(),
+            Arc::new(PlaygroundSessionStore::default()),
+        ));
+        let io_state = Arc::new(PlaygroundIoState::new(
+            broadcast_tx.clone(),
+            run_store.clone(),
+        ));
+        let platform = PlaygroundPlatform::new(broadcast_tx, run_store, env_state, io_state);
+
+        let process_dir = std::env::current_dir().expect("cwd should be available");
+        let mut engines = Vec::new();
+        for note in ["first", "second"] {
+            let project = tempfile::tempdir().expect("temp project");
+            let root = project
+                .path()
+                .canonicalize()
+                .expect("temp project canonicalizes");
+            std::fs::write(root.join("note.txt"), note).expect("note written");
+
+            let mut db = baml_db::ProjectDatabase::new();
+            db.ensure_stdlib_sources();
+            let package = db
+                .add_source_root(baml_db::SourceRootSpec::new(
+                    root.clone(),
+                    baml_db::SourceRootKind::Workspace,
+                ))
+                .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+            db.add_or_update_file_in(
+                package,
+                &root.join("main.baml"),
+                "function note() -> string throws baml.errors.Io | baml.errors.ParseError {\n    \
+                 baml.fs.read(\"note.txt\")\n}\n",
+            );
+            let program = db
+                .get_bytecode_unchecked()
+                .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
+            let engine = engine::construct_engine_candidate(
+                program,
+                Arc::new(platform.for_root(&root)),
+                baml_lsp::SourceRevision(1),
+            )
+            .unwrap_or_else(|e| unreachable!("the engine constructs: {e}"))
+            .into_engine();
+            engines.push((project, Arc::new(engine), note));
+        }
+
+        for (_project, engine, note) in &engines {
+            let context =
+                bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+            let value = engine
+                .call_function("note", Vec::new(), context, true)
+                .await
+                .unwrap_or_else(|e| unreachable!("the note reads: {e:?}"));
+            let bex_engine::BexExternalValue::String(read) = value else {
+                unreachable!("note() returns a string, got {value:?}");
+            };
+            assert_eq!(read.to_string(), *note);
+        }
+        assert_eq!(
+            std::env::current_dir().expect("cwd should be available"),
+            process_dir,
+            "serving a project must not change the process's directory"
+        );
     }
 }

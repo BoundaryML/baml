@@ -29,7 +29,7 @@ fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io:
         .get_or_init(|| tokio::sync::Mutex::new(tokio::io::BufReader::new(tokio::io::stdin())))
 }
 
-use crate::NativeSysOps;
+use crate::{NativeSysOps, WorkingDir};
 
 // Runtime compilation is intercepted by BexEngine and delegated to the
 // compiler trait injected by bex_project. This provider implementation is the
@@ -610,6 +610,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let BexExternalValue::String(mode) = mode else {
                 return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
@@ -620,13 +621,14 @@ impl io::IoNamespaceFs for NativeSysOps {
             // matching Bun's `Bun.write` behavior.
             let creates = matches!(mode.as_str(), "w" | "w+" | "a" | "a+");
             if creates {
-                if let Some(parent) = std::path::Path::new(&path).parent() {
+                if let Some(parent) = path.parent() {
                     if !parent.as_os_str().is_empty() {
                         tokio::fs::create_dir_all(parent)
                             .await
                             .map_err(|e| VmBamlError::Io {
                                 message: format!(
-                                    "Failed to create parent directories for '{path}': {e}"
+                                    "Failed to create parent directories for '{}': {e}",
+                                    path.display()
                                 ),
                             })?;
                     }
@@ -682,7 +684,7 @@ impl io::IoNamespaceFs for NativeSysOps {
                 }
             }
             .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to open file '{path}': {e}"),
+                message: format!("Failed to open file '{}': {e}", path.display()),
             })?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(tokio::sync::Mutex::new(Some(file)));
@@ -697,11 +699,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::try_exists(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to check existence of '{path}': {e}"),
+                    message: format!("Failed to check existence of '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -714,6 +717,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             match tokio::fs::remove_file(&path).await {
                 Ok(()) => Ok(()),
@@ -731,13 +735,13 @@ impl io::IoNamespaceFs for NativeSysOps {
                     {
                         return Err(VmBamlError::Io {
                             message: format!(
-                                "Failed to remove '{path}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories"
+                                "Failed to remove '{}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories", path.display()
                             ),
                         }
                         .into());
                     }
                     Err(VmBamlError::Io {
-                        message: format!("Failed to remove file '{path}': {e}"),
+                        message: format!("Failed to remove file '{}': {e}", path.display()),
                     }
                     .into())
                 }
@@ -752,11 +756,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::remove_dir(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to remove directory '{path}': {e}"),
+                    message: format!("Failed to remove directory '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -769,13 +774,14 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             match tokio::fs::remove_dir_all(&path).await {
                 Ok(()) => Ok(()),
                 // `force: true` semantics: a missing path is not an error.
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(e) => Err(VmBamlError::Io {
-                    message: format!("Failed to remove directory '{path}': {e}"),
+                    message: format!("Failed to remove directory '{}': {e}", path.display()),
                 }
                 .into()),
             }
@@ -789,15 +795,16 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let metadata = tokio::fs::metadata(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to stat '{path}': {e}"),
+                    message: format!("Failed to stat '{}': {e}", path.display()),
                 })?;
             i64::try_from(metadata.len())
                 .map_err(|_| VmBamlError::Io {
-                    message: format!("File '{path}' size exceeds i64::MAX"),
+                    message: format!("File '{}' size exceeds i64::MAX", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -810,11 +817,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::read_to_string(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file '{path}': {e}"),
+                    message: format!("Failed to read file '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -828,6 +836,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             write_path(&path, content.as_bytes())
                 .await
@@ -843,6 +852,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             write_path(&path, &content)
                 .await
@@ -857,15 +867,19 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let mut rd = tokio::fs::read_dir(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read directory '{path}': {e}"),
+                    message: format!("Failed to read directory '{}': {e}", path.display()),
                 })?;
             let mut entries = Vec::new();
             while let Some(entry) = rd.next_entry().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to read directory entry in '{path}': {e}"),
+                message: format!(
+                    "Failed to read directory entry in '{}': {e}",
+                    path.display()
+                ),
             })? {
                 let ft = entry.file_type().await.map_err(|e| VmBamlError::Io {
                     message: format!(
@@ -892,6 +906,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         options: owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             if options.recursive {
                 tokio::fs::create_dir_all(&path).await
@@ -899,7 +914,7 @@ impl io::IoNamespaceFs for NativeSysOps {
                 tokio::fs::create_dir(&path).await
             }
             .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to create directory '{path}': {e}"),
+                message: format!("Failed to create directory '{}': {e}", path.display()),
             })
             .map_err(VmRustFnError::from)
         })
@@ -917,6 +932,7 @@ impl io::IoNamespaceFs for NativeSysOps {
             Ok(mode) => mode,
             Err(err) => return SysOpOutput::err(err),
         };
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move { chmod_path(&path, mode).await })
     }
 
@@ -928,11 +944,15 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             symlink_path(&target, &path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to create symlink '{path}' -> '{target}': {e}"),
+                    message: format!(
+                        "Failed to create symlink '{}' -> '{target}': {e}",
+                        path.display()
+                    ),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -963,13 +983,13 @@ fn permission_bits(mode: i64) -> Result<u32, VmBamlError> {
 }
 
 #[cfg(unix)]
-async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+async fn chmod_path(path: &std::path::Path, mode: u32) -> Result<(), VmRustFnError> {
     use std::os::unix::fs::PermissionsExt as _;
 
     tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
         .await
         .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to set permissions on '{path}': {e}"),
+            message: format!("Failed to set permissions on '{}': {e}", path.display()),
         })
         .map_err(VmRustFnError::from)
 }
@@ -982,24 +1002,24 @@ async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
 /// Reading the current permissions first is what makes a missing `path` fail
 /// here as it does on unix, rather than silently succeeding.
 #[cfg(windows)]
-async fn chmod_path(path: &str, mode: u32) -> Result<(), VmRustFnError> {
+async fn chmod_path(path: &std::path::Path, mode: u32) -> Result<(), VmRustFnError> {
     let mut permissions = tokio::fs::metadata(path)
         .await
         .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to read permissions of '{path}': {e}"),
+            message: format!("Failed to read permissions of '{}': {e}", path.display()),
         })?
         .permissions();
     permissions.set_readonly((mode & 0o200) == 0);
     tokio::fs::set_permissions(path, permissions)
         .await
         .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to set permissions on '{path}': {e}"),
+            message: format!("Failed to set permissions on '{}': {e}", path.display()),
         })
         .map_err(VmRustFnError::from)
 }
 
 #[cfg(unix)]
-async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+async fn symlink_path(target: &str, path: &std::path::Path) -> std::io::Result<()> {
     tokio::fs::symlink(target, path).await
 }
 
@@ -1009,13 +1029,12 @@ async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
 /// when that resolves to a directory today. A dangling link becomes a file
 /// link, matching Node's autodetect.
 #[cfg(windows)]
-async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
+async fn symlink_path(target: &str, path: &std::path::Path) -> std::io::Result<()> {
     let target_path = std::path::Path::new(target);
     let resolved = if target_path.is_absolute() {
         target_path.to_path_buf()
     } else {
-        std::path::Path::new(path)
-            .parent()
+        path.parent()
             .unwrap_or_else(|| std::path::Path::new(""))
             .join(target_path)
     };
@@ -1030,20 +1049,23 @@ async fn symlink_path(target: &str, path: &str) -> std::io::Result<()> {
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
-async fn write_path(path: &str, data: &[u8]) -> Result<i64, VmBamlError> {
-    if let Some(parent) = std::path::Path::new(path).parent() {
+async fn write_path(path: &std::path::Path, data: &[u8]) -> Result<i64, VmBamlError> {
+    if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to create parent directories for '{path}': {e}"),
+                    message: format!(
+                        "Failed to create parent directories for '{}': {e}",
+                        path.display()
+                    ),
                 })?;
         }
     }
     tokio::fs::write(path, data)
         .await
         .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to write file '{path}': {e}"),
+            message: format!("Failed to write file '{}': {e}", path.display()),
         })?;
     i64::try_from(data.len()).map_err(|_| VmBamlError::Io {
         message: format!("Write size {} exceeds i64::MAX", data.len()),
@@ -1095,6 +1117,7 @@ impl io::IoClassGlobGlob for NativeSysOps {
         root: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let handle = downcast_glob_handle(&glob)?;
 
@@ -1142,9 +1165,9 @@ impl io::IoClassGlobGlob for NativeSysOps {
                 }
             };
 
-            let cwd_path = std::path::Path::new(&cwd);
+            let cwd_path = working_dir.resolve(&cwd);
             let abs_cwd = if cwd_path.is_absolute() {
-                cwd_path.to_path_buf()
+                cwd_path
             } else {
                 std::env::current_dir()
                     .map_err(|e| VmBamlError::Io {
@@ -1625,16 +1648,18 @@ impl io::IoClassSysProcess for NativeSysOps {
 async fn run_process(
     cmd: &mut tokio::process::Command,
     options: Option<owned::sys::ProcessOptions>,
+    working_dir: &WorkingDir,
     label: &str,
 ) -> Result<owned::sys::ShellOutput, VmRustFnError> {
     use std::process::Stdio;
 
     use tokio::io::AsyncWriteExt as _;
 
+    if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
+    {
+        cmd.current_dir(dir);
+    }
     if let Some(ref opts) = options {
-        if let Some(ref cwd) = opts.cwd {
-            cmd.current_dir(cwd);
-        }
         if let Some(ref env) = opts.env {
             cmd.env_clear();
             cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
@@ -1726,12 +1751,13 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
-            let mut cmd = tokio::process::Command::new(&program);
+            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
             if let Some(ref a) = args {
                 cmd.args(a);
             }
-            run_process(&mut cmd, options, &program).await
+            run_process(&mut cmd, options, &working_dir, &program).await
         })
     }
 
@@ -1744,19 +1770,22 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::Process> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             use std::process::Stdio;
 
             use tokio::io::AsyncWriteExt as _;
 
-            let mut cmd = tokio::process::Command::new(&program);
+            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
             if let Some(ref args) = args {
                 cmd.args(args);
             }
+            if let Some(dir) =
+                working_dir.for_child(options.as_ref().and_then(|options| options.cwd.as_deref()))
+            {
+                cmd.current_dir(dir);
+            }
             if let Some(ref options) = options {
-                if let Some(ref cwd) = options.cwd {
-                    cmd.current_dir(cwd);
-                }
                 if let Some(ref env) = options.env {
                     cmd.env_clear();
                     cmd.envs(
@@ -1866,11 +1895,12 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let resolved = crate::shell::default_shell();
             let mut cmd = tokio::process::Command::new(&resolved.path);
             resolved.apply(&mut cmd, &command);
-            run_process(&mut cmd, options, &command).await
+            run_process(&mut cmd, options, &working_dir, &command).await
         })
     }
 

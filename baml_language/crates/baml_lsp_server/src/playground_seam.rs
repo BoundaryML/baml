@@ -40,6 +40,7 @@ use parking_lot::Mutex;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
+    PlaygroundPlatform,
     engine::{
         CollectionTicket, CommitOutcome, PrepareRunError, ProjectRuntime, RegistryLease,
         RegistryLeaseError, RunSnapshot, RuntimeRegistry, construct_engine_candidate,
@@ -121,9 +122,8 @@ pub struct PlaygroundSeam {
     runtimes: Arc<RuntimeRegistry>,
     sender: Arc<NativePlaygroundSender>,
     env_state: Arc<PlaygroundEnvState>,
-    /// Built for every engine candidate; the playground intercepts HTTP, env
-    /// and IO so runs report through the webview.
-    sys_ops: Arc<sys_ops::SysOps>,
+    /// Builds every engine candidate's platform table, per project root.
+    platform: Arc<PlaygroundPlatform>,
     build_failures: Mutex<BuildFailures>,
 }
 
@@ -133,14 +133,14 @@ impl PlaygroundSeam {
         runtimes: Arc<RuntimeRegistry>,
         sender: Arc<NativePlaygroundSender>,
         env_state: Arc<PlaygroundEnvState>,
-        sys_ops: Arc<sys_ops::SysOps>,
+        platform: Arc<PlaygroundPlatform>,
     ) -> Arc<Self> {
         Arc::new(Self {
             runtime,
             runtimes,
             sender,
             env_state,
-            sys_ops,
+            platform,
             build_failures: Mutex::new(BuildFailures::default()),
         })
     }
@@ -692,7 +692,10 @@ impl PlaygroundSeam {
             return; // blocked by diagnostics, or emit failed
         };
 
-        let sys_ops = Arc::clone(&self.sys_ops);
+        // The engine's platform resolves the program's relative paths
+        // against this root: the process serves every project at once and
+        // never changes directory.
+        let sys_ops = Arc::new(self.platform.for_root(root));
         let candidate = tokio::task::spawn_blocking(move || {
             construct_engine_candidate(*program, sys_ops, revision)
         })
