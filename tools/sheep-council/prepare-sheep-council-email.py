@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 LOOPS_API_BASE_URL = "https://app.loops.so/api"
+LOOPS_CAMPAIGN_COMPOSE_QUERY = "stepName=Compose&page=0&pageSize=20&sortMetricsBy=emailCreatedAt&sortMetricsOrder=desc&columnPinning=email"
 SHEEP_COUNCIL_CAMPAIGN_GROUP_ID = "cmtc7a2fx078l0j4jwqydy4m4"
 DEFAULT_DOWNLOAD_DIR = Path(__file__).with_name("email-data") / "downloads"
 CAMPAIGN_FIELDS = ("name", "campaignGroupId", "mailingListId")
@@ -161,6 +162,10 @@ def campaign_file_stem(campaign: dict[str, Any]) -> str:
     return f"{created_date}-{slug}-{campaign['id']}"
 
 
+def campaign_compose_url(campaign_id: str) -> str:
+    return f"https://app.loops.so/campaigns/{campaign_id}/compose?{LOOPS_CAMPAIGN_COMPOSE_QUERY}"
+
+
 def download(api_key: str, output_dir: Path) -> list[dict[str, str]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     downloaded = []
@@ -215,6 +220,7 @@ def upload(
         "campaignId": campaign_id,
         "campaignUrl": campaign["url"],
         "emailMessageId": email_message_id,
+        "composeUrl": campaign_compose_url(campaign_id),
     }
 
 
