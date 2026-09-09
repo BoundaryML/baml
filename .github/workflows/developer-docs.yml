@@ -28,6 +28,7 @@ jobs:
     name: Determine documentation changes
     runs-on: ubuntu-24.04
     outputs:
+      can-use-secrets: ${{ steps.changes.outputs.can-use-secrets }}
       should-run: ${{ steps.changes.outputs.should-run }}
     steps:
       - name: Checkout
@@ -38,11 +39,21 @@ jobs:
       - name: Check documentation and runtime inputs
         id: changes
         env:
+          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          can_use_secrets=true
+          if [[ "$EVENT_NAME" == "pull_request" ]] && \
+             { [[ "$HEAD_REPOSITORY" != "$REPOSITORY" ]] || [[ "$ACTOR" == "dependabot[bot]" ]]; }; then
+            can_use_secrets=false
+          fi
+          echo "can-use-secrets=$can_use_secrets" >> "$GITHUB_OUTPUT"
+
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             echo "should-run=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -179,7 +190,9 @@ jobs:
   production-path:
     name: DB-backed SSR and HTTP contracts
     needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
+    if: >-
+      needs.determine-changes.outputs.should-run == 'true' &&
+      needs.determine-changes.outputs.can-use-secrets == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -263,6 +276,7 @@ jobs:
           AUTHORED_CONTENT_RESULT: ${{ needs.authored-content.result }}
           DATABASE_INTEGRATION_RESULT: ${{ needs.database-integration.result }}
           DETERMINE_CHANGES_RESULT: ${{ needs.determine-changes.result }}
+          CAN_USE_SECRETS: ${{ needs.determine-changes.outputs.can-use-secrets }}
           PRODUCTION_PATH_RESULT: ${{ needs.production-path.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           SHOULD_RUN: ${{ needs.determine-changes.outputs.should-run }}
@@ -281,18 +295,27 @@ jobs:
             echo "::error::Documentation change detection returned an invalid result"
             exit 1
           fi
+          if [[ "$CAN_USE_SECRETS" != "true" && "$CAN_USE_SECRETS" != "false" ]]; then
+            echo "::error::Pull-request trust detection returned an invalid result"
+            exit 1
+          fi
 
           failed=false
           for result in \
             "$QUALITY_RESULT" \
             "$AUTHORED_CONTENT_RESULT" \
             "$SNIPPETS_RESULT" \
-            "$DATABASE_INTEGRATION_RESULT" \
-            "$PRODUCTION_PATH_RESULT"; do
+            "$DATABASE_INTEGRATION_RESULT"; do
             if [[ "$result" != "success" ]]; then
               failed=true
             fi
           done
+          if [[ "$CAN_USE_SECRETS" == "true" && "$PRODUCTION_PATH_RESULT" != "success" ]]; then
+            failed=true
+          fi
+          if [[ "$CAN_USE_SECRETS" == "false" && "$PRODUCTION_PATH_RESULT" != "skipped" ]]; then
+            failed=true
+          fi
           if [[ "$failed" == "true" ]]; then
             echo "::error::One or more required Developer Docs jobs did not succeed"
             exit 1
