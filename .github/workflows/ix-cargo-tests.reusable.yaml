@@ -797,7 +797,7 @@ jobs:
       - uses: ./.github/actions/setup-mise
         if: matrix.sdk-label == 'csharp'
         with:
-          install_args: "dotnet"
+          install_args: "dotnet@10.0.301"
 
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'

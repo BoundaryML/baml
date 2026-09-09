@@ -859,7 +859,7 @@ jobs:
       - uses: ./.github/actions/setup-mise
         if: matrix.sdk-label == 'csharp'
         with:
-          install_args: "dotnet"
+          install_args: "dotnet@10.0.301"
 
       - name: "Backdate .NET SDK install"
         if: matrix.sdk-label == 'csharp'

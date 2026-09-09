@@ -81,8 +81,8 @@ function lint_action(
                 || paths.includes("${{")
                 || paths.includes(".cargo")
                 || paths.includes("sccache")
-                || paths.split("/").some((p) -> {
-                    p == "target" || p.starts_with("target\n")
+                || paths.lines().some((line) -> {
+                    line.trim().split("/").includes("target")
                 })
                 || paths.includes("/target")
         ) {

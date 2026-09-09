@@ -85,6 +85,29 @@ runs:
         # tools fall back to failing source compiles, it breaks the job.
         add_shims_to_path: false
 
+    # mise-action exports `mise env` for the config, which omits explicit
+    # install_args versions that differ from mise.toml (e.g. node@24 vs node=22).
+    # Publish those exact installed bin directories without enabling shims or
+    # installing any additional tools. Keep arguments as data, never eval them.
+    - name: Export requested tool paths
+      if: inputs.install_args != ''
+      shell: bash
+      env:
+        MISE_INSTALL_ARGS: ${{ inputs.install_args }}
+      run: |
+        set -euo pipefail
+        read -r -a requested_tools <<< "$MISE_INSTALL_ARGS"
+        paths=$(mise bin-paths "${requested_tools[@]}")
+        test -n "$paths"
+        while IFS= read -r tool_path; do
+          if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+            test -d "$(cygpath -u "$tool_path")"
+          else
+            test -d "$tool_path"
+          fi
+          printf '%s\n' "$tool_path" >> "$GITHUB_PATH"
+        done <<< "$paths"
+
     - name: Disable mise task auto-install
       shell: bash
       run: |

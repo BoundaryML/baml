@@ -487,3 +487,70 @@ test "canonical mise bootstrap settings and task auto-install cannot drift" {
         ["BOOTSTRAP", "BOOTSTRAP"],
     )
 }
+
+test "mise bootstrap exports explicitly requested versions without installing or evaluating arguments" {
+    let root = `/tmp/baml-actions-mise-path-${baml.sys.pid()}`;
+    baml.fs.mkdir(`${root}/bin`, baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(`${root}/node24/bin`, baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(`${root}/pnpm11/bin`, baml.fs.MkdirOptions { recursive: true });
+    defer { baml.fs.remove_dir_all(root); }
+    let repo = baml.sys.exec(
+        "git",
+        ["rev-parse", "--show-toplevel"],
+        baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 30000, stdin: null },
+    );
+    let doc = baml.yaml.parse(
+        baml.fs.read(
+            baml.String.from_utf8(repo.stdout).trim() + "/.github/actions/setup-mise/action.yml",
+        ),
+    );
+    let step = array(field(field(doc, "runs"), "steps")).find((s) -> {
+        field(s, "name") == "Export requested tool paths"
+    });
+    let script = string_value(field(step, "run"));
+    assert.is_true(script.length() > 0);
+    baml.fs.write(
+        `${root}/bin/mise`,
+        "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$TEST_ROOT/args\"\nprintf '%s\\n' \"$TEST_ROOT/node24/bin\" \"$TEST_ROOT/pnpm11/bin\"\n",
+    );
+    baml.fs.chmod(`${root}/bin/mise`, 493);
+    let options = baml.sys.ProcessOptions {
+        cwd: root,
+        timeout_ms: 30000,
+        stdin: null,
+        env: {
+            "PATH": `${root}/bin:/usr/bin:/bin`,
+            "TEST_ROOT": root,
+            "MISE_INSTALL_ARGS": "node@24 npm:pnpm@11.1.3",
+            "GITHUB_PATH": `${root}/paths`,
+        },
+    };
+    assert.is_true(baml.sys.exec("bash", ["-c", script], options).ok());
+    assert.equal(baml.fs.read(`${root}/args`), "bin-paths\nnode@24\nnpm:pnpm@11.1.3\n");
+    assert.equal(baml.fs.read(`${root}/paths`), `${root}/node24/bin\n${root}/pnpm11/bin\n`);
+    let hostile = baml.sys.ProcessOptions {
+        ...options,
+        env: {
+            "PATH": `${root}/bin:/usr/bin:/bin`,
+            "TEST_ROOT": root,
+            "MISE_INSTALL_ARGS": "node@24 $(touch pwned)",
+            "GITHUB_PATH": `${root}/paths`,
+        },
+    };
+    assert.is_true(baml.sys.exec("bash", ["-c", script], hostile).ok());
+    assert.equal(baml.fs.exists(`${root}/pwned`), false);
+    assert.contains(baml.fs.read(`${root}/args`), "$(touch\npwned)");
+    baml.fs.write(`${root}/bin/mise`, "#!/bin/bash\nexit 17\n");
+    assert.equal(baml.sys.exec("bash", ["-c", script], options).exit_code, 17)
+}
+
+test "multiline generic cache paths cannot hide a bare Rust target on a later line" {
+    assert.equal(
+        rules(
+            workflow(
+                "      - uses: actions/cache@v6\n        with:\n          path: |\n            ~/.cache/non-rust\n            target\n",
+            ),
+        ),
+        ["RUST-CACHE"],
+    )
+}
