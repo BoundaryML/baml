@@ -16,14 +16,12 @@
 // bridge sidesteps this by running async callables on a fresh asyncio
 // loop in the dispatch thread (different I/O architecture).
 //
-// Why the suite relies on Vitest's forced teardown: each
-// registered callable holds a strong (`weak::<false>`) ThreadsafeFunction
-// ref that pins the libuv loop until the engine releases it, and release
-// is GC/drain-driven (`host_release_callback`). A runtime dropped at the
-// end of a test isn't guaranteed to have collected its `HostClosure`
-// before the process exits, so the ref can outlive the test and keep the
-// runner from exiting on its own. Vitest terminates once the tests
-// themselves have completed.
+// Registered callables do not pin the libuv loop: their ThreadsafeFunction
+// refs are weak, and release is GC/drain-driven (`host_release_callback`),
+// so a runtime whose `HostClosure`s were never collected before the end of
+// a test leaks nothing that keeps the runner from exiting on its own. The
+// process-exit behaviour itself is covered by the sdk_tests fixture suite
+// (`callback_lifetime.test.ts`), which spawns real child processes.
 
 import { vi } from 'vitest';
 

@@ -422,6 +422,83 @@ async fn cancelled_shutdown_restores_the_running_state() {
 }
 
 #[tokio::test]
+async fn wait_until_idle_waits_for_spawned_work_and_keeps_admission_open() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    assert_ne!(engine.active_future_count().await, 0);
+
+    engine.wait_until_idle().await;
+    assert_eq!(engine.active_future_count().await, 0);
+
+    // Unlike `shutdown`, idleness is only observed: a later call is admitted.
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+}
+
+#[tokio::test]
+async fn wait_until_idle_waits_for_an_active_call() {
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move { call_main(&call_engine, true).await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    engine.wait_until_idle().await;
+    assert!(call.is_finished());
+    assert_eq!(call.await.unwrap().unwrap(), BexExternalValue::Int(1));
+    engine.shutdown().await;
+}
+
+#[tokio::test]
+async fn wait_until_idle_during_shutdown_returns_once_closed() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    let shutdown_engine = Arc::clone(&engine);
+    let shutdown = tokio::spawn(async move { shutdown_engine.shutdown().await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    engine.wait_until_idle().await;
+    assert!(shutdown.is_finished());
+    shutdown.await.unwrap();
+    assert_eq!(
+        call_main(&engine, true).await,
+        Err(EngineError::ShuttingDown)
+    );
+}
+
+#[tokio::test]
 async fn unhandled_grandchild_error_is_not_attached_to_parent_spawn() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }

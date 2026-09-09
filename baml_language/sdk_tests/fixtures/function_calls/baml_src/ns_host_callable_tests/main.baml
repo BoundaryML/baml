@@ -340,6 +340,27 @@ function call_with_typed_throws_propagating(
     callback(x)
 }
 
+// ─── Host process lifetime ───────────────────────────────────────────────────
+//
+// A registered callable must not keep the host process alive by itself; only
+// BAML work that is still running may. These pair with the Node exit-hook
+// tests: `call_callback_later` keeps the host's own call pending across the
+// callback, `schedule_callback` returns before a background `spawn` calls the
+// host back (during the host's exit drain, the callback may re-enter BAML).
+
+function call_callback_later(callback: () -> int) -> int {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    callback()
+}
+
+function schedule_callback(callback: () -> int) -> int {
+    spawn {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+        callback()
+    };
+    1
+}
+
 // Catch `n` host throws and keep every caught error alive until the call
 // returns, so the host values they carry are released to the host in one
 // burst rather than trickling out per iteration. Exercises the host's
