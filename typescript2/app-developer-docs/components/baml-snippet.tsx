@@ -3,6 +3,7 @@ import {
   loadStandaloneSnippet,
 } from '@/lib/snippets/discovery';
 import { highlightCode } from '@/lib/snippets/highlighter';
+import { selectProjectFiles } from '@/lib/snippets/selection';
 
 function TokenizedCode({
   className,
@@ -78,11 +79,20 @@ export async function BamlSnippet({
   );
 }
 
-export async function BamlProject({ id }: { id: string }) {
+export async function BamlProject({
+  id,
+  file,
+  regions,
+}: {
+  id: string;
+  file?: string;
+  regions?: string[];
+}) {
   const project = await loadProjectSnippet(id);
+  const files = selectProjectFiles(project, file, regions);
   return (
     <div className="baml-project" data-project-id={id}>
-      {project.files.map((file) => (
+      {files.map((file) => (
         <HighlightedCode
           code={file.displaySource}
           filename={file.projectPath}

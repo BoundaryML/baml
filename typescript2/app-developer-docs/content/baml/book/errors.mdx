@@ -1,0 +1,382 @@
+---
+title: Handle errors
+description: Chapter 8 · Define error values, handle failures, and understand inferred error effects.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - label: "8. Handle errors"
+---
+
+BAML makes a big bet on error handling: errors are ordinary values, and the compiler tracks how they flow through your program so the syntax stays simple.
+
+You can see the difference in two places: how you write a function that can fail, and how you call it.
+
+The BAML excerpts through error context add to one project. The lambda example repeats `BadToolInput` for context; keep the existing declaration when adding it. The final checked failure is a separate project.
+
+## Write a function that can fail
+
+Each example in this section checks a tool name. A valid name is returned as a string. An empty name produces a `BadToolInput` value.
+
+### TypeScript
+
+```typescript
+class BadToolInput extends Error {
+  constructor(
+    readonly tool: string,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
+function checkToolName(tool: string): string {
+  if (tool === "") {
+    throw new BadToolInput(tool, "tool name is empty")
+  }
+  return tool
+}
+```
+
+### Effect.ts
+
+```typescript
+import { Data, Effect } from "effect"
+
+class BadToolInput extends Data.TaggedError("BadToolInput")<{
+  readonly tool: string
+  readonly message: string
+}> {}
+
+function checkToolName(
+  tool: string,
+): Effect.Effect<string, BadToolInput, never> {
+  return tool === ""
+    ? Effect.fail(new BadToolInput({ tool, message: "tool name is empty" }))
+    : Effect.succeed(tool)
+}
+```
+
+### Rust
+
+```rust
+#[derive(Debug)]
+struct BadToolInput {
+    tool: String,
+    message: String,
+}
+
+fn check_tool_name(tool: &str) -> Result<String, BadToolInput> {
+    if tool.is_empty() {
+        return Err(BadToolInput {
+            tool: tool.to_string(),
+            message: "tool name is empty".to_string(),
+        });
+    }
+    Ok(tool.to_string())
+}
+```
+
+### BAML
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-01"]} />
+
+Notice the return types. TypeScript writes `string`, but the possible error isn't part of the function type. Effect.ts returns `Effect<string, BadToolInput, never>`, and Rust returns `Result<String, BadToolInput>`. BAML writes the successful return type, `string`; the compiler infers that the function also `throws BadToolInput`.
+
+## Call a function that can fail
+
+Each caller handles `BadToolInput` by returning its message.
+
+### TypeScript
+
+```typescript
+function displayToolName(tool: string): string {
+  try {
+    return checkToolName(tool)
+  } catch (error: unknown) {
+    if (error instanceof BadToolInput) {
+      return error.message
+    }
+    throw error
+  }
+}
+```
+
+### Effect.ts
+
+```typescript
+function displayToolName(
+  tool: string,
+): Effect.Effect<string, never, never> {
+  return checkToolName(tool).pipe(
+    Effect.catchAll((error) => Effect.succeed(error.message)),
+  )
+}
+```
+
+### Rust
+
+```rust
+fn display_tool_name(tool: &str) -> String {
+    match check_tool_name(tool) {
+        Ok(tool) => tool,
+        Err(error) => error.message,
+    }
+}
+```
+
+### BAML
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-02"]} />
+
+At the call site, TypeScript uses a `try` block and narrows an `unknown` error. Effect.ts transforms the wrapped computation, and Rust matches on the returned `Result`. In BAML, `catch` attaches to the expression that can fail, and the compiler narrows the error value in each arm.
+
+Rust's `Result<T, E>` and Effect.ts's typed error channel shaped this model. BAML keeps the successful return value unwrapped and represents possible failures as an inferred error effect.
+
+This page explains how to:
+
+- Define and throw structured error values.
+- Inspect errors inferred by the compiler.
+- Handle selected errors or every error.
+- Enforce an explicit `throws` contract.
+- Distinguish errors from panics.
+- Understand error inference for lambdas and function-valued parameters.
+
+## Add another error value
+
+The first BAML example used `BadToolInput` for invalid input. Add a second class for a temporary outage:
+
+<BamlProject id="no-listing-08-01-throws-never" file="baml_src/main.baml" regions={["excerpt-03"]} />
+
+`BadToolInput` and `ToolUnavailable` let a caller distinguish invalid input from a temporary outage. Their fields let the caller choose a response without parsing an error message.
+
+## Throw an error value
+
+Use `throw` to stop the current evaluation and send an error value to the caller:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-04"]} />
+
+On success, `invoke_tool` returns the final `string`. An empty name produces `BadToolInput`, while a random value below 20 models a 20% chance of `ToolUnavailable`. In either case, `throw` stops the function before it reaches the final expression.
+
+`int.random(0, 100)` returns an integer from 0 through 99. Its API can also throw `baml.errors.InvalidArgument` when the range is invalid, so the compiler carries that declared error even though these literal bounds are valid.
+
+## Inspect inferred errors
+
+When a function omits `throws`, BAML infers the errors that can leave its body. Omission doesn't mean `throws never`.
+
+Your editor shows the effective signature when you hover over the function. Line numbers in the terminal examples refer to the complete source project, including its excerpt markers. From a terminal, `baml describe` prints the declaration and the places that use it:
+
+```console
+$ baml describe invoke_tool | head -12
+function invoke_tool  baml_src/main.baml:36-44
+
+function invoke_tool(tool: string) -> string {
+    if (tool == "") {
+        throw BadToolInput { tool, message: "tool name is empty" };
+    }
+    if (int.random(0, 100) < 20) {
+        throw ToolUnavailable { tool, retry_after_ms: 500 };
+    }
+    `result from ${tool}`
+}
+```
+
+The LSP reports this effective signature:
+
+```text title="Inferred signature (LSP hover)"
+function invoke_tool(tool: string) -> string throws baml.errors.InvalidArgument | BadToolInput | ToolUnavailable
+```
+
+`string` is the success type. `baml.errors.InvalidArgument | BadToolInput | ToolUnavailable` is the error type. The compiler inferred the two errors thrown by the function and propagated the error declared by `int.random`.
+
+For example, `uncaught` also omits `throws` and doesn't handle the call:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-05"]} />
+
+The error effect follows the call:
+
+```text
+invoke_tool
+    ├─ returns string ──────────────────────> uncaught returns string
+    ├─ throws ToolUnavailable ──────────────> uncaught may throw ToolUnavailable
+    ├─ throws BadToolInput ─────────────────> uncaught may throw BadToolInput
+    └─ throws InvalidArgument ───────────────> uncaught may throw InvalidArgument
+```
+
+If no caller handles the value, the runtime reports the value and the path it took:
+
+```text
+error: Traceback (most recent call last):
+  File "baml_src/main.baml", line 220, in user.uncaught
+  File "baml_src/main.baml", line 41, in user.invoke_tool
+uncaught throw: user.ToolUnavailable {tool: "search", retry_after_ms: 500}
+```
+
+## Handle one error
+
+Add `catch` after the expression that can throw. Its arms look like `match` or `switch` cases: BAML tests each pattern and narrows the bound value to the matching type.
+
+Unlike `match`, `catch` is intentionally non-exhaustive. You can handle the error that matters here and leave the rest for the caller:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-06"]} />
+
+`catch (e)` binds the thrown value. In the `BadToolInput` arm, `e` is a `BadToolInput`, so you can read its `message` field. An unmatched `ToolUnavailable` or `baml.errors.InvalidArgument` continues to the caller, which is why both remain in the function's `throws` contract.
+
+## Handle every error
+
+Use `catch_all` when the call site promises to handle the complete error set. This handler gives each current error its own response:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-07"]} />
+
+`catch_all` must be exhaustive. If `invoke_tool` gains another error type, this function stops compiling until you add an arm. That keeps its `throws never` promise intact during refactors and agent-driven changes.
+
+Use `_` when the boundary should handle present and future errors the same way:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-08"]} />
+
+`BadToolInput` keeps its specific response. The `_` arm makes the handler exhaustive by covering `ToolUnavailable`, `baml.errors.InvalidArgument`, and any error types added later. Use a wildcard only when that future behavior is the policy you want.
+
+## Enforce an error contract
+
+Add a `throws` clause to constrain the errors that a function can expose:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-09"]} />
+
+The compiler compares errors inferred from the body with the declared union. If an implementation or an agent-driven edit exposes a different error, the contract fails to compile. The function must handle the new error or make the API change explicit by updating `throws`.
+
+An exhaustive `catch_all` protects a caller when a callee changes. A `throws` contract protects a function's callers from an accidental expansion of its public error set.
+
+Use `throws never` when no error value can leave a function. The reference section includes a checked failure for this contract.
+
+## Distinguish errors from panics
+
+Use an error for a failure that a caller can inspect and potentially handle, such as invalid input or a temporary outage. Errors appear in the inferred or declared `throws` set.
+
+Use a panic when execution reaches a path that isn't ready or a state the program considers invalid. During development, a panic can mark a placeholder implementation while the rest of the program continues to type-check and unrelated tests continue to run.
+
+This function validates its input, then marks the unfinished implementation with a panic:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-10"]} />
+
+The effective signature includes `BadToolInput` but not the possible panic. Panics aren't part of the typed error effect. `baml describe` shows the declaration directly:
+
+```console
+$ baml describe load_tool_config | head -9
+function load_tool_config  baml_src/main.baml:114-119
+
+function load_tool_config(tool: string) -> string {
+    if (tool == "") {
+        throw BadToolInput { tool, message: "tool name is empty" };
+    }
+    baml.sys.panic(`TODO: load config for ${tool}`)
+}
+```
+
+In the editor, LSP hover adds the inferred effect: `function load_tool_config(tool: string) -> string throws BadToolInput`.
+
+`catch_all` handles error values, not panics. Calling `panic_escapes_catch_all("search")` still stops at the placeholder:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-11"]} />
+
+## Catch errors and panics at a boundary
+
+Use `catch_all_panics` when a boundary must receive both errors and panics. For example, a web request handler can return a 500 response instead of taking down the server process:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-12"]} />
+
+In a real server, this boundary can also log the error context before returning 500. Use this broader handler only when the boundary can restore a valid state or stop cleanly. Catching a panic stops it from propagating; it doesn't implement the unfinished path or repair an invalid condition.
+
+## Log an error before returning a fallback
+
+A catch arm can use a block when it needs to do work before producing its value. This boundary records the error, then returns a stable fallback:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-13"]} />
+
+`log.error` accepts the error value directly. Run the program with `--log error` to emit error-level logs. The block's final expression, `"tool failed"`, is the value of the catch arm.
+
+## Advanced error reference
+
+### Read error context
+
+Every catch variant has two binding forms:
+
+- `catch (e)` and `catch (e, context)`.
+- `catch_all (e)` and `catch_all (e, context)`.
+- `catch_all_panics (e)` and `catch_all_panics (e, context)`.
+
+Use the second form when a handler needs a stack trace or cause chain:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-14"]} />
+
+The name `tb` isn't special. In this example, it refers to the `ErrorContext` and reads its `stack_trace`.
+
+### ErrorContext reference
+
+The second catch binding has type `ErrorContext`:
+
+- `error`: The caught error value.
+- `stack_trace`: The stack trace captured for the error.
+- `cause`: An optional preceding `ErrorContext` in a cause chain.
+- `root_cause()`: Returns the deepest context in the cause chain.
+
+The binding name doesn't change the type. `catch (error, context)` and `catch (e, tb)` use the same two-binding form.
+
+### Lambda error inference
+
+A lambda owns the errors thrown by its body. Defining a throwing lambda doesn't make the enclosing function throw; calling the lambda does.
+
+Keep the error type close to the lambda that uses it:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-15", "excerpt-16"]} />
+
+The compiler infers `BadToolInput` from the lambda body. `define_validator` creates the lambda but doesn't call it, so its own `throws never` contract remains true.
+
+### Function-type error inference
+
+When a function-valued parameter omits `throws`, BAML creates an implicit error-effect variable for that parameter.
+
+Call a supplied validator and propagate its errors:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-17"]} />
+
+Use `baml describe` to inspect either declaration in readable form:
+
+```console
+$ baml describe apply_validator
+function apply_validator  baml_src/main.baml:190-192
+
+function apply_validator(validate: (score: int) -> int, score: int) -> int {
+    validate(score)
+}
+
+references (1):
+  baml_src/main.baml:195  apply_validator(
+```
+
+LSP hover makes the inferred effect parameter visible:
+
+```text title="Inferred signature (LSP hover)"
+function apply_validator(validate: (score: int) -> int throws callback, score: int) -> int throws callback
+function validate_score(score: int) -> int throws BadToolInput
+```
+
+`callback` is the compiler's name for the implicit effect variable. At this call site, the lambda binds it to `BadToolInput`. Another function value can bind it to another error set or to `never`.
+
+### Throws contract diagnostic
+
+This checked failure promises `throws never` but calls a function that can throw `ToolUnavailable`:
+
+<BamlProject id="no-listing-08-01-throws-never" file="baml_src/main.baml" regions={["excerpt-18"]} />
+
+```text
+E0096
+
+  × declared throws is `never`, but this function may also throw `ToolUnavailable`
+    ╭─[main.baml:21:5]
+ 21 │     invoke_tool()
+    ·     ───────────
+    ╰────
+```
+
+Handle `ToolUnavailable`, add it to the declared contract, or remove the `throws` clause and use inference.

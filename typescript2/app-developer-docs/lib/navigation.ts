@@ -36,6 +36,12 @@ export const documentationNavigation: DocumentationGroup[] = [
             href: '/baml/book/foundations',
             label: 'Foundations',
           },
+          { href: '/baml/book/errors', label: '8. Handle errors' },
+          { href: '/baml/book/interfaces', label: '11. Interfaces' },
+          {
+            href: '/baml/book/concurrency',
+            label: '12. Run work concurrently',
+          },
         ],
         href: '/baml/book',
         label: 'Book',

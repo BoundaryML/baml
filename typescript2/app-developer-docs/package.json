@@ -35,6 +35,7 @@
     "build": "next build",
     "dev": "next dev",
     "docs:authored:validate": "tsx --test tests/authored-content.test.ts",
+    "docs:book:validate": "tsx scripts/validate-book-behavior.ts",
     "docs:contracts:sample": "tsx scripts/generate-contract-samples.ts",
     "docs:db:backfill": "tsx scripts/backfill-document-store.ts",
     "docs:db:inspect": "tsx scripts/inspect-generated-content.ts",

@@ -7,15 +7,22 @@ breadcrumbs:
   - label: Book
 ---
 
-## About the book
+The BAML book introduces the language in sequence, with explanations and examples you can check and run. Start with [Get started](/baml/get-started) for a working project or the [Foundations introduction](/baml/book/foundations) for a brief orientation.
 
-The book is a first-class part of this portal. Chapters share the same navigation, search, syntax highlighting, and checked examples as the rest of the BAML documentation.
+## Read the available chapters
 
-## Contents
+The book is being published chapter by chapter. Numbers follow the full outline; gaps are chapters that aren't published yet. Previous and next links follow the available pages.
 
-Each part begins with an orientation page and continues into focused chapters. Start with foundations to learn how BAML functions establish a typed boundary around model calls.
+### Act II · The Language
 
 <div className="docs-card-grid">
-  <DocsCard description="Learn the source-file structure, type declarations, and functions that everything else builds upon." href="/baml/book/foundations" title="Part I · Foundations" />
-  <DocsCard description="Take the shortest path to a working project before reading sequentially." href="/baml/get-started" title="Start with the quickstart" />
+  <DocsCard description="Define error values, handle failures, and understand inferred error effects." href="/baml/book/errors" title="8. Handle errors" />
+  <DocsCard description="Define shared contracts that new types can implement." href="/baml/book/interfaces" title="11. Interfaces" />
+  <DocsCard description="Start independent work, await results, and manage task lifetimes." href="/baml/book/concurrency" title="12. Run work concurrently" />
 </div>
+
+## Before you begin
+
+These chapters assume familiarity with functions, classes, unions, pattern matching, arrays, and lambdas. Interfaces builds on the error effects introduced in [Handle errors](/baml/book/errors); [Run work concurrently](/baml/book/concurrency) uses those effects to explain futures.
+
+BAML examples are excerpts from complete compiler-checked projects. Examples that intentionally fail are checked for their expected diagnostics. Inferred signatures and diagnostic output are labeled separately from executable source.
