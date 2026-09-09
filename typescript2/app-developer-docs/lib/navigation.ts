@@ -83,6 +83,7 @@ export const documentationNavigation: DocumentationGroup[] = [
         href: '/examples',
         label: 'Examples',
       },
+      { href: '/changelog', label: 'Changelog' },
     ],
   },
 ];
