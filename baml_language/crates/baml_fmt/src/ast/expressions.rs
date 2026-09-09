@@ -4214,6 +4214,7 @@ impl Printable for ObjectInitializer {
 /// Corresponds to a [`SyntaxKind::MAP_LITERAL`] node.
 #[derive(Debug)]
 pub struct MapLiteral {
+    pub prefix: Option<t::Word>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -4226,6 +4227,10 @@ impl FromCST for MapLiteral {
 
         let mut it = SyntaxNodeIter::new(&node);
 
+        let prefix = it
+            .next_if_kind(SyntaxKind::WORD)
+            .map(t::Word::from_cst)
+            .transpose()?;
         let open_brace = it.expect_parse()?;
 
         let mut fields = Vec::new();
@@ -4258,6 +4263,7 @@ impl FromCST for MapLiteral {
         it.expect_end()?;
 
         Ok(MapLiteral {
+            prefix,
             open_brace,
             fields,
             close_brace,
@@ -4288,6 +4294,18 @@ impl PrintMultiLine for MapLiteral {
             first_line_offset: 0,
         };
 
+        if let Some(prefix) = &self.prefix {
+            printer.print_raw_token(prefix);
+            let (_, line_comment) = printer.print_trivia_all_trailing_for(prefix.span());
+            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
+            if line_comment || !leading.is_empty() {
+                printer.print_newline();
+                printer.print_trivia_with_newline(leading, shape.indent);
+                printer.print_spaces(shape.indent);
+            } else {
+                printer.print_str(" ");
+            }
+        }
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
@@ -4333,6 +4351,20 @@ impl MapLiteral {
         } else {
             const { "{}".len() }
         };
+        if let Some(prefix) = &self.prefix {
+            len += const { "map ".len() };
+            let (_, trailing) = input.trivia.get_for_range_split(prefix.span());
+            let (leading, _) = input.trivia.get_for_range_split(self.open_brace.span());
+            len += trailing.try_squished_len(input.input)?;
+            len += leading.try_squished_len(input.input)?;
+            if trailing
+                .iter()
+                .chain(leading)
+                .any(EmittableTrivia::is_comment)
+            {
+                len += 1;
+            }
+        }
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
@@ -4390,6 +4422,21 @@ impl MapLiteral {
             || open_trailing.iter().any(EmittableTrivia::is_comment)
             || close_leading.iter().any(EmittableTrivia::is_comment);
 
+        if let Some(prefix) = &self.prefix {
+            printer.print_raw_token(prefix);
+            let (_, trailing) = printer.trivia.get_for_range_split(prefix.span());
+            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
+            printer.print_str(" ");
+            printer.try_print_trivia_single_line_squished(trailing)?;
+            printer.try_print_trivia_single_line_squished(leading)?;
+            if trailing
+                .iter()
+                .chain(leading)
+                .any(EmittableTrivia::is_comment)
+            {
+                printer.print_str(" ");
+            }
+        }
         printer.print_raw_token(&self.open_brace);
         if has_content {
             printer.print_str(" ");
@@ -4449,7 +4496,9 @@ impl Printable for MapLiteral {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_brace.span()
+        self.prefix
+            .as_ref()
+            .map_or(self.open_brace.span(), t::Word::span)
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
