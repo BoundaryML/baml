@@ -6994,7 +6994,6 @@ impl BexEngine {
 
     fn runtime_type_mount(
         vm: &BexVm,
-        alias: &str,
         export_name: &str,
         ptr: bex_vm_types::HeapPtr,
     ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
@@ -7003,11 +7002,12 @@ impl BexEngine {
                 message: format!("with_types entry `{export_name}` is not a type"),
             });
         };
-        // In the consumer compile world, a runtime declaration is spelled
-        // `alias.<item name>`: the mount surface is the only channel that
-        // names it there, whatever its home world called it. Compiled
-        // declarations from another dependency keep their qualified names;
-        // declarations local to this mounted package relocate to its alias.
+        // On the mount's wire a declaration local to the mounted package is
+        // `Local` — the consumer compile world resolves `Local` to the root
+        // it mounts this package as, under whichever aliases reach it — and a
+        // compiled declaration from another dependency keeps its qualified
+        // name; a runtime-created declaration has no name of its own beyond
+        // its item name, so it is local to the mount surface that carries it.
         let wire_head =
             |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
                 if !head.is_resolved() {
@@ -7023,15 +7023,7 @@ impl BexEngine {
                                 "mounted type `{export_name}` names an unnameable compiled head"
                             ),
                         })?;
-                    return Ok(if name.is_local() {
-                        baml_type::QualifiedTypeName::new(
-                            baml_type::Name::new(alias),
-                            name.namespace().clone(),
-                            name.name().clone(),
-                        )
-                    } else {
-                        name
-                    });
+                    return Ok(name);
                 }
                 let item = match vm.get_object(head.ptr()) {
                     Object::Class(class) => class.name.item_name().clone(),
@@ -7046,11 +7038,7 @@ impl BexEngine {
                         });
                     }
                 };
-                Ok(baml_type::QualifiedTypeName::new(
-                    baml_type::Name::new(alias),
-                    Vec::new(),
-                    item,
-                ))
+                Ok(baml_type::QualifiedTypeName::local(item))
             };
         let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
             let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
@@ -7310,11 +7298,12 @@ impl BexEngine {
             let types = package
                 .mounted_types
                 .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
                 .collect::<Result<Vec<_>, _>>()?;
             packages.insert(
                 alias.to_string(),
                 bex_vm_types::RuntimePackageMount {
+                    identity: bex_vm_types::RuntimePackageIdentity::of(package_ptr),
                     interface_blob: package.interface_blob.clone(),
                     types,
                 },
@@ -7433,12 +7422,13 @@ impl BexEngine {
             let types = package
                 .mounted_types
                 .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| invalid(error.to_string()))?;
             packages.insert(
                 alias,
                 bex_vm_types::RuntimePackageMount {
+                    identity: bex_vm_types::RuntimePackageIdentity::of(ptr),
                     interface_blob: package.interface_blob.clone(),
                     types,
                 },

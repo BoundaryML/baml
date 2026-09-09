@@ -14,17 +14,12 @@ use baml_compiler2_hir::loc::FunctionLoc;
 /// for a source-less package.
 #[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ExternalCallTarget<N: baml_type::Head = baml_type::DeclName> {
-    Free {
-        package: baml_base::Name,
-        namespace: Vec<baml_base::Name>,
-        name: baml_base::Name,
-    },
-    Method {
-        package: baml_base::Name,
-        namespace: Vec<baml_base::Name>,
-        class: baml_base::Name,
-        name: baml_base::Name,
-    },
+    /// A free function, named as an item: its package (the head's root at
+    /// compile time, a spelling on the wire), namespace, and name.
+    Free { function: N },
+    /// A class-inherent method: the owning class as a head, and the method.
+    Method { class: N, name: baml_base::Name },
+    /// An interface method: the interface as a head, and the method.
     Interface {
         interface: N,
         method: baml_base::Name,
@@ -32,32 +27,19 @@ pub enum ExternalCallTarget<N: baml_type::Head = baml_type::DeclName> {
 }
 
 impl<N: baml_type::Head> ExternalCallTarget<N> {
-    /// This target with its interface head replaced by what `f` resolves it
-    /// to; the package spellings of free functions and methods are wire link
-    /// names and pass through unchanged.
+    /// This target with every head replaced by what `f` resolves it to: the
+    /// one operation that moves a target between the database's root-headed
+    /// form and the wire's name-headed form.
     pub fn try_map_heads<M: baml_type::Head, E>(
         &self,
         f: &mut impl FnMut(&N) -> Result<M, E>,
     ) -> Result<ExternalCallTarget<M>, E> {
         Ok(match self {
-            Self::Free {
-                package,
-                namespace,
-                name,
-            } => ExternalCallTarget::Free {
-                package: package.clone(),
-                namespace: namespace.clone(),
-                name: name.clone(),
+            Self::Free { function } => ExternalCallTarget::Free {
+                function: f(function)?,
             },
-            Self::Method {
-                package,
-                namespace,
-                class,
-                name,
-            } => ExternalCallTarget::Method {
-                package: package.clone(),
-                namespace: namespace.clone(),
-                class: class.clone(),
+            Self::Method { class, name } => ExternalCallTarget::Method {
+                class: f(class)?,
                 name: name.clone(),
             },
             Self::Interface { interface, method } => ExternalCallTarget::Interface {
@@ -107,7 +89,8 @@ impl ExternalCallable {
 
     pub fn display_name(&self) -> &baml_base::Name {
         match &self.target {
-            ExternalCallTarget::Free { name, .. } | ExternalCallTarget::Method { name, .. } => name,
+            ExternalCallTarget::Free { function } => function.name(),
+            ExternalCallTarget::Method { name, .. } => name,
             ExternalCallTarget::Interface { method, .. } => method,
         }
     }

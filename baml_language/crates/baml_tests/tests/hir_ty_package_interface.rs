@@ -558,12 +558,12 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
     assert!(local_targets.is_empty());
     assert!(mounted_targets.iter().any(|target| matches!(
         target,
-        ExternalCallTarget::Free { name, .. } if name.as_str() == "choose"
+        ExternalCallTarget::Free { function } if function.name().as_str() == "choose"
     )));
     assert!(mounted_targets.iter().any(|target| matches!(
         target,
-        ExternalCallTarget::Method { class, name, .. }
-            if class.as_str() == "Box" && name.as_str() == "get_value"
+        ExternalCallTarget::Method { class, name }
+            if class.name().as_str() == "Box" && name.as_str() == "get_value"
     )));
     assert!(mounted_targets.iter().any(|target| matches!(
         target,

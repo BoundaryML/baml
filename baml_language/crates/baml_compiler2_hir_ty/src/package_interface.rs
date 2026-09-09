@@ -699,11 +699,13 @@ fn external_target<'db>(
 ) -> ExternalCallTarget {
     use baml_compiler2_ppir::item_data::MethodOwner;
 
-    let spelling = baml_compiler2_hir::package::spelling(db);
     let package = file_package::file_package(db, function.file(db));
     let name = baml_compiler2_ppir::item_data::function_data(db, function)
         .name
         .clone();
+    let free = || ExternalCallTarget::Free {
+        function: DeclName::in_root(package.root, package.namespace_path.clone(), name.clone()),
+    };
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
             if let Some(target) = crate::lower::owner_impl_target(db, function, frame) {
@@ -713,11 +715,13 @@ fn external_target<'db>(
                 }
             } else {
                 ExternalCallTarget::Method {
-                    package: spelling.of(package.root).clone(),
-                    namespace: package.namespace_path,
-                    class: baml_compiler2_ppir::item_data::class_data(db, class)
-                        .name
-                        .clone(),
+                    class: DeclName::in_root(
+                        package.root,
+                        package.namespace_path.clone(),
+                        baml_compiler2_ppir::item_data::class_data(db, class)
+                            .name
+                            .clone(),
+                    ),
                     name,
                 }
             }
@@ -731,16 +735,8 @@ fn external_target<'db>(
                 interface: target.name,
                 method: name.clone(),
             })
-            .unwrap_or_else(|| ExternalCallTarget::Free {
-                package: spelling.of(package.root).clone(),
-                namespace: package.namespace_path,
-                name,
-            }),
-        None => ExternalCallTarget::Free {
-            package: spelling.of(package.root).clone(),
-            namespace: package.namespace_path,
-            name,
-        },
+            .unwrap_or_else(free),
+        None => free(),
     }
 }
 

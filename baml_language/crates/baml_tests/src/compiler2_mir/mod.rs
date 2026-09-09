@@ -180,14 +180,14 @@ function forged_type_of<T>() -> reflect.Type {
     {
         let target = match exported.name.as_str() {
             "forged_log" => ExternalCallTarget::Free {
-                package: Name::new("log"),
-                namespace: Vec::new(),
-                name: Name::new("info"),
+                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
             },
             "forged_type_of" => ExternalCallTarget::Free {
-                package: Name::new("reflect"),
-                namespace: vec![Name::new("Type")],
-                name: Name::new("of"),
+                function: baml_type::TypeName::new(
+                    Name::new("reflect"),
+                    vec![Name::new("Type")],
+                    Name::new("of"),
+                ),
             },
             _ => continue,
         };

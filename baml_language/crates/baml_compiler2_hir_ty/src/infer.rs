@@ -5322,22 +5322,18 @@ impl<'db> InferenceContext<'db> {
             return;
         };
         let package_root = match &external.target {
-            crate::callable::ExternalCallTarget::Free { package, .. }
-            | crate::callable::ExternalCallTarget::Method { package, .. } => {
-                baml_compiler2_hir::package::spelling(self.db).root(package)
-            }
-            crate::callable::ExternalCallTarget::Interface { interface, .. } => {
-                Some(interface.root())
-            }
+            crate::callable::ExternalCallTarget::Free { function } => function.root(),
+            crate::callable::ExternalCallTarget::Method { class, .. } => class.root(),
+            crate::callable::ExternalCallTarget::Interface { interface, .. } => interface.root(),
         };
-        let trusted_callsite_lowering = matches!(
-            external.builtin_kind,
-            Some(
-                baml_compiler2_ast::BuiltinKind::Intrinsic
-                    | baml_compiler2_ast::BuiltinKind::AwaitAny
-            )
-        ) && package_root
-            .is_some_and(|root| baml_compiler2_hir::package::is_precompiled_stdlib(self.db, root));
+        let trusted_callsite_lowering =
+            matches!(
+                external.builtin_kind,
+                Some(
+                    baml_compiler2_ast::BuiltinKind::Intrinsic
+                        | baml_compiler2_ast::BuiltinKind::AwaitAny
+                )
+            ) && baml_compiler2_hir::package::is_precompiled_stdlib(self.db, package_root);
         if external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
             && !trusted_callsite_lowering
         {
@@ -6032,7 +6028,10 @@ impl<'db> InferenceContext<'db> {
                     &function.generic_params,
                     Some(&function.name),
                     &bounds,
-                    external_type_position(&external.target),
+                    external_type_position(
+                        baml_compiler2_hir::package::lang_roots(self.db),
+                        &external.target,
+                    ),
                 );
                 let instantiation = self.write_call_type_args(call, &instantiation, 0);
                 self.register_external_call_bounds(&external, &instantiation, call);
@@ -6471,7 +6470,10 @@ impl<'db> InferenceContext<'db> {
                     &function.generic_params,
                     Some(&function.name),
                     &bounds,
-                    external_type_position(&external.target),
+                    external_type_position(
+                        baml_compiler2_hir::package::lang_roots(self.db),
+                        &external.target,
+                    ),
                 ));
                 let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
                 self.register_external_call_bounds(&external, &instantiation, call);
@@ -7696,7 +7698,10 @@ impl<'db> InferenceContext<'db> {
                         &external.generic_params,
                         Some(member),
                         &bounds,
-                        external_type_position(&external.target),
+                        external_type_position(
+                            baml_compiler2_hir::package::lang_roots(self.db),
+                            &external.target,
+                        ),
                     );
                     let own_offset = owner_args.len();
                     let mut instantiation = owner_args;
@@ -7709,7 +7714,10 @@ impl<'db> InferenceContext<'db> {
                         &frame,
                         Some(member),
                         &bounds,
-                        external_type_position(&external.target),
+                        external_type_position(
+                            baml_compiler2_hir::package::lang_roots(self.db),
+                            &external.target,
+                        ),
                     );
                     (instantiation, 0)
                 }
@@ -13642,18 +13650,13 @@ fn external_bounds_map(
 }
 
 fn external_type_position(
+    lang: baml_base::LangRoots,
     target: &crate::callable::ExternalCallTarget,
 ) -> crate::lower::TypePosition {
     match target {
-        crate::callable::ExternalCallTarget::Method {
-            package,
-            namespace,
-            class,
-            name,
-        } if package.as_str() == "reflect"
-            && namespace.is_empty()
-            && class.as_str() == "Package"
-            && name.as_str() == "get_function" =>
+        crate::callable::ExternalCallTarget::Method { class, name }
+            if class.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "Package")
+                && name.as_str() == "get_function" =>
         {
             crate::lower::TypePosition::ExtractionContract
         }
@@ -13666,27 +13669,10 @@ fn external_target_path(
     target: &crate::callable::ExternalCallTarget,
 ) -> baml_type::Name {
     let path = match target {
-        crate::callable::ExternalCallTarget::Free {
-            package,
-            namespace,
-            name,
-        } => std::iter::once(package)
-            .chain(namespace)
-            .chain(std::iter::once(name))
-            .map(baml_type::Name::as_str)
-            .collect::<Vec<_>>()
-            .join("."),
-        crate::callable::ExternalCallTarget::Method {
-            package,
-            namespace,
-            class,
-            name,
-        } => std::iter::once(package)
-            .chain(namespace)
-            .chain([class, name])
-            .map(baml_type::Name::as_str)
-            .collect::<Vec<_>>()
-            .join("."),
+        crate::callable::ExternalCallTarget::Free { function } => function.spell(vp),
+        crate::callable::ExternalCallTarget::Method { class, name } => {
+            format!("{}.{}", class.spell(vp), name)
+        }
         crate::callable::ExternalCallTarget::Interface { interface, method } => {
             format!("{}.{}", interface.spell(vp), method)
         }

@@ -357,17 +357,18 @@ fn external_call_target_name(
 ) -> String {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
     let (package, namespace, owner, name) = match target {
-        ExternalCallTarget::Free {
-            package,
-            namespace,
+        ExternalCallTarget::Free { function } => (
+            spelling.of(function.root()),
+            function.namespace().as_slice(),
+            None,
+            function.name(),
+        ),
+        ExternalCallTarget::Method { class, name } => (
+            spelling.of(class.root()),
+            class.namespace().as_slice(),
+            Some(class.name()),
             name,
-        } => (package, namespace.as_slice(), None, name),
-        ExternalCallTarget::Method {
-            package,
-            namespace,
-            class,
-            name,
-        } => (package, namespace.as_slice(), Some(class), name),
+        ),
         ExternalCallTarget::Interface { interface, method } => (
             spelling.of(interface.root()),
             interface.namespace().as_slice(),

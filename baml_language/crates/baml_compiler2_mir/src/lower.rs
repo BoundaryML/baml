@@ -1392,24 +1392,15 @@ fn resolution_to_item_ref<'db>(
         MemberResolution::External(external) => {
             use baml_compiler2_hir_ty::callable::ExternalCallTarget;
             Some(match &external.target {
-                ExternalCallTarget::Free {
-                    package,
-                    namespace,
-                    name,
-                } => ItemRef::Free {
-                    package: package.clone(),
-                    namespace: namespace.clone(),
-                    name: name.clone(),
+                ExternalCallTarget::Free { function } => ItemRef::Free {
+                    package: spelling(db).of(function.root()).clone(),
+                    namespace: function.namespace().clone(),
+                    name: function.name().clone(),
                 },
-                ExternalCallTarget::Method {
-                    package,
-                    namespace,
-                    class,
-                    name,
-                } => ItemRef::Method {
-                    package: package.clone(),
-                    namespace: namespace.clone(),
-                    class: class.clone(),
+                ExternalCallTarget::Method { class, name } => ItemRef::Method {
+                    package: spelling(db).of(class.root()).clone(),
+                    namespace: class.namespace().clone(),
+                    class: class.name().clone(),
                     name: name.clone(),
                 },
                 ExternalCallTarget::Interface { interface, method } => ItemRef::Method {
@@ -9820,16 +9811,18 @@ impl<'db> LoweringContext<'db> {
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
         if let Some(external) = self.external_callee(callee) {
             let package_root = match &external.target {
-                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { package, .. }
-                | baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { package, .. } => {
-                    self.spelling.root(package)
+                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } => {
+                    function.root()
+                }
+                baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, .. } => {
+                    class.root()
                 }
                 baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface {
                     interface,
                     ..
-                } => Some(interface.root()),
+                } => interface.root(),
             };
-            if package_root.is_some_and(|root| is_precompiled_stdlib(self.db, root)) {
+            if is_precompiled_stdlib(self.db, package_root) {
                 return external.builtin_kind;
             }
         }
@@ -9985,20 +9978,14 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_ast::BuiltinKind;
 
         if let Some(external) = self.external_callee(callee)
-            && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
-                package,
-                namespace,
-                name,
-            } = &external.target
-            && self
-                .spelling
-                .root(package)
-                .is_some_and(|root| is_precompiled_stdlib(self.db, root))
+            && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } =
+                &external.target
+            && is_precompiled_stdlib(self.db, function.root())
             && external.builtin_kind == Some(BuiltinKind::Intrinsic)
-            && package.as_str() == "log"
-            && namespace.is_empty()
+            && self.spelling.of(function.root()).as_str() == "log"
+            && function.namespace().is_empty()
         {
-            return match name.as_str() {
+            return match function.name().as_str() {
                 "info" => Some(IntrinsicOp::Log(LogLevel::Info)),
                 "debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
                 "warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
@@ -10086,15 +10073,12 @@ impl<'db> LoweringContext<'db> {
             external.builtin_kind == Some(BuiltinKind::Intrinsic)
                 && matches!(
                     &external.target,
-                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Method {
-                        package,
-                        namespace,
-                        class,
-                        name,
-                    } if package.as_str() == "reflect"
-                        && namespace.is_empty()
-                        && class.as_str() == "Type"
-                        && name.as_str() == "of"
+                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, name }
+                        if class.is_lang_root_type(
+                            baml_compiler2_hir::package::lang_roots(self.db),
+                            baml_base::LangPackage::Reflect,
+                            "Type",
+                        ) && name.as_str() == "of"
                 )
         });
         let func_loc = (!external_type_of)
