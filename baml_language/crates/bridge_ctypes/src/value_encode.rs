@@ -10,8 +10,47 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
-    handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
+    handle_table::{BexRustData, CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions},
 };
+
+/// Handle-table rows inserted while encoding one outbound aggregate.
+///
+/// Every row inserted for the host owes exactly one release. Until the ledger
+/// is committed it still owns those releases and performs them on drop, so an
+/// encode that fails partway — an invalid child after valid opaque siblings —
+/// leaves no orphaned rows behind.
+struct OutboundOwnership<'a> {
+    table: &'a CffiHandleTable,
+    keys: Vec<u64>,
+}
+
+impl<'a> OutboundOwnership<'a> {
+    fn new(table: &'a CffiHandleTable) -> Self {
+        Self {
+            table,
+            keys: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, entry: CffiHandleTableEntry) -> u64 {
+        let key = self.table.insert(entry);
+        self.keys.push(key);
+        key
+    }
+
+    /// Hand every inserted row to the host: the releases are now its to make.
+    fn commit(mut self) {
+        self.keys.clear();
+    }
+}
+
+impl Drop for OutboundOwnership<'_> {
+    fn drop(&mut self) {
+        for key in self.keys.drain(..) {
+            self.table.release(key);
+        }
+    }
+}
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
 ///
@@ -20,9 +59,24 @@ use crate::{
 /// For `BexExternalAdt::TaggedHeapHandle { ty, .. }` the underlying type is encoded
 /// as a full `BamlTy` on the handle's `ty` field so the host sees the class FQN +
 /// concrete generic args (and an interface keeps its bindings).
+///
+/// The value is one ownership aggregate: on error, every row this call
+/// inserted is released again, so a caller may encode a fallback value in its
+/// place without leaking the failed attempt.
 pub fn external_to_outbound(
     value: &BexExternalValue,
     options: &CffiHandleTableOptions,
+) -> Result<BamlOutboundValue, CtypesError> {
+    let mut owned = OutboundOwnership::new(options.table);
+    let encoded = encode_value(value, options, &mut owned)?;
+    owned.commit();
+    Ok(encoded)
+}
+
+fn encode_value(
+    value: &BexExternalValue,
+    options: &CffiHandleTableOptions,
+    owned: &mut OutboundOwnership<'_>,
 ) -> Result<BamlOutboundValue, CtypesError> {
     let variant = match value {
         BexExternalValue::Null => None,
@@ -40,7 +94,7 @@ pub fn external_to_outbound(
         } => {
             let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
                 .iter()
-                .map(|v| external_to_outbound(v, options))
+                .map(|v| encode_value(v, options, owned))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
                 item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(element_type)),
@@ -56,7 +110,7 @@ pub fn external_to_outbound(
             for (key, val) in entries {
                 baml_entries.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(encode_value(val, options, owned)?),
                 });
             }
             Some(BamlValueVariant::MapValue(BamlValueMap {
@@ -74,7 +128,7 @@ pub fn external_to_outbound(
             for (key, val) in fields {
                 baml_fields.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(encode_value(val, options, owned)?),
                 });
             }
             // Carry a generic instance's concrete class type args (De Bruijn
@@ -101,7 +155,7 @@ pub fn external_to_outbound(
         BexExternalValue::Union { value, metadata } => {
             let selected_option_index =
                 selected_union_option_index(&metadata.union_type, &metadata.selected_option)?;
-            let inner = external_to_outbound(value, options)?;
+            let inner = encode_value(value, options, owned)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
                     name: metadata.name.clone().unwrap_or_default(),
@@ -133,11 +187,11 @@ pub fn external_to_outbound(
         }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return external_to_outbound(&converted, options);
+                return encode_value(&converted, options, owned);
             }
             let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = owned.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
@@ -207,7 +261,7 @@ pub fn external_to_outbound(
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
             })?;
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = owned.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
@@ -545,10 +599,13 @@ pub fn build_to_host_call(
     optional: &IndexMap<String, BexExternalValue>,
     options: &CffiHandleTableOptions,
 ) -> Result<BamlToHostCall, CtypesError> {
+    // The whole argument list is one ownership aggregate: a later argument
+    // that fails to encode releases the rows of every argument before it.
+    let mut owned = OutboundOwnership::new(options.table);
     let mut args = Vec::with_capacity(positional.len() + optional.len());
     for v in positional {
         args.push(BamlToHostArg {
-            value: Some(external_to_outbound(v, options)?),
+            value: Some(encode_value(v, options, &mut owned)?),
             // Positional (required) args are taken by position — no name.
             arg_name: String::new(),
             is_optional_arg: false,
@@ -556,11 +613,12 @@ pub fn build_to_host_call(
     }
     for (name, v) in optional {
         args.push(BamlToHostArg {
-            value: Some(external_to_outbound(v, options)?),
+            value: Some(encode_value(v, options, &mut owned)?),
             arg_name: name.clone(),
             is_optional_arg: true,
         });
     }
+    owned.commit();
     Ok(BamlToHostCall { args })
 }
 
@@ -606,6 +664,59 @@ mod tests {
 
     fn ambiguous_numeric_union(selected: RuntimeTy, value: BexExternalValue) -> BexExternalValue {
         BexExternalValue::union(value, [RuntimeTy::int(), RuntimeTy::float()], selected)
+    }
+
+    /// An opaque sibling is inserted into the table before a later child
+    /// fails to encode. The failed aggregate must not leave that row (and the
+    /// value it retains) behind.
+    #[test]
+    fn failed_output_aggregate_rolls_back_earlier_owned_handles() {
+        struct Resource;
+        let resource = Arc::new(Resource);
+        let live = BexExternalValue::RustData(resource.clone());
+        let invalid = ambiguous_numeric_union(RuntimeTy::bool(), BexExternalValue::Bool(true));
+        let table = CffiHandleTable::new();
+        let options = CffiHandleTableOptions {
+            table: &table,
+            serialize_media: true,
+            serialize_prompt_ast: true,
+        };
+        let value = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                live.clone(),
+                BexExternalValue::Instance {
+                    class_name: "user.Record".into(),
+                    type_args: vec![],
+                    fields: IndexMap::from([
+                        ("live".to_string(), live.clone()),
+                        ("invalid".to_string(), invalid.clone()),
+                    ]),
+                },
+            ],
+        };
+        let owners = Arc::strong_count(&resource);
+        assert!(external_to_outbound(&value, &options).is_err());
+        assert!(table.is_empty());
+        assert_eq!(Arc::strong_count(&resource), owners);
+
+        // A callback's argument list is one aggregate too, optional arguments
+        // included: a bad optional rolls back the positional before it.
+        let call = build_to_host_call(
+            std::slice::from_ref(&live),
+            &IndexMap::from([("bad".to_string(), invalid)]),
+            &options,
+        );
+        assert!(call.is_err());
+        assert!(table.is_empty());
+        assert_eq!(Arc::strong_count(&resource), owners);
+
+        // The same values encode, and commit, once the aggregate is valid.
+        let encoded = external_to_outbound(&live, &options).unwrap();
+        let handle = extract_handle(encoded);
+        assert_eq!(table.len(), 1);
+        assert!(table.release(handle.key));
+        assert!(table.is_empty());
     }
 
     #[test]
