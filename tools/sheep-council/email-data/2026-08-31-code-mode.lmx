@@ -1,0 +1,28 @@
+---
+name: "Sheep Council Mon Aug 31"
+campaignGroupId: "cmtc7a2fx078l0j4jwqydy4m4"
+mailingListId: "cmpzwi95b07yc0j5z217rfahn"
+subject: "Sheep Council Mon Aug 31, 9am PT - code mode"
+previewText: ""
+fromName: "Vaibhav from Boundary"
+fromEmail: "vbv"
+replyToEmail: "vbv@boundaryml.com"
+emailFormat: "styled"
+contactPropertiesFallbacks: {}
+---
+<Style backgroundColor="" backgroundXPadding="0" backgroundYPadding="0" bodyColor="" bodyXPadding="0" bodyYPadding="0" bodyFontFamily="Default" bodyFontCategory="sans-serif" borderColor="" borderWidth="0" borderRadius="4" buttonBodyColor="" buttonBodyXPadding="16" buttonBodyYPadding="12" buttonBorderColor="" buttonBorderWidth="0" buttonBorderRadius="4" buttonTextColor="" buttonTextFormat="0" buttonTextFontSize="16" dividerColor="" dividerBorderWidth="1" textBaseColor="" textBaseFontSize="14" textBaseLineHeight="150" textBaseLetterSpacing="0" textLinkColor="" heading1Color="" heading1FontSize="28" heading1LineHeight="125" heading1LetterSpacing="0" heading2Color="" heading2FontSize="24" heading2LineHeight="125" heading2LetterSpacing="0" heading3Color="" heading3FontSize="20" heading3LineHeight="125" heading3LetterSpacing="0" />
+<Paragraph>Hello Sheep Councillor {contact.firstName}!</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>We’ll see you on <Strong textColor="#6d28d9">Monday Aug 31, 9am PT.</Strong></Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>This week we'll be talking about<Text textColor="#6d28d9"> code mode a</Text>nd what you can do with the new baml.reflect.* APIs, including how you can define tools at runtime!</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>BAML 0.18 is also now available, which means you and your agents can now <Code>baml query</Code> the BAML program traces saved on your computer.</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>If you're interested in seeing a demo, sharing feedback about your use case, or influencing how BAML does this, make sure to be there :)</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph><Link href="https://calendar.google.com/calendar/event?action=TEMPLATE&amp;tmeid=OXQ1dGE3dmthNGptN2JlNnR0ajI5OG5oOHNfMjAyNjA4MTBUMTYwMDAwWiBjX2Q4OWQ3NWVlZGJlYTZjMWUxOTE5MTJiYjlmZmNmMmM3ZGM2OGM2ZWNmNmFkYzY1YjM0NzVhYWNkNGZjOGUxYmJAZw&amp;tmsrc=c_d89d75eedbea6c1e191912bb9ffcf2c7dc68c6ecf6adc65b3475aacd4fc8e1bb%40group.calendar.google.com"><Underline>Add to your calendar by using this link</Underline></Link></Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>See you all then!</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>Vaibhav</Paragraph>
