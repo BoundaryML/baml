@@ -13,15 +13,30 @@
 
 import {
     BamlCallContext,
+    BamlRuntime,
     getRuntime,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { BamlTypeMap, getTypeMap } from './typemap.js';
 import { attachCallContext } from './call_context.js';
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlType, lowerTypeToWireTy, type BamlTypeToken } from './wire_ty.js';
+import { BamlType, isBamlType, lowerTypeToWireTy, type BamlTypeValue, type BamlTypeToken } from './wire_ty.js';
 
 export type Mode = 'sync' | 'async';
+
+/** One SDK's engine binding and codecs. Generated modules supply a lazy getter
+ * so cyclic namespace imports can define functions before setup finishes. */
+export interface SdkContext {
+    readonly runtime: BamlRuntime;
+    readonly typeMap: BamlTypeMap;
+}
+
+function contextGetter(sdk?: () => SdkContext): () => SdkContext {
+    if (sdk) return sdk;
+    const captured = { runtime: getRuntime(), typeMap: getTypeMap() };
+    return () => captured;
+}
 
 /** Sentinel for "argument not supplied" so optional kwargs can be skipped. */
 export const UNSET: unique symbol = Symbol('baml.UNSET');
@@ -46,8 +61,8 @@ interface BuiltArgs {
     types?: unknown;
 }
 
-type HostTypeToken = BamlType | BamlTypeToken;
-type WireTypeArg = [string, baml_bridge.cffi.v1.IBamlTy | BamlType];
+type HostTypeToken = BamlTypeValue | BamlTypeToken;
+type WireTypeArg = [string, baml_bridge.cffi.v1.IBamlTy | BamlTypeValue];
 
 /**
  * Resolve the caller's `$types` option onto the callee's own generic params, in
@@ -113,6 +128,7 @@ function buildTypeArgs(
     typesOpt: unknown,
     typeParams: readonly string[],
     classTypeParams: readonly string[],
+    typeMap: BamlTypeMap,
 ): WireTypeArg[] {
     const wire: WireTypeArg[] = [];
     const classTypes = classTypeParams.length ? receiverTypes(self) : undefined;
@@ -120,7 +136,7 @@ function buildTypeArgs(
         for (const name of classTypeParams) {
             const token = classTypes[name];
             if (token !== undefined) {
-                wire.push([name, token instanceof BamlType ? token : lowerTypeToWireTy(token)]);
+                wire.push([name, isBamlType(token) ? token : lowerTypeToWireTy(token, typeMap)]);
             }
         }
     }
@@ -135,7 +151,7 @@ function buildTypeArgs(
             );
         }
         for (const [name, token] of resolved) {
-            wire.push([name, token instanceof BamlType ? token : lowerTypeToWireTy(token)]);
+            wire.push([name, isBamlType(token) ? token : lowerTypeToWireTy(token, typeMap)]);
         }
     }
     return wire;
@@ -209,7 +225,9 @@ export function defineFunction(
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
     generics?: GenericParams | undefined,
+    sdk?: (() => SdkContext) | undefined,
 ): (...args: unknown[]) => unknown {
+    const getContext = contextGetter(sdk);
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     // A free function / static method binds only its OWN generic params (a
@@ -219,18 +237,18 @@ export function defineFunction(
     // Eagerly reject `$types` on a non-generic call, matching the generic path's
     // strict binding contract (mirrors Python's `is_generic` gate).
     const typeArgsFor = (built: BuiltArgs): WireTypeArg[] =>
-        isGeneric ? buildTypeArgs(undefined, built.types, typeParams, []) : [];
+        isGeneric ? buildTypeArgs(undefined, built.types, typeParams, [], getContext().typeMap) : [];
     if (mode === 'sync') {
         return (...args: unknown[]): unknown => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const { runtime: rt, typeMap } = getContext();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
+            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, typeMap, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = rt.callFunctionSync(argsProto, null, null);
-                return decodeCallResult(resultBytes);
+                return decodeCallResult(resultBytes, typeMap);
             } finally {
                 callCtxBinding.detach();
             }
@@ -240,13 +258,13 @@ export function defineFunction(
         return async (...args: unknown[]): Promise<unknown> => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const { runtime: rt, typeMap } = getContext();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
+            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, typeMap, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = await rt.callFunction(argsProto, null, null);
-                return decodeCallResult(resultBytes);
+                return decodeCallResult(resultBytes, typeMap);
             } finally {
                 callCtxBinding.detach();
             }
@@ -268,7 +286,9 @@ export function defineInstanceFunction(
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
     generics?: GenericParams | undefined,
+    sdk?: (() => SdkContext) | undefined,
 ): { bind(self: unknown): (...args: unknown[]) => unknown } {
+    const getContext = contextGetter(sdk);
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     const selfName = requiredNames[0] ?? 'self';
@@ -289,18 +309,18 @@ export function defineInstanceFunction(
     return {
         bind(self: unknown): (...args: unknown[]) => unknown {
             const typeArgsFor = (built: BuiltArgs): WireTypeArg[] =>
-                isGeneric ? buildTypeArgs(self, built.types, typeParams, classTypeParams) : [];
+                isGeneric ? buildTypeArgs(self, built.types, typeParams, classTypeParams, getContext().typeMap) : [];
             if (mode === 'sync') {
                 return (...args: unknown[]): unknown => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const { runtime: rt, typeMap } = getContext();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
+                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, typeMap, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = rt.callFunctionSync(argsProto, null, null);
-                        return decodeCallResult(resultBytes);
+                        return decodeCallResult(resultBytes, typeMap);
                     } finally {
                         callCtxBinding.detach();
                     }
@@ -310,13 +330,13 @@ export function defineInstanceFunction(
                 return async (...args: unknown[]): Promise<unknown> => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const { runtime: rt, typeMap } = getContext();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
+                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, typeMap, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = await rt.callFunction(argsProto, null, null);
-                        return decodeCallResult(resultBytes);
+                        return decodeCallResult(resultBytes, typeMap);
                     } finally {
                         callCtxBinding.detach();
                     }

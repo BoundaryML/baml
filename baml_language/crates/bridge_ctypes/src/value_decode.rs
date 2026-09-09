@@ -31,6 +31,125 @@ pub fn inbound_to_external(
     value: InboundValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
+    InboundTransfer::capture_value(&value, handle_table).decode(value)
+}
+
+/// Owns every capability in one parsed inbound aggregate before validation.
+/// Table leases are consumed once per occurrence. Decoding clones the retained
+/// values; any unvisited siblings are released when this batch is dropped.
+#[derive(Default)]
+pub struct InboundTransfer {
+    engine_values: HashMap<u64, Option<BexExternalValue>>,
+    host_values: HashMap<u64, Option<Arc<bex_project::HostValueArc>>>,
+}
+
+impl InboundTransfer {
+    pub fn capture_value(value: &InboundValue, table: &CffiHandleTable) -> Self {
+        Self::capture(std::iter::once(value), table)
+    }
+
+    /// Own one protocol input batch without inventing a BAML container type.
+    pub fn capture_values(values: &[InboundValue], table: &CffiHandleTable) -> Self {
+        Self::capture(values.iter(), table)
+    }
+
+    pub fn decode_values(
+        self,
+        values: Vec<InboundValue>,
+    ) -> Result<Vec<BexExternalValue>, CtypesError> {
+        values
+            .into_iter()
+            .map(|value| decode_value(value, &self))
+            .collect()
+    }
+
+    pub fn decode(self, value: InboundValue) -> Result<BexExternalValue, CtypesError> {
+        decode_value(value, &self)
+    }
+
+    fn capture<'a>(
+        values: impl IntoIterator<Item = &'a InboundValue>,
+        table: &CffiHandleTable,
+    ) -> Self {
+        let mut transfer = Self::default();
+        let mut pending: Vec<_> = values.into_iter().collect();
+        while let Some(value) = pending.pop() {
+            match &value.value {
+                Some(InboundValueVariant::Handle(handle)) => {
+                    if let Some(kind) = host_kind(handle.handle_type) {
+                        let entry = transfer.host_values.entry(handle.key).or_insert_with(|| {
+                            bex_project::HostValueArc::try_intern(handle.key, kind).ok()
+                        });
+                        if entry.as_ref().is_some_and(|arc| arc.kind != kind) {
+                            *entry = None;
+                        }
+                    } else {
+                        let captured = table
+                            .drain(handle.key)
+                            .and_then(|entry| BexExternalValue::try_from((*entry).clone()).ok());
+                        transfer
+                            .engine_values
+                            .entry(handle.key)
+                            .and_modify(|existing| {
+                                if captured.is_none() {
+                                    *existing = None;
+                                }
+                            })
+                            .or_insert(captured);
+                    }
+                }
+                Some(InboundValueVariant::ListValue(list)) => pending.extend(&list.values),
+                Some(InboundValueVariant::MapValue(map)) => {
+                    pending.extend(map.entries.iter().filter_map(|entry| entry.value.as_ref()))
+                }
+                Some(InboundValueVariant::ClassValue(class)) => {
+                    pending.extend(class.fields.iter().filter_map(|entry| entry.value.as_ref()))
+                }
+                _ => {}
+            }
+        }
+        transfer
+    }
+
+    pub fn capture_kwargs(kwargs: &[InboundMapEntry], table: &CffiHandleTable) -> Self {
+        Self::capture(
+            kwargs.iter().filter_map(|entry| entry.value.as_ref()),
+            table,
+        )
+    }
+
+    pub fn decode_kwargs(
+        self,
+        kwargs: Vec<InboundMapEntry>,
+    ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+        let mut result = HashMap::new();
+        for entry in kwargs {
+            let key = extract_string_key(&entry)?;
+            let value = entry
+                .value
+                .map(|value| decode_value(value, &self))
+                .transpose()?
+                .unwrap_or(BexExternalValue::Null);
+            result.insert(key, value);
+        }
+        Ok(result)
+    }
+}
+
+fn host_kind(handle_type: i32) -> Option<bex_project::HostValueKind> {
+    if handle_type == BamlHandleType::HostValueCallable as i32 {
+        Some(bex_project::HostValueKind::Callable)
+    } else if handle_type == BamlHandleType::HostValueOpaque as i32 {
+        Some(bex_project::HostValueKind::Opaque)
+    } else {
+        None
+    }
+}
+
+fn decode_value(
+    value: InboundValue,
+    transfer: &InboundTransfer,
+) -> Result<BexExternalValue, CtypesError> {
     let value_type = value
         .value_type
         .as_ref()
@@ -68,9 +187,9 @@ pub fn inbound_to_external(
             }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),
-            InboundValueVariant::ListValue(list) => convert_list(list, handle_table),
-            InboundValueVariant::MapValue(map) => convert_map(map, handle_table),
-            InboundValueVariant::ClassValue(class) => convert_class(class, handle_table),
+            InboundValueVariant::ListValue(list) => convert_list(list, transfer),
+            InboundValueVariant::MapValue(map) => convert_map(map, transfer),
+            InboundValueVariant::ClassValue(class) => convert_class(class, transfer),
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
@@ -83,31 +202,20 @@ pub fn inbound_to_external(
                 BexExternalAdt::PromptAst(Arc::new(proto_prompt_ast_to_bex_prompt_ast(prompt)?)),
             )),
             InboundValueVariant::Handle(handle) => {
-                // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
-                // bridge owns the lookup; we construct the Arc stub here so
-                // last-drop fires the registered HostReleaseFn.
-                let host_value_kind =
-                    if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
-                        Some(bex_project::HostValueKind::Callable)
-                    } else if handle.handle_type == BamlHandleType::HostValueOpaque as i32 {
-                        Some(bex_project::HostValueKind::Opaque)
-                    } else {
-                        None
-                    };
-                if let Some(kind) = host_value_kind {
-                    // Intern by key so repeated decodes of the same wire key
-                    // (e.g. BAML returns a host callable, the host passes it
-                    // back in) share one Arc identity. Otherwise each decode
-                    // would mint an independent Arc with its own refcount and
-                    // the first last-drop would fire HostReleaseFn, tearing the
-                    // registry entry out from under the still-live other Arc.
-                    let arc = bex_project::HostValueArc::intern(handle.key, kind);
-                    return Ok(BexExternalValue::HostValue(arc));
+                if host_kind(handle.handle_type).is_some() {
+                    let arc = transfer
+                        .host_values
+                        .get(&handle.key)
+                        .and_then(Clone::clone)
+                        .ok_or(CtypesError::InvalidHostValueKind(handle.key))?;
+                    Ok(BexExternalValue::HostValue(arc))
+                } else {
+                    transfer
+                        .engine_values
+                        .get(&handle.key)
+                        .and_then(Clone::clone)
+                        .ok_or(CtypesError::InvalidHandleKey(handle.key))
                 }
-                let value = handle_table
-                    .drain(handle.key)
-                    .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
-                Ok(BexExternalValue::from((*value).clone()))
             }
         },
     }?;
@@ -221,12 +329,12 @@ fn default_scalar_union_ty() -> RuntimeTy {
 
 fn convert_list(
     list: InboundListValue,
-    handle_table: &CffiHandleTable,
+    transfer: &InboundTransfer,
 ) -> Result<BexExternalValue, CtypesError> {
     let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
         .into_iter()
-        .map(|v| inbound_to_external(v, handle_table))
+        .map(|v| decode_value(v, transfer))
         .collect();
     Ok(BexExternalValue::Array {
         element_type: default_scalar_union_ty(),
@@ -236,14 +344,14 @@ fn convert_list(
 
 fn convert_map(
     map: InboundMapValue,
-    handle_table: &CffiHandleTable,
+    transfer: &InboundTransfer,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut entries = IndexMap::new();
     for entry in map.entries {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
-            .map(|v| inbound_to_external(v, handle_table))
+            .map(|v| decode_value(v, transfer))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         entries.insert(key, value);
@@ -257,14 +365,14 @@ fn convert_map(
 
 fn convert_class(
     class: InboundClassValue,
-    handle_table: &CffiHandleTable,
+    transfer: &InboundTransfer,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut fields = IndexMap::new();
     for entry in class.fields {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
-            .map(|v| inbound_to_external(v, handle_table))
+            .map(|v| decode_value(v, transfer))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         fields.insert(key, value);
@@ -299,17 +407,7 @@ pub fn kwargs_to_bex_values(
     kwargs: Vec<InboundMapEntry>,
     handle_table: &CffiHandleTable,
 ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
-    let mut result = HashMap::new();
-    for entry in kwargs {
-        let key = extract_string_key(&entry)?;
-        let value = entry
-            .value
-            .map(|v| inbound_to_external(v, handle_table))
-            .transpose()?
-            .unwrap_or(BexExternalValue::Null);
-        result.insert(key, value);
-    }
-    Ok(result)
+    InboundTransfer::capture_kwargs(&kwargs, handle_table).decode_kwargs(kwargs)
 }
 
 /// Decode playground run arguments from a host-call-free byte envelope.
@@ -339,6 +437,124 @@ mod tests {
             value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
             value: Some(value),
         }
+    }
+
+    #[test]
+    fn failed_input_aggregate_releases_visited_and_unvisited_transfers() {
+        struct Resource;
+        let resource = Arc::new(Resource);
+        let table = CffiHandleTable::new();
+        let original = table.insert(CffiHandleTableEntry::RustData(
+            crate::handle_table::BexRustData(resource.clone()),
+        ));
+        let owners = Arc::strong_count(&resource);
+        let sent = || InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: table.clone_handle(original).unwrap(),
+                handle_type: BamlHandleType::UntaggedRustData as i32,
+            })),
+            ..Default::default()
+        };
+        for _ in 0..16 {
+            let input = InboundValue {
+                value: Some(InboundValueVariant::ListValue(InboundListValue {
+                    values: vec![
+                        sent(),
+                        InboundValue {
+                            value: Some(InboundValueVariant::BigintValue("not hex".into())),
+                            ..Default::default()
+                        },
+                        sent(),
+                    ],
+                })),
+                ..Default::default()
+            };
+            assert!(inbound_to_external(input, &table).is_err());
+            assert_eq!(table.len(), 1, "the caller's original lease remains");
+            assert_eq!(Arc::strong_count(&resource), owners);
+
+            let input = typed_input(
+                &RuntimeTy::optional(RuntimeTy::int()),
+                InboundValueVariant::ListValue(InboundListValue {
+                    values: vec![sent(), sent()],
+                }),
+            );
+            assert!(inbound_to_external(input, &table).is_err());
+            assert_eq!(
+                table.len(),
+                1,
+                "invalid annotations must not hide child leases"
+            );
+            assert_eq!(Arc::strong_count(&resource), owners);
+
+            let input = vec![
+                InboundMapEntry {
+                    key: None,
+                    value: Some(sent()),
+                },
+                InboundMapEntry {
+                    key: Some(crate::baml_bridge::cffi::inbound_map_entry::Key::StringKey(
+                        "later".into(),
+                    )),
+                    value: Some(sent()),
+                },
+            ];
+            assert!(kwargs_to_bex_values(input, &table).is_err());
+            assert_eq!(
+                table.len(),
+                1,
+                "malformed keyword names still release the whole batch"
+            );
+            assert_eq!(Arc::strong_count(&resource), owners);
+        }
+        assert!(table.release(original));
+        assert_eq!(Arc::strong_count(&resource), 1);
+    }
+
+    #[test]
+    fn input_batch_keeps_ownership_until_decoded_or_abandoned() {
+        struct Resource;
+        let table = CffiHandleTable::new();
+        let resource = Arc::new(Resource);
+        let weak = Arc::downgrade(&resource);
+        let key = table.insert(CffiHandleTableEntry::RustData(
+            crate::handle_table::BexRustData(resource),
+        ));
+        let input = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: BamlHandleType::UntaggedRustData as i32,
+            })),
+            ..Default::default()
+        };
+        let batch = InboundTransfer::capture(std::iter::once(&input), &table);
+        assert!(table.is_empty());
+        assert!(weak.upgrade().is_some());
+        let decoded = decode_value(input, &batch).unwrap();
+        drop(batch);
+        assert!(weak.upgrade().is_some());
+        drop(decoded);
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn forged_host_kind_is_rejected_without_replacing_the_live_registration() {
+        let original =
+            bex_project::HostValueArc::intern(91234, bex_project::HostValueKind::Callable);
+        let input = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: original.key,
+                handle_type: BamlHandleType::HostValueOpaque as i32,
+            })),
+            ..Default::default()
+        };
+        assert!(matches!(
+            inbound_to_external(input, &CffiHandleTable::new()),
+            Err(CtypesError::InvalidHostValueKind(91234))
+        ));
+        let same =
+            bex_project::HostValueArc::intern(original.key, bex_project::HostValueKind::Callable);
+        assert!(Arc::ptr_eq(&original, &same));
     }
 
     #[test]

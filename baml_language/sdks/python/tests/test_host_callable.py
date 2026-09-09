@@ -31,7 +31,7 @@ from baml_bridge.baml_py import (
     _live_handle_count,
     _seed_generic_media_handle,
 )
-from baml_bridge.errors import BamlError
+from baml_bridge.errors import BamlError, BamlPanic
 
 
 CALLBACK_BAML = """\
@@ -95,24 +95,11 @@ def test_lambda_round_trip():
     assert result.result() == "lambda-12"
 
 
-@pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic. v1 leaks until the engine collects.",
-    strict=False,
-)
-def test_release_fires_on_drop():
-    """The Rust side drops its `HostValueArc` once the engine GCs the
-    `Object::HostClosure` it allocated for the callable; the release
-    callback then removes the Python callable from the registry, and
-    dropping the user's last reference makes it collectible.
+def test_release_fires_after_collection_with_runtime_open():
+    """The engine's last closure owner releases the registration after GC.
 
-    `flush_events()` clears the event-sink arg-snapshot clone; the
-    remaining clone sits on the engine's heap and only goes away when
-    GC walks it. Driving extra BAML calls *eventually* triggers GC,
-    but a single one usually doesn't — hence xfail-strict-false. The
-    release path itself is exercised directly by the `bex_external_types`
-    unit tests in `host_value::tests::drop_fires_release_once_at_last_clone`.
+    Keeping the default runtime installed must not keep dead callbacks alive.
+    Use the public collection operation to test ownership deterministically.
     """
     rt = _make_runtime()
 
@@ -124,16 +111,17 @@ def test_release_fires_on_drop():
     wr = weakref.ref(cb)
     result = call_function_sync(rt, "CallCb", {"callback": cb, "x": 3})
     assert result.result() == "3"
-    del cb
+    del cb, result
     flush_events()
-    # Drive enough calls to nudge the engine's GC heuristic. Even with
-    # this, a single-callable program may stay below the threshold.
-    for _ in range(64):
-        _ = call_function_sync(rt, "CallCb", {"callback": lambda _x: "", "x": 0})
+    call_function_sync(rt, "baml.sys.collect_garbage", {}).result()
     flush_events()
     gc.collect()
-    assert wr() is None, (
-        "expected the host callable to be released after BAML drops its HostClosure"
+    assert wr() is None
+    assert (
+        call_function_sync(
+            rt, "CallIntCb", {"callback": lambda x: x + 1, "x": 1}
+        ).result()
+        == 2
     )
 
 
@@ -234,13 +222,14 @@ def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
-    with pytest.raises(Exception, match="TypeMismatch"):
+    with pytest.raises(BamlPanic) as raised:
         call_function_sync(
             rt,
             "ConsumeUnknownCb",
             {"callback": lambda _x: handle, "x": 7},
         )
 
+    assert raised.value.class_name == "baml.panics.HostContractViolation"
     assert _live_handle_count() == before
 
 
@@ -320,33 +309,18 @@ def test_encode_error_releases_registered_callables(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_normal_user_exception_routes_to_BamlError_not_BamlPanic():
-    """Regression guard for the BamlError vs BamlPanic dichotomy. A
-    *normal* user exception raised by the lambda is a user-level error
-    (catchable), not a bridge-layer fault — it must surface as
-    `BamlError`, never `BamlPanic`. If a future change accidentally
-    routed every host throw through `send_dispatch_bridge_failure`, the
-    test fails because `BamlPanic` subclasses `BaseException` (not
-    `Exception`), so the `pytest.raises(Exception)` check below would
-    miss it.
-    """
-    from baml_bridge.errors import BamlError, BamlPanic
-
+def test_normal_user_exception_preserves_same_host_identity():
+    """A permitted host exception comes back as the original Python object."""
     rt = _make_runtime()
+    original = ValueError("ordinary user error")
 
     def cb(_x: int) -> str:
-        raise ValueError("ordinary user error")
+        raise original
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(ValueError) as exc_info:
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
 
-    assert isinstance(exc_info.value, BamlError), (
-        f"expected BamlError, got {type(exc_info.value).__name__}"
-    )
-    assert not isinstance(exc_info.value, BamlPanic), (
-        "user exceptions must NOT route as BamlPanic — that's reserved "
-        "for bridge-layer faults like missing-callable-for-key"
-    )
+    assert exc_info.value is original
 
 
 def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
@@ -359,11 +333,6 @@ def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
     """
     from baml_bridge.errors import BamlError, BamlPanic
     from baml_bridge.cffi.v1 import baml_outbound_pb2
-
-    # `decode_call_result` reads the process-wide typemap to materialize the
-    # panic value's class. `baml.panics.SdkPanic` is part of the BAML std
-    # namespace, so any initialized runtime makes it resolvable.
-    _make_runtime()
 
     # Build the smallest envelope that round-trips: a `panic` arm with a
     # `baml.panics.SdkPanic` ClassValue holding a single `message` field.

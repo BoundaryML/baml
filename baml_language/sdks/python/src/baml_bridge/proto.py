@@ -14,6 +14,9 @@ caller's declared Python return type plays no runtime role.
 from __future__ import annotations
 
 import enum
+import copy
+from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 import os
 import types as python_types
 import typing
@@ -22,11 +25,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from .cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 from .baml_py import (
     BamlAudio,
+    BamlEncodedResult,
     BamlImage,
     BamlPdf,
     BamlPyHandle,
     BamlVideo,
-    get_runtime as _get_runtime,
     new_function_call,
     register_host_callable,
     _release_wire_handle,
@@ -35,8 +38,24 @@ from .baml_py import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
+from ._concrete import BamlConcreteRef
+from ._interface import BamlInterfaceRef
+from .errors import (
+    BamlCancelledError,
+    BamlError,
+    BamlFailureValue,
+    BamlPanic,
+    attach_baml_traceback,
+)
 from .typemap import BamlTypeMap, get_type_map
+
+
+# A synchronous decode transaction. ContextVar nesting keeps a validator's
+# reentrant BAML call from attaching its handles to the outer result.
+_active_result: ContextVar[Optional[BamlEncodedResult]] = ContextVar(
+    "baml_decoding_result",
+    default=None,
+)
 
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -349,7 +368,23 @@ def _set_inbound_value(
     if isinstance(value, (bytes, bytearray)):
         inbound_value.uint8array_value = bytes(value)
         return
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, BamlFailureValue):
+        # Preserve the builtin class identity when a caught failure is passed
+        # back or rethrown; encoding it as a dict would erase that contract.
+        inbound_value.value_type.class_ty.name = value.class_name
+        cv = inbound_value.class_value
+        cv.SetInParent()
+        for key, item in value.fields.items():
+            _set_inbound_map_entry(
+                cv.fields.add(),
+                key,
+                item,
+                kwarg_name=kwarg_name,
+                registered=registered,
+                cloned_handles=cloned_handles,
+            )
+        return
+    if isinstance(value, Sequence):
         list_val = inbound_value.list_value
         # Mark the `list_value` oneof arm present even for an empty list.
         # Merely reading `inbound_value.list_value` doesn't set the oneof
@@ -366,7 +401,7 @@ def _set_inbound_value(
                 cloned_handles=cloned_handles,
             )
         return
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         map_val = inbound_value.map_value
         # Same as the empty-list case above: set the oneof arm so an empty
         # dict encodes as an empty map rather than an unset (null) value.
@@ -420,7 +455,17 @@ def _set_inbound_value(
     # than the media-style `class_value(name, _data: handle_value)` wrap.
     # Inbound stays a bare `BamlHandle` (key + type only) since the
     # engine's `HANDLE_TABLE` row already carries the receiver's `ty`.
-    if isinstance(value, (BamlStream, BamlFunctionSpec, BamlRuntimeValue)):
+    if isinstance(
+        value,
+        (
+            BamlStream,
+            BamlFunctionSpec,
+            BamlRuntimeValue,
+            BamlInterfaceRef,
+            BamlConcreteRef,
+            BamlClosure,
+        ),
+    ):
         return _set_inbound_value(
             inbound_value,
             value._to_pyhandle(),
@@ -685,8 +730,29 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         interface_fqn = getattr(origin, "__baml_interface_fqn__", None)
         if interface_fqn:
             ty.interface.name = interface_fqn
-            for arg in targs:
+            associated = getattr(origin, "__baml_interface_associated_types__", ())
+            generic_count = getattr(
+                origin, "__baml_interface_generic_count__", len(targs)
+            )
+            if len(targs) != generic_count + len(associated):
+                raise TypeError(
+                    f"{interface_fqn} requires {generic_count} type arguments and {len(associated)} associated bindings"
+                )
+            for arg in targs[:generic_count]:
                 _fill_inner(ty.interface.type_args.add(), arg)
+            for name, arg in zip(associated, targs[generic_count:]):
+                binding = ty.interface.bindings.add()
+                binding.name = name
+                _fill_inner(binding.ty, arg)
+            return
+        from ._concrete import BamlConcreteRef
+
+        if isinstance(origin, type) and issubclass(origin, BamlConcreteRef):
+            # Live generated classes use typing.Generic, not Pydantic's
+            # specialized subclasses. Keep their complete class arguments.
+            ty.class_ty.name = get_type_map().py_type_to_baml_type(origin)
+            for arg in targs:
+                _fill_inner(ty.class_ty.type_args.add(), arg)
             return
         if origin in (list, typing.List):
             _fill_inner(ty.list.item, targs[0] if targs else None)
@@ -775,6 +841,7 @@ def encode_call_args(
     *,
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
+    concrete_method: Optional[baml_inbound_pb2.ConcreteMethodTarget] = None,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -785,7 +852,13 @@ def encode_call_args(
     """
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
-    if function_name is not None and function_handle is not None:
+    if (
+        sum(
+            target is not None
+            for target in (function_name, function_handle, concrete_method)
+        )
+        > 1
+    ):
         raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     cloned_handles: List[int] = []
@@ -796,6 +869,10 @@ def encode_call_args(
             args.function_name = function_name
         elif function_handle is not None:
             args.function_handle = function_handle
+        elif concrete_method is not None:
+            args.concrete_method.CopyFrom(concrete_method)
+            if type_args and args.concrete_method.type_args:
+                raise ValueError("method type arguments must be supplied once")
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(),
@@ -806,8 +883,13 @@ def encode_call_args(
                 cloned_handles=cloned_handles,
             )
         if type_args:
+            entries = (
+                args.concrete_method.type_args
+                if concrete_method is not None
+                else args.type_args
+            )
             for type_var, wire_ty in type_args:
-                entry = args.type_args.add()
+                entry = entries.add()
                 entry.type_var = type_var
                 if isinstance(wire_ty, BamlType):
                     entry.type_definition.CopyFrom(wire_ty._definition)
@@ -872,7 +954,7 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
     if which == "primitive":
         return _TY_PRIMITIVE_PY.get(ty.primitive.kind, typing.Any)
     if which == "class_ty":
-        cls = type_map.get_class(ty.class_ty.name)
+        cls = type_map.get_class_type(ty.class_ty.name)
         return _parameterize_tys(cls, ty.class_ty.type_args, type_map)
     if which == "enum":
         return type_map.get_enum(ty.enum.name)
@@ -1092,7 +1174,12 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     """
     HT = baml_handle_pb2.BamlHandleType
     ht = handle.handle_type
-    pyhandle = BamlPyHandle(handle.key, int(ht))
+    transfer = _active_result.get()
+    pyhandle = (
+        transfer._wrap_handle(handle.key, int(ht))
+        if transfer is not None
+        else BamlPyHandle(handle.key, int(ht))
+    )
 
     if ht == HT.ADT_MEDIA_IMAGE:
         return BamlImage._from_pyhandle(pyhandle)
@@ -1108,10 +1195,21 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         return BamlFunctionSpec._from_pyhandle(pyhandle)
     if ht == HT.ADT_RUNTIME_VALUE:
         return BamlRuntimeValue._from_pyhandle(pyhandle)
+    if ht == HT.CONCRETE_OBJECT:
+        cls = type_map.get_concrete_ref(pyhandle)
+        return cls._from_handle(pyhandle, type_map)
+    if ht == HT.ADT_INTERFACE:
+        ty = getattr(handle, "ty", None)
+        if ty is None or ty.WhichOneof("ty") != "interface":
+            raise BamlError(
+                "BEX emitted an interface handle without its interface type"
+            )
+        cls = type_map.get_interface_ref(ty.interface.name)
+        return cls._from_handle(pyhandle, type_map)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)
         function_ty = ty.function if ty is not None else baml_type_pb2.BamlTyFunction()
-        return BamlClosure(pyhandle, function_ty)
+        return BamlClosure(pyhandle, function_ty, type_map)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
@@ -1125,11 +1223,12 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
 class BamlClosure:
     """A reusable, engine-owned BAML callable."""
 
-    __slots__ = ("_handle", "_required_names", "_optional_names")
+    __slots__ = ("_handle", "_required_names", "_optional_names", "_type_map")
 
-    def __init__(self, handle: BamlPyHandle, function_ty: Any):
+    def __init__(self, handle: BamlPyHandle, function_ty: Any, type_map: BamlTypeMap):
         mode = baml_type_pb2.BamlTyFunctionParamMode
         self._handle = handle
+        self._type_map = type_map
         self._required_names = [
             param.name if param.HasField("name") else f"arg{index}"
             for index, param in enumerate(function_ty.params)
@@ -1155,14 +1254,37 @@ class BamlClosure:
             if name in values:
                 raise TypeError(f"multiple values for argument {name!r}")
             values[name] = value
-        call_id = new_function_call()
-        args_proto = encode_call_args(
-            values,
-            call_id,
-            function_handle=self._handle._key_for_call(),
-        )
-        result_bytes = _get_runtime().call_function_sync(args_proto)
-        return decode_call_result(result_bytes)
+        from .typemap import _using_type_map
+
+        handle = self._to_pyhandle()
+        with _using_type_map(self._type_map):
+            args_proto = encode_call_args(
+                values,
+                new_function_call(),
+                function_handle=handle._key_for_call(),
+            )
+        result = handle._call_owned_function_sync(args_proto)
+        return decode_call_result(result, type_map=self._type_map)
+
+    def _to_pyhandle(self) -> BamlPyHandle:
+        if self._handle is None:
+            raise RuntimeError("BAML callable reference is closed")
+        return self._handle
+
+    def __copy__(self) -> BamlClosure:
+        copied = object.__new__(type(self))
+        copied._handle = copy.copy(self._to_pyhandle())
+        copied._type_map = self._type_map
+        copied._required_names = self._required_names
+        copied._optional_names = self._optional_names
+        return copied
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> BamlClosure:
+        return self.__copy__()
+
+    def close(self) -> None:
+        """Release this lease; independent copies retain the same callable."""
+        self._handle = None
 
     def __repr__(self) -> str:
         return "<BamlClosure>"
@@ -1270,7 +1392,7 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
 
 
 def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
-    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
+    """If `decoded` is a `baml.errors.HostCallable` failure payload or model
     whose `_handle` points at a still-live entry in this runtime's
     host-value registry, return the *original* Python exception object.
     Otherwise return `None` (foreign runtime, released key, or
@@ -1278,7 +1400,13 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     `BamlError` wrapper.
     """
     private = getattr(decoded, "__pydantic_private__", None)
-    handle = private.get("_handle") if isinstance(private, dict) else None
+    handle = (
+        decoded.fields.get("_handle")
+        if isinstance(decoded, BamlFailureValue)
+        else private.get("_handle")
+        if isinstance(private, dict)
+        else None
+    )
     if handle is None and _is_pydantic_model_class(type(decoded)):
         values = vars(decoded)
         for name, field in type(decoded).model_fields.items():
@@ -1321,9 +1449,102 @@ def _outbound_class_fqn(holder) -> Optional[str]:
     return None
 
 
-def decode_call_result(data: bytes) -> Any:
-    """Decode a `BamlOutboundResult` envelope to a Python value, raising
-    `BamlError` / `BamlPanic` for the thrown arms (31c / 31f).
+# These failures can originate before an application SDK has been imported.
+# Do not run application imports/validators just to deliver an SDK diagnostic.
+_BRIDGE_FAILURE_CLASSES = frozenset(
+    {
+        "baml.errors.InvalidArgument",
+        "baml.errors.GenericSdkError",
+        "baml.errors.CompilationError",
+        "baml.errors.AccessError",
+        "baml.errors.TypeMismatch",
+        "baml.errors.HostCallable",
+    }
+)
+
+
+def _decode_failure_value(holder, type_map: BamlTypeMap) -> Any:
+    inner = _unwrap_union_variant(holder)
+    if inner.WhichOneof("value") == "class_value":
+        cls = inner.class_value
+        if cls.name in _BRIDGE_FAILURE_CLASSES or cls.name.startswith("baml.panics."):
+            return BamlFailureValue(
+                cls.name,
+                {
+                    field.key: decode_value(field.value, type_map)
+                    for field in cls.fields
+                },
+            )
+    # Application-defined errors still use their generated models and pass
+    # validation within the same provisional ownership transaction.
+    return decode_value(holder, type_map)
+
+
+def decode_host_call(data: BamlEncodedResult) -> Tuple[Tuple[Any, ...], dict[str, Any]]:
+    """Adopt every callback argument before entering the native user body."""
+    token = _active_result.set(data)
+    try:
+        message = baml_outbound_pb2.BamlToHostCall()
+        message.ParseFromString(data.payload)
+        type_map = get_type_map()
+        positional: list[Any] = []
+        optional: dict[str, Any] = {}
+        for arg in message.args:
+            if not arg.HasField("value"):
+                raise BamlError("BAML callback argument has no value")
+            value = decode_value(arg.value, type_map)
+            if arg.is_optional_arg:
+                optional[arg.arg_name] = value
+            else:
+                positional.append(value)
+        result = (tuple(positional), optional)
+        data._adopt()
+        return result
+    except BaseException:
+        data._discard()
+        raise
+    finally:
+        _active_result.reset(token)
+
+
+def decode_call_result(
+    data: bytes | BamlEncodedResult, *, type_map: BamlTypeMap | None = None
+) -> Any:
+    """Decode and adopt an owned result before returning or raising its value.
+
+    Raw bytes are still used by not-yet-ported introspection paths.
+    Runtime function calls always supply BamlEncodedResult; a decode failure
+    discards its receipt, including handles never visited by the decoder.
+    """
+    transfer = data if isinstance(data, BamlEncodedResult) else None
+    token = _active_result.set(transfer)
+    try:
+        payload = transfer.payload if transfer is not None else typing.cast(bytes, data)
+        is_error, value = (
+            _decode_call_outcome(payload)
+            if type_map is None
+            else _decode_call_outcome(payload, type_map=type_map)
+        )
+        if transfer is not None:
+            transfer._adopt()
+    except BaseException:
+        if transfer is not None:
+            transfer._discard()
+        raise
+    finally:
+        _active_result.reset(token)
+    # A declared BAML error is a successful decode. Its nested references and
+    # any recovered native exception must be owned before it escapes here.
+    if is_error:
+        raise value
+    return value
+
+
+def _decode_call_outcome(
+    data: bytes, *, type_map: BamlTypeMap | None = None
+) -> Tuple[bool, Any]:
+    """Decode to (is_error, value_or_exception), without raising a decoded
+    application exception until the caller has adopted its nested references.
 
     - `ok` → the decoded return value.
     - `error` → `raise BamlError` with `.value` = decoded value,
@@ -1336,11 +1557,13 @@ def decode_call_result(data: bytes) -> Any:
     result = baml_outbound_pb2.BamlOutboundResult()
     result.ParseFromString(data)
     which = result.WhichOneof("result")
-    type_map = get_type_map()
+    type_map = get_type_map() if type_map is None else type_map
 
     if which == "error":
         msg = result.error
-        decoded = decode_value(msg.value, type_map)
+        if not msg.HasField("value"):
+            raise BamlError("BAML error result is missing its value")
+        decoded = _decode_failure_value(msg.value, type_map)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
         # type error — surface it as Python's native `TypeError` rather than a
@@ -1355,7 +1578,7 @@ def decode_call_result(data: bytes) -> Any:
             # Let `attach_baml_traceback` splice the BAML frames onto the
             # native exception (exception instances accept ad-hoc attributes).
             err.baml_trace = list(msg.trace)  # type: ignore[attr-defined]
-            raise attach_baml_traceback(err)
+            return True, attach_baml_traceback(err)
         # Same-host rehydration: a `baml.errors.HostCallable` carrying a
         # `_handle` that still resolves in this runtime's host-value
         # registry re-raises the *original* native exception object the
@@ -1366,8 +1589,8 @@ def decode_call_result(data: bytes) -> Any:
         if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
             rehydrated = _try_rehydrate_host_value(decoded)
             if rehydrated is not None:
-                raise attach_baml_traceback(rehydrated)
-        raise attach_baml_traceback(
+                return True, attach_baml_traceback(rehydrated)
+        return True, attach_baml_traceback(
             BamlError(
                 decoded,
                 baml_trace=list(msg.trace),
@@ -1387,16 +1610,17 @@ def decode_call_result(data: bytes) -> Any:
             if _outbound_class_fqn(msg.value) == "baml.panics.Cancelled"
             else BamlPanic
         )
-        raise attach_baml_traceback(
+        return True, attach_baml_traceback(
             panic_type(
-                decode_value(msg.value, type_map),
+                _decode_failure_value(msg.value, type_map),
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )
         )
 
-    # `ok` (or an absent oneof — an all-default envelope is a null `ok`).
-    return decode_value(result.ok, type_map)
+    if which != "ok":
+        raise BamlError("BAML result is missing its outcome")
+    return False, decode_value(result.ok, type_map)
 
 
 def _flush_for_exit() -> None:

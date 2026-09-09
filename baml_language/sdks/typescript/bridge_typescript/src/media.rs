@@ -11,11 +11,8 @@
 //! `@boundaryml/baml-bridge` under aliases (`BamlImage as Image`, etc.). See
 //! `00a-spec-codegen-mappings.md` "Stdlib Re-Exports".
 //!
-//! The key is stored inline as a raw `(key, handle_type)` pair (rather than a
-//! `napi::Reference<BamlHandle>`) to avoid napi reference-lifetime complexity;
-//! `ObjectFinalize` on the media class releases the table row. `_fromHandle`
-//! and `_toHandle` clone the table row so the input/output `BamlHandle` and the
-//! media wrapper own independent references.
+//! Wrappers share a native lease owner with their decoded handle. Provisional
+//! owners become usable only when the entire result is adopted.
 
 use std::{
     ffi::{CString, c_char},
@@ -23,15 +20,13 @@ use std::{
 };
 
 use bridge_cffi::{
-    BamlCffiStatus, Buffer, baml_handle_release, baml_media_base64, baml_media_file,
-    baml_media_from_base64, baml_media_from_file, baml_media_from_url, baml_media_mime_type,
-    baml_media_url, free_buffer,
+    BamlCffiStatus, Buffer, baml_media_base64, baml_media_file, baml_media_from_base64,
+    baml_media_from_file, baml_media_from_url, baml_media_mime_type, baml_media_url, free_buffer,
 };
 use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
-use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::handle::{BamlHandle, handle_clone, status_to_napi};
+use crate::handle::{BamlHandle, status_to_napi};
 
 type MediaConstructor =
     unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> BamlCffiStatus;
@@ -114,10 +109,9 @@ fn media_string(
 
 macro_rules! define_media_napi_class {
     ($name:ident, $media_kind:expr, $expected_ht:expr) => {
-        #[napi(custom_finalize)]
+        #[napi]
         pub struct $name {
-            key: u64,
-            handle_type: i32,
+            handle: BamlHandle,
         }
 
         #[napi]
@@ -126,7 +120,9 @@ macro_rules! define_media_napi_class {
             pub fn from_url(url: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) =
                     create_media(baml_media_from_url, $media_kind, url, mime_type, "fromUrl")?;
-                Ok(Self { key, handle_type })
+                Ok(Self {
+                    handle: BamlHandle::from_parts(key, handle_type),
+                })
             }
 
             #[napi(factory, js_name = "fromFile")]
@@ -138,7 +134,9 @@ macro_rules! define_media_napi_class {
                     mime_type,
                     "fromFile",
                 )?;
-                Ok(Self { key, handle_type })
+                Ok(Self {
+                    handle: BamlHandle::from_parts(key, handle_type),
+                })
             }
 
             #[napi(factory, js_name = "fromBase64")]
@@ -150,33 +148,55 @@ macro_rules! define_media_napi_class {
                     mime_type,
                     "fromBase64",
                 )?;
-                Ok(Self { key, handle_type })
+                Ok(Self {
+                    handle: BamlHandle::from_parts(key, handle_type),
+                })
             }
 
             #[napi]
             pub fn url(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_url, "url")
+                media_string_option(
+                    self.handle.key_u64()?,
+                    self.handle.handle_type(),
+                    baml_media_url,
+                    "url",
+                )
             }
 
             #[napi]
             pub fn file(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_file, "file")
+                media_string_option(
+                    self.handle.key_u64()?,
+                    self.handle.handle_type(),
+                    baml_media_file,
+                    "file",
+                )
             }
 
             #[napi]
             pub fn base64(&self) -> napi::Result<String> {
-                media_string(self.key, self.handle_type, baml_media_base64, "base64")
+                media_string(
+                    self.handle.key_u64()?,
+                    self.handle.handle_type(),
+                    baml_media_base64,
+                    "base64",
+                )
             }
 
             #[napi(js_name = "mimeType")]
             pub fn mime_type(&self) -> napi::Result<Option<String>> {
-                media_string_option(self.key, self.handle_type, baml_media_mime_type, "mimeType")
+                media_string_option(
+                    self.handle.key_u64()?,
+                    self.handle.handle_type(),
+                    baml_media_mime_type,
+                    "mimeType",
+                )
             }
 
             /// Internal: build from an existing `BamlHandle`. Used by proto
             /// decode. Validates the handle's `handle_type` tag matches the
-            /// expected media kind, then clones the table row so the input
-            /// handle stays usable.
+            /// expected media kind, then shares its native lease owner. This
+            /// also preserves provisional-result invalidation on decode failure.
             #[napi(factory, js_name = "_fromHandle")]
             pub fn from_handle(handle: &BamlHandle) -> napi::Result<Self> {
                 if handle.handle_type() != $expected_ht as i32 {
@@ -190,10 +210,8 @@ macro_rules! define_media_napi_class {
                         ),
                     ));
                 }
-                let new_key = handle_clone(handle.key_u64(), "_fromHandle")?;
                 Ok(Self {
-                    key: new_key,
-                    handle_type: $expected_ht as i32,
+                    handle: handle.share_owner(),
                 })
             }
 
@@ -201,15 +219,7 @@ macro_rules! define_media_napi_class {
             /// table row (cloned). Used by inbound encode.
             #[napi(js_name = "_toHandle")]
             pub fn to_handle(&self) -> napi::Result<BamlHandle> {
-                let new_key = handle_clone(self.key, "_toHandle")?;
-                Ok(BamlHandle::from_parts(new_key, self.handle_type))
-            }
-        }
-
-        impl ObjectFinalize for $name {
-            fn finalize(self, _env: Env) -> napi::Result<()> {
-                let _ = unsafe { baml_handle_release(self.key) };
-                Ok(())
+                self.handle.clone_handle()
             }
         }
     };

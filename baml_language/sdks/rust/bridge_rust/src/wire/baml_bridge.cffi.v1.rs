@@ -18,7 +18,8 @@ pub struct BamlHandle {
 ///    - baml.llm.Collector                     -> ADT_COLLECTOR
 ///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///    - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
-///    - runtime-created nominal values         -> ADT_RUNTIME_VALUE
+///    - runtime-created enum values            -> ADT_RUNTIME_VALUE
+///    - live or runtime-created classes        -> CONCRETE_OBJECT
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -65,10 +66,20 @@ pub enum BamlHandleType {
     /// is annotation-only; method generic substitution comes from the resolved
     /// heap object.
     AdtFunctionSpec = 17,
-    /// Live runtime-created class/enum value. The host must not resolve its
+    /// Live runtime-created enum value. The host must not resolve its
     /// display name through a generated typemap; only the originating engine can
     /// interpret the rooted declaration identity.
     AdtRuntimeValue = 18,
+    /// Live checked interface view. The table owns receiver, type and world roots.
+    AdtInterface = 19,
+    /// Owned table lease retaining a host registration. Unlike raw registration
+    /// keys (15/16), this key uses ordinary handle clone/release and receipts.
+    HostReference = 20,
+    /// Retained concrete class receiver. Exact declaration/type arguments come
+    /// from the rooted object; ty is descriptive and cannot establish identity.
+    ConcreteObject = 21,
+    /// Immutable host adapter type registration, not a BAML value.
+    HostAdapterType = 22,
 }
 impl BamlHandleType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -94,6 +105,10 @@ impl BamlHandleType {
             Self::HostValueOpaque => "HOST_VALUE_OPAQUE",
             Self::AdtFunctionSpec => "ADT_FUNCTION_SPEC",
             Self::AdtRuntimeValue => "ADT_RUNTIME_VALUE",
+            Self::AdtInterface => "ADT_INTERFACE",
+            Self::HostReference => "HOST_REFERENCE",
+            Self::ConcreteObject => "CONCRETE_OBJECT",
+            Self::HostAdapterType => "HOST_ADAPTER_TYPE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -116,6 +131,10 @@ impl BamlHandleType {
             "HOST_VALUE_OPAQUE" => Some(Self::HostValueOpaque),
             "ADT_FUNCTION_SPEC" => Some(Self::AdtFunctionSpec),
             "ADT_RUNTIME_VALUE" => Some(Self::AdtRuntimeValue),
+            "ADT_INTERFACE" => Some(Self::AdtInterface),
+            "HOST_REFERENCE" => Some(Self::HostReference),
+            "CONCRETE_OBJECT" => Some(Self::ConcreteObject),
+            "HOST_ADAPTER_TYPE" => Some(Self::HostAdapterType),
             _ => None,
         }
     }
@@ -1083,11 +1102,54 @@ pub struct BamlTyArg {
     /// the concrete binding
     #[prost(message, optional, tag = "2")]
     pub type_value: ::core::option::Option<BamlTy>,
-    /// Preferred for a runtime reflected type. Mutually exclusive with
-    /// `type_value` by convention; retained as separate fields for backwards
-    /// compatibility with already generated SDKs.
+    /// Explicit portable definition: importing it creates fresh runtime types.
     #[prost(message, optional, tag = "3")]
     pub type_definition: ::core::option::Option<BamlTyDef>,
+    /// Borrowed session reference to an engine-owned reflected type. Exactly one
+    /// of type_value, type_definition or type_reference must be present.
+    #[prost(uint64, optional, tag = "4")]
+    pub type_reference: ::core::option::Option<u64>,
+}
+/// Type arguments for a method are ordered by its checked declaration. Live
+/// references preserve identity; definitions explicitly create fresh types.
+/// Each BamlTyArg.type_var must be empty on this positional path.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InterfaceMethodTarget {
+    #[prost(uint64, tag = "1")]
+    pub view: u64,
+    #[prost(string, tag = "2")]
+    pub member: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+}
+/// A compiler-selected method on a concrete class.
+/// The receiver is borrowed and pinned during preparation. Class variables in
+/// interface_pattern index the receiver's stored class arguments, never the
+/// host's method arguments. The engine checks the exact class declaration and
+/// complete obligation before invoking the concrete implementation contract.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConcreteMethodTarget {
+    #[prost(uint64, tag = "1")]
+    pub receiver: u64,
+    #[prost(string, tag = "2")]
+    pub class_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub member: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    #[prost(oneof = "concrete_method_target::Dispatch", tags = "3, 6")]
+    pub dispatch: ::core::option::Option<concrete_method_target::Dispatch>,
+}
+/// Nested message and enum types in `ConcreteMethodTarget`.
+pub mod concrete_method_target {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Dispatch {
+        #[prost(message, tag = "3")]
+        InterfacePattern(super::BamlTy),
+        /// Must be true when selected; a missing dispatch is an invalid request.
+        #[prost(bool, tag = "6")]
+        Inherent(bool),
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CallFunctionArgs {
@@ -1105,17 +1167,21 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
-    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
+    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5, 6, 7")]
     pub call_target: ::core::option::Option<call_function_args::CallTarget>,
 }
 /// Nested message and enum types in `CallFunctionArgs`.
 pub mod call_function_args {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum CallTarget {
         #[prost(string, tag = "4")]
         FunctionName(::prost::alloc::string::String),
         #[prost(uint64, tag = "5")]
         FunctionHandle(u64),
+        #[prost(message, tag = "6")]
+        InterfaceMethod(super::InterfaceMethodTarget),
+        #[prost(message, tag = "7")]
+        ConcreteMethod(super::ConcreteMethodTarget),
     }
 }
 /// CallAck is the engine's acknowledgment of an inbound call. It flows
@@ -1132,5 +1198,107 @@ pub mod call_ack {
     pub enum Response {
         #[prost(string, tag = "1")]
         Error(::prost::alloc::string::String),
+    }
+}
+/// Host adapter registration. No host callbacks are acquired at this stage.
+/// Template type-var index 0 denotes Self. Index n+1 selects type_args\[n\].
+/// Type arguments are positional and shared across the whole registration;
+/// definitions are materialized once, references retain their issuing identity.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RegisterHostAdapterRequest {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub implementations: ::prost::alloc::vec::Vec<HostAdapterImplementation>,
+    #[prost(message, repeated, tag = "3")]
+    pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HostAdapterImplementation {
+    #[prost(message, optional, tag = "1")]
+    pub interface_template: ::core::option::Option<BamlTy>,
+    #[prost(string, repeated, tag = "2")]
+    pub methods: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RegisteredHostAdapter {
+    #[prost(message, optional, tag = "1")]
+    pub adapter_type: ::core::option::Option<BamlOutboundHandle>,
+    #[prost(message, optional, tag = "2")]
+    pub class_type: ::core::option::Option<BamlOutboundHandle>,
+    #[prost(message, repeated, tag = "3")]
+    pub callbacks: ::prost::alloc::vec::Vec<HostAdapterCallbackSlot>,
+    /// Exact checked interface types in request implementation order, including
+    /// interfaces with no callbacks. Borrow these when projecting a new instance;
+    /// importing a portable type definition again would create different types.
+    #[prost(message, repeated, tag = "4")]
+    pub interface_types: ::prost::alloc::vec::Vec<BamlOutboundHandle>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct HostAdapterCallbackSlot {
+    /// Index into RegisterHostAdapterRequest.implementations. The pair of this
+    /// index and method identifies an operation even when obligations share names.
+    #[prost(uint32, tag = "3")]
+    pub implementation_index: u32,
+    #[prost(string, tag = "1")]
+    pub method: ::prost::alloc::string::String,
+}
+/// adapter_type is borrowed and pinned by synchronous preparation. Receiver
+/// and callbacks transfer their occurrences as one batch, including on failure.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateHostAdapterRequest {
+    #[prost(uint64, tag = "1")]
+    pub adapter_type: u64,
+    #[prost(message, optional, tag = "2")]
+    pub receiver: ::core::option::Option<InboundValue>,
+    #[prost(message, repeated, tag = "3")]
+    pub callbacks: ::prost::alloc::vec::Vec<InboundValue>,
+}
+/// The receiver is borrowed and retained during preparation. Type evidence has
+/// the same named/definition/reference semantics as method type arguments.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProjectInterfaceRequest {
+    #[prost(uint64, tag = "1")]
+    pub receiver: u64,
+    #[prost(message, optional, tag = "2")]
+    pub interface_type: ::core::option::Option<BamlTyArg>,
+}
+/// Private SDK administrative channel. Each request selects exactly one
+/// operation; preparation consumes create-input transfers before admission.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HostOperationRequest {
+    #[prost(oneof = "host_operation_request::Operation", tags = "1, 2, 3")]
+    pub operation: ::core::option::Option<host_operation_request::Operation>,
+}
+/// Nested message and enum types in `HostOperationRequest`.
+pub mod host_operation_request {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Operation {
+        #[prost(message, tag = "1")]
+        Register(super::RegisterHostAdapterRequest),
+        #[prost(message, tag = "2")]
+        Create(super::CreateHostAdapterRequest),
+        #[prost(message, tag = "3")]
+        Project(super::ProjectInterfaceRequest),
+    }
+}
+/// Carried by the same owned delivery/receipt as ordinary call results.
+/// Registration metadata is not a BAML value. Failure reuses the ordinary
+/// structured error/panic envelope (its ok arm is never produced here).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HostOperationResult {
+    #[prost(oneof = "host_operation_result::Result", tags = "1, 2, 3")]
+    pub result: ::core::option::Option<host_operation_result::Result>,
+}
+/// Nested message and enum types in `HostOperationResult`.
+pub mod host_operation_result {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Result {
+        #[prost(message, tag = "1")]
+        Registered(super::RegisteredHostAdapter),
+        #[prost(message, tag = "2")]
+        Value(super::BamlOutboundValue),
+        #[prost(message, tag = "3")]
+        Failure(super::BamlOutboundResult),
     }
 }

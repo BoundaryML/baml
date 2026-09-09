@@ -86,31 +86,139 @@ class InboundEnumValue(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
 class BamlTyArg(_message.Message):
-    __slots__ = ("type_var", "type_value", "type_definition")
+    __slots__ = ("type_var", "type_value", "type_definition", "type_reference")
     TYPE_VAR_FIELD_NUMBER: _ClassVar[int]
     TYPE_VALUE_FIELD_NUMBER: _ClassVar[int]
     TYPE_DEFINITION_FIELD_NUMBER: _ClassVar[int]
+    TYPE_REFERENCE_FIELD_NUMBER: _ClassVar[int]
     type_var: str
     type_value: _baml_type_pb2.BamlTy
     type_definition: _baml_type_pb2.BamlTyDef
-    def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., type_definition: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ...) -> None: ...
+    type_reference: int
+    def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., type_definition: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ..., type_reference: _Optional[int] = ...) -> None: ...
+
+class InterfaceMethodTarget(_message.Message):
+    __slots__ = ("view", "member", "type_args")
+    VIEW_FIELD_NUMBER: _ClassVar[int]
+    MEMBER_FIELD_NUMBER: _ClassVar[int]
+    TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    view: int
+    member: str
+    type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
+    def __init__(self, view: _Optional[int] = ..., member: _Optional[str] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ...) -> None: ...
+
+class ConcreteMethodTarget(_message.Message):
+    __slots__ = ("receiver", "class_name", "interface_pattern", "inherent", "member", "type_args")
+    RECEIVER_FIELD_NUMBER: _ClassVar[int]
+    CLASS_NAME_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_PATTERN_FIELD_NUMBER: _ClassVar[int]
+    INHERENT_FIELD_NUMBER: _ClassVar[int]
+    MEMBER_FIELD_NUMBER: _ClassVar[int]
+    TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    receiver: int
+    class_name: str
+    interface_pattern: _baml_type_pb2.BamlTy
+    inherent: bool
+    member: str
+    type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
+    def __init__(self, receiver: _Optional[int] = ..., class_name: _Optional[str] = ..., interface_pattern: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., inherent: bool = ..., member: _Optional[str] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle")
+    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle", "interface_method", "concrete_method")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_NAME_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_HANDLE_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_METHOD_FIELD_NUMBER: _ClassVar[int]
+    CONCRETE_METHOD_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
     call_id: int
     type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
     function_name: str
     function_handle: int
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ...) -> None: ...
+    interface_method: InterfaceMethodTarget
+    concrete_method: ConcreteMethodTarget
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ..., interface_method: _Optional[_Union[InterfaceMethodTarget, _Mapping]] = ..., concrete_method: _Optional[_Union[ConcreteMethodTarget, _Mapping]] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)
     ERROR_FIELD_NUMBER: _ClassVar[int]
     error: str
     def __init__(self, error: _Optional[str] = ...) -> None: ...
+
+class RegisterHostAdapterRequest(_message.Message):
+    __slots__ = ("name", "implementations", "type_args")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    IMPLEMENTATIONS_FIELD_NUMBER: _ClassVar[int]
+    TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    implementations: _containers.RepeatedCompositeFieldContainer[HostAdapterImplementation]
+    type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
+    def __init__(self, name: _Optional[str] = ..., implementations: _Optional[_Iterable[_Union[HostAdapterImplementation, _Mapping]]] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ...) -> None: ...
+
+class HostAdapterImplementation(_message.Message):
+    __slots__ = ("interface_template", "methods")
+    INTERFACE_TEMPLATE_FIELD_NUMBER: _ClassVar[int]
+    METHODS_FIELD_NUMBER: _ClassVar[int]
+    interface_template: _baml_type_pb2.BamlTy
+    methods: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, interface_template: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., methods: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class RegisteredHostAdapter(_message.Message):
+    __slots__ = ("adapter_type", "class_type", "callbacks", "interface_types")
+    ADAPTER_TYPE_FIELD_NUMBER: _ClassVar[int]
+    CLASS_TYPE_FIELD_NUMBER: _ClassVar[int]
+    CALLBACKS_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_TYPES_FIELD_NUMBER: _ClassVar[int]
+    adapter_type: _baml_outbound_pb2.BamlOutboundHandle
+    class_type: _baml_outbound_pb2.BamlOutboundHandle
+    callbacks: _containers.RepeatedCompositeFieldContainer[HostAdapterCallbackSlot]
+    interface_types: _containers.RepeatedCompositeFieldContainer[_baml_outbound_pb2.BamlOutboundHandle]
+    def __init__(self, adapter_type: _Optional[_Union[_baml_outbound_pb2.BamlOutboundHandle, _Mapping]] = ..., class_type: _Optional[_Union[_baml_outbound_pb2.BamlOutboundHandle, _Mapping]] = ..., callbacks: _Optional[_Iterable[_Union[HostAdapterCallbackSlot, _Mapping]]] = ..., interface_types: _Optional[_Iterable[_Union[_baml_outbound_pb2.BamlOutboundHandle, _Mapping]]] = ...) -> None: ...
+
+class HostAdapterCallbackSlot(_message.Message):
+    __slots__ = ("implementation_index", "method")
+    IMPLEMENTATION_INDEX_FIELD_NUMBER: _ClassVar[int]
+    METHOD_FIELD_NUMBER: _ClassVar[int]
+    implementation_index: int
+    method: str
+    def __init__(self, implementation_index: _Optional[int] = ..., method: _Optional[str] = ...) -> None: ...
+
+class CreateHostAdapterRequest(_message.Message):
+    __slots__ = ("adapter_type", "receiver", "callbacks")
+    ADAPTER_TYPE_FIELD_NUMBER: _ClassVar[int]
+    RECEIVER_FIELD_NUMBER: _ClassVar[int]
+    CALLBACKS_FIELD_NUMBER: _ClassVar[int]
+    adapter_type: int
+    receiver: InboundValue
+    callbacks: _containers.RepeatedCompositeFieldContainer[InboundValue]
+    def __init__(self, adapter_type: _Optional[int] = ..., receiver: _Optional[_Union[InboundValue, _Mapping]] = ..., callbacks: _Optional[_Iterable[_Union[InboundValue, _Mapping]]] = ...) -> None: ...
+
+class ProjectInterfaceRequest(_message.Message):
+    __slots__ = ("receiver", "interface_type")
+    RECEIVER_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_TYPE_FIELD_NUMBER: _ClassVar[int]
+    receiver: int
+    interface_type: BamlTyArg
+    def __init__(self, receiver: _Optional[int] = ..., interface_type: _Optional[_Union[BamlTyArg, _Mapping]] = ...) -> None: ...
+
+class HostOperationRequest(_message.Message):
+    __slots__ = ("register", "create", "project")
+    REGISTER_FIELD_NUMBER: _ClassVar[int]
+    CREATE_FIELD_NUMBER: _ClassVar[int]
+    PROJECT_FIELD_NUMBER: _ClassVar[int]
+    register: RegisterHostAdapterRequest
+    create: CreateHostAdapterRequest
+    project: ProjectInterfaceRequest
+    def __init__(self, register: _Optional[_Union[RegisterHostAdapterRequest, _Mapping]] = ..., create: _Optional[_Union[CreateHostAdapterRequest, _Mapping]] = ..., project: _Optional[_Union[ProjectInterfaceRequest, _Mapping]] = ...) -> None: ...
+
+class HostOperationResult(_message.Message):
+    __slots__ = ("registered", "value", "failure")
+    REGISTERED_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_FIELD_NUMBER: _ClassVar[int]
+    registered: RegisteredHostAdapter
+    value: _baml_outbound_pb2.BamlOutboundValue
+    failure: _baml_outbound_pb2.BamlOutboundResult
+    def __init__(self, registered: _Optional[_Union[RegisteredHostAdapter, _Mapping]] = ..., value: _Optional[_Union[_baml_outbound_pb2.BamlOutboundValue, _Mapping]] = ..., failure: _Optional[_Union[_baml_outbound_pb2.BamlOutboundResult, _Mapping]] = ...) -> None: ...

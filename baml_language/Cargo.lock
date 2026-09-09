@@ -743,6 +743,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "borsh",
  "la-arena",
  "num-bigint",
@@ -980,6 +981,7 @@ dependencies = [
  "baml_db",
  "baml_type",
  "bitflags 2.11.1",
+ "borsh",
  "insta",
  "la-arena",
  "rowan 0.16.1",
@@ -1273,6 +1275,7 @@ dependencies = [
  "bex_events",
  "bex_external_types",
  "bex_heap",
+ "bex_project",
  "bex_resource_types",
  "bex_str",
  "bex_vm",
@@ -1470,6 +1473,7 @@ dependencies = [
  "base64",
  "bex_events",
  "bex_heap",
+ "bex_resource_types",
  "bex_str",
  "bex_vm_types",
  "chacha20poly1305",
@@ -1602,6 +1606,7 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "baml_artifact",
+ "baml_type",
  "baml_version",
  "bex_events",
  "bex_project",
@@ -6473,10 +6478,14 @@ name = "sdkgen_python_pydantic2"
 version = "0.0.0-beta"
 dependencies = [
  "askama",
+ "baml_artifact",
  "baml_base",
  "baml_codegen_types",
+ "baml_type",
+ "bridge_ctypes",
  "indexmap",
  "pretty_assertions",
+ "prost",
 ]
 
 [[package]]
@@ -6511,7 +6520,10 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_type",
  "base64",
+ "bridge_ctypes",
+ "prost",
 ]
 
 [[package]]

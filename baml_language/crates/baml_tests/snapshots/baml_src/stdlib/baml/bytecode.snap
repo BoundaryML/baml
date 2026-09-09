@@ -1208,14 +1208,14 @@ function baml.String.trim_end(self: string) -> string {
 function baml.String.trim_start(self: string) -> string {
 }
 
-function baml.ToJson.to_json(self: baml.ToJson) -> baml.json.json {
+function baml.ToJson.to_json(self: #0) -> baml.json.json {
     load_type #0
     load_var self
     call baml._to_json_default
     return
 }
 
-function baml.ToString.to_string(self: baml.ToString) -> string {
+function baml.ToString.to_string(self: #0) -> string {
     load_type #0
     load_var self
     call baml._to_string_default
@@ -3359,7 +3359,12 @@ function baml.id.new() -> string {
 function baml.id.set(id: string) -> string {
 }
 
-function baml.io.Read.bytes(self: baml.io.Read) -> uint8array {
+function baml.identity(value: #0) -> #0 {
+    load_var value
+    return
+}
+
+function baml.io.Read.bytes(self: #0) -> uint8array {
     load_const b""
     call baml.deep_copy
     store_var result
@@ -3389,7 +3394,7 @@ function baml.io.Read.bytes(self: baml.io.Read) -> uint8array {
     jump L0
 }
 
-function baml.io.Read.text(self: baml.io.Read) -> string {
+function baml.io.Read.text(self: #0) -> string {
     load_var self
     load_type baml.io.Read
     load_const "bytes"
@@ -3400,7 +3405,7 @@ function baml.io.Read.text(self: baml.io.Read) -> string {
     return
 }
 
-function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> int {
+function baml.io.Write.write(self: #0, data: string | uint8array) -> int {
     load_var data
     store_var _4
     load_var _4
@@ -4310,7 +4315,7 @@ function baml.iter.ArrayIterator.new(arr: #0[]) -> baml.iter.ArrayIterator<#0> {
     return
 }
 
-function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.chain(self: #0, other: baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var other
     load_type baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>
     load_const "iter"
@@ -4325,7 +4330,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     return
 }
 
-function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (#0 as baml.iter.Iterator).Item[] {
+function baml.iter.Iterator.collect(self: #0) -> (#0 as baml.iter.Iterator).Item[] {
     load_type (#0 as baml.iter.Iterator).Item
     alloc_array 0
     store_var r
@@ -4355,7 +4360,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (#0 as baml.ite
     return
 }
 
-function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
+function baml.iter.Iterator.count(self: #0) -> int {
     load_const 0
     store_var n
 
@@ -4384,7 +4389,7 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     return
 }
 
-function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
+function baml.iter.Iterator.every(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -4413,7 +4418,7 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((#0 as b
     return
 }
 
-function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.filter(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_type (#0 as baml.iter.Iterator).Item
     load_type (#0 as baml.iter.Iterator).Error
@@ -4422,7 +4427,7 @@ function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: ((#0 as 
     return
 }
 
-function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> #1 | null throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
+function baml.iter.Iterator.filter_map(self: #0, fn: ((#0 as baml.iter.Iterator).Item) -> #1 | null throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
     load_var2 1 2
     load_type (#0 as baml.iter.Iterator).Item
     load_type #1
@@ -4432,7 +4437,7 @@ function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: ((#0 as bam
     return
 }
 
-function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> (#0 as baml.iter.Iterator).Item | null {
+function baml.iter.Iterator.find(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> (#0 as baml.iter.Iterator).Item | null {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -4462,7 +4467,7 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((#0 as ba
     return
 }
 
-function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> baml.iter.Iterable<Error = #3, Item = #1> throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2 | #3, Item = #1> {
+function baml.iter.Iterator.flat_map(self: #0, fn: ((#0 as baml.iter.Iterator).Item) -> baml.iter.Iterable<Error = #3, Item = #1> throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2 | #3, Item = #1> {
     load_var2 1 2
     alloc_instance baml.iter.Done
     load_type (#0 as baml.iter.Iterator).Item
@@ -4474,7 +4479,7 @@ function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: ((#0 as baml.
     return
 }
 
-function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> void throws #1) -> void {
+function baml.iter.Iterator.for_each(self: #0, fn: ((#0 as baml.iter.Iterator).Item) -> void throws #1) -> void {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -4499,7 +4504,7 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((#0 as baml.
     return
 }
 
-function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> #1 throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
+function baml.iter.Iterator.map(self: #0, fn: ((#0 as baml.iter.Iterator).Item) -> #1 throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
     load_var2 1 2
     load_type (#0 as baml.iter.Iterator).Item
     load_type #1
@@ -4509,7 +4514,7 @@ function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.
     return
 }
 
-function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> {
+function baml.iter.Iterator.peekable(self: #0) -> baml.iter.Peekable<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> {
     load_var self
     alloc_instance baml.iter.Done
     load_const false
@@ -4519,7 +4524,7 @@ function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peek
     return
 }
 
-function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#1, (#0 as baml.iter.Iterator).Item) -> #1 throws #2, initial: #1) -> #1 {
+function baml.iter.Iterator.reduce(self: #0, fn: (#1, (#0 as baml.iter.Iterator).Item) -> #1 throws #2, initial: #1) -> #1 {
     load_var initial
     store_var acc
 
@@ -4548,7 +4553,7 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#1, (#0 as bam
     return
 }
 
-function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.skip(self: #0, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_type (#0 as baml.iter.Iterator).Item
     load_type (#0 as baml.iter.Iterator).Error
@@ -4556,7 +4561,7 @@ function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.
     return
 }
 
-function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.skip_while(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const true
     load_type (#0 as baml.iter.Iterator).Item
@@ -4566,7 +4571,7 @@ function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: ((#0
     return
 }
 
-function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
+function baml.iter.Iterator.some(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -4594,7 +4599,7 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((#0 as ba
     return
 }
 
-function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.step_by(self: #0, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const true
     load_type (#0 as baml.iter.Iterator).Item
@@ -4603,7 +4608,7 @@ function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.it
     return
 }
 
-function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.take(self: #0, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_type (#0 as baml.iter.Iterator).Item
     load_type (#0 as baml.iter.Iterator).Error
@@ -4611,7 +4616,7 @@ function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.
     return
 }
 
-function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
+function baml.iter.Iterator.take_while(self: #0, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const false
     load_type (#0 as baml.iter.Iterator).Item
@@ -5338,10 +5343,10 @@ function baml.json.to_string(value: unknown) -> string {
     return
 }
 
-function baml.media.Audio.base64(self: baml.media.Audio) -> string {
+function baml.media.Audio.base64(self: audio) -> string {
 }
 
-function baml.media.Audio.file(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.file(self: audio) -> string | null {
 }
 
 function baml.media.Audio.from_base64(base64: string, mime_type: string | null) -> audio {
@@ -5353,16 +5358,16 @@ function baml.media.Audio.from_file(file: string, mime_type: string | null) -> a
 function baml.media.Audio.from_url(url: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.mime_type(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.mime_type(self: audio) -> string | null {
 }
 
-function baml.media.Audio.url(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.url(self: audio) -> string | null {
 }
 
-function baml.media.Image.base64(self: baml.media.Image) -> string {
+function baml.media.Image.base64(self: image) -> string {
 }
 
-function baml.media.Image.file(self: baml.media.Image) -> string | null {
+function baml.media.Image.file(self: image) -> string | null {
 }
 
 function baml.media.Image.from_base64(base64: string, mime_type: string | null) -> image {
@@ -5374,16 +5379,16 @@ function baml.media.Image.from_file(file: string, mime_type: string | null) -> i
 function baml.media.Image.from_url(url: string, mime_type: string | null) -> image {
 }
 
-function baml.media.Image.mime_type(self: baml.media.Image) -> string | null {
+function baml.media.Image.mime_type(self: image) -> string | null {
 }
 
-function baml.media.Image.url(self: baml.media.Image) -> string | null {
+function baml.media.Image.url(self: image) -> string | null {
 }
 
-function baml.media.Pdf.base64(self: baml.media.Pdf) -> string {
+function baml.media.Pdf.base64(self: pdf) -> string {
 }
 
-function baml.media.Pdf.file(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.file(self: pdf) -> string | null {
 }
 
 function baml.media.Pdf.from_base64(base64: string, mime_type: string | null) -> pdf {
@@ -5395,16 +5400,16 @@ function baml.media.Pdf.from_file(file: string, mime_type: string | null) -> pdf
 function baml.media.Pdf.from_url(url: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.mime_type(self: pdf) -> string | null {
 }
 
-function baml.media.Pdf.url(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.url(self: pdf) -> string | null {
 }
 
-function baml.media.Video.base64(self: baml.media.Video) -> string {
+function baml.media.Video.base64(self: video) -> string {
 }
 
-function baml.media.Video.file(self: baml.media.Video) -> string | null {
+function baml.media.Video.file(self: video) -> string | null {
 }
 
 function baml.media.Video.from_base64(base64: string, mime_type: string | null) -> video {
@@ -5416,10 +5421,10 @@ function baml.media.Video.from_file(file: string, mime_type: string | null) -> v
 function baml.media.Video.from_url(url: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
+function baml.media.Video.mime_type(self: video) -> string | null {
 }
 
-function baml.media.Video.url(self: baml.media.Video) -> string | null {
+function baml.media.Video.url(self: video) -> string | null {
 }
 
 function baml.net.<(baml.net.TcpStream as baml.io.Read)>.read(self: baml.net.TcpStream, limit: int) -> uint8array | null {
@@ -5815,7 +5820,7 @@ function baml.ops.<(uint8array as baml.ops.Index<int>)>.index(self: uint8array, 
     return
 }
 
-function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.ge(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -5826,7 +5831,7 @@ function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
     return
 }
 
-function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.gt(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "le"
@@ -5837,7 +5842,7 @@ function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
     return
 }
 
-function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.le(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -5858,7 +5863,7 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     return
 }
 
-function baml.ops.Equals.neq(self: baml.ops.Equals, other: #0) -> bool {
+function baml.ops.Equals.neq(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Equals
     load_const "eq"
@@ -5929,7 +5934,7 @@ function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
     return
 }
 
-function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
+function baml.random.Rng.random_int(self: #0) -> int {
     load_var self
     load_const 8
     load_type baml.random.Rng

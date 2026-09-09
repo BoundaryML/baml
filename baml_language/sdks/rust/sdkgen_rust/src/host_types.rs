@@ -1,9 +1,7 @@
 use baml_codegen_types::{CallableParam, Class, Function, Symbol, SymbolPool, Ty};
 
 pub(crate) fn lower_unrepresentable_literals(pool: &SymbolPool) -> SymbolPool {
-    pool.iter()
-        .map(|(name, symbol)| (name.clone(), lower_symbol(symbol)))
-        .collect()
+    pool.map_symbols(lower_symbol)
 }
 
 fn lower_symbol(symbol: &Symbol) -> Symbol {

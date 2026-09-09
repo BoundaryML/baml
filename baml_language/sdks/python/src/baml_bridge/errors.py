@@ -1,8 +1,8 @@
 # BAML Python error types.
 #
 # A thrown BAML value surfaces in Python as one of these *wrappers* carrying
-# the decoded value via `.value` (a plain pydantic model / enum / alias,
-# codegen'd by the normal rules) — see 31a-spec. The wrappers are raised by
+# the decoded value via `.value` (an application model / enum / alias, or
+# an SDK-owned builtin failure payload). The wrappers are raised by
 # `decode_call_result` (proto.py) from the `BamlOutboundResult` envelope.
 #
 # They are deliberately plain Python classes: a BAML error type cannot itself
@@ -15,12 +15,31 @@ from __future__ import annotations
 import re
 import sys
 import types
+from dataclasses import dataclass
 from typing import Any, List, Optional, TypeVar
 
 # Wire trace line shape, e.g. `File "resume.baml", line 12, in user.extract`.
 _TRACE_LINE = re.compile(r'File "(?P<file>.*)", line (?P<line>\d+), in (?P<func>.*)')
 
 _E = TypeVar("_E", bound=BaseException)
+
+
+@dataclass
+class BamlFailureValue:
+    """SDK-owned payload for a builtin runtime failure.
+
+    Unlike application error models this needs no generated typemap. Fields
+    keep their decoded values (including owned references), and ``class_name``
+    preserves the exact builtin name when the value is passed back to BAML.
+    """
+
+    class_name: str
+    fields: dict[str, Any]
+
+    @property
+    def message(self) -> Optional[str]:
+        value = self.fields.get("message")
+        return value if isinstance(value, str) else None
 
 
 def _capture_frame(filename: str, lineno: int, func: str) -> Optional[types.FrameType]:
@@ -175,19 +194,15 @@ def make_sdk_panic(message: str) -> BamlPanic:
     Used by the Rust pre-call *handle-returning* sites (`get_runtime` /
     `initialize_runtime`) — SDK-internal *setup* failures, which are
     panic-shaped, not recoverable `baml.errors.*` (32c). When the runtime
-    isn't initialized the typemap may be unavailable, so we fall back to the
-    plain string as `.value` rather than letting construction fail.
+    isn't initialized the application typemap may be unavailable. Builtin
+    failure payloads always use the SDK-owned representation.
     """
-    try:
-        from .typemap import get_type_map  # local import: avoid circular load
-
-        value: Any = get_type_map().get_class("baml.panics.SdkPanic")(message=message)
-    except Exception:
-        value = message
+    value = BamlFailureValue("baml.panics.SdkPanic", {"message": message})
     return BamlPanic(value, class_name="baml.panics.SdkPanic")
 
 
 __all__ = [
+    "BamlFailureValue",
     "BamlError",
     "BamlCancelledError",
     "BamlPanic",

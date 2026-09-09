@@ -78,6 +78,7 @@ pub struct PackageInterface {
 pub enum ExportedType {
     Class {
         qtn: QualifiedTypeName,
+        boundary_projection: baml_type::ClassProjection,
         fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
         methods: Vec<ExportedFunction>,
         generic_params: Vec<ParamTy>,
@@ -147,6 +148,8 @@ pub enum ExportedImplOrigin {
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ExportedFunction {
     pub name: Name,
+    /// Authored receiver behavior, excluding static/internal/derived methods.
+    pub authored_instance: bool,
     pub params: Vec<FunctionParamTy>,
     pub return_type: Ty,
     pub declared_throws: Option<Ty>,
@@ -640,6 +643,7 @@ fn exported_function<'db>(
     let all_bounds = crate::lower::function_generic_bounds(db, func_loc);
     ExportedFunction {
         name: name.clone(),
+        authored_instance: crate::class_projection::is_authored_instance_method(db, func_loc),
         params,
         return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
         declared_throws,
@@ -703,6 +707,7 @@ fn lower_class_export<'db>(
     let qtn = qualify_def(db, Definition::Class(class_loc), name);
     ExportedType::Class {
         qtn,
+        boundary_projection: crate::class_projection::class_projection(db, class_loc),
         fields,
         methods,
         generic_params: class_frame,

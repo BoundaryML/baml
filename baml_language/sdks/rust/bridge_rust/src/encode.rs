@@ -34,6 +34,7 @@ pub fn type_args(entries: Vec<(&str, wire::BamlTy)>) -> Vec<wire::BamlTyArg> {
             type_var: name.to_string(),
             type_value: Some(ty),
             type_definition: None,
+            type_reference: None,
         })
         .collect()
 }

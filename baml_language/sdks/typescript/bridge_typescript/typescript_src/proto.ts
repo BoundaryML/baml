@@ -7,6 +7,7 @@
 import { baml_bridge } from './proto/baml_cffi.js';
 import {
     BamlHandle,
+    BamlEncodedResult,
     BamlCallContext,
     HandleKey,
     BamlImage,
@@ -22,6 +23,7 @@ import {
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
+import { BamlRef, BamlConcreteRef, BamlInterfaceRef } from './interface_ref.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
 import { handleExitPanic } from './platform.js';
 import {
@@ -32,10 +34,11 @@ import {
 import { BamlTypeMap, getTypeMap } from './typemap.js';
 import {
     BamlType,
+    isBamlType,
     BamlTypeMetadataRow,
     lowerTypeToWireTy,
     outboundTyToBamlTypeToken,
-    type BamlTypeToken,
+    type BamlTypeValue, type BamlTypeToken,
 } from './wire_ty.js';
 
 const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
@@ -48,6 +51,9 @@ const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
+// Engine callables cross back as their native carrier, not a new host callback.
+// Weak keys do not keep returned JavaScript functions alive after their users drop them.
+const decodedCallables = new WeakMap<object, BamlHandle>();
 
 // ─── Inbound (TS → Rust) ───
 
@@ -74,7 +80,28 @@ export class HostCallableSyncError extends Error {
  */
 interface EncodeCtx {
     syncMode: boolean;
+    typeMap: BamlTypeMap;
     registered: HandleKey[];
+    clonedHandles: Array<{ key: HandleKey; kind: number }>;
+}
+
+function cloneHandleForWire(handle: BamlHandle, ctx: EncodeCtx): baml_bridge.cffi.v1.IBamlHandle {
+    const key = handle._cloneKeyForWire();
+    const kind = handle.handleType;
+    ctx.clonedHandles.push({ key, kind });
+    return { key, handleType: kind };
+}
+
+function rollbackEncoding(ctx: EncodeCtx): void {
+    for (const { key, kind } of ctx.clonedHandles.splice(0).reverse()) {
+        try {
+            // This key belongs exclusively to the aborted wire transfer.
+            new BamlHandle(key, kind).close();
+        } catch {
+            // Continue releasing the remaining leases without hiding the cause.
+        }
+    }
+    rollbackHostCallables(ctx.registered.splice(0));
 }
 
 function rollbackHostCallables(keys: HandleKey[]): void {
@@ -90,8 +117,10 @@ function rollbackHostCallables(keys: HandleKey[]): void {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    typeMap?: BamlTypeMap;
     functionName?: string;
     functionHandle?: HandleKey;
+    concreteMethod?: baml_bridge.cffi.v1.IConcreteMethodTarget;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -99,7 +128,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlTypeValue]>;
 }
 
 export interface BamlPromptCallOptions {
@@ -236,7 +265,8 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
-    if (value instanceof BamlType) {
+    if (isBamlType(value)) {
+        value._checkSdk(ctx.typeMap);
         iv.tyDefValue = value._wireCopy();
     } else if (value instanceof BamlTypeMetadataRow) {
         const fields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
@@ -282,8 +312,8 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         }
         // The Rust inbound decoder drains handle-table entries. Send a fresh
         // cloned key so the JS-owned handle remains valid for later calls.
-        iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
-    } else if (value instanceof BamlStream || value instanceof BamlFunctionSpec) {
+        iv.handle = cloneHandleForWire(value, ctx);
+    } else if (value instanceof BamlStream || value instanceof BamlFunctionSpec || value instanceof BamlRef) {
         // Live capability wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
         // branch above: the Rust inbound decoder *drains* the handle-table
         // entry, so send a fresh cloned key — otherwise the engine consumes the
@@ -291,7 +321,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // handle key". `_toHandle()` returns the inner handle without cloning,
         // unlike the media wrappers' `_toHandle()`.
         const h = value._toHandle();
-        iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
+        iv.handle = cloneHandleForWire(h, ctx);
     } else if (
         value instanceof BamlImage
         || value instanceof BamlAudio
@@ -303,6 +333,11 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // can reconstruct a fresh stdlib wrapper without handle identity.
         iv.mediaValue = wireMedia(value);
     } else if (typeof value === 'function') {
+        const native = decodedCallables.get(value);
+        if (native) {
+            iv.handle = cloneHandleForWire(native, ctx);
+            return;
+        }
         // Host callables cannot work on the synchronous call path —
         // fast-fail before any blocking happens (and before we register a
         // tsfn, which would otherwise be orphaned).
@@ -318,7 +353,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // side decodes this into `BexExternalValue::HostValue` and binds it
         // to an `Object::HostClosure`; BAML invocations land back in
         // `hostCallableDispatch` below via the ThreadsafeFunction.
-        const key = registerHostCallable(makeHostCallableDispatch(value as (...args: unknown[]) => unknown));
+        const key = registerHostCallable(makeHostCallableDispatch(value as (...args: unknown[]) => unknown, ctx.typeMap));
         // Remember the key so a later encode failure can release it.
         ctx.registered.push(key);
         iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
@@ -357,7 +392,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // value lets it resolve the same object and preserve cursor/connection
         // state across FFI calls. The FQN comes from the typemap reverse map.
         if (isClassInstance && Object.values(value).some(v => v instanceof BamlHandle)) {
-            const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+            const fqn = ctx.typeMap.jsTypeToBamlType((value as object).constructor);
             if (fqn) {
                 const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
@@ -379,7 +414,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // will not use it to choose between two concrete instantiations of the
         // same generic class in a union.
         if (isClassInstance) {
-            const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+            const fqn = ctx.typeMap.jsTypeToBamlType((value as object).constructor);
             const params = genericParamNames(value);
             if (fqn) {
                 const userTypes = (value as { $types?: Record<string, BamlTypeToken> }).$types;
@@ -394,7 +429,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
                     classFields.push({ stringKey: k, value: childVal });
                 }
                 if (params && userTypes !== undefined && params.every((p) => userTypes[p] !== undefined)) {
-                    const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes[p]));
+                    const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes[p], ctx.typeMap));
                     iv.valueType = { classTy: { name: fqn, typeArgs } };
                 } else {
                     iv.valueType = { classTy: { name: fqn, typeArgs: [] } };
@@ -431,21 +466,19 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
  * host-value table and is normally released only when the engine GCs the
  * `HostClosure` it allocated and fires the C release callback (a GC-timed
  * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * Callback channels retain their callable without pinning the Node event loop.
+ * If a later argument or type token fails, the engine never sees the registered
+ * keys or cloned handles, so encoding must release them itself.
  */
 export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer {
     const callId = options.callId;
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
-    if (options.functionName !== undefined && options.functionHandle !== undefined) {
+    if ([options.functionName, options.functionHandle, options.concreteMethod].filter(value => value !== undefined).length > 1) {
         throw new TypeError('exactly one BAML call target may be set');
     }
-    const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
+    const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, typeMap: options.typeMap ?? getTypeMap(), registered: [], clonedHandles: [] };
     try {
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
@@ -455,23 +488,26 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             entry.value = iv;
             entries.push(entry);
         }
-        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => value instanceof BamlType
-            ? { typeVar, typeDefinition: value._wireCopy() }
-            : { typeVar, typeValue: value });
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => {
+            if (!isBamlType(value)) return { typeVar, typeValue: value };
+            value._checkSdk(ctx.typeMap);
+            return { typeVar, typeDefinition: value._wireCopy() };
+        });
         const msg = CallFunctionArgs.fromObject({
             kwargs: entries,
             callId: callId.toString(),
-            typeArgs,
+            typeArgs: options.concreteMethod ? [] : typeArgs,
+            concreteMethod: options.concreteMethod ? { ...options.concreteMethod, typeArgs } : undefined,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
         // Roll back any host callables registered before the failure so
-        // they don't leak in the registry (and pin the libuv loop) for the
+        // they don't leak in the registry for the
         // life of the process — the call never reaches the engine, so the
         // engine would never release them.
-        rollbackHostCallables(ctx.registered);
+        rollbackEncoding(ctx);
         throw err;
     }
 }
@@ -572,9 +608,29 @@ function decodeValueHolder(
             // Never a valid decoded handle (mirrors Python's _decode_handle).
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
-        const handle = new BamlHandle(holder.handleValue.key, ht);
+        const handle = activeResult
+            ? activeResult._wrapHandle(holder.handleValue.key, ht)
+            : new BamlHandle(holder.handleValue.key, ht);
         if (ht === BamlHandleType.FUNCTION_REF) {
-            return decodeBamlClosure(handle, holder.handleValue.ty?.function);
+            return decodeBamlClosure(handle, holder.handleValue.ty?.function, typeMap);
+        }
+        if (ht === BamlHandleType.ADT_INTERFACE) {
+            const name = holder.handleValue.ty?.interface?.name;
+            if (!name) throw new BamlError('interface reference has no checked type');
+            const ctor = typeMap.getInterface(name) as typeof BamlInterfaceRef;
+            if (!(ctor.prototype instanceof BamlInterfaceRef)) {
+                throw new BamlError(`invalid generated interface reference for ${name}`);
+            }
+            return ctor._fromHandle(handle, typeMap);
+        }
+        if (ht === BamlHandleType.CONCRETE_OBJECT) {
+            const name = holder.handleValue.ty?.classTy?.name;
+            if (!name) throw new BamlError('concrete reference has no checked class type');
+            const ctor = typeMap.getClass(name) as typeof BamlConcreteRef;
+            if (!(ctor.prototype instanceof BamlConcreteRef)) {
+                throw new BamlError(`invalid generated concrete reference for ${name}`);
+            }
+            return ctor._fromHandle(handle, typeMap);
         }
         if (ht === BamlHandleType.ADT_MEDIA_IMAGE) return BamlImage._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO) return BamlAudio._fromHandle(handle);
@@ -630,6 +686,7 @@ function decodeValueHolder(
 function decodeBamlClosure(
     handle: BamlHandle,
     functionTy: baml_bridge.cffi.v1.IBamlTyFunction | null | undefined,
+    typeMap: BamlTypeMap,
 ): (...args: unknown[]) => unknown {
     const params = functionTy?.params ?? [];
     const required = params.filter(
@@ -641,7 +698,7 @@ function decodeBamlClosure(
     const requiredNames = required.map((param, index) => param.name ?? `arg${index}`);
     const optionalNames = new Set(optional.map((param, index) => param.name ?? `arg${required.length + index}`));
 
-    return (...args: unknown[]): unknown => {
+    const callable = (...args: unknown[]): unknown => {
         if (args.length > requiredNames.length + 1) {
             throw new TypeError(
                 `got ${args.length} arguments but this BAML closure accepts ` +
@@ -665,15 +722,17 @@ function decodeBamlClosure(
                 if (value !== undefined) kwargs[name] = value;
             }
         }
-        const runtime = getRuntime();
         const callId = BigInt(newFunctionCall());
         const encodedArgs = encodeCallArgs(kwargs, {
             syncMode: true,
             callId,
             functionHandle: handle.key,
+            typeMap,
         });
-        return decodeCallResult(runtime.callFunctionSync(encodedArgs));
+        return decodeCallResult(handle._callOwnedFunctionSync(encodedArgs), typeMap);
     };
+    decodedCallables.set(callable, handle);
+    return callable;
 }
 
 /**
@@ -727,7 +786,7 @@ function decodeClass(
             if (params && typeArgs && typeArgs.length) {
                 const types: Record<string, BamlTypeToken | undefined> = {};
                 params.forEach((p, i) => {
-                    types[p] = outboundTyToBamlTypeToken(typeArgs[i]);
+                    types[p] = outboundTyToBamlTypeToken(typeArgs[i], typeMap);
                 });
                 Object.defineProperty(instance, '$types', {
                     value: types,
@@ -786,16 +845,23 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
  * into the required positional run and the supplied optionals (keyed by
  * `argName`) using each arg's `isOptionalArg` flag.
  */
-function decodeHostCall(data: Buffer | Uint8Array): {
+function decodeHostCall(data: BamlEncodedResult, typeMap: BamlTypeMap): {
     positional: unknown[];
     optional: Record<string, unknown>;
 } {
-    const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
-    const typeMap = getTypeMap();
+    return decodeOwned(data, payload => decodeHostCallPayload(payload, typeMap));
+}
+
+function decodeHostCallPayload(data: Buffer | Uint8Array, typeMap: BamlTypeMap): {
+    positional: unknown[];
+    optional: Record<string, unknown>;
+} {
+    const msg = BamlToHostCall.decode(data);
     const positional: unknown[] = [];
     const optional: Record<string, unknown> = {};
     for (const arg of msg.args ?? []) {
-        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
+        if (!arg.value) throw new BamlError('BAML callback argument has no value');
+        const value = decodeValueHolder(arg.value, typeMap);
         if (arg.isOptionalArg) {
             optional[arg.argName ?? ''] = value;
         } else {
@@ -832,9 +898,8 @@ function reshapeHostArgs(positional: unknown[], optional: Record<string, unknown
  * bridge_python's `decode_value` + `_outbound_class_fqn` so the surfaced
  * `BamlError`/`BamlPanic` carries the decoded value, not just a string.
  *
- * Decoding is defensive: a malformed/unsupported thrown payload must not mask
- * the original error/panic, so a decode failure degrades to an undefined value
- * (the formatted message and className are still surfaced).
+ * A failure while constructing this value is a decoding failure: propagate it
+ * so the enclosing receipt transaction can discard provisional references.
  */
 /**
  * Peel any `union_variant_value` wrapper(s) so a metadata read sees the inner
@@ -844,7 +909,7 @@ function reshapeHostArgs(positional: unknown[], optional: Record<string, unknown
  * FQN read below must match or `className` is lost for union throws.
  */
 function unwrapUnionVariant(
-    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined,
 ): baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined {
     let h = holder;
     while (h?.unionVariantValue?.value) {
@@ -854,15 +919,12 @@ function unwrapUnionVariant(
 }
 
 function decodeThrown(
-    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined,
+    typeMap: BamlTypeMap,
 ): { value: unknown; className: string | undefined; message: string } {
     const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
-    let value: unknown;
-    try {
-        value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
-    } catch {
-        value = undefined;
-    }
+    if (!holder) throw new BamlError('BAML failure envelope has no value');
+    const value = decodeValueHolder(holder, typeMap);
     let message = '';
     if (value != null && typeof value === 'object' && 'message' in (value as object)) {
         const m = (value as Record<string, unknown>).message;
@@ -907,12 +969,37 @@ function errorForClassName(formatted: string, detail: BamlErrorDetail): BamlErro
  * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
  * rather than throwing.
  */
-export function decodeCallResult(data: Buffer | Uint8Array): unknown {
+// Decoding is synchronous. Restore the previous transaction for reentrant
+// model constructors; never leave provisional ownership in a global cache.
+let activeResult: BamlEncodedResult | undefined;
+
+function decodeOwned<T>(data: Buffer | Uint8Array | BamlEncodedResult, decode: (payload: Buffer | Uint8Array) => T): T {
+    const owned = data instanceof BamlEncodedResult ? data : undefined;
+    const previous = activeResult;
+    activeResult = owned;
+    try {
+        const value = decode(owned ? owned.payload : data as Buffer | Uint8Array);
+        owned?._adopt();
+        return value;
+    } catch (error) {
+        owned?._discard();
+        throw error;
+    } finally {
+        activeResult = previous;
+    }
+}
+
+export function decodeCallResult(data: Buffer | Uint8Array | BamlEncodedResult, typeMap: BamlTypeMap = getTypeMap()): unknown {
+    // Valid errors own their decoded references too; adopt before throwing.
+    return decodeOwned(data, payload => decodeCallOutcome(payload, typeMap))();
+}
+
+function decodeCallOutcome(data: Buffer | Uint8Array, typeMap: BamlTypeMap): () => unknown {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
     const result = BamlOutboundResult.decode(buf);
     switch (result.result) {
         case 'error': {
-            const { value, className, message } = decodeThrown(result.error?.value);
+            const { value, className, message } = decodeThrown(result.error?.value, typeMap);
             const trace = result.error?.trace ?? [];
             // Same-host rehydration: a `baml.errors.HostCallable` carrying a
             // `_handle` that still resolves in this process's host-value
@@ -925,36 +1012,44 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
                 const handle = (value as Record<string, unknown>)._handle;
                 const original = tryRehydrateHostValueByKey(handle);
                 if (original !== undefined) {
-                    throw original;
+                    // The original JS object is the returned value. Its
+                    // temporary transport reference has no remaining user;
+                    // release that lease when this receipt adopts, rather
+                    // than waiting for a later JS garbage collection.
+                    if (handle instanceof BamlHandle) handle.close();
+                    return () => { throw original; };
                 }
             }
             const formatted = formatThrownMessage('error', className ?? '', message, trace);
             if (className === CANCELLED_PANIC_CLASS) {
-                throw cancellationAbortError(formatted);
+                return () => { throw cancellationAbortError(formatted); };
             }
-            throw errorForClassName(formatted, { value, bamlTrace: trace, className });
+            const error = errorForClassName(formatted, { value, bamlTrace: trace, className });
+            return () => { throw error; };
         }
         case 'panic': {
             const panic = result.panic;
-            const { value, className, message } = decodeThrown(panic?.value);
+            const { value, className, message } = decodeThrown(panic?.value, typeMap);
             const trace = panic?.trace ?? [];
             const formatted = formatThrownMessage('panic', className ?? '', message, trace);
             if (className === CANCELLED_PANIC_CLASS) {
-                throw cancellationAbortError(formatted);
+                return () => { throw cancellationAbortError(formatted); };
             }
             const fallback = new BamlPanic(
                 formatted,
                 { value, bamlTrace: trace, className },
             );
-            if (panic?.isExitPanic) {
-                handleExitPanic(Number(panic.exitCode ?? 0), fallback);
-            }
-            throw fallback;
+            return () => {
+                if (panic?.isExitPanic) handleExitPanic(Number(panic.exitCode ?? 0), fallback);
+                throw fallback;
+            };
         }
-        case 'ok':
+        case 'ok': {
+            const value = decodeValueHolder(result.ok!, typeMap);
+            return () => value;
+        }
         default:
-            // `ok` (or an absent oneof — an all-default envelope is a null `ok`).
-            return result.ok ? decodeValueHolder(result.ok, getTypeMap()) : null;
+            throw new BamlError('BAML result envelope has no outcome');
     }
 }
 
@@ -973,8 +1068,8 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
 // inside the Rust dispatch callback (under the GIL) rather than going
 // through a JS-side wrapper. Node's tsfn model makes the wrapper natural.
 
-export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
-    return (callId: number, argsBytes: Buffer): void => {
+export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown, typeMap: BamlTypeMap = getTypeMap()) {
+    return (callId: number, argsBytes: BamlEncodedResult): void => {
         // Every reachable exit from this wrapper must complete `callId`
         // exactly once — if it doesn't, the engine awaits the in-flight call
         // forever (there is no timeout). The outer try/catch is a last-resort
@@ -989,17 +1084,17 @@ export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown
                 // `args` list. Partition it into the positional run and the
                 // supplied optionals, then reshape into the `$opts` calling
                 // convention the callback's type advertises.
-                const { positional, optional } = decodeHostCall(argsBytes);
+                const { positional, optional } = decodeHostCall(argsBytes, typeMap);
                 args = reshapeHostArgs(positional, optional);
             } catch (err) {
-                sendHostCallableError(callId, err);
+                sendHostCallableError(callId, err, typeMap);
                 return;
             }
             let result: unknown;
             try {
                 result = userFn(...args);
             } catch (err) {
-                sendHostCallableError(callId, err);
+                sendHostCallableError(callId, err, typeMap);
                 return;
             }
             // Async callables: the wrapper resolves the promise on the libuv
@@ -1014,11 +1109,11 @@ export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown
                 // exactly once. The handlers only call the defended send*
                 // helpers (they can't throw synchronously).
                 Promise.resolve(result).then(
-                    (resolved) => sendHostCallableResult(callId, resolved),
-                    (err) => sendHostCallableError(callId, err)
+                    (resolved) => sendHostCallableResult(callId, resolved, typeMap),
+                    (err) => sendHostCallableError(callId, err, typeMap)
                 );
             } else {
-                sendHostCallableResult(callId, result);
+                sendHostCallableResult(callId, result, typeMap);
             }
         } catch (err) {
             // Reached only if a send* helper or the promise plumbing threw
@@ -1036,7 +1131,7 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     );
 }
 
-function sendHostCallableResult(callId: number, value: unknown): void {
+function sendHostCallableResult(callId: number, value: unknown, typeMap: BamlTypeMap): void {
     let bytes: Buffer;
     // Result-encode path (host → engine): no sync guard (we're already on
     // libuv). We do track registrations, though — a callable nested in the
@@ -1044,15 +1139,15 @@ function sendHostCallableResult(callId: number, value: unknown): void {
     // throws, the bytes never reach the engine, so it never decodes (and
     // never releases) the callable. Roll those back on failure, mirroring the
     // argument-path rollback in `encodeCallArgs`.
-    const ctx: EncodeCtx = { syncMode: false, registered: [] };
+    const ctx: EncodeCtx = { syncMode: false, typeMap, registered: [], clonedHandles: [] };
     try {
         const iv: baml_bridge.cffi.v1.IInboundValue = {};
         setInboundValue(iv, value, ctx);
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());
     } catch (err) {
-        rollbackHostCallables(ctx.registered);
-        sendHostCallableError(callId, err);
+        rollbackEncoding(ctx);
+        sendHostCallableError(callId, err, typeMap);
         return;
     }
     completeHostCall(callId, 0, bytes);
@@ -1128,13 +1223,13 @@ function setInboundTypedThrowValue(
         const proto = Object.getPrototypeOf(value);
         const isClassInstance = proto !== Object.prototype && proto !== null;
         if (isClassInstance) {
-            const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+            const fqn = ctx.typeMap.jsTypeToBamlType((value as object).constructor);
             if (fqn) {
                 const params = genericParamNames(value);
                 const userTypes = (value as { $types?: Record<string, BamlTypeToken> }).$types;
                 const typeArgs = params?.map((param) => {
                     const token = userTypes?.[param];
-                    return token === undefined ? { unknown: {} } : lowerTypeToWireTy(token);
+                    return token === undefined ? { unknown: {} } : lowerTypeToWireTy(token, ctx.typeMap);
                 }) ?? [];
                 const fields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [key, fieldValue] of Object.entries(value)) {
@@ -1152,7 +1247,7 @@ function setInboundTypedThrowValue(
     setInboundValue(iv, value, ctx);
 }
 
-function sendHostCallableError(callId: number, err: unknown): void {
+function sendHostCallableError(callId: number, err: unknown, typeMap: BamlTypeMap): void {
     // Normal error path: never leaves the call uncompleted. If building or
     // encoding the Instance throws (e.g. `describeError`, proto `create` /
     // `encode`, or the native `completeHostCall` itself), fall back to the
@@ -1180,7 +1275,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // as an error. Treating both via the same wire path is consistent
         // with how engine-internal throws are routed.
         if (err instanceof BamlError && err.value != null) {
-            const ctx: EncodeCtx = { syncMode: false, registered: [] };
+            const ctx: EncodeCtx = { syncMode: false, typeMap, registered: [], clonedHandles: [] };
             try {
                 const iv = InboundValue.create({});
                 setInboundTypedThrowValue(iv, err.value, ctx);
@@ -1198,7 +1293,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
                 // and leak the remaining registrations (mirrors the other
                 // rollback sites in `setInboundValue` and
                 // `sendHostCallableResult`).
-                rollbackHostCallables(ctx.registered);
+                rollbackEncoding(ctx);
             }
         }
 

@@ -20,6 +20,8 @@ use std::{
 };
 
 use bex_project::Bex;
+mod runtime_issuer;
+pub use runtime_issuer::RuntimeIssuer;
 #[cfg(target_arch = "wasm32")]
 use vfs::error::VfsErrorKind;
 
@@ -135,11 +137,12 @@ pub mod baml_to_host;
 pub mod buffer;
 pub mod error;
 pub mod handle;
+pub mod host_registration;
 mod identity;
 
 pub use baml_to_host::{
-    call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
-    unhandled_spawn_error_to_outbound,
+    PreparedCall, error_to_outbound, invoke_prepared, invoke_prepared_encoded, prepare_call,
+    result_to_outbound, unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::{Buffer, free_buffer};
@@ -152,6 +155,14 @@ pub use platform::*;
 /// Get a clone of the target's global runtime, or error if not initialized.
 pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     platform::get_runtime()
+}
+
+/// Snapshot the engine and its output-transfer session under the same lock.
+/// Replacement/shutdown closes that session, so an old call cannot deliver
+/// new capabilities through the replacement runtime's session.
+pub fn get_runtime_with_transfers()
+-> Result<(Arc<dyn Bex>, bridge_ctypes::TransferSession<'static>), BridgeError> {
+    platform::get_runtime_with_transfers()
 }
 
 /// Initialize the global runtime from serialized BAML bytecode.
@@ -181,7 +192,6 @@ pub fn initialize_runtime_from_bytecode_with_sys_ops(
             bridge.bridge_runtime_name, bridge.bridge_runtime_version,
         ))
     })?;
-    install_unhandled_spawn_error_handler(&runtime);
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }
@@ -346,29 +356,36 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     }
 
     let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
-    install_unhandled_spawn_error_handler(&runtime);
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
-    runtime.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+fn install_unhandled_spawn_error_handler(
+    runtime: &Arc<dyn Bex>,
+    transfers: bridge_ctypes::TransferSession<'static>,
+) {
+    // The handler is stored by the runtime: a strong capture would form a
+    // permanent cycle even when no errors or SDK references remain.
+    let issuer = Arc::downgrade(runtime);
+    runtime.set_unhandled_spawn_error_handler(Some(Arc::new(move |error| {
         let cancelled = error.cancelled;
-        platform::dispatch_unhandled_spawn_error(
-            unhandled_spawn_error_to_outbound(error),
+        platform::dispatch_unhandled_spawn_error(platform::OwnedUnhandledSpawnError {
+            content: unhandled_spawn_error_to_outbound(error),
             cancelled,
-        );
+            runtime: issuer.upgrade(),
+            transfers: transfers.clone(),
+        });
     })));
 }
-
-#[cfg(target_arch = "wasm32")]
-fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
 pub async fn shutdown_runtime() -> Result<(), BridgeError> {
     if let Some(runtime) = platform::take_runtime()? {
         runtime.shutdown().await;
     }
+    // The final runtime owner above can itself release host registrations.
+    // Shutdown must flush them without requiring another SDK operation.
+    bex_project::host_release_dispatch::drain();
     Ok(())
 }
 

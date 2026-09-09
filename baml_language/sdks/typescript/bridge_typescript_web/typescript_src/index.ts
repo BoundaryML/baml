@@ -10,20 +10,20 @@ export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
 export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
-export type { GenericParams } from "./shared/define_function.js";
+export type { GenericParams, SdkContext } from "./shared/define_function.js";
 export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export { BamlType, reflectType } from "./shared/wire_ty.js";
-export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";
+export type { BamlNoInfer, BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken, BamlTypeValue, BamlPrimitiveValue } from "./shared/wire_ty.js";
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
 export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
-export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): void {
-  BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);
+export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  return BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);
 }
 
-export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-  BamlRuntime.initializeRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>): BamlRuntime {
+  return BamlRuntime.initializeRuntime(srcDir, files);
 }
 
 export class FunctionResult {

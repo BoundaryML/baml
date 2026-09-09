@@ -36,6 +36,7 @@ export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
+export { BamlInterfaceRef, BamlConcreteRef, BamlInterfaceType } from './interface_ref.js';
 export { BamlFunctionSpec } from './function_spec.js';
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
@@ -45,10 +46,10 @@ export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
-export type { GenericParams } from './define_function.js';
+export type { GenericParams, SdkContext } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
-export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
+export type { BamlNoInfer, BamlTypeValue, BamlPrimitiveValue, BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
@@ -56,16 +57,16 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
  * singleton reachable via `getRuntime()`).
  */
-export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-    BamlRuntime.initializeRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>): BamlRuntime {
+    return BamlRuntime.initializeRuntime(srcDir, files);
 }
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+    return BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
 }
 export {
     BamlAbortError,
@@ -166,7 +167,7 @@ export function callFunctionSync(
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
     try {
-        let resultBytes: Buffer;
+        let resultBytes: ReturnType<BamlRuntime["callFunctionSync"]>;
         try {
             resultBytes = rt.callFunctionSync(argsProto, ctx ?? null, nativeCollectors);
         } catch (err) {
@@ -196,7 +197,7 @@ export async function callFunction(
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
     try {
-        let resultBytes: Buffer;
+        let resultBytes: ReturnType<BamlRuntime["callFunctionSync"]>;
         try {
             resultBytes = await rt.callFunction(argsProto, ctx ?? null, nativeCollectors);
         } catch (err) {

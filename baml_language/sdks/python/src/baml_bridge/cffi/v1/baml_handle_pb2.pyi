@@ -24,6 +24,10 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     HOST_VALUE_OPAQUE: _ClassVar[BamlHandleType]
     ADT_FUNCTION_SPEC: _ClassVar[BamlHandleType]
     ADT_RUNTIME_VALUE: _ClassVar[BamlHandleType]
+    ADT_INTERFACE: _ClassVar[BamlHandleType]
+    HOST_REFERENCE: _ClassVar[BamlHandleType]
+    CONCRETE_OBJECT: _ClassVar[BamlHandleType]
+    HOST_ADAPTER_TYPE: _ClassVar[BamlHandleType]
 HANDLE_UNSPECIFIED: BamlHandleType
 UNTAGGED_RUST_DATA: BamlHandleType
 UNTAGGED_BEX_HEAP: BamlHandleType
@@ -41,6 +45,10 @@ HOST_VALUE_CALLABLE: BamlHandleType
 HOST_VALUE_OPAQUE: BamlHandleType
 ADT_FUNCTION_SPEC: BamlHandleType
 ADT_RUNTIME_VALUE: BamlHandleType
+ADT_INTERFACE: BamlHandleType
+HOST_REFERENCE: BamlHandleType
+CONCRETE_OBJECT: BamlHandleType
+HOST_ADAPTER_TYPE: BamlHandleType
 
 class BamlHandle(_message.Message):
     __slots__ = ("key", "handle_type")

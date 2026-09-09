@@ -162,7 +162,7 @@ function dispatch_matrix.Counter.start() -> int {
     return
 }
 
-function dispatch_matrix.Formatting.present(self: dispatch_matrix.Formatting) -> string {
+function dispatch_matrix.Formatting.present(self: #0) -> string {
     load_var self
     load_const 1
     load_type dispatch_matrix.Formatting
@@ -175,7 +175,7 @@ function dispatch_matrix.Formatting.present(self: dispatch_matrix.Formatting) ->
     return
 }
 
-function dispatch_matrix.Speaker.speak(self: dispatch_matrix.Speaker) -> string {
+function dispatch_matrix.Speaker.speak(self: #0) -> string {
     load_const "default"
     return
 }

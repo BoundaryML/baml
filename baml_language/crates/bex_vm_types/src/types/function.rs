@@ -366,8 +366,8 @@ pub struct Closure {
 ///
 /// The type environment resolved when the method is bound is curried in via
 /// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
-/// See the field documentation for the ordinary-bound-method limitation around
-/// a later explicit generic application.
+/// A later explicit generic application preserves the receiver and appends the
+/// method arguments to this frame.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
@@ -386,13 +386,12 @@ pub struct BoundMethod {
     /// class args cannot express, e.g. a blanket `implement<T> I for T[]`
     /// bound at `int[]`) —
     /// followed by any method-level type args from the reference site.
-    ///
-    /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
-    /// and [`GenericFunction::type_args`]: these positions should never carry a
-    /// type variable, but the upstream fix that stops typevars leaking into
-    /// value positions is still in flight, so all three stay `RuntimeTy` and
-    /// narrow to `RealizedTy` together once it lands.
     pub type_args: Box<[crate::RealizedTy]>,
+    /// A checked interface projection's realized function type, without `self`.
+    /// The callee frame above still describes the concrete implementation; this
+    /// contract describes what callers may pass and how results cross the bridge.
+    /// Ordinary compiler-created bound methods derive their type from the callee.
+    pub interface_signature: Option<Box<crate::RealizedTy>>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.
@@ -483,5 +482,28 @@ impl From<&FunctionKind> for FunctionType {
         } else {
             FunctionType::Callable
         }
+    }
+}
+
+impl Function {
+    /// Executable value slots, including a receiver when this is a method.
+    pub fn argument_layout(&self) -> baml_type::CallLayout {
+        baml_type::CallLayout(
+            (0..self.arity)
+                .map(|index| {
+                    self.param_has_default
+                        .get(index)
+                        .copied()
+                        .unwrap_or(false)
+                        .then(|| {
+                            baml_type::Name::new(
+                                self.param_names
+                                    .get(index)
+                                    .expect("optional parameter has a name"),
+                            )
+                        })
+                })
+                .collect(),
+        )
     }
 }

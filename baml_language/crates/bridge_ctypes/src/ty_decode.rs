@@ -1,12 +1,9 @@
 //! Decode the wire `BamlTy` (`baml_type.proto`) into a `baml_type::RuntimeTy`.
 //!
-//! Two host-provided "type as a value" paths share this:
-//!   - `CallFunctionArgs.type_args` — explicit, named `TypeVar` bindings for a
-//!     generic function/method call (`BamlTyArg { type_var, type_value }`). The
-//!     host sends them in De Bruijn order (enclosing class params first, then
-//!     the callee's own params); the engine maps each named binding onto the
-//!     entry frame's `type_args` slot by `TypeVar` name in
-//!     `set_entry_point_with_type_args`.
+//! Type evidence and "type as a value" paths share this:
+//!   - Named function bindings and positional checked-method bindings accept
+//!     exactly one static type, explicit portable definition or live reference.
+//!     The latter pins the original type; it never imports its display schema.
 //!   - `InboundValue.ty_value` — a reflected type passed as an argument value
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
@@ -26,35 +23,57 @@ use crate::{
     error::CtypesError,
 };
 
-#[derive(Debug, Default)]
-pub struct DecodedTypeArgs {
-    pub type_args: IndexMap<String, RuntimeTy>,
-    pub type_defs: IndexMap<String, bex_project::PortableTypeDef>,
+/// Decode one type binding. A reference borrows an SDK lease and pins the
+/// actual type object for this call; its portable description is not evidence.
+pub fn proto_type_argument(arg: &BamlTyArg) -> Result<bex_project::TypeArgument, CtypesError> {
+    let count = usize::from(arg.type_value.is_some())
+        + usize::from(arg.type_definition.is_some())
+        + usize::from(arg.type_reference.is_some());
+    if count != 1 {
+        return Err(CtypesError::InternalError(
+            "type argument must supply exactly one named type, definition or reference".into(),
+        ));
+    }
+    if let Some(key) = arg.type_reference {
+        let entry = crate::HANDLE_TABLE
+            .resolve(key)
+            .ok_or(CtypesError::InvalidHandleKey(key))?;
+        let handle = match &*entry {
+            crate::CffiHandleTableEntry::Adt(BexExternalAdt::TypeDef(TypeDefRef::Live {
+                handle,
+                ..
+            }))
+            | crate::CffiHandleTableEntry::BexHeapHandle(handle) => handle,
+            _ => {
+                return Err(CtypesError::InternalError(
+                    "type reference must identify a live reflected type".into(),
+                ));
+            }
+        };
+        // Bare internal type roots are validated as Object::Type by the engine.
+        return Ok(bex_project::TypeArgument::Reference(handle.clone()));
+    }
+    if let Some(definition) = &arg.type_definition {
+        return Ok(bex_project::TypeArgument::Definition(
+            proto_ty_def_to_portable(definition)?,
+        ));
+    }
+    Ok(bex_project::TypeArgument::Named(proto_ty_to_runtime_ty(
+        arg.type_value.as_ref().expect("one binding checked"),
+    )?))
 }
 
-/// Decode `CallFunctionArgs.type_args` (a list of named `BamlTyArg`s) into a
-/// `TypeVar name -> concrete RuntimeTy` map, preserving wire order (the map's
-/// insertion order is the host's De Bruijn order). A `BamlTyArg` with an absent
-/// `type_value` decodes to the unknown/top type, mirroring
-/// [`proto_ty_to_runtime_ty`]'s rollout-safe default. A repeated `type_var`
-/// keeps the last binding. The engine resolves the names against the callee's
-/// generic params when seeding the entry frame.
-pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs, CtypesError> {
-    let mut decoded = DecodedTypeArgs::default();
+pub fn proto_ty_args_to_named(
+    type_args: &[BamlTyArg],
+) -> Result<IndexMap<String, bex_project::TypeArgument>, CtypesError> {
+    let mut decoded = IndexMap::new();
     for arg in type_args {
-        if let Some(definition) = arg.type_definition.as_ref() {
-            let definition = proto_ty_def_to_portable(definition)?;
-            decoded
-                .type_args
-                .insert(arg.type_var.clone(), definition.root.clone());
-            decoded.type_defs.insert(arg.type_var.clone(), definition);
-        } else {
-            let ty = match arg.type_value.as_ref() {
-                Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                None => RuntimeTy::unknown(),
-            };
-            decoded.type_args.insert(arg.type_var.clone(), ty);
+        if arg.type_var.is_empty() || decoded.contains_key(&arg.type_var) {
+            return Err(CtypesError::InternalError(
+                "type argument names must be nonempty and unique".into(),
+            ));
         }
+        decoded.insert(arg.type_var.clone(), proto_type_argument(arg)?);
     }
     Ok(decoded)
 }

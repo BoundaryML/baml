@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 // prettier-ignore
 /* eslint-disable */
 // @ts-nocheck
@@ -596,23 +589,33 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LlmCall, LLMCall, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, cancelFunctionCall, completeHostCall, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { BamlAudio, BamlCallContext, BamlEncodedResult, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, DispatchQueueProbe, FunctionLog, HostSpanManager, LlmCall, LLMCall, ReleaseQueueProbe, Timing, Usage, _hostReleaseStats, _liveHandleCount, _pendingTransferCount, _probeOwnedDispatch, _probeReleaseQueue, _releaseHostReferencesForTest, _seedFunctionRefHandle, _seedGenericMediaHandle, _waitForRuntimeIdle, cancelFunctionCall, completeHostCall, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseHostCallable, shutdownRuntime } = nativeBinding
 export { BamlAudio }
 export { BamlCallContext }
+export { BamlEncodedResult }
 export { BamlHandle }
 export { BamlImage }
 export { BamlPdf }
 export { BamlRuntime }
 export { BamlVideo }
 export { Collector }
+export { DispatchQueueProbe }
 export { FunctionLog }
 export { HostSpanManager }
 export { LlmCall }
 export { LLMCall }
+export { ReleaseQueueProbe }
 export { Timing }
 export { Usage }
+export { _hostReleaseStats }
+export { _liveHandleCount }
+export { _pendingTransferCount }
+export { _probeOwnedDispatch }
+export { _probeReleaseQueue }
+export { _releaseHostReferencesForTest }
 export { _seedFunctionRefHandle }
 export { _seedGenericMediaHandle }
+export { _waitForRuntimeIdle }
 export { cancelFunctionCall }
 export { completeHostCall }
 export { flushEvents }

@@ -120,6 +120,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
+        boundary_projection: baml_type::ClassProjection::Record,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -175,6 +176,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         type_tag: baml_type::typetag::TypeTag::from_i64(101),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
+        boundary_projection: baml_type::ClassProjection::Record,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));

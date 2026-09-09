@@ -247,9 +247,7 @@ fn enrich_runtime_mount(
         relocate_ty(&mut function.callable_throws, alias);
         relocate_bounds(&mut function.generic_param_bounds, alias);
 
-        if !matches!(function.linkability, ExternalLinkability::Linkable) {
-            return;
-        }
+        let interface_member = matches!(function.target, ExternalCallTarget::Interface { .. });
         let (namespace, name) = match &mut function.target {
             ExternalCallTarget::Free {
                 package,
@@ -281,6 +279,11 @@ fn enrich_runtime_mount(
                 (target_namespace, method.clone())
             }
         };
+        // Interface members live inside their declaration stub. A free
+        // function in ns_Interface would shadow the interface itself.
+        if interface_member || !matches!(function.linkability, ExternalLinkability::Linkable) {
+            return;
+        }
         // Compiler-generated init/test helpers and callable companions are not
         // authored declarations. The mounted interface already exports their
         // exact callable identities; emitting either spelling as a source stub
@@ -389,6 +392,7 @@ fn enrich_runtime_mount(
                     methods,
                     generic_params,
                     generic_param_bounds,
+                    ..
                 } => {
                     *qtn = relocated_name(qtn, &alias);
                     for (_, ty, _) in fields.iter_mut() {
@@ -450,7 +454,7 @@ fn enrich_runtime_mount(
                     ..
                 } => {
                     relocate_bounds(param_bounds, &alias);
-                    for interface in requires {
+                    for interface in requires.iter_mut() {
                         relocate_interface(interface, &alias);
                     }
                     for associated in associated_types.iter_mut() {
@@ -464,7 +468,10 @@ fn enrich_runtime_mount(
                     for (_, ty, _) in fields.iter_mut() {
                         relocate_ty(ty, &alias);
                     }
-                    for function in required_methods.iter_mut().chain(default_methods) {
+                    for function in required_methods
+                        .iter_mut()
+                        .chain(default_methods.iter_mut())
+                    {
                         relocate_function(function, &alias, &viewpoint, &mut stubs);
                     }
                     let namespace = qtn.namespace().clone();
@@ -476,17 +483,118 @@ fn enrich_runtime_mount(
                     );
                     let generics = generic_params
                         .iter()
-                        .map(ToString::to_string)
+                        .zip(param_bounds.iter())
+                        .map(|(param, bounds)| {
+                            if bounds.is_empty() {
+                                param.to_string()
+                            } else {
+                                format!(
+                                    "{param} extends {}",
+                                    bounds
+                                        .iter()
+                                        .map(|bound| bound.to_ty().to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(" & ")
+                                )
+                            }
+                        })
                         .collect::<Vec<_>>();
                     let generic_suffix = if generics.is_empty() {
                         String::new()
                     } else {
                         format!("<{}>", generics.join(", "))
                     };
-                    let mut source = format!("interface {name}{generic_suffix} {{\n");
+                    let requires_suffix = if requires.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            " requires {}",
+                            requires
+                                .iter()
+                                .map(|bound| bound.to_ty().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+                    let mut source =
+                        format!("interface {name}{generic_suffix}{requires_suffix} {{\n");
                     for associated in associated_types {
-                        writeln!(&mut source, "  type {}", associated.name)
+                        let bound = associated
+                            .bound
+                            .as_ref()
+                            .map(|ty| format!(" extends {}", ty.to_ty()))
+                            .unwrap_or_default();
+                        let default = associated
+                            .default
+                            .as_ref()
+                            .map(|ty| format!(" = {ty}"))
+                            .unwrap_or_default();
+                        writeln!(&mut source, "  type {}{bound}{default}", associated.name)
                             .expect("writing to String is infallible");
+                    }
+                    for (function, has_body) in required_methods
+                        .iter()
+                        .map(|method| (method, false))
+                        .chain(default_methods.iter().map(|method| (method, true)))
+                    {
+                        let generics = function
+                            .generic_params
+                            .iter()
+                            .zip(&function.generic_param_bounds)
+                            .filter(|(param, _)| {
+                                !baml_type::is_synthetic_effect_param(param.name())
+                            })
+                            .map(|(param, bounds)| {
+                                if bounds.is_empty() {
+                                    param.to_string()
+                                } else {
+                                    format!(
+                                        "{param} extends {}",
+                                        bounds
+                                            .iter()
+                                            .map(|bound| bound.to_ty().to_string())
+                                            .collect::<Vec<_>>()
+                                            .join(" & ")
+                                    )
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        let generics = if generics.is_empty() {
+                            String::new()
+                        } else {
+                            format!("<{}>", generics.join(", "))
+                        };
+                        let params = function
+                            .params
+                            .iter()
+                            .enumerate()
+                            .map(|(index, param)| {
+                                let name = param
+                                    .name
+                                    .as_ref()
+                                    .map_or_else(|| format!("arg{index}"), ToString::to_string);
+                                if name == "self" {
+                                    return name;
+                                }
+                                // The original implementation evaluates defaults. This
+                                // body is discarded after linking; its placeholder
+                                // must type-check at any declared parameter type.
+                                let default = if param.is_optional() {
+                                    " = baml.sys.panic(\"runtime link stub\")"
+                                } else {
+                                    ""
+                                };
+                                format!("{name}: {}{default}", param.ty)
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let body = if has_body { " { $rust_function }" } else { "" };
+                        writeln!(
+                            &mut source,
+                            "  function {}{generics}({params}) -> {} throws {}{body}",
+                            function.name, function.return_type, function.callable_throws
+                        )
+                        .expect("writing to String is infallible");
                     }
                     for (field, ty, attrs) in fields {
                         // Keep ordinary source-spellable ABI intact, but avoid
@@ -582,6 +690,7 @@ fn enrich_runtime_mount(
                         Vec::new(),
                         class.name.clone(),
                     ),
+                    boundary_projection: baml_type::ClassProjection::Record,
                     fields: class
                         .fields
                         .iter()

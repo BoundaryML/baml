@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
+use bex_project::{BexExternalAdt, BexExternalValue, Handle, HostValueArc, MediaKind};
 
 use crate::baml_bridge::cffi::BamlHandleType;
 
@@ -23,22 +23,24 @@ impl std::fmt::Debug for BexRustData {
     }
 }
 
-/// Subset of `BexExternalValue` that can be held as a handle.
-/// Enforces at the type level that primitives/containers never enter the table.
+/// Retained values and bridge administration capabilities.
+/// Primitives/containers never enter the table. Adapter type registrations are
+/// not BAML values and are rejected by the fallible value conversion.
 ///
-/// Note: `HOST_VALUE_CALLABLE` keys do NOT live in this table. They are
-/// bridge-side identifiers backed by a per-bridge `HostValueRegistry`.
-/// See `bex_external_types::host_value` for the inverted-direction
-/// lifetime model (Rust holds keys + Arc-with-Drop; bridge holds the
-/// underlying host object).
+/// Raw `HOST_VALUE_CALLABLE`/`HOST_VALUE_OPAQUE` registration keys are not
+/// table keys. A `HOST_REFERENCE` table entry owns their HostValueArc and
+/// follows the same lease/adoption rules as every other retained reference.
 #[derive(Clone, Debug)]
 pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
+    HostAdapterType(Arc<bex_project::HostAdapterType>),
     FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
     RustData(BexRustData),
+    HostValue(Arc<HostValueArc>),
 }
 
+#[derive(Clone, Copy)]
 pub struct CffiHandleTableOptions<'a> {
     pub(crate) table: &'a CffiHandleTable,
     pub(crate) serialize_media: bool,
@@ -67,10 +69,13 @@ impl CffiHandleTableEntry {
     /// Map this value to its proto `BamlHandleType` tag.
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
+            Self::HostAdapterType(_) => BamlHandleType::HostAdapterType,
             Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
             Self::RustData(_) => BamlHandleType::UntaggedRustData,
+            Self::HostValue(_) => BamlHandleType::HostReference,
             Self::Adt(adt) => match adt {
+                BexExternalAdt::Interface(_) => BamlHandleType::AdtInterface,
                 BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
                 BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => BamlHandleType::AdtType,
                 BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
@@ -92,6 +97,9 @@ impl CffiHandleTableEntry {
                     bex_project::TaggedHeapHandleKind::RuntimeValue => {
                         BamlHandleType::AdtRuntimeValue
                     }
+                    bex_project::TaggedHeapHandleKind::ConcreteObject => {
+                        BamlHandleType::ConcreteObject
+                    }
                 },
             },
         }
@@ -109,9 +117,8 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
             BexExternalValue::RustData(arc) => Ok(Self::RustData(BexRustData(arc))),
-            // HostValue uses a separate per-bridge registry, not HANDLE_TABLE.
-            BexExternalValue::HostValue(_)
-            | BexExternalValue::Null
+            BexExternalValue::HostValue(arc) => Ok(Self::HostValue(arc)),
+            BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Bigint(_)
             | BexExternalValue::Float(_)
@@ -129,16 +136,22 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
     }
 }
 
-impl From<CffiHandleTableEntry> for BexExternalValue {
-    fn from(value: CffiHandleTableEntry) -> Self {
-        match value {
+impl TryFrom<CffiHandleTableEntry> for BexExternalValue {
+    type Error = &'static str;
+
+    fn try_from(value: CffiHandleTableEntry) -> Result<Self, Self::Error> {
+        Ok(match value {
+            CffiHandleTableEntry::HostAdapterType(_) => {
+                return Err("host adapter registration is not a BAML value");
+            }
             CffiHandleTableEntry::BexHeapHandle(h) => BexExternalValue::Handle(h),
             CffiHandleTableEntry::FunctionRef { global_index } => {
                 BexExternalValue::FunctionRef { global_index }
             }
             CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
             CffiHandleTableEntry::RustData(BexRustData(arc)) => BexExternalValue::RustData(arc),
-        }
+            CffiHandleTableEntry::HostValue(arc) => BexExternalValue::HostValue(arc),
+        })
     }
 }
 
@@ -255,25 +268,33 @@ impl CffiHandleTable {
     /// The row (and its dedup index entry) is removed when the last
     /// ownership is released.
     pub fn release(&self, key: u64) -> bool {
-        let mut entries = self
-            .entries
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(row) = entries.get_mut(&key) else {
-            return false;
-        };
-        row.refcount -= 1;
-        if row.refcount == 0 {
-            let row = entries
-                .remove(&key)
-                .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
-            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
-                self.heap_keys
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(handle);
+        let removed = {
+            let mut entries = self
+                .entries
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(row) = entries.get_mut(&key) else {
+                return false;
+            };
+            row.refcount -= 1;
+            if row.refcount == 0 {
+                let row = entries
+                    .remove(&key)
+                    .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
+                if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
+                    self.heap_keys
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(handle);
+                }
+                Some(row)
+            } else {
+                None
             }
-        }
+        };
+        // RustData/ADT destructors may reenter the bridge. Never run the last
+        // value destructor while holding a handle-table write lock.
+        drop(removed);
         true
     }
 
@@ -403,6 +424,28 @@ mod tests {
     }
 
     #[test]
+    fn last_release_drops_resource_after_unlocking_table() {
+        struct Resource(
+            std::sync::Weak<CffiHandleTable>,
+            Arc<std::sync::atomic::AtomicBool>,
+        );
+        impl Drop for Resource {
+            fn drop(&mut self) {
+                let table = self.0.upgrade().unwrap();
+                assert!(table.entries.try_write().is_ok());
+                assert!(table.heap_keys.try_write().is_ok());
+                self.1.store(true, Ordering::SeqCst);
+            }
+        }
+        let table = Arc::new(CffiHandleTable::new());
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let resource = Arc::new(Resource(Arc::downgrade(&table), dropped.clone()));
+        let key = table.insert(CffiHandleTableEntry::RustData(BexRustData(resource)));
+        assert!(table.release(key));
+        assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
     fn drain_removes_entry() {
         let table = CffiHandleTable::new();
         let key = table.insert(make_function_ref());
@@ -443,7 +486,7 @@ mod tests {
     #[test]
     fn roundtrip_to_bex_external_value() {
         let original = CffiHandleTableEntry::FunctionRef { global_index: 99 };
-        let bex: BexExternalValue = original.into();
+        let bex = BexExternalValue::try_from(original).unwrap();
         let back = CffiHandleTableEntry::try_from(bex).unwrap();
         assert!(matches!(
             back,
@@ -566,6 +609,7 @@ mod tests {
                 kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
                 ty: bex_project::RuntimeTy::int(),
                 heap_handle: h.clone(),
+                sdk_declaration: None,
             })
         };
         let key3 = table.insert(adt(&handle));

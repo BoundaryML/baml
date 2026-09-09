@@ -584,11 +584,11 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
         .expect("a runtime class instance should reach the host")
     {
         BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-            kind: TaggedHeapHandleKind::RuntimeValue,
+            kind: TaggedHeapHandleKind::ConcreteObject,
             ..
         }) => {}
         other => panic!(
-            "an anonymous class instance must cross as a tagged RuntimeValue, \
+            "an anonymous class instance must cross as a tagged ConcreteObject, \
              not structurally under the compiled `Widget`: {other:?}"
         ),
     }
@@ -636,11 +636,11 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
         .expect("a runtime-compiled class instance should reach the host")
     {
         BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-            kind: TaggedHeapHandleKind::RuntimeValue,
+            kind: TaggedHeapHandleKind::ConcreteObject,
             ..
         }) => {}
         other => panic!(
-            "a runtime-compiled class instance must cross as a tagged RuntimeValue, \
+            "a runtime-compiled class instance must cross as a tagged ConcreteObject, \
              not structurally under the static `ExtractedRecord`: {other:?}"
         ),
     }

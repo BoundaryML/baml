@@ -1,7 +1,7 @@
-import { registerUnhandledSpawnErrorCallback } from './native.js';
+import { registerUnhandledSpawnErrorCallback, type BamlEncodedResult } from './native.js';
 import { decodeCallResult } from './proto.js';
 
-export function reportUnhandledSpawnError(errorBytes: Buffer, cancelled: boolean): void {
+export function reportUnhandledSpawnError(errorBytes: BamlEncodedResult, cancelled: boolean): void {
     try {
         decodeCallResult(errorBytes);
     } catch (error) {

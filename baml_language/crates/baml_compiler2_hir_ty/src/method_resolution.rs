@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
+    Name, ParamTy, TyAttr, TypeName,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::TypeContext as _,
 };
@@ -100,136 +100,27 @@ pub(crate) fn external_class_for_type(
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(TypeName, Vec<Ty>)> {
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        (
-            TypeName::new(
-                Name::new("baml"),
-                namespace.iter().map(Name::new).collect(),
-                Name::new(name),
-            ),
-            args,
-        )
-    };
-    Some(match receiver.kind() {
-        TyKind::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
-        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        TyKind::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        TyKind::Type { .. } => (
-            TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type")),
-            Vec::new(),
-        ),
-        TyKind::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
+    match receiver.kind() {
+        TyKind::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
         TyKind::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
-            return external_class_for_type(
-                facts,
-                &Ty::from_plain(&expanded),
-                fuel.checked_sub(1)?,
-            );
+            external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
-        _ => return None,
-    })
+        _ => baml_type::compiler_aliases::member_owner(receiver)
+            .map(|(definition, args)| (definition.qualified_name(), args)),
+    }
 }
 
-/// The class whose declaration owns `receiver`'s methods, with the generic
-/// arguments the receiver pins. This table IS the language's builtin-class
-/// correspondence (TIR: `resolve_builtin_member` call sites), one row per
-/// structural kind; literals defer to their base primitive's class.
+/// Resolve the same member owner in source-backed and precompiled packages.
+/// The compiler alias registry owns the builtin correspondence in both lanes.
 pub(crate) fn receiver_class<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(ClassLoc<'db>, Vec<Ty>)> {
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        let qtn = TypeName::new(
-            Name::new("baml"),
-            namespace.iter().map(Name::new).collect(),
-            Name::new(name),
-        );
-        match facts.definition_of(&qtn) {
-            Some(Definition::Class(class)) => Some((class, args)),
-            _ => None,
-        }
-    };
-    match receiver.kind() {
-        TyKind::Class(qtn, args, _) => match facts.definition_of(qtn) {
-            Some(Definition::Class(class)) => Some((class, args.to_vec())),
-            _ => None,
-        },
-        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        TyKind::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        TyKind::Type { .. } => {
-            let qtn = TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type"));
-            match facts.definition_of(&qtn) {
-                Some(Definition::Class(class)) => Some((class, Vec::new())),
-                _ => None,
-            }
-        }
-        TyKind::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                // Generic media (`media`, any subtype) has no single class.
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
-        // Aliases are transparent: expand through the oracle (fuel-bounded
-        // like every alias walk) and resolve on the expansion.
-        TyKind::TypeAlias(qtn, _) => {
-            let expanded = facts.alias_def(qtn)?;
-            let fuel = fuel.checked_sub(1)?;
-            receiver_class(facts, &Ty::from_plain(&expanded), fuel)
-        }
+    let (name, args) = external_class_for_type(facts, receiver, fuel)?;
+    match facts.definition_of(&name) {
+        Some(Definition::Class(class)) => Some((class, args)),
         _ => None,
     }
 }
@@ -238,6 +129,9 @@ pub(crate) fn receiver_class<'db>(
 /// instantiated for the receiver.
 pub struct InterfaceMember<'db> {
     pub ty: Ty,
+    /// Exact instantiated interface that declared this member. Kept even
+    /// after concrete resolution selects a provided or default body.
+    pub declaring_interface: InterfaceRef,
     /// Methods bind their receiver; fields do not take one.
     pub is_method: bool,
     /// Set when the member is a default method with OWN generic params:
@@ -473,7 +367,7 @@ pub fn lookup_interface_member<'db>(
 
 /// Whether `target` declares method `name` with a `Self` use that makes it
 /// uncallable through an existential receiver, and where that use sits.
-pub(crate) fn declared_method_self_restriction<'db>(
+pub fn declared_method_self_restriction<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     target: &InterfaceRef,
@@ -884,6 +778,22 @@ fn env_discharges_rigid_bounds<'db>(
     true
 }
 
+/// Complete interface views proved for this concrete receiver in the caller's
+/// parameter environment. Unlike raw impl candidates, these discharge rigid
+/// bounds and retain block-level associated bindings and overridden defaults.
+/// Rules needing additional specialization remain in the implementation graph.
+pub fn concrete_interface_views<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+) -> Vec<InterfaceRef> {
+    crate::impls::impls_for_type(db, receiver)
+        .into_iter()
+        .filter(|resolved| env_discharges_rigid_bounds(db, facts, resolved))
+        .map(|resolved| resolved.implemented_view(db, receiver))
+        .collect()
+}
+
 /// Whether the param env proves rigid `actual` implements `goal`: the
 /// declared env clause for the var, or anything in its elaborated
 /// `requires` closure, whose head matches the goal. Structured
@@ -958,6 +868,7 @@ fn substitute_lookup_class_args<'db>(
     match lookup {
         InterfaceMemberLookup::Found(mut member) => {
             member.ty = subst(&member.ty);
+            member.declaring_interface = subst_ref(&member.declaring_interface);
             member.pending_own = member.pending_own.map(|pending| match pending {
                 PendingOwnGenerics::Source { method, prefix } => PendingOwnGenerics::Source {
                     method,
@@ -1052,6 +963,7 @@ pub(crate) fn member_on_interface<'db>(
                 crate::lower::substitute_params(&Ty::from_plain(field_ty), &instantiation);
             return Some(InterfaceMember {
                 ty: field_ty,
+                declaring_interface: target.clone(),
                 is_method: false,
                 pending_own: None,
                 declarer: MemberDeclarer::ExternalVirtualField {
@@ -1086,6 +998,7 @@ pub(crate) fn member_on_interface<'db>(
                 .expect("an exported interface method has an external target");
             return Some(InterfaceMember {
                 ty: instantiate_external_signature(&function, &instantiation),
+                declaring_interface: target.clone(),
                 is_method: true,
                 pending_own,
                 declarer: MemberDeclarer::ExternalMethod(callable),
@@ -1109,6 +1022,7 @@ pub(crate) fn member_on_interface<'db>(
         let field_ty = ctx.lower_type_ref(&data.type_refs, field.type_ref);
         return Some(InterfaceMember {
             ty: crate::lower::substitute_params(&field_ty, &instantiation),
+            declaring_interface: target.clone(),
             is_method: false,
             pending_own: None,
             declarer: MemberDeclarer::VirtualField {
@@ -1146,6 +1060,7 @@ pub(crate) fn member_on_interface<'db>(
         });
         return Some(InterfaceMember {
             ty: instantiate_signature(signature, &instantiation),
+            declaring_interface: target.clone(),
             is_method: true,
             pending_own,
             declarer: MemberDeclarer::VirtualMethod { interface, method },
@@ -1551,7 +1466,7 @@ fn interface_member_rows<'db>(
     rows
 }
 
-pub(crate) fn instantiate_external_signature(
+pub fn instantiate_external_signature(
     function: &crate::package_interface::ResolvedFunction,
     instantiation: &[Ty],
 ) -> Ty {
@@ -1648,7 +1563,10 @@ fn interface_frame<'db>(
     crate::lower::interface_frame(db, interface)
 }
 
-fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
+pub fn instantiate_signature(
+    signature: &crate::lower::FunctionSignature,
+    instantiation: &[Ty],
+) -> Ty {
     let params: Box<[baml_type::interned::FunctionParam]> = signature
         .params
         .iter()

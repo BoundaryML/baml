@@ -888,7 +888,10 @@ fn unify_union_members_at(
 
 /// Flatten nested unions, drop `Never`, deduplicate; collapse a single survivor
 /// to a bare type and an empty result to `Never`.
-pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
+pub fn normalize_union_members<H: Clone + PartialEq>(
+    members: impl IntoIterator<Item = Ty<H>>,
+    attr: TyAttr,
+) -> Ty<H> {
     let mut normalized = Vec::new();
     for member in members {
         match member {
@@ -954,7 +957,10 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
 /// returning `Some` replaces the node wholesale (its children are not
 /// visited), `None` recurses into children and rebuilds. The shared chassis
 /// of [`substitute_ty`] and the interface machinery's projection collapse.
-pub fn rewrite_ty(ty: &Ty, rewrite: &mut dyn FnMut(&Ty) -> Option<Ty>) -> Ty {
+pub fn rewrite_ty<H: Clone + PartialEq>(
+    ty: &Ty<H>,
+    rewrite: &mut dyn FnMut(&Ty<H>) -> Option<Ty<H>>,
+) -> Ty<H> {
     if let Some(replacement) = rewrite(ty) {
         return replacement;
     }
@@ -1012,11 +1018,13 @@ pub fn rewrite_ty(ty: &Ty, rewrite: &mut dyn FnMut(&Ty) -> Option<Ty>) -> Ty {
             }
         }
         Ty::Class(name, type_args, attr) => {
-            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            let rebuilt_args: Vec<Ty<H>> =
+                type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
             Ty::Class(name.clone(), rebuilt_args, attr.clone())
         }
         Ty::Interface(name, type_args, associated_bindings, attr) => {
-            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            let rebuilt_args: Vec<Ty<H>> =
+                type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
             let rebuilt_bindings = associated_bindings
                 .iter()
                 .map(|(name, ty)| (name.clone(), rewrite_ty(ty, rewrite)))

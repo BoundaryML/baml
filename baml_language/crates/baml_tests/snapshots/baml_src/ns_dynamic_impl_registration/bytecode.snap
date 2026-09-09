@@ -1,0 +1,96 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function dynamic_impl_registration.$init_test_ns_dynamic_impl_registration_registration(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_rejects_blanket_activated_by_same_batch"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_associated_outputs_do_not_disambiguate"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_distinct_inputs_and_inapplicable_blanket_are_allowed"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_rejected_builder_group_can_retry"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_requires_exact_arguments_and_associated_projection"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_required_interface_can_come_from_blanket"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dynamic_impl_registration"
+    load_const "dynamic_registration_failed_requirement_leaves_builder_retryable"
+    make_closure .<lambda($init_test_ns_dynamic_impl_registration_registration, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function dynamic_impl_registration.rejects_requirement(choice: reflect.interface.Implementation) -> bool {
+    load_type dynamic_impl_registration.Needs<int, Output = string>
+    call reflect.interface.implementation
+    store_var _6
+    load_const "NeedsAdapter"
+    load_type string
+    load_type reflect.Type | reflect.WithMeta<reflect.Type>
+    alloc_map 0
+    load_var2 3 1
+    load_type reflect.interface.Implementation
+    alloc_array 2
+    call reflect.class.new
+    pop 1
+    jump L2
+    load_var e
+    is_type reflect.errors.CompilationError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .diagnostics
+    load_const 0
+    load_array_element
+    load_field .message
+    load_const "requires"
+    call baml.String.includes
+    jump L3
+
+  L2:
+    load_const false
+
+  L3:
+    return
+}

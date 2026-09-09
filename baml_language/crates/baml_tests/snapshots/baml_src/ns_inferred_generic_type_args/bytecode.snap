@@ -277,13 +277,13 @@ function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> inferred_gene
     return
 }
 
-function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
+function inferred_generic_type_args.Counter.element_type(self: #0) -> string {
     load_type #1
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<#1>) -> inferred_generic_type_args.Cursor<#1> {
+function inferred_generic_type_args.Cursor.take_one(self: #0) -> inferred_generic_type_args.Cursor<#1> {
     load_var self
     load_type inferred_generic_type_args.Cursor<#1>
     load_const "head"
@@ -302,13 +302,13 @@ function inferred_generic_type_args.Dog.make(v: #0) -> inferred_generic_type_arg
     return
 }
 
-function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<#1>) -> string {
+function inferred_generic_type_args.Named.tname(self: #0) -> string {
     load_type #1
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_type_args.NextIter<#1, #2>) -> #1[] {
+function inferred_generic_type_args.NextIter.collect2(self: #0) -> #1[] {
     load_type #1
     alloc_array 0
     store_var out
@@ -338,7 +338,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     return
 }
 
-function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
+function inferred_generic_type_args.SelfEcho.nested_self_type(self: #0) -> string {
     load_type #0[]
     load_var self
     load_type #0

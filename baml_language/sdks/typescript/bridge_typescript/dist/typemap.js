@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 // typemap.ts — runtime BamlTypeMap, the Node analog of
 // sdks/python/src/baml_bridge/typemap.py.
 //
@@ -19,9 +12,11 @@ export class BamlTypeMap {
     classLazy = new Map();
     enumLazy = new Map();
     aliasLazy = new Map();
+    interfaceLazy = new Map();
     classCache = new Map();
     enumCache = new Map();
     aliasCache = new Map();
+    interfaceCache = new Map();
     // Reverse map (constructor or enum-object identity → FQN) for the encode path. Lazily
     // built from the class/enum thunks on first `jsTypeToBamlType` call. The
     // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
@@ -35,6 +30,8 @@ export class BamlTypeMap {
             m.enumLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.typeAliases))
             m.aliasLazy.set(fqn, le);
+        for (const [fqn, le] of Object.entries(args.interfaces ?? {}))
+            m.interfaceLazy.set(fqn, le);
         return m;
     }
     _resolve(fqn, lazy, cache, kind) {
@@ -64,6 +61,9 @@ export class BamlTypeMap {
     }
     getTypeAlias(fqn) {
         return this._resolve(fqn, this.aliasLazy, this.aliasCache, 'type alias');
+    }
+    getInterface(fqn) {
+        return this._resolve(fqn, this.interfaceLazy, this.interfaceCache, 'interface');
     }
     /**
      * Reverse lookup for the encode path: given a value's constructor, return
@@ -106,6 +106,8 @@ export class BamlTypeMap {
             this.getEnum(k);
         for (const k of this.aliasLazy.keys())
             this.getTypeAlias(k);
+        for (const k of this.interfaceLazy.keys())
+            this.getInterface(k);
     }
 }
 let _TYPE_MAP = new BamlTypeMap();

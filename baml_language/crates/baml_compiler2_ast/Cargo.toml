@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_type = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 borsh = { workspace = true }

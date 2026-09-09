@@ -10,12 +10,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-pub use bex::{Bex, BexCallTraceResult};
+pub use bex::{Bex, BexCallTraceResult, ConcreteMethodCall};
 // The engine type itself, and the compiled program it is built from, for
 // hosts that manage engine lifecycles (the LSP server's and the browser's
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
-pub use bex_engine::BexCallResult;
+pub use bex_engine::{
+    BexCallResult, HostAdapterImplementation, HostAdapterType, HostAdapterTypeDescriptor,
+    HostDeclaration,
+};
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
@@ -25,10 +28,11 @@ pub use bex_engine::{
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
-    HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
-    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy,
-    TaggedHeapHandleKind, TyAttr, TypeDefRef, WeakHeapRef, host_release_dispatch,
-    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
+    HostValueArc, HostValueKind, InterfaceValue, MediaKind, PortableClassDef,
+    PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef, PortableMetadata,
+    PortableTypeDef, RuntimeTy, TaggedHeapHandleKind, TyAttr, TypeArgument, TypeDefRef, TypeName,
+    WeakHeapRef, host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
+    try_convert_rust_data, validate_host_return,
 };
 pub use bex_vm_types::{HeapPtr, Program};
 use indexmap::IndexMap;
@@ -210,7 +214,9 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
         Vec::new(),
         runtime_compiler(),
     )?;
-    Ok(Arc::new(engine))
+    Ok(Arc::new(engine.with_sdk_bundle_id(
+        baml_artifact::sdk_bundle_id(bytecode),
+    )))
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -260,6 +266,54 @@ mod bytecode_artifact_tests {
                 baml_artifact::FORMAT_VERSION,
             )
         );
+    }
+
+    #[tokio::test]
+    async fn sdk_bundle_evidence_distinguishes_static_and_runtime_declarations() {
+        let program = baml_db::testing::compile_source(
+            r#"
+class Widget {
+    value: string,
+    function label(self) -> string throws never { self.value }
+}
+function static_widget() -> Widget throws never { Widget { value: "static" } }
+function dynamic_widget() -> unknown {
+    let t = reflect.class.new("Widget", {"value": reflect.Type.of<string>()});
+    baml.json.from_string<unreflect(t.as_type())>(`{"value":"dynamic"}`)
+}
+"#,
+        );
+        let artifact =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
+        let runtime = new_from_bytecode(&artifact, sys_ops::SysOps::native()).unwrap();
+        for (function, expected_static) in [("static_widget", true), ("dynamic_widget", false)] {
+            let result = runtime
+                .clone()
+                .call_function(
+                    function,
+                    IndexMap::new().into(),
+                    FunctionCallContextBuilder::new(CallId::next()).build(),
+                )
+                .await
+                .unwrap();
+            let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind: TaggedHeapHandleKind::ConcreteObject,
+                sdk_declaration,
+                ..
+            }) = result
+            else {
+                panic!("expected concrete reference")
+            };
+            assert_eq!(sdk_declaration.is_some(), expected_static);
+            if let Some(declaration) = sdk_declaration {
+                assert_eq!(
+                    declaration.bundle_id,
+                    baml_artifact::sdk_bundle_id(&artifact)
+                );
+                assert_eq!(declaration.name.to_string(), "user.Widget");
+            }
+        }
+        runtime.shutdown().await;
     }
 }
 

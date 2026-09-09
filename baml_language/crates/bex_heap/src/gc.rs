@@ -325,6 +325,7 @@ impl BexHeap {
                 {
                     errors.push(crate::UnhandledSpawnError {
                         future_id: future.id(),
+                        future: ptr,
                         value,
                         trace: future.error_trace(),
                         cancelled: future.cancel_requested(),
@@ -347,10 +348,7 @@ impl BexHeap {
                 &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
             )
         };
-        let mut worklist: Vec<HeapPtr> = errors
-            .iter()
-            .filter_map(|error| error.value.as_object_ptr())
-            .collect();
+        let mut worklist: Vec<HeapPtr> = errors.iter().map(|error| error.future).collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -371,7 +369,14 @@ impl BexHeap {
                         .expect("error payload must be forwarded"),
                 )
             });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
+            let future = *forwarding
+                .get(&error.future)
+                .expect("error future must be forwarded");
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError {
+                value,
+                future,
+                ..error
+            });
         }
     }
 
@@ -385,10 +390,7 @@ impl BexHeap {
         let errors = unsafe {
             self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen1_ref()])
         };
-        let mut worklist: Vec<HeapPtr> = errors
-            .iter()
-            .filter_map(|error| error.value.as_object_ptr())
-            .collect();
+        let mut worklist: Vec<HeapPtr> = errors.iter().map(|error| error.future).collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -416,7 +418,14 @@ impl BexHeap {
                         .expect("error payload must be forwarded"),
                 )
             });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
+            let future = *forwarding
+                .get(&error.future)
+                .expect("error future must be forwarded");
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError {
+                value,
+                future,
+                ..error
+            });
         }
     }
 
@@ -1815,6 +1824,7 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         }))];
@@ -2459,6 +2469,7 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -2734,6 +2745,7 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -2879,6 +2891,7 @@ mod tests {
             type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -3320,6 +3333,7 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));

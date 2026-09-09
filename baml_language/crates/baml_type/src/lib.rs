@@ -32,7 +32,10 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+mod class_projection;
+pub use class_projection::ClassProjection;
 mod codegen_ty;
+pub mod compiler_aliases;
 pub mod decl_cycles;
 mod declaration_name;
 mod defs;
@@ -1463,3 +1466,6 @@ mod tests {
         );
     }
 }
+
+pub mod call_layout;
+pub use call_layout::CallLayout;

@@ -6,7 +6,6 @@ import asyncio
 import enum
 
 import pydantic
-import pytest
 
 import baml_bridge
 from baml_bridge.cffi.v1 import baml_inbound_pb2
@@ -126,9 +125,11 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
     monkeypatch.setattr(baml_bridge, "get_runtime", lambda: FakeRuntime())
     monkeypatch.setattr(baml_bridge, "encode_call_args", fake_encode)
-    monkeypatch.setattr(baml_bridge, "decode_call_result", lambda _value: "stream")
     monkeypatch.setattr(
-        baml_bridge, "_decode_call_result_async", lambda _value: "stream"
+        baml_bridge, "decode_call_result", lambda _value, **_kwargs: "stream"
+    )
+    monkeypatch.setattr(
+        baml_bridge, "_decode_call_result_async", lambda _value, **_kwargs: "stream"
     )
 
     listener = object()

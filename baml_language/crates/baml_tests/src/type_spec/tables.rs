@@ -924,7 +924,7 @@ function ea_use_ambiguous() -> int throws never {
     assert_eq!(
         adjustments,
         vec![("ea_flex".to_string(), 1), ("ea_wide".to_string(), 1)],
-        "runtime-incompatible functions record a FunctionAdapter for direct and union callback slots"
+        "function shape coercions are recorded for direct and union callback slots"
     );
 }
 

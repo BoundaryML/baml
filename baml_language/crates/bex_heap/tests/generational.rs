@@ -119,6 +119,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             test_init: None,
             mounted_types: IndexMap::new(),
             kind: PackageKind::Runtime(Box::new(RuntimePackage {
+                host_adapter_callback_count: None,
                 objects: Box::new([]),
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
@@ -144,6 +145,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: package_ptr,
         })));
@@ -1150,6 +1152,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
+        boundary_projection: baml_type::ClassProjection::Record,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -1207,6 +1210,9 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        method_dispatch: IndexMap::new(),
+        associated_type_names: Vec::new(),
+        registration_obligations: Vec::new(),
         name: iface_name.clone(),
         type_tag: baml_type::typetag::TypeTag::of_head("Runtime"),
         args: Vec::new(),
@@ -1271,7 +1277,24 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let body_ptr = tlab.alloc_string("default body".to_string());
+    let bound_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let bound_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        name: QualifiedTypeName::local(Name::new("OnlyInMethodBound")),
+        type_tag: bound_tag,
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+        method_dispatch: IndexMap::new(),
+        associated_type_names: Vec::new(),
+        registration_obligations: Vec::new(),
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        method_dispatch: IndexMap::new(),
+        associated_type_names: Vec::new(),
+        registration_obligations: Vec::new(),
         name: QualifiedTypeName::local(Name::new("SessionIface")),
         type_tag: baml_type::typetag::TypeTag::of_head("SessionIface"),
         args: Vec::new(),
@@ -1279,6 +1302,38 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         assoc: Vec::new(),
         fields: Vec::new(),
         methods: vec![bex_vm_types::types::InterfaceMethodDef {
+            generic_params: vec![Name::new("Self"), Name::new("T")],
+            generic_param_bounds: vec![
+                Vec::new(),
+                vec![bex_vm_types::types::InterfaceBound {
+                    interface: bex_vm_types::TypeHead::new(bound_ptr, bound_tag),
+                    args: vec![bex_vm_types::TyTemplate::interface(
+                        bex_vm_types::TypeHead::new(bound_ptr, bound_tag),
+                        Vec::new(),
+                        Vec::new(),
+                    )],
+                    assoc: vec![(
+                        Name::new("Item"),
+                        bex_vm_types::TyTemplate::interface(
+                            bex_vm_types::TypeHead::new(bound_ptr, bound_tag),
+                            Vec::new(),
+                            Vec::new(),
+                        ),
+                    )],
+                }],
+            ],
+            signature: bex_vm_types::TyTemplate::Function {
+                params: vec![],
+                ret: Box::new(bex_vm_types::TyTemplate::Void {
+                    attr: TyAttr::default(),
+                }),
+                throws: Box::new(bex_vm_types::TyTemplate::Never {
+                    attr: TyAttr::default(),
+                }),
+                attr: TyAttr::default(),
+            },
+            has_receiver: true,
+            existential_callable: true,
             name: Name::new("greet"),
             args: Vec::new(),
             kwargs: Vec::new(),
@@ -1303,8 +1358,8 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
 
     assert_eq!(
-        stats.live_count, 3,
-        "interface, owner package and default body must all survive"
+        stats.live_count, 4,
+        "interface, owner package, default body and method-only bound must all survive"
     );
     let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
         panic!("root was not the interface")
@@ -1320,6 +1375,100 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         "default body moved; default_fn must be repointed"
     );
     assert!(matches!(unsafe { bound.get() }, Object::String(_)));
+    let bound = iface.methods[0].generic_param_bounds[1][0].interface;
+    assert_ne!(
+        bound.ptr(),
+        bound_ptr,
+        "method-only bound head must be forwarded"
+    );
+    let Object::Interface(declaration) = (unsafe { bound.ptr().get() }) else {
+        panic!("method bound must remain an interface")
+    };
+    assert_eq!(declaration.type_tag, bound_tag);
+    for ty in [
+        &iface.methods[0].generic_param_bounds[1][0].args[0],
+        &iface.methods[0].generic_param_bounds[1][0].assoc[0].1,
+    ] {
+        let bex_vm_types::TyTemplate::Interface(head, ..) = ty else {
+            panic!("nested bound head")
+        };
+        assert_eq!(
+            head.ptr(),
+            bound.ptr(),
+            "nested generic arguments and associated bindings must also be forwarded"
+        );
+    }
+}
+
+/// Predicate heads are ownership edges even when no reflection field or method
+/// mentions them. Exercise both subject and constraint, including nested pins.
+#[test]
+fn interface_registration_predicate_heads_are_traced_and_forwarded() {
+    use bex_vm_types::{TyTemplate, TypeHead, types::InterfaceObligation};
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let definition = |name: &str| InterfaceDef {
+        name: QualifiedTypeName::local(Name::new(name)),
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+        args: vec![],
+        requires: vec![],
+        assoc: vec![],
+        fields: vec![],
+        methods: vec![],
+        associated_type_names: vec![],
+        registration_obligations: vec![],
+        method_dispatch: IndexMap::new(),
+        owner: bex_vm_types::HeapPtr::null(),
+    };
+    let subject = definition("Subject");
+    let subject_tag = subject.type_tag;
+    let subject = tlab.alloc(Object::Interface(Box::new(subject)));
+    let constraint = definition("Constraint");
+    let constraint_tag = constraint.type_tag;
+    let constraint = tlab.alloc(Object::Interface(Box::new(constraint)));
+    let subject_type = TyTemplate::interface(TypeHead::new(subject, subject_tag), vec![], vec![]);
+    let mut root = definition("Root");
+    root.registration_obligations.push(InterfaceObligation {
+        subject: subject_type.clone(),
+        constraint: TyTemplate::interface(
+            TypeHead::new(constraint, constraint_tag),
+            vec![subject_type.clone()],
+            vec![(Name::new("Item"), subject_type)],
+        ),
+    });
+    let root = tlab.alloc(Object::Interface(Box::new(root)));
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[root], CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+    assert_eq!(stats.live_count, 3);
+    let Object::Interface(root) = (unsafe { roots[0].get() }) else {
+        panic!("root")
+    };
+    let obligation = &root.registration_obligations[0];
+    let TyTemplate::Interface(moved_subject, ..) = &obligation.subject else {
+        panic!("subject")
+    };
+    let TyTemplate::Interface(moved_constraint, args, pins, _) = &obligation.constraint else {
+        panic!("constraint")
+    };
+    assert_ne!(moved_subject.ptr(), subject);
+    assert_ne!(moved_constraint.ptr(), constraint);
+    for (head, tag) in [
+        (moved_subject, subject_tag),
+        (moved_constraint, constraint_tag),
+    ] {
+        let Object::Interface(declaration) = (unsafe { head.ptr().get() }) else {
+            panic!("predicate head")
+        };
+        assert_eq!(declaration.type_tag, tag);
+    }
+    for ty in [&args[0], &pins[0].1] {
+        let TyTemplate::Interface(head, ..) = ty else {
+            panic!("nested head")
+        };
+        assert_eq!(head.ptr(), moved_subject.ptr());
+    }
 }
 
 /// A runtime-declared alias back-references its owning package; the collector
@@ -1380,6 +1529,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         type_tag,
         ty_attr: TyAttr::default(),
         has_cleanup: false,
+        boundary_projection: baml_type::ClassProjection::Record,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -1420,4 +1570,67 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         panic!("forwarded head does not point at the class")
     };
     assert_eq!(class.type_tag, type_tag, "identity survives the move");
+}
+
+/// The caller contract can reference a declaration absent from the concrete
+/// receiver and callee frame. Rooting only the bound method must retain it.
+#[test]
+fn bound_interface_contract_heads_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let tag = baml_type::typetag::TypeTag::of_head("ContractOutput");
+    let declaration = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+        name: QualifiedTypeName::local(Name::new("ContractOutput")),
+        type_tag: tag,
+        definition: RealizedTy::string(),
+        owner: package,
+    })));
+    // Only pointer tracing is exercised; the body is never executed.
+    let body = tlab.alloc_string("body");
+    let method = tlab.alloc(Object::BoundMethod(bex_vm_types::BoundMethod {
+        function: body,
+        receiver: bex_vm_types::Value::int(1),
+        type_args: Box::default(),
+        interface_signature: Some(Box::new(RealizedTy::Function {
+            params: vec![],
+            ret: Box::new(RealizedTy::TypeAlias(
+                bex_vm_types::TypeHead::new(declaration, tag),
+                TyAttr::default(),
+            )),
+            throws: Box::new(RealizedTy::never()),
+            attr: TyAttr::default(),
+        })),
+    }));
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[method], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+    tlab.invalidate();
+    assert_eq!(
+        stats.live_count, 4,
+        "method, body, output declaration and its package"
+    );
+    let Object::BoundMethod(method) = (unsafe { roots[0].get() }) else {
+        unreachable!()
+    };
+    let RealizedTy::Function { ret, .. } = &**method.interface_signature.as_ref().unwrap() else {
+        unreachable!()
+    };
+    let RealizedTy::TypeAlias(head, _) = &**ret else {
+        unreachable!()
+    };
+    assert_eq!(head.tag(), tag);
+    assert_ne!(
+        head.ptr(),
+        declaration,
+        "contract head must follow the moved declaration"
+    );
+    let Object::TypeAlias(alias) = (unsafe { head.ptr().get() }) else {
+        unreachable!()
+    };
+    assert_ne!(alias.owner, package);
+    assert!(matches!(unsafe { alias.owner.get() }, Object::Package(_)));
 }

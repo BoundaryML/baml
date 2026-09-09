@@ -1,0 +1,12 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const dir=new URL('./',import.meta.url);
+const template=readFileSync(new URL('template.html',dir),'utf8');
+const data=readFileSync(new URL('cases.js',dir),'utf8');
+const examples=readFileSync(new URL('code.js',dir),'utf8');
+const app=readFileSync(new URL('app.js',dir),'utf8');
+if (/<\/script/i.test(data+examples+app)) throw Error('Embedded script contains closing script tag');
+const html=template.replace('/* CASE_DATA */',()=>data).replace('/* EXAMPLE_CODE */',()=>examples).replace('/* APP_CODE */',()=>app);
+const output=new URL('index.html',dir);
+writeFileSync(output,html);
+console.log(`Built ${fileURLToPath(output)} (${Buffer.byteLength(html)} bytes)`);

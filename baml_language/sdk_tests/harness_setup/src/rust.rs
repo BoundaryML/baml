@@ -87,6 +87,7 @@ enum Gate {
 /// `customizable/`, gate). File names match the python suite byte-for-byte
 /// (`.py` → `.rs`) for the cross-language suite checker.
 const TEST_MODS: &[(&str, &str, Gate)] = &[
+    ("interfaces", "test_interfaces.rs", Gate::Now),
     ("docstrings_etc", "test_main.rs", Gate::Now),
     (
         "function_calls",
@@ -209,7 +210,7 @@ pub fn run_all() {
         codegen_fixture(&fixtures_root, fixture, &manifest_dir, &mut diagnostics);
     }
 
-    // Toolchain pre-warm (`cargo test --no-run` per fixture) is NOT run
+    // Toolchain pre-warm (`cargo nextest list --list-type binaries-only` per fixture) is NOT run
     // here — it lives in `crates/rust/setup.sh`, fired by `cargo nextest
     // run` (see module docs), so `cargo check` / `cargo doc` of the
     // workspace never build the fixture crates.
@@ -395,8 +396,8 @@ fn render_tests_main(fixture: &str) -> String {
 /// `tests/main.rs` (rustfmt follows the enabled `mod` declarations;
 /// generated `src/` is intentionally not rustfmt-checked — the emitter's
 /// pretty-printer is its canonical format), `clippy` lints the generated
-/// library, and `cargo_test` compiles and runs the enabled ports.
-/// `cargo_test` alone gets `BAML_LIBRARY_PATH`: `baml_bridge` is
+/// library, and `nextest` compiles and runs the enabled ports.
+/// `nextest` alone gets `BAML_LIBRARY_PATH`: `baml_bridge` is
 /// dylib-only, so the fixture's tests load the engine cdylib at run time
 /// (built by the setup script; fmt/clippy never execute the engine).
 fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
@@ -438,53 +439,26 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
         let fmt_cmd = format!("rustfmt --edition {GENERATED_EDITION} --check tests/main.rs");
         items.extend(quote::quote! {
             mod #mod_ident {
-                fn cmd_env(c: &str, extra_env: &[(&str, &str)]) {
-                    // Never spawn cargo without the generated manifest in
-                    // place: cargo discovers manifests *upward*, so in its
-                    // absence a fixture-level `cargo test` would silently
-                    // become a workspace-wide one — re-entering this very
-                    // test suite and forking cargo processes without bound.
-                    // (The `--manifest-path Cargo.toml` pin on the commands
-                    // below is the second layer of the same defense.)
-                    let manifest = ::std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join(#fixture)
-                        .join("generated")
-                        .join("Cargo.toml");
-                    assert!(
-                        manifest.exists(),
-                        "{} is missing — codegen failed for this fixture \
-                         (see the build_diagnostics test); refusing to run \
-                         cargo without it",
-                        manifest.display(),
-                    );
-                    ::sdk_test_harness_runner::run_test_cmd_with_env(
-                        #fixture,
-                        c,
-                        #CACHE_SUBDIR,
-                        #CACHE_ENV_VAR,
-                        extra_env,
-                    );
-                }
-
-                fn cmd(c: &str) {
-                    cmd_env(c, &[]);
-                }
-
                 #[test]
                 fn fmt() {
-                    cmd(#fmt_cmd);
+                    ::sdk_test_harness_runner::run_test_cmd(
+                        #fixture, #fmt_cmd, #CACHE_SUBDIR, #CACHE_ENV_VAR,
+                    );
                 }
 
                 #[test]
                 fn clippy() {
-                    cmd("cargo clippy --manifest-path Cargo.toml -- -D warnings");
+                    ::sdk_test_harness_runner::run_rust_fixture_cargo(
+                        #fixture, &["clippy", "--", "-D", "warnings"], &[],
+                    );
                 }
 
                 #[test]
-                fn cargo_test() {
+                fn nextest() {
                     let engine = super::engine_library();
-                    cmd_env(
-                        "cargo test --manifest-path Cargo.toml",
+                    ::sdk_test_harness_runner::run_rust_fixture_cargo(
+                        #fixture,
+                        &["nextest", "run"],
                         &[
                             (
                                 "BAML_LIBRARY_PATH",

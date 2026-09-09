@@ -13,11 +13,10 @@
 //! 1. Looks up the Python callable by `host_value_key`.
 //! 2. Decodes the `BamlOutboundValue` args into Python values via
 //!    `baml_bridge.proto._decode_value_holder` (already a list shape).
-//! 3. Invokes the callable. If the return is a coroutine, runs it to
+//! 3. Invokes the callable. If the return is awaitable, runs it to
 //!    completion on a fresh `asyncio` event loop. The dispatch runs on a
-//!    spawned tokio task (see [`host_dispatch_callback`]), so blocking that
-//!    task to drive the coroutine to completion does not stall the engine,
-//!    which concurrently awaits the call's completion.
+//!    Tokio blocking task (see [`host_dispatch_callback`]); the engine's
+//!    async workers remain free to run BAML calls made by the callback.
 //! 4. Encodes the result into `InboundValue` bytes via
 //!    `baml_bridge.proto.encode_call_args`-style serialization, then calls
 //!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
@@ -70,7 +69,14 @@ use pyo3_stub_gen::derive::gen_stub_pyfunction;
 /// corresponding `HostValueArc`.
 struct Registry {
     next_key: AtomicU64,
-    table: Mutex<HashMap<u64, Py<PyAny>>>,
+    table: Mutex<HashMap<u64, RegisteredHostValue>>,
+}
+
+struct RegisteredHostValue {
+    value: Py<PyAny>,
+    // Callables retain the selected SDK's codecs, not a later process default.
+    // Opaque exception registrations need only retain the original object.
+    type_map: Option<Py<PyAny>>,
 }
 
 static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
@@ -94,10 +100,20 @@ fn next_key() -> u64 {
 /// callable appears as a kwarg.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
+pub fn register_host_callable(py: Python<'_>, callable: Py<PyAny>) -> PyResult<u64> {
+    let type_map = PyModule::import(py, "baml_bridge.typemap")?
+        .getattr("get_type_map")?
+        .call0()?
+        .unbind();
     let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, callable);
-    key
+    REGISTRY.table.lock().unwrap().insert(
+        key,
+        RegisteredHostValue {
+            value: callable,
+            type_map: Some(type_map),
+        },
+    );
+    Ok(key)
 }
 
 /// Insert an arbitrary host Python object into the registry and return its key.
@@ -110,7 +126,13 @@ pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
 /// `host_release_callback` releases either kind on last-Arc-drop.
 fn register_host_opaque(value: Py<PyAny>) -> u64 {
     let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, value);
+    REGISTRY.table.lock().unwrap().insert(
+        key,
+        RegisteredHostValue {
+            value,
+            type_map: None,
+        },
+    );
     key
 }
 
@@ -120,7 +142,7 @@ fn register_host_opaque(value: Py<PyAny>) -> u64 {
 /// the encoder's rollback path ([`release_host_callable`]). Dropping the
 /// `Py<PyAny>` requires the GIL.
 fn drop_registry_entry(host_value_key: u64) {
-    let popped: Option<Py<PyAny>> = match REGISTRY.table.lock() {
+    let popped: Option<RegisteredHostValue> = match REGISTRY.table.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
             // Poisoning means an earlier panic occurred while holding the
@@ -172,11 +194,23 @@ pub fn lookup_host_value(
 ) -> Option<Py<PyAny>> {
     use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
     let ht_i32 = i32::try_from(handle.handle_type).ok()?;
-    if ht_i32 != BamlHandleType::HostValueCallable as i32
-        && ht_i32 != BamlHandleType::HostValueOpaque as i32
-    {
-        return None;
-    }
+    // Retain the resolved table owner through lookup. Provisional result
+    // wrappers may rehydrate during decoding while their receipt owns the key.
+    let owner = if ht_i32 == BamlHandleType::HostReference as i32 {
+        Some(bridge_ctypes::HANDLE_TABLE.resolve(handle.handle_key)?)
+    } else {
+        None
+    };
+    let host_key = match owner.as_deref() {
+        Some(bridge_ctypes::CffiHandleTableEntry::HostValue(host)) => host.key,
+        Some(_) => return None,
+        None if ht_i32 == BamlHandleType::HostValueCallable as i32
+            || ht_i32 == BamlHandleType::HostValueOpaque as i32 =>
+        {
+            handle.handle_key
+        }
+        None => return None,
+    };
     let table = match REGISTRY.table.lock() {
         Ok(t) => t,
         Err(e) => {
@@ -187,12 +221,12 @@ pub fn lookup_host_value(
             log::warn!(
                 "host-callable registry mutex poisoned during lookup of key \
                  {}: {e}; rehydration will fall back to metadata",
-                handle.handle_key
+                host_key
             );
             return None;
         }
     };
-    table.get(&handle.handle_key).map(|obj| obj.clone_ref(py))
+    table.get(&host_key).map(|obj| obj.value.clone_ref(py))
 }
 
 /// Release a host callable the inbound encoder registered but never handed to
@@ -211,36 +245,18 @@ pub fn release_host_callable(host_value_key: u64) {
     drop_registry_entry(host_value_key);
 }
 
-/// Dispatch a BAML→host call into Python.
-///
-/// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
-/// `BamlValueList` (see `sys_native::host_impls::call_host_value` —
-/// args are wrapped as `BexExternalValue::Array` before encoding).
-#[expect(
-    clippy::not_unsafe_ptr_arg_deref,
-    reason = "C ABI entry point: pointer validity is the caller's contract, documented \
-              alongside the registered HostDispatchFn signature in bridge_cffi"
-)]
-pub extern "C" fn host_dispatch_callback(
+/// Dispatch an owned argument aggregate into Python. Lookup/scheduling failures
+/// drop the aggregate; decoding adopts it before entering a user body.
+pub fn host_dispatch_callback(
     host_value_key: u64,
     call_id: u32,
-    args: *const u8,
-    length: usize,
+    delivery: sys_native::host_dispatch::OwnedHostCall,
 ) {
-    // Copy the wire bytes into a Vec — the dispatch task may outlive the
-    // caller's stack frame, and we need a `'static` slice anyway.
-    let bytes: Vec<u8> = if length == 0 || args.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: the engine guarantees `args` is valid for `length` bytes
-        // for the duration of this call (see `host_dispatch::fire_dispatch`).
-        unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
-    };
-
     // We're called on a tokio worker from the engine's sysop dispatch (see
-    // `sys_native::host_dispatch::fire_dispatch`). Spawn a task so the
-    // dispatch callback returns promptly and the engine can continue
-    // making progress on other work while Python runs.
+    // `sys_native::host_dispatch::fire_dispatch`). Python may block, including
+    // while its callback awaits a reentrant BAML method. Use the blocking pool:
+    // blocking an async worker can strand newly spawned work in its local
+    // queue and deadlock the callback waiting for that work.
     //
     // The Python encode/decode and the user callable invocation happen
     // inside this task with the GIL held. Async user callables are run
@@ -257,13 +273,16 @@ pub extern "C" fn host_dispatch_callback(
     // The `Py<PyAny>` is `Send + Sync` and survives moving into the
     // spawned task without holding the GIL; it's only re-attached inside
     // `dispatch_in_python` to invoke the callable.
-    let callable: Py<PyAny> = match Python::attach(|py| -> Result<Py<PyAny>, String> {
+    let callable = match Python::attach(|py| -> Result<RegisteredHostValue, String> {
         let table = REGISTRY
             .table
             .lock()
             .map_err(|e| format!("host-callable registry mutex poisoned: {e}"))?;
         match table.get(&host_value_key) {
-            Some(c) => Ok(c.clone_ref(py)),
+            Some(c) => Ok(RegisteredHostValue {
+                value: c.value.clone_ref(py),
+                type_map: c.type_map.as_ref().map(|map| map.clone_ref(py)),
+            }),
             None => Err(format!(
                 "no host callable registered for key {host_value_key}"
             )),
@@ -287,7 +306,7 @@ pub extern "C" fn host_dispatch_callback(
         );
         return;
     };
-    handle.spawn(async move {
+    handle.spawn_blocking(move || {
         // A Rust-level *panic* (not a `PyErr`) inside `dispatch_in_python`
         // would unwind out of this task and silently drop the in-flight
         // `call_id`, leaving the engine awaiting it forever (there is no
@@ -296,10 +315,10 @@ pub extern "C" fn host_dispatch_callback(
         // on a caught panic we touch no state that the panic could have left
         // logically inconsistent — we only read `call_id` (a `Copy` `u32`)
         // and emit a fresh error payload. The normal `PyErr` path inside
-        // `dispatch_in_python` is unaffected: it returns `Err(_)` and
+        // `dispatch_in_python` is unaffected: it encodes the Python error and
         // completes the call itself, so `catch_unwind` sees `Ok(())`.
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            dispatch_in_python(callable, call_id, bytes);
+            dispatch_in_python(callable, call_id, delivery);
         }));
         if let Err(panic) = outcome {
             let detail = panic_message(&panic);
@@ -330,30 +349,89 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 /// `callable` was resolved from the registry before the spawn so its
 /// presence is guaranteed (missing-key faults surface as `BridgeFailure`
 /// earlier in `host_dispatch_callback`).
-fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
-    let result = Python::attach(|py| -> PyResult<Vec<u8>> {
-        // Decode the engine-side `BamlToHostCall` into the callable's
-        // positional args + supplied-optional kwargs.
-        let (positional, kwargs) = decode_args(py, &args_bytes)?;
+fn dispatch_in_python(
+    callable: RegisteredHostValue,
+    call_id: u32,
+    delivery: sys_native::host_dispatch::OwnedHostCall,
+) {
+    let (runtime, invocation_session) =
+        match bridge_cffi::RuntimeIssuer::from_host_context(delivery.issuer.as_ref()) {
+            Ok(issuer) => issuer,
+            Err(error) => {
+                send_dispatch_bridge_failure(call_id, error.to_string());
+                return;
+            }
+        };
+    Python::attach(|py| {
+        let _type_map = match CallbackTypeMap::enter(py, callable.type_map.as_ref()) {
+            Ok(context) => context,
+            Err(error) => {
+                send_dispatch_bridge_failure(call_id, error.to_string());
+                return;
+            }
+        };
+        let result = (|| -> PyResult<Vec<u8>> {
+            // Decode the engine-side `BamlToHostCall` into the callable's
+            // positional args + supplied-optional kwargs.
+            // The receipt is independent of invocation cancellation; adopted
+            // arguments may be retained by the host. Never fetch a potentially
+            // replaced process-global runtime to attach to this delivery.
+            let args = crate::encoded_result::BamlEncodedResult::with_invocation_session(
+                delivery.arguments,
+                bridge_ctypes::TransferSession::new(&bridge_ctypes::HANDLE_TABLE),
+                Some(runtime),
+                invocation_session,
+            )?;
+            let (positional, kwargs) = decode_args(py, args)?;
 
-        // Invoke the user callable: required args positionally, supplied
-        // optionals by keyword. Omitted optionals are absent, so the callable's
-        // own defaults apply.
-        let result_obj = callable.call(py, &positional, Some(&kwargs))?;
+            // Invoke the user callable: required args positionally, supplied
+            // optionals by keyword. Omitted optionals are absent, so the callable's
+            // own defaults apply.
+            let result_obj = callable.value.call(py, &positional, Some(&kwargs))?;
 
-        // If the callable returned a coroutine (async function), run it to
-        // completion on a fresh asyncio loop. Sync callables fall through.
-        let final_result = run_if_coroutine(py, result_obj)?;
+            // If the callable returned a coroutine (async function), run it to
+            // completion on a fresh asyncio loop. Sync callables fall through.
+            let final_result = run_if_awaitable(py, result_obj)?;
 
-        // Encode the result as an `InboundValue` via `baml_bridge.proto`.
-        encode_result_inbound(py, final_result)
+            // Encode the result as an `InboundValue` via `baml_bridge.proto`.
+            encode_result_inbound(py, final_result)
+        })();
+        match result {
+            Ok(bytes) => send_dispatch_success(call_id, &bytes),
+            Err(py_err) => send_dispatch_error_from_pyerr(call_id, py, &py_err),
+        }
     });
+}
 
-    match result {
-        Ok(bytes) => send_dispatch_success(call_id, &bytes),
-        Err(py_err) => Python::attach(|py| {
-            send_dispatch_error_from_pyerr(call_id, py, &py_err);
-        }),
+/// Keep the registration's SDK context active through decoding, user code,
+/// nested callback registration, and success/throw encoding. Asyncio copies
+/// this context into the task it runs. Restore it even if native code unwinds.
+struct CallbackTypeMap<'py>(Bound<'py, PyAny>);
+
+impl<'py> CallbackTypeMap<'py> {
+    fn enter(py: Python<'py>, type_map: Option<&Py<PyAny>>) -> PyResult<Self> {
+        let type_map = type_map.ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "host callable has no registered SDK type map",
+            )
+        })?;
+        let context = PyModule::import(py, "baml_bridge.typemap")?
+            .getattr("_using_type_map")?
+            .call1((type_map,))?;
+        context.call_method0("__enter__")?;
+        Ok(Self(context))
+    }
+}
+
+impl Drop for CallbackTypeMap<'_> {
+    fn drop(&mut self) {
+        let py = self.0.py();
+        if let Err(error) = self
+            .0
+            .call_method1("__exit__", (py.None(), py.None(), py.None()))
+        {
+            log::error!("failed to restore host callback SDK type map: {error}");
+        }
     }
 }
 
@@ -367,44 +445,29 @@ fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
 /// apply.
 fn decode_args<'py>(
     py: Python<'py>,
-    bytes: &[u8],
+    args: crate::encoded_result::BamlEncodedResult,
 ) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyDict>)> {
-    let outbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_outbound_pb2")?;
     let proto = PyModule::import(py, "baml_bridge.proto")?;
-    let type_map = proto.getattr("get_type_map")?.call0()?;
-    let decode_value = proto.getattr("decode_value")?;
-
-    let to_host_call = outbound_pb2.getattr("BamlToHostCall")?.call0()?;
-    to_host_call.call_method1("ParseFromString", (bytes,))?;
-
-    let mut positional_items: Vec<Bound<'py, PyAny>> = Vec::new();
-    let kwargs = PyDict::new(py);
-    for arg in to_host_call.getattr("args")?.try_iter()? {
-        let arg = arg?;
-        let value = decode_value.call1((arg.getattr("value")?, &type_map))?;
-        if arg.getattr("is_optional_arg")?.extract::<bool>()? {
-            let name: String = arg.getattr("arg_name")?.extract()?;
-            kwargs.set_item(name, value)?;
-        } else {
-            positional_items.push(value);
-        }
-    }
-    let positional = PyTuple::new(py, positional_items)?;
-
-    Ok((positional, kwargs))
+    proto
+        .getattr("decode_host_call")?
+        .call1((Py::new(py, args)?,))?
+        .extract()
 }
 
-/// If `value` is a coroutine, run it to completion on a fresh asyncio loop
+/// If `value` is awaitable, run it to completion on a fresh asyncio loop
 /// and return the resolved result. Otherwise return `value` unchanged.
-fn run_if_coroutine(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
+fn run_if_awaitable(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
     let bound = value.bind(py);
     let asyncio = PyModule::import(py, "asyncio")?;
-    let is_coro: bool = asyncio.getattr("iscoroutine")?.call1((bound,))?.extract()?;
-    if !is_coro {
+    let is_awaitable: bool = PyModule::import(py, "inspect")?
+        .getattr("isawaitable")?
+        .call1((bound,))?
+        .extract()?;
+    if !is_awaitable {
         return Ok(value);
     }
     // Run the coroutine to completion on a new event loop in the current
-    // thread. The bridge is on a tokio worker — Python sees a fresh loop
+    // thread. The bridge is on the blocking pool — Python sees a fresh loop
     // dedicated to this dispatch only.
     let new_loop = asyncio.getattr("new_event_loop")?.call0()?;
     let set_event_loop = asyncio.getattr("set_event_loop")?;

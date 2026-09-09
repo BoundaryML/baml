@@ -17,8 +17,8 @@
 //! the `call_host_value` sysop impl (also in `sys_native`) needs them,
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
-use bex_project::{BexExternalValue, host_release_dispatch};
-use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external};
+use bex_project::host_release_dispatch;
+use bridge_ctypes::{HANDLE_TABLE, InboundTransfer, baml_bridge::cffi::InboundValue};
 use prost::Message;
 use sys_native::host_dispatch;
 use sys_types::{OpError, SysOp, VmBamlError, VmInternalError};
@@ -150,6 +150,13 @@ pub extern "C" fn complete_host_call(
         unsafe { std::slice::from_raw_parts(content as *const u8, length) }
     };
 
+    // The parsed payload transfers all of its references, even if its
+    // completion flag is invalid. Decode semantics only after flag validation.
+    let inbound = InboundValue::decode(bytes).map(|value| {
+        let transfer = InboundTransfer::capture_value(&value, &HANDLE_TABLE);
+        (value, transfer)
+    });
+
     // Strict 0/1 contract: any other value is a bridge wire-protocol bug
     // (an `i32` could carry uninitialised memory, a forgotten cast, or
     // someone repurposing the flag) — surface it as `BridgeFailure` so the
@@ -170,110 +177,50 @@ pub extern "C" fn complete_host_call(
         return;
     }
 
-    if is_error == 0 {
-        // Success: decode InboundValue → BexExternalValue.
-        if bytes.is_empty() {
-            // No payload → Null return.
-            host_dispatch::complete_with_value(call_id, BexExternalValue::Null);
-            return;
-        }
-        let inbound = match InboundValue::decode(bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                host_dispatch::complete_with_error(
-                    call_id,
-                    OpError::new(
-                        SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
-                            message: format!("complete_host_call decode failure: {e}"),
-                        },
-                    ),
-                );
-                return;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => host_dispatch::complete_with_value(call_id, v),
-            Err(e) => host_dispatch::complete_with_error(
-                call_id,
-                OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    VmBamlError::ParseError {
-                        message: format!("complete_host_call decode failure: {e}"),
-                    },
-                ),
+    if is_error == 1 && bytes.is_empty() {
+        host_dispatch::complete_with_error(
+            call_id,
+            OpError::new(
+                SysOp::BamlHostCallHostValue,
+                VmInternalError::BridgeFailure {
+                    message: "host bridge called complete_host_call(is_error=1) \
+                              with no payload; expected a protobuf-encoded \
+                              InboundValue describing the thrown value"
+                        .to_string(),
+                },
             ),
-        }
-    } else {
-        // Throw: decode `InboundValue` → `BexExternalValue` → engine.
-        //
-        // The host bridge SDK wraps native exceptions in a synthetic
-        // `Instance` of class `baml.errors.HostCallable` carrying
-        // `message` / `class_name` / `language` / `traceback` fields
-        // (and a hidden `HostValue(arc, kind=Error)` reference field, on
-        // bridges that support same-host round-trip). Codegenned BAML
-        // values flow through as their own `Instance` / primitive
-        // shape. Either way, the engine's `materialize_host_throw`
-        // runs the declared-throws contract check on this value and
-        // either materialises it as a catchable throw or escalates to
-        // a `HostContractViolation` panic.
-        if bytes.is_empty() {
-            // An empty throw payload is a host bridge bug, not a user
-            // contract violation: `is_error == 1` requires a protobuf-
-            // encoded `InboundValue`, and only the bridge itself decides
-            // what to send on the wire. A misbehaving bridge is an
-            // infrastructure fault — surface it as `BridgeFailure` (which
-            // codegens to `baml.panics.SdkPanic` on the host side), not as
-            // `HostContractViolation` (which would falsely accuse the
-            // user's callable of returning the wrong shape).
+        );
+        return;
+    }
+
+    let decoded = inbound
+        .map_err(bridge_ctypes::CtypesError::from)
+        .and_then(|(value, transfer)| transfer.decode(value));
+    match decoded {
+        Ok(value) if is_error == 0 => host_dispatch::complete_with_value(call_id, value),
+        Ok(value) => host_dispatch::complete_with_throw(call_id, value),
+        Err(error) => {
+            let context = if is_error == 0 {
+                "complete_host_call"
+            } else {
+                "complete_host_call throw-payload"
+            };
             host_dispatch::complete_with_error(
                 call_id,
                 OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    VmInternalError::BridgeFailure {
-                        message: "host bridge called complete_host_call(is_error=1) \
-                                  with no payload; expected a protobuf-encoded \
-                                  InboundValue describing the thrown value"
-                            .to_string(),
+                    VmBamlError::ParseError {
+                        message: format!("{context} decode failure: {error}"),
                     },
                 ),
             );
-            return;
-        }
-        let inbound = match InboundValue::decode(bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                host_dispatch::complete_with_error(
-                    call_id,
-                    OpError::new(
-                        SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
-                            message: format!(
-                                "complete_host_call throw-payload decode failure: {e}"
-                            ),
-                        },
-                    ),
-                );
-                return;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => host_dispatch::complete_with_throw(call_id, v),
-            Err(e) => host_dispatch::complete_with_error(
-                call_id,
-                OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    VmBamlError::ParseError {
-                        message: format!("complete_host_call throw-payload decode failure: {e}"),
-                    },
-                ),
-            ),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use bex_project::BexExternalValue;
     use std::sync::{
         LazyLock, Mutex, Once,
         atomic::{AtomicU64, Ordering},
@@ -330,6 +277,20 @@ mod tests {
             })),
         }
         .encode_to_vec()
+    }
+
+    #[test]
+    fn invalid_completion_flag_releases_the_parsed_payload() {
+        install_release_recorder();
+        let key = NEXT_TEST_HOST_KEY.fetch_add(1, Ordering::Relaxed);
+        let bytes = host_callable_throw_payload(key);
+        complete_host_call(
+            host_dispatch::next_call_id(),
+            7,
+            bytes.as_ptr().cast(),
+            bytes.len(),
+        );
+        assert!(take_recorded_release(key));
     }
 
     /// Verify first-call-wins semantics for dispatch registration.

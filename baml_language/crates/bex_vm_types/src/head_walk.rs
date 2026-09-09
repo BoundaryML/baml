@@ -43,6 +43,15 @@ macro_rules! walk_object_heads {
                     for req in &$($mut)? iface.requires {
                         req.$visit(f);
                     }
+                    for (_, dispatch) in &$($mut)? iface.method_dispatch {
+                        if let crate::types::InterfaceMethodDispatch::Resolved(target) = dispatch {
+                            target.$visit(f);
+                        }
+                    }
+                    for obligation in &$($mut)? iface.registration_obligations {
+                        obligation.subject.$visit(f);
+                        obligation.constraint.$visit(f);
+                    }
                     for (_, assoc) in &$($mut)? iface.assoc {
                         assoc.$visit(f);
                     }
@@ -58,6 +67,14 @@ macro_rules! walk_object_heads {
                         }
                         method.returns.$visit(f);
                         method.errors.$visit(f);
+                        method.signature.$visit(f);
+                        for bounds in &$($mut)? method.generic_param_bounds {
+                            for bound in bounds {
+                                f(&$($mut)? bound.interface);
+                                for arg in &$($mut)? bound.args { arg.$visit(f); }
+                                for (_, ty) in &$($mut)? bound.assoc { ty.$visit(f); }
+                            }
+                        }
                     }
                 }
                 Object::ImplRule(rule) => {
@@ -130,6 +147,9 @@ macro_rules! walk_object_heads {
                     }
                 }
                 Object::BoundMethod(bm) => {
+                    if let Some(signature) = &$($mut)? bm.interface_signature {
+                        signature.$visit(f);
+                    }
                     for arg in &$($mut)? *bm.type_args {
                         arg.$visit(f);
                     }

@@ -11,6 +11,7 @@ use crate::{
     },
     error::CtypesError,
     handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
+    transfer::{EncodedTransfer, OutboundOwnership},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
@@ -23,6 +24,59 @@ use crate::{
 pub fn external_to_outbound(
     value: &BexExternalValue,
     options: &CffiHandleTableOptions,
+) -> Result<BamlOutboundValue, CtypesError> {
+    let mut encoder = OutboundEncoder::new(*options);
+    let encoded = encoder.encode(value)?;
+    Ok(encoder.finish(encoded).into_unreceipted())
+}
+
+/// Encode one delivery aggregate. Successful values share an ownership ledger;
+/// each failed encoding rolls back only that attempt, so error classification
+/// can safely encode a fallback without committing the failed value's leases.
+pub struct OutboundEncoder<'a> {
+    options: CffiHandleTableOptions<'a>,
+    ownership: OutboundOwnership<'a>,
+}
+
+impl<'a> OutboundEncoder<'a> {
+    pub fn new(options: CffiHandleTableOptions<'a>) -> Self {
+        Self {
+            options,
+            ownership: OutboundOwnership::new(options.table),
+        }
+    }
+
+    pub fn encode(&mut self, value: &BexExternalValue) -> Result<BamlOutboundValue, CtypesError> {
+        let mut attempt = OutboundOwnership::new(self.options.table);
+        let encoded = encode_value(value, &self.options, &mut attempt)?;
+        self.ownership.append(&mut attempt);
+        Ok(encoded)
+    }
+
+    /// Stage a non-value protocol capability in this aggregate's receipt.
+    /// Consumers must adopt it before using the ordinary clone/release API.
+    pub fn encode_handle(&mut self, entry: CffiHandleTableEntry) -> BamlOutboundHandle {
+        let handle_type = entry.handle_type() as i32;
+        let key = self.ownership.insert(entry);
+        BamlOutboundHandle {
+            key,
+            handle_type,
+            ..Default::default()
+        }
+    }
+
+    pub fn finish<T>(self, payload: T) -> EncodedTransfer<'a, T> {
+        EncodedTransfer {
+            payload,
+            ownership: self.ownership,
+        }
+    }
+}
+
+fn encode_value(
+    value: &BexExternalValue,
+    options: &CffiHandleTableOptions,
+    transfer: &mut OutboundOwnership<'_>,
 ) -> Result<BamlOutboundValue, CtypesError> {
     let variant = match value {
         BexExternalValue::Null => None,
@@ -40,7 +94,7 @@ pub fn external_to_outbound(
         } => {
             let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
                 .iter()
-                .map(|v| external_to_outbound(v, options))
+                .map(|v| encode_value(v, options, transfer))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
                 item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(element_type)),
@@ -56,7 +110,7 @@ pub fn external_to_outbound(
             for (key, val) in entries {
                 baml_entries.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(encode_value(val, options, transfer)?),
                 });
             }
             Some(BamlValueVariant::MapValue(BamlValueMap {
@@ -74,7 +128,7 @@ pub fn external_to_outbound(
             for (key, val) in fields {
                 baml_fields.push(BamlOutboundMapEntry {
                     key: key.clone(),
-                    value: Some(external_to_outbound(val, options)?),
+                    value: Some(encode_value(val, options, transfer)?),
                 });
             }
             // Carry a generic instance's concrete class type args (De Bruijn
@@ -101,7 +155,7 @@ pub fn external_to_outbound(
         BexExternalValue::Union { value, metadata } => {
             let selected_option_index =
                 selected_union_option_index(&metadata.union_type, &metadata.selected_option)?;
-            let inner = external_to_outbound(value, options)?;
+            let inner = encode_value(value, options, transfer)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
                     name: metadata.name.clone().unwrap_or_default(),
@@ -133,11 +187,11 @@ pub fn external_to_outbound(
         }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
-                return external_to_outbound(&converted, options);
+                return encode_value(&converted, options, transfer);
             }
             let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = transfer.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
@@ -145,18 +199,13 @@ pub fn external_to_outbound(
             }))
         }
 
-        // Host-value handles do NOT live in HANDLE_TABLE. Encode directly using
-        // the host-side key; drop semantics are preserved by the Arc
-        // (HostValueArc::drop fires HostReleaseFn on last drop).
+        // The outgoing key owns the registration, rather than merely naming
+        // it. Receipt adoption, copying and pass-back use ordinary table leases.
         BexExternalValue::HostValue(arc) => {
             use crate::baml_bridge::cffi::BamlHandleType;
-            let ht = match arc.kind {
-                bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
-                bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
-            };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
-                key: arc.key,
-                handle_type: ht,
+                key: transfer.insert(CffiHandleTableEntry::HostValue(arc.clone())),
+                handle_type: BamlHandleType::HostReference as i32,
                 ty: None,
             }))
         }
@@ -181,13 +230,13 @@ pub fn external_to_outbound(
                 crate::ty_encode::runtime_ty_to_proto_ty(&named),
             ))
         }
-        // A live handle is an engine capability, not data: only the portable
-        // definitions cross a process (BEP-066 H-4).
-        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
-            Some(BamlValueVariant::TyDefValue(
-                crate::ty_encode::portable_type_def_to_proto(definition.def()),
-            ))
-        }
+        // Portable type definitions explicitly create fresh declarations on
+        // arrival. Live reflected types use the session-capability lane below.
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(bex_project::TypeDefRef::Portable(
+            definition,
+        ))) => Some(BamlValueVariant::TyDefValue(
+            crate::ty_encode::portable_type_def_to_proto(definition),
+        )),
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
@@ -198,6 +247,16 @@ pub fn external_to_outbound(
             // diagnostics; live declaration identity and generic substitution
             // come from the rooted heap object when it re-enters the engine.
             let ty = match value {
+                BexExternalValue::Adt(BexExternalAdt::Interface(view)) => {
+                    let ty = view
+                        .interface
+                        .as_runtime_ty()
+                        .try_map_heads(&mut |head| {
+                            Ok::<_, std::convert::Infallible>(head.name().overlay_name())
+                        })
+                        .expect("diagnostic type projection is total");
+                    Some(crate::ty_encode::runtime_ty_to_proto_ty(&ty))
+                }
                 BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => {
                     Some(crate::ty_encode::runtime_ty_to_proto_ty(ty))
                 }
@@ -207,7 +266,7 @@ pub fn external_to_outbound(
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
             })?;
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = transfer.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
@@ -545,10 +604,21 @@ pub fn build_to_host_call(
     optional: &IndexMap<String, BexExternalValue>,
     options: &CffiHandleTableOptions,
 ) -> Result<BamlToHostCall, CtypesError> {
+    Ok(encode_to_host_call(positional, optional, *options)?.into_unreceipted())
+}
+
+/// Receipt-ready callback arguments, including one ownership aggregate across
+/// required and optional values. Stage before handing the payload to the host.
+pub fn encode_to_host_call<'a>(
+    positional: &[BexExternalValue],
+    optional: &IndexMap<String, BexExternalValue>,
+    options: CffiHandleTableOptions<'a>,
+) -> Result<EncodedTransfer<'a, BamlToHostCall>, CtypesError> {
+    let mut encoder = OutboundEncoder::new(options);
     let mut args = Vec::with_capacity(positional.len() + optional.len());
     for v in positional {
         args.push(BamlToHostArg {
-            value: Some(external_to_outbound(v, options)?),
+            value: Some(encoder.encode(v)?),
             // Positional (required) args are taken by position — no name.
             arg_name: String::new(),
             is_optional_arg: false,
@@ -556,12 +626,12 @@ pub fn build_to_host_call(
     }
     for (name, v) in optional {
         args.push(BamlToHostArg {
-            value: Some(external_to_outbound(v, options)?),
+            value: Some(encoder.encode(v)?),
             arg_name: name.clone(),
             is_optional_arg: true,
         });
     }
-    Ok(BamlToHostCall { args })
+    Ok(encoder.finish(BamlToHostCall { args }))
 }
 
 #[cfg(test)]
@@ -575,6 +645,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::CffiHandleTable;
     use crate::baml_bridge::cffi::{
         BamlHandleType, baml_outbound_value::Value as BamlValueVariant,
     };
@@ -606,6 +677,52 @@ mod tests {
 
     fn ambiguous_numeric_union(selected: RuntimeTy, value: BexExternalValue) -> BexExternalValue {
         BexExternalValue::union(value, [RuntimeTy::int(), RuntimeTy::float()], selected)
+    }
+
+    #[test]
+    fn failed_output_aggregate_rolls_back_earlier_owned_handles() {
+        struct Resource;
+        let resource = Arc::new(Resource);
+        let live = BexExternalValue::RustData(resource.clone());
+        let invalid = ambiguous_numeric_union(RuntimeTy::bool(), BexExternalValue::Bool(true));
+        let table = crate::CffiHandleTable::new();
+        let options = CffiHandleTableOptions {
+            table: &table,
+            serialize_media: true,
+            serialize_prompt_ast: true,
+        };
+        let values = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                live.clone(),
+                BexExternalValue::Instance {
+                    class_name: "user.Record".into(),
+                    type_args: vec![],
+                    fields: IndexMap::from([
+                        ("live".into(), live.clone()),
+                        ("invalid".into(), invalid.clone()),
+                    ]),
+                },
+            ],
+        };
+        let owners = Arc::strong_count(&resource);
+        for _ in 0..16 {
+            assert!(external_to_outbound(&values, &options).is_err());
+            assert!(table.is_empty());
+            assert_eq!(Arc::strong_count(&resource), owners);
+            // The callback argument list is itself one transfer, including
+            // optional arguments, rather than one committed transfer per item.
+            assert!(
+                build_to_host_call(
+                    &[live.clone()],
+                    &IndexMap::from([("bad".into(), invalid.clone())]),
+                    &options
+                )
+                .is_err()
+            );
+            assert!(table.is_empty());
+            assert_eq!(Arc::strong_count(&resource), owners);
+        }
     }
 
     #[test]
@@ -761,41 +878,45 @@ mod tests {
     }
 
     #[test]
-    fn encode_outbound_host_value_callable() {
-        let arc = HostValueArc::new(42, HostValueKind::Callable);
-        let value = BexExternalValue::HostValue(arc);
-        let options = CffiHandleTableOptions::for_in_process();
-        let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
-        let handle = match encoded.value {
-            Some(BamlValueVariant::HandleValue(h)) => h,
-            other => panic!("unexpected: {other:?}"),
-        };
-        assert_eq!(handle.key, 42);
-        assert_eq!(handle.handle_type, BamlHandleType::HostValueCallable as i32);
-        // Must not appear in the handle table.
-        assert!(
-            options.table.resolve(42).is_none(),
-            "HOST_VALUE_CALLABLE must not be inserted into HANDLE_TABLE"
-        );
-    }
-
-    #[test]
-    fn encode_outbound_host_value_opaque() {
-        let arc = HostValueArc::new(42, HostValueKind::Opaque);
-        let value = BexExternalValue::HostValue(arc);
-        let options = CffiHandleTableOptions::for_in_process();
-        let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
-        let handle = match encoded.value {
-            Some(BamlValueVariant::HandleValue(h)) => h,
-            other => panic!("unexpected: {other:?}"),
-        };
-        assert_eq!(handle.key, 42);
-        assert_eq!(handle.handle_type, BamlHandleType::HostValueOpaque as i32);
-        // Like callables, opaque handles bypass the HANDLE_TABLE.
-        assert!(
-            options.table.resolve(42).is_none(),
-            "HOST_VALUE_OPAQUE must not be inserted into HANDLE_TABLE"
-        );
+    fn encoded_host_references_own_registration_and_roundtrip_by_identity() {
+        for kind in [HostValueKind::Callable, HostValueKind::Opaque] {
+            let table = CffiHandleTable::new();
+            let options = CffiHandleTableOptions {
+                table: &table,
+                serialize_media: true,
+                serialize_prompt_ast: true,
+            };
+            let arc = HostValueArc::new(42, kind);
+            let weak = Arc::downgrade(&arc);
+            let value = BexExternalValue::HostValue(arc);
+            let encoded = external_to_outbound(&value, &options).unwrap();
+            let Some(BamlValueVariant::HandleValue(handle)) = encoded.value else {
+                panic!("expected owned host reference")
+            };
+            assert_eq!(handle.handle_type, BamlHandleType::HostReference as i32);
+            drop(value);
+            assert!(weak.upgrade().is_some());
+            let clone = table.clone_handle(handle.key).unwrap();
+            assert!(table.release(handle.key));
+            let inbound = crate::baml_bridge::cffi::InboundValue {
+                value: Some(crate::baml_bridge::cffi::inbound_value::Value::Handle(
+                    crate::baml_bridge::cffi::BamlHandle {
+                        key: clone,
+                        handle_type: handle.handle_type,
+                    },
+                )),
+                ..Default::default()
+            };
+            let roundtrip = crate::inbound_to_external(inbound, &table).unwrap();
+            let BexExternalValue::HostValue(host) = &roundtrip else {
+                panic!("expected host value")
+            };
+            assert!(Arc::ptr_eq(host, &weak.upgrade().unwrap()));
+            assert_eq!(host.kind, kind);
+            assert!(table.is_empty());
+            drop(roundtrip);
+            assert!(weak.upgrade().is_none());
+        }
     }
 
     #[test]

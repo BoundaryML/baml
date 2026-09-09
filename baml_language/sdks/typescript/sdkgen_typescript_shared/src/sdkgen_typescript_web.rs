@@ -91,6 +91,7 @@ mod tests {
         let output = to_source_code(&SymbolPool::new(), &[], NamingConvention::PreserveCase);
         let root = &output[&PathBuf::from("index.ts")];
         let typemap = &output[&PathBuf::from("_typemap.ts")];
+        let context = &output[&PathBuf::from("_sdk.ts")];
 
         assert!(root.contains(
             "//  $ pnpm add @boundaryml/baml-bridge-web\n\
@@ -98,7 +99,7 @@ mod tests {
              //  $ yarn add @boundaryml/baml-bridge-web"
         ));
         assert!(!root.contains("baml package"));
-        assert!(root.contains("from \"@boundaryml/baml-bridge-web\";"));
+        assert!(context.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(typemap.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(!root.contains("from \"@boundaryml/baml-bridge\";"));
         assert!(!typemap.contains("from \"@boundaryml/baml-bridge\";"));

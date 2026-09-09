@@ -42,6 +42,7 @@ use std::{
     },
 };
 
+use bridge_ctypes::EncodedTransfer;
 use once_cell::sync::{Lazy, OnceCell};
 use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError};
 
@@ -66,38 +67,60 @@ use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError}
 pub type HostDispatchFn =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
-static HOST_DISPATCH_FN: OnceCell<HostDispatchFn> = OnceCell::new();
+/// Native adapters receive ownership, including when scheduling fails. The
+/// remaining C adapters use the byte transport until their receipt ABI lands.
+pub struct OwnedHostCall {
+    pub arguments: EncodedTransfer<'static, Vec<u8>>,
+    pub issuer: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+pub type OwnedHostDispatchFn = fn(u64, u32, OwnedHostCall);
+
+enum Dispatcher {
+    Bytes(HostDispatchFn),
+    Owned(OwnedHostDispatchFn),
+}
+
+static HOST_DISPATCH_FN: OnceCell<Dispatcher> = OnceCell::new();
 
 /// Install the dispatch callback. First-call-wins; subsequent calls are
 /// silently ignored (consistent with `register_callback` semantics).
 pub fn set_dispatch_fn(f: HostDispatchFn) {
-    let _ = HOST_DISPATCH_FN.set(f);
+    let _ = HOST_DISPATCH_FN.set(Dispatcher::Bytes(f));
 }
 
-/// Invoke the registered dispatch callback.
-///
-/// Returns `true` if the callback was installed and fired, `false` if
-/// no bridge has registered a dispatcher yet. The caller is responsible
-/// for resolving the in-flight `CompletionHandle` on `false`.
-pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
-    match HOST_DISPATCH_FN.get() {
-        Some(f) => {
-            // The dispatch fn is fire-and-return: every bridge hands the call
-            // off to the host (spawning a task / goroutine / threadsafe-fn
-            // callback) and returns promptly, then later resolves the in-flight
-            // `CompletionHandle` via `complete_host_call`. It never blocks on
-            // the host's response, so we call it directly. A
-            // `tokio::task::block_in_place` wrapper would only be needed for a
-            // blocking callee, and it would panic on a current-thread runtime —
-            // neither applies here.
-            f(host_value_key, call_id, args.as_ptr(), args.len());
+/// Install the native ownership-aware dispatch callback. First registration
+/// wins across both transport forms, so a second bridge cannot replace it.
+pub fn set_owned_dispatch_fn(f: OwnedHostDispatchFn) {
+    let _ = HOST_DISPATCH_FN.set(Dispatcher::Owned(f));
+}
+
+/// Hand over one aggregate. A missing dispatcher leaves ownership here and
+/// drops it on return. No provisional table keys escape that failure path.
+pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: OwnedHostCall) -> bool {
+    dispatch_with(HOST_DISPATCH_FN.get(), host_value_key, call_id, args)
+}
+
+fn dispatch_with(
+    dispatcher: Option<&Dispatcher>,
+    host_value_key: u64,
+    call_id: u32,
+    args: OwnedHostCall,
+) -> bool {
+    match dispatcher {
+        Some(Dispatcher::Owned(f)) => {
+            f(host_value_key, call_id, args);
+            true
+        }
+        Some(Dispatcher::Bytes(f)) => {
+            // Transitional C transport only. All adapters must migrate before
+            // the final ABI cutover; raw bytes cannot acknowledge decoding.
+            let bytes = args.arguments.into_unreceipted();
+            f(host_value_key, call_id, bytes.as_ptr(), bytes.len());
             true
         }
         None => {
-            tracing::warn!(
-                "call_host_value invoked before register_host_dispatch_callback: \
-                 no host dispatch fn registered"
-            );
+            tracing::warn!("no host bridge registered for host-value dispatch");
             false
         }
     }
@@ -277,6 +300,73 @@ mod tests {
     use sys_types::{SysOp, SysOpResult};
 
     use super::*;
+
+    fn owned_args() -> (OwnedHostCall, std::sync::Weak<()>) {
+        use bridge_ctypes::CffiHandleTableOptions;
+        use prost::Message as _;
+        let resource = std::sync::Arc::new(());
+        let weak = std::sync::Arc::downgrade(&resource);
+        let encoded = bridge_ctypes::encode_to_host_call(
+            &[BexExternalValue::RustData(resource)],
+            &Default::default(),
+            CffiHandleTableOptions::for_wire(),
+        )
+        .unwrap()
+        .map_payload(|call| call.encode_to_vec());
+        (
+            OwnedHostCall {
+                arguments: encoded,
+                issuer: None,
+            },
+            weak,
+        )
+    }
+
+    #[test]
+    fn missing_dispatcher_drops_owned_arguments() {
+        let (args, resource) = owned_args();
+        assert!(resource.upgrade().is_some());
+        assert!(!dispatch_with(None, 0, 0, args));
+        assert!(resource.upgrade().is_none());
+    }
+
+    #[test]
+    fn native_dispatch_owns_rejected_and_panicking_delivery() {
+        fn reject(_: u64, _: u32, _args: OwnedHostCall) {}
+        fn panic_delivery(_: u64, _: u32, _args: OwnedHostCall) {
+            panic!("delivery rejected");
+        }
+        let (args, resource) = owned_args();
+        assert!(dispatch_with(Some(&Dispatcher::Owned(reject)), 0, 0, args));
+        assert!(resource.upgrade().is_none());
+        let (args, resource) = owned_args();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                dispatch_with(Some(&Dispatcher::Owned(panic_delivery)), 0, 0, args);
+            }))
+            .is_err()
+        );
+        assert!(resource.upgrade().is_none());
+    }
+
+    #[test]
+    fn owned_delivery_carries_and_releases_its_original_issuer() {
+        fn receive(_: u64, _: u32, args: OwnedHostCall) {
+            assert_eq!(
+                args.issuer.as_ref().unwrap().downcast_ref::<u64>(),
+                Some(&123),
+            );
+        }
+        for dispatcher in [None, Some(Dispatcher::Owned(receive))] {
+            let issuer = std::sync::Arc::new(123_u64);
+            let weak_issuer = std::sync::Arc::downgrade(&issuer);
+            let (mut args, resource) = owned_args();
+            args.issuer = Some(issuer);
+            dispatch_with(dispatcher.as_ref(), 0, 0, args);
+            assert!(weak_issuer.upgrade().is_none());
+            assert!(resource.upgrade().is_none());
+        }
+    }
 
     /// Test-only presence check that does not remove the entry.
     fn contains(call_id: u32) -> bool {

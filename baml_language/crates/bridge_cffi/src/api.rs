@@ -56,6 +56,9 @@ pub enum BamlCffiHandleType {
     HostValueOpaque = 16,
     FunctionSpec = 17,
     RuntimeValue = 18,
+    ConcreteObject = 21,
+    Interface = 19,
+    HostReference = 20,
 }
 
 /// Receives the completed result of `call_function`.
@@ -447,6 +450,15 @@ mod tests {
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
             (BamlCffiHandleType::Collector, BamlHandleType::AdtCollector),
             (BamlCffiHandleType::Type, BamlHandleType::AdtType),
+            (BamlCffiHandleType::Interface, BamlHandleType::AdtInterface),
+            (
+                BamlCffiHandleType::ConcreteObject,
+                BamlHandleType::ConcreteObject,
+            ),
+            (
+                BamlCffiHandleType::HostReference,
+                BamlHandleType::HostReference,
+            ),
             (
                 BamlCffiHandleType::TaggedHeapHandle,
                 BamlHandleType::AdtTaggedHeapHandle,

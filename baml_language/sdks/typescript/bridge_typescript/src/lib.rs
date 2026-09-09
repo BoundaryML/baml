@@ -4,10 +4,13 @@
 //! but powered by napi-rs instead of PyO3.
 
 mod baml_call_context;
+mod dispatch_queue;
+mod encoded_result;
 mod errors;
 pub mod handle;
 pub mod host_value;
 pub mod media;
+mod release_queue;
 pub mod runtime;
 mod types;
 pub mod unhandled_spawn;
@@ -30,7 +33,7 @@ fn init() {
     // Node host-value registry. First-call-wins inside bridge_cffi, so
     // repeated module loads (rare under napi-rs, which loads each addon
     // once per Node process) are harmless.
-    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    sys_native::host_dispatch::set_owned_dispatch_fn(host_value::host_dispatch_callback);
     bridge_cffi::register_host_release_callback(host_value::host_release_callback);
 }
 

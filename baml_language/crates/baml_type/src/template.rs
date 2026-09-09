@@ -1166,3 +1166,187 @@ mod tests {
         );
     }
 }
+
+impl<N: Clone> RuntimeTy<N> {
+    /// Interpret explicit runtime parameter indices as slots in a supplied
+    /// frame. This does not infer a frame from names or replace unknown slots.
+    pub fn to_frame_template(&self) -> TyTemplate<N> {
+        let convert = Self::to_frame_template;
+        match self {
+            Self::TypeVar(param, _) => TyTemplate::TypeArgRef(param.index()),
+            Self::List(inner, attr) => TyTemplate::List(Box::new(convert(inner)), attr.clone()),
+            Self::Map { key, value, attr } => TyTemplate::Map {
+                key: Box::new(convert(key)),
+                value: Box::new(convert(value)),
+                attr: attr.clone(),
+            },
+            Self::Union(members, attr) => {
+                TyTemplate::Union(members.iter().map(convert).collect(), attr.clone())
+            }
+            Self::Class(head, args, attr) => TyTemplate::Class(
+                head.clone(),
+                args.iter().map(convert).collect(),
+                attr.clone(),
+            ),
+            Self::Interface(head, args, pins, attr) => TyTemplate::Interface(
+                head.clone(),
+                args.iter().map(convert).collect(),
+                pins.iter()
+                    .map(|(name, ty)| (name.clone(), convert(ty)))
+                    .collect(),
+                attr.clone(),
+            ),
+            Self::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            } => TyTemplate::Function {
+                params: params
+                    .iter()
+                    .map(|param| crate::TyTemplateFunctionParamTy {
+                        name: param.name.clone(),
+                        ty: convert(&param.ty),
+                        mode: param.mode,
+                    })
+                    .collect(),
+                ret: Box::new(convert(ret)),
+                throws: Box::new(convert(throws)),
+                attr: attr.clone(),
+            },
+            Self::Future(value, error, attr) => TyTemplate::Future(
+                Box::new(convert(value)),
+                Box::new(convert(error)),
+                attr.clone(),
+            ),
+            Self::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => TyTemplate::AssociatedTypeProjection {
+                base: Box::new(convert(base)),
+                interface: Box::new(crate::TyTemplateInterface {
+                    name: interface.name.clone(),
+                    generics: interface.generics.iter().map(convert).collect(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), convert(ty)))
+                        .collect(),
+                }),
+                member: member.clone(),
+                attr: attr.clone(),
+            },
+            leaf => RealizedTy::try_from(leaf.clone())
+                .unwrap_or_else(|error| unreachable!("unhandled runtime template variant: {error}"))
+                .into(),
+        }
+    }
+}
+
+impl<N: Clone> TyTemplate<N> {
+    /// Substitute a template frame once, retaining any symbolic slots in the
+    /// replacements. Unlike symbolic inference, a missing slot is an error.
+    pub fn compose_checked(&self, frame: &[Self]) -> Result<Self, SubstituteError> {
+        let mut result = self.clone();
+        let mut missing = None;
+        walk_template(&mut result, false, &mut |node, _| {
+            if let Self::TypeArgRef(index) = node {
+                if let Some(value) = frame.get(*index as usize) {
+                    *node = value.clone();
+                } else {
+                    missing = Some(*index);
+                }
+                false
+            } else {
+                true
+            }
+        });
+        match missing {
+            Some(index) => Err(SubstituteError::TypeArgRefOutOfRange {
+                index,
+                frame_len: frame.len(),
+            }),
+            None => Ok(result),
+        }
+    }
+}
+
+#[cfg(test)]
+mod frame_conversion_tests {
+    use super::*;
+    use crate::{FunctionParamMode, ParamTy, RuntimeFunctionParamTy, RuntimeInterface};
+
+    #[test]
+    fn explicit_frame_roundtrip_preserves_nested_projections_modes_and_errors() {
+        let self_ty = RuntimeTy::TypeVar(ParamTy::new(0, Name::new("Self")), Default::default());
+        let item = RuntimeTy::TypeVar(ParamTy::new(1, Name::new("Item")), Default::default());
+        let head = TypeName::from_dotted_path("user.Source");
+        let projection = RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(self_ty.clone()),
+            interface: Box::new(RuntimeInterface::new(
+                head.clone(),
+                vec![item.clone()],
+                vec![],
+            )),
+            member: Name::new("Output"),
+            attr: Default::default(),
+        };
+        let ty = RuntimeTy::Function {
+            params: vec![RuntimeFunctionParamTy {
+                name: Some(Name::new("value")),
+                ty: RuntimeTy::Interface(
+                    head,
+                    vec![self_ty.clone()],
+                    vec![(Name::new("Output"), RuntimeTy::list(item.clone()))],
+                    Default::default(),
+                ),
+                mode: FunctionParamMode::Optional,
+            }],
+            ret: Box::new(RuntimeTy::Future(
+                Box::new(projection),
+                Box::new(item.clone()),
+                Default::default(),
+            )),
+            throws: Box::new(item.clone()),
+            attr: Default::default(),
+        };
+        assert_eq!(
+            ty.to_frame_template().substitute_symbolic(&[self_ty, item]),
+            ty
+        );
+    }
+
+    #[test]
+    fn checked_composition_keeps_self_and_rejects_missing_evidence() {
+        let template = TyTemplate::<TypeName>::interface(
+            TypeName::from_dotted_path("user.Source"),
+            vec![TyTemplate::TypeArgRef(0)],
+            vec![(
+                Name::new("Output"),
+                TyTemplate::list(TyTemplate::TypeArgRef(1)),
+            )],
+        );
+        let frame = [TyTemplate::TypeArgRef(0), RealizedTy::string().into()];
+        let composed = template.compose_checked(&frame).unwrap();
+        assert_eq!(
+            composed,
+            TyTemplate::interface(
+                TypeName::from_dotted_path("user.Source"),
+                vec![TyTemplate::TypeArgRef(0)],
+                vec![(
+                    Name::new("Output"),
+                    TyTemplate::list(RealizedTy::string().into())
+                )]
+            )
+        );
+        assert!(matches!(
+            template.compose_checked(&frame[..1]),
+            Err(SubstituteError::TypeArgRefOutOfRange {
+                index: 1,
+                frame_len: 1
+            })
+        ));
+    }
+}

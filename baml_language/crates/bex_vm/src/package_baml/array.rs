@@ -427,6 +427,7 @@ impl Continuation for MapContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -468,6 +469,7 @@ impl Continuation for FilterContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -504,6 +506,7 @@ impl Continuation for SomeContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -534,6 +537,7 @@ impl Continuation for EveryContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -574,6 +578,7 @@ impl Continuation for FindContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -616,6 +621,7 @@ impl Continuation for FindLastContinuation {
         self.idx -= 1;
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -644,6 +650,7 @@ impl Continuation for ReduceContinuation {
         }
         let next_elem = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![value, next_elem],
             type_args: vec![],
@@ -683,6 +690,7 @@ impl Continuation for FlatMapContinuation {
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.f_ptr,
             args: vec![next_arg],
             type_args: vec![],
@@ -725,6 +733,7 @@ impl SortByContinuation {
         loop {
             if self.left < self.middle && self.right < self.run_end {
                 return NativeCallResult::YieldToCall {
+                    argument_layout: None,
                     callee: self.f_ptr,
                     args: vec![self.source[self.left], self.source[self.right]],
                     type_args: vec![],
@@ -967,6 +976,7 @@ impl BamlClassArray for PackageBamlImpl {
         let first_arg = array[0];
         let capacity = array.len();
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -995,6 +1005,7 @@ impl BamlClassArray for PackageBamlImpl {
         let first_arg = array[0];
         let capacity = array.len();
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1021,6 +1032,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1043,6 +1055,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1065,6 +1078,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1088,6 +1102,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1112,6 +1127,7 @@ impl BamlClassArray for PackageBamlImpl {
         let last_idx = array.len() - 1;
         let first_arg = array[last_idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1140,6 +1156,7 @@ impl BamlClassArray for PackageBamlImpl {
         let last_idx = array.len() - 1;
         let first_arg = array[last_idx];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],
@@ -1188,6 +1205,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_elem = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![*initial, first_elem],
             type_args: vec![],
@@ -1213,6 +1231,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: f_ptr,
             args: vec![first_arg],
             type_args: vec![],

@@ -1,3 +1,6 @@
+/// Returns `value` unchanged, preserving its identity and ownership.
+function identity<T>(value: T) -> T throws never { value }
+
 /// Returns a deep copy of `value` — all nested structures are recursively cloned.
 //baml:mut_vm
 function deep_copy<T>(value: T) -> T throws never {

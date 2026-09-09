@@ -28,8 +28,11 @@ use crate::{emit::EmittedSymbol, leaf::LeafBody, py_string, routing::LeafPath};
 pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
     sdk_root: &str,
+    interface_refs: &[(String, String, String)],
+    sdk_bundle_id: Option<[u8; 32]>,
 ) -> String {
     let mut classes: Vec<(String, String, String)> = Vec::new();
+    let mut concrete = Vec::new();
     let mut enums: Vec<(String, String, String)> = Vec::new();
     let mut aliases: Vec<(String, String, String)> = Vec::new();
 
@@ -38,7 +41,8 @@ pub(crate) fn render_typemap_module(
         for (sym, _) in &body.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    classes.push((c.source.to_string(), module_path.clone(), c.py_name.clone()));
+                    let entries = if c.live { &mut concrete } else { &mut classes };
+                    entries.push((c.source.to_string(), module_path.clone(), c.py_name.clone()));
                 }
                 EmittedSymbol::Enum(e) => {
                     enums.push((e.source.to_string(), module_path.clone(), e.py_name.clone()));
@@ -51,6 +55,11 @@ pub(crate) fn render_typemap_module(
         }
     }
     classes.sort();
+    concrete.sort();
+    assert!(
+        concrete.is_empty() || sdk_bundle_id.is_some(),
+        "live concrete SDK facades require a bytecode bundle identity"
+    );
     enums.sort();
     aliases.sort();
 
@@ -60,16 +69,31 @@ pub(crate) fn render_typemap_module(
 
     write_entries(&mut out, "_CLASS_ENTRIES", &classes);
     out.push('\n');
+    write_entries(&mut out, "_CONCRETE_REFS", &concrete);
+    out.push('\n');
     write_entries(&mut out, "_ENUM_ENTRIES", &enums);
     out.push('\n');
     write_entries(&mut out, "_ALIAS_ENTRIES", &aliases);
     out.push('\n');
+    write_entries(&mut out, "_INTERFACE_REFS", interface_refs);
+    out.push('\n');
+    let bundle = sdk_bundle_id.map_or_else(
+        || "None".to_owned(),
+        |id| {
+            let hex: String = id.iter().map(|byte| format!("{byte:02x}")).collect();
+            format!("bytes.fromhex({})", py_string(&hex))
+        },
+    );
+    writeln!(out, "_SDK_BUNDLE_ID = {bundle}\n").unwrap();
 
     out.push_str(
         "_TYPE_MAP = BamlTypeMap.from_lazy_entries(\n    \
          classes=_CLASS_ENTRIES,\n    \
          enums=_ENUM_ENTRIES,\n    \
-         type_aliases=_ALIAS_ENTRIES,\n)\n",
+         type_aliases=_ALIAS_ENTRIES,\n    \
+         interface_refs=_INTERFACE_REFS,\n    \
+         concrete_refs=_CONCRETE_REFS,\n    \
+         sdk_bundle_id=_SDK_BUNDLE_ID,\n)\n",
     );
 
     out

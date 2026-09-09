@@ -115,6 +115,7 @@ impl BamlPackageBaml for PackageBamlImpl {
             Err(e) => return NativeCallResult::Error(e),
         };
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee,
             args: vec![*b],
             type_args: vec![],
@@ -351,6 +352,7 @@ pub(crate) fn render_to_string_honoring_overrides(
     match make_to_string_callee(vm, Value::object(first_ptr)) {
         Err(e) => NativeCallResult::Error(e.into()),
         Ok(Some(callee)) => NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee,
             args: vec![],
             type_args: vec![],
@@ -405,6 +407,7 @@ impl Continuation for ToStringWalkContinuation {
                 Err(e) => return NativeCallResult::Error(e.into()),
                 Ok(Some(callee)) => {
                     return NativeCallResult::YieldToCall {
+                        argument_layout: None,
                         callee,
                         args: vec![],
                         type_args: vec![],

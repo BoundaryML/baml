@@ -1,12 +1,48 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use bridge_ctypes::{EncodedTransfer, TransferSession};
 
 use super::super::api::BamlUnhandledSpawnErrorCallback;
 
-type PendingError = (Vec<u8>, bool);
+/// An error and its original invocation authority travel together, including
+/// while delivery waits for a host callback to register. The runtime can be
+/// unavailable during final destruction; the error must still be reportable.
+pub struct OwnedUnhandledSpawnError {
+    pub content: EncodedTransfer<'static, Vec<u8>>,
+    pub cancelled: bool,
+    pub runtime: Option<Arc<dyn bex_project::Bex>>,
+    pub transfers: TransferSession<'static>,
+}
+
+pub type OwnedUnhandledSpawnErrorCallback = fn(OwnedUnhandledSpawnError);
+
+#[derive(Clone, Copy)]
+enum Callback {
+    Bytes(BamlUnhandledSpawnErrorCallback),
+    Owned(OwnedUnhandledSpawnErrorCallback),
+}
+
+impl Callback {
+    fn deliver(self, error: OwnedUnhandledSpawnError) {
+        match self {
+            Self::Owned(callback) => callback(error),
+            Self::Bytes(callback) => {
+                // Transitional C route. Remove this early commitment when the
+                // remaining C consumers adopt the receipt ABI.
+                let bytes = error.content.into_unreceipted();
+                callback(
+                    bytes.as_ptr().cast(),
+                    bytes.len(),
+                    i32::from(error.cancelled),
+                );
+            }
+        }
+    }
+}
 
 struct CallbackState {
-    callback: Option<BamlUnhandledSpawnErrorCallback>,
-    pending: Vec<PendingError>,
+    callback: Option<Callback>,
+    pending: Vec<OwnedUnhandledSpawnError>,
 }
 
 struct CallbackRegistry {
@@ -23,7 +59,7 @@ impl CallbackRegistry {
         }
     }
 
-    fn register(&self, callback: BamlUnhandledSpawnErrorCallback) {
+    fn register(&self, callback: Callback) {
         let pending = {
             let mut state = self
                 .state
@@ -35,27 +71,27 @@ impl CallbackRegistry {
             state.callback = Some(callback);
             std::mem::take(&mut state.pending)
         };
-        for (content, cancelled) in pending {
-            callback(content.as_ptr().cast(), content.len(), i32::from(cancelled));
+        for error in pending {
+            callback.deliver(error);
         }
     }
 
-    fn dispatch(&self, content: Vec<u8>, cancelled: bool) {
+    fn dispatch(&self, error: OwnedUnhandledSpawnError) {
         let delivery = {
             let mut state = self
                 .state
                 .lock()
                 .expect("unhandled spawn callback state poisoned");
             match state.callback {
-                Some(callback) => Some((callback, content, cancelled)),
+                Some(callback) => Some((callback, error)),
                 None => {
-                    state.pending.push((content, cancelled));
+                    state.pending.push(error);
                     None
                 }
             }
         };
-        if let Some((callback, content, cancelled)) = delivery {
-            callback(content.as_ptr().cast(), content.len(), i32::from(cancelled));
+        if let Some((callback, error)) = delivery {
+            callback.deliver(error);
         }
     }
 }
@@ -66,11 +102,17 @@ static REGISTRY: CallbackRegistry = CallbackRegistry::new();
 pub extern "C" fn register_unhandled_spawn_error_callback(
     callback: BamlUnhandledSpawnErrorCallback,
 ) {
-    REGISTRY.register(callback);
+    REGISTRY.register(Callback::Bytes(callback));
 }
 
-pub fn dispatch(content: Vec<u8>, cancelled: bool) {
-    REGISTRY.dispatch(content, cancelled);
+pub fn dispatch(error: OwnedUnhandledSpawnError) {
+    REGISTRY.dispatch(error);
+}
+
+/// Native bridges retain the entire error aggregate through scheduling and
+/// decoding. The first registration wins across both transport forms.
+pub fn register_owned_unhandled_spawn_error_callback(callback: OwnedUnhandledSpawnErrorCallback) {
+    REGISTRY.register(Callback::Owned(callback));
 }
 
 #[cfg(test)]
@@ -80,7 +122,18 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
-    use super::CallbackRegistry;
+    use super::{Callback, CallbackRegistry, OwnedUnhandledSpawnError};
+
+    fn delivery(
+        content: bridge_ctypes::EncodedTransfer<'static, Vec<u8>>,
+    ) -> OwnedUnhandledSpawnError {
+        OwnedUnhandledSpawnError {
+            content,
+            cancelled: false,
+            runtime: None,
+            transfers: bridge_ctypes::TransferSession::new(&bridge_ctypes::HANDLE_TABLE),
+        }
+    }
 
     static DELIVERED: AtomicUsize = AtomicUsize::new(0);
 
@@ -99,7 +152,7 @@ mod tests {
             let barrier = Arc::clone(&barrier);
             std::thread::spawn(move || {
                 barrier.wait();
-                registry.register(count_delivery);
+                registry.register(Callback::Bytes(count_delivery));
             })
         };
         let dispatch = {
@@ -107,7 +160,12 @@ mod tests {
             let barrier = Arc::clone(&barrier);
             std::thread::spawn(move || {
                 barrier.wait();
-                registry.dispatch(vec![1, 2, 3], false);
+                registry.dispatch(delivery(
+                    bridge_ctypes::OutboundEncoder::new(
+                        bridge_ctypes::CffiHandleTableOptions::for_wire(),
+                    )
+                    .finish(vec![1, 2, 3]),
+                ));
             })
         };
 
@@ -116,6 +174,53 @@ mod tests {
         dispatch.join().unwrap();
 
         assert_eq!(DELIVERED.load(Ordering::SeqCst), 1);
+        assert!(registry.state.lock().unwrap().pending.is_empty());
+    }
+    fn resource_error() -> (OwnedUnhandledSpawnError, std::sync::Weak<()>) {
+        let resource = Arc::new(());
+        let weak = Arc::downgrade(&resource);
+        let error = bex_project::UnhandledSpawnError {
+            report_id: 0,
+            value: bex_project::BexExternalValue::RustData(resource),
+            trace: vec![],
+            cancelled: false,
+        };
+        (
+            delivery(crate::unhandled_spawn_error_to_outbound(error)),
+            weak,
+        )
+    }
+
+    #[test]
+    fn pending_owned_error_is_retained_until_delivery_or_registry_drop() {
+        let registry = CallbackRegistry::new();
+        let (error, weak) = resource_error();
+        registry.dispatch(error);
+        assert!(weak.upgrade().is_some());
+        registry.register(Callback::Owned(drop));
+        assert!(weak.upgrade().is_none());
+        assert!(registry.state.lock().unwrap().pending.is_empty());
+
+        let registry = CallbackRegistry::new();
+        let (error, weak) = resource_error();
+        registry.dispatch(error);
+        drop(registry);
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn panicking_owned_handler_releases_current_and_undelivered_errors() {
+        let registry = CallbackRegistry::new();
+        let (first, first_weak) = resource_error();
+        let (second, second_weak) = resource_error();
+        registry.dispatch(first);
+        registry.dispatch(second);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            registry.register(Callback::Owned(|_error| panic!("broken native delivery")));
+        }));
+        assert!(outcome.is_err());
+        assert!(first_weak.upgrade().is_none());
+        assert!(second_weak.upgrade().is_none());
         assert!(registry.state.lock().unwrap().pending.is_empty());
     }
 }

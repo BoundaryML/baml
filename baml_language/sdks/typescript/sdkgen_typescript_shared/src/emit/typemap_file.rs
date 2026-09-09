@@ -3,7 +3,8 @@
 //! Walks the grouped `LeafBody` map and renders three literal records of
 //! `FQN → () => <class/enum/alias>` **resolver thunks**, plus the
 //! `BamlTypeMap.fromLazyEntries(...)` call that installs the populated map.
-//! The root `index.ts` imports `_TYPE_MAP` and calls `setTypeMap(_TYPE_MAP)`.
+//! `_sdk.ts` captures this map alongside the issuing runtime and installs the
+//! default map. Generated callers use their captured map, not that default.
 //!
 //! Each thunk closes over a statically imported namespace from the generated
 //! SDK: `() => __leaf_0.Resume`. A thunk (rather than the Python-style
@@ -23,6 +24,7 @@ pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
     _sdk_root: &str,
     runtime_package: &str,
+    interface_names: &crate::interface_names::TypeScriptInterfaces,
 ) -> String {
     // (source FQN, module namespace alias, attr name)
     let mut classes: Vec<(String, String, String)> = Vec::new();
@@ -49,6 +51,18 @@ pub(crate) fn render_typemap_module(
             }
         }
     }
+    let interfaces = interface_names
+        .declarations
+        .iter()
+        .map(|(name, names)| {
+            let leaf = crate::routing::route_class_ref(name);
+            (
+                name.to_string(),
+                alias_for_leaf(&mut module_aliases, &leaf),
+                names.reference.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
     classes.sort();
     enums.sort();
     aliases.sort();
@@ -72,11 +86,12 @@ pub(crate) fn render_typemap_module(
     write_entries(&mut out, "_ALIAS_ENTRIES", &aliases);
     out.push('\n');
 
+    write_entries(&mut out, "_INTERFACE_ENTRIES", &interfaces);
     out.push_str(
         "export const _TYPE_MAP = BamlTypeMap.fromLazyEntries({\n  \
          classes: _CLASS_ENTRIES,\n  \
          enums: _ENUM_ENTRIES,\n  \
-         typeAliases: _ALIAS_ENTRIES,\n});\n",
+         typeAliases: _ALIAS_ENTRIES,\n  interfaces: _INTERFACE_ENTRIES,\n});\n",
     );
 
     out
@@ -174,7 +189,12 @@ mod tests {
     #[test]
     fn empty_pool_yields_empty_records() {
         let bodies = BTreeMap::new();
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            TEST_RUNTIME_PACKAGE,
+            &Default::default(),
+        );
         assert!(out.contains("const _CLASS_ENTRIES: Record<string, () => unknown> = {};"));
         assert!(out.contains("const _ENUM_ENTRIES: Record<string, () => unknown> = {};"));
         assert!(out.contains("const _ALIAS_ENTRIES: Record<string, () => unknown> = {};"));
@@ -194,7 +214,12 @@ mod tests {
                 vec![class_sym(name("aws", &["s3"], "Bucket"), "Bucket")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            TEST_RUNTIME_PACKAGE,
+            &Default::default(),
+        );
         assert!(out.contains("import * as __leaf_0 from \"./vendor/aws/s3/index.js\";"));
         assert!(out.contains(
             "\"aws.s3.Bucket\": () => (__leaf_0 as Record<string, unknown>)[\"Bucket\"],"
@@ -219,7 +244,12 @@ mod tests {
                 )],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            TEST_RUNTIME_PACKAGE,
+            &Default::default(),
+        );
         assert!(out.contains("import * as __leaf_0 from \"./lorem/index.js\";"));
         assert!(out.contains(
             "\"user.lorem.Resume$stream\": () => (__leaf_0 as Record<string, unknown>)[\"Resume$stream\"],"
@@ -249,7 +279,12 @@ mod tests {
                 vec![class_sym(name("ai", &["stream"], "Stream"), "Stream")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", "@boundaryml/baml-bridge-web");
+        let out = render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            "@boundaryml/baml-bridge-web",
+            &Default::default(),
+        );
         assert!(out.contains("import * as __leaf_0 from \"./ai/stream/index.js\";"));
         assert!(out.contains("import * as __leaf_1 from \"./baml/media/index.js\";"));
         assert!(out.contains(&format!(
@@ -272,7 +307,12 @@ mod tests {
                 vec![enum_sym(name("user", &[], "Sentiment"), "Sentiment")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            TEST_RUNTIME_PACKAGE,
+            &Default::default(),
+        );
         assert!(out.contains("import * as __leaf_0 from \"./index.js\";"));
         assert!(out.contains(
             "\"user.Sentiment\": () => (__leaf_0 as Record<string, unknown>)[\"Sentiment\"],"

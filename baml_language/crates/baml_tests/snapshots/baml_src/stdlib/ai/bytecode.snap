@@ -1369,7 +1369,7 @@ function ai.Agent._validated_schema_attempts(self: ai.Agent) -> int {
     throw
 }
 
-function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.Agent {
+function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> ai.Agent {
     load_var max_steps
     load_const <omitted>
     cmp_op ==
@@ -1581,7 +1581,7 @@ function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, client: ai.Cli
     return
 }
 
-function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
+function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1725,8 +1725,8 @@ function ai.Journal.new(spec: ai.FunctionSpec<#0>) -> ai.Journal {
     return
 }
 
-function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf)[] {
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+function ai.ModelTurn.media(self: ai.ModelTurn) -> (image | audio | video | pdf)[] {
+    load_type image | audio | video | pdf
     alloc_array 0
     store_var out
     load_var self
@@ -1753,7 +1753,7 @@ function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.medi
     load_var _9
     narrow_bind ai.content.Media, slot=5
     pop_jump_if_false L0
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type image | audio | video | pdf
     load_var2 2 5
     load_field .media
     call baml.Array.push
@@ -3617,7 +3617,7 @@ function ai.content.Media.kind(self: ai.content.Media) -> string {
     load_var _2
     store_var _3
     load_var _3
-    narrow_bind baml.media.Image, slot=3
+    narrow_bind image, slot=3
     pop_jump_if_false L0
     jump L5
 
@@ -3625,7 +3625,7 @@ function ai.content.Media.kind(self: ai.content.Media) -> string {
     load_var _2
     store_var _4
     load_var _4
-    narrow_bind baml.media.Audio, slot=4
+    narrow_bind audio, slot=4
     pop_jump_if_false L1
     jump L4
 
@@ -3633,7 +3633,7 @@ function ai.content.Media.kind(self: ai.content.Media) -> string {
     load_var _2
     store_var _5
     load_var _5
-    narrow_bind baml.media.Video, slot=5
+    narrow_bind video, slot=5
     pop_jump_if_false L2
     jump L3
 
@@ -4016,7 +4016,7 @@ function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeo
 }
 
 function ai.events.UserContent.new(parts: (string | image | audio | video | pdf)[]) -> ai.events.UserContent {
-    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type string | image | audio | video | pdf
     alloc_array 0
     store_var out
     load_var parts
@@ -4050,14 +4050,14 @@ function ai.events.UserContent.new(parts: (string | image | audio | video | pdf)
     load_var part
     call ai.internal.media_part
     store_var _14
-    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type string | image | audio | video | pdf
     load_var2 2 7
     call baml.Array.push
     pop 1
     jump L0
 
   L3:
-    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type string | image | audio | video | pdf
     load_var2 2 6
     call baml.Array.push
     pop 1
@@ -6628,7 +6628,7 @@ function ai.internal.make_role(name: string) -> ai.Role {
     return
 }
 
-function ai.internal.media_part(value: image | audio | video | pdf) -> baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf {
+function ai.internal.media_part(value: image | audio | video | pdf) -> image | audio | video | pdf {
     load_var value
     call baml.json.to_json
     store_var envelope
@@ -6650,7 +6650,7 @@ function ai.internal.media_part(value: image | audio | video | pdf) -> baml.medi
     throw
 
   L0:
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type image | audio | video | pdf
     load_var envelope
     call baml.json.from_json
     jump L1
@@ -7181,7 +7181,7 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     return
 }
 
-function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError {
+function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws unknown) -> (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError {
     load_var ?1
     make_cell
     store_var ?1
@@ -8099,7 +8099,7 @@ function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[] {
     return
 }
 
-function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0, #1> {
+function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> ai.stream.Stream<#0, #1> {
     load_var ?10
     make_cell
     store_var ?10
@@ -8860,11 +8860,11 @@ function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fall
     return
 }
 
-function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
+function ai.wire.resolve_media(media: image | audio | video | pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _3
     load_var _3
-    narrow_bind baml.media.Image, slot=3
+    narrow_bind image, slot=3
     pop_jump_if_false L0
     jump L11
 
@@ -8872,7 +8872,7 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var media
     store_var _18
     load_var _18
-    narrow_bind baml.media.Audio, slot=12
+    narrow_bind audio, slot=12
     pop_jump_if_false L1
     jump L8
 
@@ -8880,7 +8880,7 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     load_var media
     store_var _33
     load_var _33
-    narrow_bind baml.media.Video, slot=21
+    narrow_bind video, slot=21
     pop_jump_if_false L2
     jump L5
 
@@ -9069,11 +9069,11 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     return
 }
 
-function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf) -> ai.wire.ResolvedMedia {
+function ai.wire.resolve_media_preview(media: image | audio | video | pdf) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _2
     load_var _2
-    narrow_bind baml.media.Image, slot=2
+    narrow_bind image, slot=2
     pop_jump_if_false L0
     jump L11
 
@@ -9081,7 +9081,7 @@ function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audi
     load_var media
     store_var _17
     load_var _17
-    narrow_bind baml.media.Audio, slot=11
+    narrow_bind audio, slot=11
     pop_jump_if_false L1
     jump L8
 
@@ -9089,7 +9089,7 @@ function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audi
     load_var media
     store_var _32
     load_var _32
-    narrow_bind baml.media.Video, slot=20
+    narrow_bind video, slot=20
     pop_jump_if_false L2
     jump L5
 
@@ -9790,14 +9790,14 @@ function ai.wire.user_content_message(event: ai.events.UserContent) -> ai.Prompt
     store_var text
     load_var event
     load_field .parts
-    load_type baml.iter.Iterable<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_type baml.iter.Iterable<Error = never, Item = string | image | audio | video | pdf>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_type baml.iter.Iterator<Error = never, Item = string | image | audio | video | pdf>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -9820,7 +9820,7 @@ function ai.wire.user_content_message(event: ai.events.UserContent) -> ai.Prompt
     load_var part
     store_var _14
     load_var _14
-    narrow_bind baml.media.Image, slot=7
+    narrow_bind image, slot=7
     pop_jump_if_false L3
     jump L8
 
@@ -9828,7 +9828,7 @@ function ai.wire.user_content_message(event: ai.events.UserContent) -> ai.Prompt
     load_var part
     store_var _17
     load_var _17
-    narrow_bind baml.media.Audio, slot=8
+    narrow_bind audio, slot=8
     pop_jump_if_false L4
     jump L7
 
@@ -9836,7 +9836,7 @@ function ai.wire.user_content_message(event: ai.events.UserContent) -> ai.Prompt
     load_var part
     store_var _20
     load_var _20
-    narrow_bind baml.media.Video, slot=9
+    narrow_bind video, slot=9
     pop_jump_if_false L5
     jump L6
 

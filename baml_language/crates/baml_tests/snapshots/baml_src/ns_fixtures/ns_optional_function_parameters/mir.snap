@@ -148,30 +148,12 @@ fn user.fixtures.optional_function_parameters.UseOptionalDropping() -> string[] 
     // Locals:
     let _0: string[] // _0 // return
     let _1: (string, string | null) -> string[] throws never // narrowed
-    let _2: (string, int, string | null, int) -> string[] throws never [captured]
-    let _3: (string, string | null) -> string[] throws never
+    let _2: (string, string | null) -> string[] throws never
 
     bb0: {
-        _2 = const fn user.fixtures.optional_function_parameters.SearchDocs;
-        _1 = make_closure lambda[0](copy _2);
-        _3 = copy _1;
-        _0 = call copy _3(const "cats", const "recent") -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<optional-adapter(UseOptionalDropping, 0)>(query: string, filter: string | null) -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: string // query // param
-    let _2: string | null // filter // param
-
-    bb0: {
-        _0 = call copy capture[0](copy _1, const <omitted>, copy _2, const <omitted>) -> [bb1];
+        _1 = const fn user.fixtures.optional_function_parameters.SearchDocs;
+        _2 = copy _1;
+        _0 = call copy _2(const "cats", const "recent") -> [bb1];
     }
 
     bb1: {

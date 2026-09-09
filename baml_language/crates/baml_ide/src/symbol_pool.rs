@@ -13,6 +13,10 @@ use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, pa
 use baml_db::{Name, ProjectDatabase};
 use baml_type::{Freshness, ParamTy, QualifiedTypeName, Ty as TirTy, TyAttr};
 
+mod concrete_export;
+mod interface_callers;
+mod interface_export;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -91,8 +95,10 @@ fn hide_from_host_sdk(name: &str) -> bool {
 ///
 /// Walks every file visible to compiler2 (user files + stdlib stubs),
 /// extracts classes/enums/type aliases/functions/methods, resolves their
-/// types, and converts to codegen types.
-pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
+/// types, and converts to codegen types. Interface declarations and impl
+/// rules also include source-less packages via their compiler export data.
+/// Invalid interface type states fail export instead of becoming `unknown`.
+pub fn build_symbol_pool(db: &ProjectDatabase) -> Result<SymbolPool, cg::InterfaceExportError> {
     enum MethodKind {
         Static,
         Instance,
@@ -226,13 +232,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 }
 
-                // Interface-impl methods are not part of the generated surface.
-                // Interfaces themselves are never emitted — host languages differ
-                // too much on trait/protocol/interface semantics — so a method
-                // that only exists to satisfy one has nothing to attach to.
-                // `class.methods` already excludes them: an `implements`-block
-                // method (in-body or out-of-body) is Impl-owned and never lands
-                // here.
+                // This walk exports inherent methods. Implementation methods
+                // are Impl-owned and reach the shared interface graph through
+                // PackageInterface, including out-of-body builtin receivers.
                 debug_assert!(
                     baml_compiler2_ppir::item_data::method_interface_target(db, method_loc)
                         .is_none(),
@@ -602,7 +604,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
     }
 
-    pool
+    pool.interfaces = std::sync::Arc::new(interface_export::build(db)?);
+    pool.class_projections = interface_export::class_projections(db);
+    Ok(pool)
 }
 
 // ---------------------------------------------------------------------------
@@ -876,7 +880,7 @@ mod tests {
             "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format()}`\n}\n",
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         // Only the parent, spec, and stream functions cross into generated
         // host SDKs. The remaining companions stay internal BAML callables.
@@ -913,7 +917,7 @@ function extract_resume(resume: string) -> Resume {
 "##,
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         // The compiler injects `client: ai.Client? = null` and
         // `on_event: ((ai.events.Event) -> void)? = null` onto the LLM
@@ -957,7 +961,7 @@ class Extractor {
 "##,
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         let key = cg::Name::new(Name::new("user"), vec![], Name::new("Extractor"));
         let Some(cg::Symbol::Class(class)) = pool.get(&key) else {
             panic!("Extractor must be a Class");
@@ -1049,7 +1053,7 @@ function Watch(on_event: ((string) -> void throws never)? = null) -> string {
 "##,
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         for bare in ["Notify$stream", "Watch"] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
@@ -1117,7 +1121,7 @@ function extract(client: string, text: string) -> string {
             "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n",
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         let doc_key = pool
             .keys()
@@ -1200,7 +1204,7 @@ function extract(client: string, text: string) -> string {
             ),
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         let throws_names = |fn_name: &str| -> Vec<String> {
             let key = pool
@@ -1312,7 +1316,7 @@ function extract(client: string, text: string) -> string {
             "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n",
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         let key = pool
             .keys()
@@ -1368,7 +1372,7 @@ class GenericMirror<T> {
 "#,
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         let (owner, class) = pool
             .iter()
             .find_map(|(name, symbol)| match symbol {
@@ -1485,7 +1489,7 @@ class GenericMirror<T> {
             "class Sentiment { label string }\n",
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         let sentiment_key = pool.keys().find(|k| k.name().as_str() == "Sentiment");
         assert!(sentiment_key.is_some(), "Sentiment must be in the pool");
@@ -1516,7 +1520,7 @@ class GenericMirror<T> {
             "function return_int() -> int { 42 }\n",
         );
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         let key = pool
             .keys()
@@ -1555,7 +1559,7 @@ function top() -> int { 0 }
         let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
 
         assert!(
             !pool
@@ -1594,7 +1598,7 @@ function passthrough(x: Marker) -> Marker { x }
         let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         let key = pool
             .keys()
             .find(|k| k.name().as_str() == "passthrough")
@@ -1642,7 +1646,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
 
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         let name = |name: &str| cg::Name::new(Name::new("user"), vec![], Name::new(name));
         let text = name("Text");
         let text_chain = name("TextChain");
@@ -1746,7 +1750,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         );
         let diagnostics = baml_db::collect_compiler2_diagnostics(&legal_db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
-        let legal_pool = build_symbol_pool(&legal_db);
+        let legal_pool = build_symbol_pool(&legal_db).expect("valid interface export");
         let lookup_name = cg::Name::new(Name::new("user"), vec![], Name::new("Lookup"));
         let key_chain = cg::Name::new(Name::new("user"), vec![], Name::new("KeyChain"));
         let cg::Symbol::Class(lookup) = &legal_pool[&lookup_name] else {
@@ -1779,7 +1783,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
                 .any(|diagnostic| diagnostic.id == DiagnosticId::InvalidMapKeyType),
             "the compiler must reject an int-denoting alias map key: {diagnostics:#?}"
         );
-        let illegal_pool = build_symbol_pool(&illegal_db);
+        let illegal_pool = build_symbol_pool(&illegal_db).expect("valid interface export");
         assert!(matches!(
             cg::validate_symbol_pool_map_keys(&illegal_pool),
             Err(cg::CodegenTypeError::InvalidMapKey(key))
@@ -1803,7 +1807,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
 
         let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
-        let pool = build_symbol_pool(&db);
+        let pool = build_symbol_pool(&db).expect("valid interface export");
         let qualified = |namespace: &str, name: &str| {
             cg::Name::new(
                 Name::new("user"),

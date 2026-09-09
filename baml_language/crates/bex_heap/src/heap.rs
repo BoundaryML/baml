@@ -57,6 +57,9 @@ pub enum Generation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
     pub future_id: FutureId,
+    /// Keep the settled future and its exact output type heads alive until
+    /// the engine has exported the error through the typed host boundary.
+    pub future: HeapPtr,
     pub value: Value,
     pub trace: Vec<StackFrame>,
     pub cancelled: bool,

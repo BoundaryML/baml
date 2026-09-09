@@ -13,6 +13,16 @@ use text_size::TextRange;
 /// rather than semantic ones ("duplicate definition", "type mismatch").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagnostic {
+    /// Builtin aliases have a fixed arity and no associated bindings. Report
+    /// these before AST lowering erases their written type arguments.
+    InvalidBuiltinTypeArguments {
+        name: String,
+        expected: usize,
+        got: usize,
+        associated_bindings: usize,
+        span: TextRange,
+    },
+
     /// A top-level item (class, function, enum, etc.) has no name token.
     MissingItemName {
         item_kind: &'static str,
@@ -292,6 +302,19 @@ impl LoweringDiagnostic {
     /// construct `Span` values from the stored `TextRange`s.
     pub fn to_diagnostic(&self, file_id: FileId) -> Diagnostic {
         let (id, severity, message, range, label) = match self {
+            LoweringDiagnostic::InvalidBuiltinTypeArguments {
+                name, expected, got, associated_bindings, span,
+            } => (
+                DiagnosticId::TypeMismatch,
+                Severity::Error,
+                if *associated_bindings == 0 {
+                    format!("type `{name}` expects {expected} type argument(s), got {got}")
+                } else {
+                    format!("builtin type `{name}` does not accept associated-type bindings")
+                },
+                *span,
+                "invalid builtin type arguments",
+            ),
             LoweringDiagnostic::MissingItemName { item_kind, span } => (
                 DiagnosticId::MissingName,
                 Severity::Error,

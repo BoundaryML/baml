@@ -70,7 +70,7 @@ function test_block_locals.<(user.test_block_locals.TblLoud as user.test_block_l
     return
 }
 
-function test_block_locals.TblSpeaker.speak(self: test_block_locals.TblSpeaker) -> string {
+function test_block_locals.TblSpeaker.speak(self: #0) -> string {
     load_const "default"
     return
 }

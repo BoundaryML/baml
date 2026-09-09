@@ -319,7 +319,7 @@ function interfaces_associated_types.<(user.interfaces_associated_types.UpcEntit
     return
 }
 
-function interfaces_associated_types.ApdSomeInterface.same_label(self: interfaces_associated_types.ApdSomeInterface, other: #0) -> bool {
+function interfaces_associated_types.ApdSomeInterface.same_label(self: #0, other: #0) -> bool {
     load_var self
     load_type interfaces_associated_types.ApdSomeInterface
     load_const "label"
@@ -345,7 +345,7 @@ function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_t
     return
 }
 
-function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> (#0 as interfaces_associated_types.Describable).Output {
+function interfaces_associated_types.Describable.describe(self: #0) -> (#0 as interfaces_associated_types.Describable).Output {
     load_var self
     load_type interfaces_associated_types.Describable
     load_const "value"
@@ -355,7 +355,7 @@ function interfaces_associated_types.Describable.describe(self: interfaces_assoc
     return
 }
 
-function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_associated_types.Fallible) -> int {
+function interfaces_associated_types.Fallible.value_plus_one(self: #0) -> int {
     load_var self
     load_type interfaces_associated_types.Fallible
     load_const "value"
@@ -367,7 +367,7 @@ function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_as
     return
 }
 
-function interfaces_associated_types.OgbTallier.tally(self: interfaces_associated_types.OgbTallier, a: #1, extra: #2) -> string {
+function interfaces_associated_types.OgbTallier.tally(self: #0, a: #1, extra: #2) -> string {
     load_var a
     load_type interfaces_associated_types.OgbTagged
     load_const "tag_of"

@@ -337,7 +337,7 @@ impl GenerateArgs {
         let embedded_baml_toml = build_embedded_baml_toml(&from)?;
 
         // Build the codegen SymbolPool from the compiler database.
-        let pool = baml_ide::build_symbol_pool(&db);
+        let pool = baml_ide::build_symbol_pool(&db)?;
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db

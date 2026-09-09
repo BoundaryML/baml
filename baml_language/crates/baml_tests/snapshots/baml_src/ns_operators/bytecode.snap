@@ -662,7 +662,7 @@ function operators.<(user.operators.Wrapped<#0> as baml.ops.Equals)>.eq(self: op
     return
 }
 
-function operators.Ordered.precedes(self: operators.Ordered, other: #0) -> bool {
+function operators.Ordered.precedes(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"

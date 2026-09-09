@@ -298,19 +298,19 @@ function self_frame_slot.<(user.self_frame_slot.IntShelf as user.self_frame_slot
     return
 }
 
-function self_frame_slot.Kinded.kind_name(self: self_frame_slot.Kinded) -> string {
+function self_frame_slot.Kinded.kind_name(self: #0) -> string {
     load_type #0
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function self_frame_slot.Kinded.kind_namer(self: self_frame_slot.Kinded) -> () -> string throws never {
+function self_frame_slot.Kinded.kind_namer(self: #0) -> () -> string throws never {
     load_type #0
     make_closure .<lambda(Kinded.kind_namer, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function self_frame_slot.Kinded.match_kind(self: self_frame_slot.Kinded, other: unknown) -> string {
+function self_frame_slot.Kinded.match_kind(self: #0, other: unknown) -> string {
     load_var other
     store_var _3
     load_var _3
@@ -329,7 +329,7 @@ function self_frame_slot.Kinded.match_kind(self: self_frame_slot.Kinded, other: 
     return
 }
 
-function self_frame_slot.Kinded.same_kind(self: self_frame_slot.Kinded, other: unknown) -> bool {
+function self_frame_slot.Kinded.same_kind(self: #0, other: unknown) -> bool {
     load_var other
     is_type #0
     pop_jump_if_false L0
@@ -346,7 +346,7 @@ function self_frame_slot.Kinded.same_kind(self: self_frame_slot.Kinded, other: u
     return
 }
 
-function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other: self_frame_slot.Kinded) -> bool {
+function self_frame_slot.Kinded.same_kind_of(self: #0, other: self_frame_slot.Kinded) -> bool {
     load_var other
     is_type #0
     pop_jump_if_false L0
@@ -363,7 +363,7 @@ function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other
     return
 }
 
-function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> string {
+function self_frame_slot.Store.describe(self: #0) -> string {
     load_type #0
     call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _5

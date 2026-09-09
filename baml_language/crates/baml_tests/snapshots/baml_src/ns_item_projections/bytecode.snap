@@ -334,17 +334,17 @@ function item_projections.<(user.item_projections.Widget as user.item_projection
     return
 }
 
-function item_projections.Label.label(self: item_projections.Label<#1>) -> string {
+function item_projections.Label.label(self: #0) -> string {
     load_const "ok"
     return
 }
 
-function item_projections.Sayer.say(self: item_projections.Sayer) -> string {
+function item_projections.Sayer.say(self: #0) -> string {
     load_const "default"
     return
 }
 
-function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
+function item_projections.Sizer.grow(self: #0) -> #0 {
     load_var2 1 1
     load_type item_projections.Sizer
     load_const "pick"

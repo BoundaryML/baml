@@ -13,7 +13,13 @@
 pub(crate) mod array_index;
 pub mod debug;
 pub mod errors;
+mod host_interface;
+mod host_registration;
+pub use host_registration::{
+    HostAdapterDescriptor, HostAdapterRegistration, HostCallbackSlot, HostInterfaceImplementation,
+};
 pub mod indexable;
+mod interface;
 pub mod kperf;
 pub mod package_ai;
 pub mod package_baml;

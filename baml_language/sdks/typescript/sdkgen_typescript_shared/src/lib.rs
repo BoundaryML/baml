@@ -19,10 +19,14 @@
 pub mod sdkgen_typescript;
 pub mod sdkgen_typescript_web;
 
+mod concrete_refs;
 mod emit;
+mod interface_names;
+mod interface_refs;
 mod leaf;
 mod routing;
 mod translate_ty;
+mod type_factories;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -36,7 +40,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
-    leaf::{LeafBody, group_and_sort, render_index_ts},
+    leaf::{LeafBody, group_and_sort, render_index_ts_with_interfaces},
     routing::{LeafPath, route, route_class_ref},
 };
 
@@ -204,13 +208,19 @@ pub fn to_source_code_with_metadata(
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let interface_tokens = public_interface_tokens(pool);
+    let interface_names = std::rc::Rc::new(interface_names::TypeScriptInterfaces::new(pool));
 
     // Every symbol routes to exactly one leaf. Dedup via `BTreeSet`.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
     for key in pool.keys() {
         leaves.insert(route(key));
     }
-    for name in &interface_tokens {
+    for name in pool
+        .interfaces
+        .declarations
+        .keys()
+        .chain(interface_tokens.iter())
+    {
         leaves.insert(route_class_ref(name));
     }
 
@@ -263,7 +273,13 @@ pub fn to_source_code_with_metadata(
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
         let is_root = dir.is_empty();
 
-        let mut content = render_index_ts(body, &kids, is_root, config.runtime_package);
+        let mut content = render_index_ts_with_interfaces(
+            body,
+            &kids,
+            is_root,
+            config.runtime_package,
+            Some((pool, interface_names.clone())),
+        );
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -273,6 +289,11 @@ pub fn to_source_code_with_metadata(
         out.insert(init_ts_path(dir), content);
     }
 
+    out.insert(
+        PathBuf::from("_interface_types.ts"),
+        interface_refs::render_witnesses(pool, &interface_names),
+    );
+
     // Root-only data modules.
     out.insert(
         PathBuf::from("_inlinedbaml.ts"),
@@ -280,7 +301,16 @@ pub fn to_source_code_with_metadata(
     );
     out.insert(
         PathBuf::from("_typemap.ts"),
-        render_typemap_module(&bodies, "baml_sdk", config.runtime_package),
+        render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            config.runtime_package,
+            &interface_names,
+        ),
+    );
+    out.insert(
+        PathBuf::from("_sdk.ts"),
+        render_sdk_context(config.runtime_package),
     );
 
     // Prepend the do-not-edit banner to every `.ts` file.
@@ -310,6 +340,37 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
 /// Base64 characters per emitted source line. Long enough that the line count
 /// stays small, short enough that the file is still diffable.
 const BYTECODE_BASE64_LINE: usize = 4096;
+
+fn render_sdk_context(runtime_package: &str) -> String {
+    format!(
+        r#"import * as runtime from "{runtime_package}";
+import * as inlined from "./_inlinedbaml.js";
+import {{ _TYPE_MAP }} from "./_typemap.js";
+
+const context: runtime.SdkContext = Object.freeze({{
+    runtime: runtime.initializeRuntimeFromBytecode(inlined.BYTECODE, inlined.BAML_TOML),
+    typeMap: _TYPE_MAP,
+}});
+runtime.setTypeMap(_TYPE_MAP);
+
+function getContext(): runtime.SdkContext {{ return context; }}
+
+/** @internal Generated declarations supply the native projection and layout. */
+export function declareType<T>(kind: "class" | "enum", name: string, args: readonly runtime.BamlTypeValue[]): runtime.BamlType<T> {{
+    return runtime.BamlType._declared<T>(context.typeMap, kind, name, args);
+}}
+
+// Hoisted declarations are safe during cyclic namespace imports. The SDK
+// context is read on invocation, after this module has finished setup.
+export function defineFunction(...args: Parameters<typeof runtime.defineFunction>): ReturnType<typeof runtime.defineFunction> {{
+    return runtime.defineFunction(args[0], args[1], args[2], args[3], args[4], getContext);
+}}
+export function defineInstanceFunction(...args: Parameters<typeof runtime.defineInstanceFunction>): ReturnType<typeof runtime.defineInstanceFunction> {{
+    return runtime.defineInstanceFunction(args[0], args[1], args[2], args[3], args[4], getContext);
+}}
+"#
+    )
+}
 
 fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     // The bytecode ships as base64 rather than a decimal `new Uint8Array([...])`
@@ -465,6 +526,7 @@ mod tests {
             "index.ts",
             "_inlinedbaml.ts",
             "_typemap.ts",
+            "_sdk.ts",
             "baml/index.ts",
         ] {
             assert!(out.contains_key(&PathBuf::from(f)), "missing {f}");
@@ -473,10 +535,13 @@ mod tests {
         assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
-        assert!(root.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+        assert!(root.contains("import \"./_sdk.js\";"));
+        let context = &out[&PathBuf::from("_sdk.ts")];
+        assert!(context.contains(
+            "runtime.initializeRuntimeFromBytecode(inlined.BYTECODE, inlined.BAML_TOML)"
         ));
-        assert!(root.contains("setTypeMap(_TYPE_MAP);"));
+        assert!(context.contains("runtime.setTypeMap(_TYPE_MAP);"));
+        assert!(context.contains("export function defineFunction("));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
         assert!(!root.contains("BAML_PLACEHOLDER"));

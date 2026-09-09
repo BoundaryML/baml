@@ -9,7 +9,7 @@
 //! decides the branch is a warning (TS 5.6's 2872/2873) unless the
 //! condition is a written literal (`while (true)` stays idiomatic).
 //!
-//! Layering follows the `FunctionAdapter` precedent exactly: the checker
+//! Layering follows the `FunctionShape` precedent exactly: the checker
 //! DECIDES here and records an [`Adjust::Truthy`] adjustment on the
 //! condition expression; MIR synthesizes the coercion structurally from
 //! `expr_adjustments`; the VM's branch opcodes stay strict-bool. A

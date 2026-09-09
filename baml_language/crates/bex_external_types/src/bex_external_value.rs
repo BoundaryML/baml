@@ -81,6 +81,8 @@ impl UnionMetadata {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
+    /// A live view retaining its concrete receiver and exact interface pins.
+    Interface(std::sync::Arc<crate::InterfaceValue>),
     Collector(bex_vm_types::CollectorRef),
     /// A reflected type, carried at the sys-op lane's head so a definition
     /// table can be keyed by declaration identity rather than by name.
@@ -96,13 +98,13 @@ pub enum BexExternalAdt {
     ///
     /// * [`Live`](TypeDefRef::Live) — a rooted reference back to the very
     ///   `Object::Type` that produced it. Valid only in the engine that issued
-    ///   the handle, which is why it also carries the portable definitions:
-    ///   anywhere else (another engine, another process) it degrades to them.
+    ///   the handle. Session transfer preserves this capability; using it in
+    ///   another engine fails rather than silently creating a different type.
     /// * [`Portable`](TypeDefRef::Portable) — definitions alone, reconstructed
     ///   into fresh heap objects on arrival.
     ///
-    /// Wire encoders serialize the portable form in both cases: a handle is a
-    /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
+    /// Artifact export explicitly serializes definitions. A session reference
+    /// is not portable data and cannot be stored or imported into another runtime.
     TypeDef(TypeDefRef),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
@@ -120,7 +122,18 @@ pub enum BexExternalAdt {
         kind: TaggedHeapHandleKind,
         ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
+        /// Loader/engine-produced evidence, never decoded from a host's wire
+        /// type. Only a static concrete declaration in this bundle has it.
+        sdk_declaration: Option<std::sync::Arc<SdkDeclaration>>,
     },
+}
+
+/// Generated-facade selection evidence captured while the receiver is rooted.
+/// The receiver's handle, not this metadata, remains authoritative for calls.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SdkDeclaration {
+    pub bundle_id: [u8; 32],
+    pub name: baml_type::QualifiedTypeName,
 }
 
 /// Trusted role of a rooted heap capability crossing a host boundary.
@@ -133,7 +146,11 @@ pub enum TaggedHeapHandleKind {
     Callable,
     Stream,
     FunctionSpec,
+    /// A runtime-created enum value; classes use `ConcreteObject`.
     RuntimeValue,
+    /// A concrete class receiver, including runtime-created declarations.
+    /// Its diagnostic wire type is not the authority for its identity.
+    ConcreteObject,
 }
 
 /// How a `type` value crosses a boundary: as a live reference into the issuing
@@ -152,8 +169,17 @@ pub enum TypeDefRef {
         def: bex_vm_types::types::PortableTypeDef,
     },
     /// Definitions only: the receiving engine reconstructs heap objects and
-    /// assigns fresh identity. The form every cross-process payload takes.
+    /// assigns fresh identity. Used for explicit portable import/export.
     Portable(bex_vm_types::types::PortableTypeDef),
+}
+
+/// Explicit type evidence supplied for a call. A live reference never degrades
+/// into a portable definition: the receiving engine must validate its origin.
+#[derive(Clone, Debug)]
+pub enum TypeArgument {
+    Named(baml_type::RuntimeTy),
+    Definition(bex_vm_types::types::PortableTypeDef),
+    Reference(crate::Handle),
 }
 
 impl TypeDefRef {
@@ -435,6 +461,7 @@ impl PartialEq for BexExternalValue {
 impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
+            BexExternalAdt::Interface(_) => "interface",
             BexExternalAdt::Collector(_) => "collector",
             BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",

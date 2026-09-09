@@ -168,6 +168,87 @@ async fn observed_child_error_does_not_surface_after_gc() {
 }
 
 #[tokio::test]
+async fn unhandled_interface_error_preserves_contract_and_receiver_across_gc() {
+    let engine = make_engine(
+        r#"
+        interface Counter {
+            type Error
+            function add(self, amount: int) -> int throws Self.Error
+        }
+        class StoredCounter {
+            count: int,
+            implements Counter {
+                type Error = string
+                function add(self, amount: int) -> int throws never {
+                    self.count += amount;
+                    self.count
+                }
+            }
+        }
+        function main() -> int {
+            let value: Counter<Error=string> = StoredCounter { count: 10 };
+            spawn { throw value; };
+            1
+        }
+        function infallible(value: Counter<Error=never>) -> int throws never {
+            value.add(100)
+        }
+    "#,
+    );
+    let baseline = engine.heap_stats().active_handles;
+    for level in [CollectionLevel::Minor, CollectionLevel::Major] {
+        assert_eq!(
+            call_main(&engine, true).await.unwrap(),
+            BexExternalValue::Int(1)
+        );
+        wait_for_spawn_completion(&engine).await;
+        engine.collect_garbage(level).await;
+        // The queued exported view must also survive a later collection.
+        engine.collect_garbage(CollectionLevel::Major).await;
+        let mut errors = engine.take_unhandled_spawn_errors();
+        assert_eq!(errors.len(), 1);
+        let bex_external_types::BexExternalAdt::Interface(view) = (match errors.pop().unwrap().value
+        {
+            BexExternalValue::Adt(value) => value,
+            other => panic!("expected a retained interface error, got {other:?}"),
+        }) else {
+            panic!("expected an interface view")
+        };
+        let context = || FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+        assert!(
+            engine
+                .call_function(
+                    "infallible",
+                    vec![BexExternalValue::Adt(
+                        bex_external_types::BexExternalAdt::Interface(view.clone())
+                    )],
+                    context(),
+                    true,
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            engine
+                .call_interface(
+                    view,
+                    "add",
+                    vec![],
+                    vec![BexExternalValue::Int(2)],
+                    context(),
+                )
+                .await
+                .unwrap(),
+            BexExternalValue::Int(12)
+        );
+        engine.collect_garbage(CollectionLevel::Major).await;
+        assert!(engine.take_unhandled_spawn_errors().is_empty());
+        assert_eq!(engine.heap_stats().active_handles, baseline);
+    }
+    engine.shutdown().await;
+}
+
+#[tokio::test]
 async fn host_handle_keeps_errored_future_observable() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
@@ -508,7 +589,12 @@ async fn call_completion_does_not_join_but_shutdown_does() {
     engine.shutdown().await;
     let errors = engine.take_unhandled_spawn_errors();
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
+    // The spawn can throw either sleep's Io error or the literal. Background
+    // delivery now preserves that declared union, as foreground calls do.
+    let BexExternalValue::Union { value, .. } = &errors[0].value else {
+        panic!("expected the declared throws union");
+    };
+    assert_eq!(value.as_ref(), &BexExternalValue::String("boom".into()));
 }
 
 #[tokio::test(start_paused = true)]
@@ -641,4 +727,55 @@ async fn combinator_observation_is_not_preempted_by_unrelated_await() {
         }
     "#;
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn reported_host_value_is_reclaimed_by_subsequent_collection() {
+    use bex_resource_types::{HostValueArc, HostValueKind, host_release_dispatch};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const KEY: u64 = 9_100_001;
+    static RELEASES: AtomicUsize = AtomicUsize::new(0);
+    extern "C" fn released(key: u64) {
+        if key == KEY {
+            RELEASES.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    host_release_dispatch::install(released).unwrap();
+    let engine = make_engine(
+        r#"
+        function main<T>(value: T) -> int {
+            spawn { throw value; };
+            1
+        }
+    "#,
+    );
+    let reports = Arc::new(AtomicUsize::new(0));
+    let reports_for_handler = reports.clone();
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |_error| {
+        reports_for_handler.fetch_add(1, Ordering::SeqCst);
+    })));
+    let host = HostValueArc::new(KEY, HostValueKind::Opaque);
+    let weak = Arc::downgrade(&host);
+    let result = engine
+        .call_function(
+            "main",
+            vec![BexExternalValue::HostValue(host)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result, BexExternalValue::Int(1));
+    wait_for_spawn_completion(&engine).await;
+    engine.collect_garbage(CollectionLevel::Major).await;
+    assert_eq!(reports.load(Ordering::SeqCst), 1);
+    // The reporting collection keeps an object-valued throw rooted while it
+    // materializes the notification. A subsequent collection reclaims that
+    // now-unrooted VM object; releasing the notification alone cannot free it.
+    engine.collect_garbage(CollectionLevel::Major).await;
+    assert!(weak.upgrade().is_none());
+    assert_eq!(RELEASES.load(Ordering::SeqCst), 1);
+    // No later call, explicit release, or runtime shutdown drives cleanup.
+    engine.shutdown().await;
 }

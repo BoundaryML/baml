@@ -1,10 +1,8 @@
 //! `BexThread`: a `BexVm` plus the metadata needed to participate in
 //! BEP-034 spawn / await scheduling.
 //!
-//! Phase A only introduces the wrapper. The engine still runs a single
-//! root thread per `call_function` and there is no behavior change. Phase
-//! B adds child threads and routes child completions through
-//! `settles_future`.
+//! Root threads retain the host-facing output contract; child threads route
+//! their completion through `settles_future`. Both participate in heap tracing.
 
 use std::collections::HashMap;
 
@@ -20,6 +18,17 @@ pub struct BexThread {
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// Exact host-facing contract. Declaration pointers stay rooted across
+    /// suspension and moving GC; wire names are presentation, not identity.
+    pub(crate) outbound: Option<OutboundContract>,
+    /// The currently suspended host callback's exact result/error contracts.
+    /// Both root and child threads must trace these across moving GC.
+    pub(crate) host_call: Option<OutboundContract>,
+}
+
+pub(crate) struct OutboundContract {
+    pub returns: bex_vm_types::RuntimeTy,
+    pub throws: Option<bex_vm_types::RuntimeTy>,
 }
 
 impl BexThread {
@@ -30,6 +39,8 @@ impl BexThread {
             name: None,
             cancel,
             settles_future: None,
+            outbound: None,
+            host_call: None,
         }
     }
 
@@ -45,6 +56,8 @@ impl BexThread {
             name,
             cancel,
             settles_future: Some(settles_future),
+            outbound: None,
+            host_call: None,
         }
     }
 
@@ -64,10 +77,30 @@ impl BexThread {
 impl RootHaver for BexThread {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         self.vm.collect_roots(roots);
+        for contract in self.outbound.iter().chain(self.host_call.iter()) {
+            for ty in std::iter::once(&contract.returns).chain(contract.throws.iter()) {
+                ty.visit_heads(&mut |head| {
+                    if head.is_resolved() {
+                        roots.push(head.ptr());
+                    }
+                });
+            }
+        }
     }
 
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.vm.forward_roots(roots);
+        for contract in self.outbound.iter_mut().chain(self.host_call.iter_mut()) {
+            for ty in std::iter::once(&mut contract.returns).chain(contract.throws.iter_mut()) {
+                ty.visit_heads_mut(&mut |head| {
+                    if head.is_resolved()
+                        && let Some(&moved) = roots.get(&head.ptr())
+                    {
+                        head.forward_to(moved);
+                    }
+                });
+            }
+        }
     }
 }
 

@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BAML interfaces · Lifetime & mutation review</title>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#f5f6f8,#121419);--paper:light-dark(#fff,#1b1e25);--ink:light-dark(#1b2535,#e5eaf3);--muted:light-dark(#556176,#aab4c7);--line:light-dark(#d7dce5,#3a4251);--accent:light-dark(#305dce,#99b5ff);--soft:light-dark(#edf2ff,#232f49);--ok:light-dark(#246a53,#83d3b3);--okbg:light-dark(#eaf6ef,#1e322c);--warn:light-dark(#855611,#e4bd77);--warnbg:light-dark(#fff5df,#352c1c);--red:light-dark(#9c3741,#ffb0b6);--native:light-dark(#7a4bab,#c7a3f2);--storage:light-dark(#18735f,#84d1bf);--edge:light-dark(#6d7c95,#93a1b9);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit;color:inherit}button,select{min-height:38px;border:1px solid var(--line);border-radius:7px;padding:7px 12px;background:var(--paper)}button{cursor:pointer}button:hover{border-color:var(--accent)}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:3px}a{color:var(--accent);text-underline-offset:3px}h1,h2,h3,p{margin:0}h1{font-size:30px;letter-spacing:-.7px;font-weight:650;line-height:1.2}h2{font-size:24px;line-height:1.25;letter-spacing:-.4px}h3{font-size:16px;font-weight:600}p+p{margin-top:10px}.top{max-width:1500px;margin:auto;padding:32px 32px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:25px}.eyebrow{color:var(--accent);text-transform:uppercase;font-size:12px;font-weight:650;letter-spacing:1.4px;margin-bottom:9px}.subtitle{max-width:790px;margin-top:12px;color:var(--muted)}.topactions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;padding-top:4px}.shell{max-width:1500px;padding:0 32px 40px;margin:auto;display:grid;grid-template-columns:265px minmax(0,1fr);gap:24px;align-items:start}.sidebar{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow:auto;scrollbar-width:thin;padding:14px 12px 18px 0}.sidebar h3{margin:16px 0 8px;font-size:13px;color:var(--muted);font-weight:600}.sidebar .navcase{display:flex;width:100%;gap:9px;text-align:left;border:0;background:transparent;padding:9px 10px;margin:2px 0;line-height:1.3;align-items:baseline;border-radius:7px}.navcase[aria-current=true]{background:var(--soft);color:var(--accent)}.caseid{font-variant-numeric:tabular-nums;font-size:12px;min-width:29px;color:var(--muted)}.navtitle{font-size:13px;flex:1}.navmark{color:var(--muted);font-size:12px}.navmark.reviewed{color:var(--ok)}.navmark.discuss{color:var(--warn)}.progresslabel{font-size:13px;color:var(--muted);margin:5px 10px}.main{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}.casehead{padding:25px 28px 21px;border-bottom:1px solid var(--line)}.casekicker{display:flex;gap:9px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px}.badge{padding:2px 7px;background:var(--soft);color:var(--accent);border-radius:4px}.badge.warning{background:var(--warnbg);color:var(--warn)}.summary{margin-top:11px;max-width:830px;color:var(--muted)}.evidence{display:block;font-size:12px;margin-top:12px}.stagenav{padding:18px 28px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.stagenav .position{font-size:13px;color:var(--muted);margin-right:auto;font-variant-numeric:tabular-nums}.primary{background:var(--ink);border-color:var(--ink);color:var(--paper)}.stepdots{display:flex;gap:5px;padding:0 28px 16px}.stepdot{flex:1;min-width:0;min-height:9px;height:9px;border:0;border-radius:2px;padding:0;background:var(--line)}.stepdot.done{background:var(--edge)}.stepdot.current{background:var(--accent)}.stage{padding:0 28px 16px}.stage h3{font-size:19px}.detail{color:var(--muted);margin-top:8px;min-height:45px;max-width:920px}.graphwrap{background:var(--bg);border-radius:8px;padding:20px 20px 14px;margin-top:18px}.graphheader{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding-bottom:8px}.graphheader strong{font-weight:600;color:var(--ink)}.graph{position:relative;width:100%;min-height:220px}.connections{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.connection{fill:none;stroke:var(--edge);stroke-width:1.6}.connection.native{stroke:var(--native)}.connection.reach{stroke:var(--storage)}.connection.pending{stroke:var(--accent);stroke-dasharray:5 4}.edge-label{fill:var(--muted);font:12px ui-sans-serif,system-ui,sans-serif}.edge-label-bg{fill:var(--bg)}.node{position:absolute;border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:10px 12px;min-height:76px;display:flex;flex-direction:column;justify-content:center}.node .nodekind{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:3px}.node .nodelabel{font-size:14px;line-height:1.25;font-weight:600;overflow-wrap:anywhere}.node .nodevalue{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:6px;line-height:1.35;color:var(--muted)}.node.receiver{border-left:3px solid var(--accent)}.node.storage{border-left:3px solid var(--storage)}.node.payload{border-left:3px solid var(--native)}.node.released{border-style:dashed;background:transparent;color:var(--muted)}.nodefoot{font-size:11px;color:var(--muted);margin-top:6px}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding-top:12px}.legend span:before{content:"";display:inline-block;width:18px;border-top:2px solid var(--edge);margin:0 5px 3px 0}.legend .native:before{border-color:var(--native)}.legend .reach:before{border-color:var(--storage)}.legend .pending:before{border-color:var(--accent);border-top-style:dashed}.modelnote{font-size:11px;color:var(--muted);margin-top:9px}.statelocals{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}.local{border-left:2px solid var(--line);padding:2px 10px;max-width:100%;font-size:12px}.local code{font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap}.local label{display:block;color:var(--muted);font-size:11px}.warnbox{background:var(--warnbg);color:var(--warn);border-radius:6px;padding:12px 14px;font-size:13px;margin-top:14px}.code{background:var(--bg);padding:13px 15px;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;margin:14px 0 0}.checks{padding:18px 28px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}.checks h3{font-size:13px;margin-bottom:9px}.checklist{list-style:none;padding:0;margin:0;font-size:12px}.checklist li{padding:3px 0;display:flex;gap:7px}.tick{color:var(--ok)}.gate{font-size:12px;color:var(--muted)}.review{padding:18px 28px 22px;border-top:1px solid var(--line);background:var(--bg)}.reviewrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.reviewrow label{font-size:13px;font-weight:600}.review select{min-width:180px}.review textarea{width:100%;resize:vertical;min-height:62px;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font-size:13px}.reviewhint{font-size:11px;color:var(--muted);margin-top:7px}.bottomnav{padding:16px 28px;display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line)}.docs{font-size:12px;display:flex;gap:15px;flex-wrap:wrap;margin-top:16px}.mobilepicker{display:none}.about{max-width:1500px;margin:0 auto 35px;padding:0 32px;color:var(--muted);font-size:13px}.about summary{cursor:pointer;font-weight:600;color:var(--ink)}.about .aboutbody{max-width:1000px;padding-top:13px}.about ul{padding-left:19px}.about li{margin:7px 0}.about table{border-collapse:collapse;width:100%;margin:14px 0;font-size:12px}.about td,.about th{border-bottom:1px solid var(--line);padding:9px 12px 9px 0;text-align:left;vertical-align:top}.mobile-edge{display:flex;gap:8px;font-size:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.mobile-edge strong{font-weight:500;flex:1}.mobile-edge small{color:var(--muted);flex:1}.noscript{margin:30px;padding:20px;background:var(--warnbg)}
+
+.exportpanel textarea{width:100%;min-height:240px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:12px;font:12px/1.6 ui-monospace,SFMono-Regular,monospace;margin-bottom:10px}.exportdownload{display:inline-block;margin-right:8px}.codepanel{margin-top:18px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}.codebar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:12px}.codebar strong{font-weight:600}.codebar #codelanguages{display:flex;gap:5px;flex-wrap:wrap}.langbutton{min-height:30px;font-size:12px;padding:4px 8px;background:transparent}.langbutton[aria-pressed=true]{background:var(--soft);color:var(--accent);border-color:var(--accent)}.sourcecode{margin:0;padding:11px 0;max-height:345px;overflow:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4;white-space:pre-wrap;overflow-wrap:anywhere}.sourceline{display:flex;min-height:21px;padding-right:14px;border-left:3px solid transparent}.sourceline.active{background:var(--soft);border-color:var(--accent)}.lineno{width:40px;flex:0 0 40px;text-align:right;padding-right:12px;color:var(--muted);user-select:none;font-size:11px}.sourcecontent{flex:1;min-width:0;white-space:pre-wrap}.sourcecomment{color:var(--muted)}.codecaption{font-size:11px;color:var(--muted);padding:9px 13px;border-top:1px solid var(--line)}
+
+@media(max-width:1100px){.shell{grid-template-columns:220px minmax(0,1fr);gap:16px}.top,.shell{padding-left:20px;padding-right:20px}.casehead,.stagenav,.stage,.checks,.review,.bottomnav{padding-left:20px;padding-right:20px}.stepdots{padding-left:20px;padding-right:20px}.graphwrap{padding:14px}.checks{grid-template-columns:1fr}}
+@media(max-width:800px){.top{padding:24px 16px 20px;display:block}h1{font-size:25px}.topactions{justify-content:flex-start;margin-top:15px}.shell{display:block;padding:0 12px 25px}.sidebar{display:none}.mobilepicker{display:block;margin:0 0 13px}.mobilepicker label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.mobilepicker select{width:100%;min-height:44px}h2{font-size:22px}.casehead{padding-top:21px}.graphwrap{padding:13px}.stage,.casehead,.review,.checks,.bottomnav,.stagenav{padding-left:16px;padding-right:16px}.stepdots{padding-left:16px;padding-right:16px}.about{padding:0 20px}.reviewrow{align-items:stretch}.review select{min-width:0;flex:1}.review textarea{font-size:16px}.topactions button{min-height:44px}.bottomnav button{font-size:13px;min-height:44px}.detail{min-height:0}.about table{font-size:11px}.about td{padding-right:8px}}
+@media print{.sidebar,.topactions,.stagenav,.stepdots,.review,.bottomnav,.mobilepicker{display:none}.shell{display:block}.main{border:0}.graphwrap{break-inside:avoid}.about{display:none}body{background:var(--paper)}}
+</style>
+</head>
+<body>
+<header class="top"><div><div class="eyebrow">BAML interfaces · Design review</div><h1>Lifetime & mutation, one case at a time.</h1><p class="subtitle">Follow ownership from call to cleanup. See exactly which object a mutation reaches. Mark each case for review and export your notes.</p></div><div class="topactions"><button id="export">Export review notes</button><button id="overview">Model & language guide</button></div></header>
+<div class="shell"><nav class="sidebar" aria-label="Review cases"><p class="progresslabel" id="progress"></p><div id="caselist"></div></nav><div><div class="mobilepicker"><label for="casepicker">Review case</label><select id="casepicker"></select></div><main class="main" id="main"><section class="casehead"><div class="casekicker" id="casekicker"></div><h2 id="casetitle"></h2><p class="summary" id="summary"></p><a class="evidence" id="evidence"></a></section><div class="stagenav"><span class="position" id="position"></span><button id="back">← Back</button><button id="next" class="primary">Next step →</button></div><div class="stepdots" id="stepdots" aria-label="Steps"></div><section class="stage" aria-live="polite"><h3 id="stagetitle"></h3><p class="detail" id="detail"></p><section class="codepanel" aria-label="Scenario code"><div class="codebar"><strong>Code</strong><div id="codelanguages" aria-label="Code language"></div></div><pre class="sourcecode" id="sourcecode" aria-label="Scenario source code"></pre><p class="codecaption" id="codecaption"></p></section><div class="graphwrap"><div class="graphheader"><span id="scope"></span><span id="ledger"></span></div><div class="graph" id="graph" aria-label="Ownership graph"></div><div class="legend"><span>Owned bridge lease</span><span class="native">Native owner / buffer</span><span class="reach">Stored reference / VM root</span><span class="pending">Active operation</span></div><p class="modelnote">Edges are logical ownership obligations, not measured allocator counts. Scope authority is separate from ownership.</p></div><div class="statelocals" id="locals"></div><div class="warnbox" id="warning" hidden></div></section><section class="checks"><div><h3>Expected model invariants</h3><ul class="checklist" id="checks"></ul></div><div><h3>What the real bridge must test</h3><p class="gate" id="gate"></p></div></section><section class="review"><div class="reviewrow"><label for="reviewstatus">Your assessment of this case</label><select id="reviewstatus"><option value="unreviewed">Not reviewed</option><option value="reviewed">Looks right</option><option value="discuss">Needs discussion</option></select></div><textarea id="notes" aria-label="Notes for this case" placeholder="Questions, changes, or additional scenarios…"></textarea><p class="reviewhint" id="savehint">Notes stay in this browser. Export them to keep or share a copy.</p></section><div class="bottomnav"><button id="previouscase">← Previous case</button><button id="nextcase">Next case →</button></div></main><div class="docs"><a href="../MEDIA_INTERFACES_AND_BRIDGES_DESIGN.md">Technical design</a><a href="../INTERFACES_USER_GUIDE.md">Python / TS / Rust guide</a><a href="../INTERFACE_PROBE_RESULTS.md">Actual probe results</a></div></div></div>
+<section class="about exportpanel" id="exportpanel" hidden aria-label="Exported review notes"><div class="reviewrow"><h3>Review notes as JSON</h3><div><a id="downloadjson" class="exportdownload" download="baml-interface-review-notes.json">Download JSON</a> <button id="selectjson">Select JSON</button> <button id="closeexport">Close</button></div></div><textarea id="reviewjson" readonly aria-label="Exported JSON"></textarea><p>If your browser does not download local files, select the JSON and copy it. Nothing is sent externally.</p></section><details class="about" id="about"><summary>How to read this model, language cleanup, and the limits of “no leaks”</summary><div class="aboutbody"><p>This is an executable design model, not an implementation or a proof of the new BAML ABI. Green checks validate the model’s accounting and selected expected states. Evidence links say what was actually probed. “Policy to review” marks a recommendation or unresolved protocol detail.</p><ul><li><strong>Reference versus authority:</strong> a live lease keeps state safe to access. An open scope grants permission to start operations. Closing a wrapper releases local ownership; closing a scope revokes operations and drains admitted work.</li><li><strong>One receiver, many views:</strong> every view keeps concrete identity, interface metadata, exact type pins and the original scope. Function, interface and storage handles use the same ownership principles.</li><li><strong>Collection is simplified:</strong> the model removes objects when no modeled owners remain, then removes their outgoing edges. Real VM and host collectors may delay collection and trace internal cycles. The cross-runtime cycle case specifically represents roots that neither collector can trace through.</li><li><strong>No universal prompt cleanup:</strong> application-retained references remain live; separate collectors do not automatically collect cross-runtime cycles; JS finalization may never run; an uncooperative worker can keep a closing runtime alive indefinitely. Scope teardown releases eligible bridge roots after actual drain, not arbitrary native resources on a deadline.</li><li><strong>Mutations:</strong> scalar reads are values, mutable child reads are storage references, and explicit supported data export is a copy. Parent-field replacement detaches old aliases. Cancellation after commit does not undo the write.</li><li><strong>Coverage:</strong> these finite cases organize the review. Their runtime gates also need adversarial scheduling, fault injection, recursive containers, iterators/streams, generic witnesses, inherited/default methods and every supported bridge. Passing the browser model cannot establish leak freedom.</li></ul><table><thead><tr><th>Language</th><th>Local reference cleanup</th><th>Revocation and async drain</th></tr></thead><tbody><tr><td>Python</td><td>SDK proxy <code>close()</code>; detached <code>weakref.finalize</code> release token as fallback. No user <code>__del__</code>. Pydantic validation does not bind a runtime.</td><td>Optional <code>async with bridge_scope()</code>; default runtime scope for ordinary calls. Finalizers cannot await application cleanup.</td></tr><tr><td>TypeScript / JS</td><td><code>using ref = …</code> / <code>Symbol.dispose</code> releases local ownership. FinalizationRegistry is fallback only. Node 22.22.2 needs TS downlevel compilation for raw <code>using</code> syntax.</td><td><code>await using scope = …</code> / <code>Symbol.asyncDispose</code> awaits closure. No synchronous fire-and-forget scope disposer.</td></tr><tr><td>Rust</td><td>Owned implementation wrappers and checked refs use <code>Clone</code> / <code>Drop</code>. Arc-backed native state survives any independent VM owner. Drop never blocks on async cleanup.</td><td>Explicit async scope/runtime close for early revocation and drain. Arc cycles still need weak edges or teardown.</td></tr><tr><td>Other bridges</td><td>Go explicit close + fallback finalization; C# disposable/SafeHandle ownership; Java explicit close + Cleaner; Swift ARC; C++ RAII. Each must preserve the same checked ownership contract.</td><td>Use each bridge’s async executor and cancellation mechanism. Language-specific syntax does not weaken admission, adoption, cleanup or storage identity rules.</td></tr></tbody></table><p>Local browser notes are optional convenience, not project review state. Export shows downloadable/copyable JSON with case IDs, steps, assessments and notes; it does not send data anywhere. The HTML works offline; repository evidence links need the adjacent files.</p></div></details>
+<noscript><p class="noscript">Enable JavaScript to step through the review. The technical design and probe results are available in the links above.</p></noscript>
+<script>
+/* Executable review model, not BAML runtime code. See README.md for its limits. */
+(function (root) {
+'use strict';
+const clone = value => JSON.parse(JSON.stringify(value));
+const evidence = {
+  design: {label:'Proposed ABI • not implemented', href:'../MEDIA_INTERFACES_AND_BRIDGES_DESIGN.md'},
+  baml: {label:'Related BAML probes • this bridge case unimplemented', href:'../interface_probes/baml/RESULTS.md'},
+  python: {label:'Python ownership model • no general interface ABI', href:'../interface_probes/python/pydantic_lifetime.py'},
+  fields: {label:'BAML execution + Pydantic adapter model', href:'../interface_probes/python/pydantic_live_fields.py'},
+  disposal: {label:'Real TS cleanup syntax + simulated ownership', href:'../interface_probes/typescript/README.md'},
+  closure: {label:'Current Python runtime failure reproduced', href:'../INTERFACE_PROBE_RESULTS.md'},
+  rust: {label:'Rust compiler + Arc ownership model', href:'../INTERFACE_PROBE_RESULTS.md'}
+};
+class Model {
+  constructor() { this.objects={}; this.edges={}; this.vars={}; this.events=[]; this.scope='open'; this.frames=[]; this.allocations=0; this.releases=0; }
+  object(id,label,value={},kind='receiver') { if(this.objects[id]) throw Error('Duplicate object '+id); this.objects[id]={id,label,value:clone(value),kind,status:'alive'}; return this; }
+  own(id,label,to,kind='lease',from=null) { if(this.edges[id]) throw Error('Duplicate ownership '+id); if(this.objects[to]?.status!=='alive') throw Error('Own invalid receiver '+to); this.edges[id]={id,label,to,kind,from}; this.allocations++; return this; }
+  transfer(id,label,from=null,kind) { const e=this.edges[id]; if(!e) throw Error('Transfer missing lease '+id); e.label=label; e.from=from; if(kind)e.kind=kind; return this; }
+  drop(id) { if(this.edges[id]) {delete this.edges[id]; this.releases++;} return this; }
+  value(id,value) { if(this.objects[id]?.status!=='alive') throw Error('Write freed object'); this.objects[id].value=clone(value); return this; }
+  local(name,value) {this.vars[name]=clone(value);return this;}
+  count(id) {return Object.values(this.edges).filter(e=>!id||e.to===id).length;}
+  collect() { let changed; do {changed=false; for(const o of Object.values(this.objects)) if(o.status==='alive' && this.count(o.id)===0) {o.status='released'; for(const e of Object.values(this.edges)) if(e.from===o.id)this.drop(e.id); changed=true;}} while(changed); return this; }
+  revoke() { this.scope='closing'; return this; }
+  closeScope() {if(Object.values(this.edges).some(e=>e.kind==='pending'))throw Error('Cannot close scope with active work');this.scope='closed';return this;}
+  frame(title,detail,checks=[],code='',warning='') {
+    const dangling=Object.values(this.edges).filter(e=>this.objects[e.to]?.status!=='alive'||(e.from&&this.objects[e.from]?.status!=='alive'));
+    const base=[['No ownership edge targets released storage',dangling.length===0],['Ownership accounting balances',this.allocations-this.releases===this.count()]];
+    this.frames.push({title,detail,code,warning,objects:clone(this.objects),edges:clone(this.edges),vars:clone(this.vars),scope:this.scope,checks:[...base,...checks].map(([label,pass])=>({label,pass:!!pass})),allocations:this.allocations,releases:this.releases});return this;
+  }
+}
+const cases=[];
+function story(id,group,title,summary,source,gate,build,options={}) {
+  const m=new Model();build(m);cases.push({id,group,title,summary,evidence:evidence[source],gate,frames:m.frames,...options});
+}
+function host(m) {return m.object('H','Host receiver',{count:0}).own('local','Local implementation','H','native');}
+function vm(m) {return m.object('V','BAML receiver',{count:0}).own('root','BAML root','V','reach');}
+function setupField(m) {return m.object('P','State owner',{count:1},'receiver').own('p','Live state ref','P');}
+function child(m,id,label,value) {return m.object(id,label,value,'storage');}
+function link(m,id,label,from,to) {return m.own(id,label,to,'reach',from);}
+const countCheck=(m,n)=>['Exactly '+n+' live ownership edges',m.count()===n];
+story('L01','Lifetime','An ordinary call ends','Construct locally, bind on first use, release the call’s temporary ownership, then release the local implementation.','design','Concurrent first use must bind once per source/runtime/scope; injected registration failure must unwind every waiter.',m=>{
+ host(m).frame('Construct the implementation','Factory construction owns native state but creates no engine registration.', [['No bridge lease yet',Object.values(m.edges).every(e=>e.kind!=='lease')]],'greeter = Greeter.implement(host)');
+ m.own('call','Invocation lease','H').frame('First async call binds','The invocation validates the fixed interface bundle and takes its own lease. Registry metadata is retained by these owners; it is not an extra immortal owner.',[countCheck(m,2)],'await Welcome_async(greeter, "Ada")');
+ m.drop('call').frame('Call completes','The call releases its lease. The local implementation still owns its native receiver.',[countCheck(m,1)]);
+ m.drop('local').collect().frame('Local ownership ends','There is no VM retention or worker left. The receiver and registration can be released.',[['Receiver released',m.objects.H.status==='released'],countCheck(m,0)]);
+});
+story('L02','Lifetime','BAML keeps the object','Disposing your local wrapper cannot invalidate a separately retained BAML reference.','python','Real VM retention must survive host proxy collection, disposal and callback-frame exit in every SDK.',m=>{
+ host(m).own('vm','Retained BAML reference','H').frame('BAML stores the receiver','The two owners share one receiver identity. The registry retains host state independently of the SDK wrapper.',[countCheck(m,2)]);
+ m.drop('local').frame('Dispose the local wrapper','The wrapper is closed for future use. BAML can still call its independently retained receiver.',[['Receiver remains alive',m.objects.H.status==='alive'],countCheck(m,1)],'using source = Greeter.implement(host)\n// Leaving this block releases only source.');
+ m.value('H',{count:1}).frame('BAML calls it again','The call reaches the same host state, even though the local wrapper has gone away.',[['Same state changed',m.objects.H.value.count===1]]);
+ m.drop('vm').collect().frame('BAML drops its final reference','After actual VM collection/release, the last ownership obligation ends.',[['Receiver released',m.objects.H.status==='released']]);
+});
+story('L03','Lifetime','Alias, clone and double close','Assignment aliases a wrapper. Explicit cloning creates independent ownership of the same receiver.','rust','Check alias invalidation, independent clone survival, and exactly-once native release under explicit close plus finalization.',m=>{
+ vm(m).own('a','Wrapper A (also named B)','V').local('a and b','same wrapper').frame('Assign another variable','a and b name one wrapper and one lease. Rust moves differ; use Clone to obtain a second owned wrapper.',[countCheck(m,2)],'const b = a; // TypeScript alias');
+ m.own('c','Wrapper C (explicit clone)','V').frame('Clone explicitly','C owns another lease but shares the receiver; cloning does not copy fields.',[countCheck(m,3)],'const c = a.clone(); // proposed proxy API');
+ m.drop('a').drop('a').frame('Close A twice','B is also closed because it is the same wrapper. C and the BAML root remain valid. Repeated close releases nothing extra.',[countCheck(m,2)]);
+ m.drop('c').drop('root').collect().frame('Remaining owners finish','Only the final release makes the receiver eligible for reclamation.',[countCheck(m,0)]);
+});
+story('L04','Lifetime','Return, retain, pass back','Returning a BAML interface or function creates a checked proxy. Passing it back preserves the original receiver.','closure','The current Python returned-closure pass-back probe panics. Replace adaptation order and test interface, function, field and nested-container round trips.',m=>{
+ vm(m).own('out','Outbound transfer','V').frame('BAML returns a live value','Encoding transfers one owned lease. Its receiver, witness and runtime generation stay pinned.',[countCheck(m,2)]);
+ m.transfer('out','Host checked proxy').drop('root').frame('Host adopts the return','The original call frame can finish; the adopted proxy now keeps the receiver alive.',[countCheck(m,1)]);
+ m.own('in','Temporary input lease','V').frame('Pass the proxy back','Recognize a checked capability before attempting host adaptation. Do not create a new callback that calls this proxy.',[['Only one concrete receiver',Object.keys(m.objects).length===1]],'await Apply_async(returned_closure, 1)','Observed current Python failure: re-registering the returned closure enters a nested runtime and then masks the panic with an unknown SdkPanic type error. This frame specifies the replacement behavior.');
+ m.drop('in').drop('out').collect().frame('Both sides finish','No wrapper-on-wrapper cycle or extra receiver was created.',[countCheck(m,0)]);
+});
+story('L05','Lifetime','Project another interface','Client overrides, required interfaces and media views share identity without user-written casts.','design','Direct client overrides and Agent.run must preserve receiver state, exact pins and independent view lifetime.',m=>{
+ vm(m).own('client','ResponsesClient facade','V').frame('A concrete client exists','The facade owns a checked concrete receiver.',[],'client = ResponsesClient(...)');
+ m.own('view','Client input lease','V').frame('Use it as Client','The parameter codec projects an implemented interface internally. No .as_client() call and no new receiver.',[['Receiver identity unchanged',Object.keys(m.objects).length===1]],'await Extract_async(text, options={client: client})');
+ m.drop('client').frame('Local facade closes','The call’s retained view remains usable until the call finishes.',[countCheck(m,2)]);
+ m.drop('view').drop('root').collect().frame('Call and VM ownership end','A witness/default-method dependency cannot outlive its receiver lease or be dropped earlier than it.',[countCheck(m,0)]);
+});
+story('L06','Lifetime','Partial encode fails','A failed aggregate transfer must release all unadopted leases while preserving the caller’s inputs.','design','Fault-inject every allocation/codec/dispatch/adoption boundary, including nested aggregates and error payloads.',m=>{
+ vm(m).own('a','Caller proxy','V').frame('Caller still owns its input','The caller’s lease is never consumed by an attempted call.',[]);
+ m.own('t1','Transfer token 1','V').own('t2','Transfer token 2','V').frame('Encode two nested references','The transfer transaction owns each token until aggregate validation and adoption finish.',[countCheck(m,4)],'{first: ref, nested: [ref, invalid_value]}');
+ m.drop('t1').drop('t2').frame('The next element fails validation','Roll back both tokens. If any token was staged at the receiver, receiver rollback must release that staged ownership too; no partial value escapes.',[['Caller lease preserved',!!m.edges.a],countCheck(m,2)]);
+ m.drop('a').drop('root').collect().frame('Caller later closes normally','The failed call left no transfer ownership behind.',[countCheck(m,0)]);
+});
+story('L07','Lifetime','Close during an active call','An admitted invocation pins everything it can still access, independently of the initiating proxy.','design','Race close/finalize against lookup, admission, callback dispatch and normal completion; run with deterministic counters.',m=>{
+ host(m).own('work','Active invocation','H','pending').frame('The callback is running','Admission takes temporary ownership before releasing lookup locks.',[countCheck(m,2)]);
+ m.drop('local').frame('The caller closes its wrapper','The receiver remains live while user code might still access it.',[['Worker still owns receiver',!!m.edges.work]],'ref.close()');
+ m.value('H',{count:1}).frame('Callback finishes its work','Local close does not cancel or revoke independent work.',[['Receiver still alive',m.objects.H.status==='alive']]);
+ m.drop('work').collect().frame('Completion releases the call lease','Only now can the last host receiver reference disappear.',[countCheck(m,0)]);
+});
+story('L08','Lifetime','Cancel, then a late result','A canceled waiter may be finished while the host worker is still running. Those are different lifetimes.','design','Cancellation at every boundary, worker non-cooperation, late results with nested refs and duplicate completion must release exactly once.',m=>{
+ host(m).own('work','Active host worker','H','pending').frame('Callback starts','The worker has its own receiver lease.',[]);
+ m.drop('local').local('caller outcome','canceled; delivered once').frame('Caller is canceled','The waiter completes once, but the running worker remains an owner. Cancellation is cooperative.',[['Worker still retained',!!m.edges.work]],'task.cancel()','If host code never terminates, safe reclamation and bounded shutdown are impossible without isolation or a stronger host contract.');
+ m.object('R','Late result receiver',{value:42}).own('late','Unadopted late result','R').frame('Worker returns after cancellation','The result must not be delivered to the already completed waiter. Its transferred resources still need cleanup.',[['Caller remains canceled',m.vars['caller outcome'].startsWith('canceled')]]);
+ m.drop('late').drop('work').collect().frame('Discard result and finish worker','Release late-result tokens and the worker lease. Duplicate completion cannot release them again.',[countCheck(m,0)]);
+});
+story('L09','Lifetime','Scope close drains work','A scope controls permission to call; it is not a permanent strong owner of every registration.','disposal','Test atomic admission vs revocation, parent/child calls, active worker drain, and scope-close result ownership.',m=>{
+ host(m).own('saved','Retained BAML view','H').own('work','Active invocation','H','pending').frame('Scope is open','Local state, a retained view and an admitted call own the receiver. The scope itself contributes zero ownership edges.',[countCheck(m,3)]);
+ m.revoke().local('new calls','rejected').frame('Begin closing the scope','Revoke new calls before awaiting drain. Retained handles lose permission to call, even while the receiver must remain allocated.',[['Scope revoked',m.scope==='closing']],'await scope.close()');
+ m.drop('local').drop('saved').frame('Detach inactive registry ownership','Closed views become harmless tombstones. The admitted worker still owns its receiver and cleanup state.',[countCheck(m,1)],'// Await real worker completion, not just cancellation delivery.');
+ m.drop('work').collect().closeScope().local('scope close','resolved').frame('Worker finishes; close resolves','All bridge-owned roots in this modeled scope are gone. An application’s separate native reference, if any, would remain its own responsibility.',[countCheck(m,0)]);
+});
+story('L10','Lifetime','A callback closes its own scope','Awaiting a scope’s drain from one of that scope’s active callbacks creates a self-wait.','design','Choose and test a self-close policy before implementation; include descendant calls and cleanup callbacks.',m=>{
+ host(m).own('work','Callback being drained','H','pending').frame('A scoped callback is active','The callback counts as work that scope.close() must drain.',[]);
+ m.revoke().local('wait dependency','callback → scope close → callback').frame('Callback awaits its own scope close','Waiting here deadlocks. Revocation alone does not remove the active worker’s ownership.',[['Worker is still retained',!!m.edges.work]],'async def callback():\n    await my_scope.close()','Decision to review: reject an awaited self-drain deterministically after beginning revocation; expose nonwaiting begin_close(), and let an outside owner await close.');
+ m.local('proposed callback outcome','self-drain error or nonwaiting close').drop('work').frame('Proposed policy lets the callback unwind','A nonwaiting revocation request is safe; awaiting one’s own drain is not. This is a policy proposal, not a shipped or settled API.',[countCheck(m,1)]);
+ m.drop('local').collect().closeScope().frame('An outside owner awaits drain','After the callback has actually ended, ordinary teardown can complete.',[countCheck(m,0)]);
+},{decision:true});
+story('L11','Lifetime','A cycle spans two runtimes','Weak SDK caches prevent accidental roots. They do not collect cycles created by application objects.','python','Construct host→proxy→VM→host cycles; show retention before teardown and release after scope/runtime teardown.',m=>{
+ m.object('H','Host object',{owns:'BAML proxy'}).object('V','BAML object',{owns:'host interface'}).own('user','User variable','H','native').own('hv','Stored proxy lease','V','lease','H').own('vh','Stored host view','H','lease','V').frame('The objects retain each other','The two cross-runtime ownership edges form a cycle. An ordinary user variable also reaches it.',[countCheck(m,3)]);
+ m.drop('user').collect().frame('Drop the last outside variable','Both collectors still see roots from the other runtime. Reference counting / separate tracing does not break this cycle.',[['Both receivers remain alive',m.objects.H.status==='alive'&&m.objects.V.status==='alive']],'' ,'This is retained memory until teardown, not automatic leak freedom. A long-lived default runtime allows application cycles to accumulate.');
+ m.revoke().drop('vh').collect().closeScope().frame('Scope teardown breaks a bridge edge','After any active calls drain, invalidating registry ownership breaks the cycle. Collecting H releases its stored V lease.',[['Cycle reclaimed',m.count()===0&&m.objects.H.status==='released'&&m.objects.V.status==='released']]);
+},{limit:true});
+story('L12','Lifetime','Finalizers and release queues','Finalizers enqueue a detached token. They cannot await, reenter BAML, or retain their own target.','python','Test weak caches, unhashable/equal host models, delayed collection, explicit close plus finalizer, and queue drain after shutdown.',m=>{
+ vm(m).own('proxy','Host proxy lease','V').frame('A proxy owns a lease','The SDK finalizer holds detached release state, not a bound method or strong path back to the proxy.',[]);
+ m.transfer('proxy','Queued release token').frame('Proxy is collected','The finalizer enqueues a release. Native ownership remains until the queue is drained.',[['Release token still owned',!!m.edges.proxy]],'weakref.finalize(proxy, enqueue_release, detached_token)');
+ m.drop('proxy').frame('Runtime drains the queue','Explicit close uses the same idempotent token. JS FinalizationRegistry may run late or never; do not use GC timing as the release test oracle.',[countCheck(m,1)]);
+ m.drop('root').collect().frame('Runtime ownership ends','Runtime shutdown also drains or invalidates its release obligations. Late finalizer delivery must be harmless.',[countCheck(m,0)]);
+});
+story('L13','Lifetime','Stale and foreign handles','Receiver identity includes the owning runtime and generation, not just a numeric key or type name.','design','Try wrong session, wrong role, old generation, forged witness and exact-type mismatch before dispatch.',m=>{
+ vm(m).own('proxy','Old-runtime proxy','V').local('token','runtime A / generation 7 / key 12').frame('A valid capability exists','Its immutable witness and session identify the receiver.',[]);
+ m.local('attempt in runtime B','rejected before adoption').frame('Pass it to another runtime','Matching type names do not permit transfer of a live capability. The failed attempt allocates no receiver ownership.',[countCheck(m,2)]);
+ m.revoke().drop('root').drop('proxy').collect().closeScope().frame('The old runtime shuts down','Outstanding proxy wrappers become closed. Safe late releases cannot resurrect anything.',[countCheck(m,0)]);
+ m.object('N','New runtime receiver',{generation:8,key:12}).own('new','New runtime root','N','reach').frame('A new runtime reuses key 12','The old token still fails. Numeric reuse never changes the old receiver’s identity.',[['Old receiver stays released',m.objects.V.status==='released'],['New receiver has independent ownership',m.count('N')===1]]);
+});
+story('L14','Lifetime','Concrete image versus live view','A portable image payload can outlive an engine. A live interface view remains tied to its runtime.','design','Verify engine-independent media ownership in all SDKs, then media-as-interface shutdown, aliasing and callback round trips.',m=>{
+ m.object('I','Owned image bytes',{mime:'image/png'},'payload').own('bytes','Native image value','I','native').object('V','Media interface receiver',{kind:'image'}).own('view','Media checked view','V').own('buffer','Shared immutable buffer','I','native','V').frame('One payload, one live view','The immutable buffer has engine-independent ownership. The view’s witness belongs to a runtime.',[]);
+ m.revoke().drop('view').collect().closeScope().frame('Runtime shuts down','The live view is revoked and released. The independent image value still retains its bytes.',[['Payload survives',m.objects.I.status==='alive'],['View receiver released',m.objects.V.status==='released']]);
+ m.drop('bytes').collect().frame('Image value is dropped','The last buffer owner releases it. A URL image descriptor does not promise that its external content is immutable.',[countCheck(m,0)]);
+});
+story('L15','Lifetime','Throws, reentry and returned errors','Callbacks can reenter BAML. Both frames own their receivers, and error payloads participate in transfer cleanup.','design','Exercise nested async reentry, declared error refs, native exceptions, wrong returns, and infrastructure decoding without the user typemap.',m=>{
+ host(m).own('outer','Outer callback invocation','H','pending').frame('Host callback starts','Lookup/adoption locks have already been released before user code executes.',[]);
+ m.own('inner','Reentrant BAML invocation','H','pending').frame('Host calls BAML again','The inner invocation retains independent ownership. Never block the host executor or hold a global bridge lock across reentry.',[countCheck(m,3)],'async def callback():\n    return await OtherBamlFunction_async(self)');
+ m.drop('inner').local('inner outcome','declared error / bridge failure').frame('Inner call fails','Unwind the inner frame and all unadopted result/error tokens. An error carrier with an adopted live child would own its own lease.',[countCheck(m,2)]);
+ m.drop('outer').drop('local').collect().frame('Outer frame unwinds','Native exceptions, invalid return values and infrastructure failures must all reach a completion path that releases temporary ownership.',[countCheck(m,0)]);
+});
+story('M01','Mutation','One scalar field, one owner','A native write is visible on the next BAML read. A BAML write reaches that same owner through a setter.','fields','Test host→VM and VM→host scalar access, renamed fields, defaults, strict reads/writes and executor dispatch.',m=>{
+ setupField(m).local('previous scalar read',1).frame('Read count','Reading an int returns a value. It does not subscribe the local variable to later changes.',[],'saved = await counter.get_count()');
+ m.value('P',{count:2}).frame('Native owner writes 2','The adapter reads the retained host object each time; no update message or second field copy is needed.',[['Earlier scalar stays 1',m.vars['previous scalar read']===1]],'python_owner.count = 2');
+ m.local('next BAML read',2).frame('BAML reads again','The next ordered read sees 2 unless another writer changes it first.',[['Read sees current owner',m.vars['next BAML read']===m.objects.P.value.count]],'let current = counter.count;');
+ m.value('P',{count:3}).frame('BAML writes 3','Successful setter completion acknowledges the owner’s committed update.',[['Owner changed',m.objects.P.value.count===3]],'counter.count = 3;');
+});
+story('M02','Mutation','A proxy is not a native model','Remote fields use awaited accessors. Plain assignment must fail instead of creating an unused shadow property.','fields','Assert Python/JS runtime guards as well as TS/Rust static checks; ordinary copied records must retain local field access.',m=>{
+ setupField(m).frame('The host receives a live ref','This is a proxy, not the original Pydantic model or JS implementation object.',[]);
+ m.local('plain assignment','rejected; no shadow property').frame('Try ref.count = 9','Python attribute guards and JS property guards reject this write; TS and Rust also reject it statically.',[['Owner unchanged',m.objects.P.value.count===1]],'ref.count = 9  // rejected on a live proxy');
+ m.value('P',{count:9}).frame('Await the setter','The async operation validates, dispatches to the owner and acknowledges commit.',[['Owner updated',m.objects.P.value.count===9]],'await ref.set_count(9)');
+});
+story('M03','Mutation','Two fields share one list','Nested mutation targets the actual child object. Reading a field must not produce a detached native array.','baml','Run index/push/map/class operations through both VM-owned and host-owned storage backends, including default methods and reflection.',m=>{
+ setupField(m);child(m,'A','Shared list',[1]);link(m,'f1','items','P','A');link(m,'f2','also_items','P','A');m.frame('Both fields point to list A','The two field links share one mutable identity.',[['Both links target A',m.edges.f1.to===m.edges.f2.to]]);
+ m.own('list','Host ListRef','A').frame('Read items','The returned view owns the actual list. It is not a copy and does not merely remember parent.items.',[countCheck(m,4)],'items = await state.get_items()');
+ m.value('A',[1,2]).frame('Push through the child view','Both fields now observe [1, 2]. No parent-field setter needs to run.',[['Both aliases observe the same updated child',m.objects.A.value.length===2]],'await items.push(2)');
+ m.drop('p').collect().frame('Parent wrapper is released','The parent can be reclaimed while the independently held list stays alive. Its owning scope/runtime must still be open.',[['Parent released',m.objects.P.status==='released'],['Child alive',m.objects.A.status==='alive']]);
+ m.drop('list').collect().frame('Last child ref closes','The child’s final owner releases shared storage.',[countCheck(m,0)]);
+});
+story('M04','Mutation','Replace a field; keep the old alias','Replacing parent.items changes a slot. It does not retarget existing references to the previous list.','baml','Test retained child across root replacement and parent disposal, in both bridge directions and for list/map/class fields.',m=>{
+ setupField(m);child(m,'A','Old list A',[1]);link(m,'field','items','P','A');m.own('old','Old ListRef','A').frame('Keep an alias to A','The saved child ref has its own identity and lifetime.',[],'old = await state.get_items()');
+ child(m,'B','New list B',[99]);m.drop('field');link(m,'newfield','items','P','B');m.frame('Replace the parent field','The root slot now names B. The old ref still names A.',[['Root and old alias differ',m.edges.newfield.to!==m.edges.old.to]],'await state.set_items([99]) // native data initializer');
+ m.value('A',[1,2]).frame('Mutate the old alias','A changes; B stays [99]. A field-path proxy would incorrectly mutate B and violate BAML identity semantics.',[['New field unaffected',JSON.stringify(m.objects.B.value)==='[99]']], 'await old.push(2)');
+ m.drop('p').collect().frame('Drop the parent','B is released with its last parent slot. A survives through the old child ref.',[['B released',m.objects.B.status==='released'],['A alive',m.objects.A.status==='alive']]);
+ m.drop('old').collect().frame('Drop the old alias','All storage in this scenario can now be released.',[countCheck(m,0)]);
+});
+story('M05','Mutation','VM storage replaces a host field','A host aggregate field must be able to hold a checked VM-owned child without copying away aliases.','baml','Generated shared storage holders must accept host- and VM-owned values and preserve identity under replacement both ways.',m=>{
+ setupField(m);child(m,'A','Host list A',[1]);link(m,'field','items','P','A');child(m,'B','VM list B',[7]);m.own('baml','BAML local list','B','reach').frame('Host and VM start with separate lists','Plain Pydantic list / JS array / Rust Vec fields cannot universally preserve this next assignment by themselves.',[]);
+ m.drop('field');link(m,'field2','items','P','B');m.collect().frame('BAML assigns its list to the host field','The shared-storage holder retains B’s checked identity, not a copied native container.',[['B has two owners',m.count('B')===2]],'state.items = baml_items;');
+ m.value('B',[7,8]).frame('Host mutates through its field','The BAML local sees [7, 8] because both still refer to B.',[['B updated in place',m.objects.B.value[1]===8]],'await host.items.push(8)');
+ m.drop('p').collect().frame('Host parent is released','The VM local retains B independently.',[['BAML alias survives',m.objects.B.status==='alive'&&!!m.edges.baml]]);
+ m.drop('baml').collect().frame('VM local is released','The remaining storage can be reclaimed.',[countCheck(m,0)]);
+});
+story('M06','Mutation','Copied result, live journal','RunResult’s outer record is local data. Its journal remains a live reference with shared state.','baml','Codec tests must distinguish outer DTO replacement from nested capability identity for RunResult and ModelTurnInput.',m=>{
+ child(m,'J','Shared journal',['first']);m.own('engine','BAML journal owner','J','reach').own('record','Host result.journal','J').local('result.value',{answer:42}).frame('Receive a result envelope','The native record is copied; its journal is an independently retained live child.',[],'result = await agent.run(spec)');
+ m.value('J',['first','second']).frame('Append through result.journal','The engine observes the shared journal mutation. result.value remains ordinary local data.',[['Journal changed',m.objects.J.value.length===2]],'await result.journal.append(entry)');
+ child(m,'K','Different journal',['new']);m.drop('record').own('replacement','Host result.journal','K').frame('Replace the outer record’s field','This updates the host record only. It does not replace an earlier engine-side envelope’s journal slot.',[['Engine still owns J',m.edges.engine.to==='J'],['Host now owns K',m.edges.replacement.to==='K']], 'result.journal = other_journal');
+ m.drop('engine').drop('replacement').collect().frame('Both independent owners end','Recursive capability ownership must be released when enclosing native values are dropped.',[countCheck(m,0)]);
+});
+story('M07','Mutation','Lost updates versus an atomic method','Shared identity does not make read-modify-write atomic. Methods are atomic only if their implementation provides it.','design','Use barriers to force interleaving. Verify explicit synchronized operations separately from ordinary field reads/writes.',m=>{
+ setupField(m).value('P',{count:0}).frame('Two tasks share one counter','Both tasks are allowed to write the same field.',[]);
+ m.local('task A read',0).local('task B read',0).frame('Both read 0','Each has a copied scalar. Neither read reserves the field.',[],'a = await ref.get_count()\nb = await ref.get_count()');
+ m.value('P',{count:1}).frame('Task A writes 1','Task A’s write commits.',[]);
+ m.value('P',{count:1}).frame('Task B also writes 1','The second update is lost. This is permitted interleaving, not a stale-field-cache bug.',[['Lost-update result is 1',m.objects.P.value.count===1]],'await ref.set_count(b + 1)','BAML compound field assignments can also suspend between foreign read and write.');
+ m.value('P',{count:0}).local('task A read','unused by atomic operation').local('task B read','unused by atomic operation').frame('Restart with a synchronized method','The receiver implements increment using an atomic operation, lock or owner transaction.',[]);
+ m.value('P',{count:2}).frame('Two protected increments finish','Now the value is 2. Merely naming an async method increment would not guarantee this.',[['Both increments counted',m.objects.P.value.count===2]],'await ref.increment() // implementation provides synchronization');
+});
+story('M08','Mutation','Cancellation after a write commits','A canceled setter can have changed state even though the caller never received its acknowledgement.','design','Force cancellation before dispatch, before commit and after commit. Do not infer rollback from transport/cancellation failure.',m=>{
+ setupField(m).frame('Before dispatch','A request canceled before admission performs no write.',[]);
+ m.own('write','Admitted setter','P','pending').frame('Setter is admitted','The operation owns a temporary lease while it can access storage.',[],'await ref.set_count(5)');
+ m.value('P',{count:5}).frame('Owner commits 5','The update is committed before the acknowledgement reaches the caller.',[['Owner contains 5',m.objects.P.value.count===5]]);
+ m.local('caller outcome','canceled; commit may have happened').drop('write').frame('Caller receives cancellation','There is no implicit rollback. Retrying a non-idempotent operation can apply it twice.',[['Committed value remains',m.objects.P.value.count===5]],'// Read again or use an application operation ID/transaction.');
+});
+story('M09','Mutation','Validation and frozen models','Pydantic helps native validation; the bridge still validates every read, write and nested operation against exact BAML types.','fields','Check strict type validation, in-place mutation bypass, frozen/writable conflicts, invariant pins and no commit on invalid writes.',m=>{
+ setupField(m).frame('The interface requires writable int count','A frozen native field cannot automatically implement this contract.',[]);
+ m.local('invalid set_count("2")','rejected without commit').frame('Reject an invalid write','Do not coerce a string into an int at the BAML boundary.',[['Count stays 1',m.objects.P.value.count===1]],'await ref.set_count("2") // contract violation');
+ m.value('P',{count:'corrupted by native bypass'}).frame('Native code bypasses validation','Native state can become invalid outside the bridge. Pydantic also cannot observe every in-place container edit.',[],'object.__setattr__(host, "count", "invalid")');
+ m.local('BAML read','rejected; no invalid BAML value').frame('Reject the outgoing read','Report a bridge contract failure before injecting invalid state into typed BAML execution.',[['Invalid value was not exported',m.vars['BAML read'].startsWith('rejected')]]);
+ m.value('P',{count:2}).local('BAML read',2).frame('Repair the owner','The next valid read succeeds. Mutable ListRef<int> cannot be relabeled as ListRef<int|string>.',[['Valid read resumes',m.vars['BAML read']===2]]);
+});
+story('M10','Mutation','An explicit data copy is detached','Copying supported data is useful, but it must be an explicit operation with clearly detached mutation semantics.','design','Verify recursive copy behavior, reject nonportable capabilities, and preserve immutable media buffer ownership independently.',m=>{
+ child(m,'A','Live list',[1]);m.own('ref','Live ListRef','A').frame('Start with shared storage','Ordinary live-field reads retain this storage.',[]);
+ m.local('native copy',[1]).frame('Export supported data','to_value() returns a native data copy when this storage supports data export. It is not a required method on all interfaces.',[],'copy = await items.to_value()');
+ m.local('native copy',[1,2]).frame('Mutate the copy','The live list stays [1]. There is no polling, reconciliation or automatic copyback.',[['Live list unchanged',m.objects.A.value.length===1]],'copy.append(2)');
+ m.drop('ref').collect().frame('Release the live list','The detached native data survives without the runtime.',[['Storage released',m.objects.A.status==='released'],['Copy survives',m.vars['native copy'].length===2]]);
+});
+story('M11','Mutation','A child survives its parent, not revocation','A child owns storage independently of its parent wrapper, but its access still depends on the owning scope/runtime.','design','Race parent release and owner revocation against nested storage operations, iterator advancement and field replacement.',m=>{
+ setupField(m);child(m,'A','Shared child',[1]);link(m,'field','items','P','A');m.own('child','Child ListRef','A').frame('Read a child view','The child owns a lease independent of the parent.',[]);
+ m.drop('p').collect().frame('Release the parent','Child operations remain legal while the owner’s scope is open.',[['Child survives parent',m.objects.P.status==='released'&&m.objects.A.status==='alive']]);
+ m.revoke().local('child.push(2)','rejected; scope closed').frame('Revoke the owning scope','A retained lease does not grant authority to call after revocation. No storage operation reaches freed or closed owner state.',[['No write committed',m.objects.A.value.length===1]]);
+ m.drop('child').collect().closeScope().frame('Detach the closed child lease','The stale wrapper becomes an inert tombstone; remaining release messages are harmless.',[countCheck(m,0)]);
+});
+story('L16','Lifetime','Two calls bind at once','Lazy registration needs one publication point per implementation source, runtime generation and scope.','design','Race first binding, cancellation of one waiter, registration failure and retry. A waiter must never tear down another waiter’s published registration.',m=>{
+ host(m).local('registration','absent').frame('One source, two callers','Both callers start with the same fixed implementation bundle.',[]);
+ m.local('registration','one shared initialization').own('a','Call A admission','H','pending').own('b','Call B admission','H','pending').frame('First-use calls converge','The registry performs one initialization; each call separately owns its eventual invocation lease. A raw second factory call would be a distinct adapter.',[['One receiver identity',Object.keys(m.objects).length===1]]);
+ m.local('registration','published once').drop('a').frame('A cancels; B continues','A’s cancellation releases A’s obligation. It does not revoke the source or B’s ownership.',[['B still retained',!!m.edges.b]]);
+ m.drop('b').drop('local').collect().frame('Remaining work ends','No losing initialization or abandoned waiter may strand registry state.',[countCheck(m,0)]);
+});
+story('L17','Lifetime','A view cannot escape its scope','Projecting or passing a view through a longer-lived scope cannot extend the originating registration’s authority.','design','Check projection, returned refs, child storage and reentrant calls across scopes. Separate explicit registrations must have distinct identities.',m=>{
+ host(m).own('short','View in short scope A','H').local('origin authority','scope A').frame('Register in a short scope','The receiver is bound to A. A native host reference can survive A, but this registration cannot.',[]);
+ m.own('long','View retained by scope B caller','H').frame('Pass it through a longer-lived caller','The new lease preserves A’s revocation authority; scope B does not re-register or retag it.',[['Origin remains A',m.vars['origin authority']==='scope A']]);
+ m.revoke().local('B calls old view','rejected: origin A closed').frame('A closes','Every derived view of this registration becomes unusable. A new explicit registration is a distinct adapter, not a resurrection.',[['No authority laundering',m.vars['B calls old view'].startsWith('rejected')]]);
+ m.drop('short').drop('long').closeScope().frame('Retire the old registration','The application’s independent native reference still owns its host object. Dropping a registry root must not invoke arbitrary user cleanup.',[['Native host ownership preserved',!!m.edges.local]]);
+ m.drop('local').collect().frame('Application releases the native object','Only the last real native owner can make the host object eligible for collection.',[countCheck(m,0)]);
+});
+story('L18','Lifetime','Who owns an ambiguous transfer?','Completion, cancellation and adoption need an atomic ownership decision. Neither side can guess after a lost acknowledgement.','design','Choose a staging/transaction protocol; test duplicate completion, lost ACK, malformed nested error payloads and cancellation racing adoption.',m=>{
+ vm(m).own('transfer','Sender transfer transaction','V').local('transaction T','prepared').frame('Prepare a transfer','The transaction owns one token before receiver adoption.',[]);
+ m.transfer('transfer','Receiver staging arena').local('transaction T','staged; not user-visible').frame('Receiver validates in a staging arena','Responsibility moves through a transport-owned ledger; staged values cannot escape to user code.',[['Token has exactly one owner',m.count('V')===2]]);
+ m.transfer('transfer','Adopted receiver proxy').local('transaction T','committed').frame('Adoption wins atomically','One commit record determines ownership. The example shows adoption winning; a cancellation winner must roll back all staged tokens instead.',[['One transfer token remains',Object.keys(m.edges).filter(k=>k==='transfer').length===1]],'// Proposed transaction ID + idempotent commit/ack protocol.');
+ m.local('duplicate ACK','read same committed outcome').frame('An ACK is lost or delivered twice','Query/replay the same transaction outcome; do not retain a second token or free an already adopted one.',[countCheck(m,2)],'','Protocol decision: local in-process bridges can share an atomic ledger. Any transport that can lose acknowledgements needs an explicit ownership-transfer recovery rule.');
+ m.drop('transfer').drop('root').collect().frame('The adopted proxy is later closed','Transaction records may retire once duplicate-delivery safety is guaranteed. The runtime needs a bounded retirement policy.',[countCheck(m,0)]);
+},{decision:true});
+story('L19','Lifetime','A worker never returns','Safe ownership can require retaining memory indefinitely. A timeout cannot magically make running native code safe to free.','design','Specify shutdown policy and completion-sink lifetime. Test permanently blocked host work in an isolated subprocess.',m=>{
+ host(m).own('work','Uncooperative worker','H','pending').frame('Native work begins','This could be Python to_thread work or a native callback that ignores cancellation.',[]);
+ m.revoke().drop('local').local('close outcome','still waiting for real work').frame('Scope requests cancellation','The caller can be canceled, but the worker still retains receiver state. Scope close cannot report that it has drained.',[['Worker remains an owner',!!m.edges.work]]);
+ m.local('timeout','does not release worker lease').frame('A shutdown timeout expires','The honest choices are to keep waiting, return a timeout while retaining a closing runtime, or use separately specified process isolation. Freeing the receiver is unsafe.',[['Receiver must remain allocated',m.objects.H.status==='alive']], '','Recommended baseline: await real drain; an optional timeout reports incomplete closure and retains safe ownership. Do not silently detach and destroy the runtime.');
+},{decision:true,limit:true});
+story('L20','Lifetime','Reference release is not resource cleanup','Dropping a bridge root does not automatically close an application’s database connection, file or PIL resource.','design','Specify any opt-in cleanup hook separately, including ownership, exactly-once execution, async failure and shared native objects.',m=>{
+ host(m).own('bridge','Registry-backed view','H').local('application resource','open; owned by application').frame('The implementation uses a resource','The bridge owns references to the receiver, not an inferred right to close all resources inside it.',[]);
+ m.drop('bridge').frame('Bridge reference is released','The native application owner still exists. Do not discover and call arbitrary close/aclose methods on it.',[['Application owner remains',!!m.edges.local]]);
+ m.local('application resource','closed explicitly').frame('Application closes its resource','Use application context managers / disposal or an explicitly declared resource-owner contract for async cleanup.',[['Resource cleanup is explicit',m.vars['application resource']==='closed explicitly']]);
+ m.drop('local').collect().frame('Native ownership ends','Garbage collection and reference release do not substitute for awaited application cleanup.',[countCheck(m,0)]);
+});
+story('M12','Mutation','One operation versus a sequence','A storage operation needs an owner-side commit point. A sequence of operations still allows interleaving.','design','Define and test per-operation linearization across every storage backend and every native holder entrypoint; specify iteration under concurrent mutation.',m=>{
+ child(m,'A','Shared list',[]);m.own('a','Task A list ref','A').own('b','Task B list ref','A').frame('Two tasks share a list','This case proposes linearizable individual push/index-write/map-set operations at the owner.',[]);
+ m.value('A',[1]).frame('Task A push commits','The first operation makes one complete change; readers cannot observe partially initialized storage.',[],'await list.push(1)');
+ m.value('A',[1,2]).frame('Task B push commits','Both elements remain. Reverse commit order would yield [2, 1]. Ordering between concurrent tasks is unspecified.',[['Both pushes retained',m.objects.A.value.length===2]],'await list.push(2)');
+ m.local('iteration policy','must be specified by storage operation').frame('Iteration needs its own rule','Do not imply that an iteration, to_value(), or multiple reads sees an atomic snapshot. Snapshot/export consistency and concurrent iteration must have explicit semantics.',[], '', 'Decision to review: linearizable single mutations; no implicit transaction for multi-operation sequences. Never hold a bridge/global lock while invoking user code.');
+},{decision:true});
+story('M13','Mutation','Maps, nested objects and default methods','The same storage identity rule applies recursively to map entries and class fields read by BAML default methods.','baml','Exercise map insert/remove, class field load/store, defaults, nested aliases, renamed fields, bounds failures and reflection through foreign storage.',m=>{
+ setupField(m);child(m,'C','Child object',{value:1});child(m,'D','Shared map',{a:1});link(m,'c','child','P','C');link(m,'d','values','P','D');m.own('child','Old child ref','C').frame('Parent stores a class and a map','Both are shared mutable objects rather than DTO copies.',[]);
+ m.value('C',{value:12}).value('D',{a:11,b:2}).local('default method read',{child:12,a:11,b:2}).frame('Mutate the nested storage','A BAML default method sees the current child and map values through ordinary field/storage dispatch.',[['Default sees updated child',m.vars['default method read'].child===12]]);
+ child(m,'N','Replacement child',{value:8});m.drop('c');link(m,'n','child','P','N');m.value('C',{value:120}).local('default method read',{child:8,a:11,b:2}).frame('Replace child, then mutate old ref','The default method now follows the new parent slot. The saved ObjectRef still mutates the old child.',[['Default sees replacement',m.vars['default method read'].child===8],['Old alias changed independently',m.objects.C.value.value===120]]);
+ m.drop('p').drop('child').collect().frame('All owners release','Recursively retained storage edges must be released when their owning objects become collectible.',[countCheck(m,0)]);
+});
+
+cases.sort((a,b)=>a.id.localeCompare(b.id));
+const api={Model,cases,evidence};
+if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.BamlReview=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+</script>
+<script>
+/* Proposed usage and bridge pseudocode. Fixture functions and imports are omitted. */
+(function(root){
+'use strict';
+const examples={};
+function add(id,language,blocks,prelude='',note='Proposed SDK usage. Fixture functions and imports are omitted; these APIs are not all implemented today.'){
+ (examples[id]??={})[language]={note,lines:[...prelude.split('\n').filter(Boolean).map(text=>({text,step:-1})),...blocks.flatMap((block,step)=>block.split('\n').map(text=>({text,step})))]};
+}
+const bridge=(id,blocks)=>add(id,'Bridge pseudocode',blocks,'','Implementation pseudocode: operation names describe the proposed ownership protocol, not current ABI exports.');
+add('L01','Python',[
+ 'greeter = PythonGreeter("Hello")  # Native object; no binding yet.',
+ 'message = await Welcome_async(greeter, "Ada")  # Bind on first use.',
+ '# Welcome has returned; its temporary invocation lease is gone.',
+ 'del greeter  # Eligible for native collection; no retained VM owner.',
+], 'class PythonGreeter(GreeterImplementation):\n    def __init__(self, prefix):\n        self.prefix = prefix\n    async def greet(self, name):\n        return f"{self.prefix}, {name}"\n');
+add('L01','TypeScript',[
+ 'const greeter = Greeter.implement({\n  greet: async name => `Hello, ${name}`,\n}); // No runtime binding yet.',
+ 'const message = await Welcome_async(greeter, "Ada");',
+ '// Welcome has returned; the invocation lease is released.',
+ 'greeter.close(); // Release local ownership.',
+]);
+add('L01','Rust',[
+ 'let greeter = Greeter::implement(RustGreeter::new("Hello"));',
+ 'let message = Welcome_async(&greeter, "Ada", &ctx).await?;',
+ '// The invocation has returned and released its temporary lease.',
+ 'drop(greeter); // No VM owner remains in this example.',
+]);
+add('L02','TypeScript',[
+ 'let id: string;\n{\n  using source = Greeter.implement(host);\n  id = await SaveGreeter_async(source); // BAML stores the receiver.',
+ '} // Symbol.dispose releases source; BAML still owns the receiver.',
+ 'await GreetSaved_async(id, "Ada"); // The same host state runs.',
+ 'await ForgetGreeter_async(id); // Remove VM retention; collect later.',
+]);
+add('L02','Python',[
+ 'host = PythonGreeter("Hello")\nref = await GreeterRef.bind(host)\nid = await SaveGreeter_async(ref)',
+ 'ref.close()\ndel ref, host  # BAML retention still keeps host state alive.',
+ 'await GreetSaved_async(id, "Ada")',
+ 'await ForgetGreeter_async(id)  # VM collection releases its owner.',
+]);
+add('L02','Rust',[
+ 'let greeter = Greeter::implement(host);\nlet id = SaveGreeter_async(&greeter, &ctx).await?;',
+ 'drop(greeter); // BAML owns a separate reference.',
+ 'GreetSaved_async(&id, "Ada", &ctx).await?;',
+ 'ForgetGreeter_async(&id, &ctx).await?;',
+]);
+add('L03','Python',[
+ 'a = await GetGreeter_async()\nb = a  # Two names; one proxy lease.',
+ 'c = a.clone()  # New lease; same receiver.',
+ 'a.close()\na.close()  # Idempotent. b is also closed; c is still usable.',
+ 'c.close()\nawait ForgetGreeter_async()  # Release the modeled BAML root.',
+]);
+add('L03','TypeScript',[
+ 'const a = await GetGreeter_async();\nconst b = a; // Same wrapper, same lease.',
+ 'const c = a.clone(); // Independent ownership, same receiver.',
+ 'a.close();\na.close(); // b is closed too. c remains usable.',
+ 'c.close();\nawait ForgetGreeter_async();',
+]);
+add('L03','Rust',[
+ 'let a = GetGreeter_async(&ctx).await?;\nlet b = &a; // A borrow adds no owned lease.',
+ 'let c = a.clone(); // Independent owned reference.',
+ '// b cannot outlive a: the borrow checker enforces this.\ndrop(a); // Rust moves/Drop replace explicit double-close.',
+ 'drop(c);\nForgetGreeter_async(&ctx).await?;',
+]);
+add('L04','Python',[
+ '# BAML MakeCounter returns a closure capturing its counter.\npending = asyncio.create_task(MakeCounter_async(40))\nawait callee_returned.wait()  # Fixture pauses before host adoption.',
+ 'counter = await pending  # Adopt a checked BAML closure.',
+ 'value = await Apply_async(counter, 1)  # Pass it back unchanged.',
+ 'counter.close()  # Proposed unified callable ownership API.',
+]);
+bridge('L04',[
+ 'tx = encode_owned_view(baml_closure)\n// tx pins the original receiver and declaration.',
+ 'proxy = decode_and_adopt(tx)',
+ 'if is_checked_capability(proxy):\n    input = retain_original_view(proxy)\nelse:\n    input = adapt_explicit_host_implementation(proxy)',
+ 'release(input)\nrelease(proxy)\n// Never wrap a returned BAML closure in a new host callback.',
+]);
+add('L05','Python',[
+ 'client = ResponsesClient(...)  # Generated concrete client facade.',
+ 'task = asyncio.create_task(Extract_async(text, baml_options={"client": client}))\nawait call_admitted.wait()  # Fixture barrier: Client view retained.',
+ 'client.close()  # In-flight calls own independent leases.',
+ 'result = await task\n# Remaining BAML roots release their views when done.',
+]);
+add('L05','TypeScript',[
+ 'const client = new ResponsesClient(/* configuration */);',
+ 'const pending = Extract_async(text, {client});\nawait callAdmitted; // Fixture barrier; no client.as_client().',
+ 'client.close(); // An admitted call retains its own ownership.',
+ 'const result = await pending;\n// Final VM release can now reclaim the receiver.',
+]);
+bridge('L06',[
+ 'caller = checked_ref(V)  // Caller owns its original lease.',
+ 'tx = TransferArena()\ntx.retain(ref_in_first_field)\ntx.retain(ref_in_nested_array)',
+ 'try:\n    tx.encode(invalid_tail)\n    receiver.adopt_all(tx)\nexcept:\n    tx.rollback_all_unadopted()  // Caller ownership is untouched.',
+ 'caller.close()\nrelease_final_vm_root(V)',
+]);
+bridge('L07',[
+ 'call = admit(receiver)\ncall.retain_receiver_before_unlocking()',
+ 'proxy.close()  // Releases only the proxy lease.',
+ 'result = await host_callback(call.receiver)\n// call still owns everything the callback can access.',
+ 'complete_once(call, result)\ncall.release_after_actual_completion()',
+]);
+add('L07','Python',[
+ 'task = asyncio.create_task(ref.greet("Ada"))\nawait callback_started.wait()  # Fixture barrier: call is admitted.',
+ 'ref.close()  # Safe: the admitted call owns another lease.',
+ 'allow_callback_to_finish.set()\nmessage = await task',
+ '# Callback completion releases the final invocation lease.',
+]);
+bridge('L08',[
+ 'worker = admit_host_call(receiver)\nworker.retain_receiver()',
+ 'cancel_waiter_once(worker)\nrequest_cooperative_cancellation(worker)\n// Do not release the running worker\'s ownership.',
+ 'late_tx = await actual_worker_completion(worker)\n// May contain newly exported interfaces or callbacks.',
+ 'if waiter_already_completed(worker):\n    late_tx.discard_and_release_all()\nworker.release_receiver_once()',
+]);
+add('L09','TypeScript',[
+ 'const scope = await bamlSdk.bridgeScope();\nconst ref = await GreeterRef.bind(host, {scope});\nconst work = RunScoped_async(ref); // Fixture waits until admitted.',
+ 'const closing = scope.close(); // Revoke new calls immediately.',
+ 'ref.close();\n// closing still waits for actual admitted work and cleanup.',
+ 'await work.catch(handleCancellation);\nawait closing; // Only resolves after real drain.',
+]);
+bridge('L09',[
+ 'scope.state = OPEN\ncall = scope.admit_and_retain(receiver)',
+ 'scope.state = CLOSING  // Atomic with admission.\nscope.reject_new_calls()\nscope.request_cancellation()',
+ 'scope.retire_inactive_views()\n// Keep active-call roots until actual host work ends.',
+ 'await scope.drain_actual_work_and_cleanup()\nscope.state = CLOSED\nresolve_all_close_waiters_once()',
+]);
+bridge('L10',[
+ 'async host_callback(ctx):\n    // This call is itself part of ctx.scope.active_calls.',
+ '    await ctx.scope.close()\n    // BAD if close waits for this callback: self-deadlock.',
+ '// Proposed close policy:\nbegin_close(scope)  // Revoke without waiting.\nif current_call_is_in_drain_set(scope):\n    raise ScopeSelfDrainError  // Let this callback unwind.',
+ 'await outside_owner.close(scope)\n// An external waiter can now observe actual drain.',
+]);
+add('L11','Python',[
+ 'async with baml_sdk.bridge_scope() as scope:\n    host = HostState()\n    host.vm = await NewVmState_async()\n    ref = await HostStateRef.bind(host, scope=scope)\n    await host.vm.set_host(ref)\n    ref.close()  # Remove temporary binder ownership.',
+ '    del host, ref\n    # Separate collectors still see each other\'s bridge roots.',
+ '# Context exit awaits scope closure and actual work drain.\n# Retiring a bridge edge then makes this cycle collectible.',
+]);
+bridge('L11',[
+ 'H.owns(proxy_to(V))\nV.owns(interface_view_of(H))\nuser.owns(H)',
+ 'user.release(H)\ncollect_each_runtime_separately()\n// The cross-runtime cycle remains rooted.',
+ 'revoke_origin_scope()\nawait drain_actual_calls()\nretire_bridge_roots()\n// Removing a bridge edge makes this idle cycle collectible.',
+]);
+add('L12','Python',[
+ 'token = DetachedReleaseToken(runtime_generation, lease_id)\nfinalizer = weakref.finalize(proxy, enqueue_release, token)\n# token must not retain proxy or proxy.close.',
+ 'del proxy\n# If collected: finalize enqueues token. No await or BAML reentry.',
+ '# Runtime-owned release queue:\nrelease_once(token)  # Same token used by explicit proxy.close().',
+ '# Shutdown retires/drains the release table before executor teardown.\n# A later finalizer token is generation-checked and harmless.',
+], '', 'SDK implementation sketch, not code users need to write. Python collection timing is not a correctness oracle.');
+bridge('L13',[
+ 'token = {runtime: A, generation: 7, key: 12, witness: W}',
+ 'invoke_in(B, token)\n// Reject wrong runtime before adopting a lease or dispatching.',
+ 'await A.shutdown()\nretire_generation(7)\n// Surviving SDK wrappers are closed tombstones.',
+ 'new_token = {runtime: A2, generation: 8, key: 12, witness: W2}\ninvoke_in(A2, token) // Still rejected: old generation and owner.',
+]);
+bridge('L14',[
+ 'image = OwnedImageBuffer(bytes, "image/png")\nview = project_as_media(image, runtime)\n// Both retain the immutable buffer independently.',
+ 'await runtime.shutdown()\n// view is closed; image.bytes are still owned native data.',
+ 'drop(image)\n// Last engine-independent buffer owner releases the bytes.',
+]);
+add('L15','Python',[
+ 'async def greet(self, name):  # BAML → Python callback',
+ '    return await OtherBamlFunction_async(self, name)\n    # Python → BAML reentry, with independent call ownership.',
+ '# If the inner call throws: release its temporary transfer/call state.',
+ '# If the outer call propagates it: release that frame too.\n# Any adopted live children in an error retain their own leases.',
+]);
+bridge('L16',[
+ 'source = DeclaredImplementation(host, fixed_interface_bundle)',
+ 'A, B = concurrent_calls(source)\nentry = registry.singleflight(source, runtime, generation, scope)\n// Publish at most one registration for this key.',
+ 'cancel(A)\nA.release_own_obligations()\n// B still owns the shared publication and its call lease.',
+ 'B.complete_and_release()\nsource.close()\n// Failed initialization must roll back all staged ownership.',
+]);
+bridge('L17',[
+ 'ref_A = bind(host, scope=A)\nref_A.origin_scope = A',
+ 'ref_B = pass_or_project(ref_A, caller_scope=B)\nassert ref_B.origin_scope == A  // No authority laundering.',
+ 'A.begin_close()\ninvoke(ref_B) // Rejected even if B remains open.',
+ 'await A.drain_and_retire()\n// Drop registration roots; a native application owner survives.',
+ 'application.drop(host)\n// New explicit registration would have a distinct identity.',
+]);
+bridge('L18',[
+ 'T = transfers.prepare(owned_tokens)\n// T is the sole transfer owner.',
+ 'receiver.stage(T)\nreceiver.validate_entire_aggregate(T)\n// Nothing has escaped to user code.',
+ 'outcome = T.commit_or_cancel_atomically()\nif outcome == COMMITTED:\n    receiver.adopt_all(T)\nelse:\n    receiver.rollback_all(T)',
+ 'on_duplicate_or_lost_ack(T):\n    return ledger.recorded_outcome(T)\n    // Never duplicate-retain or double-release.',
+ 'receiver_proxy.close()\nretire_transaction_record_when_duplicate_delivery_is_safe(T)',
+]);
+bridge('L19',[
+ 'worker = spawn_native_work(receiver)\nworker.retain_receiver()',
+ 'scope.begin_close()\nrequest_cancel(worker)\n// Native work ignores cancellation and continues running.',
+ 'if close_timeout_expires():\n    report_incomplete_close()\n    retain_safe_runtime_and_worker_state()\n    // Never free storage still accessible by the worker.',
+]);
+add('L20','Python',[
+ 'connection = await open_connection()\nhost = DatabaseAdapter(connection)\nref = await DatabaseRef.bind(host)',
+ 'ref.close()\n# This releases a bridge reference; it does not own connection.close.',
+ 'await connection.aclose()  # Explicit application resource cleanup.',
+ 'del ref, host, connection\n# A separately specified owned-resource adapter could automate this.',
+]);
+const py={
+ M01:['saved = await counter.get_count()  # saved == 1','python_owner.count = 2  # Direct write to the retained native owner.','current = await ReadInBaml_async(counter)  # 2; saved is still 1.','await WriteInBaml_async(counter, 3)  # python_owner.count becomes 3.'],
+ M02:['counter = await GetCounter_async()  # A live proxy.','counter.count = 9  # Rejected: cannot create a shadow property.','await counter.set_count(9)  # Owner commits before success returns.'],
+ M03:['state = await MakeStateWithSharedFields_async()\n# state.items and state.also_items refer to the same list A.','items = await state.get_items()  # Checked ListRef to A.','await items.push(2)  # Both fields now observe [1, 2].','state.close()  # Child view still owns A.','items.close()  # Last remaining owner of A in this scenario.'],
+ M04:['state = await MakeState_async([1])\nold = await state.get_items()  # Alias to list A.','await state.set_items([99])  # New storage B from native data.','await old.push(2)  # A = [1, 2]; state.items still names B = [99].','state.close()  # Parent and its new B can be collected.','old.close()  # A can now be collected too.'],
+ M05:['state = await BindHostState_async(host)\nvm_items = await NewSharedList_async([7])','await state.set_items(vm_items)  # Retain B; do not copy into list.','await host.items.push(8)  # vm_items also observes [7, 8].','state.close()  # VM-owned B still has its own local reference.','vm_items.close()'],
+ M06:['result = await agent.run(spec)\n# Copied outer record; live result.journal.','await result.journal.append(entry)  # Mutates shared J.','result.journal = other_journal  # Local record replacement only.','# Drop all independent journal owners when done.\ndel result, other_journal\nawait ForgetEngineJournal_async()'],
+ M07:['counter = await NewCounter_async(0)','a = await counter.get_count()  # Task A reads 0.\nb = await counter.get_count()  # Task B also reads 0.','await counter.set_count(a + 1)  # Commits 1.','await counter.set_count(b + 1)  # Also commits 1: lost update.','await counter.set_count(0)  # Restart the comparison.','await asyncio.gather(counter.increment(), counter.increment())\n# Result 2 ONLY if increment implements synchronization.'],
+ M08:['counter = await NewCounter_async(1)','task = asyncio.create_task(counter.set_count(5))\nawait setter_admitted.wait()  # Fixture barrier.','await owner_committed.wait()  # Owner has already written 5.','task.cancel()\n# Cancellation is not rollback; the owner may already contain 5.'],
+ M09:['host = CounterModel(count=1)\nref = await CounterRef.bind(host)','await ref.set_count("2")  # Rejected; count stays 1.','object.__setattr__(host, "count", "invalid")  # Native bypass.','await ref.get_count()  # Rejected before producing a BAML int.','host.count = 2\nassert await ref.get_count() == 2'],
+ M10:['items = await NewSharedList_async([1])','copy = await items.to_value()  # Supported data only; detached.','copy.append(2)  # copy = [1, 2]; live list remains [1].','items.close()\nassert copy == [1, 2]  # No runtime needed for this native data.'],
+ M11:['parent = await GetScopedState_async()\nchild = await parent.get_items()','parent.close()\n# child still owns its storage while the scope remains open.','closing = asyncio.create_task(scope.close())\nawait scope_revoked.wait()  # Fixture barrier.\nawait child.push(2)  # Rejected after origin-scope revocation.','child.close()\nawait closing  # Resolves only after actual work drains.'],
+ M12:['items = await NewSharedList_async([])\n# Two tasks hold the same storage identity.','await items.push(1)  # Task A commits one operation.','await items.push(2)  # Task B commits one operation.\n# Both retained; reverse commit order could yield [2, 1].','# Multiple reads / iteration are NOT implicitly a transaction.\n# Specify their consistency independently of single-operation atomicity.'],
+ M13:['state = await MakeNestedState_async()\nold_child = await state.get_child()','await old_child.set_value(12)\nvalues = await state.get_values()\nawait values.set("a", 11)\nawait values.set("b", 2)\n# A BAML default method reads the updated child and map.','await state.set_child(Child(value=8))\nawait old_child.set_value(120)\n# Default method sees the NEW child value 8.','old_child.close()\nvalues.close()\nstate.close()'],
+};
+for(const [id,blocks]of Object.entries(py))add(id,'Python',blocks);
+add('M01','BAML',['let saved = counter.count; // saved == 1','// Host performs: python_owner.count = 2','let current = counter.count; // 2; saved remains 1','counter.count = 3; // Dispatches to the same host owner.']);
+add('M03','BAML',['// Fixture: state.items and state.also_items refer to list A.','let items = state.items; // A shared child, not a copy.','items.push(2); // Both fields observe [1, 2].','// Parent becomes unreachable; items still retains A.','// When items also becomes unreachable, A can be collected.']);
+add('M04','BAML',['let old = state.items; // A = [1]','state.items = [99]; // New list B','old.push(2); // A = [1, 2]; B stays [99]','// Parent becomes unreachable. B loses its parent edge.','// Old alias becomes unreachable. A loses its last edge.']);
+add('M05','BAML',['let baml_items = [7]; // Separate from host-owned state.items.','state.items = baml_items; // Foreign field must retain this identity.','// Host calls: await host.items.push(8)\n// baml_items is now [7, 8].','// Host parent is released; baml_items still owns the shared list.','// The last BAML alias becomes unreachable.']);
+add('M07','BAML',['// counter.count starts at 0.','let a = counter.count; // Task A\nlet b = counter.count; // Task B','counter.count = a + 1; // Task A writes 1.','counter.count = b + 1; // Task B also writes 1.','counter.count = 0;','counter.increment(); // Task A\ncounter.increment(); // Task B\n// Must use actual owner-side synchronization to guarantee 2.']);
+add('M04','TypeScript',['const state = await MakeState_async([1]);\nconst old = await state.get_items(); // List A','await state.set_items([99]); // New list B','await old.push(2); // A = [1, 2]; B = [99]','state.close(); // Drops the parent, not the old alias.','old.close();']);
+add('M04','Rust',['let state = MakeState_async(vec![1], &ctx).await?;\nlet old = state.get_items(&ctx).await?; // List A','state.set_items(vec![99], &ctx).await?; // Native initializer → B','old.push(2, &ctx).await?; // A changes; B stays [99].','drop(state); // old still owns A.','drop(old);']);
+add('M01','TypeScript',['const saved = await counter.get_count(); // 1','nativeOwner.count = 2;','const current = await ReadInBaml_async(counter); // 2','await WriteInBaml_async(counter, 3); // Native owner now has 3.']);
+add('M01','Rust',['let saved = counter.get_count(&ctx).await?; // 1','host.count.store(2, Ordering::SeqCst); // Example atomic owner storage.','let current = ReadInBaml_async(&counter, &ctx).await?; // 2','WriteInBaml_async(&counter, 3, &ctx).await?; // Host storage becomes 3.']);
+add('M02','TypeScript',['const counter = await GetCounter_async();','counter.count = 9; // TS error and JS runtime guard.','await counter.set_count(9);']);
+add('M02','Rust',['let counter = GetCounter_async(&ctx).await?;','counter.count = 9; // Compile error: no assignable proxy field.','counter.set_count(9, &ctx).await?;']);
+add('M03','TypeScript',['const state = await MakeStateWithSharedFields_async();','const items = await state.get_items(); // ListRef, not number[]','await items.push(2); // Both fields observe [1, 2].','state.close();','items.close();']);
+add('M03','Rust',['let state = MakeStateWithSharedFields_async(&ctx).await?;','let items = state.get_items(&ctx).await?; // Shared child','items.push(2, &ctx).await?;','drop(state); // items remains usable.','drop(items);']);
+add('M10','TypeScript',['const items = await NewSharedList_async([1]);','const copy = await items.to_value(); // Native number[]','copy.push(2); // Does not mutate shared storage.','items.close();\n// copy remains [1, 2].']);
+add('M10','Rust',['let items = NewSharedList_async(vec![1], &ctx).await?;','let mut copy = items.to_value(&ctx).await?; // Native Vec','copy.push(2); // No shared-storage mutation.','drop(items);\nassert_eq!(copy, vec![1, 2]);']);
+if(typeof module!=='undefined'&&module.exports)module.exports=examples;else root.BamlReviewExamples=examples;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+</script>
+<script>
+(function () {
+'use strict';
+const {cases}=globalThis.BamlReview;
+const examples=globalThis.BamlReviewExamples;
+let preferredLanguage="Python";
+const $=id=>document.getElementById(id);
+const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const format=value=>typeof value==='string'?value:JSON.stringify(value);
+const storageKey='baml-interface-review-v1';
+let saved={},persist=true;
+try {const x=JSON.parse(localStorage.getItem(storageKey)||'{}');if(x&&typeof x==='object'&&!Array.isArray(x))saved=x;}catch{persist=false;}
+let selected=0,step=0;
+const record=id=>saved[id]&&typeof saved[id]==='object'?saved[id]:{status:'unreviewed',notes:'',step:0};
+const status=id=>['reviewed','discuss'].includes(record(id).status)?record(id).status:'unreviewed';
+function save(){try{localStorage.setItem(storageKey,JSON.stringify(saved));}catch{persist=false;}$('savehint').textContent=persist?'Notes stay in this browser. Export them to keep or share a copy.':'Browser storage is unavailable. Notes remain in this open page; export before closing.';}
+function updateRecord(values){const id=cases[selected].id;saved[id]={...record(id),...values};save();}
+function nav(){
+ const count=cases.filter(c=>status(c.id)!=='unreviewed').length;
+ $('progress').textContent=`${count} of ${cases.length} cases assessed`;
+ $('caselist').innerHTML=['Lifetime','Mutation'].map(group=>`<h3>${group} · ${cases.filter(c=>c.group===group).length}</h3>`+cases.filter(c=>c.group===group).map(c=>`<button class="navcase" data-case="${c.id}" aria-current="${c.id===cases[selected].id}"><span class="caseid">${c.id}</span><span class="navtitle">${esc(c.title)}</span><span class="navmark ${status(c.id)}" aria-label="${status(c.id)}">${status(c.id)==='reviewed'?'✓':status(c.id)==='discuss'?'?':c.decision?'◇':'·'}</span></button>`).join('')).join('');
+ $('casepicker').innerHTML=['Lifetime','Mutation'].map(group=>`<optgroup label="${group}">`+cases.filter(c=>c.group===group).map(c=>`<option value="${c.id}" ${c.id===cases[selected].id?'selected':''}>${c.id} · ${esc(c.title)}${c.decision?' ◇':''}</option>`).join('')+'</optgroup>').join('');
+}
+function navigate(index,newstep,scroll=false){selected=Math.max(0,Math.min(cases.length-1,index));step=Math.max(0,Math.min(cases[selected].frames.length-1,newstep??(Number(record(cases[selected].id).step)||0)));render();if(scroll)$('main').scrollIntoView({block:'start',behavior:'smooth'});}
+function nodeContent(o,edges){const n=edges.filter(e=>e.to===o.id).length;return `<div class="nodekind">${esc(o.id)} · ${esc(o.kind)}</div><div class="nodelabel">${esc(o.label)}</div><div class="nodevalue">${esc(format(o.value))}</div><div class="nodefoot">${o.status==='released'?'Released in model':`${n} ownership ${n===1?'edge':'edges'}`}</div>`;}
+function draw(){
+ const f=cases[selected].frames[step],g=$('graph'),objects=Object.values(f.objects),edges=Object.values(f.edges),outside=edges.filter(e=>!e.from),internal=edges.filter(e=>e.from),width=g.clientWidth;
+ if(!width)return;
+ g.innerHTML='';
+ if(width<660){
+  g.style.height='auto';g.innerHTML=objects.map(o=>`<div class="node ${esc(o.kind)} ${o.status==='released'?'released':''}" style="position:relative;width:100%;margin:8px 0">${nodeContent(o,edges)}</div>`).join('')+edges.map(e=>`<div class="mobile-edge"><strong>${esc(e.from?f.objects[e.from].label+' · '+e.label:e.label)}</strong><span aria-hidden="true">→</span><small>${esc(f.objects[e.to].label)}<br>${esc(e.kind==='lease'?'owned lease':e.kind==='reach'?'stored reference':e.kind==='pending'?'active operation':'native ownership')}</small></div>`).join('')+(edges.length?'':'<p class="modelnote">No live ownership edges remain in this scenario.</p>');return;
+ }
+ const three=internal.length>0,columns=three?3:2,gap=three?60:120,box=Math.min(245,(width-gap*(columns-1))/columns);
+ const x=[0,three?(width-box)/2:width-box,width-box];
+ const groups=[[],[],[]];
+ outside.forEach(e=>groups[0].push({id:'owner:'+e.id,label:e.label,kind:e.kind,owner:true,edge:e}));
+ objects.forEach((o,i)=>groups[three?(i===0?1:2):1].push({...o,owner:false}));
+ const heights=groups.map(list=>list.length*118),contentHeight=Math.max(235,...heights)+22;
+ const bypass=three?outside.filter(e=>e.to!==objects[0].id):[];
+ const height=contentHeight+(bypass.length?30+15*bypass.length:0);g.style.height=height+'px';
+ const coords={};
+ groups.forEach((list,col)=>list.forEach((item,i)=>{const top=(contentHeight-heights[col])/2+i*118;const el=document.createElement('div');el.className='node '+(item.owner?'owner':item.kind)+(item.status==='released'?' released':'');el.style.cssText=`left:${x[col]}px;top:${top}px;width:${box}px`;el.dataset.node=item.id;
+ el.innerHTML=item.owner?`<div class="nodekind">${esc(item.kind==='lease'?'owned bridge lease':item.kind==='pending'?'active operation':item.kind==='reach'?'VM reachability':'native ownership')}</div><div class="nodelabel">${esc(item.label)}</div>`:nodeContent(item,edges);g.appendChild(el);coords[item.id]={x:x[col],y:top,w:box,h:el.offsetHeight};}));
+ const paths=[];edges.forEach((e,i)=>{const a=coords[e.from||'owner:'+e.id],b=coords[e.to];if(!a||!b)return;let d,lx,ly;
+ if(three&&!e.from&&b.x===x[2]){const track=contentHeight+15*bypass.findIndex(v=>v.id===e.id),sx=a.x+a.w,sy=a.y+a.h/2,tx=b.x,ty=b.y+b.h/2;d=`M ${sx} ${sy} L ${sx+18} ${sy} L ${sx+18} ${track} L ${tx-18} ${track} L ${tx-18} ${ty} L ${tx} ${ty}`;lx=(sx+tx)/2;ly=track-6;}
+ else if(a.x===b.x){const side=Math.min(width-8,a.x+a.w+28+i*8),sx=a.x+a.w,sy=a.y+a.h/2,ty=b.y+b.h/2;d=`M ${sx} ${sy} C ${side} ${sy}, ${side} ${ty}, ${sx} ${ty}`;lx=side;ly=(sy+ty)/2;}
+ else {const forwards=a.x<b.x,peers=edges.filter(v=>v.from===e.from&&v.to===e.to),offset=(peers.findIndex(v=>v.id===e.id)-(peers.length-1)/2)*28+(e.from?(forwards?12:-12):0),sx=forwards?a.x+a.w:a.x,tx=forwards?b.x:b.x+b.w,sy=a.y+a.h/2+offset,ty=b.y+b.h/2+offset,mid=(sx+tx)/2;d=`M ${sx} ${sy} C ${mid} ${sy}, ${mid} ${ty}, ${tx} ${ty}`;lx=mid;ly=(sy+ty)/2-7;}
+ const label=e.from?e.label:'';const labelw=Math.max(24,label.length*6.4+8);
+ paths.push(`<path class="connection ${esc(e.kind)}" d="${d}" marker-end="url(#arrow)"><title>${esc(e.label)} → ${esc(f.objects[e.to].label)}</title></path>`+(label?`<rect class="edge-label-bg" x="${lx-labelw/2}" y="${ly-11}" width="${labelw}" height="17" rx="3"/><text class="edge-label" x="${lx}" y="${ly+1}" text-anchor="middle">${esc(label)}</text>`:''));
+ });
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','connections');svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('aria-hidden','true');svg.innerHTML=`<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge)"/></marker></defs>${paths.join('')}`;g.prepend(svg);
+}
+function drawCode(){
+ const options=examples[cases[selected].id],language=options[preferredLanguage]?preferredLanguage:Object.keys(options)[0],example=options[language];
+ $('codelanguages').innerHTML=Object.keys(options).map(lang=>`<button class="langbutton" data-language="${esc(lang)}" aria-pressed="${lang===language}">${esc(lang)}</button>`).join('');
+ $('sourcecode').innerHTML=example.lines.map((line,i)=>`<span class="sourceline ${line.step===step?'active':''}" ${line.step===step?'aria-current="step"':''}><span class="lineno" aria-hidden="true">${i+1}</span><span class="sourcecontent ${/^\s*(#|\/\/)/.test(line.text)?'sourcecomment':''}">${esc(line.text)||' '}</span></span>`).join('');
+ $('codecaption').textContent=example.note+' The highlighted block corresponds to this diagram step.';
+ const first=$('sourcecode').querySelector('.active');if(first)$('sourcecode').scrollTop=Math.max(0,first.offsetTop-$('sourcecode').offsetTop-35);
+}
+$('codelanguages').addEventListener('click',e=>{const b=e.target.closest('[data-language]');if(b){preferredLanguage=b.dataset.language;drawCode();}});
+function render(){const c=cases[selected],f=c.frames[step];
+ $('casekicker').innerHTML=`<span>${c.id} / ${c.group}</span><span class="badge">Design model</span>${c.decision?'<span class="badge warning">Policy to review</span>':''}${c.limit?'<span class="badge warning">Retention limit</span>':''}`;
+ $('casetitle').textContent=c.title;$('summary').textContent=c.summary;$('evidence').textContent=c.evidence.label+' ↗';$('evidence').href=c.evidence.href;
+ $('position').textContent=`Step ${step+1} of ${c.frames.length}`;$('back').disabled=step===0;$('next').disabled=step===c.frames.length-1;
+ $('stepdots').innerHTML=c.frames.map((v,i)=>`<button class="stepdot ${i===step?'current':i<step?'done':''}" data-step="${i}" aria-label="Step ${i+1}: ${esc(v.title)}" ${i===step?'aria-current="step"':''}></button>`).join('');
+ $('stagetitle').textContent=f.title;$('detail').textContent=f.detail;
+ $('scope').innerHTML=`Origin scope: <strong>${f.scope==='open'?'open':f.scope==='closed'?'closed':'closing / operations revoked'}</strong>`;
+ $('ledger').innerHTML=`<strong>${Object.keys(f.edges).length}</strong> active ownership ${Object.keys(f.edges).length===1?'edge':'edges'}`;
+ $('locals').innerHTML=Object.entries(f.vars).map(([key,value])=>`<div class="local"><label>${esc(key)}</label><code>${esc(format(value))}</code></div>`).join('');
+ $('warning').hidden=!f.warning;$('warning').textContent=f.warning;drawCode();
+ $('checks').innerHTML=f.checks.map(check=>`<li><span class="tick">${check.pass?'✓':'✕'}</span><span>${esc(check.label)}</span></li>`).join('');$('gate').textContent=c.gate;
+ $('reviewstatus').value=status(c.id);$('notes').value=typeof record(c.id).notes==='string'?record(c.id).notes:'';
+ $('previouscase').disabled=selected===0;$('nextcase').disabled=selected===cases.length-1;
+ updateRecord({step});try{history.replaceState(null,'',`#${c.id}/${step+1}`);}catch{}nav();draw();
+}
+$('caselist').addEventListener('click',e=>{const b=e.target.closest('[data-case]');if(b)navigate(cases.findIndex(c=>c.id===b.dataset.case),undefined,false);});
+$('casepicker').addEventListener('change',e=>navigate(cases.findIndex(c=>c.id===e.target.value),undefined,false));
+$('stepdots').addEventListener('click',e=>{const b=e.target.closest('[data-step]');if(b)navigate(selected,Number(b.dataset.step));});
+$('back').addEventListener('click',()=>navigate(selected,step-1));$('next').addEventListener('click',()=>navigate(selected,step+1));
+$('previouscase').addEventListener('click',()=>navigate(selected-1,undefined,true));$('nextcase').addEventListener('click',()=>navigate(selected+1,undefined,true));
+$('reviewstatus').addEventListener('change',e=>{updateRecord({status:e.target.value});nav();});$('notes').addEventListener('input',e=>updateRecord({notes:e.target.value}));
+$('overview').addEventListener('click',()=>{$('about').open=true;$('about').scrollIntoView({behavior:'smooth',block:'start'});});
+$('export').addEventListener('click',()=>{const data={artifact:'BAML interface lifetime and mutation review',schema:1,exportedAt:new Date().toISOString(),scope:'Design assessments; not runtime test results',cases:cases.map(c=>({id:c.id,title:c.title,assessment:status(c.id),notes:record(c.id).notes||'',lastStep:Number(record(c.id).step||0)+1,policyToReview:!!c.decision}))};const json=JSON.stringify(data,null,2);if($('downloadjson').href.startsWith('blob:'))URL.revokeObjectURL($('downloadjson').href);$('downloadjson').href=URL.createObjectURL(new Blob([json],{type:'application/json'}));$('reviewjson').value=json;$('exportpanel').hidden=false;$('exportpanel').scrollIntoView({behavior:'smooth',block:'start'});});
+$('selectjson').addEventListener('click',()=>{$('reviewjson').focus();$('reviewjson').select();});
+$('closeexport').addEventListener('click',()=>{$('exportpanel').hidden=true;$('main').scrollIntoView({behavior:'smooth',block:'start'});});
+function fromHash(){const match=location.hash.match(/^#([LM]\d{2})(?:\/(\d+))?$/);if(match){const index=cases.findIndex(c=>c.id===match[1]);if(index>=0){navigate(index,match[2]?Number(match[2])-1:undefined);return;}}navigate(0,0);}
+window.addEventListener('hashchange',fromHash);let lastWidth=0;new ResizeObserver(entries=>{const w=entries[0].contentRect.width;if(Math.abs(w-lastWidth)>.5){lastWidth=w;draw();}}).observe($('graph'));
+fromHash();
+})();
+
+</script>
+</body>
+</html>

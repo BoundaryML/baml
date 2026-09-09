@@ -261,6 +261,7 @@ impl PromptAssembly {
             Ok(None) => return self.finish(vm),
         };
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee,
             args: vec![],
             type_args: vec![],

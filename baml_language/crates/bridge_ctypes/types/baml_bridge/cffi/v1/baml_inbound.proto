@@ -92,10 +92,37 @@ message InboundEnumValue {
 message BamlTyArg {
   string type_var = 1; // TypeVar name, e.g. "T", "A"
   BamlTy type_value = 2; // the concrete binding
-  // Preferred for a runtime reflected type. Mutually exclusive with
-  // `type_value` by convention; retained as separate fields for backwards
-  // compatibility with already generated SDKs.
+  // Explicit portable definition: importing it creates fresh runtime types.
   BamlTyDef type_definition = 3;
+  // Borrowed session reference to an engine-owned reflected type. Exactly one
+  // of type_value, type_definition or type_reference must be present.
+  optional uint64 type_reference = 4;
+}
+
+// Type arguments for a method are ordered by its checked declaration. Live
+// references preserve identity; definitions explicitly create fresh types.
+// Each BamlTyArg.type_var must be empty on this positional path.
+message InterfaceMethodTarget {
+  uint64 view = 1;
+  string member = 2;
+  repeated BamlTyArg type_args = 3;
+}
+
+// A compiler-selected method on a concrete class.
+// The receiver is borrowed and pinned during preparation. Class variables in
+// interface_pattern index the receiver's stored class arguments, never the
+// host's method arguments. The engine checks the exact class declaration and
+// complete obligation before invoking the concrete implementation contract.
+message ConcreteMethodTarget {
+  uint64 receiver = 1;
+  string class_name = 2;
+  oneof dispatch {
+    BamlTy interface_pattern = 3;
+    // Must be true when selected; a missing dispatch is an invalid request.
+    bool inherent = 6;
+  }
+  string member = 4;
+  repeated BamlTyArg type_args = 5;
 }
 
 message CallFunctionArgs {
@@ -113,6 +140,8 @@ message CallFunctionArgs {
   oneof call_target {
     string function_name = 4;
     uint64 function_handle = 5;
+    InterfaceMethodTarget interface_method = 6;
+    ConcreteMethodTarget concrete_method = 7;
   }
 }
 
@@ -122,5 +151,69 @@ message CallFunctionArgs {
 message CallAck {
   oneof response {
     string error = 1;
+  }
+}
+
+// Host adapter registration. No host callbacks are acquired at this stage.
+// Template type-var index 0 denotes Self. Index n+1 selects type_args[n].
+// Type arguments are positional and shared across the whole registration;
+// definitions are materialized once, references retain their issuing identity.
+message RegisterHostAdapterRequest {
+  string name = 1;
+  repeated HostAdapterImplementation implementations = 2;
+  repeated BamlTyArg type_args = 3;
+}
+message HostAdapterImplementation {
+  BamlTy interface_template = 1;
+  repeated string methods = 2;
+}
+message RegisteredHostAdapter {
+  BamlOutboundHandle adapter_type = 1;
+  BamlOutboundHandle class_type = 2;
+  repeated HostAdapterCallbackSlot callbacks = 3;
+  // Exact checked interface types in request implementation order, including
+  // interfaces with no callbacks. Borrow these when projecting a new instance;
+  // importing a portable type definition again would create different types.
+  repeated BamlOutboundHandle interface_types = 4;
+}
+message HostAdapterCallbackSlot {
+  // Index into RegisterHostAdapterRequest.implementations. The pair of this
+  // index and method identifies an operation even when obligations share names.
+  uint32 implementation_index = 3;
+  string method = 1;
+  reserved 2; // interface type is owned once in interface_types above
+}
+// adapter_type is borrowed and pinned by synchronous preparation. Receiver
+// and callbacks transfer their occurrences as one batch, including on failure.
+message CreateHostAdapterRequest {
+  uint64 adapter_type = 1;
+  InboundValue receiver = 2;
+  repeated InboundValue callbacks = 3;
+}
+// The receiver is borrowed and retained during preparation. Type evidence has
+// the same named/definition/reference semantics as method type arguments.
+message ProjectInterfaceRequest {
+  uint64 receiver = 1;
+  BamlTyArg interface_type = 2;
+}
+
+// Private SDK administrative channel. Each request selects exactly one
+// operation; preparation consumes create-input transfers before admission.
+message HostOperationRequest {
+  oneof operation {
+    RegisterHostAdapterRequest register = 1;
+    CreateHostAdapterRequest create = 2;
+    ProjectInterfaceRequest project = 3;
+  }
+}
+
+// Carried by the same owned delivery/receipt as ordinary call results.
+// Registration metadata is not a BAML value. Failure reuses the ordinary
+// structured error/panic envelope (its ok arm is never produced here).
+message HostOperationResult {
+  oneof result {
+    RegisteredHostAdapter registered = 1;
+    BamlOutboundValue value = 2;
+    BamlOutboundResult failure = 3;
   }
 }

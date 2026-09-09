@@ -14,6 +14,7 @@ pub(crate) struct PyMethodBinding {
     /// Collision-allocated Python identifier for the method's direct, spec,
     /// or stream role. The async role conventionally ends in `_async`.
     pub(crate) py_name: String,
+    pub(crate) concrete_target: Option<ConcreteTarget>,
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,
     pub(crate) mode: SyncAsync,
@@ -110,4 +111,11 @@ impl PyMethodBinding {
         names.extend(self.required_names());
         names
     }
+}
+
+/// Static compiler selector. None pattern means inherent dispatch.
+pub(crate) struct ConcreteTarget {
+    pub(crate) class_name: String,
+    pub(crate) member: String,
+    pub(crate) interface_pattern: Option<Vec<u8>>,
 }

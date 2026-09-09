@@ -13,7 +13,7 @@ function prompt_parameter.$init_test_ns_prompt_parameter_prompt_parameter(regist
     return
 }
 
-function prompt_parameter.Echo.echo(self: prompt_parameter.Echo, prompt: string) -> string {
+function prompt_parameter.Echo.echo(self: #0, prompt: string) -> string {
     load_var prompt
     return
 }

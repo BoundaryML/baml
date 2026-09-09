@@ -17,7 +17,9 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Any change to a Borsh-derived type reachable from `Program` or
 /// `PackageInterface` bumps this. The same rule applies to other payload types
 /// stored in this envelope, such as the `baml pack` dispatch envelope.
-pub const FORMAT_VERSION: u32 = 2;
+/// Version 6 preserves interface method generic frames and bounds, including
+/// required methods without a function body.
+pub const FORMAT_VERSION: u32 = 7;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.
@@ -81,6 +83,16 @@ impl fmt::Display for ArtifactKind {
 }
 
 pub type Hash = [u8; 32];
+
+/// Exact identity of the artifact shipped with a generated SDK. The loader
+/// must validate the artifact before attaching this identity to an engine.
+/// This is bundle pairing, not declaration identity or a compatibility hash.
+pub fn sdk_bundle_id(artifact: &[u8]) -> Hash {
+    let mut hash = Sha256::new();
+    hash.update(b"baml.sdk.bundle.v1\0");
+    hash.update(artifact);
+    hash.finalize().into()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 struct ArtifactHeader {

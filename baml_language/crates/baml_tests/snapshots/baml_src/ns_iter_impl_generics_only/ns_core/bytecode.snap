@@ -571,7 +571,7 @@ function iter_impl_generics_only.core.ArrayIterator.new(arr: #0[]) -> iter_impl_
     return
 }
 
-function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<#1, #2>, other: iter_impl_generics_only.core.Iterator<#1, #2>) -> iter_impl_generics_only.core.Iterator<#1, #2> {
+function iter_impl_generics_only.core.Iterator.chain(self: #0, other: iter_impl_generics_only.core.Iterator<#1, #2>) -> iter_impl_generics_only.core.Iterator<#1, #2> {
     load_var2 1 2
     load_const false
     load_type #1
@@ -580,7 +580,7 @@ function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_on
     return
 }
 
-function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> #1[] {
+function iter_impl_generics_only.core.Iterator.collect(self: #0) -> #1[] {
     load_type #1
     alloc_array 0
     store_var r
@@ -610,7 +610,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     return
 }
 
-function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> int {
+function iter_impl_generics_only.core.Iterator.count(self: #0) -> int {
     load_const 0
     store_var n
 
@@ -639,7 +639,7 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     return
 }
 
-function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
+function iter_impl_generics_only.core.Iterator.every(self: #0, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -668,7 +668,7 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     return
 }
 
-function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3> {
+function iter_impl_generics_only.core.Iterator.filter(self: #0, predicate: (#1) -> bool throws #3) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3> {
     load_var2 1 2
     load_type #1
     load_type #2
@@ -677,7 +677,7 @@ function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_o
     return
 }
 
-function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> #3 | null throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
+function iter_impl_generics_only.core.Iterator.filter_map(self: #0, fn: (#1) -> #3 | null throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -687,7 +687,7 @@ function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generi
     return
 }
 
-function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> #1 | null {
+function iter_impl_generics_only.core.Iterator.find(self: #0, predicate: (#1) -> bool throws #3) -> #1 | null {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -717,7 +717,7 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     return
 }
 
-function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> iter_impl_generics_only.core.Iterable<#3, #5> throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4 | #5> {
+function iter_impl_generics_only.core.Iterator.flat_map(self: #0, fn: (#1) -> iter_impl_generics_only.core.Iterable<#3, #5> throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4 | #5> {
     load_var2 1 2
     alloc_instance user.iter_impl_generics_only.core.Done
     load_type #1
@@ -729,7 +729,7 @@ function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics
     return
 }
 
-function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> #3 throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
+function iter_impl_generics_only.core.Iterator.map(self: #0, fn: (#1) -> #3 throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -739,7 +739,7 @@ function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only
     return
 }
 
-function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> iter_impl_generics_only.core.Peekable<#1, #2> {
+function iter_impl_generics_only.core.Iterator.peekable(self: #0) -> iter_impl_generics_only.core.Peekable<#1, #2> {
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     load_const false
@@ -749,7 +749,7 @@ function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics
     return
 }
 
-function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
+function iter_impl_generics_only.core.Iterator.reduce(self: #0, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
     load_var initial
     store_var acc
 
@@ -778,7 +778,7 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     return
 }
 
-function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
+function iter_impl_generics_only.core.Iterator.some(self: #0, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -806,7 +806,7 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     return
 }
 
-function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<#1, #2>, n: int) -> iter_impl_generics_only.core.Iterator<#1, #2> {
+function iter_impl_generics_only.core.Iterator.step_by(self: #0, n: int) -> iter_impl_generics_only.core.Iterator<#1, #2> {
     load_var2 1 2
     load_const true
     load_type #1

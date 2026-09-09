@@ -336,11 +336,9 @@ fn syntactic_union(members: &[Ty]) -> Ty {
     }
 }
 
-/// TIR's `function_params_runtime_compatible`, verbatim: same arity,
-/// same modes, and OPTIONAL parameters keep their names (named at the
-/// call site and in the runtime's defaulted-slot filling); required
-/// parameters may rename freely.
-fn function_params_runtime_compatible(
+/// Same value-slot layout: equal arity and modes, with the same optional
+/// names in the same positions. Required parameters may rename freely.
+fn function_params_same_layout(
     source: &[baml_type::interned::FunctionParam],
     target: &[baml_type::interned::FunctionParam],
 ) -> bool {
@@ -482,11 +480,10 @@ pub struct Adjustment {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Adjust {
-    /// The optional-parameter adapter: a function value satisfies its
-    /// expectation by SUBTYPING but not by RUNTIME SHAPE (arity, mode,
-    /// or optional-parameter names drift), so lowering synthesizes an
-    /// adapter closure (TIR's `function_coercion_for` rule).
-    FunctionAdapter,
+    /// A legal function subtype with different optional parameter slots.
+    /// The call site records its checked shape; dispatch maps to the target.
+    /// This adjustment does not allocate a wrapper around the function value.
+    FunctionShape,
     /// A condition position holding a non-`bool` value (B-1563): lowering
     /// synthesizes the truthiness test (`null`/`false`/zero/empty are
     /// falsy) so the branch itself stays strict-bool.
@@ -506,6 +503,7 @@ pub struct CallPlan {
     /// Required parameters with no argument get no entry (the arity
     /// diagnostic is S17's).
     pub bindings: Vec<ParamBinding>,
+    pub argument_layout: baml_type::CallLayout,
     /// The callee's solved generic instantiation in declared De Bruijn
     /// order (owner frame prefix + own suffix). Recorded raw at the
     /// instantiation site; ground after writeback.
@@ -2182,7 +2180,7 @@ impl<'db> InferenceContext<'db> {
                     arg: expr,
                     expected: expected.clone(),
                 });
-                self.record_checked_function_adapter(expr, &ty, expected);
+                self.record_checked_function_shape(expr, &ty, expected);
             } else {
                 self.result
                     .type_mismatches
@@ -2208,7 +2206,7 @@ impl<'db> InferenceContext<'db> {
                 self.provisional_checks
                     .push((expr, expected.clone(), ty.clone()));
             }
-            self.record_checked_function_adapter(expr, &ty, expected);
+            self.record_checked_function_shape(expr, &ty, expected);
         }
         ty
     }
@@ -2229,15 +2227,15 @@ impl<'db> InferenceContext<'db> {
     /// structurally at MIR lowering; every checked position funnels
     /// through `check_expr`, so this one probe covers TIR's five
     /// recording sites. Fires only on an ACCEPTED check whose value and
-    /// expectation are both function-shaped but runtime-incompatible
-    /// (TIR's `function_coercion_for`): lowering must synthesize an
-    /// adapter closure. Target selection runs only after the subtype check
+    /// expectation are both function-shaped with different optional slots.
+    /// Dispatch uses the caller layout without wrapping the value.
+    /// Target selection runs only after the subtype check
     /// succeeds and uses the actual function to disambiguate union arms.
-    fn record_checked_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
-        let Some(adapter_expected) = self.function_adapter_target(got, expected) else {
+    fn record_checked_function_shape(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
+        let Some(adapter_expected) = self.function_shape_target(got, expected) else {
             return;
         };
-        self.record_function_adapter(expr, got, &adapter_expected);
+        self.record_function_shape(expr, got, &adapter_expected);
     }
 
     /// The concrete target an accepted function value must implement at
@@ -2245,7 +2243,7 @@ impl<'db> InferenceContext<'db> {
     /// union, select only a single concrete function arm that the actual
     /// function semantically satisfies; erased or competing arms must not make
     /// adapter lowering guess.
-    fn function_adapter_target(&mut self, actual: &Ty, expected: &Ty) -> Option<Ty> {
+    fn function_shape_target(&mut self, actual: &Ty, expected: &Ty) -> Option<Ty> {
         let actual = self.table.resolve_completely(actual);
         let actual = self.expand_alias_ty(&actual);
         if !matches!(actual.kind(), TyKind::Function { .. }) {
@@ -2366,7 +2364,7 @@ impl<'db> InferenceContext<'db> {
         compatible
     }
 
-    fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
+    fn record_function_shape(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
         let got = self.table.resolve_completely(got);
         let got = self.expand_alias_ty(&got);
         let TyKind::Function { params: source, .. } = got.kind() else {
@@ -2377,13 +2375,13 @@ impl<'db> InferenceContext<'db> {
         let TyKind::Function { params: target, .. } = target_fn.kind() else {
             return;
         };
-        if function_params_runtime_compatible(source, target) {
+        if function_params_same_layout(source, target) {
             return;
         }
         self.result.expr_adjustments.insert(
             expr,
             Box::new([Adjustment {
-                kind: Adjust::FunctionAdapter,
+                kind: Adjust::FunctionShape,
                 target: target_fn.clone(),
             }]),
         );
@@ -5756,6 +5754,8 @@ impl<'db> InferenceContext<'db> {
             })
             .collect();
         let plan = self.result.call_plans.entry(call).or_default();
+        plan.argument_layout =
+            baml_type::CallLayout::from_modes(params.iter().map(|p| (p.name.clone(), p.mode)));
         plan.bindings = bindings;
         plan.runtime_id = runtime_id;
         ret
@@ -8002,46 +8002,12 @@ impl<'db> InferenceContext<'db> {
     /// use. rust-analyzer expands aliases at lowering so every consumer sees
     /// the target; our lazy-alias design expands at the demand point.
     fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
-        let ty = match prefix {
-            [single] => match single.as_str() {
-                "int" => Ty::intern(TyKind::Int {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bigint" => Ty::intern(TyKind::Bigint {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "float" => Ty::intern(TyKind::Float {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "string" => Ty::intern(TyKind::String {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bool" => Ty::intern(TyKind::Bool {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "uint8array" => Ty::intern(TyKind::Uint8Array {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "image" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Image,
-                    baml_type::TyAttr::default(),
-                )),
-                "audio" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Audio,
-                    baml_type::TyAttr::default(),
-                )),
-                "video" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Video,
-                    baml_type::TyAttr::default(),
-                )),
-                "pdf" => Ty::intern(TyKind::Media(
-                    baml_type::MediaKind::Pdf,
-                    baml_type::TyAttr::default(),
-                )),
-                _ => self.lower_scoped_type_path(prefix),
-            },
-            _ => self.lower_scoped_type_path(prefix),
+        let builtin = match prefix {
+            [single] => baml_type::compiler_aliases::by_spelling(single.as_str())
+                .and_then(|alias| alias.lower_class(&[])),
+            _ => None,
         };
+        let ty = builtin.unwrap_or_else(|| self.lower_scoped_type_path(prefix));
         if ty.has_error() {
             return None;
         }

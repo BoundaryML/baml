@@ -17,6 +17,7 @@ from typing_extensions import Sentinel
 
 from .baml_py import (
     BamlCallContext,
+    BamlEncodedResult,
     BamlPyHandle,
     BamlRuntime,
     Collector as _RustCollector,
@@ -29,8 +30,8 @@ from .baml_py import (
     cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
-    get_bridge_runtime_version,
-    get_toolchain_version,
+    get_bridge_runtime_version as get_bridge_runtime_version,
+    get_toolchain_version as get_toolchain_version,
     get_version,
     new_function_call,
     register_unhandled_spawn_error_callback,
@@ -58,6 +59,7 @@ from .typemap import (
     BamlTypeMap,
     set_type_map,
     get_type_map,
+    _using_type_map,
 )
 
 
@@ -66,7 +68,9 @@ atexit.register(flush_events)
 atexit.register(shutdown_runtime)
 
 
-def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
+def _handle_unhandled_spawn_error(
+    error_bytes: BamlEncodedResult, cancelled: bool
+) -> None:
     try:
         decode_call_result(error_bytes)
     except BaseException as error:
@@ -183,9 +187,11 @@ def _detach_call_ctx(call_ctx: Any, call_id: int) -> None:
         call_ctx._detach_call_id(call_id)
 
 
-def _decode_call_result_async(result_bytes: bytes) -> Any:
+def _decode_call_result_async(
+    result_bytes: bytes | BamlEncodedResult, *, type_map: BamlTypeMap | None = None
+) -> Any:
     try:
-        return decode_call_result(result_bytes)
+        return decode_call_result(result_bytes, type_map=type_map)
     except (BamlError, BamlPanic) as exc:
         if getattr(exc, "class_name", None) != _CANCELLED_PANIC_CLASS:
             raise
@@ -202,7 +208,7 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 # call_function / call_function_sync — explicit-runtime helpers kept for
 # the bridge tests. Generated code uses the three-arg factories below
-# instead, which fetch the runtime lazily via `get_runtime()`.
+# with an explicit SDK runtime binding and typemap.
 # ---------------------------------------------------------------------------
 
 
@@ -238,8 +244,8 @@ async def call_function(
 # Factories consumed by generated `baml_sdk.*` leaves.
 # Every factory captures `param_names` by closure; no runtime lookup on
 # the call path (09b2 §2). The runtime is fetched lazily via
-# `get_runtime()`, so constructing a factory has no sequencing constraint
-# relative to `BamlRuntime.initialize_runtime(...)`.
+# `get_runtime()` only when no SDK binding was supplied. Generated factories
+# capture the binding created during their SDK's initialization.
 # ---------------------------------------------------------------------------
 
 Mode = Literal["sync", "async"]
@@ -468,12 +474,18 @@ def define_function(
     binding_name: Optional[str] = None,
     binding_qualname: Optional[str] = None,
     binding_module: Optional[str] = None,
+    runtime: Optional[BamlRuntime] = None,
+    type_map: Optional[BamlTypeMap] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML callable (free function, static method, or
     instance method). Captures the call contract by closure; returns a
     callable that zips positional args against `required_param_names`,
     accepts optional parameters by keyword, encodes them, and hands the
     result to `decode_call_result`.
+
+    Generated code also supplies its runtime binding and typemap. Keeping this
+    function alive does not keep a closed runtime heap alive, and replacing the
+    process default cannot retarget its calls or result decoding.
 
     For instance methods, `required_param_names[0]` is `"self"` — Python's
     descriptor protocol supplies the receiver as positional arg 0 when
@@ -498,6 +510,24 @@ def define_function(
     host_to_wire_param_names = dict(param_aliases or {})
     is_generic = bool(type_param_names or class_type_param_names)
 
+    def _prepare_arguments(call_kwargs, types_kwarg):
+        selected_map = type_map if type_map is not None else get_type_map()
+        # Reverse lookups for records, enums and generic type tokens use this
+        # SDK's map even when another SDK changed the process default.
+        with _using_type_map(selected_map):
+            type_args = (
+                _build_type_args(
+                    call_kwargs, types_kwarg, type_param_names, class_type_param_names
+                )
+                if is_generic
+                else None
+            )
+            call_id = new_function_call()
+            encoded = encode_call_args(
+                call_kwargs, call_id, type_args, function_name=baml_fqn
+            )
+        return call_id, encoded, selected_map
+
     def _set_binding_metadata(call: Callable[..., Any]) -> None:
         if binding_name is not None:
             call.__name__ = binding_name
@@ -519,30 +549,16 @@ def define_function(
                 host_to_wire_param_names,
             )
             call_kwargs = merged
-            type_args = (
-                _build_type_args(
-                    call_kwargs,
-                    types_kwarg,
-                    type_param_names,
-                    class_type_param_names,
-                )
-                if is_generic
-                else None
-            )
-            rt = get_runtime()
-            call_id = new_function_call()
-            args_proto = encode_call_args(
-                call_kwargs,
-                call_id,
-                type_args,
-                function_name=baml_fqn,
+            rt = runtime if runtime is not None else get_runtime()
+            call_id, args_proto, selected_map = _prepare_arguments(
+                call_kwargs, types_kwarg
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
                 result_bytes = rt.call_function_sync(args_proto, None, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
-            return decode_call_result(result_bytes)
+            return decode_call_result(result_bytes, type_map=selected_map)
 
         _set_binding_metadata(_sync)
         return _maybe_generic_callable(_sync, type_param_names)
@@ -559,34 +575,20 @@ def define_function(
                 host_to_wire_param_names,
             )
             call_kwargs = merged
-            type_args = (
-                _build_type_args(
-                    call_kwargs,
-                    types_kwarg,
-                    type_param_names,
-                    class_type_param_names,
-                )
-                if is_generic
-                else None
-            )
-            rt = get_runtime()
-            call_id = new_function_call()
-            args_proto = encode_call_args(
-                call_kwargs,
-                call_id,
-                type_args,
-                function_name=baml_fqn,
+            rt = runtime if runtime is not None else get_runtime()
+            call_id, args_proto, selected_map = _prepare_arguments(
+                call_kwargs, types_kwarg
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
                     result_bytes = await rt.call_function(args_proto, None, None)
                 except asyncio.CancelledError:
-                    cancel_function_call(call_id)
+                    rt.cancel_function_call(call_id)
                     raise
             finally:
                 _detach_call_ctx(call_ctx, call_id)
-            return _decode_call_result_async(result_bytes)
+            return _decode_call_result_async(result_bytes, type_map=selected_map)
 
         _set_binding_metadata(_async)
         return _maybe_generic_callable(_async, type_param_names)

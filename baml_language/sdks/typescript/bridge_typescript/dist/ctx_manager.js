@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 // ctx_manager.ts — mirrors bridge_python/python_src/baml_py/ctx_manager.py
 // Uses AsyncLocalStorage for async context isolation (Node.js built-in).
 import { AsyncLocalStorage } from 'node:async_hooks';

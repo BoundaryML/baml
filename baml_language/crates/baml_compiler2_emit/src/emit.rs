@@ -2341,6 +2341,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Call {
+                argument_layout,
                 callee,
                 args,
                 ntypeargs,
@@ -2389,22 +2390,35 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // the offending call rather than its final nested operand.
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
+                    if let Some(layout) = argument_layout {
+                        self.bytecode.call_layouts.insert(inst, layout.clone());
+                    }
                     if let Some(item) = &callee_item {
                         self.set_operand(inst, OperandMeta::Callable(item.to_string()));
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else {
+                    assert!(
+                        argument_layout.is_some(),
+                        "indirect calls require an explicit caller layout"
+                    );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
                     if let Some(runtime_id) = runtime_id {
                         unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
                         self.set_debug_span(call_span, false);
-                        self.emit(Instruction::CallIndirectWithRuntimeId);
+                        let inst = self.emit(Instruction::CallIndirectWithRuntimeId);
+                        if let Some(layout) = argument_layout {
+                            self.bytecode.call_layouts.insert(inst, layout.clone());
+                        }
                     } else {
                         self.set_debug_span(call_span, false);
-                        self.emit(Instruction::CallIndirect);
+                        let inst = self.emit(Instruction::CallIndirect);
+                        if let Some(layout) = argument_layout {
+                            self.bytecode.call_layouts.insert(inst, layout.clone());
+                        }
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);

@@ -142,7 +142,15 @@ pub fn callable_throws<'db>(
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     if let Some(throws_ref) = data.throws {
         let frame = crate::lower::function_generic_frame(db, function);
-        let ctx = crate::lower::lower_ctx_for_file(db, function.file(db)).with_frame(frame);
+        // A throwing effect has the same owner/bound scope as the rest of
+        // the signature. A frame alone cannot resolve `Self.Error` in a
+        // default method or `T.Error` on a bounded method parameter.
+        let impl_target = crate::lower::owner_impl_target(db, function, &frame);
+        let ctx = crate::lower::lower_ctx_for_file(db, function.file(db))
+            .with_frame(frame)
+            .with_bounds(crate::lower::function_generic_bounds(db, function))
+            .with_self_ty(crate::lower::owner_self_ty(db, function))
+            .with_impl_target(impl_target);
         let lowered = ctx.lower_type_ref(&data.type_refs, throws_ref);
         // A PARTIAL clause (`throws T | _`, spec Functions rule 3) keeps
         // inferring: fall through to the body run, whose finalize unions

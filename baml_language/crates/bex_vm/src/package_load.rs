@@ -30,6 +30,22 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
+impl crate::BexVm {
+    /// Private heap owner for a runtime-created concrete type and its methods.
+    /// The caller fills its class/rule tables before exposing any value. It is
+    /// not installed as a global package or a strong registry root.
+    pub fn alloc_private_type_owner(&mut self) -> HeapPtr {
+        use bex_heap::TlabHolder;
+        self.tlab_mut().alloc(Object::Package(Box::new(Package {
+            kind: PackageKind::Runtime(Box::new(bex_vm_types::types::RuntimePackage {
+                initialized: true,
+                ..Default::default()
+            })),
+            ..Default::default()
+        })))
+    }
+}
+
 /// One anonymous-class witness in the dynamic dispatch table.
 ///
 /// Both pointers are **weak**: the table never keeps a minted definition or its
@@ -63,6 +79,18 @@ impl DynDispatchTables {
             .entry(interface)
             .or_default()
             .push(entry);
+    }
+
+    /// Publish an already validated registration in one write. Readers can
+    /// observe either the old table or the complete batch, never a prefix.
+    pub(crate) fn register_batch(&self, entries: Vec<(HeapPtr, DynRuleEntry)>) {
+        let mut table = self
+            .impl_rules
+            .write()
+            .expect("dynamic-impl table lock poisoned");
+        for (interface, entry) in entries {
+            table.entry(interface).or_default().push(entry);
+        }
     }
 
     /// The witness rules registered for `interface`, as pointers to their heap

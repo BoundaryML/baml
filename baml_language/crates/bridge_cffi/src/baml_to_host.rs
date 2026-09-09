@@ -3,8 +3,8 @@
 //! `BamlOutboundResult` envelope.
 //!
 //! The whole classify-and-encode lives here, in the bridge — not in bex.
-//! Both the C-ABI entry point (`call_function` in `lib.rs`) and the PyO3 path
-//! (`bridge_python`'s `runtime.rs`) call [`call_and_encode`], so the
+//! C, Python, Node, Java and Wasm call [`prepare_call`] and
+//! [`invoke_prepared`], so the
 //! `catch_unwind` → `SdkPanic` boundary and the error/panic routing are
 //! defined exactly once. Every result — ok value, thrown error, panic, and
 //! pre-call host-boundary failure — leaves the bridge as one envelope; there is
@@ -24,11 +24,10 @@ use bex_project::{
     UnhandledSpawnError,
 };
 use bridge_ctypes::{
-    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+    CffiHandleTableEntry, CffiHandleTableOptions, EncodedTransfer, HANDLE_TABLE, OutboundEncoder,
     baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
-    external_to_outbound,
 };
 use futures::future::FutureExt;
 use indexmap::IndexMap;
@@ -84,10 +83,10 @@ fn is_panic_value(value: &BexExternalValue) -> bool {
 /// carries the message as a single trace line.
 fn sdk_panic_arm(
     message: String,
-    options: &CffiHandleTableOptions,
+    encoder: &mut OutboundEncoder<'_>,
 ) -> baml_outbound_result::Result {
     let value = message_instance(SDK_PANIC_CLASS, message.clone());
-    match external_to_outbound(&value, options) {
+    match encoder.encode(&value) {
         Ok(ob) => baml_outbound_result::Result::Panic(BamlOutboundPanic {
             value: Some(ob),
             trace: Vec::new(),
@@ -112,14 +111,14 @@ fn sdk_panic_arm(
 /// `baml.errors.*` class by its caller.
 fn infra_error_arm(
     value: BexExternalValue,
-    options: &CffiHandleTableOptions,
+    encoder: &mut OutboundEncoder<'_>,
 ) -> baml_outbound_result::Result {
-    match external_to_outbound(&value, options) {
+    match encoder.encode(&value) {
         Ok(ob) => baml_outbound_result::Result::Error(BamlOutboundError {
             value: Some(ob),
             trace: Vec::new(),
         }),
-        Err(e) => sdk_panic_arm(format!("failed to encode error value: {e}"), options),
+        Err(e) => sdk_panic_arm(format!("failed to encode error value: {e}"), encoder),
     }
 }
 
@@ -128,10 +127,10 @@ fn infra_error_arm(
 fn thrown_arm(
     value: BexExternalValue,
     trace: Vec<String>,
-    options: &CffiHandleTableOptions,
+    encoder: &mut OutboundEncoder<'_>,
 ) -> baml_outbound_result::Result {
     let is_panic = is_panic_value(&value);
-    match external_to_outbound(&value, options) {
+    match encoder.encode(&value) {
         Ok(ob) if is_panic => baml_outbound_result::Result::Panic(BamlOutboundPanic {
             value: Some(ob),
             trace,
@@ -142,7 +141,7 @@ fn thrown_arm(
             value: Some(ob),
             trace,
         }),
-        Err(e) => sdk_panic_arm(format!("failed to encode thrown value: {e}"), options),
+        Err(e) => sdk_panic_arm(format!("failed to encode thrown value: {e}"), encoder),
     }
 }
 
@@ -150,15 +149,26 @@ fn thrown_arm(
 /// `BamlOutboundResult` envelope. The only genuinely new logic is the
 /// namespace check (error vs panic) and synthesizing infra classes for the
 /// host-originated failures that never entered the VM as throws; value
-/// materialization is reused verbatim via [`external_to_outbound`].
+/// materialization is reused verbatim via [`OutboundEncoder`].
 pub fn result_to_outbound(
     result: Result<BexExternalValue, RuntimeError>,
     options: &CffiHandleTableOptions,
 ) -> BamlOutboundResult {
+    let mut encoder = OutboundEncoder::new(*options);
+    let result = encode_result_to_outbound(result, &mut encoder);
+    encoder.finish(result).into_unreceipted()
+}
+
+/// Receipt-ready classification. Failed value encodes roll back before the
+/// fallback error is encoded into this aggregate.
+pub fn encode_result_to_outbound(
+    result: Result<BexExternalValue, RuntimeError>,
+    encoder: &mut OutboundEncoder<'_>,
+) -> BamlOutboundResult {
     let inner = match result {
-        Ok(value) => match external_to_outbound(&value, options) {
+        Ok(value) => match encoder.encode(&value) {
             Ok(ob) => baml_outbound_result::Result::Ok(ob),
-            Err(e) => sdk_panic_arm(format!("failed to encode return value: {e}"), options),
+            Err(e) => sdk_panic_arm(format!("failed to encode return value: {e}"), encoder),
         },
 
         // Clean `baml.sys.exit(code)` — the engine pulled the code out before
@@ -166,14 +176,14 @@ pub fn result_to_outbound(
         // value and set the exit discriminator so the host exits the process.
         Err(RuntimeError::Engine(EngineError::Exit { code })) => {
             let value = one_field_instance(EXIT_CLASS, "code", BexExternalValue::Int(code));
-            match external_to_outbound(&value, options) {
+            match encoder.encode(&value) {
                 Ok(ob) => baml_outbound_result::Result::Panic(BamlOutboundPanic {
                     value: Some(ob),
                     trace: Vec::new(),
                     is_exit_panic: true,
                     exit_code: code,
                 }),
-                Err(e) => sdk_panic_arm(format!("failed to encode exit value: {e}"), options),
+                Err(e) => sdk_panic_arm(format!("failed to encode exit value: {e}"), encoder),
             }
         }
 
@@ -185,7 +195,7 @@ pub fn result_to_outbound(
                     .iter()
                     .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
             );
-            thrown_arm(*value, lines, options)
+            thrown_arm(*value, lines, encoder)
         }
 
         // 🟥 A value/type mismatch at the call boundary is a *caller* type error,
@@ -196,27 +206,32 @@ pub fn result_to_outbound(
         // evidence that must be specified, conflicting variance occurrences) and
         // ordinary argument-conversion mismatches alike.
         Err(RuntimeError::Engine(EngineError::TypeMismatch { message })) => {
-            infra_error_arm(message_instance(TYPE_MISMATCH_CLASS, message), options)
+            infra_error_arm(message_instance(TYPE_MISMATCH_CLASS, message), encoder)
         }
+
+        Err(RuntimeError::Engine(err @ EngineError::FunctionNotFound { .. })) => infra_error_arm(
+            message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
+            encoder,
+        ),
 
         // Every other 🟥 engine/VM-internal failure → one opaque `SdkPanic`,
         // its `Display` (incl. any formatted VM trace) carried as `message`.
-        Err(RuntimeError::Engine(engine_err)) => sdk_panic_arm(engine_err.to_string(), options),
+        Err(RuntimeError::Engine(engine_err)) => sdk_panic_arm(engine_err.to_string(), encoder),
 
         // 🟥 `RuntimeError` direct arms → fine-grained `baml.errors.*`.
         Err(RuntimeError::Other(s)) => {
-            infra_error_arm(message_instance(GENERIC_SDK_ERROR_CLASS, s), options)
+            infra_error_arm(message_instance(GENERIC_SDK_ERROR_CLASS, s), encoder)
         }
         Err(err @ RuntimeError::InvalidArgument { .. }) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
-            options,
+            encoder,
         ),
         Err(RuntimeError::Compilation { message }) => {
-            infra_error_arm(message_instance(COMPILATION_ERROR_CLASS, message), options)
+            infra_error_arm(message_instance(COMPILATION_ERROR_CLASS, message), encoder)
         }
         Err(RuntimeError::Access(inner)) => infra_error_arm(
             message_instance(ACCESS_ERROR_CLASS, inner.to_string()),
-            options,
+            encoder,
         ),
     };
 
@@ -225,8 +240,10 @@ pub fn result_to_outbound(
     }
 }
 
-pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_wire();
+pub fn unhandled_spawn_error_to_outbound(
+    error: UnhandledSpawnError,
+) -> EncodedTransfer<'static, Vec<u8>> {
+    let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
     let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
         (
             frame.file_path.as_str(),
@@ -234,10 +251,12 @@ pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> 
             frame.function_name.as_str(),
         )
     }));
-    BamlOutboundResult {
-        result: Some(thrown_arm(error.value, trace, &options)),
-    }
-    .encode_to_vec()
+    let result = BamlOutboundResult {
+        result: Some(thrown_arm(error.value, trace, &mut encoder)),
+    };
+    encoder
+        .finish(result)
+        .map_payload(|result| result.encode_to_vec())
 }
 
 /// Encode a pre-call host-boundary [`BridgeError`] as `BamlOutboundResult`
@@ -252,36 +271,47 @@ pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> 
 /// `GenericSdkError` (setup / internal), reusing the same synthesis helpers —
 /// no new construction logic.
 pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_wire();
+    error_to_outbound_encoded(err).into_unreceipted()
+}
+
+pub fn error_to_outbound_encoded(err: BridgeError) -> EncodedTransfer<'static, Vec<u8>> {
+    error_to_outbound_message(err).map_payload(|result| result.encode_to_vec())
+}
+
+pub(crate) fn error_to_outbound_message(
+    err: BridgeError,
+) -> EncodedTransfer<'static, BamlOutboundResult> {
+    let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
     let inner = match err {
         // Reuse the engine-error mapping verbatim for the wrapped RuntimeError.
-        BridgeError::Runtime(rt) => result_to_outbound(Err(rt), &options)
+        BridgeError::Runtime(rt) => encode_result_to_outbound(Err(rt), &mut encoder)
             .result
             .expect("result_to_outbound always sets the result oneof"),
 
         // Bad function name / arguments → InvalidArgument.
         err @ (BridgeError::Ctypes(_)
         | BridgeError::MissingCallTarget
+        | BridgeError::InvalidInvocation(_)
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::MissingArgument { .. }
         | BridgeError::InvalidCallId) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
-            &options,
+            &mut encoder,
         ),
 
         // Setup / internal host failures (NotInitialized, ProjectNotInitialized,
         // LockPoisoned, NotImplemented, DuplicateCallId, Internal) → GenericSdkError.
         err => infra_error_arm(
             message_instance(GENERIC_SDK_ERROR_CLASS, err.to_string()),
-            &options,
+            &mut encoder,
         ),
     };
 
-    BamlOutboundResult {
+    let result = BamlOutboundResult {
         result: Some(inner),
-    }
-    .encode_to_vec()
+    };
+    encoder.finish(result)
 }
 
 /// Render a caught panic payload into a message for `baml.panics.SdkPanic`.
@@ -303,43 +333,266 @@ fn panic_message(panic_info: &(dyn std::any::Any + Send)) -> String {
 /// `BamlOutboundPanic` envelope as a call-time panic — uniform with every other
 /// result.
 pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_wire();
-    BamlOutboundResult {
-        result: Some(sdk_panic_arm(panic_message(panic_info), &options)),
-    }
-    .encode_to_vec()
+    panic_to_outbound_message(panic_info)
+        .map_payload(|result| result.encode_to_vec())
+        .into_unreceipted()
 }
 
-/// Call a BAML function and encode the result as `BamlOutboundResult` bytes.
-///
-/// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
-/// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
-/// in Python), not an opaque ABI panic. A panic during *encoding* (outside the
-/// inner `catch_unwind` but still rare) escapes this function; the C-ABI entry
-/// point keeps its own outer `catch_unwind` for that (encoding via
-/// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
-/// `PanicException`.
-pub async fn call_and_encode(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-
-    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
-        .catch_unwind()
-        .await;
-
-    let result = match caught {
-        Ok(call_result) => result_to_outbound(call_result, &options),
-        Err(panic_info) => BamlOutboundResult {
-            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
-        },
+pub(crate) fn panic_to_outbound_message(
+    panic_info: &(dyn std::any::Any + Send),
+) -> EncodedTransfer<'static, BamlOutboundResult> {
+    let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
+    let result = BamlOutboundResult {
+        result: Some(sdk_panic_arm(panic_message(panic_info), &mut encoder)),
     };
+    encoder.finish(result)
+}
 
-    result.encode_to_vec()
+/// Fully prepared calls own their temporary receiver/type pins before the
+/// platform yields to an executor. SDK reference disposal cannot invalidate
+/// an already prepared call. The engine still checks runtime provenance.
+pub struct PreparedCall {
+    target: PreparedTarget,
+    args: BexArgs,
+    context: FunctionCallContext,
+}
+
+enum PreparedTarget {
+    Named(String),
+    Callable(bex_project::Handle),
+    ConcreteMethod(bex_project::ConcreteMethodCall),
+    Method {
+        view: Arc<bex_project::InterfaceValue>,
+        member: String,
+        type_args: Vec<bex_project::TypeArgument>,
+    },
+}
+
+pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
+    let result = prepare_call_inner(bytes);
+    if result.is_err() {
+        // Preparation holds no heap permit. A rejected call never reaches the
+        // engine's normal safepoint, so flush its queued host releases here.
+        bex_project::host_release_dispatch::drain();
+    }
+    result
+}
+
+fn prepare_call_inner(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget};
+    let call = CallFunctionArgs::decode(bytes).map_err(bridge_ctypes::CtypesError::from)?;
+    // A parsed envelope transfers the whole argument batch, even if target or
+    // type validation fails before any value is decoded.
+    let inputs = bridge_ctypes::InboundTransfer::capture_kwargs(&call.kwargs, &HANDLE_TABLE);
+    if call.call_id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
+    let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
+    if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
+        return Err(BridgeError::FunctionHandleTypeArgs);
+    }
+    if matches!(
+        target,
+        CallTarget::InterfaceMethod(_) | CallTarget::ConcreteMethod(_)
+    ) && !call.type_args.is_empty()
+    {
+        return Err(BridgeError::InvalidInvocation(
+            "method type arguments belong to its target".into(),
+        ));
+    }
+    let bindings = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
+    let context = crate::function_call_context_builder(bex_project::CallId(call.call_id))
+        .with_type_bindings(bindings)
+        .build();
+    // Pin target references before decoding values or yielding to the host executor.
+    let target = match target {
+        CallTarget::FunctionName(name) => PreparedTarget::Named(name),
+        CallTarget::FunctionHandle(key) => {
+            let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
+                BridgeError::InvalidInvocation("callable reference is closed".into())
+            })?;
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::Callable,
+                heap_handle,
+                ..
+            }) = &*entry
+            else {
+                return Err(BridgeError::InvalidInvocation(
+                    "reference is not a callable".into(),
+                ));
+            };
+            // Required argument names belong to the checked callable descriptor
+            // retained in this entry; host-supplied type decoration is unused.
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                ty: bex_project::RuntimeTy::Function { params, .. },
+                ..
+            }) = &*entry
+            else {
+                return Err(BridgeError::InvalidInvocation(
+                    "callable has no realized signature".into(),
+                ));
+            };
+            let kwargs = inputs.decode_kwargs(call.kwargs)?;
+            let args = partition_callable_args(
+                key,
+                params.iter().enumerate().map(|(index, p)| {
+                    (
+                        p.name
+                            .as_ref()
+                            .map_or_else(|| format!("arg{index}"), ToString::to_string),
+                        p.is_required(),
+                    )
+                }),
+                kwargs.into_iter().collect(),
+            )?;
+            return Ok(PreparedCall {
+                target: PreparedTarget::Callable(heap_handle.clone()),
+                args,
+                context,
+            });
+        }
+        CallTarget::InterfaceMethod(method) => {
+            let entry = HANDLE_TABLE.resolve(method.view).ok_or_else(|| {
+                BridgeError::InvalidInvocation("interface reference is closed".into())
+            })?;
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::Interface(view)) = &*entry
+            else {
+                return Err(BridgeError::InvalidInvocation(
+                    "reference is not an interface view".into(),
+                ));
+            };
+            if method.type_args.iter().any(|arg| !arg.type_var.is_empty()) {
+                return Err(BridgeError::InvalidInvocation(
+                    "method type arguments are positional; type_var must be empty".into(),
+                ));
+            }
+            let type_args = method
+                .type_args
+                .iter()
+                .map(bridge_ctypes::proto_type_argument)
+                .collect::<Result<Vec<_>, _>>()?;
+            PreparedTarget::Method {
+                view: view.clone(),
+                member: method.member,
+                type_args,
+            }
+        }
+        CallTarget::ConcreteMethod(method) => {
+            let entry = HANDLE_TABLE.resolve(method.receiver).ok_or_else(|| {
+                BridgeError::InvalidInvocation("concrete reference is closed".into())
+            })?;
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::ConcreteObject,
+                heap_handle,
+                ..
+            }) = &*entry
+            else {
+                return Err(BridgeError::InvalidInvocation(
+                    "reference is not a concrete object".into(),
+                ));
+            };
+            if method.class_name.is_empty() || method.member.is_empty() {
+                return Err(BridgeError::InvalidInvocation(
+                    "concrete method requires a class and member".into(),
+                ));
+            }
+            if method.type_args.iter().any(|arg| !arg.type_var.is_empty()) {
+                return Err(BridgeError::InvalidInvocation(
+                    "method type arguments are positional; type_var must be empty".into(),
+                ));
+            }
+            use bridge_ctypes::baml_bridge::cffi::concrete_method_target::Dispatch;
+            let interface_pattern = match &method.dispatch {
+                Some(Dispatch::InterfacePattern(pattern)) => {
+                    let pattern = bridge_ctypes::proto_ty_to_runtime_ty(pattern)?;
+                    if !matches!(pattern, bex_project::RuntimeTy::Interface(..)) {
+                        return Err(BridgeError::InvalidInvocation(
+                            "concrete method obligation must be an interface".into(),
+                        ));
+                    }
+                    Some(pattern)
+                }
+                Some(Dispatch::Inherent(true)) => None,
+                _ => {
+                    return Err(BridgeError::InvalidInvocation(
+                        "concrete method requires explicit dispatch".into(),
+                    ));
+                }
+            };
+            let type_args = method
+                .type_args
+                .iter()
+                .map(bridge_ctypes::proto_type_argument)
+                .collect::<Result<Vec<_>, _>>()?;
+            PreparedTarget::ConcreteMethod(bex_project::ConcreteMethodCall {
+                receiver: heap_handle.clone(),
+                class: bex_project::TypeName::from_dotted_path(&method.class_name),
+                interface_pattern,
+                member: method.member,
+                type_args,
+            })
+        }
+    };
+    let args = inputs.decode_kwargs(call.kwargs)?.into();
+    Ok(PreparedCall {
+        target,
+        args,
+        context,
+    })
+}
+
+pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u8> {
+    invoke_prepared_encoded(runtime, call)
+        .await
+        .into_unreceipted()
+}
+
+/// Invoke through the same classifier as every native adapter, retaining the
+/// encoded result until its transport stages and adopts/discards ownership.
+pub async fn invoke_prepared_encoded(
+    runtime: Arc<dyn Bex>,
+    call: PreparedCall,
+) -> EncodedTransfer<'static, Vec<u8>> {
+    let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
+    let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
+    let caught = AssertUnwindSafe(async move {
+        match call.target {
+            PreparedTarget::Named(name) => {
+                runtime.call_function(&name, call.args, call.context).await
+            }
+            PreparedTarget::Callable(handle) => {
+                runtime.call_callable(handle, call.args, call.context).await
+            }
+            PreparedTarget::ConcreteMethod(target) => {
+                let mut args = call.args.required;
+                args.extend(call.args.optional);
+                runtime
+                    .call_concrete_method(target, args, call.context)
+                    .await
+            }
+            PreparedTarget::Method {
+                view,
+                member,
+                type_args,
+            } => {
+                let mut args = call.args.required;
+                args.extend(call.args.optional);
+                runtime
+                    .call_interface_method(view, &member, type_args, args, call.context)
+                    .await
+            }
+        }
+    })
+    .catch_unwind()
+    .await;
+    let result = match caught {
+        Ok(result) => encode_result_to_outbound(result, &mut encoder),
+        Err(panic) => BamlOutboundResult {
+            result: Some(sdk_panic_arm(panic_message(panic.as_ref()), &mut encoder)),
+        },
+    }
+    .encode_to_vec();
+    encoder.finish(result)
 }
 
 fn partition_callable_args(
@@ -369,65 +622,6 @@ fn partition_callable_args(
     Ok(BexArgs { required, optional })
 }
 
-/// Invoke an engine-owned callable referenced by an ordinary handle-table key
-/// and encode the result through the same envelope path as a named call.
-pub async fn call_handle_and_encode(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    BexArgs { required, optional }: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    let mut supplied = required;
-    supplied.extend(optional);
-    let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
-        Some(entry) => match &*entry {
-            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
-                kind: bex_project::TaggedHeapHandleKind::Callable,
-                ty: bex_project::RuntimeTy::Function { params, .. },
-                heap_handle,
-            }) => {
-                let params = params.iter().enumerate().map(|(index, parameter)| {
-                    (
-                        parameter
-                            .name
-                            .as_ref()
-                            .map_or_else(|| format!("arg{index}"), ToString::to_string),
-                        parameter.is_required(),
-                    )
-                });
-                let args = match partition_callable_args(handle_key, params, supplied) {
-                    Ok(args) => args,
-                    Err(err) => return error_to_outbound(err),
-                };
-                (heap_handle.clone(), args)
-            }
-            _ => {
-                return error_to_outbound(BridgeError::Internal(
-                    "handle does not reference a BAML callable".to_string(),
-                ));
-            }
-        },
-        None => {
-            return error_to_outbound(BridgeError::Internal(
-                "callable handle is no longer live".to_string(),
-            ));
-        }
-    };
-
-    let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
-        .catch_unwind()
-        .await;
-    let result = match caught {
-        Ok(call_result) => result_to_outbound(call_result, &options),
-        Err(panic_info) => BamlOutboundResult {
-            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
-        },
-    };
-    result.encode_to_vec()
-}
-
 #[cfg(test)]
 mod tests {
     use bridge_ctypes::baml_bridge::cffi::{
@@ -438,6 +632,81 @@ mod tests {
 
     use super::{error_to_outbound, partition_callable_args};
     use crate::BridgeError;
+
+    #[test]
+    fn staged_thrown_host_value_retains_registration_until_discard() {
+        use bex_project::{
+            BexExternalValue, EngineError, HostValueArc, HostValueKind, RuntimeError,
+        };
+        use bridge_ctypes::{
+            CffiHandleTableOptions, HANDLE_TABLE, OutboundEncoder, TransferSession,
+        };
+        use std::sync::Arc;
+
+        let host = HostValueArc::new(9101, HostValueKind::Opaque);
+        let weak = Arc::downgrade(&host);
+        let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
+        let result = super::encode_result_to_outbound(
+            Err(RuntimeError::Engine(EngineError::UnhandledThrow {
+                value: Box::new(BexExternalValue::HostValue(host)),
+                trace: vec![],
+            })),
+            &mut encoder,
+        );
+        assert!(matches!(
+            result.result,
+            Some(baml_outbound_result::Result::Error(_))
+        ));
+        let session = TransferSession::new(&HANDLE_TABLE);
+        let (receipt, _) = session
+            .stage(
+                encoder
+                    .finish(result)
+                    .map_payload(|value| value.encode_to_vec()),
+            )
+            .unwrap()
+            .handoff();
+        assert!(weak.upgrade().is_some());
+        session.discard(receipt).unwrap();
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn failed_return_encoding_stages_only_the_fallback_panic() {
+        use bex_project::{BexExternalValue, RuntimeTy};
+        use bridge_ctypes::{
+            CffiHandleTableOptions, HANDLE_TABLE, OutboundEncoder, TransferSession,
+        };
+        use std::sync::Arc;
+
+        let resource = Arc::new(());
+        let weak = Arc::downgrade(&resource);
+        let value = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                BexExternalValue::RustData(resource),
+                BexExternalValue::union(
+                    BexExternalValue::Bool(true),
+                    [RuntimeTy::int(), RuntimeTy::float()],
+                    RuntimeTy::bool(),
+                ),
+            ],
+        };
+        let mut encoder = OutboundEncoder::new(CffiHandleTableOptions::for_wire());
+        let result = super::encode_result_to_outbound(Ok(value), &mut encoder);
+        assert!(matches!(
+            result.result,
+            Some(baml_outbound_result::Result::Panic(_))
+        ));
+        assert!(
+            weak.upgrade().is_none(),
+            "failed root's resource must not survive in fallback ledger"
+        );
+        let session = TransferSession::new(&HANDLE_TABLE);
+        let (receipt, _) = session.stage(encoder.finish(result)).unwrap().handoff();
+        session.adopt(receipt, &[]).unwrap();
+        assert_eq!(session.pending_count(), 0);
+    }
 
     #[test]
     fn function_handle_type_args_are_classified_as_invalid_argument() {

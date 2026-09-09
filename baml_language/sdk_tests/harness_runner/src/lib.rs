@@ -255,6 +255,88 @@ fn run_test_cmd_with_env_allowing_exit_codes(
     );
 }
 
+/// Run Cargo for a generated Rust fixture from the BAML workspace root.
+/// Structured arguments preserve paths containing spaces. The manifest pin is
+/// mandatory so failed codegen cannot select the outer SDK harness recursively.
+pub fn run_rust_fixture_cargo(fixture: &str, args: &[&str], extra_env: &[(&str, &str)]) {
+    let sdk_manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via nextest"),
+    );
+    let manifest = sdk_manifest.join(fixture).join("generated/Cargo.toml");
+    assert!(
+        manifest.is_file(),
+        "{} is missing — check build_diagnostics; refusing to run Cargo without it",
+        manifest.display(),
+    );
+    let workspace_root = workspace_root_from_manifest(&sdk_manifest);
+    let mut command = rust_fixture_cargo_command(workspace_root, &manifest, args);
+    command.env(
+        "CARGO_TARGET_DIR",
+        workspace_root.join("target/sdk-rust-target"),
+    );
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+    let output = command.output().unwrap_or_else(|error| {
+        panic!("failed to spawn Cargo for Rust fixture {fixture}: {error}")
+    });
+    assert!(
+        output.status.success(),
+        "Rust fixture {fixture} cargo {args:?} failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+fn rust_fixture_cargo_command(workspace_root: &Path, manifest: &Path, args: &[&str]) -> Command {
+    let mut command = Command::new("cargo");
+    // The manifest option belongs before rustc/clippy/test-binary arguments.
+    let split = args
+        .iter()
+        .position(|arg| *arg == "--")
+        .unwrap_or(args.len());
+    command
+        .args(&args[..split])
+        .arg("--manifest-path")
+        .arg(manifest);
+    command.args(&args[split..]).current_dir(workspace_root);
+    // An inner nextest run must never append to an outer setup script's file.
+    command.env_remove("NEXTEST_ENV");
+    command
+}
+
+#[cfg(test)]
+mod rust_fixture_tests {
+    use super::*;
+
+    #[test]
+    fn cargo_uses_workspace_cwd_and_keeps_manifest_before_tool_arguments() {
+        let root = Path::new("/checkout with spaces/baml_language");
+        let manifest = root.join("sdk_tests/crates/rust/interfaces/generated/Cargo.toml");
+        for args in [
+            vec!["nextest", "run"],
+            vec!["clippy", "--", "-D", "warnings"],
+        ] {
+            let command = rust_fixture_cargo_command(root, &manifest, &args);
+            assert_eq!(command.get_current_dir(), Some(root));
+            let actual: Vec<_> = command.get_args().collect();
+            let pin = actual
+                .iter()
+                .position(|arg| *arg == "--manifest-path")
+                .unwrap();
+            assert_eq!(actual[pin + 1], manifest.as_os_str());
+            if let Some(separator) = actual.iter().position(|arg| *arg == "--") {
+                assert!(pin < separator);
+            }
+            assert!(
+                command
+                    .get_envs()
+                    .any(|(key, value)| key == "NEXTEST_ENV" && value.is_none())
+            );
+        }
+    }
+}
+
 fn workspace_root_from_manifest(manifest: &Path) -> &Path {
     manifest
         .ancestors()

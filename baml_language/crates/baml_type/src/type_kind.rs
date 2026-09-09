@@ -103,40 +103,22 @@ pub struct BuiltinCompanion {
 /// instance (and, for the generic carriers, an error-recovery type that
 /// reaches MIR lowering), so the two class-literal sites reject them.
 ///
-/// Same discipline as [`QualifiedTypeName::is_builtin_root_type`]: the
-/// `baml` package plus an EMPTY namespace, so a user's own `Int` class and
-/// the field-carrying `reflect.class.Field` are both untouched.
+/// Lookup uses the compiler alias registry and checks the full definition
+/// path, so a user's own `Int` class and `reflect.class.Field` stay nominal.
 pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion> {
-    if name.package().as_str() == "reflect"
-        && name.namespace().is_empty()
-        && name.name().as_str() == "Type"
-    {
-        return Some(BuiltinCompanion {
-            builtin: "reflect.Type",
-            origin: "`reflect.Type.of<T>()` and reflection",
-            carries_methods: true,
-        });
+    let alias = crate::compiler_aliases::by_definition(name)?;
+    match alias.construction {
+        crate::compiler_aliases::Construction::Builtin {
+            origin,
+            carries_methods,
+        } => Some(BuiltinCompanion {
+            builtin: alias.display_name(),
+            origin,
+            carries_methods,
+        }),
+        crate::compiler_aliases::Construction::Alias
+        | crate::compiler_aliases::Construction::None => None,
     }
-    if name.package().as_str() != "baml" || !name.namespace().is_empty() {
-        return None;
-    }
-    let (builtin, origin, carries_methods) = match name.name().as_str() {
-        "Int" => ("int", "literals", true),
-        "Bigint" => ("bigint", "literals", true),
-        "Float" => ("float", "literals", true),
-        "String" => ("string", "literals", true),
-        "Bool" => ("bool", "literals", false),
-        "Null" => ("null", "the `null` literal", false),
-        "Uint8Array" => ("uint8array", "byte-string literals", true),
-        "Array" => ("array", "array literals", true),
-        "Map" => ("map", "map literals", true),
-        _ => return None,
-    };
-    Some(BuiltinCompanion {
-        builtin,
-        origin,
-        carries_methods,
-    })
 }
 
 #[cfg(test)]
@@ -154,7 +136,7 @@ mod tests {
     }
 
     #[test]
-    fn companion_carriers_need_the_baml_package_and_an_empty_namespace() {
+    fn companion_carriers_require_the_exact_builtin_definition() {
         for (path, builtin) in [
             ("baml.Int", "int"),
             ("baml.Bigint", "bigint"),
@@ -166,6 +148,8 @@ mod tests {
             ("baml.Array", "array"),
             ("baml.Map", "map"),
             ("reflect.Type", "reflect.Type"),
+            ("baml.media.Image", "image"),
+            ("baml.future.Future", "baml.future.Future"),
         ] {
             assert_eq!(
                 builtin_companion_of(&QualifiedTypeName::from_dotted_path(path))
@@ -182,7 +166,6 @@ mod tests {
             // field-carrying reflect classes the stdlib itself constructs.
             "reflect.class.Field",
             "reflect.class.Type",
-            "baml.media.Image",
             "baml.iter.Done",
             // A root-namespace `baml` class that really does hold fields.
             "baml.TaggedString",

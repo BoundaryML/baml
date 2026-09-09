@@ -5,6 +5,8 @@ use thiserror::Error;
 /// Errors that can occur during bridge operations.
 #[derive(Debug, Error)]
 pub enum BridgeError {
+    #[error("Invalid invocation: {0}")]
+    InvalidInvocation(String),
     #[error(transparent)]
     Ctypes(#[from] bridge_ctypes::CtypesError),
     #[error("Engine not initialized. Call create_baml_runtime first.")]

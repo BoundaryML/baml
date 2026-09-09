@@ -8,7 +8,9 @@
 //! least one symbol carries stub Python definitions and an `__all__`
 //! trailer.
 
+mod concrete_methods;
 mod emit;
+mod interface_refs;
 mod leaf;
 mod names;
 mod routing;
@@ -134,6 +136,7 @@ fn render_interface_tokens(
     tokens: impl Iterator<Item = Name>,
     stub: bool,
     names: &PythonNames,
+    pool: &SymbolPool,
 ) -> String {
     let mut out = String::new();
     let mut public_names = Vec::new();
@@ -141,15 +144,22 @@ fn render_interface_tokens(
         let bare = names.symbol(&name);
         let fqn = name.render_dotted(false);
         public_names.push(bare.to_string());
+        let metadata = pool.interfaces.declarations.get(&name).map(|declaration| {
+            format!(
+                "    __baml_interface_generic_count__ = {}\n    __baml_interface_associated_types__ = [{}]\n",
+                declaration.generic_params.len(),
+                declaration.associated_types.iter().map(|binding| py_string(binding.name.as_str())).collect::<Vec<_>>().join(", ")
+            )
+        }).unwrap_or_default();
         if stub {
             let _ = writeln!(
                 out,
-                "\nclass {bare}:\n    __baml_interface_fqn__: str\n\n    def __new__(cls, *args: typing.Any, **kwargs: typing.Any) -> typing.NoReturn: ...\n\n    @classmethod\n    def __class_getitem__(cls, args: typing.Any) -> typing.Any: ...\n"
+                "\nclass {bare}:\n    __baml_interface_fqn__: str\n{metadata}\n    def __new__(cls, *args: typing.Any, **kwargs: typing.Any) -> typing.NoReturn: ...\n\n    @classmethod\n    def __class_getitem__(cls, args: typing.Any) -> typing.Any: ...\n"
             );
         } else {
             let _ = writeln!(
                 out,
-                "\nclass {bare}:\n    \"\"\"Erased runtime token for BAML interface `{fqn}`.\"\"\"\n    __baml_interface_fqn__ = {fqn:?}\n\n    def __new__(cls, *args, **kwargs):\n        raise TypeError(\"BAML interface tokens cannot be instantiated\")\n\n    @classmethod\n    def __class_getitem__(cls, args):\n        import types\n        return types.GenericAlias(cls, args)\n"
+                "\nclass {bare}:\n    \"\"\"Erased runtime token for BAML interface `{fqn}`.\"\"\"\n    __baml_interface_fqn__ = {fqn:?}\n{metadata}\n    def __new__(cls, *args, **kwargs):\n        raise TypeError(\"BAML interface tokens cannot be instantiated\")\n\n    @classmethod\n    def __class_getitem__(cls, args):\n        import types\n        return types.GenericAlias(cls, args)\n"
             );
         }
     }
@@ -353,7 +363,8 @@ fn to_source_code_internal(
     for (key, symbol) in pool {
         leaves.insert(names.route(key, symbol));
     }
-    let interface_tokens = public_interface_tokens(pool);
+    let mut interface_tokens = public_interface_tokens(pool);
+    interface_tokens.extend(pool.interfaces.declarations.keys().cloned());
     for name in &interface_tokens {
         leaves.insert(names.route_class_ref(name));
     }
@@ -423,6 +434,9 @@ fn to_source_code_internal(
         } else {
             render_package_init(&kids)
         };
+        // Interface Ref classes must exist before eager alias/field imports
+        // can re-enter this module (for example ai.clients.ClientSelector).
+        content.push_str(&interface_refs::render(pool, &names, &leaf_path, false));
         content.push_str(&render_leaf_body(body, &callable_child_names));
         content.push_str(&render_interface_tokens(
             interface_tokens
@@ -431,7 +445,9 @@ fn to_source_code_internal(
                 .cloned(),
             false,
             &names,
+            pool,
         ));
+        content.push_str(&interface_refs::exports(pool, &names, &leaf_path));
         if dir.is_empty() {
             content.push_str(
                 "\n# BEP-066 host reflection surface.\nfrom . import reflect as reflect\n",
@@ -459,7 +475,10 @@ fn to_source_code_internal(
                 .cloned(),
             true,
             &names,
+            pool,
         ));
+        pyi_content.push_str(&interface_refs::render(pool, &names, &leaf_path, true));
+        pyi_content.push_str(&interface_refs::exports(pool, &names, &leaf_path));
         if dir.is_empty() {
             pyi_content.push_str("\nfrom . import reflect as reflect\n");
         }
@@ -489,7 +508,15 @@ fn to_source_code_internal(
     // pre-populated.
     out.insert(
         PathBuf::from("_typemap.py"),
-        render_typemap_module(&bodies, "baml_sdk"),
+        render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            &interface_refs::entries(pool, &names),
+            match runtime_payload {
+                RuntimePayload::Bytecode(bytes, ..) => Some(baml_artifact::sdk_bundle_id(bytes)),
+                RuntimePayload::SourceFiles(_) => None,
+            },
+        ),
     );
     out.insert(
         PathBuf::from("_function_registry.py"),
@@ -499,6 +526,9 @@ fn to_source_code_internal(
     // Emit PEP 561 marker. Stays empty — type checkers only check for
     // the file's existence, and the banner would defeat that contract.
     out.insert(PathBuf::from("py.typed"), String::new());
+    if let Some(guide) = interface_refs::projection_guide(pool, &names) {
+        out.insert(PathBuf::from("INTERFACE_PROJECTIONS.md"), guide);
+    }
 
     // Prepend the do-not-edit banner to every `.py` / `.pyi` file.
     for (path, content) in &mut out {
@@ -708,9 +738,9 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
+        out.push_str("_RUNTIME = BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
     } else {
-        out.push_str("BamlRuntime.initialize_runtime(\n");
+        out.push_str("_RUNTIME = BamlRuntime.initialize_runtime(\n");
         out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
         out.push_str(")\n\n");
     }
@@ -1042,7 +1072,7 @@ mod tests {
 
     #[test]
     fn empty_pool_emits_structural_files() {
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
 
         assert!(out.contains_key(&PathBuf::from("__init__.py")));
@@ -1117,7 +1147,7 @@ mod tests {
 
     #[test]
     fn class_body_renders() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
@@ -1138,7 +1168,7 @@ mod tests {
 
     #[test]
     fn reflect_kind_namespaces_are_routed_legally_across_the_generated_surface() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let kind_namespaces = [
             ("class", "class_"),
             ("enum", "enum"),
@@ -1199,7 +1229,7 @@ mod tests {
 
     #[test]
     fn enum_body_renders() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(n.clone(), enum_(n, "x.baml", 0));
 
@@ -1211,7 +1241,7 @@ mod tests {
 
     #[test]
     fn type_alias_body_renders() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Foo");
         pool.insert(n.clone(), alias(n, "x.baml", 0));
 
@@ -1223,7 +1253,7 @@ mod tests {
 
     #[test]
     fn callable_child_collision_uses_function_namespace_surface() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
         let partial_name = cg_name("boundary", &["id"], "Partial");
@@ -1299,7 +1329,7 @@ mod tests {
 
     #[test]
     fn class_summary_only_emits_single_line_docstring() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -1328,7 +1358,7 @@ mod tests {
 
     #[test]
     fn field_doc_folds_into_attributes_section() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -1363,7 +1393,7 @@ mod tests {
 
     #[test]
     fn class_summary_plus_field_docs_block_form() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Doc");
         pool.insert(
             n.clone(),
@@ -1406,7 +1436,7 @@ mod tests {
 
     #[test]
     fn class_multiline_summary_uses_block_form() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -1433,7 +1463,7 @@ mod tests {
 
     #[test]
     fn enum_doc_folds_variants_into_members_section() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(
             n.clone(),
@@ -1474,7 +1504,7 @@ mod tests {
     /// Members: section is suppressed entirely.
     #[test]
     fn enum_summary_only_skips_members_section() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(
             n.clone(),
@@ -1515,7 +1545,7 @@ mod tests {
     /// Attributes: section is suppressed entirely.
     #[test]
     fn class_summary_only_skips_attributes_section() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -1554,7 +1584,7 @@ mod tests {
     /// names.
     #[test]
     fn class_partial_field_docs_lists_all_fields_in_attributes() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -1592,7 +1622,7 @@ mod tests {
 
     #[test]
     fn class_no_docs_unchanged() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
@@ -1607,7 +1637,7 @@ mod tests {
 
     #[test]
     fn function_docstring_emits_in_pyi_body() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let mut f = bare_func("ExtractResume", "x.baml", 0);
         f.docstring = Some("Extract resume from PDF.".to_string());
         pool.insert(
@@ -1627,7 +1657,7 @@ mod tests {
 
     #[test]
     fn function_no_docstring_keeps_ellipsis() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let f = bare_func("ExtractResume", "x.baml", 0);
         pool.insert(
             cg_name("user", &["lorem"], "ExtractResume"),
@@ -1641,7 +1671,7 @@ mod tests {
 
     #[test]
     fn instance_method_docstring_emits_in_pyi_body() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         let mut method = bare_func("summarize", "x.baml", 100);
         method.docstring = Some("Summarize the resume.".to_string());
@@ -1681,7 +1711,7 @@ mod tests {
 
     #[test]
     fn function_fans_out_sync_and_async() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "extract_resume");
         pool.insert(n, func_sym("extract_resume", "x.baml", 0));
 
@@ -1703,7 +1733,7 @@ mod tests {
 
     #[test]
     fn stream_return_stub_imports_runtime_type_directly() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
@@ -1738,7 +1768,7 @@ mod tests {
 
     #[test]
     fn stream_state_class_is_not_rewritten_as_host_handle() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let stream_state_name = cg_name("ai", &["stream"], "Stream$stream");
         let holder_name = cg_name("user", &["lorem"], "PartialHolder");
         pool.insert(stream_state_name.clone(), class(stream_state_name.clone()));
@@ -1794,7 +1824,7 @@ mod tests {
 
     #[test]
     fn function_does_not_emit_removed_utility_companions() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         pool.insert(
             cg_name("user", &["lorem"], "extract_resume"),
             func_sym("extract_resume", "x.baml", 0),
@@ -1822,7 +1852,7 @@ mod tests {
 
     #[test]
     fn stream_class_routes_to_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(n.clone(), class(n));
 
@@ -1844,7 +1874,7 @@ mod tests {
     fn source_order_sorting() {
         // Two classes in the same file at different spans should render
         // in span order, regardless of insertion order into the pool.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let late = cg_name("user", &["lorem"], "Bar");
         let early = cg_name("user", &["lorem"], "Foo");
         pool.insert(late.clone(), class_at(late, "x.baml", 200));
@@ -1861,7 +1891,7 @@ mod tests {
     fn multi_file_interleave() {
         // Two classes from different files land in the same leaf and
         // interleave lexicographically by file path.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let a = cg_name("user", &["lorem"], "A");
         let b = cg_name("user", &["lorem"], "B");
         pool.insert(a.clone(), class_at(a, "b.baml", 0));
@@ -1877,7 +1907,7 @@ mod tests {
 
     #[test]
     fn all_lists_public_names_only() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let c = cg_name("user", &["lorem"], "Resume");
         let e = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(c.clone(), class_at(c, "x.baml", 0));
@@ -1890,7 +1920,7 @@ mod tests {
 
     #[test]
     fn vendor_creates_interior_dirs() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("aws", &["s3"], "Bucket");
         pool.insert(n.clone(), class(n));
 
@@ -1927,7 +1957,7 @@ mod tests {
 
     #[test]
     fn root_stub_populates_root_init() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &[], "Foo");
         pool.insert(n.clone(), class(n));
 
@@ -1948,7 +1978,7 @@ mod tests {
         // `register_type_alias`, so the surrounding `from baml_bridge ...`
         // block is no longer factory-exclusive — we assert on the
         // factory name itself.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         // lorem leaf: class + function → factory import expected.
         let c = cg_name("user", &["lorem"], "Resume");
         pool.insert(c.clone(), class(c));
@@ -1994,7 +2024,7 @@ mod tests {
 
     #[test]
     fn stream_variant_under_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(n.clone(), class(n));
 
@@ -2011,7 +2041,7 @@ mod tests {
 
     #[test]
     fn inlinedbaml_round_trips() {
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let files = vec![
             (PathBuf::from("main.baml"), "class Foo {}\n".to_string()),
             (
@@ -2045,7 +2075,7 @@ mod tests {
 
     #[test]
     fn bytecode_payload_initializes_runtime_from_bytecode() {
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let bytecode = b"\x00BAML\"\n\xff";
         let out = to_source_code_with_bytecode(&pool, bytecode, NamingConvention::PreserveCase);
 
@@ -2061,6 +2091,13 @@ mod tests {
         assert!(inl.contains("BYTECODE: bytes = ("));
         assert!(inl.contains("b\"\\x00BAML\\\"\\x0a\\xff\""));
         assert!(!inl.contains("FILES: dict[str, str]"));
+        let bundle_hex: String = baml_artifact::sdk_bundle_id(bytecode)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+        assert!(typemap.contains(&format!("bytes.fromhex(\"{bundle_hex}\")")));
+        assert!(typemap.contains("sdk_bundle_id=_SDK_BUNDLE_ID"));
 
         let sources = &out[&PathBuf::from("_baml_sources.py")];
         assert!(sources.contains("FILES: dict[str, str] = {\n}"));
@@ -2068,7 +2105,7 @@ mod tests {
 
     #[test]
     fn bytecode_payload_retains_sorted_user_sources() {
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let files = vec![
             (
                 PathBuf::from("z.baml"),
@@ -2144,7 +2181,7 @@ mod tests {
 
     #[test]
     fn class_renders_mixed_property_types() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -2195,7 +2232,7 @@ mod tests {
 
     #[test]
     fn nullable_fields_default_none_without_changing_function_parameters() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let nullable_string = union(vec![
             Ty::String {
                 attr: baml_base::TyAttr::EMPTY,
@@ -2282,7 +2319,7 @@ mod tests {
 
     #[test]
     fn zero_property_class_emits_only_model_config() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Empty");
         pool.insert(n.clone(), class_with_props(n, vec![], "x.baml", 0));
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
@@ -2298,7 +2335,7 @@ mod tests {
 
     #[test]
     fn multi_variant_enum_renders_each_variant() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["ipsum"], "Sentiment");
         pool.insert(
             n.clone(),
@@ -2336,7 +2373,7 @@ mod tests {
 
     #[test]
     fn empty_enum_emits_defensive_pass() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Nothing");
         pool.insert(
             n.clone(),
@@ -2360,7 +2397,7 @@ mod tests {
         // as forward-refs, so a `BaseModel` field annotated with
         // `JsonValue` no longer infinite-recurses during Pydantic
         // schema build.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = union(vec![
             Ty::Int {
@@ -2388,7 +2425,7 @@ mod tests {
         // load; cross-leaf imports are TYPE_CHECKING-guarded and root
         // names are also imported under TYPE_CHECKING from non-root
         // leaves — bare references would `NameError` at line eval.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let foo = cg_name("user", &[], "Foo"); // root-routed
         let bar = cg_name("user", &["util"], "Bar"); // cross-leaf
         let alias = cg_name("user", &["lorem"], "Mixed"); // recursive in lorem
@@ -2421,7 +2458,7 @@ mod tests {
     #[test]
     fn non_recursive_alias_referencing_recursive_one_is_unquoted() {
         // type Bar = List<JsonValue>  (non-recursive).
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let json = cg_name("user", &["tree"], "JsonValue");
         let bar = cg_name("user", &["tree"], "Bar");
         pool.insert(
@@ -2451,7 +2488,7 @@ mod tests {
     #[test]
     fn stream_companion_resolves_non_stream_sibling_by_fqn() {
         // $stream companion with a field typed as the non-stream sibling.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let non_stream = cg_name("user", &["lorem"], "Resume");
         let stream = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(
@@ -2529,7 +2566,7 @@ mod tests {
     #[test]
     fn cross_leaf_class_reference_uses_routed_fqn() {
         // class Envelope { sentiment: Sentiment }  across leaves.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let envelope = cg_name("user", &["lorem"], "Envelope");
         pool.insert(
@@ -2611,7 +2648,7 @@ mod tests {
 
     #[test]
     fn function_zero_args_renders_empty_param_list() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -2621,7 +2658,7 @@ mod tests {
 
     #[test]
     fn function_multi_arg_param_names_in_order() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         insert_parent_only(
             &mut pool,
             "user",
@@ -2643,7 +2680,7 @@ mod tests {
 
     #[test]
     fn function_defaults_render_keyword_only_signature_and_positional_limit() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let key = cg_name("user", &["lorem"], "search");
         pool.insert(
             key,
@@ -2742,10 +2779,10 @@ mod tests {
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.Sequence[str], UNSET] = [], metadata: typing.Union[typing.Mapping[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.Sequence[str], UNSET] = [], metadata: typing.Union[typing.Mapping[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
         // The sentinel is imported as a bare name so it can appear in the
         // `typing.Union[..., UNSET]` type expressions above (type checkers
@@ -2755,7 +2792,7 @@ mod tests {
 
     #[test]
     fn empty_collection_defaults_do_not_require_unset_import_in_pyi() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let key = cg_name("user", &["lorem"], "defaults");
         pool.insert(
             key,
@@ -2816,16 +2853,16 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(pyi.contains(
-            "def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "def defaults(*, tags: typing.Union[typing.Sequence[str], UNSET] = [], metadata: typing.Union[typing.Mapping[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "async def defaults_async(*, tags: typing.Union[typing.Sequence[str], UNSET] = [], metadata: typing.Union[typing.Mapping[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
     }
 
     #[test]
     fn vendor_function_fqn_uses_vendor_pkg() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         insert_parent_only(&mut pool, "aws", &["s3"], "create_bucket", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
@@ -2836,7 +2873,7 @@ mod tests {
 
     #[test]
     fn baml_pkg_function_fqn_keeps_baml_prefix() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         insert_parent_only(&mut pool, "baml", &["http"], "fetch", &["url"], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
@@ -2849,7 +2886,7 @@ mod tests {
 
     #[test]
     fn root_no_namespace_function_fqn_drops_segment() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         insert_parent_only(&mut pool, "user", &[], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
@@ -2861,7 +2898,7 @@ mod tests {
 
     #[test]
     fn determinism_repeated_runs_produce_identical_output() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let a = cg_name("user", &["lorem"], "Alpha");
         let b = cg_name("user", &["lorem"], "Beta");
         pool.insert(
@@ -2951,7 +2988,7 @@ mod tests {
 
     #[test]
     fn class_static_method_wraps_in_staticmethod() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Counter");
         pool.insert(
             n.clone(),
@@ -2986,7 +3023,7 @@ mod tests {
 
     #[test]
     fn class_instance_method_no_wrap_self_prepended() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Counter");
         // The pool's `Function` for an instance method does not carry
         // the `self` parameter — the receiver is prepended at render
@@ -3031,7 +3068,7 @@ mod tests {
 
     #[test]
     fn class_with_both_method_kinds_emits_single_factory_import() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Mixed");
         pool.insert(
             n.clone(),
@@ -3059,7 +3096,7 @@ mod tests {
     fn property_only_class_unchanged_by_method_renderer() {
         // Class with only properties (no methods) should render
         // byte-identical to G5 — no method block, no factory import.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
@@ -3077,7 +3114,7 @@ mod tests {
 
     #[test]
     fn no_legacy_output_paths() {
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         for path in out.keys() {
             let s = path.to_string_lossy();
@@ -3102,7 +3139,7 @@ mod tests {
         // `__init__.pyi`. `_inlinedbaml.py` and `_typemap.py` (data
         // modules at the SDK root) are the documented exceptions
         // (12d §6, 25b2 Phase 2).
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume));
         let stream = cg_name("user", &["lorem"], "Resume$stream");
@@ -3128,7 +3165,7 @@ mod tests {
 
     #[test]
     fn pyi_class_renders_typed_field_declarations() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(
             n.clone(),
@@ -3178,7 +3215,7 @@ mod tests {
 
     #[test]
     fn pyi_enum_renders_each_variant() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["ipsum"], "Sentiment");
         pool.insert(
             n.clone(),
@@ -3213,7 +3250,7 @@ mod tests {
 
     #[test]
     fn pyi_function_signature_typed_sync_and_async() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "extract_resume");
         // Single-arg function returning a class; signature must reflect
         // both ends of the typed surface (12d §3.4).
@@ -3259,7 +3296,7 @@ mod tests {
 
     #[test]
     fn pyi_type_alias_mirrors_py_shape() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["util"], "Foo");
         pool.insert(n.clone(), alias(n, "x.baml", 0));
 
@@ -3273,7 +3310,7 @@ mod tests {
     fn pyi_recursive_type_alias_emits_type_alias_type() {
         // `.pyi` mirrors `.py`: recursive aliases render via
         // `typing_extensions.TypeAliasType` (18c).
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = union(vec![
             Ty::Int {
@@ -3296,7 +3333,7 @@ mod tests {
 
     #[test]
     fn pyi_static_method_includes_decorator_and_typed_signature() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Counter");
         pool.insert(
             n.clone(),
@@ -3328,7 +3365,7 @@ mod tests {
 
     #[test]
     fn pyi_instance_method_prepends_self_no_annotation() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Counter");
         pool.insert(
             n.clone(),
@@ -3359,7 +3396,7 @@ mod tests {
 
     #[test]
     fn pyi_property_only_class_has_no_method_block() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
@@ -3373,7 +3410,7 @@ mod tests {
 
     #[test]
     fn pyi_all_mirrors_py_all() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let c = cg_name("user", &["lorem"], "Resume");
         let e = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(c.clone(), class_at(c, "x.baml", 0));
@@ -3392,7 +3429,7 @@ mod tests {
         // pulls `import typing` into the `.pyi`. Mirrors the `.py`
         // "be generous" rule so field types like `typing.Optional[…]`
         // and the `typing.Generic[…]` base resolve.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
@@ -3410,7 +3447,7 @@ mod tests {
 
     #[test]
     fn pyi_no_factory_imports_anywhere() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let n = cg_name("user", &["lorem"], "extract_resume");
         pool.insert(n, func_sym("extract_resume", "x.baml", 100));
 
@@ -3438,7 +3475,7 @@ mod tests {
     fn cross_leaf_user_user() {
         // lorem leaf references ipsum.Sentiment (sibling user-package
         // leaf). Both `.py` and `.pyi` carry a guarded `from .. import ipsum`.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let envelope = cg_name("user", &["lorem"], "Envelope");
         pool.insert(
@@ -3496,7 +3533,7 @@ mod tests {
         // shortcut, so the leaf needs `from .. import Foo` to bring
         // the name into scope. Both `.py` and `.pyi` carry a guarded
         // import.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let foo = cg_name("user", &[], "Foo");
         let envelope = cg_name("user", &["lorem"], "Envelope");
         pool.insert(foo.clone(), class(foo.clone()));
@@ -3532,7 +3569,7 @@ mod tests {
     fn root_leaf_does_not_self_import_root_types() {
         // Same `Foo` referenced from a same-leaf class on the root
         // leaf — no import should be emitted (it's locally defined).
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let foo = cg_name("user", &[], "Foo");
         let consumer = cg_name("user", &[], "FooConsumer");
         pool.insert(foo.clone(), class(foo.clone()));
@@ -3559,7 +3596,7 @@ mod tests {
         // `from .. import baml` so the `baml.http.Response` annotation
         // resolves at Pydantic-validation time. The per-package cascade
         // in `baml/__init__.py` binds `http` as an attribute of `baml`.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let response = cg_name("baml", &["http"], "Response");
         let envelope = cg_name("user", &["lorem"], "Envelope");
         pool.insert(response.clone(), class(response.clone()));
@@ -3592,7 +3629,7 @@ mod tests {
         // lorem leaf references aws.s3.Bucket — routes to vendor/aws/s3,
         // first segment is `vendor`. Cascades in `vendor/__init__.py`
         // and `vendor/aws/__init__.py` bind the deeper segments.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let bucket = cg_name("aws", &["s3"], "Bucket");
         let envelope = cg_name("user", &["lorem"], "Envelope");
         pool.insert(bucket.clone(), class(bucket.clone()));
@@ -3619,7 +3656,7 @@ mod tests {
     fn cross_leaf_stream_to_nonstream() {
         // stream_types/lorem leaf references the non-stream Resume —
         // depth 2, three dots: `from ... import lorem`.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let non_stream = cg_name("user", &["lorem"], "Resume");
         let stream = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(
@@ -3666,7 +3703,7 @@ mod tests {
         // baml.http.Response. Always anchor at the SDK root and import
         // the top-level segment `baml` — five dots escape the depth-4
         // leaf to the SDK root.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let response = cg_name("baml", &["http"], "Response");
         let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
         pool.insert(response.clone(), class(response.clone()));
@@ -3697,7 +3734,7 @@ mod tests {
         // A leaf with multiple cross-leaf first-segments emits one
         // `from <dots> import <name>` line per top-level segment,
         // never the comma-joined form.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let bucket = cg_name("aws", &["s3"], "Bucket");
@@ -3762,7 +3799,7 @@ mod tests {
         // `vendor` collapse to a single `from .. import vendor` line.
         // The dotted form `vendor.aws.s3.Bucket` / `vendor.gcp.gcs.Object`
         // distinguishes them in the annotation.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let s3_bucket = cg_name("aws", &["s3"], "Bucket");
         let gcs_object = cg_name("gcp", &["gcs"], "Object");
         let resume = cg_name("user", &["lorem"], "Resume");
@@ -3795,7 +3832,7 @@ mod tests {
     fn same_leaf_reference_emits_no_import() {
         // A class field of type `Resume` in the same leaf doesn't trigger
         // any cross-leaf import or TYPE_CHECKING block.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         let other = cg_name("user", &["lorem"], "Other");
         pool.insert(resume.clone(), class(resume.clone()));
@@ -3816,7 +3853,7 @@ mod tests {
         // Leaf with only a function whose param/return crosses leaves —
         // .pyi must carry the TYPE_CHECKING block (signatures render
         // types). The .py side gets the same block defensively.
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let sentiment = cg_name("user", &["ipsum"], "Sentiment");
         let func = cg_name("user", &["lorem"], "classify");
         pool.insert(
@@ -3870,7 +3907,7 @@ mod tests {
 
     #[test]
     fn generic_class_emits_typevar_and_generic_base() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let box_name = cg_name("user", &["lorem"], "Box");
         let crate_name = cg_name("user", &["lorem"], "Crate");
 
@@ -3979,7 +4016,7 @@ mod tests {
     /// and the .pyi signature uses bare `TypeVar` identifiers.
     #[test]
     fn generic_function_emits_typevar_at_leaf() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let key = cg_name("user", &["lorem"], "echo");
         pool.insert(
             key,
@@ -4050,7 +4087,7 @@ mod tests {
 
     #[test]
     fn generic_function_types_kwarg_tracks_engine_inference_sources() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let default_label = || FunctionArgument {
             injected: false,
             name: BaseName::new("label"),
@@ -4274,7 +4311,7 @@ mod tests {
 
     #[test]
     fn generic_method_types_kwarg_is_optional_in_stub() {
-        let mut pool: SymbolPool = HashMap::new();
+        let mut pool: SymbolPool = SymbolPool::new();
         let box_name = cg_name("user", &["lorem"], "Box");
         let pair_method = Function {
             name: BaseName::new("pair_with"),
@@ -4443,13 +4480,152 @@ mod tests {
         assert!(pyi.contains("def __class_getitem__"));
     }
 
+    #[test]
+    fn concrete_facades_use_checked_contracts_and_preserve_generic_frames() {
+        use baml_codegen_types::{
+            ConcreteDeclaration, ConcreteMethod, ConcreteMethodTarget, InterfaceParameter,
+        };
+        use baml_type::{
+            ClassProjection, FunctionParamMode, ParamTy, RuntimeFunctionParamTy, RuntimeInterface,
+            RuntimeTy,
+        };
+        let mut pool = SymbolPool::new();
+        let owner = cg_name("user", &[], "Box");
+        let mut symbol = class_with_methods(owner.clone(), vec![], vec![], "box.baml", 0);
+        if let Symbol::Class(class) = &mut symbol {
+            class.generic_params = vec![BaseName::new("T")];
+            class.properties.push(baml_codegen_types::ClassProperty {
+                name: BaseName::new("value"),
+                ty: Ty::String {
+                    attr: Default::default(),
+                },
+                docstring: None,
+            });
+        }
+        pool.insert(owner.clone(), symbol);
+        pool.class_projections
+            .insert(owner.clone(), ClassProjection::Live);
+        let class_param = ParamTy::new(0, BaseName::new("$sdk$class$0"));
+        let method_param = ParamTy::new(0, BaseName::new("T"));
+        let var = |p: &ParamTy| RuntimeTy::TypeVar(p.clone(), Default::default());
+        let self_ty = RuntimeTy::Class(owner.clone(), vec![var(&class_param)], Default::default());
+        let signature =
+            |args: Vec<(&str, RuntimeTy, FunctionParamMode)>, ret| RuntimeTy::Function {
+                params: std::iter::once(RuntimeFunctionParamTy {
+                    name: Some(BaseName::new("self")),
+                    ty: self_ty.clone(),
+                    mode: FunctionParamMode::Required,
+                })
+                .chain(
+                    args.into_iter()
+                        .map(|(name, ty, mode)| RuntimeFunctionParamTy {
+                            name: Some(BaseName::new(name)),
+                            ty,
+                            mode,
+                        }),
+                )
+                .collect(),
+                ret: Box::new(ret),
+                throws: Box::new(RuntimeTy::Never {
+                    attr: Default::default(),
+                }),
+                attr: Default::default(),
+            };
+        let parameter = |param| InterfaceParameter {
+            param,
+            bounds: vec![],
+        };
+        std::sync::Arc::make_mut(&mut pool.interfaces)
+            .concrete_classes
+            .insert(
+                owner.clone(),
+                ConcreteDeclaration {
+                    name: owner.clone(),
+                    generic_params: vec![parameter(class_param.clone())],
+                    implemented_interfaces: vec![],
+                    ambiguous_methods: Default::default(),
+                    methods: vec![
+                        ConcreteMethod {
+                            name: BaseName::new("read"),
+                            signature: signature(vec![], var(&class_param)),
+                            generic_params: vec![],
+                            target: ConcreteMethodTarget::Inherent {
+                                class: owner.clone(),
+                            },
+                        },
+                        ConcreteMethod {
+                            name: BaseName::new("echo"),
+                            signature: signature(
+                                vec![("value", var(&method_param), FunctionParamMode::Required)],
+                                var(&method_param),
+                            ),
+                            generic_params: vec![parameter(method_param)],
+                            target: ConcreteMethodTarget::Inherent {
+                                class: owner.clone(),
+                            },
+                        },
+                        ConcreteMethod {
+                            name: BaseName::new("close"),
+                            signature: signature(
+                                vec![
+                                    (
+                                        "_arguments",
+                                        RuntimeTy::string(),
+                                        FunctionParamMode::Required,
+                                    ),
+                                    ("bytes", RuntimeTy::int(), FunctionParamMode::Optional),
+                                ],
+                                RuntimeTy::string(),
+                            ),
+                            generic_params: vec![],
+                            target: ConcreteMethodTarget::Interface(RuntimeInterface::new(
+                                cg_name("user", &[], "Source"),
+                                vec![],
+                                vec![(BaseName::new("Output"), var(&class_param))],
+                            )),
+                        },
+                    ],
+                },
+            );
+        let out =
+            to_source_code_with_bytecode(&pool, b"test bundle", NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("__init__.py")];
+        let pyi = &out[&PathBuf::from("__init__.pyi")];
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+        assert!(
+            py.contains("class Box(_ConcreteRef, typing.Generic[T]):"),
+            "{py}"
+        );
+        assert!(py.contains("__slots__ = ()"));
+        assert!(!py.contains("model_config ="));
+        assert!(!py.contains("    value: str"));
+        assert!(
+            py.contains("self._invoke_concrete(\"user.Box\", None, \"read\""),
+            "{py}"
+        );
+        assert!(
+            py.contains("def close_(self, _arguments_, *, bytes=_concrete_unset):"),
+            "{py}"
+        );
+        assert!(py.contains("_ConcreteTy.FromString(b\""));
+        assert!(py.contains("self._method_types(_types, (\"T\",))"));
+        assert!(pyi.contains("async def read(self) -> T:"), "{pyi}");
+        assert!(pyi.contains("async def echo(self, value: _CBox_M1_P0, *, _types: dict[str, typing.Any]) -> _CBox_M1_P0:"), "{pyi}");
+        assert!(typemap.contains("_CLASS_ENTRIES = {}"));
+        assert!(
+            typemap.contains("_CONCRETE_REFS = {\n    \"user.Box\": (\"baml_sdk\", \"Box\"),"),
+            "{typemap}"
+        );
+        assert!(typemap.contains("concrete_refs=_CONCRETE_REFS"));
+    }
+
     // ── 25b Phase 2: ClassVar + _register_* trailer emission ──────────────
 
     #[test]
     fn root_init_no_longer_passes_sdk_root() {
         // sdk_root is deleted in Phase 5; codegen drops the kwarg now (no
         // runtime consumer, no diagnostic value worth a separate argument).
-        let pool: SymbolPool = HashMap::new();
+        let pool: SymbolPool = SymbolPool::new();
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
@@ -4463,6 +4639,92 @@ mod tests {
             !root.contains("sdk_root="),
             "root still passes sdk_root: {root}"
         );
+    }
+
+    #[test]
+    fn generated_factories_preserve_runtime_bindings_under_user_name_collisions() {
+        let mut pool = SymbolPool::new();
+        for name in ["_RUNTIME", "_TYPE_MAP", "_sdk_runtime", "_sdk_type_map"] {
+            let declaration = cg_name("user", &[], name);
+            let mut value = class_with_methods(
+                declaration.clone(),
+                vec![bare_func("_sdk_runtime", "bindings.baml", 1)],
+                vec![method_func("_sdk_type_map", &["self"], "bindings.baml", 2)],
+                "bindings.baml",
+                0,
+            );
+            if let Symbol::Class(class) = &mut value {
+                class.generic_params.push(BaseName::new("_sdk_type_map"));
+            }
+            pool.insert(declaration, value);
+            pool.insert(
+                cg_name("user", &[name], "call"),
+                func_sym("call", "bindings.baml", 3),
+            );
+        }
+        pool.insert(
+            cg_name("user", &[], "call"),
+            func_sym("call", "bindings.baml", 4),
+        );
+        let generated = to_source_code_internal(
+            &pool,
+            RuntimePayload::SourceFiles(&[]),
+            NamingConvention::PreserveCase,
+        );
+        let root = &generated.files[&PathBuf::from("__init__.py")];
+        assert!(root.contains("_RUNTIME = BamlRuntime.initialize_runtime("));
+        assert!(
+            root.find("_RUNTIME =").unwrap() < root.find("from baml_sdk import _RUNTIME").unwrap()
+        );
+        for (path, contents) in &generated.files {
+            let factories: Vec<_> = contents
+                .lines()
+                .filter(|line| {
+                    line.contains("= _define_function(")
+                        || line.contains("staticmethod(_define_function(")
+                })
+                .collect();
+            if factories.is_empty() {
+                continue;
+            }
+            assert!(
+                contents.contains("from baml_sdk import _RUNTIME as _sdk_runtime"),
+                "{}",
+                path.display()
+            );
+            assert!(
+                contents.contains("from baml_sdk._typemap import _TYPE_MAP as _sdk_type_map"),
+                "{}",
+                path.display()
+            );
+            for factory in factories {
+                assert!(
+                    factory.contains("runtime=_sdk_runtime, type_map=_sdk_type_map"),
+                    "{factory}"
+                );
+            }
+            assert!(
+                !contents.contains("_sdk_type_map = TypeVar("),
+                "{}",
+                path.display()
+            );
+        }
+        for rename in &generated.renames {
+            if matches!(
+                rename.original.as_str(),
+                "_RUNTIME" | "_TYPE_MAP" | "_sdk_runtime" | "_sdk_type_map"
+            ) {
+                assert_ne!(rename.original, rename.generated);
+            }
+        }
+        for name in ["_RUNTIME", "_TYPE_MAP", "_sdk_runtime", "_sdk_type_map"] {
+            assert!(
+                generated
+                    .renames
+                    .iter()
+                    .any(|rename| rename.kind == "class" && rename.original == name)
+            );
+        }
     }
 
     #[test]

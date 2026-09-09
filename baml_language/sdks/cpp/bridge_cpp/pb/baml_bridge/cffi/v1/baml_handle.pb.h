@@ -88,6 +88,10 @@ enum BamlHandleType : int {
   HOST_VALUE_OPAQUE = 16,
   ADT_FUNCTION_SPEC = 17,
   ADT_RUNTIME_VALUE = 18,
+  ADT_INTERFACE = 19,
+  HOST_REFERENCE = 20,
+  CONCRETE_OBJECT = 21,
+  HOST_ADAPTER_TYPE = 22,
   BamlHandleType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   BamlHandleType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -98,11 +102,11 @@ extern const uint32_t BamlHandleType_internal_data_[];
 inline constexpr BamlHandleType BamlHandleType_MIN =
     static_cast<BamlHandleType>(0);
 inline constexpr BamlHandleType BamlHandleType_MAX =
-    static_cast<BamlHandleType>(18);
+    static_cast<BamlHandleType>(22);
 inline bool BamlHandleType_IsValid(int value) {
-  return 0 <= value && value <= 18 && ((524263u >> value) & 1) != 0;
+  return 0 <= value && value <= 22 && ((8388583u >> value) & 1) != 0;
 }
-inline constexpr int BamlHandleType_ARRAYSIZE = 18 + 1;
+inline constexpr int BamlHandleType_ARRAYSIZE = 22 + 1;
 const ::std::string& BamlHandleType_Name(BamlHandleType value);
 template <typename T>
 const ::std::string& BamlHandleType_Name(T value) {

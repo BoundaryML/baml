@@ -111,6 +111,7 @@ pub(crate) enum MemberResolution<'db> {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct CallPlan {
     pub(crate) bindings: Vec<ParamBinding>,
+    pub(crate) argument_layout: baml_type::CallLayout,
     /// Full solved owner + callable generic frame, in declared order.
     pub(crate) type_args: Vec<Tir2Ty>,
     pub(crate) own_offset: usize,
@@ -184,15 +185,6 @@ pub(crate) enum ParamBinding {
     },
 }
 
-/// A function value accepted at a runtime-incompatible parameter shape - the
-/// adapter MIR emits (source shape from the value, target from the slot).
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FunctionCoercion {
-    pub(crate) source_params: Vec<baml_type::FunctionParamTy>,
-    pub(crate) target_params: Vec<baml_type::FunctionParamTy>,
-    pub(crate) target_return: Tir2Ty,
-}
-
 /// The one table store behind the `tir_*` accessors: converted ONCE at
 /// context construction, whichever engine produced them.
 pub(crate) struct ProviderTables<'db> {
@@ -249,7 +241,6 @@ pub(crate) struct ConvertedTables<'db> {
     runtime_type_bindings: FxHashMap<AstExprId, ScopedTypeBinding>,
     runtime_type_params: Vec<baml_type::ParamTy>,
     runtime_checks: Vec<RuntimeCheck>,
-    function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
     /// Condition expressions the checker marked for truthiness coercion
     /// (`Adjust::Truthy`, B-1563): lowering wraps the operand in the
     /// truthy test so the branch itself stays strict-bool.
@@ -320,9 +311,6 @@ impl<'db> ConvertedTables<'db> {
     pub(crate) fn runtime_checks(&self) -> &[RuntimeCheck] {
         &self.runtime_checks
     }
-    pub(crate) fn function_coercion(&self, expr: AstExprId) -> Option<&FunctionCoercion> {
-        self.function_coercions.get(&expr)
-    }
     pub(crate) fn truthy_condition(&self, expr: AstExprId) -> bool {
         self.truthy_conditions.contains(&expr)
     }
@@ -333,10 +321,8 @@ impl<'db> ConvertedTables<'db> {
 
 /// Materializes one `InferenceResult` into TIR-shaped tables: interned
 /// types to the plain family, the resolution enum variant-for-variant,
-/// the path ladder into TIR's three keyings, and adjustments into
-/// `FunctionCoercion` (source shape from `type_of_expr`, target from the
-/// adjustment - the redundancy TIR stored, reconstructed at the
-/// boundary).
+/// the path ladder into TIR's three keyings, and truthiness adjustments.
+/// Function-shape coercions use call-site layouts rather than value wrappers.
 fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db> {
     let mut out = ConvertedTables::default();
     for (&expr, ty) in &result.type_of_expr {
@@ -379,6 +365,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         out.call_plans.insert(
             call,
             CallPlan {
+                argument_layout: plan.argument_layout.clone(),
                 bindings: plan
                     .bindings
                     .iter()
@@ -479,38 +466,11 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
             match adjustment.kind {
                 hir_infer::Adjust::Truthy => {
                     out.truthy_conditions.insert(expr);
-                    continue;
                 }
-                hir_infer::Adjust::FunctionAdapter => {}
+                // Calls carry their checked argument layout. Function values
+                // retain their identity; no synthetic closure is necessary.
+                hir_infer::Adjust::FunctionShape => {}
             }
-            let (
-                Some(Tir2Ty::Function {
-                    params: source_params,
-                    ..
-                }),
-                Tir2Ty::Function {
-                    params: target_params,
-                    ret: target_return,
-                    ..
-                },
-            ) = (
-                result
-                    .type_of_expr
-                    .get(&expr)
-                    .map(baml_type::interned::Ty::to_plain),
-                adjustment.target.to_plain(),
-            )
-            else {
-                continue;
-            };
-            out.function_coercions.insert(
-                expr,
-                FunctionCoercion {
-                    source_params,
-                    target_params,
-                    target_return: *target_return,
-                },
-            );
         }
     }
     out.exhaustiveness = MatchExhaustiveness::NonExhaustiveSet(

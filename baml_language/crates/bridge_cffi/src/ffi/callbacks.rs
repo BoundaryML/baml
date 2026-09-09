@@ -12,7 +12,7 @@ pub extern "C" fn register_callback(callback_fn: CallbackFn) {
 }
 
 /// Deliver an already-encoded `BamlOutboundResult` envelope (the bytes from
-/// [`crate::call_and_encode`]) to the registered callback as a non-error
+/// [`crate::invoke_prepared`]) to the registered callback as a non-error
 /// payload — the envelope itself carries any thrown error/panic.
 pub fn send_outbound_result_to_callback(id: u32, buf: &[u8]) {
     let callback_fn = match CALLBACK_FN.get() {

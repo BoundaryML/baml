@@ -17,14 +17,12 @@
 //   3. The bridge emits an `InboundValue.Class(name="baml.errors.HostCallable",
 //      fields=[..., _handle: Handle(HOST_VALUE_OPAQUE, key)])`. The engine
 //      interns an `Arc<HostValueArc>` per the same key.
-//   4. When BAML propagates the throw back out to the host, the outbound
-//      encoder re-emits the `_handle: Handle(HOST_VALUE_OPAQUE, key)`. The
-//      TS decoder (proto.ts) inspects a decoded `HostCallable` instance,
-//      reads `_handle.key`, calls `lookupHostValue(key)` here, and re-throws
-//      the original JS error.
+//   4. Outbound encoding returns an owned HOST_REFERENCE table lease. The
+//      decoder resolves it to the raw registration key through native code;
+//      the receipt retains the host object throughout decoding and adoption.
 //   5. When the engine drops its last `Arc<HostValueArc>(key)`, the Rust
 //      `host_release_callback` fires the TS-installed release callback
-//      (`native.registerHostValueReleaseCallback`), which calls `_releaseHostValue`
+//      (`native.registerHostValueReleaseCallback`), which calls `_releaseHostValues`
 //      here to remove the map entry.
 //
 // Foreign runtimes (a different Node process, the Python bridge, etc.) see
@@ -32,7 +30,7 @@
 // decoder falls back to the metadata-bearing `BamlError(HostCallable(...))`
 // wrapper. The reserved `0` is used as a sentinel by code paths that
 // cannot register a real JS value (engine-internal synthetic faults like
-// "no JS callable for this key"); `_releaseHostValue(0n)` is a benign
+// "no JS callable for this key"); deleting the reserved key is a benign
 // no-op since `mintHostValueKey` never returns `0`.
 
 import { mintHostValueKey, registerHostValueReleaseCallback, BamlHandle, type HandleKey } from './native.js';
@@ -92,22 +90,14 @@ export function releaseHostOpaque(key: HandleKey): void {
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
  * - the engine has already released the entry (last `HostValueArc` clone
- *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
+ *   dropped → Rust `host_release_callback` fired → `_releaseHostValues`
  *   removed the entry);
  * - the key was minted by a different Node process (cross-runtime handle).
  *
  * Callers should fall back to a metadata-built exception in those cases.
  *
- * GC/decode race: a release notification and a rehydrating decode can be
- * scheduled on the libuv loop concurrently in principle, but in practice
- * the same `HostValueArc` cannot drop *while* the engine is actively
- * emitting an outbound proto referencing its key — the outbound encode
- * holds a strong handle through proto serialization, and the release tsfn
- * isn't fired until that strong handle drops. By the time the TS decoder
- * runs `tryRehydrateHostValueByKey`, the only way the map entry is gone is if
- * a *prior* outbound completed and the engine has since dropped its last
- * Arc; in that case the user has already observed the original throw at
- * least once, so a second lookup-miss → metadata-fallback is acceptable.
+ * Returned HOST_REFERENCE leases retain the registration through decoding.
+ * A table key must never be interpreted as a raw host registry key.
  */
 export function lookupHostValue(key: bigint): unknown {
     return hostValueMap.get(key);
@@ -115,7 +105,7 @@ export function lookupHostValue(key: bigint): unknown {
 
 /**
  * Convenience for the outbound decoder: if `handle` is a `BamlHandle`
- * tagged `HOST_VALUE_OPAQUE`, look up the originating JS value in
+ * tagged `HOST_REFERENCE`, look up the originating JS value in
  * the registry and return it. Returns `undefined` for any other handle
  * type, a non-`BamlHandle` argument, or a key that doesn't resolve.
  *
@@ -125,21 +115,21 @@ export function lookupHostValue(key: bigint): unknown {
  */
 export function tryRehydrateHostValueByKey(handle: unknown): unknown {
     if (!(handle instanceof BamlHandle)) return undefined;
-    if (handle.handleType !== BamlHandleType.HOST_VALUE_OPAQUE) return undefined;
-    return lookupHostValue(handleKeyToBigint(handle.key));
+    if (handle.handleType !== BamlHandleType.HOST_REFERENCE) return undefined;
+    return lookupHostValue(handleKeyToBigint(handle._hostValueKey()));
 }
 
 /**
- * Internal: remove the map entry for `key`. Wired at module init as the
- * Rust-side release callback. Idempotent and absent-key-safe so the same
- * callback can be invoked for *every* `HostValueArc` release (including
- * callable keys, which never have a TS-side host-value entry).
+ * Internal: delete a batch of released keys, acknowledging it by returning.
+ * Wired as the Rust-side release callback. Idempotent and absent-key-safe so the same
+ * batch can be retried after partial delivery. Callable keys have no TS-side
+ * host-value entry and are harmless to include.
  */
-function _releaseHostValue(key: HandleKey): void {
-    hostValueMap.delete(handleKeyToBigint(key));
+function _releaseHostValues(keys: HandleKey[]): void {
+    for (const key of keys) hostValueMap.delete(handleKeyToBigint(key));
 }
 
-// Install the Rust-side release callback exactly once at module load. The
-// napi function is itself first-call-wins on the Rust side, so reloads
-// (e.g. test harnesses) are harmless.
-registerHostValueReleaseCallback(_releaseHostValue);
+// Install once for this shared SDK module's registry. The native slot is
+// currently process-global and first-call-wins; it does not yet route distinct
+// module instances or worker environments to their own registries.
+registerHostValueReleaseCallback(_releaseHostValues);

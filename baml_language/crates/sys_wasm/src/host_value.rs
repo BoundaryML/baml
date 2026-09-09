@@ -61,7 +61,7 @@
 //! An `IN_FLIGHT` entry is removed by exactly one of: the JS wrapper calling
 //! `completeHostCall(callId, ...)` (normal completion), or cancellation of the
 //! BAML call. On cancel the engine drops the async future returned by
-//! [`drain_pending`], which drops the [`WasmInflightGuard`] moved into it; the
+//! [`drain_pending_unvalidated`], which drops the [`WasmInflightGuard`] moved into it; the
 //! guard removes the dangling entry so it does not leak. There is **no
 //! wall-clock timeout** — a host that never completes a call and is never
 //! cancelled leaves the entry pending forever (matching the native bridge; see
@@ -73,7 +73,7 @@ use std::{
     sync::Arc,
 };
 
-use bex_project::{HostValueArc, HostValueKind, host_release_dispatch, validate_host_return};
+use bex_project::{HostValueArc, HostValueKind, host_release_dispatch};
 use bridge_ctypes::{
     CffiHandleTableOptions, HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external,
 };
@@ -82,7 +82,6 @@ use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
     self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
-    VmRustFnError,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -236,7 +235,7 @@ fn insert_in_flight(call_id: u32, operation: SysOp, completion: CompletionHandle
 
 /// RAII guard that evicts an in-flight call's `IN_FLIGHT` entry when dropped.
 ///
-/// Owned by the async future returned by [`drain_pending`]. Carries only the
+/// Owned by the async future returned by [`drain_pending_unvalidated`]. Carries only the
 /// `Copy` `call_id`, never the `CompletionHandle` (which lives in the table).
 /// On drop it removes the entry if still present:
 ///
@@ -692,7 +691,7 @@ impl io::IoNamespaceHost for WasmHost {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: ::sys_types::SapTy,
+        _type_arg_0: ::sys_types::SapTy,
         _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
@@ -734,14 +733,11 @@ impl io::IoNamespaceHost for WasmHost {
                 });
             }
         };
-        validate_host_output(
-            self.call_registered_callable(
-                SysOp::BamlHostCallHostValue,
-                host_arc.as_ref(),
-                &positional,
-                &optional,
-            ),
-            expected_wire_ty(&type_arg_0),
+        self.call_registered_callable(
+            SysOp::BamlHostCallHostValue,
+            host_arc.as_ref(),
+            &positional,
+            &optional,
         )
     }
 }
@@ -751,14 +747,9 @@ impl io::IoNamespaceHost for WasmHost {
 /// `BexExternalValue`; on error we strip the `SysOp` wrapper to expose only
 /// the kind (the trait's contract).
 ///
-/// On success the host's returned value is strictly validated against the
-/// declared return type `expected` via the shared [`validate_host_return`]
-/// guard — the same check the native bridge performs — so a host that returns
-/// a value violating the declared `T` surfaces as a catchable
-/// `root.errors.HostCallable` rather than corrupting the VM. Class *field
-/// types* are validated engine-side where the resolved schema is available;
-/// this guard covers scalar discrimination (`int` ≠ `float`), container
-/// recursion, enum identity, and class-name identity.
+/// The engine validates return and throw values against its retained exact
+/// contracts after reacquiring the heap permit. This transport layer cannot
+/// decide nominal interface membership from names or payload shapes.
 ///
 /// When `install_guard` is true, `call_id` owns the in-flight entry installed
 /// by the caller, and a [`WasmInflightGuard`] for it is moved into the async
@@ -798,59 +789,6 @@ fn drain_pending_unvalidated(
             })))
         }
     }
-}
-
-fn validate_host_output(
-    output: SysOpOutput<BexExternalValue>,
-    expected: baml_type::RuntimeTy,
-) -> SysOpOutput<BexExternalValue> {
-    match output {
-        SysOpOutput::Ready(Ok(value)) => match validate_host_return_value(&value, &expected) {
-            Ok(()) => SysOpOutput::ok(value),
-            Err(error) => SysOpOutput::err(error),
-        },
-        SysOpOutput::Ready(Err(error)) => SysOpOutput::Ready(Err(error)),
-        SysOpOutput::Async(future) => {
-            SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
-                let value = future.await?;
-                validate_host_return_value(&value, &expected)?;
-                Ok(value)
-            })))
-        }
-    }
-}
-
-/// Strictly validate a host-returned value against the declared return type.
-/// A mismatch is a `baml.panics.HostContractViolation` panic — the host has
-/// violated its typed contract, so the call cannot be reasonably continued.
-/// Mirrors the native bridge's `validate_return_value` in
-/// `sys_native::host_impls`.
-/// Project a lane type into the name-headed form the contract check reads.
-///
-/// See the note in `sys_native`'s equivalent: the check is name-based, so an
-/// anonymous declaration widens to `unknown` rather than being given a
-/// spelling it does not have.
-fn expected_wire_ty(expected: &::sys_types::SapTy) -> baml_type::RuntimeTy {
-    expected
-        .clone()
-        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
-        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
-}
-
-fn validate_host_return_value(
-    value: &BexExternalValue,
-    expected: &baml_type::RuntimeTy,
-) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected).map_err(|err| {
-        sys_types::VmPanic::HostContractViolation {
-            message: format!(
-                "host callable returned a value of the wrong type: {err} (expected {expected})"
-            ),
-            class_name: None,
-            language: None,
-        }
-        .into()
-    })
 }
 
 #[cfg(test)]

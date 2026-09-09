@@ -571,6 +571,7 @@ mod tests {
             type_tag: TypeTag::of_head(&name.render_dotted(false)),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }));
@@ -611,6 +612,7 @@ mod tests {
             type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }));

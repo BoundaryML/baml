@@ -17,9 +17,11 @@ export class BamlTypeMap {
     private classLazy = new Map<string, LazyEntry>();
     private enumLazy = new Map<string, LazyEntry>();
     private aliasLazy = new Map<string, LazyEntry>();
+    private interfaceLazy = new Map<string, LazyEntry>();
     private classCache = new Map<string, unknown>();
     private enumCache = new Map<string, unknown>();
     private aliasCache = new Map<string, unknown>();
+    private interfaceCache = new Map<string, unknown>();
     // Reverse map (constructor or enum-object identity → FQN) for the encode path. Lazily
     // built from the class/enum thunks on first `jsTypeToBamlType` call. The
     // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
@@ -30,11 +32,13 @@ export class BamlTypeMap {
         classes: Record<string, LazyEntry>;
         enums: Record<string, LazyEntry>;
         typeAliases: Record<string, LazyEntry>;
+        interfaces?: Record<string, LazyEntry>;
     }): BamlTypeMap {
         const m = new BamlTypeMap();
         for (const [fqn, le] of Object.entries(args.classes)) m.classLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.enums)) m.enumLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.typeAliases)) m.aliasLazy.set(fqn, le);
+        for (const [fqn, le] of Object.entries(args.interfaces ?? {})) m.interfaceLazy.set(fqn, le);
         return m;
     }
 
@@ -70,6 +74,10 @@ export class BamlTypeMap {
 
     getTypeAlias(fqn: string): unknown {
         return this._resolve(fqn, this.aliasLazy, this.aliasCache, 'type alias');
+    }
+
+    getInterface(fqn: string): unknown {
+        return this._resolve(fqn, this.interfaceLazy, this.interfaceCache, 'interface');
     }
 
     /**
@@ -108,6 +116,7 @@ export class BamlTypeMap {
         for (const k of this.classLazy.keys()) this.getClass(k);
         for (const k of this.enumLazy.keys()) this.getEnum(k);
         for (const k of this.aliasLazy.keys()) this.getTypeAlias(k);
+        for (const k of this.interfaceLazy.keys()) this.getInterface(k);
     }
 }
 

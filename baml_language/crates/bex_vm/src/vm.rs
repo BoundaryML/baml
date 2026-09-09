@@ -652,6 +652,7 @@ pub(crate) mod tests {
             captured_type_args: Box::default(),
         }));
         let method = vm.tlab.alloc(Object::BoundMethod(BoundMethod {
+            interface_signature: None,
             function,
             receiver: Value::int(1),
             type_args: Box::default(),
@@ -800,6 +801,7 @@ pub(crate) mod tests {
             type_tag: tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -865,6 +867,7 @@ pub(crate) mod tests {
             type_tag: tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -922,6 +925,7 @@ pub(crate) mod tests {
             type_tag: tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -2997,7 +3001,26 @@ impl BexVm {
                 // site stored it), as at `CallIndirect`'s BoundMethod arm.
                 match unsafe { bm.function.get() } {
                     Object::Function(f) => {
-                        function_callable_signature(self, f, &bm.type_args, true).ok()
+                        if let Some(signature) = &bm.interface_signature {
+                            let bex_vm_types::RealizedTy::Function {
+                                params,
+                                ret,
+                                throws,
+                                ..
+                            } = &**signature
+                            else {
+                                return None;
+                            };
+                            Some(CallableSignature {
+                                name: Some(Self::callable_display_name(f)),
+                                params: params.clone(),
+                                ret: (**ret).clone(),
+                                throws: (**throws).clone(),
+                                docstring: f.docstring.clone(),
+                            })
+                        } else {
+                            function_callable_signature(self, f, &bm.type_args, true).ok()
+                        }
                     }
                     _ => None,
                 }
@@ -3006,11 +3029,7 @@ impl BexVm {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
                 params: (*hc.params).clone(),
-                // A host callable's declared bottom/unit throws is normalized to
-                // `unknown` when the closure is bound (see the engine's
-                // conversion): foreign code may surface a native exception no
-                // matter what it declares, so its error contract is opaque
-                // rather than empty. Nothing here can be `void`.
+                // Preserve the checked effect, including an explicit never.
                 throws: (*hc.throws_ty).clone(),
                 ret: (*hc.ret_ty).clone(),
                 // Host closures are FFI-constructed; they carry no docs.
@@ -3098,6 +3117,29 @@ impl BexVm {
             }
         }
         Some(self.value_concrete_ty(value)?.into())
+    }
+
+    /// Check a boundary value against an anchored runtime contract using the
+    /// same singleton-precise membership relation as BAML type tests. Callers
+    /// must retain the heap permit protecting both the value and type heads.
+    pub fn value_satisfies_type(&self, value: Value, expected: &bex_vm_types::RuntimeTy) -> bool {
+        let actual = if let Some(actual) = self.value_singleton_ty(value) {
+            actual.as_runtime_ty().clone()
+        } else if value
+            .as_object_ptr()
+            .is_some_and(|ptr| matches!(self.get_object(ptr), Object::RustData(_)))
+        {
+            // Opaque host payloads have an explicit internal boundary type.
+            // They expose no concrete BAML type for interface dispatch, but
+            // can round-trip through a generic specialized to `$rust_type`.
+            // This does not exempt arbitrary handles from contract checking.
+            bex_vm_types::RuntimeTy::RustType {
+                attr: baml_type::TyAttr::default(),
+            }
+        } else {
+            return false;
+        };
+        baml_type::normalize::is_subtype(actual.as_ty(), expected.as_ty(), self)
     }
 
     /// The callable's own `Function` plus the type arguments it already carries.
@@ -3391,6 +3433,23 @@ impl BexVm {
             // complete curried frame is on the object, so a generic method
             // reconstructs as precisely as any other callable.
             Object::BoundMethod(bm) => {
+                if let Some(signature) = &bm.interface_signature {
+                    let bex_vm_types::RealizedTy::Function {
+                        params,
+                        ret,
+                        throws,
+                        attr,
+                    } = &**signature
+                    else {
+                        return None;
+                    };
+                    return Some(ConcreteRealizedTy::Function {
+                        params: params.clone(),
+                        ret: ret.clone(),
+                        throws: throws.clone(),
+                        attr: attr.clone(),
+                    });
+                }
                 // SAFETY: `bm.function` points to a live `Function`, the same
                 // invariant `resolve_callable_target` relies on.
                 match unsafe { bm.function.get() } {
@@ -3989,6 +4048,54 @@ impl BexVm {
             .unwrap_or_default()
     }
 
+    /// Realize a named host entry's output contract with the same slot order
+    /// used to seed its frame. Keep declaration heads for boundary projection.
+    pub fn entry_point_output_types(
+        &self,
+        function: HeapPtr,
+        type_args: &IndexMap<String, bex_vm_types::RealizedTy>,
+    ) -> Option<(bex_vm_types::RuntimeTy, bex_vm_types::RuntimeTy)> {
+        let Object::Function(body) = self.get_object(function) else {
+            return None;
+        };
+        let slots = lower_named_type_args(
+            &self.entry_point_generic_param_names(function),
+            type_args.clone(),
+        )
+        .into_iter()
+        .map(bex_vm_types::RuntimeTy::from)
+        .collect::<Vec<_>>();
+        Some((
+            body.return_type.substitute_symbolic(&slots),
+            body.throws_type.substitute_symbolic(&slots),
+        ))
+    }
+
+    /// Input contracts use the same exact named bindings and slot layout as
+    /// the entry frame and its outputs.
+    pub fn entry_point_input_types(
+        &self,
+        function: HeapPtr,
+        type_args: &IndexMap<String, bex_vm_types::RealizedTy>,
+    ) -> Option<Vec<bex_vm_types::RuntimeTy>> {
+        let Object::Function(body) = self.get_object(function) else {
+            return None;
+        };
+        let slots = lower_named_type_args(
+            &self.entry_point_generic_param_names(function),
+            type_args.clone(),
+        )
+        .into_iter()
+        .map(bex_vm_types::RuntimeTy::from)
+        .collect::<Vec<_>>();
+        Some(
+            body.param_types
+                .iter()
+                .map(|ty| ty.substitute_symbolic(&slots))
+                .collect(),
+        )
+    }
+
     fn global_index_for_function_ptr(&self, function: HeapPtr) -> Option<GlobalIndex> {
         self.globals
             .as_slice(self.proof())
@@ -4136,8 +4243,12 @@ impl BexVm {
         self.stack.extend(args.iter().copied());
         self.stack.push(Value::object(closure));
 
+        let argument_layout = self
+            .callable_argument_layout(closure)
+            .expect("host closure checked above");
         let mut bytecode = bytecode::Bytecode {
             instructions: vec![Instruction::CallIndirect, Instruction::Return],
+            call_layouts: [(0, argument_layout)].into_iter().collect(),
             ..bytecode::Bytecode::default()
         };
         bytecode.compact = Some(bytecode.lower_to_compact());
@@ -5749,6 +5860,93 @@ impl BexVm {
         }
     }
 
+    /// Storage layout of the executable target, preserving wrapper identity
+    /// for generic frames and captures in the subsequent dispatch.
+    fn callable_argument_layout(
+        &self,
+        callee: HeapPtr,
+    ) -> Result<baml_type::CallLayout, VmInternalError> {
+        let function = match self.get_object(callee) {
+            Object::Function(function) => return Ok(function.argument_layout()),
+            Object::Closure(closure) => closure.function,
+            Object::BoundMethod(method) => method.function,
+            Object::GenericFunction(generic) => self.generic_function_authored_ptr(generic)?,
+            Object::HostClosure(host) => {
+                return Ok(baml_type::CallLayout::from_modes(
+                    host.params.iter().map(|p| (p.name.clone(), p.mode)),
+                ));
+            }
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::Callable.into(),
+                    got: ObjectType::of(other).into(),
+                });
+            }
+        };
+        self.callable_argument_layout(function)
+    }
+
+    /// Map only the caller's value lane. Type arguments and the caller's
+    /// locals below it never participate in arity inference or remapping.
+    fn remap_call_stack(
+        &mut self,
+        caller: &baml_type::CallLayout,
+        target: &baml_type::CallLayout,
+    ) -> Result<(), VmInternalError> {
+        let mapping = caller
+            .map_to(target)
+            .map_err(|message| VmInternalError::TypeSubstitution { message })?;
+        let offset = self
+            .stack
+            .len()
+            .checked_sub(caller.len())
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(caller.len()))?;
+        if caller == target {
+            return Ok(());
+        }
+        let values: Vec<_> = self.stack.drain(StackIndex::from_raw(offset)..).collect();
+        self.stack.extend(
+            mapping
+                .into_iter()
+                .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| values[index])),
+        );
+        Ok(())
+    }
+
+    fn virtual_argument_layout(
+        &self,
+        interface: Value,
+        method: Value,
+    ) -> Result<baml_type::CallLayout, VmInternalError> {
+        let ptr = self.as_object_ptr(interface, ObjectType::Type)?;
+        let Object::Type(value) = self.get_object(ptr) else {
+            unreachable!()
+        };
+        let bex_vm_types::RealizedTy::Interface(head, ..) = &value.ty else {
+            unreachable!("virtual call requires an interface")
+        };
+        let Object::Interface(declaration) = self.get_object(head.ptr()) else {
+            unreachable!()
+        };
+        let name = self.as_string(&method)?;
+        let member = declaration
+            .methods
+            .iter()
+            .find(|member| member.name.as_str() == name)
+            .ok_or_else(|| VmInternalError::TypeSubstitution {
+                message: "virtual call names no interface method".into(),
+            })?;
+        let bex_vm_types::TyTemplate::Function { params, .. } = &member.signature else {
+            unreachable!()
+        };
+        let mut layout =
+            baml_type::CallLayout::from_modes(params.iter().map(|p| (p.name.clone(), p.mode)));
+        if member.has_receiver {
+            layout.0.insert(0, None);
+        }
+        Ok(layout)
+    }
+
     /// Prepare a `YieldToCall`-style invocation: if `callee` is a
     /// `BoundMethod`, insert the receiver at the front of `args`. The returned
     /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
@@ -5757,14 +5955,33 @@ impl BexVm {
     /// `reflect.Type.of<T>()` inside generic methods invoked indirectly).
     /// `execute_call_from_locals_offset` and `load_function` both unwrap the
     /// `BoundMethod` to its inner `Function` for dispatch.
-    fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
-        let obj = self.get_object(callee);
-        if let Object::BoundMethod(bm) = obj {
-            let receiver = bm.receiver;
-            // Prepend receiver so the inner function sees [self, arg1, ..., argN].
-            args.insert(0, receiver);
+    fn resolve_bound_method_callee(
+        &self,
+        callee: HeapPtr,
+        args: &mut Vec<Value>,
+        argument_layout: Option<baml_type::CallLayout>,
+    ) -> Result<HeapPtr, VmInternalError> {
+        let mut caller =
+            argument_layout.unwrap_or_else(|| baml_type::CallLayout::positional(args.len()));
+        if caller.len() != args.len() {
+            return Err(VmInternalError::InvalidArgumentCount {
+                expected: caller.len(),
+                got: args.len(),
+            });
         }
-        callee
+        if let Object::BoundMethod(bm) = self.get_object(callee) {
+            args.insert(0, bm.receiver);
+            caller.0.insert(0, None);
+        }
+        let target = self.callable_argument_layout(callee)?;
+        let mapping = caller
+            .map_to(&target)
+            .map_err(|message| VmInternalError::TypeSubstitution { message })?;
+        *args = mapping
+            .into_iter()
+            .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
+            .collect();
+        Ok(callee)
     }
 
     /// The class-level type arguments to curry into a bound method whose
@@ -6812,6 +7029,7 @@ impl BexVm {
                         return Err(VmError::Thrown(thrown));
                     }
                     NativeCallResult::YieldToCall {
+                        argument_layout,
                         callee,
                         args: mut callback_args,
                         type_args: callback_type_args,
@@ -6827,8 +7045,11 @@ impl BexVm {
                         }));
 
                         // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
+                        let real_callee = self.resolve_bound_method_callee(
+                            callee,
+                            &mut callback_args,
+                            argument_layout,
+                        )?;
 
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
@@ -6997,7 +7218,7 @@ impl BexVm {
 
     /// Validate a callee's executable generic-bound metadata against the
     /// realized type arguments that will seed its frame.
-    fn validate_runtime_generic_bounds(
+    pub(crate) fn validate_runtime_generic_bounds(
         &mut self,
         callee_name: &str,
         generic_param_bounds: &[Vec<bex_vm_types::types::InterfaceBound>],
@@ -7746,6 +7967,7 @@ impl BexVm {
                         other => return Err(other),
                     },
                     NativeCallResult::YieldToCall {
+                        argument_layout,
                         callee,
                         args: mut callback_args,
                         type_args: callback_type_args,
@@ -7756,8 +7978,11 @@ impl BexVm {
                             continuation,
                         }));
 
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
+                        let real_callee = self.resolve_bound_method_callee(
+                            callee,
+                            &mut callback_args,
+                            argument_layout,
+                        )?;
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
@@ -8495,6 +8720,16 @@ impl BexVm {
                     let callee_value = self.load_global_in(function.runtime_package, callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
+                    if let Some(layout) = function
+                        .bytecode
+                        .compact
+                        .as_ref()
+                        .and_then(|code| code.call_layouts.get(&self.cur_pc))
+                        .cloned()
+                    {
+                        let target = self.callable_argument_layout(callee_ptr)?;
+                        self.remap_call_stack(&layout, &target)?;
+                    }
                     let args_offset = self.stack.len().checked_sub(arg_count + ntypeargs).ok_or(
                         VmInternalError::NotEnoughItemsOnStack(arg_count + ntypeargs),
                     )?;
@@ -8588,9 +8823,8 @@ impl BexVm {
                     // `Self` is the receiver's runtime concrete type; coherence makes
                     // `(Self, iface<args>)` resolve to at most one impl. Off that rule
                     // the method resolves through `rule_method_impl` (the provided
-                    // row, or the interface's default on a miss). `nargs` equals the
-                    // method's arity — the interface fixes the parameter count, so
-                    // every impl agrees. The rule borrows `self`; scope it so the
+                    // row, or the interface's default on a miss). The caller
+                    // and implementation can have different optional slots. Scope the
                     // borrow ends before the `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
                     let cache_key = if function.runtime_package.is_null() {
@@ -8697,6 +8931,17 @@ impl BexVm {
                         }
                         (callee, frame)
                     };
+                    let layout = self.virtual_argument_layout(iface_value, method_value)?;
+                    if layout.len() != nargs {
+                        return Err(VmInternalError::InvalidArgumentCount {
+                            expected: layout.len(),
+                            got: nargs,
+                        }
+                        .into());
+                    }
+                    let target = self.callable_argument_layout(callee_ptr)?;
+                    self.remap_call_stack(&layout, &target)?;
+                    let nargs = target.len();
                     // The receiver's class-level slots need no exact carrier:
                     // the resolver realizes them off `Self` as head-carrying
                     // types, so `reflect.Type.of<T>()` in an impl or default-method
@@ -8760,6 +9005,15 @@ impl BexVm {
                     };
                     bf.instruction_ptr = *pc;
 
+                    let argument_layout = function
+                        .bytecode
+                        .compact
+                        .as_ref()
+                        .and_then(|code| code.call_layouts.get(&self.cur_pc))
+                        .cloned()
+                        .ok_or_else(|| VmInternalError::TypeSubstitution {
+                            message: "indirect call is missing its caller layout".into(),
+                        })?;
                     let callee_slot = self.stack.ensure_stack_top();
                     let callee_value = self.stack[callee_slot];
                     let callee_ptr =
@@ -8777,6 +9031,8 @@ impl BexVm {
                         // for the args-layout rationale.
                         let arity = host_closure.arity;
                         let _popped_callee = self.stack.ensure_pop();
+                        let target = self.callable_argument_layout(callee_ptr)?;
+                        self.remap_call_stack(&argument_layout, &target)?;
                         // Defense-in-depth: see `Instruction::CallIndirect`
                         // above — a `HostClosure` has no inner `Object::Function`
                         // to cross-check `arity` against, so assert the operand
@@ -8820,15 +9076,18 @@ impl BexVm {
                             full_arity >= 1,
                             "BoundMethod's inner function must have self parameter"
                         );
-                        let visible_arity = full_arity.saturating_sub(1);
+                        let mut caller = argument_layout;
                         let receiver = bm.receiver;
                         let _popped = self.stack.ensure_pop();
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(visible_arity)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
+                            .checked_sub(caller.len())
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(caller.len()))?;
                         self.stack.insert(args_offset, receiver);
+                        caller.0.insert(0, None);
+                        let target = self.callable_argument_layout(callee_ptr)?;
+                        self.remap_call_stack(&caller, &target)?;
                         let locals_offset = StackIndex::from_raw(args_offset);
                         // Pass the BoundMethod pointer (not its inner function) so
                         // `execute_call_from_locals_offset` seeds the receiver's
@@ -8850,12 +9109,14 @@ impl BexVm {
                         }
                     } else {
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                        let _popped_callee = self.stack.ensure_pop();
+                        let target = self.callable_argument_layout(callee_ptr)?;
+                        self.remap_call_stack(&argument_layout, &target)?;
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(arg_count + 1)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                        let _popped_callee = self.stack.ensure_pop();
+                            .checked_sub(arg_count)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                         let locals_offset = StackIndex::from_raw(args_offset);
                         if let Some(state) = self.execute_call_from_locals_offset(
                             callee_ptr,
@@ -9480,6 +9741,7 @@ impl BexVm {
                     // support and would append after these.)
                     let type_args = self.bound_method_curried_type_args(receiver);
                     let bound = Object::BoundMethod(BoundMethod {
+                        interface_signature: None,
                         function: function_ptr,
                         receiver,
                         type_args,
@@ -9523,6 +9785,7 @@ impl BexVm {
                         method_type_args,
                     )?;
                     let bound = Object::BoundMethod(BoundMethod {
+                        interface_signature: None,
                         function: function_ptr,
                         receiver,
                         type_args: type_args.into_boxed_slice(),
@@ -9610,36 +9873,46 @@ impl BexVm {
                     // — then append the new instantiation args in call order, so
                     // a later indirect call seeds a complete `frame.type_args`).
                     //
-                    // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
-                    // in a closure without losing its receiver, so it is passed
-                    // through unchanged: the explicit type args are dropped, but
-                    // the call still dispatches with the correct `self`. This is
-                    // correct for the common case of a method that does not reify
-                    // `T` at runtime, and — unlike closure-wrapping it — never
-                    // crashes. (`GenericFunction` does not reach here: TIR rejects
-                    // type args on an already-specialized value.)
-                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
-                        match self.get_object(callable_ptr) {
-                            Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
-                            Object::Closure(c) => Some((
-                                c.function,
-                                c.captures.to_vec(),
-                                c.captured_type_args.to_vec(),
-                            )),
-                            _ => None,
+                    // Specializing a bound method preserves its receiver and
+                    // appends to its exact impl/default owner frame. It must
+                    // not mutate an existing method value or discard the new
+                    // type args. (`GenericFunction` does not reach here: TIR
+                    // rejects type args on an already-specialized value.)
+                    if let Object::BoundMethod(method) = self.get_object(callable_ptr) {
+                        let mut frame = method.type_args.to_vec();
+                        frame.extend(type_args.tys);
+                        let bound = BoundMethod {
+                            interface_signature: method.interface_signature.clone(),
+                            function: method.function,
+                            receiver: method.receiver,
+                            type_args: frame.into_boxed_slice(),
                         };
-                    match wrap {
-                        Some((function_ptr, captures, mut captured_type_args)) => {
-                            captured_type_args.extend(type_args.tys);
-                            let closure = Object::Closure(Closure {
-                                function: function_ptr,
-                                captures: captures.into_boxed_slice(),
-                                captured_type_args: captured_type_args.into_boxed_slice(),
-                            });
-                            let ptr = self.tlab.alloc(closure);
-                            self.stack.push(Value::object(ptr));
+                        let ptr = self.tlab.alloc(Object::BoundMethod(bound));
+                        self.stack.push(Value::object(ptr));
+                    } else {
+                        let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
+                            match self.get_object(callable_ptr) {
+                                Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
+                                Object::Closure(c) => Some((
+                                    c.function,
+                                    c.captures.to_vec(),
+                                    c.captured_type_args.to_vec(),
+                                )),
+                                _ => None,
+                            };
+                        match wrap {
+                            Some((function_ptr, captures, mut captured_type_args)) => {
+                                captured_type_args.extend(type_args.tys);
+                                let closure = Object::Closure(Closure {
+                                    function: function_ptr,
+                                    captures: captures.into_boxed_slice(),
+                                    captured_type_args: captured_type_args.into_boxed_slice(),
+                                });
+                                let ptr = self.tlab.alloc(closure);
+                                self.stack.push(Value::object(ptr));
+                            }
+                            None => self.stack.push(callable),
                         }
-                        None => self.stack.push(callable),
                     }
                 }
 

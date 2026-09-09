@@ -33,7 +33,7 @@ use crate::{
         type_alias::TypeScriptTypeAlias,
     },
     routing::LeafPath,
-    translate_ty::{TranslateCtx, TranslatedType, translate_ty},
+    translate_ty::{TranslateCtx, TranslatedType, translate_input_ty, translate_ty},
 };
 
 /// All symbols that land in one leaf's body, in final render order.
@@ -202,6 +202,9 @@ struct RenderState {
     uses_baml_type: bool,
     /// Set when a BAML `type` appears in a public signature.
     uses_baml_type_handle: bool,
+    uses_interface_ref: bool,
+    live_methods: BTreeMap<baml_codegen_types::Name, String>,
+    concrete_base: String,
 }
 
 impl RenderState {
@@ -400,7 +403,7 @@ fn fn_type_sig(
         if !type_binding_params.is_empty() {
             let bindings = type_binding_params
                 .iter()
-                .map(|name| format!("{name}?: BamlType | BamlTypeToken"))
+                .map(|name| format!("{name}?: BamlTypeValue | BamlTypeToken"))
                 .collect::<Vec<_>>()
                 .join("; ");
             fields.push(format!("$types?: {{ {bindings} }} | undefined"));
@@ -418,16 +421,54 @@ fn fn_type_sig(
 // ── Public entry point ──
 
 /// Render the full `index.ts` for a directory.
+#[cfg(test)]
 pub(crate) fn render_index_ts(
     body: &LeafBody,
     kids: &BTreeSet<String>,
     is_root: bool,
     runtime_package: &str,
 ) -> String {
+    render_index_ts_with_interfaces(body, kids, is_root, runtime_package, None)
+}
+
+pub(crate) fn render_index_ts_with_interfaces(
+    body: &LeafBody,
+    kids: &BTreeSet<String>,
+    is_root: bool,
+    runtime_package: &str,
+    interfaces: Option<(
+        &baml_codegen_types::SymbolPool,
+        std::rc::Rc<crate::interface_names::TypeScriptInterfaces>,
+    )>,
+) -> String {
     let ctx = TranslateCtx {
         current_leaf: body.leaf.clone(),
+        interfaces: interfaces.as_ref().map(|(_, names)| names.clone()),
     };
     let mut state = RenderState::default();
+    if let Some((pool, names)) = &interfaces {
+        if let Some(helpers) = names.helpers.get(&ctx.current_leaf) {
+            state.concrete_base.clone_from(&helpers.concrete_base);
+        }
+        for (name, projection) in &pool.class_projections {
+            if *projection != baml_type::ClassProjection::Live
+                || crate::routing::route_class_ref(name) != body.leaf
+            {
+                continue;
+            }
+            let baml_codegen_types::Symbol::Class(class) = &pool[name] else {
+                continue;
+            };
+            let declaration = &pool.interfaces.concrete_classes[name];
+            let rendered = crate::concrete_refs::render(declaration, class, &ctx);
+            for signature in rendered.signatures {
+                state.merge(&signature);
+            }
+            state.uses_baml_type |= rendered.uses_type_tokens;
+            state.uses_interface_ref = true;
+            state.live_methods.insert(name.clone(), rendered.source);
+        }
+    }
     let callable_child_aliases = body.callable_child_aliases(kids);
 
     // Render symbol bodies first so the import preamble can be computed.
@@ -448,6 +489,51 @@ pub(crate) fn render_index_ts(
         prev = Some(key);
     }
 
+    if let Some((pool, _)) = interfaces {
+        let factories = crate::type_factories::render(pool, &ctx);
+        for signature in factories.signatures {
+            state.merge(&signature);
+        }
+        let refs = crate::interface_refs::render(pool, &ctx);
+        for signature in refs.signatures {
+            state.merge(&signature);
+        }
+        state.uses_baml_type |= refs.uses_type_tokens;
+        if !refs.source.is_empty() || !factories.source.is_empty() || state.uses_interface_ref {
+            state.uses_interface_ref = true;
+            let helpers = &ctx.interfaces.as_ref().expect("names").helpers[&ctx.current_leaf];
+            let witnesses = &helpers.witnesses;
+            let interface_base = &helpers.interface_base;
+            let interface_type = &helpers.interface_type;
+            let typed_type = &helpers.typed_type;
+            let no_infer = &helpers.no_infer;
+            let declare_type = &helpers.declare_type;
+            let prefix = if body.leaf.segments.is_empty() {
+                "./".to_owned()
+            } else {
+                "../".repeat(body.leaf.segments.len())
+            };
+            writeln!(
+                body_str,
+                r#"import * as {witnesses} from "{prefix}_interface_types.js";"#
+            )
+            .unwrap();
+            writeln!(
+                body_str,
+                r#"import {{ BamlInterfaceRef as {interface_base}, BamlInterfaceType as {interface_type}, type BamlType as {typed_type}, type BamlNoInfer as {no_infer} }} from "{runtime_package}";"#
+            )
+            .unwrap();
+            if !factories.source.is_empty() {
+                writeln!(
+                    body_str,
+                    r#"import {{ declareType as {declare_type} }} from "{prefix}_sdk.js";"#
+                )
+                .unwrap();
+                body_str.push_str(&factories.source);
+            }
+            body_str.push_str(&refs.source);
+        }
+    }
     state.uses_baml_handle = body_str.contains("_BamlHandle");
     let mut out = String::new();
     write_preamble_ts(
@@ -553,13 +639,7 @@ fn write_child_reexports(
 fn runtime_import_line(state: &RenderState, extra: &[&str], runtime_package: &str) -> String {
     let mut names: Vec<&str> = Vec::new();
     names.extend_from_slice(extra);
-    if state.uses_define_function {
-        names.push("defineFunction");
-    }
-    if state.uses_define_instance {
-        names.push("defineInstanceFunction");
-    }
-    if state.uses_define_function || state.uses_define_instance {
+    if state.uses_define_function || state.uses_define_instance || state.uses_interface_ref {
         names.push("type BamlCallContext");
     }
     // Type-only import (inline `type` modifier) for the generic `$types` field
@@ -568,6 +648,7 @@ fn runtime_import_line(state: &RenderState, extra: &[&str], runtime_package: &st
     if state.uses_baml_type {
         names.push("type BamlType");
         names.push("type BamlTypeToken");
+        names.push("type BamlTypeValue");
     } else if state.uses_baml_type_handle {
         names.push("type BamlType");
     }
@@ -590,6 +671,33 @@ fn write_preamble_ts(
     is_root: bool,
     runtime_package: &str,
 ) {
+    if !state.live_methods.is_empty() {
+        let concrete_base = &state.concrete_base;
+        writeln!(
+            out,
+            r#"import {{ BamlConcreteRef as {concrete_base} }} from "{runtime_package}";"#
+        )
+        .unwrap();
+    }
+    let mut factories = Vec::new();
+    if state.uses_define_function {
+        factories.push("defineFunction");
+    }
+    if state.uses_define_instance {
+        factories.push("defineInstanceFunction");
+    }
+    if !factories.is_empty() {
+        let prefix = if body.leaf.segments.is_empty() {
+            "./".to_owned()
+        } else {
+            "../".repeat(body.leaf.segments.len())
+        };
+        let _ = writeln!(
+            out,
+            "import {{ {} }} from \"{prefix}_sdk.js\";",
+            factories.join(", ")
+        );
+    }
     if state.uses_baml_handle {
         let _ = writeln!(
             out,
@@ -597,19 +705,12 @@ fn write_preamble_ts(
         );
     }
     if is_root {
-        out.push_str(&runtime_import_line(
-            state,
-            &["initializeRuntimeFromBytecode", "setTypeMap"],
-            runtime_package,
-        ));
-        out.push_str("import * as _inlinedbaml from \"./_inlinedbaml.js\";\n");
-        out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
+        out.push_str(&runtime_import_line(state, &[], runtime_package));
+        // Also initialize empty/root-only SDKs. Factory wrappers in this module
+        // are hoisted functions, so cyclic typemap imports can define callers.
+        out.push_str("import \"./_sdk.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n",
-        );
-        out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
             write_child_reexports(out, kids, callable_child_aliases);
@@ -634,7 +735,27 @@ fn render_symbol_ts(
     match sym {
         EmittedSymbol::Class(c) => {
             if let Some(rust_name) = runtime_owned_reexport_name(c) {
-                render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
+                if let Some(names) = &ctx.interfaces
+                    && names.concrete_inputs.contains(&c.source)
+                {
+                    let runtime_alias =
+                        &names.helpers[&ctx.current_leaf].runtime_classes[&c.source];
+                    let local = &c.name;
+                    let generic = generic_decl(&c.generic_params);
+                    writeln!(
+                        out,
+                        r#"import {{ {rust_name} as {runtime_alias} }} from "{runtime_package}";"#
+                    )
+                    .unwrap();
+                    writeln!(out, "export const {local} = {runtime_alias};").unwrap();
+                    writeln!(
+                        out,
+                        "export interface {local}{generic} extends {runtime_alias}{generic} {{}}"
+                    )
+                    .unwrap();
+                } else {
+                    render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
+                }
             } else {
                 render_class_ts(out, c, ctx, state);
             }
@@ -684,6 +805,15 @@ fn render_type_alias(
     state.merge(&rhs);
     // TS resolves recursive aliases natively; same shape for both.
     let _ = writeln!(out, "export type {} = {};", a.name, rhs.expr);
+    if let Some(name) = ctx
+        .interfaces
+        .as_ref()
+        .and_then(|names| names.input_aliases.get(&a.source))
+    {
+        let input = translate_input_ty(&a.resolves_to, ctx);
+        state.merge(&input);
+        writeln!(out, "export type {name} = {};", input.expr).unwrap();
+    }
 }
 
 fn render_class_ts(
@@ -694,6 +824,25 @@ fn render_class_ts(
 ) {
     write_class_doc(out, c);
     let generics = generic_decl(&c.generic_params);
+
+    if let Some(methods) = state.live_methods.get(&c.source).cloned() {
+        let concrete_base = &state.concrete_base;
+        let mut pins = vec![crate::ts_string(&c.source.to_string())];
+        pins.extend(c.generic_params.iter().cloned());
+        let pins = pins.join(", ");
+        writeln!(
+            out,
+            "export class {}{generics} extends {concrete_base}<[{pins}]> {{",
+            c.name
+        )
+        .unwrap();
+        for method in &c.static_methods {
+            render_method_binding_ts(out, method, &c.generic_params, ctx, state);
+        }
+        out.push_str(&methods);
+        out.push_str("}\n");
+        return;
+    }
 
     // Translate each property type once; reuse for field + constructor.
     let props: Vec<(&str, TranslatedType)> = c
@@ -716,7 +865,7 @@ fn render_class_ts(
         let fields = c
             .generic_params
             .iter()
-            .map(|p| format!("{p}?: BamlType | BamlTypeToken"))
+            .map(|p| format!("{p}?: BamlTypeValue | BamlTypeToken"))
             .collect::<Vec<_>>()
             .join("; ");
         format!("{{ {fields} }}")
@@ -808,13 +957,13 @@ fn binding_surface<'a>(
         .required_args
         .iter()
         .map(|arg| {
-            let tt = translate_ty(&arg.ty, ctx);
+            let tt = translate_input_ty(&arg.ty, ctx);
             state.merge(&tt);
             tt
         })
         .collect();
     tys.extend(m.optional_args.iter().map(|arg| {
-        let tt = translate_ty(&arg.ty, ctx);
+        let tt = translate_input_ty(&arg.ty, ctx);
         state.merge(&tt);
         tt
     }));
@@ -903,7 +1052,7 @@ fn render_function_ts(
         .arg_tys
         .iter()
         .map(|t| {
-            let tt = translate_ty(t, ctx);
+            let tt = translate_input_ty(t, ctx);
             state.merge(&tt);
             tt
         })
@@ -1213,9 +1362,7 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains(
-            "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
-        ));
+        assert!(ts.contains("import { defineFunction } from \"../_sdk.js\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
     }
@@ -1454,12 +1601,10 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
-        ));
-        assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
+        assert!(ts.contains("import \"./_sdk.js\";"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction } from \"./_sdk.js\";"));
+        assert!(ts.contains("import { type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
     }
 }

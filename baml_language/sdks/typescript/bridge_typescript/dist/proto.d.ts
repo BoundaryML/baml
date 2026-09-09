@@ -1,13 +1,7 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlCallContext, HandleKey } from './native.js';
-import { BamlType } from './wire_ty.js';
+import { BamlEncodedResult, BamlCallContext, HandleKey } from './native.js';
+import { BamlTypeMap } from './typemap.js';
+import { type BamlTypeValue } from './wire_ty.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -18,8 +12,10 @@ export declare class HostCallableSyncError extends Error {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    typeMap?: BamlTypeMap;
     functionName?: string;
     functionHandle?: HandleKey;
+    concreteMethod?: baml_bridge.cffi.v1.IConcreteMethodTarget;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -27,7 +23,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlTypeValue]>;
 }
 export interface BamlPromptCallOptions {
     $ctx?: BamlCallContext;
@@ -77,11 +73,9 @@ export declare class BamlPrompt {
  * host-value table and is normally released only when the engine GCs the
  * `HostClosure` it allocated and fires the C release callback (a GC-timed
  * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * Callback channels retain their callable without pinning the Node event loop.
+ * If a later argument or type token fails, the engine never sees the registered
+ * keys or cloned handles, so encoding must release them itself.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
 /**
@@ -90,15 +84,6 @@ export declare function encodeCallArgs(kwargs: Record<string, unknown>, options:
  * than the call-result `BamlOutboundResult` envelope.
  */
 export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
-/**
- * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
- * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
- * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
- * value (`.value`), the BAML trace (`.bamlTrace`), and the class FQN
- * (`.className`), with a readable formatted `.message`. An `is_exit_panic`
- * (clean `baml.sys.exit`) terminates the process via `process.exit(code)`
- * rather than throwing.
- */
-export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
-export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer) => void;
+export declare function decodeCallResult(data: Buffer | Uint8Array | BamlEncodedResult, typeMap?: BamlTypeMap): unknown;
+export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown, typeMap?: BamlTypeMap): (callId: number, argsBytes: BamlEncodedResult) => void;
 //# sourceMappingURL=proto.d.ts.map

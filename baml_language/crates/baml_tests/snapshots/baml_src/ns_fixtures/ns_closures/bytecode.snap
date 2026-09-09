@@ -95,14 +95,14 @@ function fixtures.closures.RangeCheck.is_valid(self: fixtures.closures.RangeChec
     return
 }
 
-function fixtures.closures.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
+function fixtures.closures.apply(f: (int, int) -> int throws unknown, a: int, b: int) -> int {
     load_var2 2 3
     load_var f
     call_indirect
     return
 }
 
-function fixtures.closures.apply_to_each(items: fixtures.closures.Employee[], f: (fixtures.closures.Employee) -> string throws never) -> string[] {
+function fixtures.closures.apply_to_each(items: fixtures.closures.Employee[], f: (fixtures.closures.Employee) -> string throws unknown) -> string[] {
     load_type fixtures.closures.Employee
     load_type string
     load_type unknown

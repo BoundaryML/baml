@@ -25,6 +25,7 @@
 //! backend; it only appears in the S15 differential sweep.
 
 pub mod callable;
+pub mod class_projection;
 pub mod coherence;
 pub mod defaults;
 pub mod diagnostics;

@@ -1,9 +1,8 @@
 //! `PyClass` — Python class definition.
 //!
-//! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
-//! and `$stream` companion classes. All three render as a
-//! `pydantic.BaseModel` subclass with typed fields; they differ only in
-//! leaf routing.
+//! The compiler-owned projection chooses a Pydantic record, a retained
+//! concrete facade, or a dedicated builtin wrapper. Field copies and live
+//! receiver methods never share one generated object representation.
 
 use std::collections::BTreeMap;
 
@@ -11,13 +10,15 @@ use baml_codegen_types::{Name, Ty};
 
 use crate::emit::method::PyMethodBinding;
 
-/// Python class definition. G4 populates `properties`; 12b populates
-/// `static_methods` and `instance_methods`; §7 handle-backed
-/// classes are deferred — every `PyClass` renders as vanilla Pydantic.
+/// Python class definition. Live classes keep factories and compiler-resolved
+/// receiver methods; records keep their copied fields.
 pub(crate) struct PyClass {
     /// Python identifier (bare name). `$stream` suffix is stripped —
     /// it influenced routing, not the class name.
     pub(crate) py_name: String,
+    /// Compiler-owned live projection; fields are not native mutable copies.
+    pub(crate) live: bool,
+    pub(crate) input_proofs: Vec<(String, Ty)>,
     /// Source pool key, retained for debug / routing.
     #[allow(dead_code)]
     pub(crate) source: Name,

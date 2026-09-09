@@ -110,6 +110,7 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
     match make_to_json_callee(vm, Value::object(first_ptr)) {
         Err(e) => NativeCallResult::Error(e.into()),
         Ok(Some(callee)) => NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee,
             args: vec![],
             type_args: vec![],
@@ -393,6 +394,7 @@ impl Continuation for ToJsonWalkContinuation {
                 Err(e) => return NativeCallResult::Error(e.into()),
                 Ok(Some(callee)) => {
                     return NativeCallResult::YieldToCall {
+                        argument_layout: None,
                         callee,
                         args: vec![],
                         type_args: vec![],
@@ -1677,6 +1679,7 @@ fn class_drive(
             continue;
         }
         return NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: to_fn,
             args: vec![field_json],
             type_args: vec![field_ty],
@@ -1804,6 +1807,7 @@ fn try_yield_interface_from_json(
         Err(e) => return Some(NativeCallResult::Error(e.into())),
     };
     Some(NativeCallResult::YieldToCall {
+        argument_layout: None,
         callee: resolved.method.fqn,
         args: vec![j],
         type_args,
@@ -1855,6 +1859,7 @@ fn list_drive(
                 None => return missing_to_driver(),
             };
             return NativeCallResult::YieldToCall {
+                argument_layout: None,
                 callee: to_fn,
                 args: vec![curr],
                 type_args: vec![elem_ty.clone()],
@@ -1975,6 +1980,7 @@ fn map_drive(
                 None => return missing_to_driver(),
             };
             return NativeCallResult::YieldToCall {
+                argument_layout: None,
                 callee: to_fn,
                 args: vec![curr],
                 type_args: vec![val_ty.clone()],

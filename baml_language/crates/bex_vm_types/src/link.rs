@@ -1354,6 +1354,7 @@ mod tests {
             type_tag: baml_type::typetag::TypeTag::from_i64(type_tag),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }))

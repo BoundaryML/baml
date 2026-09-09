@@ -20,7 +20,8 @@ option optimize_for = LITE_RUNTIME;
 //   - baml.llm.Collector                     -> ADT_COLLECTOR
 //   - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 //   - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
-//   - runtime-created nominal values         -> ADT_RUNTIME_VALUE
+//   - runtime-created enum values            -> ADT_RUNTIME_VALUE
+//   - live or runtime-created classes        -> CONCRETE_OBJECT
 //
 // `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 // `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -64,10 +65,20 @@ enum BamlHandleType {
   // is annotation-only; method generic substitution comes from the resolved
   // heap object.
   ADT_FUNCTION_SPEC = 17;
-  // Live runtime-created class/enum value. The host must not resolve its
+  // Live runtime-created enum value. The host must not resolve its
   // display name through a generated typemap; only the originating engine can
   // interpret the rooted declaration identity.
   ADT_RUNTIME_VALUE = 18;
+  // Live checked interface view. The table owns receiver, type and world roots.
+  ADT_INTERFACE = 19;
+  // Owned table lease retaining a host registration. Unlike raw registration
+  // keys (15/16), this key uses ordinary handle clone/release and receipts.
+  HOST_REFERENCE = 20;
+  // Retained concrete class receiver. Exact declaration/type arguments come
+  // from the rooted object; ty is descriptive and cannot establish identity.
+  CONCRETE_OBJECT = 21;
+  // Immutable host adapter type registration, not a BAML value.
+  HOST_ADAPTER_TYPE = 22;
 }
 
 message BamlHandle {

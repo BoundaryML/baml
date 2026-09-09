@@ -86,9 +86,12 @@ pub(crate) fn build_emitted(
         match symbol {
             Symbol::Class(c) => {
                 let sort_key = origin_key(&c.origin);
+                let live =
+                    pool.class_projections.get(key) == Some(&baml_type::ClassProjection::Live);
                 let properties = c
                     .properties
                     .iter()
+                    .filter(|_| !live)
                     .map(|p| {
                         let wire_name = p.name.as_str().to_string();
                         PyClassProperty {
@@ -111,12 +114,21 @@ pub(crate) fn build_emitted(
                     MethodKind::Static,
                     names,
                 );
-                let instance_methods = expand_methods(
-                    &c.instance_methods,
-                    &class_fqn_root,
-                    MethodKind::Instance,
-                    names,
-                );
+                let instance_methods = if live {
+                    let declaration = pool
+                        .interfaces
+                        .concrete_classes
+                        .get(key)
+                        .unwrap_or_else(|| panic!("missing concrete caller contract for {key}"));
+                    crate::concrete_methods::build(declaration, c, names)
+                } else {
+                    expand_methods(
+                        &c.instance_methods,
+                        &class_fqn_root,
+                        MethodKind::Instance,
+                        names,
+                    )
+                };
                 let generic_params = c
                     .generic_params
                     .iter()
@@ -141,6 +153,13 @@ pub(crate) fn build_emitted(
                     leaf,
                     EmittedSymbol::Class(PyClass {
                         py_name: bare,
+                        live,
+                        input_proofs: pool.interfaces.concrete_classes.get(key).map_or_else(
+                            Vec::new,
+                            |declaration| {
+                                crate::concrete_methods::input_proofs(declaration, c, names)
+                            },
+                        ),
                         source: key.clone(),
                         generic_params,
                         wire_generic_params,
@@ -301,7 +320,7 @@ fn expand_function(
 /// in source order, de-duping exact-equal names (32d). Class/Enum/TypeAlias
 /// contribute their unqualified leaf name; a union contributes each member's;
 /// an optional unwraps; anything else (primitives) contributes nothing.
-fn collect_raises_names(
+pub(crate) fn collect_raises_names(
     throws: Option<&baml_codegen_types::Ty>,
     names: &PythonNames,
 ) -> Vec<String> {
@@ -372,6 +391,7 @@ fn expand_methods(
                 SyncAsync::Sync
             };
             out.push(PyMethodBinding {
+                concrete_target: None,
                 py_name: names.callable(&fqn_root, role).into_owned(),
                 baml_fqn: fqn_root.clone(),
                 mode,

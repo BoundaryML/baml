@@ -2,7 +2,76 @@ use std::collections::HashSet;
 
 use crate::{CodegenTypeError, Ty};
 
-pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
+/// SDK declarations plus the unprojected interface/implementation graph.
+/// Native signature rewrites must preserve the semantic graph.
+#[derive(Clone, Default)]
+pub struct SymbolPool {
+    symbols: std::collections::HashMap<super::Name, Symbol>,
+    pub interfaces: std::sync::Arc<crate::InterfaceGraph>,
+    /// Owner-defined bridge codecs, including source-less class declarations.
+    pub class_projections: std::collections::BTreeMap<super::Name, baml_type::ClassProjection>,
+}
+
+impl SymbolPool {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn map_symbols(&self, mut map: impl FnMut(&Symbol) -> Symbol) -> Self {
+        Self {
+            symbols: self
+                .symbols
+                .iter()
+                .map(|(name, symbol)| (name.clone(), map(symbol)))
+                .collect(),
+            interfaces: self.interfaces.clone(),
+            class_projections: self.class_projections.clone(),
+        }
+    }
+}
+
+impl std::ops::Deref for SymbolPool {
+    type Target = std::collections::HashMap<super::Name, Symbol>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.symbols
+    }
+}
+
+impl std::ops::DerefMut for SymbolPool {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.symbols
+    }
+}
+
+impl<'a> IntoIterator for &'a SymbolPool {
+    type Item = (&'a super::Name, &'a Symbol);
+    type IntoIter = std::collections::hash_map::Iter<'a, super::Name, Symbol>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.symbols.iter()
+    }
+}
+
+impl<const N: usize> From<[(super::Name, Symbol); N]> for SymbolPool {
+    fn from(symbols: [(super::Name, Symbol); N]) -> Self {
+        Self {
+            symbols: symbols.into(),
+            interfaces: std::sync::Arc::default(),
+            class_projections: Default::default(),
+        }
+    }
+}
+
+impl FromIterator<(super::Name, Symbol)> for SymbolPool {
+    fn from_iter<T: IntoIterator<Item = (super::Name, Symbol)>>(iter: T) -> Self {
+        Self {
+            symbols: iter.into_iter().collect(),
+            interfaces: std::sync::Arc::default(),
+            class_projections: Default::default(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub enum Symbol {

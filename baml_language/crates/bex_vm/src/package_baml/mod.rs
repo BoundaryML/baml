@@ -89,6 +89,10 @@ pub enum NativeCallResult {
     /// can dispatch a generic class' `from_json` (e.g. `Box<Secret>.from_json`)
     /// with the right `T` substitution.  Pass `vec![]` for non-generic callees.
     YieldToCall {
+        /// None means every supplied value is a required positional argument.
+        /// Reflection supplies its declared slots (including omitted optionals).
+        /// Excludes the receiver inserted for a BoundMethod.
+        argument_layout: Option<baml_type::CallLayout>,
         callee: HeapPtr,
         args: Vec<Value>,
         type_args: Vec<bex_vm_types::RealizedTy>,
@@ -308,6 +312,7 @@ pub(super) fn shim_rule_method(
 /// approximation `bound_method_curried_type_args` gives a `MakeBoundMethod`.
 fn rule_bound_method(vm: &mut BexVm, v: Value, resolved: ShimRuleMethod) -> HeapPtr {
     vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        interface_signature: None,
         function: resolved.callee,
         receiver: v,
         type_args: resolved.type_args.into_boxed_slice(),

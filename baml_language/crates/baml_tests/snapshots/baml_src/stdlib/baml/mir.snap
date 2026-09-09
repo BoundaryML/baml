@@ -1188,6 +1188,21 @@ fn baml.FromJson.from_json(_1: void) -> void {
 
 fn baml._from_json_shim = builtin(vm)
 
+fn baml.identity(value: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T // value // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.deep_copy = builtin(vm)
 
 fn baml.Float.is_nan = builtin(vm)

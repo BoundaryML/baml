@@ -64,6 +64,30 @@ class CallFunctionArgs;
 struct CallFunctionArgsDefaultTypeInternal;
 extern CallFunctionArgsDefaultTypeInternal _CallFunctionArgs_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<37> CallFunctionArgs_class_data_;
+class ConcreteMethodTarget;
+struct ConcreteMethodTargetDefaultTypeInternal;
+extern ConcreteMethodTargetDefaultTypeInternal _ConcreteMethodTarget_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<41> ConcreteMethodTarget_class_data_;
+class CreateHostAdapterRequest;
+struct CreateHostAdapterRequestDefaultTypeInternal;
+extern CreateHostAdapterRequestDefaultTypeInternal _CreateHostAdapterRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<45> CreateHostAdapterRequest_class_data_;
+class HostAdapterCallbackSlot;
+struct HostAdapterCallbackSlotDefaultTypeInternal;
+extern HostAdapterCallbackSlotDefaultTypeInternal _HostAdapterCallbackSlot_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<44> HostAdapterCallbackSlot_class_data_;
+class HostAdapterImplementation;
+struct HostAdapterImplementationDefaultTypeInternal;
+extern HostAdapterImplementationDefaultTypeInternal _HostAdapterImplementation_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<46> HostAdapterImplementation_class_data_;
+class HostOperationRequest;
+struct HostOperationRequestDefaultTypeInternal;
+extern HostOperationRequestDefaultTypeInternal _HostOperationRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<41> HostOperationRequest_class_data_;
+class HostOperationResult;
+struct HostOperationResultDefaultTypeInternal;
+extern HostOperationResultDefaultTypeInternal _HostOperationResult_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<40> HostOperationResult_class_data_;
 class InboundClassValue;
 struct InboundClassValueDefaultTypeInternal;
 extern InboundClassValueDefaultTypeInternal _InboundClassValue_default_instance_;
@@ -88,6 +112,22 @@ class InboundValue;
 struct InboundValueDefaultTypeInternal;
 extern InboundValueDefaultTypeInternal _InboundValue_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<33> InboundValue_class_data_;
+class InterfaceMethodTarget;
+struct InterfaceMethodTargetDefaultTypeInternal;
+extern InterfaceMethodTargetDefaultTypeInternal _InterfaceMethodTarget_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<42> InterfaceMethodTarget_class_data_;
+class ProjectInterfaceRequest;
+struct ProjectInterfaceRequestDefaultTypeInternal;
+extern ProjectInterfaceRequestDefaultTypeInternal _ProjectInterfaceRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<44> ProjectInterfaceRequest_class_data_;
+class RegisterHostAdapterRequest;
+struct RegisterHostAdapterRequestDefaultTypeInternal;
+extern RegisterHostAdapterRequestDefaultTypeInternal _RegisterHostAdapterRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<47> RegisterHostAdapterRequest_class_data_;
+class RegisteredHostAdapter;
+struct RegisteredHostAdapterDefaultTypeInternal;
+extern RegisteredHostAdapterDefaultTypeInternal _RegisteredHostAdapter_default_instance_;
+extern const ::google::protobuf::internal::ClassDataLite<42> RegisteredHostAdapter_class_data_;
 }  // namespace v1
 }  // namespace cffi
 }  // namespace baml_bridge
@@ -306,6 +346,202 @@ class InboundEnumValue final : public ::google::protobuf::MessageLite
 extern const ::google::protobuf::internal::ClassDataLite<37> InboundEnumValue_class_data_;
 // -------------------------------------------------------------------
 
+class HostAdapterCallbackSlot final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.HostAdapterCallbackSlot) */ {
+ public:
+  inline HostAdapterCallbackSlot() : HostAdapterCallbackSlot(nullptr) {}
+  ~HostAdapterCallbackSlot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HostAdapterCallbackSlot* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HostAdapterCallbackSlot));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HostAdapterCallbackSlot(::google::protobuf::internal::ConstantInitialized);
+
+  inline HostAdapterCallbackSlot(const HostAdapterCallbackSlot& from) : HostAdapterCallbackSlot(nullptr, from) {}
+  inline HostAdapterCallbackSlot(HostAdapterCallbackSlot&& from) noexcept
+      : HostAdapterCallbackSlot(nullptr, ::std::move(from)) {}
+  inline HostAdapterCallbackSlot& operator=(const HostAdapterCallbackSlot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostAdapterCallbackSlot& operator=(HostAdapterCallbackSlot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const HostAdapterCallbackSlot& default_instance() {
+    return *reinterpret_cast<const HostAdapterCallbackSlot*>(
+        &_HostAdapterCallbackSlot_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(HostAdapterCallbackSlot& a, HostAdapterCallbackSlot& b) { a.Swap(&b); }
+  inline void Swap(HostAdapterCallbackSlot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostAdapterCallbackSlot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostAdapterCallbackSlot* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<HostAdapterCallbackSlot>(arena);
+  }
+  void CopyFrom(const HostAdapterCallbackSlot& from);
+  void MergeFrom(const HostAdapterCallbackSlot& from) { HostAdapterCallbackSlot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HostAdapterCallbackSlot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.HostAdapterCallbackSlot"; }
+
+ protected:
+  explicit HostAdapterCallbackSlot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HostAdapterCallbackSlot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HostAdapterCallbackSlot& from);
+  HostAdapterCallbackSlot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HostAdapterCallbackSlot&& from) noexcept
+      : HostAdapterCallbackSlot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMethodFieldNumber = 1,
+    kImplementationIndexFieldNumber = 3,
+  };
+  // string method = 1;
+  void clear_method() ;
+  const ::std::string& method() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_method(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_method();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_method();
+  void set_allocated_method(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_method() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_method(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_method();
+
+  public:
+  // uint32 implementation_index = 3;
+  void clear_implementation_index() ;
+  ::uint32_t implementation_index() const;
+  void set_implementation_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_implementation_index() const;
+  void _internal_set_implementation_index(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.HostAdapterCallbackSlot)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 2,
+                                   0, 58,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HostAdapterCallbackSlot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr method_;
+    ::uint32_t implementation_index_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<44> HostAdapterCallbackSlot_class_data_;
+// -------------------------------------------------------------------
+
 class CallAck final : public ::google::protobuf::MessageLite
 /* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.CallAck) */ {
  public:
@@ -356,7 +592,7 @@ class CallAck final : public ::google::protobuf::MessageLite
     kError = 1,
     RESPONSE_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(CallAck& a, CallAck& b) { a.Swap(&b); }
   inline void Swap(CallAck* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -502,6 +738,453 @@ class CallAck final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<28> CallAck_class_data_;
+// -------------------------------------------------------------------
+
+class HostAdapterImplementation final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.HostAdapterImplementation) */ {
+ public:
+  inline HostAdapterImplementation() : HostAdapterImplementation(nullptr) {}
+  ~HostAdapterImplementation() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HostAdapterImplementation* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HostAdapterImplementation));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HostAdapterImplementation(::google::protobuf::internal::ConstantInitialized);
+
+  inline HostAdapterImplementation(const HostAdapterImplementation& from) : HostAdapterImplementation(nullptr, from) {}
+  inline HostAdapterImplementation(HostAdapterImplementation&& from) noexcept
+      : HostAdapterImplementation(nullptr, ::std::move(from)) {}
+  inline HostAdapterImplementation& operator=(const HostAdapterImplementation& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostAdapterImplementation& operator=(HostAdapterImplementation&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const HostAdapterImplementation& default_instance() {
+    return *reinterpret_cast<const HostAdapterImplementation*>(
+        &_HostAdapterImplementation_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(HostAdapterImplementation& a, HostAdapterImplementation& b) { a.Swap(&b); }
+  inline void Swap(HostAdapterImplementation* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostAdapterImplementation* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostAdapterImplementation* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<HostAdapterImplementation>(arena);
+  }
+  void CopyFrom(const HostAdapterImplementation& from);
+  void MergeFrom(const HostAdapterImplementation& from) { HostAdapterImplementation::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HostAdapterImplementation* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.HostAdapterImplementation"; }
+
+ protected:
+  explicit HostAdapterImplementation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HostAdapterImplementation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HostAdapterImplementation& from);
+  HostAdapterImplementation(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HostAdapterImplementation&& from) noexcept
+      : HostAdapterImplementation(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMethodsFieldNumber = 2,
+    kInterfaceTemplateFieldNumber = 1,
+  };
+  // repeated string methods = 2;
+  int methods_size() const;
+  private:
+  int _internal_methods_size() const;
+
+  public:
+  void clear_methods() ;
+  const ::std::string& methods(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_methods(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_methods(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_methods();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_methods(Arg_&& value, Args_... args);
+  const ::google::protobuf::RepeatedPtrField<::std::string>& methods() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL mutable_methods();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_methods() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_methods();
+
+  public:
+  // .baml_bridge.cffi.v1.BamlTy interface_template = 1;
+  bool has_interface_template() const;
+  void clear_interface_template() ;
+  const ::baml_bridge::cffi::v1::BamlTy& interface_template() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_interface_template();
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_interface_template();
+  void set_allocated_interface_template(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_interface_template(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_interface_template();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTy& _internal_interface_template() const;
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_interface_template();
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.HostAdapterImplementation)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   1, 61,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HostAdapterImplementation& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField<::std::string> methods_;
+    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE interface_template_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<46> HostAdapterImplementation_class_data_;
+// -------------------------------------------------------------------
+
+class RegisteredHostAdapter final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.RegisteredHostAdapter) */ {
+ public:
+  inline RegisteredHostAdapter() : RegisteredHostAdapter(nullptr) {}
+  ~RegisteredHostAdapter() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RegisteredHostAdapter* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegisteredHostAdapter));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RegisteredHostAdapter(::google::protobuf::internal::ConstantInitialized);
+
+  inline RegisteredHostAdapter(const RegisteredHostAdapter& from) : RegisteredHostAdapter(nullptr, from) {}
+  inline RegisteredHostAdapter(RegisteredHostAdapter&& from) noexcept
+      : RegisteredHostAdapter(nullptr, ::std::move(from)) {}
+  inline RegisteredHostAdapter& operator=(const RegisteredHostAdapter& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RegisteredHostAdapter& operator=(RegisteredHostAdapter&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const RegisteredHostAdapter& default_instance() {
+    return *reinterpret_cast<const RegisteredHostAdapter*>(
+        &_RegisteredHostAdapter_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(RegisteredHostAdapter& a, RegisteredHostAdapter& b) { a.Swap(&b); }
+  inline void Swap(RegisteredHostAdapter* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RegisteredHostAdapter* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RegisteredHostAdapter* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<RegisteredHostAdapter>(arena);
+  }
+  void CopyFrom(const RegisteredHostAdapter& from);
+  void MergeFrom(const RegisteredHostAdapter& from) { RegisteredHostAdapter::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RegisteredHostAdapter* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.RegisteredHostAdapter"; }
+
+ protected:
+  explicit RegisteredHostAdapter(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegisteredHostAdapter(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegisteredHostAdapter& from);
+  RegisteredHostAdapter(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegisteredHostAdapter&& from) noexcept
+      : RegisteredHostAdapter(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCallbacksFieldNumber = 3,
+    kInterfaceTypesFieldNumber = 4,
+    kAdapterTypeFieldNumber = 1,
+    kClassTypeFieldNumber = 2,
+  };
+  // repeated .baml_bridge.cffi.v1.HostAdapterCallbackSlot callbacks = 3;
+  int callbacks_size() const;
+  private:
+  int _internal_callbacks_size() const;
+
+  public:
+  void clear_callbacks() ;
+  ::baml_bridge::cffi::v1::HostAdapterCallbackSlot* PROTOBUF_NONNULL mutable_callbacks(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>* PROTOBUF_NONNULL mutable_callbacks();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>& _internal_callbacks() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>* PROTOBUF_NONNULL _internal_mutable_callbacks();
+  public:
+  const ::baml_bridge::cffi::v1::HostAdapterCallbackSlot& callbacks(int index) const;
+  ::baml_bridge::cffi::v1::HostAdapterCallbackSlot* PROTOBUF_NONNULL add_callbacks();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>& callbacks() const;
+  // repeated .baml_bridge.cffi.v1.BamlOutboundHandle interface_types = 4;
+  int interface_types_size() const;
+  private:
+  int _internal_interface_types_size() const;
+
+  public:
+  void clear_interface_types() ;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL mutable_interface_types(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>* PROTOBUF_NONNULL mutable_interface_types();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>& _internal_interface_types() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>* PROTOBUF_NONNULL _internal_mutable_interface_types();
+  public:
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle& interface_types(int index) const;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL add_interface_types();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>& interface_types() const;
+  // .baml_bridge.cffi.v1.BamlOutboundHandle adapter_type = 1;
+  bool has_adapter_type() const;
+  void clear_adapter_type() ;
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle& adapter_type() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE release_adapter_type();
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL mutable_adapter_type();
+  void set_allocated_adapter_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_adapter_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE unsafe_arena_release_adapter_type();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle& _internal_adapter_type() const;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL _internal_mutable_adapter_type();
+
+  public:
+  // .baml_bridge.cffi.v1.BamlOutboundHandle class_type = 2;
+  bool has_class_type() const;
+  void clear_class_type() ;
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle& class_type() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE release_class_type();
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL mutable_class_type();
+  void set_allocated_class_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_class_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE unsafe_arena_release_class_type();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle& _internal_class_type() const;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL _internal_mutable_class_type();
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.RegisteredHostAdapter)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   4, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RegisteredHostAdapter& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::HostAdapterCallbackSlot > callbacks_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlOutboundHandle > interface_types_;
+    ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE adapter_type_;
+    ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE class_type_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<42> RegisteredHostAdapter_class_data_;
 // -------------------------------------------------------------------
 
 class InboundClassValue final : public ::google::protobuf::MessageLite
@@ -1970,6 +2653,7 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
     kTypeVarFieldNumber = 1,
     kTypeValueFieldNumber = 2,
     kTypeDefinitionFieldNumber = 3,
+    kTypeReferenceFieldNumber = 4,
   };
   // string type_var = 1;
   void clear_type_var() ;
@@ -2016,11 +2700,22 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL _internal_mutable_type_definition();
 
   public:
+  // optional uint64 type_reference = 4;
+  bool has_type_reference() const;
+  void clear_type_reference() ;
+  ::uint64_t type_reference() const;
+  void set_type_reference(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_type_reference() const;
+  void _internal_set_type_reference(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyArg)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    2, 46,
                                    2>
       _table_;
@@ -2045,6 +2740,7 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::ArenaStringPtr type_var_;
     ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE type_value_;
     ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE type_definition_;
+    ::uint64_t type_reference_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2052,6 +2748,1383 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<30> BamlTyArg_class_data_;
+// -------------------------------------------------------------------
+
+class RegisterHostAdapterRequest final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.RegisterHostAdapterRequest) */ {
+ public:
+  inline RegisterHostAdapterRequest() : RegisterHostAdapterRequest(nullptr) {}
+  ~RegisterHostAdapterRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RegisterHostAdapterRequest* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegisterHostAdapterRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RegisterHostAdapterRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline RegisterHostAdapterRequest(const RegisterHostAdapterRequest& from) : RegisterHostAdapterRequest(nullptr, from) {}
+  inline RegisterHostAdapterRequest(RegisterHostAdapterRequest&& from) noexcept
+      : RegisterHostAdapterRequest(nullptr, ::std::move(from)) {}
+  inline RegisterHostAdapterRequest& operator=(const RegisterHostAdapterRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RegisterHostAdapterRequest& operator=(RegisterHostAdapterRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const RegisterHostAdapterRequest& default_instance() {
+    return *reinterpret_cast<const RegisterHostAdapterRequest*>(
+        &_RegisterHostAdapterRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(RegisterHostAdapterRequest& a, RegisterHostAdapterRequest& b) { a.Swap(&b); }
+  inline void Swap(RegisterHostAdapterRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RegisterHostAdapterRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RegisterHostAdapterRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<RegisterHostAdapterRequest>(arena);
+  }
+  void CopyFrom(const RegisterHostAdapterRequest& from);
+  void MergeFrom(const RegisterHostAdapterRequest& from) { RegisterHostAdapterRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RegisterHostAdapterRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.RegisterHostAdapterRequest"; }
+
+ protected:
+  explicit RegisterHostAdapterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegisterHostAdapterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegisterHostAdapterRequest& from);
+  RegisterHostAdapterRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegisterHostAdapterRequest&& from) noexcept
+      : RegisterHostAdapterRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kImplementationsFieldNumber = 2,
+    kTypeArgsFieldNumber = 3,
+    kNameFieldNumber = 1,
+  };
+  // repeated .baml_bridge.cffi.v1.HostAdapterImplementation implementations = 2;
+  int implementations_size() const;
+  private:
+  int _internal_implementations_size() const;
+
+  public:
+  void clear_implementations() ;
+  ::baml_bridge::cffi::v1::HostAdapterImplementation* PROTOBUF_NONNULL mutable_implementations(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>* PROTOBUF_NONNULL mutable_implementations();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>& _internal_implementations() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>* PROTOBUF_NONNULL _internal_mutable_implementations();
+  public:
+  const ::baml_bridge::cffi::v1::HostAdapterImplementation& implementations(int index) const;
+  ::baml_bridge::cffi::v1::HostAdapterImplementation* PROTOBUF_NONNULL add_implementations();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>& implementations() const;
+  // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
+  int type_args_size() const;
+  private:
+  int _internal_type_args_size() const;
+
+  public:
+  void clear_type_args() ;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL mutable_type_args(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL mutable_type_args();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& _internal_type_args() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL _internal_mutable_type_args();
+  public:
+  const ::baml_bridge::cffi::v1::BamlTyArg& type_args(int index) const;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL add_type_args();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& type_args() const;
+  // string name = 1;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.RegisterHostAdapterRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 59,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RegisterHostAdapterRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::HostAdapterImplementation > implementations_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<47> RegisterHostAdapterRequest_class_data_;
+// -------------------------------------------------------------------
+
+class ProjectInterfaceRequest final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.ProjectInterfaceRequest) */ {
+ public:
+  inline ProjectInterfaceRequest() : ProjectInterfaceRequest(nullptr) {}
+  ~ProjectInterfaceRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ProjectInterfaceRequest* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ProjectInterfaceRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ProjectInterfaceRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline ProjectInterfaceRequest(const ProjectInterfaceRequest& from) : ProjectInterfaceRequest(nullptr, from) {}
+  inline ProjectInterfaceRequest(ProjectInterfaceRequest&& from) noexcept
+      : ProjectInterfaceRequest(nullptr, ::std::move(from)) {}
+  inline ProjectInterfaceRequest& operator=(const ProjectInterfaceRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ProjectInterfaceRequest& operator=(ProjectInterfaceRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const ProjectInterfaceRequest& default_instance() {
+    return *reinterpret_cast<const ProjectInterfaceRequest*>(
+        &_ProjectInterfaceRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(ProjectInterfaceRequest& a, ProjectInterfaceRequest& b) { a.Swap(&b); }
+  inline void Swap(ProjectInterfaceRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ProjectInterfaceRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ProjectInterfaceRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<ProjectInterfaceRequest>(arena);
+  }
+  void CopyFrom(const ProjectInterfaceRequest& from);
+  void MergeFrom(const ProjectInterfaceRequest& from) { ProjectInterfaceRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ProjectInterfaceRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.ProjectInterfaceRequest"; }
+
+ protected:
+  explicit ProjectInterfaceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ProjectInterfaceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ProjectInterfaceRequest& from);
+  ProjectInterfaceRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ProjectInterfaceRequest&& from) noexcept
+      : ProjectInterfaceRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInterfaceTypeFieldNumber = 2,
+    kReceiverFieldNumber = 1,
+  };
+  // .baml_bridge.cffi.v1.BamlTyArg interface_type = 2;
+  bool has_interface_type() const;
+  void clear_interface_type() ;
+  const ::baml_bridge::cffi::v1::BamlTyArg& interface_type() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE release_interface_type();
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL mutable_interface_type();
+  void set_allocated_interface_type(::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_interface_type(::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE unsafe_arena_release_interface_type();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTyArg& _internal_interface_type() const;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL _internal_mutable_interface_type();
+
+  public:
+  // uint64 receiver = 1;
+  void clear_receiver() ;
+  ::uint64_t receiver() const;
+  void set_receiver(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_receiver() const;
+  void _internal_set_receiver(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.ProjectInterfaceRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ProjectInterfaceRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE interface_type_;
+    ::uint64_t receiver_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<44> ProjectInterfaceRequest_class_data_;
+// -------------------------------------------------------------------
+
+class InterfaceMethodTarget final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.InterfaceMethodTarget) */ {
+ public:
+  inline InterfaceMethodTarget() : InterfaceMethodTarget(nullptr) {}
+  ~InterfaceMethodTarget() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(InterfaceMethodTarget* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(InterfaceMethodTarget));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR InterfaceMethodTarget(::google::protobuf::internal::ConstantInitialized);
+
+  inline InterfaceMethodTarget(const InterfaceMethodTarget& from) : InterfaceMethodTarget(nullptr, from) {}
+  inline InterfaceMethodTarget(InterfaceMethodTarget&& from) noexcept
+      : InterfaceMethodTarget(nullptr, ::std::move(from)) {}
+  inline InterfaceMethodTarget& operator=(const InterfaceMethodTarget& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline InterfaceMethodTarget& operator=(InterfaceMethodTarget&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const InterfaceMethodTarget& default_instance() {
+    return *reinterpret_cast<const InterfaceMethodTarget*>(
+        &_InterfaceMethodTarget_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(InterfaceMethodTarget& a, InterfaceMethodTarget& b) { a.Swap(&b); }
+  inline void Swap(InterfaceMethodTarget* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(InterfaceMethodTarget* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  InterfaceMethodTarget* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<InterfaceMethodTarget>(arena);
+  }
+  void CopyFrom(const InterfaceMethodTarget& from);
+  void MergeFrom(const InterfaceMethodTarget& from) { InterfaceMethodTarget::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(InterfaceMethodTarget* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.InterfaceMethodTarget"; }
+
+ protected:
+  explicit InterfaceMethodTarget(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  InterfaceMethodTarget(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const InterfaceMethodTarget& from);
+  InterfaceMethodTarget(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, InterfaceMethodTarget&& from) noexcept
+      : InterfaceMethodTarget(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTypeArgsFieldNumber = 3,
+    kMemberFieldNumber = 2,
+    kViewFieldNumber = 1,
+  };
+  // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
+  int type_args_size() const;
+  private:
+  int _internal_type_args_size() const;
+
+  public:
+  void clear_type_args() ;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL mutable_type_args(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL mutable_type_args();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& _internal_type_args() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL _internal_mutable_type_args();
+  public:
+  const ::baml_bridge::cffi::v1::BamlTyArg& type_args(int index) const;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL add_type_args();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& type_args() const;
+  // string member = 2;
+  void clear_member() ;
+  const ::std::string& member() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_member(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_member();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_member();
+  void set_allocated_member(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_member() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_member(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_member();
+
+  public:
+  // uint64 view = 1;
+  void clear_view() ;
+  ::uint64_t view() const;
+  void set_view(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_view() const;
+  void _internal_set_view(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InterfaceMethodTarget)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   1, 56,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const InterfaceMethodTarget& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
+    ::google::protobuf::internal::ArenaStringPtr member_;
+    ::uint64_t view_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<42> InterfaceMethodTarget_class_data_;
+// -------------------------------------------------------------------
+
+class CreateHostAdapterRequest final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.CreateHostAdapterRequest) */ {
+ public:
+  inline CreateHostAdapterRequest() : CreateHostAdapterRequest(nullptr) {}
+  ~CreateHostAdapterRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CreateHostAdapterRequest* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CreateHostAdapterRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CreateHostAdapterRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline CreateHostAdapterRequest(const CreateHostAdapterRequest& from) : CreateHostAdapterRequest(nullptr, from) {}
+  inline CreateHostAdapterRequest(CreateHostAdapterRequest&& from) noexcept
+      : CreateHostAdapterRequest(nullptr, ::std::move(from)) {}
+  inline CreateHostAdapterRequest& operator=(const CreateHostAdapterRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CreateHostAdapterRequest& operator=(CreateHostAdapterRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const CreateHostAdapterRequest& default_instance() {
+    return *reinterpret_cast<const CreateHostAdapterRequest*>(
+        &_CreateHostAdapterRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(CreateHostAdapterRequest& a, CreateHostAdapterRequest& b) { a.Swap(&b); }
+  inline void Swap(CreateHostAdapterRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CreateHostAdapterRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CreateHostAdapterRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<CreateHostAdapterRequest>(arena);
+  }
+  void CopyFrom(const CreateHostAdapterRequest& from);
+  void MergeFrom(const CreateHostAdapterRequest& from) { CreateHostAdapterRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CreateHostAdapterRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.CreateHostAdapterRequest"; }
+
+ protected:
+  explicit CreateHostAdapterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CreateHostAdapterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CreateHostAdapterRequest& from);
+  CreateHostAdapterRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CreateHostAdapterRequest&& from) noexcept
+      : CreateHostAdapterRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCallbacksFieldNumber = 3,
+    kReceiverFieldNumber = 2,
+    kAdapterTypeFieldNumber = 1,
+  };
+  // repeated .baml_bridge.cffi.v1.InboundValue callbacks = 3;
+  int callbacks_size() const;
+  private:
+  int _internal_callbacks_size() const;
+
+  public:
+  void clear_callbacks() ;
+  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL mutable_callbacks(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>* PROTOBUF_NONNULL mutable_callbacks();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>& _internal_callbacks() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>* PROTOBUF_NONNULL _internal_mutable_callbacks();
+  public:
+  const ::baml_bridge::cffi::v1::InboundValue& callbacks(int index) const;
+  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL add_callbacks();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>& callbacks() const;
+  // .baml_bridge.cffi.v1.InboundValue receiver = 2;
+  bool has_receiver() const;
+  void clear_receiver() ;
+  const ::baml_bridge::cffi::v1::InboundValue& receiver() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE release_receiver();
+  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL mutable_receiver();
+  void set_allocated_receiver(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_receiver(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE unsafe_arena_release_receiver();
+
+  private:
+  const ::baml_bridge::cffi::v1::InboundValue& _internal_receiver() const;
+  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL _internal_mutable_receiver();
+
+  public:
+  // uint64 adapter_type = 1;
+  void clear_adapter_type() ;
+  ::uint64_t adapter_type() const;
+  void set_adapter_type(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_adapter_type() const;
+  void _internal_set_adapter_type(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.CreateHostAdapterRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CreateHostAdapterRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundValue > callbacks_;
+    ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE receiver_;
+    ::uint64_t adapter_type_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<45> CreateHostAdapterRequest_class_data_;
+// -------------------------------------------------------------------
+
+class ConcreteMethodTarget final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.ConcreteMethodTarget) */ {
+ public:
+  inline ConcreteMethodTarget() : ConcreteMethodTarget(nullptr) {}
+  ~ConcreteMethodTarget() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ConcreteMethodTarget* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ConcreteMethodTarget));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ConcreteMethodTarget(::google::protobuf::internal::ConstantInitialized);
+
+  inline ConcreteMethodTarget(const ConcreteMethodTarget& from) : ConcreteMethodTarget(nullptr, from) {}
+  inline ConcreteMethodTarget(ConcreteMethodTarget&& from) noexcept
+      : ConcreteMethodTarget(nullptr, ::std::move(from)) {}
+  inline ConcreteMethodTarget& operator=(const ConcreteMethodTarget& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConcreteMethodTarget& operator=(ConcreteMethodTarget&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const ConcreteMethodTarget& default_instance() {
+    return *reinterpret_cast<const ConcreteMethodTarget*>(
+        &_ConcreteMethodTarget_default_instance_);
+  }
+  enum DispatchCase {
+    kInterfacePattern = 3,
+    kInherent = 6,
+    DISPATCH_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(ConcreteMethodTarget& a, ConcreteMethodTarget& b) { a.Swap(&b); }
+  inline void Swap(ConcreteMethodTarget* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConcreteMethodTarget* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ConcreteMethodTarget* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<ConcreteMethodTarget>(arena);
+  }
+  void CopyFrom(const ConcreteMethodTarget& from);
+  void MergeFrom(const ConcreteMethodTarget& from) { ConcreteMethodTarget::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ConcreteMethodTarget* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.ConcreteMethodTarget"; }
+
+ protected:
+  explicit ConcreteMethodTarget(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ConcreteMethodTarget(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConcreteMethodTarget& from);
+  ConcreteMethodTarget(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ConcreteMethodTarget&& from) noexcept
+      : ConcreteMethodTarget(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTypeArgsFieldNumber = 5,
+    kClassNameFieldNumber = 2,
+    kMemberFieldNumber = 4,
+    kReceiverFieldNumber = 1,
+    kInterfacePatternFieldNumber = 3,
+    kInherentFieldNumber = 6,
+  };
+  // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 5;
+  int type_args_size() const;
+  private:
+  int _internal_type_args_size() const;
+
+  public:
+  void clear_type_args() ;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL mutable_type_args(int index);
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL mutable_type_args();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& _internal_type_args() const;
+  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL _internal_mutable_type_args();
+  public:
+  const ::baml_bridge::cffi::v1::BamlTyArg& type_args(int index) const;
+  ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL add_type_args();
+  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& type_args() const;
+  // string class_name = 2;
+  void clear_class_name() ;
+  const ::std::string& class_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_class_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_class_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_class_name();
+  void set_allocated_class_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_class_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_class_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_class_name();
+
+  public:
+  // string member = 4;
+  void clear_member() ;
+  const ::std::string& member() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_member(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_member();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_member();
+  void set_allocated_member(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_member() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_member(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_member();
+
+  public:
+  // uint64 receiver = 1;
+  void clear_receiver() ;
+  ::uint64_t receiver() const;
+  void set_receiver(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_receiver() const;
+  void _internal_set_receiver(::uint64_t value);
+
+  public:
+  // .baml_bridge.cffi.v1.BamlTy interface_pattern = 3;
+  bool has_interface_pattern() const;
+  private:
+  bool _internal_has_interface_pattern() const;
+
+  public:
+  void clear_interface_pattern() ;
+  const ::baml_bridge::cffi::v1::BamlTy& interface_pattern() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_interface_pattern();
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_interface_pattern();
+  void set_allocated_interface_pattern(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_interface_pattern(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_interface_pattern();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTy& _internal_interface_pattern() const;
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_interface_pattern();
+
+  public:
+  // bool inherent = 6;
+  bool has_inherent() const;
+  void clear_inherent() ;
+  bool inherent() const;
+  void set_inherent(bool value);
+
+  private:
+  bool _internal_inherent() const;
+  void _internal_set_inherent(bool value);
+
+  public:
+  void clear_dispatch();
+  DispatchCase dispatch_case() const;
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.ConcreteMethodTarget)
+ private:
+  class _Internal;
+  void set_has_interface_pattern();
+  void set_has_inherent();
+  inline bool has_dispatch() const;
+  inline void clear_has_dispatch();
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   2, 65,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ConcreteMethodTarget& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
+    ::google::protobuf::internal::ArenaStringPtr class_name_;
+    ::google::protobuf::internal::ArenaStringPtr member_;
+    ::uint64_t receiver_;
+    union DispatchUnion {
+      constexpr DispatchUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE interface_pattern_;
+      bool inherent_;
+    } dispatch_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<41> ConcreteMethodTarget_class_data_;
+// -------------------------------------------------------------------
+
+class HostOperationRequest final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.HostOperationRequest) */ {
+ public:
+  inline HostOperationRequest() : HostOperationRequest(nullptr) {}
+  ~HostOperationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HostOperationRequest* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HostOperationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HostOperationRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline HostOperationRequest(const HostOperationRequest& from) : HostOperationRequest(nullptr, from) {}
+  inline HostOperationRequest(HostOperationRequest&& from) noexcept
+      : HostOperationRequest(nullptr, ::std::move(from)) {}
+  inline HostOperationRequest& operator=(const HostOperationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostOperationRequest& operator=(HostOperationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const HostOperationRequest& default_instance() {
+    return *reinterpret_cast<const HostOperationRequest*>(
+        &_HostOperationRequest_default_instance_);
+  }
+  enum OperationCase {
+    kRegister = 1,
+    kCreate = 2,
+    kProject = 3,
+    OPERATION_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(HostOperationRequest& a, HostOperationRequest& b) { a.Swap(&b); }
+  inline void Swap(HostOperationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostOperationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostOperationRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<HostOperationRequest>(arena);
+  }
+  void CopyFrom(const HostOperationRequest& from);
+  void MergeFrom(const HostOperationRequest& from) { HostOperationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HostOperationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.HostOperationRequest"; }
+
+ protected:
+  explicit HostOperationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HostOperationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HostOperationRequest& from);
+  HostOperationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HostOperationRequest&& from) noexcept
+      : HostOperationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRegisterFieldNumber = 1,
+    kCreateFieldNumber = 2,
+    kProjectFieldNumber = 3,
+  };
+  // .baml_bridge.cffi.v1.RegisterHostAdapterRequest register = 1;
+  bool has_register_() const;
+  private:
+  bool _internal_has_register_() const;
+
+  public:
+  void clear_register_() ;
+  const ::baml_bridge::cffi::v1::RegisterHostAdapterRequest& register_() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE release_register_();
+  ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NONNULL mutable_register_();
+  void set_allocated_register_(::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_register_(::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE unsafe_arena_release_register_();
+
+  private:
+  const ::baml_bridge::cffi::v1::RegisterHostAdapterRequest& _internal_register_() const;
+  ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NONNULL _internal_mutable_register_();
+
+  public:
+  // .baml_bridge.cffi.v1.CreateHostAdapterRequest create = 2;
+  bool has_create() const;
+  private:
+  bool _internal_has_create() const;
+
+  public:
+  void clear_create() ;
+  const ::baml_bridge::cffi::v1::CreateHostAdapterRequest& create() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE release_create();
+  ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NONNULL mutable_create();
+  void set_allocated_create(::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_create(::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE unsafe_arena_release_create();
+
+  private:
+  const ::baml_bridge::cffi::v1::CreateHostAdapterRequest& _internal_create() const;
+  ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NONNULL _internal_mutable_create();
+
+  public:
+  // .baml_bridge.cffi.v1.ProjectInterfaceRequest project = 3;
+  bool has_project() const;
+  private:
+  bool _internal_has_project() const;
+
+  public:
+  void clear_project() ;
+  const ::baml_bridge::cffi::v1::ProjectInterfaceRequest& project() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE release_project();
+  ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NONNULL mutable_project();
+  void set_allocated_project(::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_project(::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE unsafe_arena_release_project();
+
+  private:
+  const ::baml_bridge::cffi::v1::ProjectInterfaceRequest& _internal_project() const;
+  ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NONNULL _internal_mutable_project();
+
+  public:
+  void clear_operation();
+  OperationCase operation_case() const;
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.HostOperationRequest)
+ private:
+  class _Internal;
+  void set_has_register_();
+  void set_has_create();
+  void set_has_project();
+  inline bool has_operation() const;
+  inline void clear_has_operation();
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 3,
+                                   3, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HostOperationRequest& from_msg);
+    union OperationUnion {
+      constexpr OperationUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE register__;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE create_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE project_;
+    } operation_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<41> HostOperationRequest_class_data_;
 // -------------------------------------------------------------------
 
 class CallFunctionArgs final : public ::google::protobuf::MessageLite
@@ -2103,9 +4176,11 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   enum CallTargetCase {
     kFunctionName = 4,
     kFunctionHandle = 5,
+    kInterfaceMethod = 6,
+    kConcreteMethod = 7,
     CALL_TARGET_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(CallFunctionArgs& a, CallFunctionArgs& b) { a.Swap(&b); }
   inline void Swap(CallFunctionArgs* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2195,6 +4270,8 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     kCallIdFieldNumber = 2,
     kFunctionNameFieldNumber = 4,
     kFunctionHandleFieldNumber = 5,
+    kInterfaceMethodFieldNumber = 6,
+    kConcreteMethodFieldNumber = 7,
   };
   // repeated .baml_bridge.cffi.v1.InboundMapEntry kwargs = 1;
   int kwargs_size() const;
@@ -2267,6 +4344,44 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   void _internal_set_function_handle(::uint64_t value);
 
   public:
+  // .baml_bridge.cffi.v1.InterfaceMethodTarget interface_method = 6;
+  bool has_interface_method() const;
+  private:
+  bool _internal_has_interface_method() const;
+
+  public:
+  void clear_interface_method() ;
+  const ::baml_bridge::cffi::v1::InterfaceMethodTarget& interface_method() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE release_interface_method();
+  ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NONNULL mutable_interface_method();
+  void set_allocated_interface_method(::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_interface_method(::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE unsafe_arena_release_interface_method();
+
+  private:
+  const ::baml_bridge::cffi::v1::InterfaceMethodTarget& _internal_interface_method() const;
+  ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NONNULL _internal_mutable_interface_method();
+
+  public:
+  // .baml_bridge.cffi.v1.ConcreteMethodTarget concrete_method = 7;
+  bool has_concrete_method() const;
+  private:
+  bool _internal_has_concrete_method() const;
+
+  public:
+  void clear_concrete_method() ;
+  const ::baml_bridge::cffi::v1::ConcreteMethodTarget& concrete_method() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE release_concrete_method();
+  ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NONNULL mutable_concrete_method();
+  void set_allocated_concrete_method(::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_concrete_method(::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE unsafe_arena_release_concrete_method();
+
+  private:
+  const ::baml_bridge::cffi::v1::ConcreteMethodTarget& _internal_concrete_method() const;
+  ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NONNULL _internal_mutable_concrete_method();
+
+  public:
   void clear_call_target();
   CallTargetCase call_target_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.CallFunctionArgs)
@@ -2274,11 +4389,13 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   class _Internal;
   void set_has_function_name();
   void set_has_function_handle();
+  void set_has_interface_method();
+  void set_has_concrete_method();
   inline bool has_call_target() const;
   inline void clear_has_call_target();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 5,
-                                   2, 58,
+  static const ::google::protobuf::internal::TcParseTable<2, 7,
+                                   4, 58,
                                    2>
       _table_;
 
@@ -2307,6 +4424,8 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
       ::google::protobuf::internal::ConstantInitialized _constinit_;
       ::google::protobuf::internal::ArenaStringPtr function_name_;
       ::uint64_t function_handle_;
+      ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE interface_method_;
+      ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE concrete_method_;
     } call_target_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2316,6 +4435,253 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<37> CallFunctionArgs_class_data_;
+// -------------------------------------------------------------------
+
+class HostOperationResult final : public ::google::protobuf::MessageLite
+/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.HostOperationResult) */ {
+ public:
+  inline HostOperationResult() : HostOperationResult(nullptr) {}
+  ~HostOperationResult() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HostOperationResult* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HostOperationResult));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HostOperationResult(::google::protobuf::internal::ConstantInitialized);
+
+  inline HostOperationResult(const HostOperationResult& from) : HostOperationResult(nullptr, from) {}
+  inline HostOperationResult(HostOperationResult&& from) noexcept
+      : HostOperationResult(nullptr, ::std::move(from)) {}
+  inline HostOperationResult& operator=(const HostOperationResult& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostOperationResult& operator=(HostOperationResult&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
+  }
+  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const HostOperationResult& default_instance() {
+    return *reinterpret_cast<const HostOperationResult*>(
+        &_HostOperationResult_default_instance_);
+  }
+  enum ResultCase {
+    kRegistered = 1,
+    kValue = 2,
+    kFailure = 3,
+    RESULT_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(HostOperationResult& a, HostOperationResult& b) { a.Swap(&b); }
+  inline void Swap(HostOperationResult* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostOperationResult* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostOperationResult* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::MessageLite::DefaultConstruct<HostOperationResult>(arena);
+  }
+  void CopyFrom(const HostOperationResult& from);
+  void MergeFrom(const HostOperationResult& from) { HostOperationResult::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HostOperationResult* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.HostOperationResult"; }
+
+ protected:
+  explicit HostOperationResult(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HostOperationResult(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HostOperationResult& from);
+  HostOperationResult(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HostOperationResult&& from) noexcept
+      : HostOperationResult(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRegisteredFieldNumber = 1,
+    kValueFieldNumber = 2,
+    kFailureFieldNumber = 3,
+  };
+  // .baml_bridge.cffi.v1.RegisteredHostAdapter registered = 1;
+  bool has_registered() const;
+  private:
+  bool _internal_has_registered() const;
+
+  public:
+  void clear_registered() ;
+  const ::baml_bridge::cffi::v1::RegisteredHostAdapter& registered() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE release_registered();
+  ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NONNULL mutable_registered();
+  void set_allocated_registered(::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_registered(::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE unsafe_arena_release_registered();
+
+  private:
+  const ::baml_bridge::cffi::v1::RegisteredHostAdapter& _internal_registered() const;
+  ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NONNULL _internal_mutable_registered();
+
+  public:
+  // .baml_bridge.cffi.v1.BamlOutboundValue value = 2;
+  bool has_value() const;
+  private:
+  bool _internal_has_value() const;
+
+  public:
+  void clear_value() ;
+  const ::baml_bridge::cffi::v1::BamlOutboundValue& value() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE release_value();
+  ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL mutable_value();
+  void set_allocated_value(::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_value(::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE unsafe_arena_release_value();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlOutboundValue& _internal_value() const;
+  ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL _internal_mutable_value();
+
+  public:
+  // .baml_bridge.cffi.v1.BamlOutboundResult failure = 3;
+  bool has_failure() const;
+  private:
+  bool _internal_has_failure() const;
+
+  public:
+  void clear_failure() ;
+  const ::baml_bridge::cffi::v1::BamlOutboundResult& failure() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE release_failure();
+  ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NONNULL mutable_failure();
+  void set_allocated_failure(::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_failure(::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE unsafe_arena_release_failure();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlOutboundResult& _internal_failure() const;
+  ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NONNULL _internal_mutable_failure();
+
+  public:
+  void clear_result();
+  ResultCase result_case() const;
+  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.HostOperationResult)
+ private:
+  class _Internal;
+  void set_has_registered();
+  void set_has_value();
+  void set_has_failure();
+  inline bool has_result() const;
+  inline void clear_has_result();
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 3,
+                                   3, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HostOperationResult& from_msg);
+    union ResultUnion {
+      constexpr ResultUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE registered_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE value_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE failure_;
+    } result_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataLite<40> HostOperationResult_class_data_;
 
 // ===================================================================
 
@@ -4367,6 +6733,497 @@ inline void BamlTyArg::set_allocated_type_definition(::baml_bridge::cffi::v1::Ba
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyArg.type_definition)
 }
 
+// optional uint64 type_reference = 4;
+inline bool BamlTyArg::has_type_reference() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000008u) != 0;
+  return value;
+}
+inline void BamlTyArg::clear_type_reference() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_reference_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000008u;
+}
+inline ::uint64_t BamlTyArg::type_reference() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyArg.type_reference)
+  return _internal_type_reference();
+}
+inline void BamlTyArg::set_type_reference(::uint64_t value) {
+  _internal_set_type_reference(value);
+  _impl_._has_bits_[0] |= 0x00000008u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyArg.type_reference)
+}
+inline ::uint64_t BamlTyArg::_internal_type_reference() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.type_reference_;
+}
+inline void BamlTyArg::_internal_set_type_reference(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_reference_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// InterfaceMethodTarget
+
+// uint64 view = 1;
+inline void InterfaceMethodTarget::clear_view() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::uint64_t InterfaceMethodTarget::view() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InterfaceMethodTarget.view)
+  return _internal_view();
+}
+inline void InterfaceMethodTarget::set_view(::uint64_t value) {
+  _internal_set_view(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.InterfaceMethodTarget.view)
+}
+inline ::uint64_t InterfaceMethodTarget::_internal_view() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.view_;
+}
+inline void InterfaceMethodTarget::_internal_set_view(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.view_ = value;
+}
+
+// string member = 2;
+inline void InterfaceMethodTarget::clear_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& InterfaceMethodTarget::member() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InterfaceMethodTarget.member)
+  return _internal_member();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void InterfaceMethodTarget::set_member(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.member_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.InterfaceMethodTarget.member)
+}
+inline ::std::string* PROTOBUF_NONNULL InterfaceMethodTarget::mutable_member()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_member();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InterfaceMethodTarget.member)
+  return _s;
+}
+inline const ::std::string& InterfaceMethodTarget::_internal_member() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.member_.Get();
+}
+inline void InterfaceMethodTarget::_internal_set_member(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.member_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL InterfaceMethodTarget::_internal_mutable_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.member_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE InterfaceMethodTarget::release_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InterfaceMethodTarget.member)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.member_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.member_.Set("", GetArena());
+  }
+  return released;
+}
+inline void InterfaceMethodTarget::set_allocated_member(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.member_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.member_.IsDefault()) {
+    _impl_.member_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InterfaceMethodTarget.member)
+}
+
+// repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
+inline int InterfaceMethodTarget::_internal_type_args_size() const {
+  return _internal_type_args().size();
+}
+inline int InterfaceMethodTarget::type_args_size() const {
+  return _internal_type_args_size();
+}
+inline void InterfaceMethodTarget::clear_type_args() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_args_.Clear();
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL InterfaceMethodTarget::mutable_type_args(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InterfaceMethodTarget.type_args)
+  return _internal_mutable_type_args()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL InterfaceMethodTarget::mutable_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.InterfaceMethodTarget.type_args)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_type_args();
+}
+inline const ::baml_bridge::cffi::v1::BamlTyArg& InterfaceMethodTarget::type_args(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InterfaceMethodTarget.type_args)
+  return _internal_type_args().Get(index);
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL InterfaceMethodTarget::add_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::BamlTyArg* _add = _internal_mutable_type_args()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.InterfaceMethodTarget.type_args)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& InterfaceMethodTarget::type_args() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.InterfaceMethodTarget.type_args)
+  return _internal_type_args();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>&
+InterfaceMethodTarget::_internal_type_args() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.type_args_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL
+InterfaceMethodTarget::_internal_mutable_type_args() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.type_args_;
+}
+
+// -------------------------------------------------------------------
+
+// ConcreteMethodTarget
+
+// uint64 receiver = 1;
+inline void ConcreteMethodTarget::clear_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.receiver_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000004u;
+}
+inline ::uint64_t ConcreteMethodTarget::receiver() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.receiver)
+  return _internal_receiver();
+}
+inline void ConcreteMethodTarget::set_receiver(::uint64_t value) {
+  _internal_set_receiver(value);
+  _impl_._has_bits_[0] |= 0x00000004u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.ConcreteMethodTarget.receiver)
+}
+inline ::uint64_t ConcreteMethodTarget::_internal_receiver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.receiver_;
+}
+inline void ConcreteMethodTarget::_internal_set_receiver(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.receiver_ = value;
+}
+
+// string class_name = 2;
+inline void ConcreteMethodTarget::clear_class_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_name_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& ConcreteMethodTarget::class_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.class_name)
+  return _internal_class_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConcreteMethodTarget::set_class_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.class_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.ConcreteMethodTarget.class_name)
+}
+inline ::std::string* PROTOBUF_NONNULL ConcreteMethodTarget::mutable_class_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_class_name();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.ConcreteMethodTarget.class_name)
+  return _s;
+}
+inline const ::std::string& ConcreteMethodTarget::_internal_class_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.class_name_.Get();
+}
+inline void ConcreteMethodTarget::_internal_set_class_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.class_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConcreteMethodTarget::_internal_mutable_class_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.class_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConcreteMethodTarget::release_class_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.ConcreteMethodTarget.class_name)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.class_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.class_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConcreteMethodTarget::set_allocated_class_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.class_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.class_name_.IsDefault()) {
+    _impl_.class_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.ConcreteMethodTarget.class_name)
+}
+
+// .baml_bridge.cffi.v1.BamlTy interface_pattern = 3;
+inline bool ConcreteMethodTarget::has_interface_pattern() const {
+  return dispatch_case() == kInterfacePattern;
+}
+inline bool ConcreteMethodTarget::_internal_has_interface_pattern() const {
+  return dispatch_case() == kInterfacePattern;
+}
+inline void ConcreteMethodTarget::set_has_interface_pattern() {
+  _impl_._oneof_case_[0] = kInterfacePattern;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE ConcreteMethodTarget::release_interface_pattern() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern)
+  if (dispatch_case() == kInterfacePattern) {
+    clear_has_dispatch();
+    auto* temp = _impl_.dispatch_.interface_pattern_;
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.dispatch_.interface_pattern_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& ConcreteMethodTarget::_internal_interface_pattern() const {
+  return dispatch_case() == kInterfacePattern ? *_impl_.dispatch_.interface_pattern_ : reinterpret_cast<::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& ConcreteMethodTarget::interface_pattern() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern)
+  return _internal_interface_pattern();
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE ConcreteMethodTarget::unsafe_arena_release_interface_pattern() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern)
+  if (dispatch_case() == kInterfacePattern) {
+    clear_has_dispatch();
+    auto* temp = _impl_.dispatch_.interface_pattern_;
+    _impl_.dispatch_.interface_pattern_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ConcreteMethodTarget::unsafe_arena_set_allocated_interface_pattern(
+    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_dispatch();
+  if (value) {
+    set_has_interface_pattern();
+    _impl_.dispatch_.interface_pattern_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern)
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL ConcreteMethodTarget::_internal_mutable_interface_pattern() {
+  if (dispatch_case() != kInterfacePattern) {
+    clear_dispatch();
+    set_has_interface_pattern();
+    _impl_.dispatch_.interface_pattern_ =
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
+  }
+  return _impl_.dispatch_.interface_pattern_;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL ConcreteMethodTarget::mutable_interface_pattern()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_interface_pattern();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern)
+  return _msg;
+}
+
+// bool inherent = 6;
+inline bool ConcreteMethodTarget::has_inherent() const {
+  return dispatch_case() == kInherent;
+}
+inline void ConcreteMethodTarget::set_has_inherent() {
+  _impl_._oneof_case_[0] = kInherent;
+}
+inline void ConcreteMethodTarget::clear_inherent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (dispatch_case() == kInherent) {
+    _impl_.dispatch_.inherent_ = false;
+    clear_has_dispatch();
+  }
+}
+inline bool ConcreteMethodTarget::inherent() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.inherent)
+  return _internal_inherent();
+}
+inline void ConcreteMethodTarget::set_inherent(bool value) {
+  if (dispatch_case() != kInherent) {
+    clear_dispatch();
+    set_has_inherent();
+  }
+  _impl_.dispatch_.inherent_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.ConcreteMethodTarget.inherent)
+}
+inline bool ConcreteMethodTarget::_internal_inherent() const {
+  if (dispatch_case() == kInherent) {
+    return _impl_.dispatch_.inherent_;
+  }
+  return false;
+}
+
+// string member = 4;
+inline void ConcreteMethodTarget::clear_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline const ::std::string& ConcreteMethodTarget::member() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.member)
+  return _internal_member();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConcreteMethodTarget::set_member(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_.member_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.ConcreteMethodTarget.member)
+}
+inline ::std::string* PROTOBUF_NONNULL ConcreteMethodTarget::mutable_member()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_member();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.ConcreteMethodTarget.member)
+  return _s;
+}
+inline const ::std::string& ConcreteMethodTarget::_internal_member() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.member_.Get();
+}
+inline void ConcreteMethodTarget::_internal_set_member(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_.member_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConcreteMethodTarget::_internal_mutable_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  return _impl_.member_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConcreteMethodTarget::release_member() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.ConcreteMethodTarget.member)
+  if ((_impl_._has_bits_[0] & 0x00000002u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000002u;
+  auto* released = _impl_.member_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.member_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConcreteMethodTarget::set_allocated_member(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000002u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000002u;
+  }
+  _impl_.member_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.member_.IsDefault()) {
+    _impl_.member_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.ConcreteMethodTarget.member)
+}
+
+// repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 5;
+inline int ConcreteMethodTarget::_internal_type_args_size() const {
+  return _internal_type_args().size();
+}
+inline int ConcreteMethodTarget::type_args_size() const {
+  return _internal_type_args_size();
+}
+inline void ConcreteMethodTarget::clear_type_args() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_args_.Clear();
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL ConcreteMethodTarget::mutable_type_args(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.ConcreteMethodTarget.type_args)
+  return _internal_mutable_type_args()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL ConcreteMethodTarget::mutable_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.ConcreteMethodTarget.type_args)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_type_args();
+}
+inline const ::baml_bridge::cffi::v1::BamlTyArg& ConcreteMethodTarget::type_args(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ConcreteMethodTarget.type_args)
+  return _internal_type_args().Get(index);
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL ConcreteMethodTarget::add_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::BamlTyArg* _add = _internal_mutable_type_args()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.ConcreteMethodTarget.type_args)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& ConcreteMethodTarget::type_args() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.ConcreteMethodTarget.type_args)
+  return _internal_type_args();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>&
+ConcreteMethodTarget::_internal_type_args() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.type_args_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL
+ConcreteMethodTarget::_internal_mutable_type_args() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.type_args_;
+}
+
+inline bool ConcreteMethodTarget::has_dispatch() const {
+  return dispatch_case() != DISPATCH_NOT_SET;
+}
+inline void ConcreteMethodTarget::clear_has_dispatch() {
+  _impl_._oneof_case_[0] = DISPATCH_NOT_SET;
+}
+inline ConcreteMethodTarget::DispatchCase ConcreteMethodTarget::dispatch_case() const {
+  return ConcreteMethodTarget::DispatchCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // CallFunctionArgs
@@ -4613,6 +7470,172 @@ inline ::uint64_t CallFunctionArgs::_internal_function_handle() const {
   return ::uint64_t{0u};
 }
 
+// .baml_bridge.cffi.v1.InterfaceMethodTarget interface_method = 6;
+inline bool CallFunctionArgs::has_interface_method() const {
+  return call_target_case() == kInterfaceMethod;
+}
+inline bool CallFunctionArgs::_internal_has_interface_method() const {
+  return call_target_case() == kInterfaceMethod;
+}
+inline void CallFunctionArgs::set_has_interface_method() {
+  _impl_._oneof_case_[0] = kInterfaceMethod;
+}
+inline void CallFunctionArgs::clear_interface_method() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() == kInterfaceMethod) {
+    if (GetArena() == nullptr) {
+      delete _impl_.call_target_.interface_method_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.call_target_.interface_method_ != nullptr) {
+        _impl_.call_target_.interface_method_->Clear();
+      }
+    }
+    clear_has_call_target();
+  }
+}
+inline ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE CallFunctionArgs::release_interface_method() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.CallFunctionArgs.interface_method)
+  if (call_target_case() == kInterfaceMethod) {
+    clear_has_call_target();
+    auto* temp = _impl_.call_target_.interface_method_;
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.call_target_.interface_method_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::InterfaceMethodTarget& CallFunctionArgs::_internal_interface_method() const {
+  return call_target_case() == kInterfaceMethod ? *_impl_.call_target_.interface_method_ : reinterpret_cast<::baml_bridge::cffi::v1::InterfaceMethodTarget&>(::baml_bridge::cffi::v1::_InterfaceMethodTarget_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::InterfaceMethodTarget& CallFunctionArgs::interface_method() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.interface_method)
+  return _internal_interface_method();
+}
+inline ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE CallFunctionArgs::unsafe_arena_release_interface_method() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.CallFunctionArgs.interface_method)
+  if (call_target_case() == kInterfaceMethod) {
+    clear_has_call_target();
+    auto* temp = _impl_.call_target_.interface_method_;
+    _impl_.call_target_.interface_method_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void CallFunctionArgs::unsafe_arena_set_allocated_interface_method(
+    ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_call_target();
+  if (value) {
+    set_has_interface_method();
+    _impl_.call_target_.interface_method_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.CallFunctionArgs.interface_method)
+}
+inline ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NONNULL CallFunctionArgs::_internal_mutable_interface_method() {
+  if (call_target_case() != kInterfaceMethod) {
+    clear_call_target();
+    set_has_interface_method();
+    _impl_.call_target_.interface_method_ =
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::InterfaceMethodTarget>(GetArena());
+  }
+  return _impl_.call_target_.interface_method_;
+}
+inline ::baml_bridge::cffi::v1::InterfaceMethodTarget* PROTOBUF_NONNULL CallFunctionArgs::mutable_interface_method()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::InterfaceMethodTarget* _msg = _internal_mutable_interface_method();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CallFunctionArgs.interface_method)
+  return _msg;
+}
+
+// .baml_bridge.cffi.v1.ConcreteMethodTarget concrete_method = 7;
+inline bool CallFunctionArgs::has_concrete_method() const {
+  return call_target_case() == kConcreteMethod;
+}
+inline bool CallFunctionArgs::_internal_has_concrete_method() const {
+  return call_target_case() == kConcreteMethod;
+}
+inline void CallFunctionArgs::set_has_concrete_method() {
+  _impl_._oneof_case_[0] = kConcreteMethod;
+}
+inline void CallFunctionArgs::clear_concrete_method() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() == kConcreteMethod) {
+    if (GetArena() == nullptr) {
+      delete _impl_.call_target_.concrete_method_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.call_target_.concrete_method_ != nullptr) {
+        _impl_.call_target_.concrete_method_->Clear();
+      }
+    }
+    clear_has_call_target();
+  }
+}
+inline ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE CallFunctionArgs::release_concrete_method() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.CallFunctionArgs.concrete_method)
+  if (call_target_case() == kConcreteMethod) {
+    clear_has_call_target();
+    auto* temp = _impl_.call_target_.concrete_method_;
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.call_target_.concrete_method_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::ConcreteMethodTarget& CallFunctionArgs::_internal_concrete_method() const {
+  return call_target_case() == kConcreteMethod ? *_impl_.call_target_.concrete_method_ : reinterpret_cast<::baml_bridge::cffi::v1::ConcreteMethodTarget&>(::baml_bridge::cffi::v1::_ConcreteMethodTarget_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::ConcreteMethodTarget& CallFunctionArgs::concrete_method() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.concrete_method)
+  return _internal_concrete_method();
+}
+inline ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE CallFunctionArgs::unsafe_arena_release_concrete_method() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.CallFunctionArgs.concrete_method)
+  if (call_target_case() == kConcreteMethod) {
+    clear_has_call_target();
+    auto* temp = _impl_.call_target_.concrete_method_;
+    _impl_.call_target_.concrete_method_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void CallFunctionArgs::unsafe_arena_set_allocated_concrete_method(
+    ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_call_target();
+  if (value) {
+    set_has_concrete_method();
+    _impl_.call_target_.concrete_method_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.CallFunctionArgs.concrete_method)
+}
+inline ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NONNULL CallFunctionArgs::_internal_mutable_concrete_method() {
+  if (call_target_case() != kConcreteMethod) {
+    clear_call_target();
+    set_has_concrete_method();
+    _impl_.call_target_.concrete_method_ =
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::ConcreteMethodTarget>(GetArena());
+  }
+  return _impl_.call_target_.concrete_method_;
+}
+inline ::baml_bridge::cffi::v1::ConcreteMethodTarget* PROTOBUF_NONNULL CallFunctionArgs::mutable_concrete_method()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::ConcreteMethodTarget* _msg = _internal_mutable_concrete_method();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CallFunctionArgs.concrete_method)
+  return _msg;
+}
+
 inline bool CallFunctionArgs::has_call_target() const {
   return call_target_case() != CALL_TARGET_NOT_SET;
 }
@@ -4719,6 +7742,1515 @@ inline void CallAck::clear_has_response() {
 }
 inline CallAck::ResponseCase CallAck::response_case() const {
   return CallAck::ResponseCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// RegisterHostAdapterRequest
+
+// string name = 1;
+inline void RegisterHostAdapterRequest::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& RegisterHostAdapterRequest::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisterHostAdapterRequest.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegisterHostAdapterRequest::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.RegisterHostAdapterRequest.name)
+}
+inline ::std::string* PROTOBUF_NONNULL RegisterHostAdapterRequest::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisterHostAdapterRequest.name)
+  return _s;
+}
+inline const ::std::string& RegisterHostAdapterRequest::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void RegisterHostAdapterRequest::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegisterHostAdapterRequest::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegisterHostAdapterRequest::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.RegisterHostAdapterRequest.name)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegisterHostAdapterRequest::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.RegisterHostAdapterRequest.name)
+}
+
+// repeated .baml_bridge.cffi.v1.HostAdapterImplementation implementations = 2;
+inline int RegisterHostAdapterRequest::_internal_implementations_size() const {
+  return _internal_implementations().size();
+}
+inline int RegisterHostAdapterRequest::implementations_size() const {
+  return _internal_implementations_size();
+}
+inline void RegisterHostAdapterRequest::clear_implementations() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.implementations_.Clear();
+}
+inline ::baml_bridge::cffi::v1::HostAdapterImplementation* PROTOBUF_NONNULL RegisterHostAdapterRequest::mutable_implementations(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations)
+  return _internal_mutable_implementations()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>* PROTOBUF_NONNULL RegisterHostAdapterRequest::mutable_implementations()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_implementations();
+}
+inline const ::baml_bridge::cffi::v1::HostAdapterImplementation& RegisterHostAdapterRequest::implementations(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations)
+  return _internal_implementations().Get(index);
+}
+inline ::baml_bridge::cffi::v1::HostAdapterImplementation* PROTOBUF_NONNULL RegisterHostAdapterRequest::add_implementations()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::HostAdapterImplementation* _add = _internal_mutable_implementations()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>& RegisterHostAdapterRequest::implementations() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations)
+  return _internal_implementations();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>&
+RegisterHostAdapterRequest::_internal_implementations() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.implementations_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterImplementation>* PROTOBUF_NONNULL
+RegisterHostAdapterRequest::_internal_mutable_implementations() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.implementations_;
+}
+
+// repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
+inline int RegisterHostAdapterRequest::_internal_type_args_size() const {
+  return _internal_type_args().size();
+}
+inline int RegisterHostAdapterRequest::type_args_size() const {
+  return _internal_type_args_size();
+}
+inline void RegisterHostAdapterRequest::clear_type_args() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_args_.Clear();
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL RegisterHostAdapterRequest::mutable_type_args(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args)
+  return _internal_mutable_type_args()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL RegisterHostAdapterRequest::mutable_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_type_args();
+}
+inline const ::baml_bridge::cffi::v1::BamlTyArg& RegisterHostAdapterRequest::type_args(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args)
+  return _internal_type_args().Get(index);
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL RegisterHostAdapterRequest::add_type_args()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::BamlTyArg* _add = _internal_mutable_type_args()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>& RegisterHostAdapterRequest::type_args() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args)
+  return _internal_type_args();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>&
+RegisterHostAdapterRequest::_internal_type_args() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.type_args_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyArg>* PROTOBUF_NONNULL
+RegisterHostAdapterRequest::_internal_mutable_type_args() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.type_args_;
+}
+
+// -------------------------------------------------------------------
+
+// HostAdapterImplementation
+
+// .baml_bridge.cffi.v1.BamlTy interface_template = 1;
+inline bool HostAdapterImplementation::has_interface_template() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.interface_template_ != nullptr);
+  return value;
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& HostAdapterImplementation::_internal_interface_template() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.interface_template_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& HostAdapterImplementation::interface_template() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostAdapterImplementation.interface_template)
+  return _internal_interface_template();
+}
+inline void HostAdapterImplementation::unsafe_arena_set_allocated_interface_template(
+    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.interface_template_);
+  }
+  _impl_.interface_template_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostAdapterImplementation.interface_template)
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE HostAdapterImplementation::release_interface_template() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.interface_template_;
+  _impl_.interface_template_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE HostAdapterImplementation::unsafe_arena_release_interface_template() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostAdapterImplementation.interface_template)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.interface_template_;
+  _impl_.interface_template_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL HostAdapterImplementation::_internal_mutable_interface_template() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.interface_template_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
+    _impl_.interface_template_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
+  }
+  return _impl_.interface_template_;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL HostAdapterImplementation::mutable_interface_template()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_interface_template();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostAdapterImplementation.interface_template)
+  return _msg;
+}
+inline void HostAdapterImplementation::set_allocated_interface_template(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.interface_template_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.interface_template_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.HostAdapterImplementation.interface_template)
+}
+
+// repeated string methods = 2;
+inline int HostAdapterImplementation::_internal_methods_size() const {
+  return _internal_methods().size();
+}
+inline int HostAdapterImplementation::methods_size() const {
+  return _internal_methods_size();
+}
+inline void HostAdapterImplementation::clear_methods() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.methods_.Clear();
+}
+inline ::std::string* PROTOBUF_NONNULL HostAdapterImplementation::add_methods()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s = _internal_mutable_methods()->Add();
+  // @@protoc_insertion_point(field_add_mutable:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+  return _s;
+}
+inline const ::std::string& HostAdapterImplementation::methods(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+  return _internal_methods().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL HostAdapterImplementation::mutable_methods(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+  return _internal_mutable_methods()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void HostAdapterImplementation::set_methods(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(*_internal_mutable_methods()->Mutable(index), ::std::forward<Arg_>(value),
+                        args... );
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+}
+template <typename Arg_, typename... Args_>
+inline void HostAdapterImplementation::add_methods(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(*_internal_mutable_methods(),
+                               ::std::forward<Arg_>(value),
+                               args... );
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& HostAdapterImplementation::methods()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+  return _internal_methods();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+HostAdapterImplementation::mutable_methods() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.HostAdapterImplementation.methods)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_methods();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+HostAdapterImplementation::_internal_methods() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.methods_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+HostAdapterImplementation::_internal_mutable_methods() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.methods_;
+}
+
+// -------------------------------------------------------------------
+
+// RegisteredHostAdapter
+
+// .baml_bridge.cffi.v1.BamlOutboundHandle adapter_type = 1;
+inline bool RegisteredHostAdapter::has_adapter_type() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.adapter_type_ != nullptr);
+  return value;
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundHandle& RegisteredHostAdapter::_internal_adapter_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle* p = _impl_.adapter_type_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlOutboundHandle&>(::baml_bridge::cffi::v1::_BamlOutboundHandle_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundHandle& RegisteredHostAdapter::adapter_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type)
+  return _internal_adapter_type();
+}
+inline void RegisteredHostAdapter::unsafe_arena_set_allocated_adapter_type(
+    ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.adapter_type_);
+  }
+  _impl_.adapter_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type)
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE RegisteredHostAdapter::release_adapter_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* released = _impl_.adapter_type_;
+  _impl_.adapter_type_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE RegisteredHostAdapter::unsafe_arena_release_adapter_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* temp = _impl_.adapter_type_;
+  _impl_.adapter_type_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::_internal_mutable_adapter_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.adapter_type_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlOutboundHandle>(GetArena());
+    _impl_.adapter_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(p);
+  }
+  return _impl_.adapter_type_;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_adapter_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* _msg = _internal_mutable_adapter_type();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type)
+  return _msg;
+}
+inline void RegisteredHostAdapter::set_allocated_adapter_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.adapter_type_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.adapter_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type)
+}
+
+// .baml_bridge.cffi.v1.BamlOutboundHandle class_type = 2;
+inline bool RegisteredHostAdapter::has_class_type() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.class_type_ != nullptr);
+  return value;
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundHandle& RegisteredHostAdapter::_internal_class_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlOutboundHandle* p = _impl_.class_type_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlOutboundHandle&>(::baml_bridge::cffi::v1::_BamlOutboundHandle_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundHandle& RegisteredHostAdapter::class_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisteredHostAdapter.class_type)
+  return _internal_class_type();
+}
+inline void RegisteredHostAdapter::unsafe_arena_set_allocated_class_type(
+    ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.class_type_);
+  }
+  _impl_.class_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000002u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000002u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.RegisteredHostAdapter.class_type)
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE RegisteredHostAdapter::release_class_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000002u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* released = _impl_.class_type_;
+  _impl_.class_type_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE RegisteredHostAdapter::unsafe_arena_release_class_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.RegisteredHostAdapter.class_type)
+
+  _impl_._has_bits_[0] &= ~0x00000002u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* temp = _impl_.class_type_;
+  _impl_.class_type_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::_internal_mutable_class_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.class_type_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlOutboundHandle>(GetArena());
+    _impl_.class_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(p);
+  }
+  return _impl_.class_type_;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_class_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000002u;
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* _msg = _internal_mutable_class_type();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisteredHostAdapter.class_type)
+  return _msg;
+}
+inline void RegisteredHostAdapter::set_allocated_class_type(::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.class_type_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000002u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000002u;
+  }
+
+  _impl_.class_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundHandle*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.RegisteredHostAdapter.class_type)
+}
+
+// repeated .baml_bridge.cffi.v1.HostAdapterCallbackSlot callbacks = 3;
+inline int RegisteredHostAdapter::_internal_callbacks_size() const {
+  return _internal_callbacks().size();
+}
+inline int RegisteredHostAdapter::callbacks_size() const {
+  return _internal_callbacks_size();
+}
+inline void RegisteredHostAdapter::clear_callbacks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.callbacks_.Clear();
+}
+inline ::baml_bridge::cffi::v1::HostAdapterCallbackSlot* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_callbacks(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks)
+  return _internal_mutable_callbacks()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_callbacks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_callbacks();
+}
+inline const ::baml_bridge::cffi::v1::HostAdapterCallbackSlot& RegisteredHostAdapter::callbacks(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks)
+  return _internal_callbacks().Get(index);
+}
+inline ::baml_bridge::cffi::v1::HostAdapterCallbackSlot* PROTOBUF_NONNULL RegisteredHostAdapter::add_callbacks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::HostAdapterCallbackSlot* _add = _internal_mutable_callbacks()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>& RegisteredHostAdapter::callbacks() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks)
+  return _internal_callbacks();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>&
+RegisteredHostAdapter::_internal_callbacks() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.callbacks_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::HostAdapterCallbackSlot>* PROTOBUF_NONNULL
+RegisteredHostAdapter::_internal_mutable_callbacks() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.callbacks_;
+}
+
+// repeated .baml_bridge.cffi.v1.BamlOutboundHandle interface_types = 4;
+inline int RegisteredHostAdapter::_internal_interface_types_size() const {
+  return _internal_interface_types().size();
+}
+inline int RegisteredHostAdapter::interface_types_size() const {
+  return _internal_interface_types_size();
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_interface_types(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types)
+  return _internal_mutable_interface_types()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>* PROTOBUF_NONNULL RegisteredHostAdapter::mutable_interface_types()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_interface_types();
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundHandle& RegisteredHostAdapter::interface_types(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types)
+  return _internal_interface_types().Get(index);
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundHandle* PROTOBUF_NONNULL RegisteredHostAdapter::add_interface_types()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::BamlOutboundHandle* _add = _internal_mutable_interface_types()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>& RegisteredHostAdapter::interface_types() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types)
+  return _internal_interface_types();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>&
+RegisteredHostAdapter::_internal_interface_types() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.interface_types_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundHandle>* PROTOBUF_NONNULL
+RegisteredHostAdapter::_internal_mutable_interface_types() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.interface_types_;
+}
+
+// -------------------------------------------------------------------
+
+// HostAdapterCallbackSlot
+
+// uint32 implementation_index = 3;
+inline void HostAdapterCallbackSlot::clear_implementation_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.implementation_index_ = 0u;
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::uint32_t HostAdapterCallbackSlot::implementation_index() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostAdapterCallbackSlot.implementation_index)
+  return _internal_implementation_index();
+}
+inline void HostAdapterCallbackSlot::set_implementation_index(::uint32_t value) {
+  _internal_set_implementation_index(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.HostAdapterCallbackSlot.implementation_index)
+}
+inline ::uint32_t HostAdapterCallbackSlot::_internal_implementation_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.implementation_index_;
+}
+inline void HostAdapterCallbackSlot::_internal_set_implementation_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.implementation_index_ = value;
+}
+
+// string method = 1;
+inline void HostAdapterCallbackSlot::clear_method() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.method_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::std::string& HostAdapterCallbackSlot::method() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostAdapterCallbackSlot.method)
+  return _internal_method();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HostAdapterCallbackSlot::set_method(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.method_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.HostAdapterCallbackSlot.method)
+}
+inline ::std::string* PROTOBUF_NONNULL HostAdapterCallbackSlot::mutable_method()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_method();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostAdapterCallbackSlot.method)
+  return _s;
+}
+inline const ::std::string& HostAdapterCallbackSlot::_internal_method() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.method_.Get();
+}
+inline void HostAdapterCallbackSlot::_internal_set_method(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.method_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HostAdapterCallbackSlot::_internal_mutable_method() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.method_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HostAdapterCallbackSlot::release_method() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostAdapterCallbackSlot.method)
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* released = _impl_.method_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.method_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HostAdapterCallbackSlot::set_allocated_method(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.method_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.method_.IsDefault()) {
+    _impl_.method_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.HostAdapterCallbackSlot.method)
+}
+
+// -------------------------------------------------------------------
+
+// CreateHostAdapterRequest
+
+// uint64 adapter_type = 1;
+inline void CreateHostAdapterRequest::clear_adapter_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adapter_type_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::uint64_t CreateHostAdapterRequest::adapter_type() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CreateHostAdapterRequest.adapter_type)
+  return _internal_adapter_type();
+}
+inline void CreateHostAdapterRequest::set_adapter_type(::uint64_t value) {
+  _internal_set_adapter_type(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.CreateHostAdapterRequest.adapter_type)
+}
+inline ::uint64_t CreateHostAdapterRequest::_internal_adapter_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.adapter_type_;
+}
+inline void CreateHostAdapterRequest::_internal_set_adapter_type(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.adapter_type_ = value;
+}
+
+// .baml_bridge.cffi.v1.InboundValue receiver = 2;
+inline bool CreateHostAdapterRequest::has_receiver() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.receiver_ != nullptr);
+  return value;
+}
+inline void CreateHostAdapterRequest::clear_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.receiver_ != nullptr) _impl_.receiver_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::baml_bridge::cffi::v1::InboundValue& CreateHostAdapterRequest::_internal_receiver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::InboundValue* p = _impl_.receiver_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::InboundValue&>(::baml_bridge::cffi::v1::_InboundValue_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::InboundValue& CreateHostAdapterRequest::receiver() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver)
+  return _internal_receiver();
+}
+inline void CreateHostAdapterRequest::unsafe_arena_set_allocated_receiver(
+    ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.receiver_);
+  }
+  _impl_.receiver_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver)
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE CreateHostAdapterRequest::release_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::InboundValue* released = _impl_.receiver_;
+  _impl_.receiver_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE CreateHostAdapterRequest::unsafe_arena_release_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::InboundValue* temp = _impl_.receiver_;
+  _impl_.receiver_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL CreateHostAdapterRequest::_internal_mutable_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.receiver_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::InboundValue>(GetArena());
+    _impl_.receiver_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(p);
+  }
+  return _impl_.receiver_;
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL CreateHostAdapterRequest::mutable_receiver()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::baml_bridge::cffi::v1::InboundValue* _msg = _internal_mutable_receiver();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver)
+  return _msg;
+}
+inline void CreateHostAdapterRequest::set_allocated_receiver(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.receiver_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.receiver_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver)
+}
+
+// repeated .baml_bridge.cffi.v1.InboundValue callbacks = 3;
+inline int CreateHostAdapterRequest::_internal_callbacks_size() const {
+  return _internal_callbacks().size();
+}
+inline int CreateHostAdapterRequest::callbacks_size() const {
+  return _internal_callbacks_size();
+}
+inline void CreateHostAdapterRequest::clear_callbacks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.callbacks_.Clear();
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL CreateHostAdapterRequest::mutable_callbacks(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks)
+  return _internal_mutable_callbacks()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>* PROTOBUF_NONNULL CreateHostAdapterRequest::mutable_callbacks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_callbacks();
+}
+inline const ::baml_bridge::cffi::v1::InboundValue& CreateHostAdapterRequest::callbacks(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks)
+  return _internal_callbacks().Get(index);
+}
+inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL CreateHostAdapterRequest::add_callbacks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::baml_bridge::cffi::v1::InboundValue* _add = _internal_mutable_callbacks()->Add();
+  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>& CreateHostAdapterRequest::callbacks() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks)
+  return _internal_callbacks();
+}
+inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>&
+CreateHostAdapterRequest::_internal_callbacks() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.callbacks_;
+}
+inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>* PROTOBUF_NONNULL
+CreateHostAdapterRequest::_internal_mutable_callbacks() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.callbacks_;
+}
+
+// -------------------------------------------------------------------
+
+// ProjectInterfaceRequest
+
+// uint64 receiver = 1;
+inline void ProjectInterfaceRequest::clear_receiver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.receiver_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::uint64_t ProjectInterfaceRequest::receiver() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ProjectInterfaceRequest.receiver)
+  return _internal_receiver();
+}
+inline void ProjectInterfaceRequest::set_receiver(::uint64_t value) {
+  _internal_set_receiver(value);
+  _impl_._has_bits_[0] |= 0x00000002u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.ProjectInterfaceRequest.receiver)
+}
+inline ::uint64_t ProjectInterfaceRequest::_internal_receiver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.receiver_;
+}
+inline void ProjectInterfaceRequest::_internal_set_receiver(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.receiver_ = value;
+}
+
+// .baml_bridge.cffi.v1.BamlTyArg interface_type = 2;
+inline bool ProjectInterfaceRequest::has_interface_type() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.interface_type_ != nullptr);
+  return value;
+}
+inline void ProjectInterfaceRequest::clear_interface_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.interface_type_ != nullptr) _impl_.interface_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const ::baml_bridge::cffi::v1::BamlTyArg& ProjectInterfaceRequest::_internal_interface_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlTyArg* p = _impl_.interface_type_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyArg&>(::baml_bridge::cffi::v1::_BamlTyArg_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTyArg& ProjectInterfaceRequest::interface_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type)
+  return _internal_interface_type();
+}
+inline void ProjectInterfaceRequest::unsafe_arena_set_allocated_interface_type(
+    ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.interface_type_);
+  }
+  _impl_.interface_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyArg*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type)
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE ProjectInterfaceRequest::release_interface_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTyArg* released = _impl_.interface_type_;
+  _impl_.interface_type_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE ProjectInterfaceRequest::unsafe_arena_release_interface_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTyArg* temp = _impl_.interface_type_;
+  _impl_.interface_type_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL ProjectInterfaceRequest::_internal_mutable_interface_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.interface_type_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyArg>(GetArena());
+    _impl_.interface_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyArg*>(p);
+  }
+  return _impl_.interface_type_;
+}
+inline ::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NONNULL ProjectInterfaceRequest::mutable_interface_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTyArg* _msg = _internal_mutable_interface_type();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type)
+  return _msg;
+}
+inline void ProjectInterfaceRequest::set_allocated_interface_type(::baml_bridge::cffi::v1::BamlTyArg* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.interface_type_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.interface_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyArg*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type)
+}
+
+// -------------------------------------------------------------------
+
+// HostOperationRequest
+
+// .baml_bridge.cffi.v1.RegisterHostAdapterRequest register = 1;
+inline bool HostOperationRequest::has_register_() const {
+  return operation_case() == kRegister;
+}
+inline bool HostOperationRequest::_internal_has_register_() const {
+  return operation_case() == kRegister;
+}
+inline void HostOperationRequest::set_has_register_() {
+  _impl_._oneof_case_[0] = kRegister;
+}
+inline void HostOperationRequest::clear_register_() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (operation_case() == kRegister) {
+    if (GetArena() == nullptr) {
+      delete _impl_.operation_.register__;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.operation_.register__ != nullptr) {
+        _impl_.operation_.register__->Clear();
+      }
+    }
+    clear_has_operation();
+  }
+}
+inline ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE HostOperationRequest::release_register_() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationRequest.register)
+  if (operation_case() == kRegister) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::RegisterHostAdapterRequest*>(_impl_.operation_.register__);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.operation_.register__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::RegisterHostAdapterRequest& HostOperationRequest::_internal_register_() const {
+  return operation_case() == kRegister ? *reinterpret_cast<::baml_bridge::cffi::v1::RegisterHostAdapterRequest*>(_impl_.operation_.register__) : reinterpret_cast<::baml_bridge::cffi::v1::RegisterHostAdapterRequest&>(::baml_bridge::cffi::v1::_RegisterHostAdapterRequest_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::RegisterHostAdapterRequest& HostOperationRequest::register_() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationRequest.register)
+  return _internal_register_();
+}
+inline ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE HostOperationRequest::unsafe_arena_release_register_() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationRequest.register)
+  if (operation_case() == kRegister) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::RegisterHostAdapterRequest*>(_impl_.operation_.register__);
+    _impl_.operation_.register__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationRequest::unsafe_arena_set_allocated_register_(
+    ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_operation();
+  if (value) {
+    set_has_register_();
+    _impl_.operation_.register__ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationRequest.register)
+}
+inline ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NONNULL HostOperationRequest::_internal_mutable_register_() {
+  if (operation_case() != kRegister) {
+    clear_operation();
+    set_has_register_();
+    _impl_.operation_.register__ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::RegisterHostAdapterRequest>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::RegisterHostAdapterRequest*>(_impl_.operation_.register__);
+}
+inline ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* PROTOBUF_NONNULL HostOperationRequest::mutable_register_()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::RegisterHostAdapterRequest* _msg = _internal_mutable_register_();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationRequest.register)
+  return _msg;
+}
+
+// .baml_bridge.cffi.v1.CreateHostAdapterRequest create = 2;
+inline bool HostOperationRequest::has_create() const {
+  return operation_case() == kCreate;
+}
+inline bool HostOperationRequest::_internal_has_create() const {
+  return operation_case() == kCreate;
+}
+inline void HostOperationRequest::set_has_create() {
+  _impl_._oneof_case_[0] = kCreate;
+}
+inline void HostOperationRequest::clear_create() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (operation_case() == kCreate) {
+    if (GetArena() == nullptr) {
+      delete _impl_.operation_.create_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.operation_.create_ != nullptr) {
+        _impl_.operation_.create_->Clear();
+      }
+    }
+    clear_has_operation();
+  }
+}
+inline ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE HostOperationRequest::release_create() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationRequest.create)
+  if (operation_case() == kCreate) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::CreateHostAdapterRequest*>(_impl_.operation_.create_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.operation_.create_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::CreateHostAdapterRequest& HostOperationRequest::_internal_create() const {
+  return operation_case() == kCreate ? *reinterpret_cast<::baml_bridge::cffi::v1::CreateHostAdapterRequest*>(_impl_.operation_.create_) : reinterpret_cast<::baml_bridge::cffi::v1::CreateHostAdapterRequest&>(::baml_bridge::cffi::v1::_CreateHostAdapterRequest_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::CreateHostAdapterRequest& HostOperationRequest::create() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationRequest.create)
+  return _internal_create();
+}
+inline ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE HostOperationRequest::unsafe_arena_release_create() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationRequest.create)
+  if (operation_case() == kCreate) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::CreateHostAdapterRequest*>(_impl_.operation_.create_);
+    _impl_.operation_.create_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationRequest::unsafe_arena_set_allocated_create(
+    ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_operation();
+  if (value) {
+    set_has_create();
+    _impl_.operation_.create_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationRequest.create)
+}
+inline ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NONNULL HostOperationRequest::_internal_mutable_create() {
+  if (operation_case() != kCreate) {
+    clear_operation();
+    set_has_create();
+    _impl_.operation_.create_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::CreateHostAdapterRequest>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::CreateHostAdapterRequest*>(_impl_.operation_.create_);
+}
+inline ::baml_bridge::cffi::v1::CreateHostAdapterRequest* PROTOBUF_NONNULL HostOperationRequest::mutable_create()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::CreateHostAdapterRequest* _msg = _internal_mutable_create();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationRequest.create)
+  return _msg;
+}
+
+// .baml_bridge.cffi.v1.ProjectInterfaceRequest project = 3;
+inline bool HostOperationRequest::has_project() const {
+  return operation_case() == kProject;
+}
+inline bool HostOperationRequest::_internal_has_project() const {
+  return operation_case() == kProject;
+}
+inline void HostOperationRequest::set_has_project() {
+  _impl_._oneof_case_[0] = kProject;
+}
+inline void HostOperationRequest::clear_project() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (operation_case() == kProject) {
+    if (GetArena() == nullptr) {
+      delete _impl_.operation_.project_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.operation_.project_ != nullptr) {
+        _impl_.operation_.project_->Clear();
+      }
+    }
+    clear_has_operation();
+  }
+}
+inline ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE HostOperationRequest::release_project() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationRequest.project)
+  if (operation_case() == kProject) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::ProjectInterfaceRequest*>(_impl_.operation_.project_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.operation_.project_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::ProjectInterfaceRequest& HostOperationRequest::_internal_project() const {
+  return operation_case() == kProject ? *reinterpret_cast<::baml_bridge::cffi::v1::ProjectInterfaceRequest*>(_impl_.operation_.project_) : reinterpret_cast<::baml_bridge::cffi::v1::ProjectInterfaceRequest&>(::baml_bridge::cffi::v1::_ProjectInterfaceRequest_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::ProjectInterfaceRequest& HostOperationRequest::project() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationRequest.project)
+  return _internal_project();
+}
+inline ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE HostOperationRequest::unsafe_arena_release_project() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationRequest.project)
+  if (operation_case() == kProject) {
+    clear_has_operation();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::ProjectInterfaceRequest*>(_impl_.operation_.project_);
+    _impl_.operation_.project_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationRequest::unsafe_arena_set_allocated_project(
+    ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_operation();
+  if (value) {
+    set_has_project();
+    _impl_.operation_.project_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationRequest.project)
+}
+inline ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NONNULL HostOperationRequest::_internal_mutable_project() {
+  if (operation_case() != kProject) {
+    clear_operation();
+    set_has_project();
+    _impl_.operation_.project_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::ProjectInterfaceRequest>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::ProjectInterfaceRequest*>(_impl_.operation_.project_);
+}
+inline ::baml_bridge::cffi::v1::ProjectInterfaceRequest* PROTOBUF_NONNULL HostOperationRequest::mutable_project()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::ProjectInterfaceRequest* _msg = _internal_mutable_project();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationRequest.project)
+  return _msg;
+}
+
+inline bool HostOperationRequest::has_operation() const {
+  return operation_case() != OPERATION_NOT_SET;
+}
+inline void HostOperationRequest::clear_has_operation() {
+  _impl_._oneof_case_[0] = OPERATION_NOT_SET;
+}
+inline HostOperationRequest::OperationCase HostOperationRequest::operation_case() const {
+  return HostOperationRequest::OperationCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// HostOperationResult
+
+// .baml_bridge.cffi.v1.RegisteredHostAdapter registered = 1;
+inline bool HostOperationResult::has_registered() const {
+  return result_case() == kRegistered;
+}
+inline bool HostOperationResult::_internal_has_registered() const {
+  return result_case() == kRegistered;
+}
+inline void HostOperationResult::set_has_registered() {
+  _impl_._oneof_case_[0] = kRegistered;
+}
+inline void HostOperationResult::clear_registered() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (result_case() == kRegistered) {
+    if (GetArena() == nullptr) {
+      delete _impl_.result_.registered_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.result_.registered_ != nullptr) {
+        _impl_.result_.registered_->Clear();
+      }
+    }
+    clear_has_result();
+  }
+}
+inline ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE HostOperationResult::release_registered() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationResult.registered)
+  if (result_case() == kRegistered) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::RegisteredHostAdapter*>(_impl_.result_.registered_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.result_.registered_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::RegisteredHostAdapter& HostOperationResult::_internal_registered() const {
+  return result_case() == kRegistered ? *reinterpret_cast<::baml_bridge::cffi::v1::RegisteredHostAdapter*>(_impl_.result_.registered_) : reinterpret_cast<::baml_bridge::cffi::v1::RegisteredHostAdapter&>(::baml_bridge::cffi::v1::_RegisteredHostAdapter_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::RegisteredHostAdapter& HostOperationResult::registered() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationResult.registered)
+  return _internal_registered();
+}
+inline ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE HostOperationResult::unsafe_arena_release_registered() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationResult.registered)
+  if (result_case() == kRegistered) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::RegisteredHostAdapter*>(_impl_.result_.registered_);
+    _impl_.result_.registered_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationResult::unsafe_arena_set_allocated_registered(
+    ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_result();
+  if (value) {
+    set_has_registered();
+    _impl_.result_.registered_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationResult.registered)
+}
+inline ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NONNULL HostOperationResult::_internal_mutable_registered() {
+  if (result_case() != kRegistered) {
+    clear_result();
+    set_has_registered();
+    _impl_.result_.registered_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::RegisteredHostAdapter>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::RegisteredHostAdapter*>(_impl_.result_.registered_);
+}
+inline ::baml_bridge::cffi::v1::RegisteredHostAdapter* PROTOBUF_NONNULL HostOperationResult::mutable_registered()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::RegisteredHostAdapter* _msg = _internal_mutable_registered();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationResult.registered)
+  return _msg;
+}
+
+// .baml_bridge.cffi.v1.BamlOutboundValue value = 2;
+inline bool HostOperationResult::has_value() const {
+  return result_case() == kValue;
+}
+inline bool HostOperationResult::_internal_has_value() const {
+  return result_case() == kValue;
+}
+inline void HostOperationResult::set_has_value() {
+  _impl_._oneof_case_[0] = kValue;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE HostOperationResult::release_value() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationResult.value)
+  if (result_case() == kValue) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue*>(_impl_.result_.value_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.result_.value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundValue& HostOperationResult::_internal_value() const {
+  return result_case() == kValue ? *reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue*>(_impl_.result_.value_) : reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue&>(::baml_bridge::cffi::v1::_BamlOutboundValue_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundValue& HostOperationResult::value() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationResult.value)
+  return _internal_value();
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE HostOperationResult::unsafe_arena_release_value() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationResult.value)
+  if (result_case() == kValue) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue*>(_impl_.result_.value_);
+    _impl_.result_.value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationResult::unsafe_arena_set_allocated_value(
+    ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_result();
+  if (value) {
+    set_has_value();
+    _impl_.result_.value_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationResult.value)
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL HostOperationResult::_internal_mutable_value() {
+  if (result_case() != kValue) {
+    clear_result();
+    set_has_value();
+    _impl_.result_.value_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlOutboundValue>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundValue*>(_impl_.result_.value_);
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL HostOperationResult::mutable_value()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::BamlOutboundValue* _msg = _internal_mutable_value();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationResult.value)
+  return _msg;
+}
+
+// .baml_bridge.cffi.v1.BamlOutboundResult failure = 3;
+inline bool HostOperationResult::has_failure() const {
+  return result_case() == kFailure;
+}
+inline bool HostOperationResult::_internal_has_failure() const {
+  return result_case() == kFailure;
+}
+inline void HostOperationResult::set_has_failure() {
+  _impl_._oneof_case_[0] = kFailure;
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE HostOperationResult::release_failure() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.HostOperationResult.failure)
+  if (result_case() == kFailure) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundResult*>(_impl_.result_.failure_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.result_.failure_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundResult& HostOperationResult::_internal_failure() const {
+  return result_case() == kFailure ? *reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundResult*>(_impl_.result_.failure_) : reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundResult&>(::baml_bridge::cffi::v1::_BamlOutboundResult_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlOutboundResult& HostOperationResult::failure() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.HostOperationResult.failure)
+  return _internal_failure();
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE HostOperationResult::unsafe_arena_release_failure() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.HostOperationResult.failure)
+  if (result_case() == kFailure) {
+    clear_has_result();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundResult*>(_impl_.result_.failure_);
+    _impl_.result_.failure_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void HostOperationResult::unsafe_arena_set_allocated_failure(
+    ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_result();
+  if (value) {
+    set_has_failure();
+    _impl_.result_.failure_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.HostOperationResult.failure)
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NONNULL HostOperationResult::_internal_mutable_failure() {
+  if (result_case() != kFailure) {
+    clear_result();
+    set_has_failure();
+    _impl_.result_.failure_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlOutboundResult>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::BamlOutboundResult*>(_impl_.result_.failure_);
+}
+inline ::baml_bridge::cffi::v1::BamlOutboundResult* PROTOBUF_NONNULL HostOperationResult::mutable_failure()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::BamlOutboundResult* _msg = _internal_mutable_failure();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.HostOperationResult.failure)
+  return _msg;
+}
+
+inline bool HostOperationResult::has_result() const {
+  return result_case() != RESULT_NOT_SET;
+}
+inline void HostOperationResult::clear_has_result() {
+  _impl_._oneof_case_[0] = RESULT_NOT_SET;
+}
+inline HostOperationResult::ResultCase HostOperationResult::result_case() const {
+  return HostOperationResult::ResultCase(_impl_._oneof_case_[0]);
 }
 #ifdef __GNUC__
 #pragma GCC diagnostic pop

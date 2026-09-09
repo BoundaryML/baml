@@ -33,13 +33,13 @@ function dispatch_frames.<(user.dispatch_frames.Box<#0> as user.dispatch_frames.
     return
 }
 
-function dispatch_frames.Conv.describe(self: dispatch_frames.Conv<#1>) -> string {
+function dispatch_frames.Conv.describe(self: #0) -> string {
     load_type #1
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function dispatch_frames.Greeter.greet(self: dispatch_frames.Greeter) -> string {
+function dispatch_frames.Greeter.greet(self: #0) -> string {
     load_const "default"
     return
 }

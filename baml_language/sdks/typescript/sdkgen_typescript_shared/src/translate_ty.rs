@@ -16,7 +16,7 @@
 //! type aliases natively, so — unlike the Python port — there is no
 //! self-ref quoting or `defer_name_refs`.
 //!
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, rc::Rc};
 
 use baml_base::{Literal, MediaKind};
 use baml_codegen_types::{CodegenFunctionParamMode, Name, Ty};
@@ -29,6 +29,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TranslateCtx {
     pub(crate) current_leaf: LeafPath,
+    pub(crate) interfaces: Option<Rc<crate::interface_names::TypeScriptInterfaces>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -47,6 +48,14 @@ impl TranslatedType {
 }
 
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
+    translate_with_role(ty, ctx, false)
+}
+
+pub(crate) fn translate_input_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
+    translate_with_role(ty, ctx, true)
+}
+
+fn translate_with_role(ty: &Ty, ctx: &TranslateCtx, input: bool) -> TranslatedType {
     match ty {
         Ty::Int { .. } => TranslatedType::bare("number"),
         Ty::Bigint { .. } => TranslatedType::bare("bigint"),
@@ -55,7 +64,30 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Bool { .. } => TranslatedType::bare("boolean"),
         Ty::Null { .. } => TranslatedType::bare("null"),
         Ty::Uint8Array { .. } => TranslatedType::bare("Uint8Array"),
-        Ty::Unknown { .. } | Ty::Interface(..) => TranslatedType::bare("unknown"),
+        Ty::Unknown { .. } => TranslatedType::bare("unknown"),
+        Ty::Interface(name, generics, associated, attr) => {
+            let names = ctx
+                .interfaces
+                .as_ref()
+                .expect("interface declarations are required for type projection");
+            let mut arguments = generics.clone();
+            for binding in &names.declarations[name].associated {
+                arguments.push(
+                    associated
+                        .iter()
+                        .find(|(n, _)| n == binding)
+                        .unwrap_or_else(|| {
+                            panic!("interface {name} is missing associated binding {binding}")
+                        })
+                        .1
+                        .clone(),
+                );
+            }
+            translate_ty(
+                &Ty::Class(names.name(name, input), arguments, attr.clone()),
+                ctx,
+            )
+        }
         Ty::Void { .. } => TranslatedType::bare("null"),
         Ty::Never { .. } => TranslatedType::bare("never"),
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
@@ -83,21 +115,25 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
 
         Ty::List(inner, _) => {
             let needs_parentheses = matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. });
-            let inner = translate_ty(inner, ctx);
+            let inner = translate_with_role(inner, ctx, input);
             // Postfix `[]` binds tighter than unions and function arrows.
             let elem = if needs_parentheses {
                 format!("({})", inner.expr)
             } else {
-                inner.expr
+                inner.expr.clone()
             };
             TranslatedType {
-                expr: format!("{elem}[]"),
+                expr: if input {
+                    format!("ReadonlyArray<{}>", inner.expr)
+                } else {
+                    format!("{elem}[]")
+                },
                 imports: inner.imports,
             }
         }
         Ty::Map { key, value, .. } => {
             let key = translate_ty(key, ctx);
-            let value = translate_ty(value, ctx);
+            let value = translate_with_role(value, ctx, input);
             let mut imports = key.imports;
             imports.extend(value.imports);
             // Use an inline index/mapped type rather than `Record<K, V>`: a
@@ -106,10 +142,11 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // is rejected by tsc (TS2456). An inline `{ [key: string]: V }`
             // does defer. Map keys are always `string` or an enum (validated
             // upstream); enum keys become a partial mapped type.
+            let readonly = if input { "readonly " } else { "" };
             let expr = if key.expr == "string" {
-                format!("{{ [key: string]: {} }}", value.expr)
+                format!("{{ {readonly}[key: string]: {} }}", value.expr)
             } else {
-                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
+                format!("{{ {readonly}[key in {}]?: {} }}", key.expr, value.expr)
             };
             TranslatedType { expr, imports }
         }
@@ -118,7 +155,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             let parts: Vec<String> = items
                 .iter()
                 .map(|item| {
-                    let t = translate_ty(item, ctx);
+                    let t = translate_with_role(item, ctx, input);
                     imports.extend(t.imports);
                     if matches!(item, Ty::Function { .. }) {
                         format!("({})", t.expr)
@@ -163,11 +200,27 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             result.expr.push_str(variant.as_str());
             result
         }
-        Ty::TypeAlias(name, _) => render_name_ref(name, ctx),
+        Ty::TypeAlias(name, _) => {
+            if input
+                && let Some(alias) = ctx
+                    .interfaces
+                    .as_ref()
+                    .and_then(|names| names.input_aliases.get(name))
+            {
+                let name = Name::new(
+                    name.package().clone(),
+                    name.namespace().to_vec(),
+                    baml_base::Name::new(alias),
+                );
+                render_name_ref(&name, ctx)
+            } else {
+                render_name_ref(name, ctx)
+            }
+        }
         Ty::TypeVar(name, _) => TranslatedType::bare(name.as_str().to_string()),
 
         Ty::Function { params, ret, .. } => {
-            let ret_t = translate_ty(ret, ctx);
+            let ret_t = translate_with_role(ret, ctx, input);
             let mut imports = ret_t.imports;
             // Required params stay positional; optional params are grouped into
             // a trailing `$opts?: { name?: T | undefined; … } | undefined`
@@ -180,7 +233,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // before the user's callback runs.
             let mut translated_params = Vec::new();
             for (idx, p) in params.iter().enumerate() {
-                let t = translate_ty(&p.ty, ctx);
+                let t = translate_with_role(&p.ty, ctx, !input);
                 imports.extend(t.imports);
                 let arg_name = p
                     .name
@@ -221,7 +274,15 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                 ));
             }
             TranslatedType {
-                expr: format!("({}) => {}", positional.join(", "), ret_t.expr),
+                expr: format!(
+                    "({}) => {}",
+                    positional.join(", "),
+                    if input {
+                        format!("({}) | PromiseLike<{}>", ret_t.expr, ret_t.expr)
+                    } else {
+                        ret_t.expr
+                    }
+                ),
                 imports,
             }
         }
@@ -321,6 +382,7 @@ mod tests {
     fn ctx(segments: &[&str]) -> TranslateCtx {
         TranslateCtx {
             current_leaf: leaf(segments),
+            interfaces: None,
         }
     }
     fn name(pkg: &str, namespace_path: &[&str], bare_name: &str) -> Name {
@@ -1026,7 +1088,7 @@ mod tests {
                     ])),
                 ),
                 ctx: ctx(&[]),
-                expected_expr: "(arg0: number[]) => string | null",
+                expected_expr: "(arg0: ReadonlyArray<number>) => string | null",
                 expected_imports: &[],
             },
         ];

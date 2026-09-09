@@ -31,10 +31,12 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
             Status::InvalidArg,
             "BamlError: BamlInvalidArgumentError: Call target is missing",
         ),
-        err @ BridgeError::FunctionHandleTypeArgs => napi::Error::new(
-            Status::InvalidArg,
-            format!("BamlError: BamlInvalidArgumentError: {err}"),
-        ),
+        err @ (BridgeError::FunctionHandleTypeArgs | BridgeError::InvalidInvocation(_)) => {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("BamlError: BamlInvalidArgumentError: {err}"),
+            )
+        }
         BridgeError::FunctionNotFound { name } => napi::Error::new(
             Status::InvalidArg,
             format!("BamlError: BamlInvalidArgumentError: Function not found: {name}"),

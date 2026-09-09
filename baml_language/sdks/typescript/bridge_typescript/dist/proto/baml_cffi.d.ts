@@ -1,12 +1,5 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 import * as $protobuf from "protobufjs";
-import Long from "long";
+import Long = require("long");
 /** Namespace baml_bridge. */
 export namespace baml_bridge {
 
@@ -735,6 +728,9 @@ export namespace baml_bridge {
 
                 /** BamlTyArg typeDefinition */
                 typeDefinition?: (baml_bridge.cffi.v1.IBamlTyDef|null);
+
+                /** BamlTyArg typeReference */
+                typeReference?: (number|Long|null);
             }
 
             /** Represents a BamlTyArg. */
@@ -754,6 +750,9 @@ export namespace baml_bridge {
 
                 /** BamlTyArg typeDefinition. */
                 public typeDefinition?: (baml_bridge.cffi.v1.IBamlTyDef|null);
+
+                /** BamlTyArg typeReference. */
+                public typeReference?: (number|Long|null);
 
                 /**
                  * Creates a new BamlTyArg instance using the specified properties.
@@ -833,6 +832,245 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of an InterfaceMethodTarget. */
+            interface IInterfaceMethodTarget {
+
+                /** InterfaceMethodTarget view */
+                view?: (number|Long|null);
+
+                /** InterfaceMethodTarget member */
+                member?: (string|null);
+
+                /** InterfaceMethodTarget typeArgs */
+                typeArgs?: (baml_bridge.cffi.v1.IBamlTyArg[]|null);
+            }
+
+            /** Represents an InterfaceMethodTarget. */
+            class InterfaceMethodTarget implements IInterfaceMethodTarget {
+
+                /**
+                 * Constructs a new InterfaceMethodTarget.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IInterfaceMethodTarget);
+
+                /** InterfaceMethodTarget view. */
+                public view: (number|Long);
+
+                /** InterfaceMethodTarget member. */
+                public member: string;
+
+                /** InterfaceMethodTarget typeArgs. */
+                public typeArgs: baml_bridge.cffi.v1.IBamlTyArg[];
+
+                /**
+                 * Creates a new InterfaceMethodTarget instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns InterfaceMethodTarget instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IInterfaceMethodTarget): baml_bridge.cffi.v1.InterfaceMethodTarget;
+
+                /**
+                 * Encodes the specified InterfaceMethodTarget message. Does not implicitly {@link baml_bridge.cffi.v1.InterfaceMethodTarget.verify|verify} messages.
+                 * @param message InterfaceMethodTarget message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IInterfaceMethodTarget, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified InterfaceMethodTarget message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InterfaceMethodTarget.verify|verify} messages.
+                 * @param message InterfaceMethodTarget message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IInterfaceMethodTarget, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes an InterfaceMethodTarget message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns InterfaceMethodTarget
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.InterfaceMethodTarget;
+
+                /**
+                 * Decodes an InterfaceMethodTarget message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns InterfaceMethodTarget
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.InterfaceMethodTarget;
+
+                /**
+                 * Verifies an InterfaceMethodTarget message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates an InterfaceMethodTarget message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns InterfaceMethodTarget
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.InterfaceMethodTarget;
+
+                /**
+                 * Creates a plain object from an InterfaceMethodTarget message. Also converts values to other types if specified.
+                 * @param message InterfaceMethodTarget
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.InterfaceMethodTarget, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this InterfaceMethodTarget to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for InterfaceMethodTarget
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a ConcreteMethodTarget. */
+            interface IConcreteMethodTarget {
+
+                /** ConcreteMethodTarget receiver */
+                receiver?: (number|Long|null);
+
+                /** ConcreteMethodTarget className */
+                className?: (string|null);
+
+                /** ConcreteMethodTarget interfacePattern */
+                interfacePattern?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** ConcreteMethodTarget inherent */
+                inherent?: (boolean|null);
+
+                /** ConcreteMethodTarget member */
+                member?: (string|null);
+
+                /** ConcreteMethodTarget typeArgs */
+                typeArgs?: (baml_bridge.cffi.v1.IBamlTyArg[]|null);
+            }
+
+            /** Represents a ConcreteMethodTarget. */
+            class ConcreteMethodTarget implements IConcreteMethodTarget {
+
+                /**
+                 * Constructs a new ConcreteMethodTarget.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IConcreteMethodTarget);
+
+                /** ConcreteMethodTarget receiver. */
+                public receiver: (number|Long);
+
+                /** ConcreteMethodTarget className. */
+                public className: string;
+
+                /** ConcreteMethodTarget interfacePattern. */
+                public interfacePattern?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** ConcreteMethodTarget inherent. */
+                public inherent?: (boolean|null);
+
+                /** ConcreteMethodTarget member. */
+                public member: string;
+
+                /** ConcreteMethodTarget typeArgs. */
+                public typeArgs: baml_bridge.cffi.v1.IBamlTyArg[];
+
+                /** ConcreteMethodTarget dispatch. */
+                public dispatch?: ("interfacePattern"|"inherent");
+
+                /**
+                 * Creates a new ConcreteMethodTarget instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns ConcreteMethodTarget instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IConcreteMethodTarget): baml_bridge.cffi.v1.ConcreteMethodTarget;
+
+                /**
+                 * Encodes the specified ConcreteMethodTarget message. Does not implicitly {@link baml_bridge.cffi.v1.ConcreteMethodTarget.verify|verify} messages.
+                 * @param message ConcreteMethodTarget message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IConcreteMethodTarget, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified ConcreteMethodTarget message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.ConcreteMethodTarget.verify|verify} messages.
+                 * @param message ConcreteMethodTarget message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IConcreteMethodTarget, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a ConcreteMethodTarget message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns ConcreteMethodTarget
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.ConcreteMethodTarget;
+
+                /**
+                 * Decodes a ConcreteMethodTarget message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns ConcreteMethodTarget
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.ConcreteMethodTarget;
+
+                /**
+                 * Verifies a ConcreteMethodTarget message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a ConcreteMethodTarget message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns ConcreteMethodTarget
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.ConcreteMethodTarget;
+
+                /**
+                 * Creates a plain object from a ConcreteMethodTarget message. Also converts values to other types if specified.
+                 * @param message ConcreteMethodTarget
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.ConcreteMethodTarget, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this ConcreteMethodTarget to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for ConcreteMethodTarget
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** Properties of a CallFunctionArgs. */
             interface ICallFunctionArgs {
 
@@ -850,6 +1088,12 @@ export namespace baml_bridge {
 
                 /** CallFunctionArgs functionHandle */
                 functionHandle?: (number|Long|null);
+
+                /** CallFunctionArgs interfaceMethod */
+                interfaceMethod?: (baml_bridge.cffi.v1.IInterfaceMethodTarget|null);
+
+                /** CallFunctionArgs concreteMethod */
+                concreteMethod?: (baml_bridge.cffi.v1.IConcreteMethodTarget|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -876,8 +1120,14 @@ export namespace baml_bridge {
                 /** CallFunctionArgs functionHandle. */
                 public functionHandle?: (number|Long|null);
 
+                /** CallFunctionArgs interfaceMethod. */
+                public interfaceMethod?: (baml_bridge.cffi.v1.IInterfaceMethodTarget|null);
+
+                /** CallFunctionArgs concreteMethod. */
+                public concreteMethod?: (baml_bridge.cffi.v1.IConcreteMethodTarget|null);
+
                 /** CallFunctionArgs callTarget. */
-                public callTarget?: ("functionName"|"functionHandle");
+                public callTarget?: ("functionName"|"functionHandle"|"interfaceMethod"|"concreteMethod");
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
@@ -1057,6 +1307,872 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of a RegisterHostAdapterRequest. */
+            interface IRegisterHostAdapterRequest {
+
+                /** RegisterHostAdapterRequest name */
+                name?: (string|null);
+
+                /** RegisterHostAdapterRequest implementations */
+                implementations?: (baml_bridge.cffi.v1.IHostAdapterImplementation[]|null);
+
+                /** RegisterHostAdapterRequest typeArgs */
+                typeArgs?: (baml_bridge.cffi.v1.IBamlTyArg[]|null);
+            }
+
+            /** Represents a RegisterHostAdapterRequest. */
+            class RegisterHostAdapterRequest implements IRegisterHostAdapterRequest {
+
+                /**
+                 * Constructs a new RegisterHostAdapterRequest.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IRegisterHostAdapterRequest);
+
+                /** RegisterHostAdapterRequest name. */
+                public name: string;
+
+                /** RegisterHostAdapterRequest implementations. */
+                public implementations: baml_bridge.cffi.v1.IHostAdapterImplementation[];
+
+                /** RegisterHostAdapterRequest typeArgs. */
+                public typeArgs: baml_bridge.cffi.v1.IBamlTyArg[];
+
+                /**
+                 * Creates a new RegisterHostAdapterRequest instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns RegisterHostAdapterRequest instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IRegisterHostAdapterRequest): baml_bridge.cffi.v1.RegisterHostAdapterRequest;
+
+                /**
+                 * Encodes the specified RegisterHostAdapterRequest message. Does not implicitly {@link baml_bridge.cffi.v1.RegisterHostAdapterRequest.verify|verify} messages.
+                 * @param message RegisterHostAdapterRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IRegisterHostAdapterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified RegisterHostAdapterRequest message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.RegisterHostAdapterRequest.verify|verify} messages.
+                 * @param message RegisterHostAdapterRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IRegisterHostAdapterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a RegisterHostAdapterRequest message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns RegisterHostAdapterRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.RegisterHostAdapterRequest;
+
+                /**
+                 * Decodes a RegisterHostAdapterRequest message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns RegisterHostAdapterRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.RegisterHostAdapterRequest;
+
+                /**
+                 * Verifies a RegisterHostAdapterRequest message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a RegisterHostAdapterRequest message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns RegisterHostAdapterRequest
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.RegisterHostAdapterRequest;
+
+                /**
+                 * Creates a plain object from a RegisterHostAdapterRequest message. Also converts values to other types if specified.
+                 * @param message RegisterHostAdapterRequest
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.RegisterHostAdapterRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this RegisterHostAdapterRequest to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for RegisterHostAdapterRequest
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a HostAdapterImplementation. */
+            interface IHostAdapterImplementation {
+
+                /** HostAdapterImplementation interfaceTemplate */
+                interfaceTemplate?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** HostAdapterImplementation methods */
+                methods?: (string[]|null);
+            }
+
+            /** Represents a HostAdapterImplementation. */
+            class HostAdapterImplementation implements IHostAdapterImplementation {
+
+                /**
+                 * Constructs a new HostAdapterImplementation.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostAdapterImplementation);
+
+                /** HostAdapterImplementation interfaceTemplate. */
+                public interfaceTemplate?: (baml_bridge.cffi.v1.IBamlTy|null);
+
+                /** HostAdapterImplementation methods. */
+                public methods: string[];
+
+                /**
+                 * Creates a new HostAdapterImplementation instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostAdapterImplementation instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostAdapterImplementation): baml_bridge.cffi.v1.HostAdapterImplementation;
+
+                /**
+                 * Encodes the specified HostAdapterImplementation message. Does not implicitly {@link baml_bridge.cffi.v1.HostAdapterImplementation.verify|verify} messages.
+                 * @param message HostAdapterImplementation message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostAdapterImplementation, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostAdapterImplementation message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostAdapterImplementation.verify|verify} messages.
+                 * @param message HostAdapterImplementation message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostAdapterImplementation, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostAdapterImplementation message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostAdapterImplementation
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostAdapterImplementation;
+
+                /**
+                 * Decodes a HostAdapterImplementation message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostAdapterImplementation
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostAdapterImplementation;
+
+                /**
+                 * Verifies a HostAdapterImplementation message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostAdapterImplementation message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostAdapterImplementation
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostAdapterImplementation;
+
+                /**
+                 * Creates a plain object from a HostAdapterImplementation message. Also converts values to other types if specified.
+                 * @param message HostAdapterImplementation
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostAdapterImplementation, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostAdapterImplementation to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostAdapterImplementation
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a RegisteredHostAdapter. */
+            interface IRegisteredHostAdapter {
+
+                /** RegisteredHostAdapter adapterType */
+                adapterType?: (baml_bridge.cffi.v1.IBamlOutboundHandle|null);
+
+                /** RegisteredHostAdapter classType */
+                classType?: (baml_bridge.cffi.v1.IBamlOutboundHandle|null);
+
+                /** RegisteredHostAdapter callbacks */
+                callbacks?: (baml_bridge.cffi.v1.IHostAdapterCallbackSlot[]|null);
+
+                /** RegisteredHostAdapter interfaceTypes */
+                interfaceTypes?: (baml_bridge.cffi.v1.IBamlOutboundHandle[]|null);
+            }
+
+            /** Represents a RegisteredHostAdapter. */
+            class RegisteredHostAdapter implements IRegisteredHostAdapter {
+
+                /**
+                 * Constructs a new RegisteredHostAdapter.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IRegisteredHostAdapter);
+
+                /** RegisteredHostAdapter adapterType. */
+                public adapterType?: (baml_bridge.cffi.v1.IBamlOutboundHandle|null);
+
+                /** RegisteredHostAdapter classType. */
+                public classType?: (baml_bridge.cffi.v1.IBamlOutboundHandle|null);
+
+                /** RegisteredHostAdapter callbacks. */
+                public callbacks: baml_bridge.cffi.v1.IHostAdapterCallbackSlot[];
+
+                /** RegisteredHostAdapter interfaceTypes. */
+                public interfaceTypes: baml_bridge.cffi.v1.IBamlOutboundHandle[];
+
+                /**
+                 * Creates a new RegisteredHostAdapter instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns RegisteredHostAdapter instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IRegisteredHostAdapter): baml_bridge.cffi.v1.RegisteredHostAdapter;
+
+                /**
+                 * Encodes the specified RegisteredHostAdapter message. Does not implicitly {@link baml_bridge.cffi.v1.RegisteredHostAdapter.verify|verify} messages.
+                 * @param message RegisteredHostAdapter message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IRegisteredHostAdapter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified RegisteredHostAdapter message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.RegisteredHostAdapter.verify|verify} messages.
+                 * @param message RegisteredHostAdapter message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IRegisteredHostAdapter, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a RegisteredHostAdapter message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns RegisteredHostAdapter
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.RegisteredHostAdapter;
+
+                /**
+                 * Decodes a RegisteredHostAdapter message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns RegisteredHostAdapter
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.RegisteredHostAdapter;
+
+                /**
+                 * Verifies a RegisteredHostAdapter message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a RegisteredHostAdapter message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns RegisteredHostAdapter
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.RegisteredHostAdapter;
+
+                /**
+                 * Creates a plain object from a RegisteredHostAdapter message. Also converts values to other types if specified.
+                 * @param message RegisteredHostAdapter
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.RegisteredHostAdapter, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this RegisteredHostAdapter to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for RegisteredHostAdapter
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a HostAdapterCallbackSlot. */
+            interface IHostAdapterCallbackSlot {
+
+                /** HostAdapterCallbackSlot implementationIndex */
+                implementationIndex?: (number|null);
+
+                /** HostAdapterCallbackSlot method */
+                method?: (string|null);
+            }
+
+            /** Represents a HostAdapterCallbackSlot. */
+            class HostAdapterCallbackSlot implements IHostAdapterCallbackSlot {
+
+                /**
+                 * Constructs a new HostAdapterCallbackSlot.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostAdapterCallbackSlot);
+
+                /** HostAdapterCallbackSlot implementationIndex. */
+                public implementationIndex: number;
+
+                /** HostAdapterCallbackSlot method. */
+                public method: string;
+
+                /**
+                 * Creates a new HostAdapterCallbackSlot instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostAdapterCallbackSlot instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostAdapterCallbackSlot): baml_bridge.cffi.v1.HostAdapterCallbackSlot;
+
+                /**
+                 * Encodes the specified HostAdapterCallbackSlot message. Does not implicitly {@link baml_bridge.cffi.v1.HostAdapterCallbackSlot.verify|verify} messages.
+                 * @param message HostAdapterCallbackSlot message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostAdapterCallbackSlot, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostAdapterCallbackSlot message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostAdapterCallbackSlot.verify|verify} messages.
+                 * @param message HostAdapterCallbackSlot message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostAdapterCallbackSlot, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostAdapterCallbackSlot message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostAdapterCallbackSlot
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostAdapterCallbackSlot;
+
+                /**
+                 * Decodes a HostAdapterCallbackSlot message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostAdapterCallbackSlot
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostAdapterCallbackSlot;
+
+                /**
+                 * Verifies a HostAdapterCallbackSlot message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostAdapterCallbackSlot message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostAdapterCallbackSlot
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostAdapterCallbackSlot;
+
+                /**
+                 * Creates a plain object from a HostAdapterCallbackSlot message. Also converts values to other types if specified.
+                 * @param message HostAdapterCallbackSlot
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostAdapterCallbackSlot, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostAdapterCallbackSlot to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostAdapterCallbackSlot
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a CreateHostAdapterRequest. */
+            interface ICreateHostAdapterRequest {
+
+                /** CreateHostAdapterRequest adapterType */
+                adapterType?: (number|Long|null);
+
+                /** CreateHostAdapterRequest receiver */
+                receiver?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** CreateHostAdapterRequest callbacks */
+                callbacks?: (baml_bridge.cffi.v1.IInboundValue[]|null);
+            }
+
+            /** Represents a CreateHostAdapterRequest. */
+            class CreateHostAdapterRequest implements ICreateHostAdapterRequest {
+
+                /**
+                 * Constructs a new CreateHostAdapterRequest.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.ICreateHostAdapterRequest);
+
+                /** CreateHostAdapterRequest adapterType. */
+                public adapterType: (number|Long);
+
+                /** CreateHostAdapterRequest receiver. */
+                public receiver?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** CreateHostAdapterRequest callbacks. */
+                public callbacks: baml_bridge.cffi.v1.IInboundValue[];
+
+                /**
+                 * Creates a new CreateHostAdapterRequest instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns CreateHostAdapterRequest instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.ICreateHostAdapterRequest): baml_bridge.cffi.v1.CreateHostAdapterRequest;
+
+                /**
+                 * Encodes the specified CreateHostAdapterRequest message. Does not implicitly {@link baml_bridge.cffi.v1.CreateHostAdapterRequest.verify|verify} messages.
+                 * @param message CreateHostAdapterRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.ICreateHostAdapterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified CreateHostAdapterRequest message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.CreateHostAdapterRequest.verify|verify} messages.
+                 * @param message CreateHostAdapterRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.ICreateHostAdapterRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a CreateHostAdapterRequest message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns CreateHostAdapterRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.CreateHostAdapterRequest;
+
+                /**
+                 * Decodes a CreateHostAdapterRequest message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns CreateHostAdapterRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.CreateHostAdapterRequest;
+
+                /**
+                 * Verifies a CreateHostAdapterRequest message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a CreateHostAdapterRequest message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns CreateHostAdapterRequest
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.CreateHostAdapterRequest;
+
+                /**
+                 * Creates a plain object from a CreateHostAdapterRequest message. Also converts values to other types if specified.
+                 * @param message CreateHostAdapterRequest
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.CreateHostAdapterRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this CreateHostAdapterRequest to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for CreateHostAdapterRequest
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a ProjectInterfaceRequest. */
+            interface IProjectInterfaceRequest {
+
+                /** ProjectInterfaceRequest receiver */
+                receiver?: (number|Long|null);
+
+                /** ProjectInterfaceRequest interfaceType */
+                interfaceType?: (baml_bridge.cffi.v1.IBamlTyArg|null);
+            }
+
+            /** Represents a ProjectInterfaceRequest. */
+            class ProjectInterfaceRequest implements IProjectInterfaceRequest {
+
+                /**
+                 * Constructs a new ProjectInterfaceRequest.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IProjectInterfaceRequest);
+
+                /** ProjectInterfaceRequest receiver. */
+                public receiver: (number|Long);
+
+                /** ProjectInterfaceRequest interfaceType. */
+                public interfaceType?: (baml_bridge.cffi.v1.IBamlTyArg|null);
+
+                /**
+                 * Creates a new ProjectInterfaceRequest instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns ProjectInterfaceRequest instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IProjectInterfaceRequest): baml_bridge.cffi.v1.ProjectInterfaceRequest;
+
+                /**
+                 * Encodes the specified ProjectInterfaceRequest message. Does not implicitly {@link baml_bridge.cffi.v1.ProjectInterfaceRequest.verify|verify} messages.
+                 * @param message ProjectInterfaceRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IProjectInterfaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified ProjectInterfaceRequest message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.ProjectInterfaceRequest.verify|verify} messages.
+                 * @param message ProjectInterfaceRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IProjectInterfaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a ProjectInterfaceRequest message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns ProjectInterfaceRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.ProjectInterfaceRequest;
+
+                /**
+                 * Decodes a ProjectInterfaceRequest message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns ProjectInterfaceRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.ProjectInterfaceRequest;
+
+                /**
+                 * Verifies a ProjectInterfaceRequest message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a ProjectInterfaceRequest message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns ProjectInterfaceRequest
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.ProjectInterfaceRequest;
+
+                /**
+                 * Creates a plain object from a ProjectInterfaceRequest message. Also converts values to other types if specified.
+                 * @param message ProjectInterfaceRequest
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.ProjectInterfaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this ProjectInterfaceRequest to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for ProjectInterfaceRequest
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a HostOperationRequest. */
+            interface IHostOperationRequest {
+
+                /** HostOperationRequest register */
+                register?: (baml_bridge.cffi.v1.IRegisterHostAdapterRequest|null);
+
+                /** HostOperationRequest create */
+                create?: (baml_bridge.cffi.v1.ICreateHostAdapterRequest|null);
+
+                /** HostOperationRequest project */
+                project?: (baml_bridge.cffi.v1.IProjectInterfaceRequest|null);
+            }
+
+            /** Represents a HostOperationRequest. */
+            class HostOperationRequest implements IHostOperationRequest {
+
+                /**
+                 * Constructs a new HostOperationRequest.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostOperationRequest);
+
+                /** HostOperationRequest register. */
+                public register?: (baml_bridge.cffi.v1.IRegisterHostAdapterRequest|null);
+
+                /** HostOperationRequest create. */
+                public create?: (baml_bridge.cffi.v1.ICreateHostAdapterRequest|null);
+
+                /** HostOperationRequest project. */
+                public project?: (baml_bridge.cffi.v1.IProjectInterfaceRequest|null);
+
+                /** HostOperationRequest operation. */
+                public operation?: ("register"|"create"|"project");
+
+                /**
+                 * Creates a new HostOperationRequest instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostOperationRequest instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostOperationRequest): baml_bridge.cffi.v1.HostOperationRequest;
+
+                /**
+                 * Encodes the specified HostOperationRequest message. Does not implicitly {@link baml_bridge.cffi.v1.HostOperationRequest.verify|verify} messages.
+                 * @param message HostOperationRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostOperationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostOperationRequest message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostOperationRequest.verify|verify} messages.
+                 * @param message HostOperationRequest message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostOperationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostOperationRequest message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostOperationRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostOperationRequest;
+
+                /**
+                 * Decodes a HostOperationRequest message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostOperationRequest
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostOperationRequest;
+
+                /**
+                 * Verifies a HostOperationRequest message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostOperationRequest message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostOperationRequest
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostOperationRequest;
+
+                /**
+                 * Creates a plain object from a HostOperationRequest message. Also converts values to other types if specified.
+                 * @param message HostOperationRequest
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostOperationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostOperationRequest to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostOperationRequest
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a HostOperationResult. */
+            interface IHostOperationResult {
+
+                /** HostOperationResult registered */
+                registered?: (baml_bridge.cffi.v1.IRegisteredHostAdapter|null);
+
+                /** HostOperationResult value */
+                value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
+
+                /** HostOperationResult failure */
+                failure?: (baml_bridge.cffi.v1.IBamlOutboundResult|null);
+            }
+
+            /** Represents a HostOperationResult. */
+            class HostOperationResult implements IHostOperationResult {
+
+                /**
+                 * Constructs a new HostOperationResult.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostOperationResult);
+
+                /** HostOperationResult registered. */
+                public registered?: (baml_bridge.cffi.v1.IRegisteredHostAdapter|null);
+
+                /** HostOperationResult value. */
+                public value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
+
+                /** HostOperationResult failure. */
+                public failure?: (baml_bridge.cffi.v1.IBamlOutboundResult|null);
+
+                /** HostOperationResult result. */
+                public result?: ("registered"|"value"|"failure");
+
+                /**
+                 * Creates a new HostOperationResult instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostOperationResult instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostOperationResult): baml_bridge.cffi.v1.HostOperationResult;
+
+                /**
+                 * Encodes the specified HostOperationResult message. Does not implicitly {@link baml_bridge.cffi.v1.HostOperationResult.verify|verify} messages.
+                 * @param message HostOperationResult message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostOperationResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostOperationResult message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostOperationResult.verify|verify} messages.
+                 * @param message HostOperationResult message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostOperationResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostOperationResult message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostOperationResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostOperationResult;
+
+                /**
+                 * Decodes a HostOperationResult message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostOperationResult
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostOperationResult;
+
+                /**
+                 * Verifies a HostOperationResult message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostOperationResult message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostOperationResult
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostOperationResult;
+
+                /**
+                 * Creates a plain object from a HostOperationResult message. Also converts values to other types if specified.
+                 * @param message HostOperationResult
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostOperationResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostOperationResult to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostOperationResult
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** BamlHandleType enum. */
             enum BamlHandleType {
                 HANDLE_UNSPECIFIED = 0,
@@ -1075,7 +2191,11 @@ export namespace baml_bridge {
                 HOST_VALUE_CALLABLE = 15,
                 HOST_VALUE_OPAQUE = 16,
                 ADT_FUNCTION_SPEC = 17,
-                ADT_RUNTIME_VALUE = 18
+                ADT_RUNTIME_VALUE = 18,
+                ADT_INTERFACE = 19,
+                HOST_REFERENCE = 20,
+                CONCRETE_OBJECT = 21,
+                HOST_ADAPTER_TYPE = 22
             }
 
             /** Properties of a BamlHandle. */

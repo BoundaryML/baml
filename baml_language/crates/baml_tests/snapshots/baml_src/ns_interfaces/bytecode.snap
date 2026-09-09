@@ -20,6 +20,32 @@ function interfaces.$init_test_ns_interfaces_b_1180(registry: testing.TestCollec
     return
 }
 
+function interfaces.$init_test_ns_interfaces_generic_method_values(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_interface_method_values_keep_separate_specializations"
+    make_closure .<lambda($init_test_ns_interfaces_generic_method_values, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_interface_method_value_retains_output_only_type_argument"
+    make_closure .<lambda($init_test_ns_interfaces_generic_method_values, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_interface_method_value_from_field_access_captures_receiver"
+    make_closure .<lambda($init_test_ns_interfaces_generic_method_values, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces"
@@ -2184,7 +2210,7 @@ function interfaces.<(user.interfaces.W3umDog as user.interfaces.W3umAnimal)>.sp
     return
 }
 
-function interfaces.CimdGreeter.greet(self: interfaces.CimdGreeter) -> string {
+function interfaces.CimdGreeter.greet(self: #0) -> string {
     load_const "default"
     return
 }
@@ -2201,7 +2227,7 @@ function interfaces.ComcServer.address(self: interfaces.ComcServer) -> string {
     return
 }
 
-function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: #0) -> bool {
+function interfaces.CridEquals.neq(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type interfaces.CridEquals
     load_const "eq"
@@ -2212,70 +2238,70 @@ function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: #0) -> bo
     return
 }
 
-function interfaces.DapcBase.foo(self: interfaces.DapcBase) -> string {
+function interfaces.DapcBase.foo(self: #0) -> string {
     load_const "Base"
     return
 }
 
-function interfaces.DapcLeft.foo(self: interfaces.DapcLeft) -> string {
+function interfaces.DapcLeft.foo(self: #0) -> string {
     load_const "Left"
     return
 }
 
-function interfaces.DapcRight.foo(self: interfaces.DapcRight) -> string {
+function interfaces.DapcRight.foo(self: #0) -> string {
     load_const "Right"
     return
 }
 
-function interfaces.DcfoLogger.log(self: interfaces.DcfoLogger, msg: string) -> string {
+function interfaces.DcfoLogger.log(self: #0, msg: string) -> string {
     load_const "[LOG] "
     load_var msg
     bin_op +
     return
 }
 
-function interfaces.DcgoLogger.log(self: interfaces.DcgoLogger, msg: string) -> string {
+function interfaces.DcgoLogger.log(self: #0, msg: string) -> string {
     load_const "[L] "
     load_var msg
     bin_op +
     return
 }
 
-function interfaces.DcmrAnimal.next(self: interfaces.DcmrAnimal) -> interfaces.DcmrAnimal {
+function interfaces.DcmrAnimal.next(self: #0) -> interfaces.DcmrAnimal {
     load_var self
     return
 }
 
-function interfaces.DcobLogger.log(self: interfaces.DcobLogger, msg: string) -> string {
+function interfaces.DcobLogger.log(self: #0, msg: string) -> string {
     load_const "[L] "
     load_var msg
     bin_op +
     return
 }
 
-function interfaces.DctiBase.foo(self: interfaces.DctiBase) -> string {
+function interfaces.DctiBase.foo(self: #0) -> string {
     load_const "Base"
     return
 }
 
-function interfaces.DctiLeft.foo(self: interfaces.DctiLeft) -> string {
+function interfaces.DctiLeft.foo(self: #0) -> string {
     load_const "Left"
     return
 }
 
-function interfaces.DctiRight.foo(self: interfaces.DctiRight) -> string {
+function interfaces.DctiRight.foo(self: #0) -> string {
     load_const "Right"
     return
 }
 
-function interfaces.DctioLogger.log(self: interfaces.DctioLogger, msg: string) -> string {
+function interfaces.DctioLogger.log(self: #0, msg: string) -> string {
     load_const "[L] "
     load_var msg
     bin_op +
     return
 }
 
-function interfaces.DcwcWrapper.decorate(self: interfaces.DcwcWrapper, body: string) -> string {
+function interfaces.DcwcWrapper.decorate(self: #0, body: string) -> string {
     load_const "["
     load_var body
     bin_op +
@@ -2284,12 +2310,12 @@ function interfaces.DcwcWrapper.decorate(self: interfaces.DcwcWrapper, body: str
     return
 }
 
-function interfaces.DkslLogger.log(self: interfaces.DkslLogger, msg: string) -> string {
+function interfaces.DkslLogger.log(self: #0, msg: string) -> string {
     load_var msg
     return
 }
 
-function interfaces.DmdtAnimal.describe(self: interfaces.DmdtAnimal) -> string {
+function interfaces.DmdtAnimal.describe(self: #0) -> string {
     load_const "animal: "
     load_var self
     load_type interfaces.DmdtAnimal
@@ -2298,47 +2324,47 @@ function interfaces.DmdtAnimal.describe(self: interfaces.DmdtAnimal) -> string {
     return
 }
 
-function interfaces.DrtcA.tag(self: interfaces.DrtcA) -> string {
+function interfaces.DrtcA.tag(self: #0) -> string {
     load_const "A"
     return
 }
 
-function interfaces.DrtcB.tag(self: interfaces.DrtcB) -> string {
+function interfaces.DrtcB.tag(self: #0) -> string {
     load_const "B"
     return
 }
 
-function interfaces.DwoaBase.name(self: interfaces.DwoaBase) -> string {
+function interfaces.DwoaBase.name(self: #0) -> string {
     load_const "Base"
     return
 }
 
-function interfaces.DwoaMid.name(self: interfaces.DwoaMid) -> string {
+function interfaces.DwoaMid.name(self: #0) -> string {
     load_const "Mid"
     return
 }
 
-function interfaces.DwoaTip.name(self: interfaces.DwoaTip) -> string {
+function interfaces.DwoaTip.name(self: #0) -> string {
     load_const "Tip"
     return
 }
 
-function interfaces.Fz05A.foo(self: interfaces.Fz05A) -> string {
+function interfaces.Fz05A.foo(self: #0) -> string {
     load_const "A"
     return
 }
 
-function interfaces.Fz05B.foo(self: interfaces.Fz05B) -> string {
+function interfaces.Fz05B.foo(self: #0) -> string {
     load_const "B"
     return
 }
 
-function interfaces.Fz07Echo.echo(self: interfaces.Fz07Echo<#1>, x: #1) -> #1 {
+function interfaces.Fz07Echo.echo(self: #0, x: #1) -> #1 {
     load_var x
     return
 }
 
-function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15Container<#1>) -> string {
+function interfaces.Fz15Container.describe_with_self_call(self: #0) -> string {
     load_var self
     load_type interfaces.Fz15Container<#1>
     load_const "size"
@@ -2348,7 +2374,7 @@ function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15C
     return
 }
 
-function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fallback: #1) -> #1 {
+function interfaces.Fz16Container.get_or(self: #0, fallback: #1) -> #1 {
     load_var self
     load_type interfaces.Fz16Container<#1>
     load_const "get"
@@ -2358,7 +2384,7 @@ function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fal
     return
 }
 
-function interfaces.Fz17Greetable.greet(self: interfaces.Fz17Greetable) -> string {
+function interfaces.Fz17Greetable.greet(self: #0) -> string {
     load_const "Hello!"
     return
 }
@@ -2371,27 +2397,38 @@ function interfaces.Fz18Person.name(self: interfaces.Fz18Person) -> string {
     return
 }
 
-function interfaces.Fz23Speaker.speak(self: interfaces.Fz23Speaker) -> string {
+function interfaces.Fz23Speaker.speak(self: #0) -> string {
     load_const "default speech"
     return
 }
 
-function interfaces.Fz24Container.identity(self: interfaces.Fz24Container<#1>, x: #1) -> #1 {
+function interfaces.Fz24Container.identity(self: #0, x: #1) -> #1 {
     load_var x
     return
 }
 
-function interfaces.Fz42Printable.print(self: interfaces.Fz42Printable) -> string {
+function interfaces.Fz42Printable.print(self: #0) -> string {
     load_const "printable"
     return
 }
 
-function interfaces.Fz44Wrapper.wrap(self: interfaces.Fz44Wrapper<#1>, x: #1) -> #1 {
+function interfaces.Fz44Wrapper.wrap(self: #0, x: #1) -> #1 {
     load_var x
     return
 }
 
-function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0) -> bool {
+function interfaces.GmvIdentity.echo(self: #0, value: #1) -> #1 {
+    load_var value
+    return
+}
+
+function interfaces.GmvIdentity.empty(self: #0) -> #1[] {
+    load_type #1
+    alloc_array 0
+    return
+}
+
+function interfaces.IdmcEquatable.neq(self: #0, other: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
     load_const "eq"
@@ -2402,12 +2439,12 @@ function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0)
     return
 }
 
-function interfaces.IdmrDescribable.describe(self: interfaces.IdmrDescribable) -> string {
+function interfaces.IdmrDescribable.describe(self: #0) -> string {
     load_const "default"
     return
 }
 
-function interfaces.OdndAnimal.describe(self: interfaces.OdndAnimal) -> string {
+function interfaces.OdndAnimal.describe(self: #0) -> string {
     load_const "default:"
     load_var self
     load_type interfaces.OdndAnimal
@@ -2416,7 +2453,7 @@ function interfaces.OdndAnimal.describe(self: interfaces.OdndAnimal) -> string {
     return
 }
 
-function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string {
+function interfaces.RcpfPerson.introduce(self: #0) -> string {
     load_var self
     load_type interfaces.RcpfNamed
     virtual_load_field .name
@@ -2434,17 +2471,17 @@ function interfaces.Uf08Dog.fetch(self: interfaces.Uf08Dog) -> string {
     return
 }
 
-function interfaces.Ufp1Greeter.greet(self: interfaces.Ufp1Greeter) -> string {
+function interfaces.Ufp1Greeter.greet(self: #0) -> string {
     load_const "hello"
     return
 }
 
-function interfaces.UrdmPrintable.display(self: interfaces.UrdmPrintable) -> string {
+function interfaces.UrdmPrintable.display(self: #0) -> string {
     load_const "default"
     return
 }
 
-function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<#1>) -> #1 {
+function interfaces.W301Sub.sub_get(self: #0) -> #1 {
     load_var self
     load_type interfaces.W301Base<#1>
     load_const "base_get"
@@ -2454,12 +2491,12 @@ function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<#1>) -> #1 {
     return
 }
 
-function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
+function interfaces.W304Named.describe(self: #0) -> string {
     load_const "x"
     return
 }
 
-function interfaces.W311Base.id(self: interfaces.W311Base) -> string {
+function interfaces.W311Base.id(self: #0) -> string {
     load_const "base"
     return
 }

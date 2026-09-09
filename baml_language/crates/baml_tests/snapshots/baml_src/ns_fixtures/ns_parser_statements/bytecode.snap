@@ -166,7 +166,7 @@ function fixtures.parser_statements.continue_with_locals() -> int {
     jump L0
 }
 
-function fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws never) -> int {
+function fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws unknown) -> int {
     load_var foo
     call_indirect
     pop 1
@@ -174,7 +174,7 @@ function fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws
     return
 }
 
-function fixtures.parser_statements.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws never) -> int {
+function fixtures.parser_statements.edge_call_then_parens(foo: () -> ((int) -> int throws never) throws unknown) -> int {
     load_var foo
     call_indirect
     store_var _3
@@ -186,7 +186,7 @@ function fixtures.parser_statements.edge_call_then_parens(foo: () -> ((int) -> i
     return
 }
 
-function fixtures.parser_statements.edge_let_call_then_index(bar: () -> int[] throws never) -> int {
+function fixtures.parser_statements.edge_let_call_then_index(bar: () -> int[] throws unknown) -> int {
     load_var bar
     call_indirect
     load_const 0
@@ -194,7 +194,7 @@ function fixtures.parser_statements.edge_let_call_then_index(bar: () -> int[] th
     return
 }
 
-function fixtures.parser_statements.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int {
+function fixtures.parser_statements.edge_semicolon_forces_boundary(bar: () -> int[] throws unknown) -> int {
     load_var bar
     call_indirect
     pop 1

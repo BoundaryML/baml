@@ -21,6 +21,34 @@ use bex_vm_types::{
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
 
+#[derive(Debug)]
+pub(crate) enum RegistrationError {
+    Coherence(String),
+    Constraint(String),
+    RequiredInterface(String),
+}
+
+impl RegistrationError {
+    pub(crate) fn diagnostic_id(&self) -> baml_compiler_diagnostics::DiagnosticId {
+        use baml_compiler_diagnostics::DiagnosticId;
+        match self {
+            Self::Coherence(_) => DiagnosticId::OverlappingImplements,
+            Self::Constraint(_) => DiagnosticId::TypeMismatch,
+            Self::RequiredInterface(_) => DiagnosticId::MissingRequiredInterface,
+        }
+    }
+}
+
+impl std::fmt::Display for RegistrationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Coherence(message)
+            | Self::Constraint(message)
+            | Self::RequiredInterface(message) => f.write_str(message),
+        }
+    }
+}
+
 /// A resolver candidate borrows an immutable rule from the heap. Every rule —
 /// compiled into the static image, owned by a runtime package, or registered
 /// as an anonymous class's witness — is an `Object::ImplRule`, so no candidate
@@ -67,6 +95,8 @@ pub(crate) struct RuleMethodImpl<'r> {
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
     root_package: Option<bex_vm_types::HeapPtr>,
+    /// Private registration overlay; never visible to other VM threads.
+    staged_rules: &'vm [RuntimeImplRule],
 }
 
 impl<'vm> ImplResolver<'vm> {
@@ -74,6 +104,7 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: None,
+            staged_rules: &[],
         }
     }
 
@@ -84,7 +115,169 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: Some(package),
+            staged_rules: &[],
         }
+    }
+
+    /// Check a registration against the world it would create, without
+    /// publishing provisional rules or mutating the dispatch index. Nested
+    /// obligations use this same overlay, so another row in the batch can
+    /// activate a blanket implementation.
+    pub(crate) fn with_staged_rules(self, rules: &'vm [RuntimeImplRule]) -> Self {
+        Self {
+            staged_rules: rules,
+            ..self
+        }
+    }
+
+    /// Check the declaration's fully instantiated constraints in the private
+    /// proposed world. Method/field implementation contracts are a separate
+    /// gate; this does not make an arbitrary RuntimeImplRule a valid adapter.
+    pub(crate) fn check_staged_interface_constraints(self) -> Result<(), RegistrationError> {
+        for rule in self.staged_rules {
+            let bex_vm_types::Object::Interface(declaration) =
+                self.vm.get_object(rule.interface_head)
+            else {
+                return Err(RegistrationError::Constraint(
+                    "registration target is not an interface".into(),
+                ));
+            };
+            let mut names = rule
+                .interface_assoc
+                .iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>();
+            names.sort();
+            let mut expected = declaration.associated_type_names.iter().collect::<Vec<_>>();
+            expected.sort();
+            if names != expected {
+                return Err(RegistrationError::Constraint(format!(
+                    "interface `{}` requires every associated binding exactly once",
+                    declaration.name,
+                )));
+            }
+        }
+        // Preflight all templates before any recursive lookup sees the batch.
+        self.check_staged_coherence()
+            .map_err(RegistrationError::Coherence)?;
+        for rule in self.staged_rules {
+            let bex_vm_types::Object::Interface(declaration) =
+                self.vm.get_object(rule.interface_head)
+            else {
+                unreachable!()
+            };
+            let mut frame = vec![
+                RealizedTy::try_from(rule.for_ty_pattern.clone())
+                    .expect("preflight checked receiver"),
+            ];
+            frame.extend(
+                rule.interface_args
+                    .iter()
+                    .cloned()
+                    .map(|ty| RealizedTy::try_from(ty).expect("preflight checked arguments")),
+            );
+            for obligation in &declaration.registration_obligations {
+                let subject = obligation
+                    .subject
+                    .substitute(&frame, &self)
+                    .map_err(|error| {
+                        RegistrationError::Constraint(format!(
+                            "interface `{}` constraint subject cannot be realized: {error}",
+                            declaration.name
+                        ))
+                    })?;
+                let constraint =
+                    obligation
+                        .constraint
+                        .substitute(&frame, &self)
+                        .map_err(|error| {
+                            RegistrationError::Constraint(format!(
+                                "interface `{}` constraint cannot be realized: {error}",
+                                declaration.name
+                            ))
+                        })?;
+                let RealizedTy::Interface(head, args, pins, _) = &constraint else {
+                    return Err(RegistrationError::Constraint(
+                        "compiled registration constraint is not an interface".into(),
+                    ));
+                };
+                if !self.type_implements(&subject, *head, args, pins) {
+                    let message = format!(
+                        "interface `{}` requires `{subject}` to implement `{constraint}`",
+                        declaration.name
+                    );
+                    return Err(if matches!(obligation.subject, TyTemplate::TypeArgRef(0)) {
+                        RegistrationError::RequiredInterface(message)
+                    } else {
+                        RegistrationError::Constraint(message)
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Every staged row must be the sole applicable implementation for its
+    /// concrete receiver and interface input arguments. Associated bindings are
+    /// outputs, so different bindings never make two rows disjoint.
+    ///
+    /// This is the monomorphic registration gate, not an arbitrary source impl
+    /// coherence checker: dynamic adapter instances share one fresh concrete
+    /// type, and all interface arguments are fixed at type registration.
+    pub(crate) fn check_staged_coherence(self) -> Result<(), String> {
+        // Validate every row before solving any goal: recursive obligations can
+        // inspect a later row, whose unresolved template must never reach the
+        // infallible substitution used for compiler-checked rules.
+        let mut goals = Vec::with_capacity(self.staged_rules.len());
+        for proposed in self.staged_rules {
+            if !proposed.generic_param_bounds.is_empty() {
+                return Err("dynamic registration requires a concrete receiver".into());
+            }
+            let concrete = RealizedTy::try_from(proposed.for_ty_pattern.clone())
+                .map_err(|_| "dynamic registration receiver is not fully realized")?;
+            let args = proposed
+                .interface_args
+                .iter()
+                .cloned()
+                .map(RealizedTy::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| "dynamic registration interface arguments are not fully realized")?;
+            for (_, binding) in &proposed.interface_assoc {
+                <&RealizedTy>::try_from(binding).map_err(
+                    |_| "dynamic registration associated bindings are not fully realized",
+                )?;
+            }
+            let bex_vm_types::Object::Interface(interface) =
+                self.vm.get_object(proposed.interface_head)
+            else {
+                return Err("dynamic registration does not name an interface".into());
+            };
+            if args.len() != interface.args.len() {
+                return Err(format!(
+                    "interface `{}` expects {} arguments, got {}",
+                    interface.name,
+                    interface.args.len(),
+                    args.len()
+                ));
+            }
+            goals.push((concrete, args, proposed.interface_head, interface));
+        }
+        for (concrete, args, interface_ptr, interface) in goals {
+            let head = TypeHead::new(interface_ptr, interface.type_tag);
+            let count = self
+                .rules_for(&concrete, head, &args)
+                .iter()
+                .filter(|rule| self.requested_rule_args(rule, &concrete, &args).is_some())
+                .take(2)
+                .count();
+            if count != 1 {
+                return Err(format!(
+                    "overlapping implementations of `{}` for `{concrete}`",
+                    interface.name
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Resolve in the dynamic world that owns `value`, falling back to the
@@ -105,7 +298,12 @@ impl<'vm> ImplResolver<'vm> {
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: TypeHead) -> Vec<RuntimeImplRuleCandidate<'vm>> {
+    fn rules_for(
+        self,
+        concrete: &RealizedTy,
+        iface: TypeHead,
+        args: &[RealizedTy],
+    ) -> Vec<RuntimeImplRuleCandidate<'vm>> {
         // The head *is* the canonical `Object::Interface` pointer that keys
         // every package's `impl_rules` — no name lookup on the dispatch path.
         //
@@ -122,6 +320,29 @@ impl<'vm> ImplResolver<'vm> {
             self.root_package
                 .unwrap_or_else(|| self.vm.current_runtime_package()),
         ];
+        // Coherent implementations are owned by a declaration participating
+        // in this obligation, not necessarily by the calling function's
+        // package. Follow those exact declaration owners, including generic
+        // arguments, so a retained runtime value remains callable elsewhere.
+        // Display names never select a world: separately compiled packages
+        // may contain declarations with identical spellings.
+        let mut add_owner = |head: &TypeHead| {
+            let owner = match self.vm.get_object(head.ptr()) {
+                bex_vm_types::Object::Class(value) => value.owner,
+                bex_vm_types::Object::Enum(value) => value.owner,
+                bex_vm_types::Object::Interface(value) => value.owner,
+                bex_vm_types::Object::TypeAlias(value) => value.owner,
+                _ => bex_vm_types::HeapPtr::null(),
+            };
+            if !owner.is_null() {
+                packages.push(owner);
+            }
+        };
+        add_owner(&iface);
+        concrete.visit_heads(&mut add_owner);
+        for arg in args {
+            arg.visit_heads(&mut add_owner);
+        }
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {
@@ -137,8 +358,12 @@ impl<'vm> ImplResolver<'vm> {
                 packages.extend(runtime.dependencies.iter().copied());
             }
         }
+        // A rule can be reachable through both the static index and an owner
+        // package. Count its identity once when checking staged coherence.
+        let mut seen_rules = std::collections::HashSet::new();
         let mut rules = pointers
             .into_iter()
+            .filter(|ptr| seen_rules.insert(*ptr))
             .filter_map(|rule_ptr| {
                 self.vm
                     .get_object(rule_ptr)
@@ -151,12 +376,19 @@ impl<'vm> ImplResolver<'vm> {
                 .dynamic_dispatch
                 .rules_of(iface_ptr)
                 .into_iter()
+                .filter(|ptr| seen_rules.insert(*ptr))
                 .filter_map(|rule_ptr| {
                     self.vm
                         .get_object(rule_ptr)
                         .as_impl_rule()
                         .map(RuntimeImplRuleCandidate::Borrowed)
                 }),
+        );
+        rules.extend(
+            self.staged_rules
+                .iter()
+                .filter(|rule| rule.interface_head == iface_ptr)
+                .map(RuntimeImplRuleCandidate::Borrowed),
         );
         rules
     }
@@ -256,7 +488,7 @@ impl<'vm> ImplResolver<'vm> {
             }
         }
 
-        for rule in self.rules_for(iface) {
+        for rule in self.rules_for(concrete_ty, iface, iface_args) {
             if let Some(type_args) = self.requested_rule_args(&rule, concrete_ty, iface_args) {
                 return Some((rule, type_args));
             }
@@ -424,7 +656,7 @@ impl<'vm> ImplResolver<'vm> {
         stack.push(goal);
         // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
         // mutably inside the predicate, so the candidates are collected first.
-        let candidates = self.rules_for(iface);
+        let candidates = self.rules_for(concrete_ty, iface, requested_args);
         let proven = candidates.into_iter().any(|rule| {
             self.rule_applies(&rule, concrete_ty, stack)
                 .is_some_and(|bindings| {
@@ -784,7 +1016,7 @@ impl ImplResolver<'_> {
     /// selection conservative without aborting the query. (Value materialization
     /// uses [`Self::realize_frame`], which is strict.)
     fn substitute_checked(self, template: &TyTemplate, env: &[RealizedTy]) -> RealizedTy {
-        template.substitute(env, self.vm).unwrap_or_else(|e| {
+        template.substitute(env, &self).unwrap_or_else(|e| {
             debug_assert!(
                 !matches!(e, baml_type::SubstituteError::TypeArgRefOutOfRange { .. }),
                 "impl rule template is malformed: {e}",
@@ -794,7 +1026,93 @@ impl ImplResolver<'_> {
     }
 }
 
-impl ImplResolver<'_> {}
+// Substitution must preserve this resolver's selected package and staged rules.
+// Delegating projection to BexVm would silently return to the published world.
+impl TypeContext<TypeHead> for ImplResolver<'_> {
+    fn head_lookup(&self, name: &baml_type::QualifiedTypeName) -> Option<TypeHead> {
+        self.vm.head_lookup(name)
+    }
+    fn alias_def(&self, head: &TypeHead) -> Option<baml_type::Ty<TypeHead>> {
+        self.vm.alias_def(head)
+    }
+    fn enum_variants(&self, head: &TypeHead) -> Option<Vec<Name>> {
+        self.vm.enum_variants(head)
+    }
+    fn type_var_bound(&self, param: &baml_type::ParamTy) -> Vec<baml_type::Interface<TypeHead>> {
+        self.vm.type_var_bound(param)
+    }
+    fn interface_requires(
+        &self,
+        sub: &baml_type::Interface<TypeHead>,
+        sup: &baml_type::Interface<TypeHead>,
+    ) -> bool {
+        self.vm.interface_requires(sub, sup)
+    }
+    fn associated_type_bound(
+        &self,
+        interface: &baml_type::Interface<TypeHead>,
+        member: Name,
+    ) -> Vec<baml_type::Interface<TypeHead>> {
+        self.vm.associated_type_bound(interface, member)
+    }
+    fn implements_interface(
+        &self,
+        concrete: &baml_type::Ty<TypeHead>,
+        interface: &baml_type::Interface<TypeHead>,
+    ) -> bool {
+        let Ok(concrete) = RealizedTy::try_from(concrete) else {
+            return false;
+        };
+        let Ok(args) = interface
+            .generics
+            .iter()
+            .map(RealizedTy::try_from)
+            .collect::<Result<Vec<_>, _>>()
+        else {
+            return false;
+        };
+        let Ok(pins) = interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| RealizedTy::try_from(ty).map(|ty| (name.clone(), ty)))
+            .collect::<Result<Vec<_>, _>>()
+        else {
+            return false;
+        };
+        self.type_implements(&concrete, interface.name, &args, &pins)
+    }
+    fn project(
+        &self,
+        base: &baml_type::Ty<TypeHead>,
+        interface: &baml_type::Interface<TypeHead>,
+        member: &Name,
+        fuel: u32,
+    ) -> baml_type::normalize::ProjectionStep<TypeHead> {
+        use baml_type::normalize::ProjectionStep;
+        let Ok(base) = RealizedTy::try_from(base) else {
+            return ProjectionStep::Opaque;
+        };
+        let Ok(args) = interface
+            .generics
+            .iter()
+            .map(RealizedTy::try_from)
+            .collect::<Result<Vec<_>, _>>()
+        else {
+            return ProjectionStep::Opaque;
+        };
+        let Some((rule, frame)) = self.resolve_implements_rule(&base, interface.name, &args) else {
+            return ProjectionStep::Opaque;
+        };
+        let Some((_, template)) = rule.interface_assoc.iter().find(|(name, _)| name == member)
+        else {
+            return ProjectionStep::Opaque;
+        };
+        match template.substitute_with_fuel(&frame, self, fuel) {
+            Ok(value) => ProjectionStep::Reduced(value.into()),
+            Err(_) => ProjectionStep::Opaque,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -152,7 +152,7 @@ function projection_patterns.<(user.projection_patterns.StrHolder as user.projec
     return
 }
 
-function projection_patterns.Holder.classify(self: projection_patterns.Holder, v: unknown) -> string {
+function projection_patterns.Holder.classify(self: #0, v: unknown) -> string {
     load_var v
     store_var _3
     load_var _3
@@ -171,7 +171,7 @@ function projection_patterns.Holder.classify(self: projection_patterns.Holder, v
     return
 }
 
-function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v: unknown) -> bool {
+function projection_patterns.Holder.is_item(self: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Holder).Item
     pop_jump_if_false L0
@@ -188,7 +188,7 @@ function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v:
     return
 }
 
-function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled, v: unknown) -> bool {
+function projection_patterns.Labeled.is_label(self: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Labeled).Label
     pop_jump_if_false L0
@@ -205,7 +205,7 @@ function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled,
     return
 }
 
-function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled) -> string {
+function projection_patterns.Labeled.label_name(self: #0) -> string {
     load_type (#0 as projection_patterns.Labeled).Label
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return

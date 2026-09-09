@@ -239,6 +239,7 @@ fn dispatch_op(
         Err(e) => return NativeCallResult::from(e),
     };
     NativeCallResult::YieldToCall {
+        argument_layout: None,
         // `fqn` is the resolved callee's heap pointer (provided row or adopted
         // interface default).
         callee: resolved.method.fqn,
@@ -369,6 +370,7 @@ impl EqualsDriver {
                     type_args,
                 } => {
                     return NativeCallResult::YieldToCall {
+                        argument_layout: None,
                         callee,
                         args,
                         type_args,

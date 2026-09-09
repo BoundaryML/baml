@@ -68,6 +68,7 @@ impl BexVm {
                 type_tag,
                 ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,
+                boundary_projection: baml_type::ClassProjection::Record,
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::HeapPtr::null(),
             })));
@@ -211,17 +212,9 @@ pub(super) fn validate_class_witnesses(
         }
     }
 
-    // All aggregate witness checks happen before allocating the class/type
-    // value (C-12, Fail-Before-Type).
-    //
-    // BUG: only intra-batch duplicates are rejected. A witness for `I` on a
-    // class that a static blanket rule (`implement<T extends Bound> I for T`)
-    // already covers is not detected; the resolver tries the static slice first
-    // and returns on the first match, so such a witness is silently shadowed
-    // rather than rejected. Coherence (TYPE_SYSTEM.md, "Interface Coherence")
-    // says at most one implementation per (type, interface) — this should fail
-    // closed at registration by probing `type_implements` for the fresh class
-    // against the static rules before allocating.
+    // Shape/field checks precede allocation. Coherence needs the fresh nominal
+    // receiver and the whole proposed batch, so prepare_class_witnesses checks
+    // it in a private resolver overlay before any rule or type is exposed.
     let mut unique_witnesses = std::collections::HashSet::new();
     for witness in &witnesses {
         if !unique_witnesses.insert(witness.interface_ty.clone()) {
@@ -243,25 +236,8 @@ pub(super) fn validate_class_witnesses(
             ));
             continue;
         };
-        for required in &interface.requires {
-            let present = witnesses.iter().any(|candidate| {
-                matches!(
-                    &candidate.interface_ty,
-                    bex_vm_types::RealizedTy::Interface(name, _, _, _)
-                        if name == &required.name
-                )
-            });
-            if !present {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::MissingRequiredInterface,
-                    format!(
-                        "interface witness for `{}` requires a witness for `{}`",
-                        interface.name.display_name(),
-                        baml_type::HeadDisplay::head_display_name(&required.name)
-                    ),
-                ));
-            }
-        }
+        // Requires and all declared bounds need the concrete receiver and the
+        // complete proposed batch; prepare_class_witnesses checks them below.
         let mut physical_links = Vec::with_capacity(interface.fields.len());
         for required in &interface.fields {
             let Some(class_field_name) = witness.field_links.get(&required.name) else {
@@ -335,28 +311,18 @@ pub(super) fn validate_class_witnesses(
     validated
 }
 
-pub(super) fn register_class_witnesses(
-    vm: &mut BexVm,
-    class_ptr: bex_vm_types::HeapPtr,
+/// Prepare immutable rules, then check the complete proposed world. This
+/// returns no published registration and invokes no user code.
+pub(super) fn prepare_class_witnesses(
+    vm: &BexVm,
     ty: &bex_vm_types::RealizedTy,
     witnesses: Vec<ValidatedClassWitness>,
-) {
-    for witness in witnesses {
-        let for_ty_pattern = bex_vm_types::TyTemplate::from(ty.clone());
-        // A witness supplies fields only, so its method table is EMPTY: every
-        // method is the interface's default body, adopted at resolution
-        // (`ImplResolver::rule_method_impl` falls back to the interface's
-        // bound `default_fn` with the `[Self, iface args..]` frame). The
-        // required-method gate in `register_class_witnesses` (the
-        // "cannot be witnessed structurally" rejection) already excluded
-        // any interface with a bodyless required method.
-        // The witness is an ordinary heap `Object::ImplRule` — the resolver
-        // borrows it exactly like a package-owned rule and the collector keeps
-        // its `interface_head`/`methods[].fqn` current — so the side table
-        // holds only a pointer to it, never a copy.
-        let rule = vm.tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
+) -> Result<Vec<RuntimeImplRule>, crate::package_baml::resolve::RegistrationError> {
+    let rules = witnesses
+        .into_iter()
+        .map(|witness| RuntimeImplRule {
             interface_head: witness.interface_ptr,
-            for_ty_pattern,
+            for_ty_pattern: bex_vm_types::TyTemplate::from(ty.clone()),
             generic_param_bounds: Vec::new(),
             interface_args: witness
                 .interface_args
@@ -368,17 +334,79 @@ pub(super) fn register_class_witnesses(
                 .into_iter()
                 .map(|(name, ty)| (name, bex_vm_types::TyTemplate::from(ty)))
                 .collect(),
+            // Structural witnesses only adopt BAML defaults. Required methods were
+            // rejected when constructing the witness, before this batch exists.
             methods: IndexMap::new(),
             field_links: witness.field_links.into_boxed_slice(),
-        })));
-        vm.dynamic_dispatch.register_rule(
-            witness.interface_ptr,
-            crate::package_load::DynRuleEntry {
-                class: class_ptr,
-                rule,
-            },
+        })
+        .collect::<Vec<_>>();
+    crate::package_baml::resolve::ImplResolver::new(vm)
+        .with_staged_rules(&rules)
+        .check_staged_interface_constraints()?;
+    Ok(rules)
+}
+
+/// Publish only after every fallible registration check has succeeded. The
+/// weak index retains nothing; a private package connects the owning class to
+/// its ordinary rule objects so GC can trace their lifetime.
+pub(super) fn register_class_witnesses(
+    vm: &mut BexVm,
+    class_ptr: bex_vm_types::HeapPtr,
+    rules: Vec<RuntimeImplRule>,
+) {
+    let entries: Vec<_> = rules
+        .into_iter()
+        .map(|rule| {
+            let interface = rule.interface_head;
+            let rule = vm.tlab.alloc(Object::ImplRule(Box::new(rule)));
+            (
+                interface,
+                crate::package_load::DynRuleEntry {
+                    class: class_ptr,
+                    rule,
+                },
+            )
+        })
+        .collect();
+    // A weak lookup table is not ownership. Make the fresh class retain its
+    // rules through a private package; otherwise its witnesses die at the next
+    // collection even while an instance/type value still retains the class.
+    if !entries.is_empty() {
+        let owner = vm.alloc_private_type_owner();
+        let Object::Class(class) = vm.get_object(class_ptr) else {
+            unreachable!()
+        };
+        assert!(
+            class.owner.is_null(),
+            "new witnessed class already has an owner"
         );
+        let name = class.name.item_name().clone();
+        let Object::Package(package) = vm.get_object_mut(owner) else {
+            unreachable!()
+        };
+        package.classes.insert(
+            bex_vm_types::types::LocalName {
+                namespace: vec![],
+                name,
+            },
+            class_ptr,
+        );
+        for (interface, entry) in &entries {
+            package
+                .impl_rules
+                .entry(*interface)
+                .or_default()
+                .push(entry.rule);
+        }
+        vm.tlab
+            .heap()
+            .write_barrier(class_ptr, Value::object(owner));
+        let Object::Class(class) = vm.get_object_mut(class_ptr) else {
+            unreachable!()
+        };
+        class.owner = owner;
     }
+    vm.dynamic_dispatch.register_batch(entries);
 }
 
 impl BamlNamespaceClass for PackageReflectImpl {
@@ -463,6 +491,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             type_tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -474,7 +503,16 @@ impl BamlNamespaceClass for PackageReflectImpl {
             Vec::new(),
             baml_type::TyAttr::default(),
         );
-        register_class_witnesses(vm, class_ptr, &ty, witnesses);
+        let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|error| {
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
+                vm,
+                &[compiler_diagnostic(
+                    error.diagnostic_id(),
+                    error.to_string(),
+                )],
+            ))
+        })?;
+        register_class_witnesses(vm, class_ptr, rules);
         Ok({
             let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
             alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
@@ -1781,3 +1819,367 @@ impl BamlNamespaceMapReflect for PackageReflectImpl {}
 impl BamlNamespacePrimitiveReflect for PackageReflectImpl {}
 
 impl BamlNamespaceUnionReflect for PackageReflectImpl {}
+
+#[cfg(test)]
+mod registration_tests {
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    use bex_vm_types::{RealizedTy, TypeHead};
+
+    use super::*;
+
+    // Rust tests inspect the unpublished dispatch table, which BAML cannot
+    // observe. The compiled blanket is real compiler output, not a mock rule.
+    fn vm() -> BexVm {
+        BexVm::from_program(
+            baml_db::testing::compile_source(
+                r#"
+interface Gate {}
+interface Pick {}
+interface Choice<T> { type Item }
+interface Needs<T> requires Choice<T, Item=Self.Output> { type Output }
+interface Bounded<T extends Gate> { type Output extends Gate }
+interface NeedsPick requires Pick {}
+implements<T extends Gate> Pick for T {}
+class Fresh {}
+"#,
+            ),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .unwrap()
+    }
+
+    fn head(vm: &BexVm, name: &str) -> TypeHead {
+        vm.declaration_head(&baml_type::TypeName::from_dotted_path(&format!(
+            "user.{name}"
+        )))
+        .unwrap()
+    }
+
+    fn receiver(vm: &mut BexVm) -> RealizedTy {
+        let Object::Class(class) = vm.get_object(head(vm, "Fresh").ptr()) else {
+            unreachable!()
+        };
+        let mut class = (**class).clone();
+        class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        class.name = bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Fresh"));
+        let tag = class.type_tag;
+        let ptr = vm.tlab_mut().alloc(Object::Class(Box::new(class)));
+        RealizedTy::Class(TypeHead::new(ptr, tag), Vec::new(), Default::default())
+    }
+
+    fn witness(
+        vm: &BexVm,
+        name: &str,
+        args: Vec<RealizedTy>,
+        assoc: Vec<(baml_type::Name, RealizedTy)>,
+    ) -> ValidatedClassWitness {
+        ValidatedClassWitness {
+            interface_ptr: head(vm, name).ptr(),
+            interface_args: args,
+            interface_assoc: assoc,
+            field_links: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn registration_checks_required_interface_arguments_and_associated_projections() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        for (argument, output, accepted) in [
+            (RealizedTy::int(), RealizedTy::string(), true),
+            (RealizedTy::string(), RealizedTy::string(), false),
+            (RealizedTy::int(), RealizedTy::int(), false),
+        ] {
+            let result = prepare_class_witnesses(
+                &vm,
+                &ty,
+                vec![
+                    witness(
+                        &vm,
+                        "Needs",
+                        vec![RealizedTy::int()],
+                        vec![(baml_type::Name::new("Output"), RealizedTy::string())],
+                    ),
+                    witness(
+                        &vm,
+                        "Choice",
+                        vec![argument],
+                        vec![(baml_type::Name::new("Item"), output)],
+                    ),
+                ],
+            );
+            if accepted {
+                assert!(result.is_ok(), "{result:?}");
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(crate::package_baml::resolve::RegistrationError::RequiredInterface(_))
+                    ),
+                    "{result:?}"
+                );
+            }
+            assert_eq!(
+                vm.dynamic_dispatch.rule_count(),
+                0,
+                "validation must remain private"
+            );
+        }
+    }
+
+    #[test]
+    fn registration_checks_generic_and_associated_bounds_in_the_whole_batch() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        for reverse in [false, true] {
+            for (argument, output, accepted) in [
+                (ty.clone(), ty.clone(), true),
+                (RealizedTy::int(), ty.clone(), false),
+                (ty.clone(), RealizedTy::int(), false),
+            ] {
+                let mut witnesses = vec![
+                    witness(
+                        &vm,
+                        "Bounded",
+                        vec![argument],
+                        vec![(baml_type::Name::new("Output"), output)],
+                    ),
+                    witness(&vm, "Gate", vec![], vec![]),
+                ];
+                if reverse {
+                    witnesses.reverse();
+                }
+                let result = prepare_class_witnesses(&vm, &ty, witnesses);
+                assert_eq!(result.is_ok(), accepted, "{result:?}");
+                assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn registration_requires_can_be_satisfied_by_an_applicable_blanket() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let rules = prepare_class_witnesses(
+            &vm,
+            &ty,
+            vec![
+                witness(&vm, "NeedsPick", vec![], vec![]),
+                witness(&vm, "Gate", vec![], vec![]),
+            ],
+        )
+        .unwrap();
+        assert_eq!(rules.len(), 2, "do not synthesize a duplicate Pick witness");
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+    }
+
+    #[test]
+    fn registration_rejects_missing_duplicate_and_unknown_associated_bindings() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        for names in [vec![], vec!["Other"], vec!["Item", "Item"]] {
+            let pins = names
+                .into_iter()
+                .map(|name| (baml_type::Name::new(name), RealizedTy::int()))
+                .collect();
+            let error = prepare_class_witnesses(
+                &vm,
+                &ty,
+                vec![witness(&vm, "Choice", vec![RealizedTy::int()], pins)],
+            )
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("every associated binding exactly once"),
+                "{error}"
+            );
+            assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+        }
+    }
+    #[test]
+    fn registration_checks_blankets_activated_by_the_same_batch_without_publication() {
+        for reverse in [false, true] {
+            let mut vm = vm();
+            let ty = receiver(&mut vm);
+            let mut witnesses = vec![
+                witness(&vm, "Gate", vec![], vec![]),
+                witness(&vm, "Pick", vec![], vec![]),
+            ];
+            if reverse {
+                witnesses.reverse();
+            }
+            let error = prepare_class_witnesses(&vm, &ty, witnesses)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("overlapping implementations") && error.contains("Pick"),
+                "{error}"
+            );
+            assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+            assert!(
+                !crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
+                    &ty,
+                    head(&vm, "Gate"),
+                    &[],
+                    &[]
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn registration_does_not_treat_associated_outputs_as_disjoint_inputs() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let witnesses = [RealizedTy::int(), RealizedTy::string()]
+            .into_iter()
+            .map(|item| {
+                witness(
+                    &vm,
+                    "Choice",
+                    vec![RealizedTy::int()],
+                    vec![(baml_type::Name::new("Item"), item)],
+                )
+            })
+            .collect();
+        assert!(
+            prepare_class_witnesses(&vm, &ty, witnesses)
+                .unwrap_err()
+                .to_string()
+                .contains("overlapping implementations")
+        );
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+    }
+
+    #[test]
+    fn registration_preparation_is_private_and_distinct_inputs_publish_together() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let witnesses = [RealizedTy::int(), RealizedTy::string()]
+            .into_iter()
+            .map(|arg| {
+                witness(
+                    &vm,
+                    "Choice",
+                    vec![arg],
+                    vec![(baml_type::Name::new("Item"), RealizedTy::int())],
+                )
+            })
+            .collect();
+        let rules = prepare_class_witnesses(&vm, &ty, witnesses).unwrap();
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+        let choice = head(&vm, "Choice");
+        assert!(
+            !crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
+                &ty,
+                choice,
+                &[RealizedTy::int()],
+                &[]
+            )
+        );
+        let RealizedTy::Class(class, _, _) = &ty else {
+            unreachable!()
+        };
+        let class = class.ptr();
+        register_class_witnesses(&mut vm, class, rules);
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 2);
+        for arg in [RealizedTy::int(), RealizedTy::string()] {
+            assert!(
+                crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
+                    &ty,
+                    choice,
+                    &[arg],
+                    &[(baml_type::Name::new("Item"), RealizedTy::int())]
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn registration_validates_all_templates_before_recursive_selection() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let mut rules = prepare_class_witnesses(
+            &vm,
+            &ty,
+            vec![witness(
+                &vm,
+                "Choice",
+                vec![RealizedTy::int()],
+                vec![(baml_type::Name::new("Item"), RealizedTy::int())],
+            )],
+        )
+        .unwrap();
+        rules[0].interface_assoc[0].1 = bex_vm_types::TyTemplate::TypeArgRef(0);
+        let error = crate::package_baml::resolve::ImplResolver::new(&vm)
+            .with_staged_rules(&rules)
+            .check_staged_coherence()
+            .unwrap_err();
+        assert!(
+            error.contains("associated bindings are not fully realized"),
+            "{error}"
+        );
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+    }
+
+    #[test]
+    fn registration_accepts_an_inapplicable_bounded_blanket() {
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let rules =
+            prepare_class_witnesses(&vm, &ty, vec![witness(&vm, "Pick", vec![], vec![])]).unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(vm.dynamic_dispatch.rule_count(), 0);
+    }
+    #[test]
+    #[expect(
+        unsafe_code,
+        reason = "standalone stop-the-world dynamic registration test"
+    )]
+    fn registered_rules_are_owned_by_the_class_without_extra_gc_roots() {
+        use bex_vm_types::RootHaver;
+        let mut vm = vm();
+        let ty = receiver(&mut vm);
+        let RealizedTy::Class(head, _, _) = ty else {
+            unreachable!()
+        };
+        let rules = prepare_class_witnesses(
+            &vm,
+            &RealizedTy::Class(head, vec![], Default::default()),
+            vec![witness(&vm, "Pick", vec![], vec![])],
+        )
+        .unwrap();
+        register_class_witnesses(&mut vm, head.ptr(), rules);
+        let rule = vm.dynamic_dispatch.rules_for_class(head.ptr())[0];
+        let heap = Arc::clone(&vm.heap);
+        let mut hook = crate::package_load::DynDispatchRoot::new(
+            Arc::clone(&vm.dynamic_dispatch),
+            Arc::clone(&heap),
+        );
+        let (_, _, forwarding) = unsafe {
+            heap.collect_garbage_generational(&[head.ptr()], bex_heap::CollectionLevel::Major)
+        };
+        assert!(forwarding.contains_key(&rule));
+        vm.forward_roots(&forwarding);
+        hook.forward_roots(&forwarding);
+        assert_eq!(hook.tables.rule_count(), 1);
+        let moved = forwarding[&head.ptr()];
+        let concrete =
+            RealizedTy::Class(TypeHead::new(moved, head.tag()), vec![], Default::default());
+        assert!(
+            crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
+                &concrete,
+                super::registration_tests::head(&vm, "Pick"),
+                &[],
+                &[]
+            )
+        );
+        drop(vm);
+        let (_, _, forwarding) =
+            unsafe { heap.collect_garbage_generational(&[], bex_heap::CollectionLevel::Major) };
+        hook.forward_roots(&forwarding);
+        assert_eq!(hook.tables.rule_count(), 0);
+    }
+}

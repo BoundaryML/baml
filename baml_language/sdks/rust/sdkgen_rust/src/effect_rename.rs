@@ -20,9 +20,7 @@ use baml_codegen_types::{CallableParam, Class, Function, ParamTy, Symbol, Symbol
 /// Rewrite every function / method signature in `pool` with its synthetic
 /// effect params renamed, returning the rewritten pool.
 pub(crate) fn rename_effect_params(pool: &SymbolPool) -> SymbolPool {
-    pool.iter()
-        .map(|(name, symbol)| (name.clone(), rename_symbol(symbol)))
-        .collect()
+    pool.map_symbols(rename_symbol)
 }
 
 fn rename_symbol(symbol: &Symbol) -> Symbol {

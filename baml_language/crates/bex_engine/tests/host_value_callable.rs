@@ -137,6 +137,8 @@ async fn smoke_generic_pattern_in_match_substitutes_t() {
 enum FakeReturn {
     /// Complete the call with this successful value.
     Ok(BexExternalValue),
+    /// A typed BAML throw or panic supplied by the host bridge.
+    Throw(BexExternalValue),
     /// Complete the call with a `HostCallable` error.
     Err { class_name: String, message: String },
     /// Complete the call with a fatal `VmInternalError::BridgeFailure` —
@@ -238,6 +240,7 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
         FakeReturn::Ok(value) => {
             sys_native::host_dispatch::complete_with_value(call_id, value);
         }
+        FakeReturn::Throw(value) => sys_native::host_dispatch::complete_with_throw(call_id, value),
         FakeReturn::Err {
             class_name,
             message,
@@ -547,15 +550,45 @@ async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
         else {
             panic!("expected selected interface-union envelope, got {items:?}")
         };
-        assert_eq!(union.selected_option_index, Some(0));
-        assert!(matches!(
-            union
-                .value
-                .as_deref()
-                .and_then(|value| value.value.as_ref()),
-            Some(baml_outbound_value::Value::ClassValue(class))
-                if class.name == "user.ProviderFailure"
-        ));
+        let Some(bridge_ctypes::baml_bridge::cffi::baml_ty::Ty::Union(declared)) =
+            union.self_type.as_ref().and_then(|ty| ty.ty.as_ref())
+        else {
+            panic!("expected union schema")
+        };
+        let selected = union.selected_option_index.expect("selected arm") as usize;
+        let Some(bridge_ctypes::baml_bridge::cffi::baml_ty::Ty::Interface(interface)) =
+            declared.options.get(selected).and_then(|ty| ty.ty.as_ref())
+        else {
+            panic!("selected index must identify the interface arm")
+        };
+        assert_eq!(interface.name, "user.Failure");
+        let Some(baml_outbound_value::Value::HandleValue(handle)) = union
+            .value
+            .as_deref()
+            .and_then(|value| value.value.as_ref())
+        else {
+            panic!("an interface arm must carry a retained view");
+        };
+        assert_eq!(
+            handle.handle_type,
+            bridge_ctypes::baml_bridge::cffi::BamlHandleType::AdtInterface as i32
+        );
+        // Consume the host's wire ownership. A copied ProviderFailure record
+        // would lose the checked interface view (and eventually its methods).
+        let retained = bridge_ctypes::HANDLE_TABLE
+            .drain(handle.key)
+            .expect("live interface handle");
+        let bridge_ctypes::CffiHandleTableEntry::Adt(
+            bex_external_types::BexExternalAdt::Interface(view),
+        ) = &*retained
+        else {
+            panic!("interface tag must resolve to an interface value");
+        };
+        let baml_type::RealizedTy::Interface(head, args, pins, _) = &view.interface else {
+            unreachable!()
+        };
+        assert_eq!(head.name().overlay_name().name().as_str(), "Failure");
+        assert!(args.is_empty() && pins.is_empty());
         FakeReturn::Ok(BexExternalValue::String("handled".into()))
     });
     let snapshot = compile_for_engine(source);
@@ -1426,7 +1459,26 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
         )
         .await;
 
-    assert_host_callable_throw(&result);
+    let Err(EngineError::UnhandledThrow { value, .. }) = result else {
+        panic!("expected on-contract throw");
+    };
+    let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Interface(failure)) = *value
+    else {
+        panic!("interface error must remain live");
+    };
+    assert_eq!(
+        engine
+            .call_interface(
+                failure,
+                "kind",
+                vec![],
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::String("host".into())
+    );
     drop(arc);
 }
 
@@ -1481,13 +1533,23 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                     "expected the Failure interface arm, got {:?}",
                     metadata.selected_option,
                 );
-                assert!(
-                    matches!(
-                        value.as_ref(),
-                        BexExternalValue::Instance { class_name, .. }
-                            if class_name == "baml.errors.HostCallable"
-                    ),
-                    "expected the concrete HostCallable throw, got {value:?}",
+                let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Interface(failure)) =
+                    value.as_ref()
+                else {
+                    panic!("interface error must remain live");
+                };
+                assert_eq!(
+                    engine
+                        .call_interface(
+                            failure.clone(),
+                            "kind",
+                            vec![],
+                            vec![],
+                            FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
+                        )
+                        .await
+                        .unwrap(),
+                    BexExternalValue::String("host".into())
                 );
             }
             other => panic!("expected union-wrapped HostCallable throw, got {other:?}"),
@@ -1506,6 +1568,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
         }
         implement Failure for ProviderFailure {}
 
+        function is_provider(f: Failure) -> bool { f is ProviderFailure }
         function provider_failure() -> Failure | string {
             ProviderFailure { message: "boom" }
         }
@@ -1535,9 +1598,20 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     ));
     assert!(matches!(
         value.as_ref(),
-        BexExternalValue::Instance { class_name, .. }
-            if class_name == "user.ProviderFailure"
+        BexExternalValue::Adt(bex_external_types::BexExternalAdt::Interface(_))
     ));
+    assert_eq!(
+        engine
+            .call_function(
+                "is_provider",
+                vec![*value],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(true)
+    );
 }
 
 // ============================================================================
@@ -1688,6 +1762,11 @@ async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
                 ),
             }
         }
+        function inspect_unknown_error(error: baml.errors.UnknownError) -> bool throws never {
+            assert.is_true(error.data is baml.errors.HostCallable);
+            assert.equal(error.message, ["host callback failed"]);
+            true
+        }
     "#;
 
     let arc = register_host_callable(|_items| FakeReturn::Err {
@@ -1715,23 +1794,28 @@ async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
 
     match result {
         Err(EngineError::UnhandledThrow { value, trace }) => {
-            let BexExternalValue::Instance {
-                class_name, fields, ..
-            } = value.as_ref()
-            else {
-                panic!("expected UnknownError instance, got {value:?}");
-            };
-            assert_eq!(class_name, "baml.errors.UnknownError");
-            assert!(matches!(
-                fields.get("data"),
-                Some(BexExternalValue::Instance { class_name, .. })
-                    if class_name == "baml.errors.HostCallable"
-            ));
-            assert!(matches!(
-                fields.get("message"),
-                Some(BexExternalValue::Array { items, .. })
-                    if matches!(items.as_slice(), [BexExternalValue::String(message)] if &**message == "host callback failed")
-            ));
+            assert!(
+                matches!(
+                    value.as_ref(),
+                    BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                        kind: bex_external_types::TaggedHeapHandleKind::ConcreteObject,
+                        ..
+                    })
+                ),
+                "UnknownError has behavior and must retain its receiver: {value:?}"
+            );
+            assert_eq!(
+                engine
+                    .call_function(
+                        "inspect_unknown_error",
+                        vec![*value],
+                        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                        true,
+                    )
+                    .await
+                    .unwrap(),
+                BexExternalValue::Bool(true)
+            );
             assert!(
                 trace
                     .iter()
@@ -2340,4 +2424,727 @@ async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
         "user.main",
         "leak should be attributed to the spawning function"
     );
+}
+
+/// The root's exact output contract must be forwarded while a host callback
+/// suspends execution. Its interface is freshly declared at runtime.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn runtime_interface_output_contract_survives_gc_during_host_await() {
+    use bex_external_types::BexExternalAdt;
+    let source = r#"
+type Wait = () -> null throws never
+type Factory = (Wait) -> unknown throws never
+function factory() -> Factory {
+    let package = reflect.Package.compile({ "named.baml": `
+interface Named { function label(self) -> string throws never }
+class Stored {
+    implements Named { function label(self) -> string throws never { "after GC" } }
+}
+function make(wait: () -> null throws never) -> Named throws never {
+    wait();
+    Stored {}
+}
+` })
+    package.get_function<Factory>("root.make") ?? throw "missing make"
+}
+"#;
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .unwrap(),
+    );
+    let baseline = engine.heap_stats().active_handles;
+    let factory = engine
+        .call_function(
+            "factory",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+        heap_handle: factory,
+        ..
+    }) = factory
+    else {
+        panic!("expected callable")
+    };
+    let arc = register_host_callable(|_| FakeReturn::NeverComplete);
+    let (tx, rx) = std::sync::mpsc::channel();
+    pending_call_ids().lock().unwrap().insert(arc.key, tx);
+    let engine_for_call = Arc::clone(&engine);
+    let arc_for_call = Arc::clone(&arc);
+    let mut call = tokio::spawn(async move {
+        engine_for_call
+            .call_callable(
+                factory,
+                vec![BexExternalValue::HostValue(arc_for_call)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+    });
+    let call_id = tokio::select! {
+        result = &mut call => panic!("call finished before host dispatch: {result:?}"),
+        received = tokio::task::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(10))) => received.unwrap().expect("host dispatch"),
+    };
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    sys_native::host_dispatch::complete_with_value(call_id, BexExternalValue::Null);
+    let BexExternalValue::Adt(BexExternalAdt::Interface(view)) = call.await.unwrap().unwrap()
+    else {
+        panic!("expected interface")
+    };
+    assert_eq!(
+        engine
+            .call_interface(
+                view.clone(),
+                "label",
+                vec![],
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::String("after GC".into())
+    );
+    pending_call_ids().lock().unwrap().remove(&arc.key);
+    drop(arc);
+    drop(view);
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    assert_eq!(engine.heap_stats().active_handles, baseline);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_never_host_callback_rejects_native_throw() {
+    let source = r#"
+function invoke(f: () -> int throws never) -> int throws never { f() }
+"#;
+    let arc = register_host_callable(|_| FakeReturn::Err {
+        class_name: "ValueError".into(),
+        message: "unexpected native exception".into(),
+    });
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(arc)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_host_contract_violation_panic(&result);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn runtime_interface_callback_arguments_keep_exact_declarations() {
+    use bex_external_types::BexExternalAdt;
+    let source = r#"
+type Factory = () -> unknown throws never
+function factory() -> Factory {
+    let package = reflect.Package.compile({ "callback.baml": `
+interface Named { function label(self) -> string throws never }
+type Consumer = (Named, Named[]) -> null throws never
+interface Runner {
+    function run(self, callback: (Named, Named[]) -> null throws never) -> null throws never
+    function capture(self, callback: Consumer) -> Consumer throws never {
+        callback
+    }
+}
+class Stored {
+    implements Named { function label(self) -> string throws never { "callback" } }
+    implements Runner {
+        function run(self, callback: (Named, Named[]) -> null throws never) -> null throws never {
+            callback(self, [self])
+        }
+    }
+}
+function make() -> Runner throws never { Stored {} }
+` })
+    package.get_function<Factory>("root.make") ?? throw "missing factory"
+}
+"#;
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .unwrap(),
+    );
+    let context = || FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let baseline = engine.heap_stats().active_handles;
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) = engine
+        .call_function("factory", vec![], context(), true)
+        .await
+        .unwrap()
+    else {
+        panic!("expected factory")
+    };
+    let BexExternalValue::Adt(BexExternalAdt::Interface(runner)) = engine
+        .call_callable(heap_handle, vec![], context(), true)
+        .await
+        .unwrap()
+    else {
+        panic!("expected runner")
+    };
+    let received = Arc::new(Mutex::new(None));
+    let arc = register_host_callable({
+        let received = Arc::clone(&received);
+        move |items| {
+            fn take_view(value: &BamlOutboundValue) -> Arc<bex_external_types::InterfaceValue> {
+                let Some(baml_outbound_value::Value::HandleValue(handle)) = &value.value else {
+                    panic!("expected retained callback argument: {value:?}")
+                };
+                let entry = bridge_ctypes::HANDLE_TABLE
+                    .drain(handle.key)
+                    .expect("wire lease");
+                let bridge_ctypes::CffiHandleTableEntry::Adt(BexExternalAdt::Interface(view)) =
+                    &*entry
+                else {
+                    panic!("expected checked interface")
+                };
+                view.clone()
+            }
+            let direct = take_view(&items[0]);
+            let Some(baml_outbound_value::Value::ListValue(list)) = &items[1].value else {
+                panic!("expected array argument")
+            };
+            let nested = take_view(&list.items[0]);
+            assert_eq!(direct.receiver, nested.receiver);
+            assert_eq!(direct.interface, nested.interface);
+            *received.lock().unwrap() = Some(direct);
+            FakeReturn::Ok(BexExternalValue::Null)
+        }
+    });
+    assert_eq!(
+        engine
+            .call_interface(
+                runner.clone(),
+                "run",
+                vec![],
+                vec![BexExternalValue::HostValue(arc.clone())],
+                context()
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::Null
+    );
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+        heap_handle: callback,
+        ..
+    }) = engine
+        .call_interface(
+            runner,
+            "capture",
+            vec![],
+            vec![BexExternalValue::HostValue(arc.clone())],
+            context(),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected captured host callable")
+    };
+    let first = received.lock().unwrap().take().expect("callback ran");
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    assert_eq!(
+        engine
+            .call_callable(
+                callback,
+                vec![
+                    BexExternalValue::Adt(BexExternalAdt::Interface(first.clone())),
+                    BexExternalValue::Array {
+                        element_type: RuntimeTy::unknown(),
+                        items: vec![BexExternalValue::Adt(BexExternalAdt::Interface(
+                            first.clone()
+                        ))]
+                    },
+                ],
+                context(),
+                true
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::Null
+    );
+    drop(first);
+    drop(arc);
+    let received = received
+        .lock()
+        .unwrap()
+        .take()
+        .expect("captured callback ran");
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    assert_eq!(
+        engine
+            .call_interface(received, "label", vec![], vec![], context())
+            .await
+            .unwrap(),
+        BexExternalValue::String("callback".into())
+    );
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    assert_eq!(engine.heap_stats().active_handles, baseline);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn runtime_interface_callback_completions_keep_exact_contracts_across_gc() {
+    use bex_external_types::{BexExternalAdt, InterfaceValue};
+    let source = r#"
+type Factory = () -> unknown throws never
+function factory() -> Factory {
+    let package = reflect.Package.compile({ "completion.baml": `
+interface Named { function label(self) -> string throws never }
+type Callback = () -> Named throws Named
+class Packet { named: Named, ratio: float }
+type PacketCallback = () -> Packet throws never
+type ReadRatio = () -> float throws never
+interface Fixture {
+    function value(self) -> Named throws never
+    function capture(self, callback: Callback) -> Callback throws never { callback }
+    function capture_child(self, callback: Callback) -> Callback throws never {
+        () -> { let work = spawn { callback() }; await work }
+    }
+    function capture_packet(self, callback: PacketCallback) -> ReadRatio throws never {
+        () -> { callback().ratio }
+    }
+}
+class Stored {
+    implements Named { function label(self) -> string throws never { "completed" } }
+    implements Fixture { function value(self) -> Named throws never { self } }
+}
+function make() -> Fixture throws never { Stored {} }
+` })
+    package.get_function<Factory>("root.make") ?? throw "missing factory"
+}
+"#;
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .unwrap(),
+    );
+    fn context() -> bex_engine::FunctionCallContext {
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build()
+    }
+    async fn make_fixture(engine: &Arc<BexEngine>) -> (Arc<InterfaceValue>, Arc<InterfaceValue>) {
+        let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) = engine
+            .call_function("factory", vec![], context(), true)
+            .await
+            .unwrap()
+        else {
+            panic!("expected factory")
+        };
+        let BexExternalValue::Adt(BexExternalAdt::Interface(fixture)) = engine
+            .call_callable(heap_handle, vec![], context(), true)
+            .await
+            .unwrap()
+        else {
+            panic!("expected fixture")
+        };
+        let BexExternalValue::Adt(BexExternalAdt::Interface(named)) = engine
+            .call_interface(fixture.clone(), "value", vec![], vec![], context())
+            .await
+            .unwrap()
+        else {
+            panic!("expected named")
+        };
+        (fixture, named)
+    }
+    let baseline = engine.heap_stats().active_handles;
+    let (fixture, named) = make_fixture(&engine).await;
+    let (_, unrelated) = make_fixture(&engine).await;
+    for (method, throwing, wrong_type) in
+        ["capture", "capture_child"].into_iter().flat_map(|method| {
+            [(false, false), (true, false), (false, true), (true, true)]
+                .into_iter()
+                .map(move |(throwing, wrong_type)| (method, throwing, wrong_type))
+        })
+    {
+        let arc = register_host_callable(|_| FakeReturn::NeverComplete);
+        let (tx, rx) = std::sync::mpsc::channel();
+        pending_call_ids().lock().unwrap().insert(arc.key, tx);
+        let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) = engine
+            .call_interface(
+                fixture.clone(),
+                method,
+                vec![],
+                vec![BexExternalValue::HostValue(arc.clone())],
+                context(),
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected captured callback")
+        };
+        let engine_for_call = engine.clone();
+        let mut call = tokio::spawn(async move {
+            engine_for_call
+                .call_callable(heap_handle, vec![], context(), true)
+                .await
+        });
+        let call_id = tokio::select! {
+            result = &mut call => panic!("call ended before host dispatch: {result:?}"),
+            received = tokio::task::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(10))) => received.unwrap().expect("host dispatch"),
+        };
+        engine
+            .collect_garbage(bex_heap::CollectionLevel::Major)
+            .await;
+        let returned = BexExternalValue::Adt(BexExternalAdt::Interface(if wrong_type {
+            unrelated.clone()
+        } else {
+            named.clone()
+        }));
+        if throwing {
+            sys_native::host_dispatch::complete_with_throw(call_id, returned);
+        } else {
+            sys_native::host_dispatch::complete_with_value(call_id, returned);
+        }
+        let result = call.await.unwrap();
+        if wrong_type {
+            assert_host_contract_violation_panic(&result);
+        } else {
+            let returned = if throwing {
+                let Err(EngineError::UnhandledThrow { value, .. }) = result else {
+                    panic!("expected declared throw: {result:?}")
+                };
+                *value
+            } else {
+                result.unwrap()
+            };
+            let BexExternalValue::Adt(BexExternalAdt::Interface(returned)) = returned else {
+                panic!("expected retained completion")
+            };
+            assert_eq!(returned.receiver, named.receiver);
+            assert_eq!(
+                engine
+                    .call_interface(returned, "label", vec![], vec![], context())
+                    .await
+                    .unwrap(),
+                BexExternalValue::String("completed".into())
+            );
+        }
+        pending_call_ids().lock().unwrap().remove(&arc.key);
+        drop(arc);
+    }
+    // The outer call returns float, while the suspended host completion is
+    // a runtime-created Packet. Validate its exact field schema before input
+    // coercion could turn an invalid integer ratio into an accepted float.
+    for (wrong_float, wrong_child, sparse) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (false, false, true),
+        (true, false, true),
+        (false, true, true),
+    ] {
+        let arc = register_host_callable(|_| FakeReturn::NeverComplete);
+        let (tx, rx) = std::sync::mpsc::channel();
+        pending_call_ids().lock().unwrap().insert(arc.key, tx);
+        let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) = engine
+            .call_interface(
+                fixture.clone(),
+                "capture_packet",
+                vec![],
+                vec![BexExternalValue::HostValue(arc.clone())],
+                context(),
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected ratio reader")
+        };
+        let engine_for_call = engine.clone();
+        let mut call = tokio::spawn(async move {
+            engine_for_call
+                .call_callable(heap_handle, vec![], context(), true)
+                .await
+        });
+        let call_id = tokio::select! {
+            result = &mut call => panic!("call ended before host dispatch: {result:?}"),
+            received = tokio::task::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(10))) => received.unwrap().expect("host dispatch"),
+        };
+        engine
+            .collect_garbage(bex_heap::CollectionLevel::Major)
+            .await;
+        let payload = BexExternalValue::Instance {
+            class_name: if sparse {
+                String::new()
+            } else {
+                "user.Packet".into()
+            },
+            type_args: vec![],
+            fields: indexmap::indexmap! {
+                "named".into() => BexExternalValue::Adt(BexExternalAdt::Interface(if wrong_child { unrelated.clone() } else { named.clone() })),
+                "ratio".into() => if wrong_float { BexExternalValue::Int(1) } else { BexExternalValue::Float(1.5) },
+            },
+        };
+        let payload = if sparse {
+            BexExternalValue::typed(
+                payload,
+                RuntimeTy::Class(
+                    baml_type::TypeName::from_dotted_path("user.Packet"),
+                    vec![],
+                    Default::default(),
+                ),
+            )
+        } else {
+            payload
+        };
+        sys_native::host_dispatch::complete_with_value(call_id, payload);
+        let result = call.await.unwrap();
+        if wrong_float || wrong_child {
+            assert_host_contract_violation_panic(&result);
+        } else {
+            assert_eq!(result.unwrap(), BexExternalValue::Float(1.5));
+        }
+        pending_call_ids().lock().unwrap().remove(&arc.key);
+        drop(arc);
+    }
+    drop(fixture);
+    drop(named);
+    drop(unrelated);
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    assert_eq!(engine.heap_stats().active_handles, baseline);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_declared_unknown_is_a_realized_contract() {
+    let engine = Arc::new(BexEngine::new(
+        compile_for_engine("function read(callback: () -> unknown throws never) -> unknown throws never { callback() }"),
+        Arc::new(sys_native::SysOps::native()), Vec::new(),
+    ).unwrap());
+    for value in [
+        BexExternalValue::Int(1),
+        BexExternalValue::String("open".into()),
+    ] {
+        let expected = value.clone();
+        let arc = register_host_callable(move |_| FakeReturn::Ok(value.clone()));
+        let result = engine
+            .call_function(
+                "read",
+                vec![BexExternalValue::HostValue(arc)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, expected);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_completion_preserves_json_payload_restrictions() {
+    let engine = Arc::new(BexEngine::new(
+        compile_for_engine("function read(callback: () -> json throws never) -> json throws never { callback() }"),
+        Arc::new(sys_native::SysOps::native()), Vec::new(),
+    ).unwrap());
+    for number in [1.5, f64::INFINITY, f64::NAN] {
+        let arc = register_host_callable(move |_| {
+            FakeReturn::Ok(BexExternalValue::Array {
+                element_type: RuntimeTy::float(),
+                items: vec![BexExternalValue::Float(number)],
+            })
+        });
+        let result = engine
+            .call_function(
+                "read",
+                vec![BexExternalValue::HostValue(arc)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if number.is_finite() {
+            let BexExternalValue::Array { items, .. } = result.unwrap() else {
+                panic!("expected JSON array")
+            };
+            assert_eq!(items, vec![BexExternalValue::Float(1.5)]);
+        } else {
+            assert_host_contract_violation_panic(&result);
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_panic_is_separate_from_declared_never_but_its_payload_is_checked() {
+    let engine = Arc::new(BexEngine::new(
+        compile_for_engine("function run(callback: () -> null throws never) -> null throws never { callback() }"),
+        Arc::new(sys_native::SysOps::native()), Vec::new(),
+    ).unwrap());
+    for malformed in [false, true] {
+        let arc = register_host_callable(move |_| {
+            FakeReturn::Throw(BexExternalValue::Instance {
+                class_name: "baml.panics.SdkPanic".into(),
+                type_args: vec![],
+                fields: indexmap::indexmap! {
+                    "message".into() => if malformed { BexExternalValue::Int(3) } else { BexExternalValue::String("bridge panic".into()) },
+                },
+            })
+        });
+        let result = engine
+            .call_function(
+                "run",
+                vec![BexExternalValue::HostValue(arc)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if malformed {
+            assert_host_contract_violation_panic(&result);
+        } else {
+            let Err(EngineError::UnhandledThrow { value, .. }) = result else {
+                panic!("expected panic: {result:?}")
+            };
+            let BexExternalValue::Instance {
+                class_name, fields, ..
+            } = *value
+            else {
+                panic!("expected panic instance")
+            };
+            assert_eq!(class_name, "baml.panics.SdkPanic");
+            assert_eq!(
+                fields["message"],
+                BexExternalValue::String("bridge panic".into())
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_copied_interface_results_validate_source_pins_and_fields() {
+    let snapshot = compile_for_engine(
+        r#"
+interface Tag { type Item; type Error = never }
+class Record<T> { value: T, implements Tag { type Item = T } }
+function use_tag(f: () -> Tag<Item=float, Error=never> throws never) -> string throws never {
+    let item = f();
+    match (item) { let r: Record<float> => r.value.to_string(), _ => "wrong type" }
+}
+"#,
+    );
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+    for (type_arg, item, accepted) in [
+        (RuntimeTy::float(), BexExternalValue::Float(1.5), true),
+        // An int field cannot be coerced to float on host completion.
+        (RuntimeTy::float(), BexExternalValue::Int(1), false),
+        (RuntimeTy::int(), BexExternalValue::Int(1), false),
+    ] {
+        let arc = register_host_callable(move |_| {
+            FakeReturn::Ok(BexExternalValue::typed(
+                BexExternalValue::Instance {
+                    class_name: "Record".into(),
+                    type_args: vec![type_arg.clone()],
+                    fields: indexmap::indexmap! {"value".into() => item.clone()},
+                },
+                RuntimeTy::Class(
+                    baml_type::TypeName::from_dotted_path("user.Record"),
+                    vec![type_arg.clone()],
+                    Default::default(),
+                ),
+            ))
+        });
+        let result = engine
+            .call_function(
+                "use_tag",
+                vec![BexExternalValue::HostValue(arc)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if accepted {
+            assert_eq!(result.unwrap(), BexExternalValue::String("1.5".into()));
+        } else {
+            let error = result.unwrap_err();
+            assert!(
+                error.to_string().contains("HostContractViolation"),
+                "{error:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_sparse_class_outcomes_preserve_identity_and_strict_fields() {
+    let snapshot = compile_for_engine(
+        r#"
+class Record<T> { value: T }
+class Other<T> { value: T }
+function returned(f: () -> Record<float> throws never) -> float throws never { f().value }
+function thrown(f: () -> never throws Record<float>) -> float throws never {
+    f() catch (error) { let record: Record<float> => record.value }
+}
+"#,
+    );
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+    for throws in [false, true] {
+        for (name, value, accepted) in [
+            ("user.Record", BexExternalValue::Float(1.5), true),
+            ("user.Record", BexExternalValue::Int(1), false),
+            ("user.Other", BexExternalValue::Float(1.5), false),
+        ] {
+            let arc = register_host_callable(move |_| {
+                let payload = BexExternalValue::typed(
+                    BexExternalValue::Instance {
+                        class_name: String::new(),
+                        type_args: vec![],
+                        fields: indexmap::indexmap! {"value".into() => value.clone()},
+                    },
+                    RuntimeTy::Class(
+                        baml_type::TypeName::from_dotted_path(name),
+                        vec![RuntimeTy::float()],
+                        Default::default(),
+                    ),
+                );
+                if throws {
+                    FakeReturn::Throw(payload)
+                } else {
+                    FakeReturn::Ok(payload)
+                }
+            });
+            let result = engine
+                .call_function(
+                    if throws { "thrown" } else { "returned" },
+                    vec![BexExternalValue::HostValue(arc)],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await;
+            if accepted {
+                assert_eq!(result.unwrap(), BexExternalValue::Float(1.5));
+            } else {
+                assert_host_contract_violation_panic(&result);
+            }
+        }
+    }
 }

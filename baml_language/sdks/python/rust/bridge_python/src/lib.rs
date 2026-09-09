@@ -4,6 +4,7 @@
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
 mod baml_call_context;
+mod encoded_result;
 mod errors;
 pub mod host_value;
 mod media;
@@ -71,11 +72,13 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<baml_call_context::BamlCallContext>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
+    m.add_class::<encoded_result::BamlEncodedResult>()?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_release_wire_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_live_handle_count))?;
     m.add_class::<runtime::BamlRuntime>()?;
+    m.add_wrapped(wrap_pyfunction!(runtime::_pending_transfer_count))?;
     media::register(m)?;
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::HostSpanManager>()?;
@@ -102,7 +105,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Wire the bridge_cffi C entry points to this bridge's per-process
     // Python host-value registry. First-call-wins inside bridge_cffi, so
     // repeated module loads (e.g. via importlib.reload) are harmless.
-    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    sys_native::host_dispatch::set_owned_dispatch_fn(host_value::host_dispatch_callback);
     bridge_cffi::register_host_release_callback(host_value::host_release_callback);
 
     Ok(())

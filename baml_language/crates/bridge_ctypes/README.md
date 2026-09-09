@@ -33,7 +33,7 @@ cp cffi/proto/baml_bridge/cffi/v1/baml_outbound.pb.go \
   ../baml_go/internal/cffi/baml_outbound.pb.go
 
 # C++ (pinned vendored protoc)
-cd ../../.. && cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
+cargo nextest run -p sdkgen_cpp --test pb_generation --run-ignored only -E 'test(=regenerate)'
 #   -> sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1/*.pb.{h,cc}
 
 # Swift (protoc-gen-swift; macOS: brew install protobuf swift-protobuf)

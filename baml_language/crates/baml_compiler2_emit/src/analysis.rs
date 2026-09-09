@@ -2341,6 +2341,7 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
@@ -2406,6 +2407,7 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
@@ -2795,6 +2797,7 @@ mod tests {
 
     fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
+            argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
@@ -3017,6 +3020,7 @@ mod tests {
                     id: BlockId(1),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,

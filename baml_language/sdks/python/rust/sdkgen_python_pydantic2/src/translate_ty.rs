@@ -64,6 +64,182 @@ pub(crate) struct SelfRef {
     pub(crate) bare_name: String,
 }
 
+/// The bridge reads input containers; it does not mutate the host container.
+/// Callback direction reverses: BAML supplies outputs to the host, which may
+/// return an input value synchronously or through an awaitable. Class type
+/// arguments stay canonical because BAML class instantiations are invariant.
+pub(crate) fn translate_input_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
+    match ty {
+        Ty::Interface(..) => translate_ty(&interface_class(ty, ctx, true), ctx),
+        Ty::TypeAlias(name, _) => {
+            if let Some(input) = ctx
+                .names
+                .as_ref()
+                .and_then(|names| names.input_alias_name(name))
+            {
+                render_name_ref_or_self_ref(&input, ctx, "")
+            } else {
+                translate_ty(ty, ctx)
+            }
+        }
+        Ty::List(inner, _) => format!("typing.Sequence[{}]", translate_input_ty(inner, ctx)),
+        Ty::Map { key, value, .. } => format!(
+            "typing.Mapping[{}, {}]",
+            translate_ty(key, ctx),
+            translate_input_ty(value, ctx)
+        ),
+        Ty::Union(items, _) => {
+            let non_null: Vec<_> = items
+                .iter()
+                .filter(|ty| !matches!(ty, Ty::Null { .. }))
+                .collect();
+            if non_null.len() == 1 && non_null.len() < items.len() {
+                format!("typing.Optional[{}]", translate_input_ty(non_null[0], ctx))
+            } else {
+                format!(
+                    "typing.Union[{}]",
+                    items
+                        .iter()
+                        .map(|ty| translate_input_ty(ty, ctx))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+        Ty::Function { params, ret, .. } => {
+            if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
+                return callback_protocol_ref(&format!("{name}Input"), ty, ctx);
+            }
+            let ret = translate_host_completion_ty(ret, ctx);
+            if params
+                .iter()
+                .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional)
+            {
+                format!("typing.Callable[..., {ret}]")
+            } else {
+                format!(
+                    "typing.Callable[[{}], {ret}]",
+                    params
+                        .iter()
+                        .map(|param| translate_ty(&param.ty, ctx))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
+        _ => translate_ty(ty, ctx),
+    }
+}
+
+pub(crate) fn translate_host_completion_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
+    let value = translate_input_ty(ty, ctx);
+    format!("typing.Union[{value}, typing.Awaitable[{value}]]")
+}
+
+/// Native type variables that belong to the surrounding declaration, in
+/// first-use order. Callback Protocols bind their own inferred-variance
+/// parameters, then specialize them with these surrounding variables.
+pub(crate) fn callback_type_vars(ty: &Ty) -> Vec<String> {
+    fn visit(ty: &Ty, found: &mut Vec<String>) {
+        match ty {
+            Ty::TypeVar(param, _) => {
+                let name = param.as_str().to_string();
+                if !found.contains(&name) {
+                    found.push(name);
+                }
+            }
+            Ty::Class(_, args, _) | Ty::Union(args, _) => {
+                for arg in args {
+                    visit(arg, found);
+                }
+            }
+            Ty::Interface(_, args, associated, _) => {
+                for arg in args {
+                    visit(arg, found);
+                }
+                for (_, arg) in associated {
+                    visit(arg, found);
+                }
+            }
+            Ty::List(item, _) => visit(item, found),
+            Ty::Map { key, value, .. } => {
+                visit(key, found);
+                visit(value, found);
+            }
+            Ty::Function { params, ret, .. } => {
+                for param in params {
+                    visit(&param.ty, found);
+                }
+                visit(ret, found);
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    visit(ty, &mut found);
+    found
+}
+
+fn callback_protocol_ref(name: &str, ty: &Ty, ctx: &TranslateCtx) -> String {
+    let arguments = callback_type_vars(ty)
+        .into_iter()
+        .map(|name| ctx.type_var_names.get(&name).cloned().unwrap_or(name))
+        .collect::<Vec<_>>();
+    if arguments.is_empty() {
+        name.to_string()
+    } else {
+        format!("{name}[{}]", arguments.join(", "))
+    }
+}
+
+fn interface_class(ty: &Ty, ctx: &TranslateCtx, input: bool) -> Ty {
+    let Ty::Interface(name, generics, associated, attr) = ty else {
+        unreachable!()
+    };
+    let reference = ctx.names.as_ref().map_or_else(
+        || {
+            Name::new(
+                name.package().clone(),
+                name.namespace().to_vec(),
+                baml_base::Name::new(format!(
+                    "{}{}",
+                    name.bare_name(),
+                    if input { "Input" } else { "Ref" }
+                )),
+            )
+        },
+        |names| {
+            if input {
+                names.interface_input_name(name)
+            } else {
+                names.interface_ref_name(name)
+            }
+        },
+    );
+    let mut arguments = generics.clone();
+    if let Some(order) = ctx
+        .names
+        .as_ref()
+        .and_then(|names| names.interface_associated_names(name))
+    {
+        for member in order {
+            arguments.push(
+                associated
+                    .iter()
+                    .find(|(key, _)| key == member)
+                    .unwrap_or_else(|| {
+                        panic!("interface {name} is missing associated binding {member}")
+                    })
+                    .1
+                    .clone(),
+            );
+        }
+    } else {
+        arguments.extend(associated.iter().map(|(_, ty)| ty.clone()));
+    }
+    Ty::Class(reference, arguments, attr.clone())
+}
+
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     match ty {
         Ty::Int { .. } => "int".to_string(),
@@ -115,6 +291,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
         Ty::TypeAlias(name, _) => render_name_ref_or_self_ref(name, ctx, ""),
+        Ty::Interface(..) => translate_ty(&interface_class(ty, ctx, false), ctx),
         Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             let head = render_name_ref(name, ctx);
             if should_defer_name_ref(ctx) {
@@ -158,7 +335,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             }
         }
         Ty::Unknown { .. }
-        | Ty::Interface(..)
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
@@ -172,7 +348,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 // `typing.Protocol` (see `TranslateCtx::callback_protocols`):
                 // the type expression here is just that Protocol's name.
                 if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
-                    return name.clone();
+                    return callback_protocol_ref(name, ty, ctx);
                 }
                 // Runtime `.py` path (no Protocol map): `typing.Callable` can't
                 // express per-param optionality, so widen the arg list.
@@ -182,14 +358,15 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                     "typing.Callable[[{}], {}]",
                     params
                         .iter()
-                        .map(|param| translate_ty(&param.ty, ctx))
+                        .map(|param| translate_input_ty(&param.ty, ctx))
                         .collect::<Vec<_>>()
                         .join(", "),
                     translate_ty(ret, ctx)
                 )
             }
         }
-        Ty::Void { .. } | Ty::Never { .. } => "None".to_string(),
+        Ty::Void { .. } => "None".to_string(),
+        Ty::Never { .. } => "typing.NoReturn".to_string(),
         // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
         // The host-language opaque-handle wrapper is `BamlPyHandle` from the
         // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
@@ -898,7 +1075,7 @@ mod tests {
                     ])),
                 ),
                 ctx: ctx(&["lorem"]),
-                expected: "typing.Callable[[typing.List[int]], typing.Optional[str]]",
+                expected: "typing.Callable[[typing.Sequence[int]], typing.Optional[str]]",
             },
             Case {
                 label: "callable optional params",

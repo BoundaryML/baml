@@ -34,18 +34,12 @@ pub struct FunctionCallContext {
     pub logger: TraceLogger,
     pub cancel: CancellationToken,
     pub profile_intent: RootProfileIntent,
-    /// Named `TypeVar` bindings for a generic call. Each entry is
-    /// `TypeVar name -> concrete type`; insertion order is the callee's De
-    /// Bruijn order. Sourced from a host SDK call (`CallFunctionArgs.type_args`)
-    /// or from internal Rust callers invoking generic stdlib functions like
-    /// `baml.json.from_string<T>` (which binds `T` by name here). The engine
-    /// lowers these to the positional `type_args` slot by matching names against
-    /// the callee's generic params in `set_entry_point_with_type_args`.
-    /// Empty for non-generic / internal calls.
-    pub type_args: IndexMap<String, baml_type::RuntimeTy>,
-    /// Definition graphs accompanying entries in `type_args`. Only host
-    /// reflected runtime types populate this map.
-    pub type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+    /// Explicit named bindings for a generic function call. Each binding is a
+    /// static type, an explicit portable import, or a live type reference whose
+    /// issuing runtime must match. The engine matches names to the callee's
+    /// generic slots; caller insertion order does not select a slot. Checked
+    /// interface methods carry their positional bindings in the method target.
+    pub type_args: IndexMap<String, bex_external_types::TypeArgument>,
 }
 
 /// Builder for `FunctionCallContext`.
@@ -55,8 +49,7 @@ pub struct FunctionCallContextBuilder {
     logger: TraceLogger,
     cancel: Option<CancellationToken>,
     profile_intent: RootProfileIntent,
-    type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
-    type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
+    type_args: IndexMap<String, bex_external_types::TypeArgument>,
 }
 
 impl FunctionCallContextBuilder {
@@ -70,8 +63,7 @@ impl FunctionCallContextBuilder {
             boundary,
             logger: TraceLogger::disabled(),
             cancel: None,
-            type_args: None,
-            type_defs: None,
+            type_args: IndexMap::new(),
         }
     }
 
@@ -83,8 +75,7 @@ impl FunctionCallContextBuilder {
             logger: self.logger,
             cancel: self.cancel.unwrap_or_default(),
             profile_intent: self.profile_intent,
-            type_args: self.type_args.unwrap_or_default(),
-            type_defs: self.type_defs.unwrap_or_default(),
+            type_args: self.type_args,
         }
     }
 
@@ -110,7 +101,21 @@ impl FunctionCallContextBuilder {
     /// slots against the callee's generic params.
     #[must_use]
     pub fn with_type_args(mut self, type_args: IndexMap<String, baml_type::RuntimeTy>) -> Self {
-        self.type_args = Some(type_args);
+        self.type_args = type_args
+            .into_iter()
+            .map(|(name, ty)| (name, bex_external_types::TypeArgument::Named(ty)))
+            .collect();
+        self
+    }
+
+    /// Supply checked references or explicit portable definitions as well as
+    /// static named types. Exactly one evidence kind belongs to each binding.
+    #[must_use]
+    pub fn with_type_bindings(
+        mut self,
+        bindings: IndexMap<String, bex_external_types::TypeArgument>,
+    ) -> Self {
+        self.type_args = bindings;
         self
     }
 
@@ -119,7 +124,11 @@ impl FunctionCallContextBuilder {
         mut self,
         type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
     ) -> Self {
-        self.type_defs = Some(type_defs);
+        self.type_args.extend(
+            type_defs
+                .into_iter()
+                .map(|(name, ty)| (name, bex_external_types::TypeArgument::Definition(ty))),
+        );
         self
     }
 

@@ -562,7 +562,8 @@ pub enum Instruction {
     ///
     /// The VM pops `ntypeargs` `Object::Type` values into the new frame's
     /// `type_args` vector, then pops `nargs` regular value arguments.
-    /// `nargs` is inferred from the function's arity metadata.
+    /// `nargs` comes from the caller layout in `Bytecode::call_layouts`.
+    /// Compiler-synthesized exact calls may omit it and use the target arity.
     ///
     /// When no type arguments are threaded, set `ntypeargs = 0`.
     Call {
@@ -588,7 +589,9 @@ pub enum Instruction {
     ///
     /// Stack layout: `[arg1, ..., argN, callee]`.
     ///
-    /// Arity is read from the runtime callee function object.
+    /// The call-site layout supplies N and optional parameter names. Dispatch
+    /// maps these slots to the runtime target, inserting omitted defaults.
+    /// Indirect calls require a layout, including synthetic entry trampolines.
     CallIndirect,
 
     /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
@@ -1989,6 +1992,8 @@ impl CompactJumpTable {
 /// load time. The line table and exception table are translated to byte-offset PCs.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactCode {
+    /// Semantic caller layouts indexed by compact byte PC.
+    pub call_layouts: std::collections::BTreeMap<usize, baml_type::CallLayout>,
     /// The encoded instruction stream.
     pub code: Vec<u8>,
     /// Line table with PCs translated to byte offsets.
@@ -2045,6 +2050,8 @@ impl CompactCode {
 /// Contains the instructions to run and all the associated constants.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Bytecode {
+    /// Semantic caller layouts indexed by instruction, retained in artifacts.
+    pub call_layouts: std::collections::BTreeMap<usize, baml_type::CallLayout>,
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
 
@@ -2110,6 +2117,7 @@ impl Bytecode {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            call_layouts: Default::default(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
@@ -2553,6 +2561,11 @@ impl Bytecode {
             .collect();
 
         CompactCode {
+            call_layouts: self
+                .call_layouts
+                .iter()
+                .map(|(index, layout)| (index_to_offset[*index], layout.clone()))
+                .collect(),
             code,
             line_table,
             exception_table,
@@ -2619,6 +2632,19 @@ impl Bytecode {
                 UnaryOp::Truthy => OpCode::Truthy,
             },
 
+            // A runtime-synthesized body can already have a rooted heap
+            // constant in its resolved pool. Its compile-time placeholder is
+            // not the runtime value; folding that placeholder to LoadNull
+            // would discard the actual callable/object.
+            Instruction::LoadConst(idx)
+                if self
+                    .resolved_constants
+                    .get(*idx)
+                    .and_then(crate::Value::as_object_ptr)
+                    .is_some() =>
+            {
+                OpCode::LoadConst
+            }
             // Constant specialization
             Instruction::LoadConst(idx) => match &self.constants[*idx] {
                 ConstValue::Null => OpCode::LoadNull,
@@ -2749,6 +2775,7 @@ mod compact_tests {
         Bytecode {
             instructions,
             constants,
+            call_layouts: Default::default(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
@@ -2760,6 +2787,27 @@ mod compact_tests {
             handler_context_table: Vec::new(),
             compact: None,
         }
+    }
+
+    #[test]
+    fn call_layouts_survive_serialization_and_compact_pc_translation() {
+        let mut bytecode = make_bytecode(
+            vec![
+                Instruction::LoadConst(0),
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![ConstValue::Int(1)],
+        );
+        let layout = baml_type::CallLayout(vec![None, Some(baml_type::Name::new("prefix"))]);
+        bytecode.call_layouts.insert(1, layout.clone());
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        assert_eq!(restored.call_layouts.get(&1), Some(&layout));
+        let compact = restored.lower_to_compact();
+        assert_eq!(compact.call_layouts.get(&2), Some(&layout));
+        assert_eq!(compact.code[2], OpCode::CallIndirect as u8);
+        assert_eq!(compact.call_layouts.len(), 1);
     }
 
     #[test]
@@ -2958,6 +3006,7 @@ mod compact_tests {
                 Instruction::Return,       // i=1: 1 byte
             ],
             constants: vec![ConstValue::Int(1)],
+            call_layouts: Default::default(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
@@ -2998,6 +3047,7 @@ mod compact_tests {
                 Instruction::Return,       // i=2: 1 byte (handler)
             ],
             constants: vec![ConstValue::Int(0)],
+            call_layouts: Default::default(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),

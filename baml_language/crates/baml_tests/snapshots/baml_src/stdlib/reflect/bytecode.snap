@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function reflect.AnyClass.attributes(self: reflect.AnyClass) -> reflect.Meta {
+function reflect.AnyClass.attributes(self: #0) -> reflect.Meta {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -29,7 +29,7 @@ function reflect.AnyClass.attributes(self: reflect.AnyClass) -> reflect.Meta {
     return
 }
 
-function reflect.AnyClass.get(self: reflect.AnyClass, name: string) -> #1 | null {
+function reflect.AnyClass.get(self: #0, name: string) -> #1 | null {
     load_var2 1 2
     load_type reflect.AnyClass
     load_const "has_field"
@@ -70,7 +70,7 @@ function reflect.AnyClass.get(self: reflect.AnyClass, name: string) -> #1 | null
     return
 }
 
-function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> reflect.class.Field | null {
+function reflect.AnyClass.get_field(self: #0, name: string) -> reflect.class.Field | null {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -127,7 +127,7 @@ function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> ref
     return
 }
 
-function reflect.AnyClass.has_field(self: reflect.AnyClass, name: string) -> bool {
+function reflect.AnyClass.has_field(self: #0, name: string) -> bool {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -176,7 +176,7 @@ function reflect.AnyClass.has_field(self: reflect.AnyClass, name: string) -> boo
     return
 }
 
-function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.Field[] {
+function reflect.AnyClass.list_fields(self: #0) -> reflect.class.Field[] {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -236,14 +236,14 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
     return
 }
 
-function reflect.AnyClass.name(self: reflect.AnyClass) -> string {
+function reflect.AnyClass.name(self: #0) -> string {
     load_var self
     call reflect.Type.of_value
     call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function reflect.AnyClass.type(self: reflect.AnyClass) -> reflect.Type {
+function reflect.AnyClass.type(self: #0) -> reflect.Type {
     load_var self
     call reflect.Type.of_value
     return

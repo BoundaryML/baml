@@ -441,6 +441,9 @@ pub enum Terminator<'db> {
 
     /// Call a function.
     Call {
+        /// Caller value slots, excluding leading type arguments. None only for
+        /// compiler-synthesized calls using the target's exact storage layout.
+        argument_layout: Option<baml_type::CallLayout>,
         /// The function to call.
         callee: Operand<'db>,
         /// Arguments to pass.

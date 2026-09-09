@@ -31,4 +31,5 @@ serde_json = { workspace = true }
 text-size = { workspace = true }
 
 [dev-dependencies]
+borsh = { workspace = true }
 insta = { workspace = true }

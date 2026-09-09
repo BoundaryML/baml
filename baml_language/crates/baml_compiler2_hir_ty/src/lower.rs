@@ -1580,58 +1580,13 @@ pub fn function_generic_frame<'db>(
 /// argument-path patch. Keyed on the builtin package specifically: a
 /// user-defined `class Array<T>` stays nominal. The single constructor for
 /// class types, shared by annotation lowering and `class_self_ty`.
-pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
-    let attr = TyAttr::default;
-    if !qtn.is_local() && qtn.package().as_str() == "baml" {
-        if qtn.namespace().len() == 1
-            && qtn.namespace()[0].as_str() == "future"
-            && qtn.name().as_str() == "Future"
-            && args.len() == 2
-        {
-            let error_ty = args.pop().expect("checked len");
-            let value_ty = args.pop().expect("checked len");
-            return Ty::intern(TyKind::Future(value_ty, error_ty, attr()));
-        }
-        if qtn.namespace().is_empty() {
-            if qtn.name().as_str() == "Array" && args.len() == 1 {
-                let element = args.pop().expect("checked len");
-                return Ty::intern(TyKind::List(element, attr()));
-            }
-            if qtn.name().as_str() == "Map" && args.len() == 2 {
-                let value = args.pop().expect("checked len");
-                let key = args.pop().expect("checked len");
-                return Ty::intern(TyKind::Map {
-                    key,
-                    value,
-                    attr: attr(),
-                });
-            }
-            // The dedicated-variant scalar builtins bridge the same way: a
-            // value of `class baml.Int` IS an `int` at runtime (S11's
-            // receiver-class correspondence, applied in reverse), so the
-            // class spelling — `class_self_ty` inside the class's own
-            // methods and implements blocks included — denotes the
-            // structural type. Without this, an in-class impl's for-target
-            // would be a nominal type no runtime value ever inhabits.
-            if args.is_empty() {
-                match qtn.name().as_str() {
-                    "Int" => return Ty::intern(TyKind::Int { attr: attr() }),
-                    "Bigint" => return Ty::intern(TyKind::Bigint { attr: attr() }),
-                    "Float" => return Ty::intern(TyKind::Float { attr: attr() }),
-                    "Bool" => return Ty::intern(TyKind::Bool { attr: attr() }),
-                    "String" => return Ty::intern(TyKind::String { attr: attr() }),
-                    "Uint8Array" => return Ty::intern(TyKind::Uint8Array { attr: attr() }),
-                    // The carrier family is total: `class baml.Null` exists
-                    // (empty — a doc anchor), and leaving it unbridged would
-                    // let `baml.Null` denote a nominal class no value
-                    // inhabits.
-                    "Null" => return Ty::intern(TyKind::Null { attr: attr() }),
-                    _ => {}
-                }
-            }
-        }
+pub fn class_ty(qtn: TypeName, args: Vec<Ty>) -> Ty {
+    if let Some(alias) = baml_type::compiler_aliases::by_definition(&qtn)
+        && let Some(ty) = alias.lower_class(&args)
+    {
+        return ty;
     }
-    Ty::intern(TyKind::Class(qtn, args.into(), attr()))
+    Ty::intern(TyKind::Class(qtn, args.into(), TyAttr::default()))
 }
 
 /// The qualified name a class definition contributes, from its file's
@@ -2994,4 +2949,38 @@ pub fn throws_clause_parts(ty: &Ty) -> (Ty, bool) {
         _ => Ty::intern(TyKind::Union(named.into(), TyAttr::default())),
     };
     (named, open)
+}
+
+#[cfg(test)]
+mod compiler_alias_tests {
+    use super::*;
+
+    #[test]
+    fn compiler_aliases_do_not_create_nominal_media_classes() {
+        for primitive in baml_type::PrimitiveType::ALL {
+            let alias = baml_type::compiler_aliases::by_target(
+                baml_type::compiler_aliases::AliasTarget::Primitive(primitive),
+            );
+            let actual = class_ty(alias.definition.unwrap().qualified_name(), vec![]);
+            assert_eq!(
+                actual.to_plain(),
+                baml_type::Ty::from_primitive(primitive, TyAttr::default())
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_aliases_preserve_user_defined_names() {
+        for path in [
+            "user.String",
+            "user.Image",
+            "user.Array",
+            "baml.other.Image",
+        ] {
+            let name = TypeName::from_dotted_path(path);
+            assert!(
+                matches!(class_ty(name.clone(), vec![]).kind(), TyKind::Class(actual, _, _) if actual == &name)
+            );
+        }
+    }
 }

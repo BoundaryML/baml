@@ -58,9 +58,7 @@ struct CatchContext {
 
 // ─── Type conversion: TIR RuntimeTy → baml_type::RuntimeTy ────────────────────────────────
 
-use baml_type::{
-    FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
-};
+use baml_type::{FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty};
 
 /// Build the [`ResolvedAliases`] type-alias environment for a package,
 /// including dependency packages. The pure erasure that consumes it lives in
@@ -2962,13 +2960,6 @@ impl<'db> LoweringContext<'db> {
             .runtime_type_params()
     }
 
-    fn tir_function_coercion(
-        &self,
-        key: ExprMetadataKey,
-    ) -> Option<&crate::inference_provider::FunctionCoercion> {
-        self.tables.for_scope(key.scope).function_coercion(key.expr)
-    }
-
     fn tir_truthy_condition(&self, key: ExprMetadataKey) -> bool {
         self.tables.for_scope(key.scope).truthy_condition(key.expr)
     }
@@ -3621,6 +3612,30 @@ impl<'db> LoweringContext<'db> {
     /// no type args (the callable curries its complete frame). Mirrors the
     /// shared call tail's destination normalization — a projection
     /// destination calls into a temp and assigns through in the resume block.
+    /// The checked call plan excludes an implicit receiver, whereas an
+    /// unbound method call passes that receiver as a leading value slot.
+    fn call_argument_layout(
+        &self,
+        expr_id: AstExprId,
+        value_count: usize,
+    ) -> Option<baml_type::CallLayout> {
+        let plan = self.tir_call_plan(self.expr_metadata_key(expr_id))?;
+        let mut layout = plan.argument_layout.clone();
+        assert!(
+            value_count >= layout.len(),
+            "call has fewer operands than checked parameters"
+        );
+        let implicit = value_count - layout.len();
+        assert!(
+            implicit <= 1,
+            "only a receiver may precede checked parameters"
+        );
+        if implicit == 1 {
+            layout.0.insert(0, None);
+        }
+        Some(layout)
+    }
+
     fn emit_resolved_indirect_call(
         &mut self,
         callee_op: Operand<'db>,
@@ -3629,6 +3644,7 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) {
+        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let runtime_type_check = self.call_requires_runtime_type_check(expr_id);
@@ -3645,6 +3661,7 @@ impl<'db> LoweringContext<'db> {
                     target,
                     unwind,
                 );
+                self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
             }
             _ => {
@@ -3660,6 +3677,7 @@ impl<'db> LoweringContext<'db> {
                     target,
                     unwind,
                 );
+                self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
                 self.builder
                     .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
@@ -4559,102 +4577,6 @@ impl<'db> LoweringContext<'db> {
         let mut body = builder.build_body();
         optimize::optimize_function_body(&mut body);
         body
-    }
-
-    fn lower_optional_function_adapter(
-        &mut self,
-        expr_id: AstExprId,
-        coercion: &crate::inference_provider::FunctionCoercion,
-        dest: Place,
-    ) {
-        let original_ty = self.expr_ty(expr_id);
-        let original_local = self.builder.temp(original_ty);
-        self.lower_expr_without_function_coercion(expr_id, Place::Local(original_local));
-        self.builder.local_decl_mut(original_local).is_captured = true;
-
-        let parent_name = self.builder.name().to_string();
-        let adapter_count = self
-            .synthetic_name_counts
-            .entry("__optional_adapter".to_string())
-            .or_insert(0);
-        let adapter_idx = *adapter_count;
-        *adapter_count += 1;
-        let adapter_name = format!("<optional-adapter({parent_name}, {adapter_idx})>");
-
-        let mut adapter_builder =
-            MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
-
-        let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
-        let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None);
-
-        for param in &coercion.target_params {
-            let param_ty = self.resolved_aliases.convert(&param.ty);
-            adapter_builder.declare_local(param.name.clone(), param_ty, None);
-        }
-
-        let entry = adapter_builder.create_block();
-        let after_call = adapter_builder.create_block();
-        adapter_builder.set_current_block(entry);
-
-        let mut next_required_target = 0usize;
-        let mut source_args = Vec::with_capacity(coercion.source_params.len());
-        for source_param in &coercion.source_params {
-            match source_param.mode {
-                FunctionParamMode::Required => {
-                    let target_index = coercion
-                        .target_params
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, param)| param.is_required())
-                        .nth(next_required_target)
-                        .map(|(idx, _)| idx)
-                        .unwrap_or(next_required_target);
-                    next_required_target += 1;
-                    source_args.push(Operand::Copy(Place::Local(Local(target_index + 1))));
-                }
-                FunctionParamMode::Optional => {
-                    let target_index = source_param.name.as_ref().and_then(|name| {
-                        coercion.target_params.iter().position(|param| {
-                            param.is_optional() && param.name.as_ref() == Some(name)
-                        })
-                    });
-                    if let Some(target_index) = target_index {
-                        source_args.push(Operand::Copy(Place::Local(Local(target_index + 1))));
-                    } else {
-                        source_args.push(Operand::Constant(Constant::OmittedArg));
-                    }
-                }
-            }
-        }
-
-        adapter_builder.call(
-            Operand::Copy(Place::Capture(0)),
-            source_args,
-            Place::Local(ret),
-            after_call,
-            None,
-        );
-        adapter_builder.set_current_block(after_call);
-        adapter_builder.return_();
-
-        let mut adapter_mir = adapter_builder.build();
-        optimize::optimize_function(&mut adapter_mir);
-        adapter_mir.item_ref = ItemRef::Free {
-            package: Name::new(""),
-            namespace: vec![],
-            name: Name::new(&adapter_name),
-        };
-
-        let lambda_idx = self.pending_lambdas.len();
-        self.pending_lambdas.push(adapter_mir);
-        self.builder.assign(
-            dest,
-            Rvalue::MakeClosure {
-                lambda_idx,
-                captures: vec![Operand::Copy(Place::Local(original_local))],
-                type_arg_templates: vec![],
-            },
-        );
     }
 
     /// Lower a lambda expression into a nested `MirFunction` and emit a
@@ -5811,17 +5733,6 @@ impl<'db> LoweringContext<'db> {
         self.restore_locals_after_scope(saved_locals);
     }
 
-    fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
-        if let Some(coercion) = self
-            .tir_function_coercion(self.expr_metadata_key(expr_id))
-            .cloned()
-        {
-            self.lower_optional_function_adapter(expr_id, &coercion, dest);
-        } else {
-            self.lower_expr_without_function_coercion(expr_id, dest);
-        }
-    }
-
     fn planned_call_args(
         &self,
         expr_id: AstExprId,
@@ -5845,7 +5756,7 @@ impl<'db> LoweringContext<'db> {
         })
     }
 
-    fn lower_expr_without_function_coercion(&mut self, expr_id: AstExprId, dest: Place) {
+    fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
             self.builder.current_source_span = Some(span);
@@ -6221,6 +6132,8 @@ impl<'db> LoweringContext<'db> {
                     resume,
                     unwind,
                 );
+                self.builder
+                    .set_call_layout(Some(baml_type::CallLayout::positional(1)));
                 self.builder.set_current_block(resume);
                 cur = next;
             }
@@ -9481,6 +9394,7 @@ impl<'db> LoweringContext<'db> {
         // Prepend type-arg operands before the value-arg operands.
         // (For regular BAML calls, type args are leading so the callee's frame
         // can pop them into `frame.type_args` before reading value args.)
+        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
         let all_arg_operands_for_call = if ntypeargs > 0 {
             let mut combined = type_arg_operands.clone();
             combined.extend(arg_operands.iter().cloned());
@@ -9579,6 +9493,7 @@ impl<'db> LoweringContext<'db> {
                         target,
                         unwind,
                     );
+                    self.builder.set_call_layout(argument_layout);
                 }
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
@@ -9594,6 +9509,7 @@ impl<'db> LoweringContext<'db> {
                         target,
                         unwind,
                     );
+                    self.builder.set_call_layout(argument_layout);
                     self.builder.set_current_block(target);
                     let after = self.builder.create_block();
                     self.builder
@@ -10494,9 +10410,9 @@ impl<'db> LoweringContext<'db> {
     /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
     /// function `ItemRef` and all type args are fully concrete, emit a pooled,
     /// interned `Constant::GenericFunction` (pointer-stable; seeds
-    /// `frame.type_args` when called). Otherwise fall back to lowering the base
-    /// value with type args erased — for exotic bases (bound methods, lambdas)
-    /// or param-dependent args (`foo<T>` inside a generic function).
+    /// `frame.type_args` when called). Runtime bases (bound methods, lambdas)
+    /// retain their receiver/captures and specialize that value; param-dependent
+    /// arguments (`foo<T>` inside a generic function) are realized at runtime.
     fn lower_generic_apply(
         &mut self,
         expr_id: AstExprId,
@@ -10555,17 +10471,15 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
-    /// function or static/interface method). `None` for bound methods, lambdas,
-    /// or anything that is not a function path.
+    /// function or inherent static method). Interface methods must first bind
+    /// their implementation and owner frame, including receiverless methods;
+    /// their declaration is not the callable selected for this receiver.
     fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef<'db>> {
         use crate::inference_provider::MemberResolution;
         let is_fn = |r: &MemberResolution<'_>| {
             matches!(
                 r,
-                MemberResolution::Free { .. }
-                    | MemberResolution::UnboundMethod { .. }
-                    | MemberResolution::InterfaceVirtualMethod { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. }
+                MemberResolution::Free { .. } | MemberResolution::UnboundMethod { .. }
             )
         };
         let key = self.expr_metadata_key(base);

@@ -1,10 +1,3 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
@@ -19,6 +12,7 @@ export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
+export { BamlInterfaceRef, BamlConcreteRef, BamlInterfaceType } from './interface_ref.js';
 export { BamlFunctionSpec } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
@@ -35,14 +29,14 @@ export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
  * singleton reachable via `getRuntime()`).
  */
 export function initializeRuntime(srcDir, files) {
-    BamlRuntime.initializeRuntime(srcDir, files);
+    return BamlRuntime.initializeRuntime(srcDir, files);
 }
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
 export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml) {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+    return BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
 }
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {

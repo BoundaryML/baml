@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "ESNext.Disposable"],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmitOnError": true,
+    "outDir": "dist"
+  },
+  "include": ["contracts.ts", "typecheck.ts", "runtime.ts", "ergonomic-inputs.ts", "disposal.ts", "cross-module/**/*.ts"],
+  "exclude": ["negative.ts", "cross-module/negative-consumer.ts", "dist"]
+}

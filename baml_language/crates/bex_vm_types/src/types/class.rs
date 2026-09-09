@@ -67,6 +67,10 @@ pub struct Class {
     /// flag read and never enters finalization.
     pub has_cleanup: bool,
 
+    /// Default bridge codec, selected by the declaration's defining package.
+    /// This is serialized with the class; downstream extensions cannot change it.
+    pub boundary_projection: baml_type::ClassProjection,
+
     /// Number of generic params the class itself declares (`GenericBox<T>` ⇒ 1,
     /// non-generic ⇒ 0). A method's `display_type_params` are De Bruijn-ordered
     /// as *class params first, then the method's own*, so this count is the

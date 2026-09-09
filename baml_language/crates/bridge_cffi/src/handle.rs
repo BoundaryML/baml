@@ -74,6 +74,15 @@ pub fn clone_handle(key: u64) -> Result<u64, HandleError> {
 
 /// Release one owned ordinary handle-table key.
 pub fn release_handle(key: u64) -> Result<(), HandleError> {
+    struct DrainHostReleases;
+    impl Drop for DrainHostReleases {
+        fn drop(&mut self) {
+            bex_project::host_release_dispatch::drain();
+        }
+    }
+    // A table entry can own the last host registration. Destruction happens
+    // outside the table lock; deliver its queued release at this safepoint.
+    let _drain = DrainHostReleases;
     if HANDLE_TABLE.release(key) {
         Ok(())
     } else {

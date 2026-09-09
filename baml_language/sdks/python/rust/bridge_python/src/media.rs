@@ -233,6 +233,7 @@ macro_rules! define_media_pyclass {
             /// Internal: expose the inner `BamlPyHandle` for inbound encode.
             fn _to_pyhandle(&self, py: Python<'_>) -> PyResult<Py<BamlPyHandle>> {
                 let pyh = self.handle.borrow(py);
+                pyh.ensure_active()?;
                 let new_key = handle_clone(pyh.handle_key, "_to_pyhandle")?;
                 Py::new(py, BamlPyHandle::new(new_key, pyh.handle_type))
             }
@@ -257,6 +258,7 @@ macro_rules! define_media_pyclass {
                 context: &str,
             ) -> PyResult<Option<String>> {
                 let pyh = self.handle.borrow(py);
+                pyh.ensure_active()?;
                 media_string_option(pyh.handle_key, pyh.handle_type, accessor, context)
             }
 
@@ -267,6 +269,7 @@ macro_rules! define_media_pyclass {
                 context: &str,
             ) -> PyResult<String> {
                 let pyh = self.handle.borrow(py);
+                pyh.ensure_active()?;
                 media_string(pyh.handle_key, pyh.handle_type, accessor, context)
             }
         }

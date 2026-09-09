@@ -4,11 +4,55 @@
 //! valid Python spelling for every public binding and keeps the mapping in one
 //! table so definitions, references, stubs, and runtime dispatch cannot drift.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+};
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
+
+fn is_sdk_runtime_binding(name: &str) -> bool {
+    matches!(
+        name,
+        "_RUNTIME"
+            | "_TYPE_MAP"
+            | "_sdk_runtime"
+            | "_sdk_type_map"
+            | "_ConcreteRef"
+            | "_ConcreteTy"
+            | "_concrete_unset"
+    )
+}
+
+const CONCRETE_MEMBERS: &[&str] = &[
+    "close",
+    "as_interface",
+    "to_data",
+    "to_data_async",
+    "_invoke_concrete",
+    "_method_types",
+    "_data_call",
+    "_handle",
+    "_type_map",
+    "_to_pyhandle",
+    "_from_handle",
+    "__slots__",
+    "__new__",
+    "__init__",
+    "__copy__",
+    "__deepcopy__",
+    "__get_pydantic_core_schema__",
+];
+const CONCRETE_LOCALS: &[&str] = &[
+    "self",
+    "_ctx",
+    "_types",
+    "_arguments",
+    "_concrete_unset",
+    "_ConcreteTy",
+];
 
 /// One sync or async Python binding for a concrete BAML callable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -80,11 +124,20 @@ pub struct IdentifierRename {
 pub(crate) struct PythonNames {
     module_segments: HashMap<Vec<String>, String>,
     symbol_names: HashMap<Name, String>,
+    interface_ref_names: HashMap<Name, String>,
+    interface_input_names: HashMap<Name, String>,
+    interface_host_names: HashMap<Name, String>,
+    input_alias_names: HashMap<Name, String>,
+    helper_used: RefCell<BTreeMap<LeafPath, HashSet<String>>>,
+    helper_families: RefCell<BTreeMap<(LeafPath, String), String>>,
+    interface_witness_names: HashMap<Name, String>,
+    interface_associated_names: HashMap<Name, Vec<baml_base::Name>>,
     callable_names: HashMap<(String, BindingRole), String>,
     field_names: HashMap<(Name, String), String>,
     enum_variant_names: HashMap<(Name, String), String>,
     param_names: HashMap<(String, String), String>,
     generic_names: HashMap<(String, String), String>,
+    concrete_generic_names: HashMap<(String, usize), String>,
     renames: Vec<IdentifierRename>,
 }
 
@@ -104,6 +157,31 @@ impl PythonNames {
         names.allocate_modules(pool);
         names.allocate_leaf_bindings(pool);
         names.allocate_member_bindings(pool);
+        names.allocate_concrete_generics(pool);
+        let generic_names = names
+            .generic_names
+            .values()
+            .chain(names.concrete_generic_names.values())
+            .cloned()
+            .collect::<Vec<_>>();
+        for used in names.helper_used.get_mut().values_mut() {
+            used.extend(generic_names.iter().cloned());
+        }
+        names.interface_associated_names = pool
+            .interfaces
+            .declarations
+            .iter()
+            .map(|(name, declaration)| {
+                (
+                    name.clone(),
+                    declaration
+                        .associated_types
+                        .iter()
+                        .map(|binding| binding.name.clone())
+                        .collect(),
+                )
+            })
+            .collect();
         names.renames.sort();
         names.renames.dedup();
         names
@@ -144,6 +222,133 @@ impl PythonNames {
             .get(name)
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
             .unwrap_or_else(|| std::borrow::Cow::Owned(project_identifier(name.bare_name()).0))
+    }
+
+    pub(crate) fn interface_ref(&self, name: &Name) -> String {
+        self.interface_ref_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| format!("{}Ref", self.symbol(name)))
+    }
+
+    pub(crate) fn interface_input(&self, name: &Name) -> String {
+        self.interface_input_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| format!("{}Input", self.symbol(name)))
+    }
+
+    pub(crate) fn interface_host(&self, name: &Name) -> String {
+        self.interface_host_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| format!("{}Host", self.symbol(name)))
+    }
+
+    pub(crate) fn interface_input_name(&self, name: &Name) -> Name {
+        Name::new(
+            name.package().clone(),
+            name.namespace().to_vec(),
+            baml_base::Name::new(self.interface_input(name)),
+        )
+    }
+
+    pub(crate) fn input_alias(&self, name: &Name) -> Option<&str> {
+        self.input_alias_names.get(name).map(String::as_str)
+    }
+
+    pub(crate) fn input_alias_name(&self, name: &Name) -> Option<Name> {
+        self.input_alias(name).map(|bare| {
+            Name::new(
+                name.package().clone(),
+                name.namespace().to_vec(),
+                baml_base::Name::new(bare),
+            )
+        })
+    }
+
+    /// Allocate a complete private helper family together. A user declaration
+    /// wins even when it collides with a derived Input/Kwargs/type-variable name.
+    pub(crate) fn callback_helper(
+        &self,
+        leaf: &LeafPath,
+        key: String,
+        preferred: &str,
+        variables: usize,
+    ) -> String {
+        let key = (leaf.clone(), key);
+        if let Some(name) = self.helper_families.borrow().get(&key) {
+            return name.clone();
+        }
+        let mut used = self.helper_used.borrow_mut();
+        let used = used.entry(leaf.clone()).or_default();
+        let mut candidate = preferred.to_string();
+        let mut index = 1;
+        loop {
+            let mut family = vec![
+                candidate.clone(),
+                format!("{candidate}Input"),
+                format!("{candidate}Kwargs"),
+                format!("{candidate}InputKwargs"),
+            ];
+            for variable in 0..variables {
+                family.push(format!("{candidate}_T{variable}"));
+                family.push(format!("{candidate}Input_T{variable}"));
+            }
+            if family.iter().all(|name| !used.contains(name)) {
+                used.extend(family);
+                self.helper_families
+                    .borrow_mut()
+                    .insert(key, candidate.clone());
+                return candidate;
+            }
+            index += 1;
+            candidate = format!("{preferred}_{index}");
+        }
+    }
+
+    pub(crate) fn reserve_helper(&self, leaf: &LeafPath, name: &str) {
+        self.helper_used
+            .borrow_mut()
+            .entry(leaf.clone())
+            .or_default()
+            .insert(name.to_string());
+    }
+
+    pub(crate) fn interface_witness(&self, name: &Name) -> String {
+        self.interface_witness_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| format!("_{}View", self.symbol(name)))
+    }
+
+    pub(crate) fn interface_witness_name(&self, name: &Name) -> Name {
+        Name::new(
+            name.package().clone(),
+            name.namespace().to_vec(),
+            baml_base::Name::new(self.interface_witness(name)),
+        )
+    }
+
+    pub(crate) fn interface_proof(name: &Name) -> String {
+        let encoded: String = name
+            .to_string()
+            .bytes()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        format!("_baml_input_{encoded}")
+    }
+
+    pub(crate) fn interface_ref_name(&self, name: &Name) -> Name {
+        Name::new(
+            name.package().clone(),
+            name.namespace().to_vec(),
+            baml_base::Name::new(self.interface_ref(name)),
+        )
+    }
+
+    pub(crate) fn interface_associated_names(&self, name: &Name) -> Option<&[baml_base::Name]> {
+        self.interface_associated_names.get(name).map(Vec::as_slice)
     }
 
     pub(crate) fn callable<'a>(
@@ -205,6 +410,15 @@ impl PythonNames {
             paths.insert(symbol_path);
             paths.insert(type_path);
         }
+        for name in pool.interfaces.declarations.keys() {
+            let path = raw_route_segments(name, true);
+            if is_reportable_user_name(name) {
+                for len in 1..=path.len() {
+                    reportable_paths.insert(path[..len].to_vec());
+                }
+            }
+            paths.insert(path);
+        }
 
         let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
         for path in &paths {
@@ -229,7 +443,7 @@ impl PythonNames {
                         id: raw.clone(),
                         kind: "module segment".to_string(),
                         fqn: path.join("."),
-                        protected: (raw == "type")
+                        protected: (raw == "type" || is_sdk_runtime_binding(&raw))
                             .then_some(IdentifierRenameReason::FrameworkProtected),
                         raw,
                         report: reportable_paths.contains(&path),
@@ -246,31 +460,76 @@ impl PythonNames {
     }
 
     fn allocate_leaf_bindings(&mut self, pool: &SymbolPool) {
-        let mut by_leaf: BTreeMap<LeafPath, Vec<(&Name, &Symbol)>> = BTreeMap::new();
+        // Aliases inherit direction changes transitively. Iteration terminates
+        // because each pass only adds declarations to this finite set.
+        fn changes(ty: &baml_codegen_types::Ty, aliases: &HashSet<Name>) -> bool {
+            use baml_codegen_types::Ty;
+            match ty {
+                Ty::Interface(..) | Ty::Function { .. } | Ty::List(..) | Ty::Map { .. } => true,
+                Ty::TypeAlias(name, _) => aliases.contains(name),
+                Ty::Union(members, _) => members.iter().any(|ty| changes(ty, aliases)),
+                _ => false, // Invariant class arguments keep their canonical spelling.
+            }
+        }
+        let mut input_aliases = HashSet::new();
+        loop {
+            let count = input_aliases.len();
+            for (name, symbol) in pool {
+                if let Symbol::TypeAlias(alias) = symbol
+                    && changes(&alias.resolves_to, &input_aliases)
+                {
+                    input_aliases.insert(name.clone());
+                }
+            }
+            if count == input_aliases.len() {
+                break;
+            }
+        }
+        let mut by_leaf: BTreeMap<LeafPath, Vec<(&Name, Option<&Symbol>)>> = BTreeMap::new();
         for (name, symbol) in pool {
             by_leaf
                 .entry(self.route(name, symbol))
                 .or_default()
-                .push((name, symbol));
+                .push((name, Some(symbol)));
+        }
+        for name in pool.interfaces.declarations.keys() {
+            by_leaf
+                .entry(self.route_class_ref(name))
+                .or_default()
+                .push((name, None));
         }
 
-        for (_leaf, mut symbols) in by_leaf {
+        for (leaf, mut symbols) in by_leaf {
             symbols.sort_by_key(|(name, _)| *name);
             let primaries = symbols
                 .iter()
                 .map(|(name, symbol)| {
                     let (raw, kind, fqn) = match symbol {
-                        Symbol::Class(_) => (name.bare_name(), "class", name.to_string()),
-                        Symbol::Enum(_) => (name.bare_name(), "enum", name.to_string()),
-                        Symbol::TypeAlias(_) => (name.bare_name(), "type alias", name.to_string()),
-                        Symbol::Function(_) => (name.bare_name(), "function", name.to_string()),
+                        Some(Symbol::Class(_)) => (name.bare_name(), "class", name.to_string()),
+                        Some(Symbol::Enum(_)) => (name.bare_name(), "enum", name.to_string()),
+                        Some(Symbol::TypeAlias(_)) => {
+                            (name.bare_name(), "type alias", name.to_string())
+                        }
+                        Some(Symbol::Function(_)) => {
+                            (name.bare_name(), "function", name.to_string())
+                        }
+                        None => (name.bare_name(), "interface", name.to_string()),
                     };
                     Entry {
                         id: fqn.clone(),
                         raw: raw.to_string(),
                         kind: kind.to_string(),
                         fqn,
-                        protected: None,
+                        protected: (matches!(
+                            raw,
+                            "_BamlInterfaceRef"
+                                | "_InterfaceUnset"
+                                | "_interface_method_types"
+                                | "_HostMethod"
+                                | "_HostInterface"
+                                | "_bind_interface_host"
+                        ) || is_sdk_runtime_binding(raw))
+                        .then_some(IdentifierRenameReason::FrameworkProtected),
                         report: is_reportable_user_name(name),
                     }
                 })
@@ -291,10 +550,9 @@ impl PythonNames {
                             generated.clone(),
                         );
                     }
-                    Some(_) => {
+                    Some(_) | None => {
                         self.symbol_names.insert(name, generated.clone());
                     }
-                    None => unreachable!("name came from the pool"),
                 }
                 self.record(entry, generated, reason);
             }
@@ -302,7 +560,7 @@ impl PythonNames {
             // All derived host roles are allocated after authored declarations,
             // so a real BAML spelling always wins a projected-name collision.
             for (name, symbol) in &symbols {
-                let Symbol::Function(function) = symbol else {
+                let Some(Symbol::Function(function)) = symbol else {
                     continue;
                 };
                 let fqn = name.to_string();
@@ -323,6 +581,64 @@ impl PythonNames {
                     }
                 }
             }
+            for (name, symbol) in &symbols {
+                if input_aliases.contains(*name) {
+                    let candidate = format!("_{}Input", self.symbol(name));
+                    let generated = allocate_one(&candidate, &mut used);
+                    self.input_alias_names.insert((*name).clone(), generated);
+                }
+                if symbol.is_some() {
+                    continue;
+                }
+                let candidate = format!("{}Ref", self.symbol(name));
+                let generated = allocate_one(&candidate, &mut used);
+                self.interface_ref_names
+                    .insert((*name).clone(), generated.clone());
+                if generated != candidate && is_reportable_user_name(name) {
+                    self.renames.push(IdentifierRename {
+                        kind: "interface reference".into(),
+                        fqn: name.to_string(),
+                        original: candidate,
+                        generated,
+                        reason: IdentifierRenameReason::Collision,
+                    });
+                }
+                for (candidate, witness) in [
+                    (format!("{}Input", self.symbol(name)), false),
+                    (format!("_{}View", self.symbol(name)), true),
+                ] {
+                    let generated = allocate_one(&candidate, &mut used);
+                    let table = if witness {
+                        &mut self.interface_witness_names
+                    } else {
+                        &mut self.interface_input_names
+                    };
+                    table.insert((*name).clone(), generated.clone());
+                    if !witness && generated != candidate && is_reportable_user_name(name) {
+                        self.renames.push(IdentifierRename {
+                            kind: "interface input".into(),
+                            fqn: name.to_string(),
+                            original: candidate,
+                            generated,
+                            reason: IdentifierRenameReason::Collision,
+                        });
+                    }
+                }
+                let candidate = format!("{}Host", self.symbol(name));
+                let generated = allocate_one(&candidate, &mut used);
+                self.interface_host_names
+                    .insert((*name).clone(), generated.clone());
+                if generated != candidate && is_reportable_user_name(name) {
+                    self.renames.push(IdentifierRename {
+                        kind: "interface host".into(),
+                        fqn: name.to_string(),
+                        original: candidate,
+                        generated,
+                        reason: IdentifierRenameReason::Collision,
+                    });
+                }
+            }
+            self.helper_used.get_mut().insert(leaf, used);
         }
     }
 
@@ -354,7 +670,14 @@ impl PythonNames {
                     }
                 }
                 Symbol::Class(value) => {
-                    self.allocate_class_members(owner, value);
+                    self.allocate_class_members(
+                        owner,
+                        value,
+                        pool.interfaces.concrete_classes.get(owner).filter(|_| {
+                            pool.class_projections.get(owner)
+                                == Some(&baml_type::ClassProjection::Live)
+                        }),
+                    );
                     self.allocate_generics(
                         owner.to_string().as_str(),
                         "class type parameter",
@@ -393,9 +716,128 @@ impl PythonNames {
                 Symbol::TypeAlias(_) => {}
             }
         }
+        for (owner, declaration) in &pool.interfaces.concrete_classes {
+            for method in &declaration.methods {
+                let baml_type::RuntimeTy::Function { params, .. } = &method.signature else {
+                    panic!("concrete method {owner}.{} is not callable", method.name);
+                };
+                let fqn = format!("{owner}.{}", method.name);
+                let entries = params
+                    .iter()
+                    .skip(1)
+                    .enumerate()
+                    .map(|(index, p)| {
+                        let raw = p
+                            .name
+                            .as_ref()
+                            .map_or_else(|| format!("arg{index}"), ToString::to_string);
+                        Entry {
+                            id: raw.clone(),
+                            kind: "parameter".into(),
+                            fqn: format!("{fqn}.{raw}"),
+                            protected: CONCRETE_LOCALS
+                                .contains(&raw.as_str())
+                                .then_some(IdentifierRenameReason::HostControl),
+                            raw,
+                            report: is_reportable_user_name(owner),
+                        }
+                    })
+                    .collect();
+                for (entry, generated, reason) in allocate(entries, CONCRETE_LOCALS) {
+                    self.param_names
+                        .insert((fqn.clone(), entry.raw.clone()), generated.clone());
+                    self.record(entry, generated, reason);
+                }
+            }
+        }
+        for (owner, declaration) in &pool.interfaces.declarations {
+            let methods = declaration
+                .callers
+                .methods
+                .iter()
+                .map(|caller| &caller.method)
+                .collect::<Vec<_>>();
+            let reserved = [
+                "bind",
+                "close",
+                "as_interface",
+                "_invoke",
+                "_method_types",
+                "_handle",
+                "_type_map",
+                "_to_pyhandle",
+                "_from_handle",
+                "__slots__",
+                "__copy__",
+                "__deepcopy__",
+                "__new__",
+                "__get_pydantic_core_schema__",
+                "__baml_interface_fqn__",
+                "__baml_interface_generic_count__",
+                "__baml_interface_associated_types__",
+            ];
+            let entries = methods
+                .iter()
+                .map(|method| {
+                    let raw = method.name.to_string();
+                    Entry {
+                        id: raw.clone(),
+                        fqn: format!("{owner}.{raw}"),
+                        kind: "interface method".into(),
+                        protected: (reserved.contains(&raw.as_str())
+                            || raw.starts_with("_baml_input_"))
+                        .then_some(IdentifierRenameReason::FrameworkProtected),
+                        raw,
+                        report: is_reportable_user_name(owner),
+                    }
+                })
+                .collect();
+            for (entry, generated, reason) in allocate(entries, &reserved) {
+                self.callable_names.insert(
+                    (entry.fqn.clone(), BindingRole::DirectSync),
+                    generated.clone(),
+                );
+                self.record(entry, generated, reason);
+            }
+            for method in methods {
+                let fqn = format!("{owner}.{}", method.name);
+                let parameters = method
+                    .params
+                    .iter()
+                    .filter(|p| p.name.as_ref().is_none_or(|n| n.as_str() != "self"))
+                    .enumerate()
+                    .map(|(index, parameter)| {
+                        let raw = parameter
+                            .name
+                            .as_ref()
+                            .map_or_else(|| format!("arg{index}"), ToString::to_string);
+                        Entry {
+                            id: raw.clone(),
+                            kind: "parameter".into(),
+                            fqn: format!("{fqn}.{raw}"),
+                            protected: matches!(raw.as_str(), "_ctx" | "_types")
+                                .then_some(IdentifierRenameReason::HostControl),
+                            raw,
+                            report: is_reportable_user_name(owner),
+                        }
+                    })
+                    .collect();
+                for (entry, generated, reason) in allocate(parameters, &["self", "_ctx", "_types"])
+                {
+                    self.param_names
+                        .insert((fqn.clone(), entry.raw.clone()), generated.clone());
+                    self.record(entry, generated, reason);
+                }
+            }
+        }
     }
 
-    fn allocate_class_members(&mut self, owner: &Name, class: &baml_codegen_types::Class) {
+    fn allocate_class_members(
+        &mut self,
+        owner: &Name,
+        class: &baml_codegen_types::Class,
+        concrete: Option<&baml_codegen_types::ConcreteDeclaration>,
+    ) {
         let mut primaries = Vec::new();
         for field in &class.properties {
             let raw = field.name.as_str().to_string();
@@ -403,31 +845,55 @@ impl PythonNames {
                 id: format!("0:{raw}"),
                 kind: "class field".to_string(),
                 fqn: format!("{owner}.{raw}"),
-                protected: is_pydantic_protected(&raw)
-                    .then_some(IdentifierRenameReason::FrameworkProtected),
+                protected: (is_pydantic_protected(&raw)
+                    || is_sdk_runtime_binding(&raw)
+                    || (concrete.is_some() && CONCRETE_MEMBERS.contains(&raw.as_str())))
+                .then_some(IdentifierRenameReason::FrameworkProtected),
                 raw,
                 report: is_reportable_user_name(owner),
             });
         }
-        for method in class
+        let member_names: BTreeSet<_> = class
             .static_methods
             .iter()
-            .chain(class.instance_methods.iter())
-        {
-            let raw = method.name.as_str().to_string();
+            .map(|m| m.name.to_string())
+            .chain(if let Some(concrete) = concrete {
+                concrete
+                    .methods
+                    .iter()
+                    .map(|m| m.name.to_string())
+                    .collect::<Vec<_>>()
+            } else {
+                class
+                    .instance_methods
+                    .iter()
+                    .map(|m| m.name.to_string())
+                    .collect()
+            })
+            .collect();
+        for raw in member_names {
             primaries.push(Entry {
                 id: format!("1:{raw}"),
                 kind: "method".to_string(),
                 fqn: format!("{owner}.{raw}"),
-                protected: is_pydantic_protected(&raw)
-                    .then_some(IdentifierRenameReason::FrameworkProtected),
+                protected: (is_pydantic_protected(&raw)
+                    || is_sdk_runtime_binding(&raw)
+                    || (concrete.is_some() && CONCRETE_MEMBERS.contains(&raw.as_str())))
+                .then_some(IdentifierRenameReason::FrameworkProtected),
                 raw,
                 report: is_reportable_user_name(owner),
             });
         }
 
         let mut used = HashSet::new();
-        for (entry, generated, reason) in allocate(primaries, &["model_config"]) {
+        for (entry, generated, reason) in allocate(
+            primaries,
+            if concrete.is_some() {
+                CONCRETE_MEMBERS
+            } else {
+                &["model_config"]
+            },
+        ) {
             used.insert(generated.clone());
             let raw = entry.raw.clone();
             if entry.kind == "class field" {
@@ -512,7 +978,8 @@ impl PythonNames {
                 raw: raw.to_string(),
                 kind: kind.to_string(),
                 fqn: format!("{owner}.<{raw}>"),
-                protected: None,
+                protected: is_sdk_runtime_binding(raw)
+                    .then_some(IdentifierRenameReason::FrameworkProtected),
                 report: is_reportable_user_fqn(owner),
             })
             .collect();
@@ -521,6 +988,36 @@ impl PythonNames {
                 .insert((owner.to_string(), entry.raw.clone()), generated.clone());
             self.record(entry, generated, reason);
         }
+    }
+
+    fn allocate_concrete_generics(&mut self, pool: &SymbolPool) {
+        let mut used: HashSet<String> = self
+            .symbol_names
+            .values()
+            .chain(self.interface_ref_names.values())
+            .chain(self.interface_input_names.values())
+            .chain(self.interface_host_names.values())
+            .chain(self.interface_witness_names.values())
+            .chain(self.generic_names.values())
+            .chain(self.callable_names.values())
+            .chain(self.module_segments.values())
+            .cloned()
+            .collect();
+        for (owner, declaration) in &pool.interfaces.concrete_classes {
+            for (method_index, method) in declaration.methods.iter().enumerate() {
+                let fqn = format!("{owner}.{}", method.name);
+                for (index, _) in method.generic_params.iter().enumerate() {
+                    let candidate = format!("_C{}_M{method_index}_P{index}", self.symbol(owner));
+                    let generated = allocate_one(&candidate, &mut used);
+                    self.concrete_generic_names
+                        .insert((fqn.clone(), index), generated);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn concrete_generic(&self, fqn: &str, index: usize) -> &str {
+        &self.concrete_generic_names[&(fqn.to_owned(), index)]
     }
 
     fn record(&mut self, entry: Entry, generated: String, reason: Option<IdentifierRenameReason>) {
@@ -604,7 +1101,7 @@ pub(crate) fn is_python_identifier(value: &str) -> bool {
         && !is_python_keyword(value)
 }
 
-fn project_identifier(value: &str) -> (String, Option<IdentifierRenameReason>) {
+pub(crate) fn project_identifier(value: &str) -> (String, Option<IdentifierRenameReason>) {
     let mut generated = String::with_capacity(value.len().max(1));
     for (index, ch) in value.chars().enumerate() {
         if ch == '_' || ch.is_alphanumeric() && (index > 0 || ch.is_alphabetic()) {

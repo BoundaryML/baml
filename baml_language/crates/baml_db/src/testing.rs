@@ -276,3 +276,113 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
     generate_project_bytecode_with_opt(&db, OptLevel::One)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
+
+#[cfg(test)]
+mod class_projection_tests {
+    use super::*;
+    use baml_artifact::ArtifactKind;
+    use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface};
+    use baml_type::ClassProjection::{Builtin, Live, Record};
+
+    #[test]
+    fn class_projection_mount_source_stub_cannot_replace_owner_decision() {
+        use baml_base::{Name, SourceRootKind};
+        use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+        use baml_compiler2_hir_ty::{class_projection, facts::Facts, package_interface};
+        let (mut source, _) = workspace_db();
+        let source_root = source
+            .add_source_root(crate::SourceRootSpec {
+                path: "/objects".into(),
+                package: Name::new("objects"),
+                kind: SourceRootKind::Dependency,
+            })
+            .unwrap();
+        source.add_or_update_file_in(
+            source_root,
+            Path::new("/objects/main.baml"),
+            r#"
+class Counter {
+    value: int,
+    function current(self) -> int throws never { self.value }
+}
+"#,
+        );
+        assert_no_diagnostic_errors(&source);
+        let export = package_interface::package_interface(
+            &source,
+            PackageId::new(&source, Name::new("objects")),
+        );
+        let bytes = baml_artifact::encode(ArtifactKind::PackageInterface, export).unwrap();
+        let (mut mounted, _) = workspace_db();
+        mounted
+            .set_mounted_packages(std::collections::BTreeMap::from([(
+                "objects".to_owned(),
+                bytes,
+            )]))
+            .unwrap();
+        let stubs = mounted
+            .add_source_root(crate::SourceRootSpec {
+                path: "/mount-stubs".into(),
+                package: Name::new("objects"),
+                kind: SourceRootKind::Dynamic,
+            })
+            .unwrap();
+        mounted.add_or_update_file_in(
+            stubs,
+            Path::new("/mount-stubs/main.baml"),
+            "class Counter { value: int }",
+        );
+        let name =
+            baml_type::QualifiedTypeName::new(Name::new("objects"), vec![], Name::new("Counter"));
+        let Some(Definition::Class(stub)) = Facts::new(&mounted).definition_of(&name) else {
+            panic!("the test must exercise a source-backed linking stub");
+        };
+        assert_eq!(class_projection::class_projection(&mounted, stub), Live);
+        assert_eq!(class_projection::for_name(&mounted, &name), Some(Live));
+    }
+
+    #[test]
+    fn class_projection_bytecode_agrees_with_exported_package_metadata() {
+        let program = compile_source(include_str!(
+            "../../../sdk_tests/fixtures/interfaces/baml_src/main.baml"
+        ));
+        let bytes = baml_artifact::encode(ArtifactKind::Program, &program).unwrap();
+        let restored: Program = baml_artifact::decode(ArtifactKind::Program, &bytes).unwrap();
+        let mut projections = std::collections::BTreeMap::new();
+        for object in restored.objects.iter() {
+            if let bex_vm_types::Object::Class(class) = object {
+                let name = class.name.declared().expect("compiled class");
+                projections.insert(name.to_string(), class.boundary_projection);
+                let package = &restored.packages[name.package()];
+                // Stdlib compiler surfaces are stored in the prefix artifact,
+                // not duplicated in each program. Their source-less export is
+                // covered by the IDE test; inspect their bytecode flags below.
+                if package.interface_blob.is_empty() {
+                    continue;
+                }
+                let exported: PackageInterface =
+                    baml_artifact::decode(ArtifactKind::PackageInterface, &package.interface_blob)
+                        .unwrap();
+                let ExportedType::Class {
+                    boundary_projection,
+                    ..
+                } = exported.lookup_type(name.namespace(), name.name()).unwrap()
+                else {
+                    panic!("expected exported class {name}")
+                };
+                assert_eq!(class.boundary_projection, *boundary_projection, "{name}");
+            }
+        }
+        for name in [
+            "user.FriendlyGreeter",
+            "user.StoredCounter",
+            "user.TextDecoder",
+            "user.IdentityEcho",
+        ] {
+            assert_eq!(projections[name], Live, "{name}");
+        }
+        assert_eq!(projections["user.CounterRecord"], Record);
+        assert_eq!(projections["baml.media.Image"], Builtin);
+        assert_eq!(projections["ai.Prompt"], Builtin);
+    }
+}

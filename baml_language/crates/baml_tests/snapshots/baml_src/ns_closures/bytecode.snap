@@ -189,7 +189,7 @@ function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
     throw
 }
 
-function closures.closures_apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
+function closures.closures_apply(f: (int, int) -> int throws unknown, a: int, b: int) -> int {
     load_var2 2 3
     load_var f
     call_indirect

@@ -738,6 +738,7 @@ mod tests {
         let terminator = Terminator::Call {
             callee: local_copy(1),
             args: Vec::new(),
+            argument_layout: None,
             ntypeargs: 0,
             runtime_type_check: false,
             runtime_id: Some(local_copy(9)),

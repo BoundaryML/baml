@@ -1502,6 +1502,7 @@ mod renderability_tests {
             type_tag,
             ty_attr: attr(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner,
         })));

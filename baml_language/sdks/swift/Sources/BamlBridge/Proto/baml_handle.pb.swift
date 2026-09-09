@@ -31,7 +31,8 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 ///   - baml.llm.Collector                     -> ADT_COLLECTOR
 ///   - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///   - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
-///   - runtime-created nominal values         -> ADT_RUNTIME_VALUE
+///   - runtime-created enum values            -> ADT_RUNTIME_VALUE
+///   - live or runtime-created classes        -> CONCRETE_OBJECT
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -83,10 +84,24 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   /// heap object.
   case adtFunctionSpec // = 17
 
-  /// Live runtime-created class/enum value. The host must not resolve its
+  /// Live runtime-created enum value. The host must not resolve its
   /// display name through a generated typemap; only the originating engine can
   /// interpret the rooted declaration identity.
   case adtRuntimeValue // = 18
+
+  /// Live checked interface view. The table owns receiver, type and world roots.
+  case adtInterface // = 19
+
+  /// Owned table lease retaining a host registration. Unlike raw registration
+  /// keys (15/16), this key uses ordinary handle clone/release and receipts.
+  case hostReference // = 20
+
+  /// Retained concrete class receiver. Exact declaration/type arguments come
+  /// from the rooted object; ty is descriptive and cannot establish identity.
+  case concreteObject // = 21
+
+  /// Immutable host adapter type registration, not a BAML value.
+  case hostAdapterType // = 22
   case UNRECOGNIZED(Int)
 
   init() {
@@ -112,6 +127,10 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case 16: self = .hostValueOpaque
     case 17: self = .adtFunctionSpec
     case 18: self = .adtRuntimeValue
+    case 19: self = .adtInterface
+    case 20: self = .hostReference
+    case 21: self = .concreteObject
+    case 22: self = .hostAdapterType
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -135,6 +154,10 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case .hostValueOpaque: return 16
     case .adtFunctionSpec: return 17
     case .adtRuntimeValue: return 18
+    case .adtInterface: return 19
+    case .hostReference: return 20
+    case .concreteObject: return 21
+    case .hostAdapterType: return 22
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -158,6 +181,10 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     .hostValueOpaque,
     .adtFunctionSpec,
     .adtRuntimeValue,
+    .adtInterface,
+    .hostReference,
+    .concreteObject,
+    .hostAdapterType,
   ]
 
 }
@@ -181,7 +208,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlHandle: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{1}ADT_COLLECTOR\0\u{1}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{1}ADT_COLLECTOR\0\u{1}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}ADT_INTERFACE\0\u{1}HOST_REFERENCE\0\u{1}CONCRETE_OBJECT\0\u{1}HOST_ADAPTER_TYPE\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

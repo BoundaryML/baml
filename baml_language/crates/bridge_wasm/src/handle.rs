@@ -21,6 +21,9 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
         BamlHandleType::AdtFunctionSpec => "function_spec",
         BamlHandleType::AdtRuntimeValue => "runtime_value",
+        BamlHandleType::AdtInterface => "interface",
+        BamlHandleType::HostReference => "host_reference",
+        BamlHandleType::ConcreteObject => "concrete_object",
         // Host-owned callables are tracked per-bridge, not in HANDLE_TABLE.
         // The key here is the bridge-side identity passed in from the host.
         BamlHandleType::HostValueCallable => "host_value_callable",

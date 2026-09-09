@@ -28,8 +28,8 @@ use super::{
     BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl,
     type_kinds::{
         ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
-        compiler_diagnostic, is_baml_identifier, reflected_type_row, register_class_witnesses,
-        string_map_rows, validate_class_witnesses, with_meta_row,
+        compiler_diagnostic, is_baml_identifier, prepare_class_witnesses, reflected_type_row,
+        register_class_witnesses, string_map_rows, validate_class_witnesses, with_meta_row,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -873,6 +873,7 @@ fn build_group(
             type_tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            boundary_projection: baml_type::ClassProjection::Record,
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -900,6 +901,11 @@ fn build_group(
             &witness_diagnostics,
         )));
     }
+    // Reject the entire registration before storing resolved types in builder
+    // state. A failed attempt must leave the group retryable.
+    let start_plan = &plans[&start_id];
+    let rules = prepare_class_witnesses(vm, &start_plan.ty, witnesses)
+        .map_err(|error| compilation_error(vm, error.diagnostic_id(), error.to_string()))?;
     for node in group.values() {
         let plan = &plans[&node.id];
         let value = Value::object(vm.tlab.alloc_type(TypeValue::new(plan.ty.clone())));
@@ -945,7 +951,7 @@ fn build_group(
     }
 
     let start_plan = &plans[&start_id];
-    register_class_witnesses(vm, start_plan.ptr, &start_plan.ty, witnesses);
+    register_class_witnesses(vm, start_plan.ptr, rules);
 
     for node in group.values() {
         lock_state(&node.handle).frozen = true;

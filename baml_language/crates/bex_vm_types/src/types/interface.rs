@@ -21,6 +21,12 @@ pub struct InterfaceDef {
 
     // Member Types
     pub assoc: Vec<(baml_type::Name, crate::RuntimeInterface)>,
+    /// Complete associated-member identity, including members without bounds.
+    pub associated_type_names: Vec<baml_type::Name>,
+    /// Registration predicates over `[Self, interface arguments...]`. Unlike
+    /// reflection's symbolic names, these preserve compiler-resolved slots and
+    /// projections for generic bounds, associated bounds and `requires`.
+    pub registration_obligations: Vec<InterfaceObligation>,
     /// The interface's declared fields, in declaration order. **Position is
     /// identity**: a field's index here is the index every implementation's
     /// [`RuntimeImplRule::field_links`] is baked against, and the index a
@@ -28,6 +34,11 @@ pub struct InterfaceDef {
     /// dropped, reordered, or deduplicated.
     pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
+    /// Compiler-resolved public caller names. A target is an interface
+    /// constraint over `[Self, this interface's generic arguments...]`;
+    /// associated types remain projections, not extra positional slots.
+    /// This is separate from the own-method dispatch index space above.
+    pub method_dispatch: IndexMap<baml_type::Name, InterfaceMethodDispatch>,
 
     /// Runtime package that declared this interface; null for a static
     /// declaration. A member back-edge: reaching the interface keeps its
@@ -35,6 +46,19 @@ pub struct InterfaceDef {
     /// gives classes and enums. This is a GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,
+}
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceObligation {
+    pub subject: crate::TyTemplate,
+    /// An interface constraint: only explicitly required associated pins occur.
+    pub constraint: crate::TyTemplate,
+}
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub enum InterfaceMethodDispatch {
+    Resolved(crate::TyTemplate),
+    Ambiguous,
 }
 
 /// One field an interface declares, at its dispatch index (its position in
@@ -52,11 +76,24 @@ pub struct InterfaceFieldDef {
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceMethodDef {
+    /// Compiler-checked calling modes; never inferred by an SDK.
+    pub has_receiver: bool,
+    pub existential_callable: bool,
     pub name: baml_type::Name,
     pub args: Vec<crate::RuntimeTy>,
     pub kwargs: Vec<(baml_type::Name, crate::RuntimeTy)>,
     pub returns: crate::RuntimeTy,
     pub errors: crate::RuntimeTy,
+    /// Caller contract without `self`, templated over
+    /// `[Self, interface arguments..., method arguments...]`. Unlike the
+    /// reflection lists above, this preserves every parameter's name and mode.
+    pub signature: crate::TyTemplate,
+    /// Complete runtime frame: Self, interface arguments, then method arguments.
+    /// Keep unused parameters and empty bound sets: the signature alone cannot
+    /// recover arity or constrain a future host implementation.
+    pub generic_params: Vec<baml_type::Name>,
+    /// Checked bounds over the same dense frame as `signature`.
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
     /// The default body's pooled function, when the interface supplies one;
     /// `None` for a required method. This is the wire form: an [`ObjectIndex`]
     /// into the program's object pool, relocated by the linker like any other

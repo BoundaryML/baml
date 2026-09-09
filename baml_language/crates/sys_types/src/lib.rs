@@ -603,6 +603,9 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
 // Manual Clone impl: the derive would add an unnecessary `E: Clone` bound,
 // but no field actually stores `E` directly (only `Arc<dyn VmSpawner<E>>`).
 pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
+    /// Issuer information installed by the host bridge on this engine. The
+    /// sys-op layer transports it without depending on a particular bridge.
+    pub host_bridge_context: Option<Arc<dyn std::any::Any + Send + Sync>>,
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
@@ -641,6 +644,7 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
     fn clone(&self) -> Self {
         Self {
+            host_bridge_context: self.host_bridge_context.clone(),
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
             cancel: self.cancel.clone(),
@@ -791,6 +795,7 @@ impl SysOpContext {
             }
         }
         Self {
+            host_bridge_context: None,
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
@@ -811,6 +816,7 @@ impl EngineSysOpContext {
         spawner: Arc<dyn VmSpawner>,
     ) -> SysOpContext {
         SysOpContext {
+            host_bridge_context: None,
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
             cancel,

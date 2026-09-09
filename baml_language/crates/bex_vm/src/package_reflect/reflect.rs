@@ -642,6 +642,7 @@ impl Continuation for RegisterPackageTests {
             .into();
         };
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: self.test_init,
             args: vec![collector],
             type_args: Vec::new(),
@@ -783,6 +784,7 @@ impl BamlClassPackage for PackageReflectImpl {
             test_init: None,
             mounted_types: IndexMap::new(),
             kind: PackageKind::Runtime(Box::new(RuntimePackage {
+                host_adapter_callback_count: None,
                 objects: Box::new([]),
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
@@ -1084,6 +1086,7 @@ impl BamlClassPackage for PackageReflectImpl {
             .expect("Package copy helper allocates an instance");
         if let Some(init) = init {
             NativeCallResult::YieldToCall {
+                argument_layout: None,
                 callee: init,
                 args: Vec::new(),
                 type_args: Vec::new(),
@@ -1397,6 +1400,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let prefix = Value::object(vm.alloc_string(""));
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: constructor,
             args: vec![prefix],
             type_args: Vec::new(),
@@ -1730,6 +1734,7 @@ impl SessionExecution {
     fn next(self: Box<Self>) -> NativeCallResult {
         let action = self.actions[self.current];
         NativeCallResult::YieldToCall {
+            argument_layout: None,
             callee: action.helper,
             args: Vec::new(),
             type_args: Vec::new(),
@@ -2268,6 +2273,7 @@ impl BamlClassSession for PackageReflectImpl {
             mounted_types: IndexMap::new(),
             kind: PackageKind::Session {
                 runtime: Box::new(RuntimePackage {
+                    host_adapter_callback_count: None,
                     objects: Box::new([]),
                     object_names: IndexMap::new(),
                     globals: Box::new([]),
@@ -2717,6 +2723,9 @@ fn call_any_impl(
         .cloned()
         .unwrap_or_else(RealizedTy::unknown);
     NativeCallResult::YieldToCall {
+        argument_layout: Some(baml_type::CallLayout::from_modes(
+            sig.params.iter().map(|p| (p.name.clone(), p.mode)),
+        )),
         callee: f_ptr,
         args: final_args,
         type_args: vec![],

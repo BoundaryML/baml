@@ -630,10 +630,11 @@ type BamlTyArg struct {
 
 	TypeVar   string  `protobuf:"bytes,1,opt,name=type_var,json=typeVar,proto3" json:"type_var,omitempty"`       // TypeVar name, e.g. "T", "A"
 	TypeValue *BamlTy `protobuf:"bytes,2,opt,name=type_value,json=typeValue,proto3" json:"type_value,omitempty"` // the concrete binding
-	// Preferred for a runtime reflected type. Mutually exclusive with
-	// `type_value` by convention; retained as separate fields for backwards
-	// compatibility with already generated SDKs.
+	// Explicit portable definition: importing it creates fresh runtime types.
 	TypeDefinition *BamlTyDef `protobuf:"bytes,3,opt,name=type_definition,json=typeDefinition,proto3" json:"type_definition,omitempty"`
+	// Borrowed session reference to an engine-owned reflected type. Exactly one
+	// of type_value, type_definition or type_reference must be present.
+	TypeReference *uint64 `protobuf:"varint,4,opt,name=type_reference,json=typeReference,proto3,oneof" json:"type_reference,omitempty"`
 }
 
 func (x *BamlTyArg) Reset() {
@@ -689,6 +690,198 @@ func (x *BamlTyArg) GetTypeDefinition() *BamlTyDef {
 	return nil
 }
 
+func (x *BamlTyArg) GetTypeReference() uint64 {
+	if x != nil && x.TypeReference != nil {
+		return *x.TypeReference
+	}
+	return 0
+}
+
+// Type arguments for a method are ordered by its checked declaration. Live
+// references preserve identity; definitions explicitly create fresh types.
+// Each BamlTyArg.type_var must be empty on this positional path.
+type InterfaceMethodTarget struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	View     uint64       `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
+	Member   string       `protobuf:"bytes,2,opt,name=member,proto3" json:"member,omitempty"`
+	TypeArgs []*BamlTyArg `protobuf:"bytes,3,rep,name=type_args,json=typeArgs,proto3" json:"type_args,omitempty"`
+}
+
+func (x *InterfaceMethodTarget) Reset() {
+	*x = InterfaceMethodTarget{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *InterfaceMethodTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterfaceMethodTarget) ProtoMessage() {}
+
+func (x *InterfaceMethodTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterfaceMethodTarget.ProtoReflect.Descriptor instead.
+func (*InterfaceMethodTarget) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *InterfaceMethodTarget) GetView() uint64 {
+	if x != nil {
+		return x.View
+	}
+	return 0
+}
+
+func (x *InterfaceMethodTarget) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
+}
+
+func (x *InterfaceMethodTarget) GetTypeArgs() []*BamlTyArg {
+	if x != nil {
+		return x.TypeArgs
+	}
+	return nil
+}
+
+// A compiler-selected method on a concrete class.
+// The receiver is borrowed and pinned during preparation. Class variables in
+// interface_pattern index the receiver's stored class arguments, never the
+// host's method arguments. The engine checks the exact class declaration and
+// complete obligation before invoking the concrete implementation contract.
+type ConcreteMethodTarget struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Receiver  uint64 `protobuf:"varint,1,opt,name=receiver,proto3" json:"receiver,omitempty"`
+	ClassName string `protobuf:"bytes,2,opt,name=class_name,json=className,proto3" json:"class_name,omitempty"`
+	// Types that are assignable to Dispatch:
+	//
+	//	*ConcreteMethodTarget_InterfacePattern
+	//	*ConcreteMethodTarget_Inherent
+	Dispatch isConcreteMethodTarget_Dispatch `protobuf_oneof:"dispatch"`
+	Member   string                          `protobuf:"bytes,4,opt,name=member,proto3" json:"member,omitempty"`
+	TypeArgs []*BamlTyArg                    `protobuf:"bytes,5,rep,name=type_args,json=typeArgs,proto3" json:"type_args,omitempty"`
+}
+
+func (x *ConcreteMethodTarget) Reset() {
+	*x = ConcreteMethodTarget{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ConcreteMethodTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConcreteMethodTarget) ProtoMessage() {}
+
+func (x *ConcreteMethodTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConcreteMethodTarget.ProtoReflect.Descriptor instead.
+func (*ConcreteMethodTarget) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ConcreteMethodTarget) GetReceiver() uint64 {
+	if x != nil {
+		return x.Receiver
+	}
+	return 0
+}
+
+func (x *ConcreteMethodTarget) GetClassName() string {
+	if x != nil {
+		return x.ClassName
+	}
+	return ""
+}
+
+func (m *ConcreteMethodTarget) GetDispatch() isConcreteMethodTarget_Dispatch {
+	if m != nil {
+		return m.Dispatch
+	}
+	return nil
+}
+
+func (x *ConcreteMethodTarget) GetInterfacePattern() *BamlTy {
+	if x, ok := x.GetDispatch().(*ConcreteMethodTarget_InterfacePattern); ok {
+		return x.InterfacePattern
+	}
+	return nil
+}
+
+func (x *ConcreteMethodTarget) GetInherent() bool {
+	if x, ok := x.GetDispatch().(*ConcreteMethodTarget_Inherent); ok {
+		return x.Inherent
+	}
+	return false
+}
+
+func (x *ConcreteMethodTarget) GetMember() string {
+	if x != nil {
+		return x.Member
+	}
+	return ""
+}
+
+func (x *ConcreteMethodTarget) GetTypeArgs() []*BamlTyArg {
+	if x != nil {
+		return x.TypeArgs
+	}
+	return nil
+}
+
+type isConcreteMethodTarget_Dispatch interface {
+	isConcreteMethodTarget_Dispatch()
+}
+
+type ConcreteMethodTarget_InterfacePattern struct {
+	InterfacePattern *BamlTy `protobuf:"bytes,3,opt,name=interface_pattern,json=interfacePattern,proto3,oneof"`
+}
+
+type ConcreteMethodTarget_Inherent struct {
+	// Must be true when selected; a missing dispatch is an invalid request.
+	Inherent bool `protobuf:"varint,6,opt,name=inherent,proto3,oneof"`
+}
+
+func (*ConcreteMethodTarget_InterfacePattern) isConcreteMethodTarget_Dispatch() {}
+
+func (*ConcreteMethodTarget_Inherent) isConcreteMethodTarget_Dispatch() {}
+
 type CallFunctionArgs struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -709,13 +902,15 @@ type CallFunctionArgs struct {
 	//
 	//	*CallFunctionArgs_FunctionName
 	//	*CallFunctionArgs_FunctionHandle
+	//	*CallFunctionArgs_InterfaceMethod
+	//	*CallFunctionArgs_ConcreteMethod
 	CallTarget isCallFunctionArgs_CallTarget `protobuf_oneof:"call_target"`
 }
 
 func (x *CallFunctionArgs) Reset() {
 	*x = CallFunctionArgs{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7]
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -728,7 +923,7 @@ func (x *CallFunctionArgs) String() string {
 func (*CallFunctionArgs) ProtoMessage() {}
 
 func (x *CallFunctionArgs) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7]
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -741,7 +936,7 @@ func (x *CallFunctionArgs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallFunctionArgs.ProtoReflect.Descriptor instead.
 func (*CallFunctionArgs) Descriptor() ([]byte, []int) {
-	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{7}
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CallFunctionArgs) GetKwargs() []*InboundMapEntry {
@@ -786,6 +981,20 @@ func (x *CallFunctionArgs) GetFunctionHandle() uint64 {
 	return 0
 }
 
+func (x *CallFunctionArgs) GetInterfaceMethod() *InterfaceMethodTarget {
+	if x, ok := x.GetCallTarget().(*CallFunctionArgs_InterfaceMethod); ok {
+		return x.InterfaceMethod
+	}
+	return nil
+}
+
+func (x *CallFunctionArgs) GetConcreteMethod() *ConcreteMethodTarget {
+	if x, ok := x.GetCallTarget().(*CallFunctionArgs_ConcreteMethod); ok {
+		return x.ConcreteMethod
+	}
+	return nil
+}
+
 type isCallFunctionArgs_CallTarget interface {
 	isCallFunctionArgs_CallTarget()
 }
@@ -798,9 +1007,21 @@ type CallFunctionArgs_FunctionHandle struct {
 	FunctionHandle uint64 `protobuf:"varint,5,opt,name=function_handle,json=functionHandle,proto3,oneof"`
 }
 
+type CallFunctionArgs_InterfaceMethod struct {
+	InterfaceMethod *InterfaceMethodTarget `protobuf:"bytes,6,opt,name=interface_method,json=interfaceMethod,proto3,oneof"`
+}
+
+type CallFunctionArgs_ConcreteMethod struct {
+	ConcreteMethod *ConcreteMethodTarget `protobuf:"bytes,7,opt,name=concrete_method,json=concreteMethod,proto3,oneof"`
+}
+
 func (*CallFunctionArgs_FunctionName) isCallFunctionArgs_CallTarget() {}
 
 func (*CallFunctionArgs_FunctionHandle) isCallFunctionArgs_CallTarget() {}
+
+func (*CallFunctionArgs_InterfaceMethod) isCallFunctionArgs_CallTarget() {}
+
+func (*CallFunctionArgs_ConcreteMethod) isCallFunctionArgs_CallTarget() {}
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows
 // engine->host, but is defined in the inbound proto because it completes
@@ -819,7 +1040,7 @@ type CallAck struct {
 func (x *CallAck) Reset() {
 	*x = CallAck{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8]
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -832,7 +1053,7 @@ func (x *CallAck) String() string {
 func (*CallAck) ProtoMessage() {}
 
 func (x *CallAck) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8]
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -845,7 +1066,7 @@ func (x *CallAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallAck.ProtoReflect.Descriptor instead.
 func (*CallAck) Descriptor() ([]byte, []int) {
-	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{8}
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{10}
 }
 
 func (m *CallAck) GetResponse() isCallAck_Response {
@@ -871,6 +1092,576 @@ type CallAck_Error struct {
 }
 
 func (*CallAck_Error) isCallAck_Response() {}
+
+// Host adapter registration. No host callbacks are acquired at this stage.
+// Template type-var index 0 denotes Self. Index n+1 selects type_args[n].
+// Type arguments are positional and shared across the whole registration;
+// definitions are materialized once, references retain their issuing identity.
+type RegisterHostAdapterRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name            string                       `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Implementations []*HostAdapterImplementation `protobuf:"bytes,2,rep,name=implementations,proto3" json:"implementations,omitempty"`
+	TypeArgs        []*BamlTyArg                 `protobuf:"bytes,3,rep,name=type_args,json=typeArgs,proto3" json:"type_args,omitempty"`
+}
+
+func (x *RegisterHostAdapterRequest) Reset() {
+	*x = RegisterHostAdapterRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RegisterHostAdapterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterHostAdapterRequest) ProtoMessage() {}
+
+func (x *RegisterHostAdapterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterHostAdapterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterHostAdapterRequest) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RegisterHostAdapterRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RegisterHostAdapterRequest) GetImplementations() []*HostAdapterImplementation {
+	if x != nil {
+		return x.Implementations
+	}
+	return nil
+}
+
+func (x *RegisterHostAdapterRequest) GetTypeArgs() []*BamlTyArg {
+	if x != nil {
+		return x.TypeArgs
+	}
+	return nil
+}
+
+type HostAdapterImplementation struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	InterfaceTemplate *BamlTy  `protobuf:"bytes,1,opt,name=interface_template,json=interfaceTemplate,proto3" json:"interface_template,omitempty"`
+	Methods           []string `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty"`
+}
+
+func (x *HostAdapterImplementation) Reset() {
+	*x = HostAdapterImplementation{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostAdapterImplementation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAdapterImplementation) ProtoMessage() {}
+
+func (x *HostAdapterImplementation) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAdapterImplementation.ProtoReflect.Descriptor instead.
+func (*HostAdapterImplementation) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *HostAdapterImplementation) GetInterfaceTemplate() *BamlTy {
+	if x != nil {
+		return x.InterfaceTemplate
+	}
+	return nil
+}
+
+func (x *HostAdapterImplementation) GetMethods() []string {
+	if x != nil {
+		return x.Methods
+	}
+	return nil
+}
+
+type RegisteredHostAdapter struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AdapterType *BamlOutboundHandle        `protobuf:"bytes,1,opt,name=adapter_type,json=adapterType,proto3" json:"adapter_type,omitempty"`
+	ClassType   *BamlOutboundHandle        `protobuf:"bytes,2,opt,name=class_type,json=classType,proto3" json:"class_type,omitempty"`
+	Callbacks   []*HostAdapterCallbackSlot `protobuf:"bytes,3,rep,name=callbacks,proto3" json:"callbacks,omitempty"`
+	// Exact checked interface types in request implementation order, including
+	// interfaces with no callbacks. Borrow these when projecting a new instance;
+	// importing a portable type definition again would create different types.
+	InterfaceTypes []*BamlOutboundHandle `protobuf:"bytes,4,rep,name=interface_types,json=interfaceTypes,proto3" json:"interface_types,omitempty"`
+}
+
+func (x *RegisteredHostAdapter) Reset() {
+	*x = RegisteredHostAdapter{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RegisteredHostAdapter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisteredHostAdapter) ProtoMessage() {}
+
+func (x *RegisteredHostAdapter) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisteredHostAdapter.ProtoReflect.Descriptor instead.
+func (*RegisteredHostAdapter) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RegisteredHostAdapter) GetAdapterType() *BamlOutboundHandle {
+	if x != nil {
+		return x.AdapterType
+	}
+	return nil
+}
+
+func (x *RegisteredHostAdapter) GetClassType() *BamlOutboundHandle {
+	if x != nil {
+		return x.ClassType
+	}
+	return nil
+}
+
+func (x *RegisteredHostAdapter) GetCallbacks() []*HostAdapterCallbackSlot {
+	if x != nil {
+		return x.Callbacks
+	}
+	return nil
+}
+
+func (x *RegisteredHostAdapter) GetInterfaceTypes() []*BamlOutboundHandle {
+	if x != nil {
+		return x.InterfaceTypes
+	}
+	return nil
+}
+
+type HostAdapterCallbackSlot struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Index into RegisterHostAdapterRequest.implementations. The pair of this
+	// index and method identifies an operation even when obligations share names.
+	ImplementationIndex uint32 `protobuf:"varint,3,opt,name=implementation_index,json=implementationIndex,proto3" json:"implementation_index,omitempty"`
+	Method              string `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
+}
+
+func (x *HostAdapterCallbackSlot) Reset() {
+	*x = HostAdapterCallbackSlot{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostAdapterCallbackSlot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAdapterCallbackSlot) ProtoMessage() {}
+
+func (x *HostAdapterCallbackSlot) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAdapterCallbackSlot.ProtoReflect.Descriptor instead.
+func (*HostAdapterCallbackSlot) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *HostAdapterCallbackSlot) GetImplementationIndex() uint32 {
+	if x != nil {
+		return x.ImplementationIndex
+	}
+	return 0
+}
+
+func (x *HostAdapterCallbackSlot) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+// adapter_type is borrowed and pinned by synchronous preparation. Receiver
+// and callbacks transfer their occurrences as one batch, including on failure.
+type CreateHostAdapterRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AdapterType uint64          `protobuf:"varint,1,opt,name=adapter_type,json=adapterType,proto3" json:"adapter_type,omitempty"`
+	Receiver    *InboundValue   `protobuf:"bytes,2,opt,name=receiver,proto3" json:"receiver,omitempty"`
+	Callbacks   []*InboundValue `protobuf:"bytes,3,rep,name=callbacks,proto3" json:"callbacks,omitempty"`
+}
+
+func (x *CreateHostAdapterRequest) Reset() {
+	*x = CreateHostAdapterRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CreateHostAdapterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateHostAdapterRequest) ProtoMessage() {}
+
+func (x *CreateHostAdapterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateHostAdapterRequest.ProtoReflect.Descriptor instead.
+func (*CreateHostAdapterRequest) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateHostAdapterRequest) GetAdapterType() uint64 {
+	if x != nil {
+		return x.AdapterType
+	}
+	return 0
+}
+
+func (x *CreateHostAdapterRequest) GetReceiver() *InboundValue {
+	if x != nil {
+		return x.Receiver
+	}
+	return nil
+}
+
+func (x *CreateHostAdapterRequest) GetCallbacks() []*InboundValue {
+	if x != nil {
+		return x.Callbacks
+	}
+	return nil
+}
+
+// The receiver is borrowed and retained during preparation. Type evidence has
+// the same named/definition/reference semantics as method type arguments.
+type ProjectInterfaceRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Receiver      uint64     `protobuf:"varint,1,opt,name=receiver,proto3" json:"receiver,omitempty"`
+	InterfaceType *BamlTyArg `protobuf:"bytes,2,opt,name=interface_type,json=interfaceType,proto3" json:"interface_type,omitempty"`
+}
+
+func (x *ProjectInterfaceRequest) Reset() {
+	*x = ProjectInterfaceRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ProjectInterfaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectInterfaceRequest) ProtoMessage() {}
+
+func (x *ProjectInterfaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectInterfaceRequest.ProtoReflect.Descriptor instead.
+func (*ProjectInterfaceRequest) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ProjectInterfaceRequest) GetReceiver() uint64 {
+	if x != nil {
+		return x.Receiver
+	}
+	return 0
+}
+
+func (x *ProjectInterfaceRequest) GetInterfaceType() *BamlTyArg {
+	if x != nil {
+		return x.InterfaceType
+	}
+	return nil
+}
+
+// Private SDK administrative channel. Each request selects exactly one
+// operation; preparation consumes create-input transfers before admission.
+type HostOperationRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Operation:
+	//
+	//	*HostOperationRequest_Register
+	//	*HostOperationRequest_Create
+	//	*HostOperationRequest_Project
+	Operation isHostOperationRequest_Operation `protobuf_oneof:"operation"`
+}
+
+func (x *HostOperationRequest) Reset() {
+	*x = HostOperationRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostOperationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostOperationRequest) ProtoMessage() {}
+
+func (x *HostOperationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostOperationRequest.ProtoReflect.Descriptor instead.
+func (*HostOperationRequest) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{17}
+}
+
+func (m *HostOperationRequest) GetOperation() isHostOperationRequest_Operation {
+	if m != nil {
+		return m.Operation
+	}
+	return nil
+}
+
+func (x *HostOperationRequest) GetRegister() *RegisterHostAdapterRequest {
+	if x, ok := x.GetOperation().(*HostOperationRequest_Register); ok {
+		return x.Register
+	}
+	return nil
+}
+
+func (x *HostOperationRequest) GetCreate() *CreateHostAdapterRequest {
+	if x, ok := x.GetOperation().(*HostOperationRequest_Create); ok {
+		return x.Create
+	}
+	return nil
+}
+
+func (x *HostOperationRequest) GetProject() *ProjectInterfaceRequest {
+	if x, ok := x.GetOperation().(*HostOperationRequest_Project); ok {
+		return x.Project
+	}
+	return nil
+}
+
+type isHostOperationRequest_Operation interface {
+	isHostOperationRequest_Operation()
+}
+
+type HostOperationRequest_Register struct {
+	Register *RegisterHostAdapterRequest `protobuf:"bytes,1,opt,name=register,proto3,oneof"`
+}
+
+type HostOperationRequest_Create struct {
+	Create *CreateHostAdapterRequest `protobuf:"bytes,2,opt,name=create,proto3,oneof"`
+}
+
+type HostOperationRequest_Project struct {
+	Project *ProjectInterfaceRequest `protobuf:"bytes,3,opt,name=project,proto3,oneof"`
+}
+
+func (*HostOperationRequest_Register) isHostOperationRequest_Operation() {}
+
+func (*HostOperationRequest_Create) isHostOperationRequest_Operation() {}
+
+func (*HostOperationRequest_Project) isHostOperationRequest_Operation() {}
+
+// Carried by the same owned delivery/receipt as ordinary call results.
+// Registration metadata is not a BAML value. Failure reuses the ordinary
+// structured error/panic envelope (its ok arm is never produced here).
+type HostOperationResult struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Result:
+	//
+	//	*HostOperationResult_Registered
+	//	*HostOperationResult_Value
+	//	*HostOperationResult_Failure
+	Result isHostOperationResult_Result `protobuf_oneof:"result"`
+}
+
+func (x *HostOperationResult) Reset() {
+	*x = HostOperationResult{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostOperationResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostOperationResult) ProtoMessage() {}
+
+func (x *HostOperationResult) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostOperationResult.ProtoReflect.Descriptor instead.
+func (*HostOperationResult) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{18}
+}
+
+func (m *HostOperationResult) GetResult() isHostOperationResult_Result {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+func (x *HostOperationResult) GetRegistered() *RegisteredHostAdapter {
+	if x, ok := x.GetResult().(*HostOperationResult_Registered); ok {
+		return x.Registered
+	}
+	return nil
+}
+
+func (x *HostOperationResult) GetValue() *BamlOutboundValue {
+	if x, ok := x.GetResult().(*HostOperationResult_Value); ok {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *HostOperationResult) GetFailure() *BamlOutboundResult {
+	if x, ok := x.GetResult().(*HostOperationResult_Failure); ok {
+		return x.Failure
+	}
+	return nil
+}
+
+type isHostOperationResult_Result interface {
+	isHostOperationResult_Result()
+}
+
+type HostOperationResult_Registered struct {
+	Registered *RegisteredHostAdapter `protobuf:"bytes,1,opt,name=registered,proto3,oneof"`
+}
+
+type HostOperationResult_Value struct {
+	Value *BamlOutboundValue `protobuf:"bytes,2,opt,name=value,proto3,oneof"`
+}
+
+type HostOperationResult_Failure struct {
+	Failure *BamlOutboundResult `protobuf:"bytes,3,opt,name=failure,proto3,oneof"`
+}
+
+func (*HostOperationResult_Registered) isHostOperationResult_Result() {}
+
+func (*HostOperationResult_Value) isHostOperationResult_Result() {}
+
+func (*HostOperationResult_Failure) isHostOperationResult_Result() {}
 
 var File_baml_bridge_cffi_v1_baml_inbound_proto protoreflect.FileDescriptor
 
@@ -979,7 +1770,7 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
 	0x6e, 0x75, 0x6d, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05,
 	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c,
-	0x75, 0x65, 0x22, 0xab, 0x01, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67,
+	0x75, 0x65, 0x22, 0xea, 0x01, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67,
 	0x12, 0x19, 0x0a, 0x08, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x76, 0x61, 0x72, 0x18, 0x01, 0x20, 0x01,
 	0x28, 0x09, 0x52, 0x07, 0x74, 0x79, 0x70, 0x65, 0x56, 0x61, 0x72, 0x12, 0x3a, 0x0a, 0x0a, 0x74,
 	0x79, 0x70, 0x65, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
@@ -990,27 +1781,168 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
 	0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63,
 	0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x44, 0x65, 0x66,
 	0x52, 0x0e, 0x74, 0x79, 0x70, 0x65, 0x44, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x6f, 0x6e,
-	0x22, 0x87, 0x02, 0x0a, 0x10, 0x43, 0x61, 0x6c, 0x6c, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f,
-	0x6e, 0x41, 0x72, 0x67, 0x73, 0x12, 0x3c, 0x0a, 0x06, 0x6b, 0x77, 0x61, 0x72, 0x67, 0x73, 0x18,
-	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69,
-	0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f,
-	0x75, 0x6e, 0x64, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x06, 0x6b, 0x77, 0x61,
-	0x72, 0x67, 0x73, 0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x6c, 0x6c, 0x5f, 0x69, 0x64, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x63, 0x61, 0x6c, 0x6c, 0x49, 0x64, 0x12, 0x3b, 0x0a, 0x09,
-	0x74, 0x79, 0x70, 0x65, 0x5f, 0x61, 0x72, 0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32,
-	0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66,
-	0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67, 0x52,
-	0x08, 0x74, 0x79, 0x70, 0x65, 0x41, 0x72, 0x67, 0x73, 0x12, 0x25, 0x0a, 0x0d, 0x66, 0x75, 0x6e,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09,
-	0x48, 0x00, 0x52, 0x0c, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d, 0x65,
-	0x12, 0x29, 0x0a, 0x0f, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x68, 0x61, 0x6e,
-	0x64, 0x6c, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x48, 0x00, 0x52, 0x0e, 0x66, 0x75, 0x6e,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x42, 0x0d, 0x0a, 0x0b, 0x63,
+	0x12, 0x2a, 0x0a, 0x0e, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e,
+	0x63, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x48, 0x00, 0x52, 0x0d, 0x74, 0x79, 0x70, 0x65,
+	0x52, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x88, 0x01, 0x01, 0x42, 0x11, 0x0a, 0x0f,
+	0x5f, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x22,
+	0x80, 0x01, 0x0a, 0x15, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x4d, 0x65, 0x74,
+	0x68, 0x6f, 0x64, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x76, 0x69, 0x65,
+	0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x04, 0x76, 0x69, 0x65, 0x77, 0x12, 0x16, 0x0a,
+	0x06, 0x6d, 0x65, 0x6d, 0x62, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x6d,
+	0x65, 0x6d, 0x62, 0x65, 0x72, 0x12, 0x3b, 0x0a, 0x09, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x61, 0x72,
+	0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f,
+	0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42,
+	0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67, 0x52, 0x08, 0x74, 0x79, 0x70, 0x65, 0x41, 0x72,
+	0x67, 0x73, 0x22, 0x9c, 0x02, 0x0a, 0x14, 0x43, 0x6f, 0x6e, 0x63, 0x72, 0x65, 0x74, 0x65, 0x4d,
+	0x65, 0x74, 0x68, 0x6f, 0x64, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x72,
+	0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x72,
+	0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x12, 0x1d, 0x0a, 0x0a, 0x63, 0x6c, 0x61, 0x73, 0x73,
+	0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x63, 0x6c, 0x61,
+	0x73, 0x73, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x4a, 0x0a, 0x11, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66,
+	0x61, 0x63, 0x65, 0x5f, 0x70, 0x61, 0x74, 0x74, 0x65, 0x72, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x1b, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e,
+	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x48, 0x00,
+	0x52, 0x10, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x50, 0x61, 0x74, 0x74, 0x65,
+	0x72, 0x6e, 0x12, 0x1c, 0x0a, 0x08, 0x69, 0x6e, 0x68, 0x65, 0x72, 0x65, 0x6e, 0x74, 0x18, 0x06,
+	0x20, 0x01, 0x28, 0x08, 0x48, 0x00, 0x52, 0x08, 0x69, 0x6e, 0x68, 0x65, 0x72, 0x65, 0x6e, 0x74,
+	0x12, 0x16, 0x0a, 0x06, 0x6d, 0x65, 0x6d, 0x62, 0x65, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x06, 0x6d, 0x65, 0x6d, 0x62, 0x65, 0x72, 0x12, 0x3b, 0x0a, 0x09, 0x74, 0x79, 0x70, 0x65,
+	0x5f, 0x61, 0x72, 0x67, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x62, 0x61,
+	0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76,
+	0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67, 0x52, 0x08, 0x74, 0x79, 0x70,
+	0x65, 0x41, 0x72, 0x67, 0x73, 0x42, 0x0a, 0x0a, 0x08, 0x64, 0x69, 0x73, 0x70, 0x61, 0x74, 0x63,
+	0x68, 0x22, 0xb6, 0x03, 0x0a, 0x10, 0x43, 0x61, 0x6c, 0x6c, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69,
+	0x6f, 0x6e, 0x41, 0x72, 0x67, 0x73, 0x12, 0x3c, 0x0a, 0x06, 0x6b, 0x77, 0x61, 0x72, 0x67, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72,
+	0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62,
+	0x6f, 0x75, 0x6e, 0x64, 0x4d, 0x61, 0x70, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x06, 0x6b, 0x77,
+	0x61, 0x72, 0x67, 0x73, 0x12, 0x17, 0x0a, 0x07, 0x63, 0x61, 0x6c, 0x6c, 0x5f, 0x69, 0x64, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x63, 0x61, 0x6c, 0x6c, 0x49, 0x64, 0x12, 0x3b, 0x0a,
+	0x09, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x61, 0x72, 0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63,
+	0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67,
+	0x52, 0x08, 0x74, 0x79, 0x70, 0x65, 0x41, 0x72, 0x67, 0x73, 0x12, 0x25, 0x0a, 0x0d, 0x66, 0x75,
+	0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28,
+	0x09, 0x48, 0x00, 0x52, 0x0c, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d,
+	0x65, 0x12, 0x29, 0x0a, 0x0f, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x68, 0x61,
+	0x6e, 0x64, 0x6c, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x48, 0x00, 0x52, 0x0e, 0x66, 0x75,
+	0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x12, 0x57, 0x0a, 0x10,
+	0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x5f, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64,
+	0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2a, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72,
+	0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x74,
+	0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x54, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x48, 0x00, 0x52, 0x0f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x4d,
+	0x65, 0x74, 0x68, 0x6f, 0x64, 0x12, 0x54, 0x0a, 0x0f, 0x63, 0x6f, 0x6e, 0x63, 0x72, 0x65, 0x74,
+	0x65, 0x5f, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x29,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66,
+	0x69, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6f, 0x6e, 0x63, 0x72, 0x65, 0x74, 0x65, 0x4d, 0x65, 0x74,
+	0x68, 0x6f, 0x64, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x48, 0x00, 0x52, 0x0e, 0x63, 0x6f, 0x6e,
+	0x63, 0x72, 0x65, 0x74, 0x65, 0x4d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x42, 0x0d, 0x0a, 0x0b, 0x63,
 	0x61, 0x6c, 0x6c, 0x5f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x22, 0x2d, 0x0a, 0x07, 0x43, 0x61,
 	0x6c, 0x6c, 0x41, 0x63, 0x6b, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x0a, 0x0a,
-	0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x0a, 0x48, 0x03, 0x5a, 0x06, 0x2e,
-	0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xc7, 0x01, 0x0a, 0x1a, 0x52, 0x65,
+	0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74, 0x65,
+	0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x58, 0x0a, 0x0f,
+	0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18,
+	0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69,
+	0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x48, 0x6f, 0x73, 0x74,
+	0x41, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x49, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0f, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x3b, 0x0a, 0x09, 0x74, 0x79, 0x70, 0x65, 0x5f, 0x61,
+	0x72, 0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c,
+	0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e,
+	0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67, 0x52, 0x08, 0x74, 0x79, 0x70, 0x65, 0x41,
+	0x72, 0x67, 0x73, 0x22, 0x81, 0x01, 0x0a, 0x19, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70,
+	0x74, 0x65, 0x72, 0x49, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x12, 0x4a, 0x0a, 0x12, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x5f, 0x74,
+	0x65, 0x6d, 0x70, 0x6c, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e,
+	0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69,
+	0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x52, 0x11, 0x69, 0x6e, 0x74, 0x65,
+	0x72, 0x66, 0x61, 0x63, 0x65, 0x54, 0x65, 0x6d, 0x70, 0x6c, 0x61, 0x74, 0x65, 0x12, 0x18, 0x0a,
+	0x07, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07,
+	0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x73, 0x22, 0xc9, 0x02, 0x0a, 0x15, 0x52, 0x65, 0x67, 0x69,
+	0x73, 0x74, 0x65, 0x72, 0x65, 0x64, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74, 0x65,
+	0x72, 0x12, 0x4a, 0x0a, 0x0c, 0x61, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x5f, 0x74, 0x79, 0x70,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x27, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62,
+	0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61,
+	0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65,
+	0x52, 0x0b, 0x61, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x46, 0x0a,
+	0x0a, 0x63, 0x6c, 0x61, 0x73, 0x73, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x27, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e,
+	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62,
+	0x6f, 0x75, 0x6e, 0x64, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x52, 0x09, 0x63, 0x6c, 0x61, 0x73,
+	0x73, 0x54, 0x79, 0x70, 0x65, 0x12, 0x4a, 0x0a, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63,
+	0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f,
+	0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x48,
+	0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x43, 0x61, 0x6c, 0x6c, 0x62, 0x61,
+	0x63, 0x6b, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63, 0x6b,
+	0x73, 0x12, 0x50, 0x0a, 0x0f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x5f, 0x74,
+	0x79, 0x70, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x27, 0x2e, 0x62, 0x61, 0x6d,
+	0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31,
+	0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x48, 0x61, 0x6e,
+	0x64, 0x6c, 0x65, 0x52, 0x0e, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x54, 0x79,
+	0x70, 0x65, 0x73, 0x22, 0x6a, 0x0a, 0x17, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74,
+	0x65, 0x72, 0x43, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63, 0x6b, 0x53, 0x6c, 0x6f, 0x74, 0x12, 0x31,
+	0x0a, 0x14, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x13, 0x69, 0x6d,
+	0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x64, 0x65,
+	0x78, 0x12, 0x16, 0x0a, 0x06, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x06, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x4a, 0x04, 0x08, 0x02, 0x10, 0x03, 0x22,
+	0xbd, 0x01, 0x0a, 0x18, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64,
+	0x61, 0x70, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c,
+	0x61, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x0b, 0x61, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12,
+	0x3d, 0x0a, 0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x21, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e,
+	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56,
+	0x61, 0x6c, 0x75, 0x65, 0x52, 0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x12, 0x3f,
+	0x0a, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63, 0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x21, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e,
+	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56,
+	0x61, 0x6c, 0x75, 0x65, 0x52, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63, 0x6b, 0x73, 0x22,
+	0x7c, 0x0a, 0x17, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x66,
+	0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65,
+	0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x72, 0x65,
+	0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x12, 0x45, 0x0a, 0x0e, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66,
+	0x61, 0x63, 0x65, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66,
+	0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x72, 0x67, 0x52, 0x0d,
+	0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x54, 0x79, 0x70, 0x65, 0x22, 0x85, 0x02,
+	0x0a, 0x14, 0x48, 0x6f, 0x73, 0x74, 0x4f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x4d, 0x0a, 0x08, 0x72, 0x65, 0x67, 0x69, 0x73, 0x74,
+	0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2f, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f,
+	0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x52,
+	0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74,
+	0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52, 0x08, 0x72, 0x65, 0x67,
+	0x69, 0x73, 0x74, 0x65, 0x72, 0x12, 0x47, 0x0a, 0x06, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x2d, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69,
+	0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x72, 0x65, 0x61,
+	0x74, 0x65, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52, 0x06, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x12, 0x48,
+	0x0a, 0x07, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x2c, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66,
+	0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x50, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x49, 0x6e, 0x74,
+	0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52,
+	0x07, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, 0x42, 0x0b, 0x0a, 0x09, 0x6f, 0x70, 0x65, 0x72,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0xf2, 0x01, 0x0a, 0x13, 0x48, 0x6f, 0x73, 0x74, 0x4f, 0x70,
+	0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x4c, 0x0a,
+	0x0a, 0x72, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x2a, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e,
+	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72,
+	0x65, 0x64, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x48, 0x00, 0x52,
+	0x0a, 0x72, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x65, 0x64, 0x12, 0x3e, 0x0a, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x26, 0x2e, 0x62, 0x61, 0x6d,
+	0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31,
+	0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61, 0x6c,
+	0x75, 0x65, 0x48, 0x00, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x43, 0x0a, 0x07, 0x66,
+	0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x27, 0x2e, 0x62,
+	0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x52,
+	0x65, 0x73, 0x75, 0x6c, 0x74, 0x48, 0x00, 0x52, 0x07, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65,
+	0x42, 0x08, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x42, 0x0a, 0x48, 0x03, 0x5a, 0x06,
+	0x2e, 0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1025,48 +1957,82 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP() []byte {
 	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescData
 }
 
-var file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_baml_bridge_cffi_v1_baml_inbound_proto_goTypes = []interface{}{
-	(*InboundValue)(nil),       // 0: baml_bridge.cffi.v1.InboundValue
-	(*InboundListValue)(nil),   // 1: baml_bridge.cffi.v1.InboundListValue
-	(*InboundMapValue)(nil),    // 2: baml_bridge.cffi.v1.InboundMapValue
-	(*InboundMapEntry)(nil),    // 3: baml_bridge.cffi.v1.InboundMapEntry
-	(*InboundClassValue)(nil),  // 4: baml_bridge.cffi.v1.InboundClassValue
-	(*InboundEnumValue)(nil),   // 5: baml_bridge.cffi.v1.InboundEnumValue
-	(*BamlTyArg)(nil),          // 6: baml_bridge.cffi.v1.BamlTyArg
-	(*CallFunctionArgs)(nil),   // 7: baml_bridge.cffi.v1.CallFunctionArgs
-	(*CallAck)(nil),            // 8: baml_bridge.cffi.v1.CallAck
-	(*BamlTy)(nil),             // 9: baml_bridge.cffi.v1.BamlTy
-	(*BamlHandle)(nil),         // 10: baml_bridge.cffi.v1.BamlHandle
-	(*BamlTyDef)(nil),          // 11: baml_bridge.cffi.v1.BamlTyDef
-	(*BamlValueMedia)(nil),     // 12: baml_bridge.cffi.v1.BamlValueMedia
-	(*BamlValuePromptAst)(nil), // 13: baml_bridge.cffi.v1.BamlValuePromptAst
+	(*InboundValue)(nil),               // 0: baml_bridge.cffi.v1.InboundValue
+	(*InboundListValue)(nil),           // 1: baml_bridge.cffi.v1.InboundListValue
+	(*InboundMapValue)(nil),            // 2: baml_bridge.cffi.v1.InboundMapValue
+	(*InboundMapEntry)(nil),            // 3: baml_bridge.cffi.v1.InboundMapEntry
+	(*InboundClassValue)(nil),          // 4: baml_bridge.cffi.v1.InboundClassValue
+	(*InboundEnumValue)(nil),           // 5: baml_bridge.cffi.v1.InboundEnumValue
+	(*BamlTyArg)(nil),                  // 6: baml_bridge.cffi.v1.BamlTyArg
+	(*InterfaceMethodTarget)(nil),      // 7: baml_bridge.cffi.v1.InterfaceMethodTarget
+	(*ConcreteMethodTarget)(nil),       // 8: baml_bridge.cffi.v1.ConcreteMethodTarget
+	(*CallFunctionArgs)(nil),           // 9: baml_bridge.cffi.v1.CallFunctionArgs
+	(*CallAck)(nil),                    // 10: baml_bridge.cffi.v1.CallAck
+	(*RegisterHostAdapterRequest)(nil), // 11: baml_bridge.cffi.v1.RegisterHostAdapterRequest
+	(*HostAdapterImplementation)(nil),  // 12: baml_bridge.cffi.v1.HostAdapterImplementation
+	(*RegisteredHostAdapter)(nil),      // 13: baml_bridge.cffi.v1.RegisteredHostAdapter
+	(*HostAdapterCallbackSlot)(nil),    // 14: baml_bridge.cffi.v1.HostAdapterCallbackSlot
+	(*CreateHostAdapterRequest)(nil),   // 15: baml_bridge.cffi.v1.CreateHostAdapterRequest
+	(*ProjectInterfaceRequest)(nil),    // 16: baml_bridge.cffi.v1.ProjectInterfaceRequest
+	(*HostOperationRequest)(nil),       // 17: baml_bridge.cffi.v1.HostOperationRequest
+	(*HostOperationResult)(nil),        // 18: baml_bridge.cffi.v1.HostOperationResult
+	(*BamlTy)(nil),                     // 19: baml_bridge.cffi.v1.BamlTy
+	(*BamlHandle)(nil),                 // 20: baml_bridge.cffi.v1.BamlHandle
+	(*BamlTyDef)(nil),                  // 21: baml_bridge.cffi.v1.BamlTyDef
+	(*BamlValueMedia)(nil),             // 22: baml_bridge.cffi.v1.BamlValueMedia
+	(*BamlValuePromptAst)(nil),         // 23: baml_bridge.cffi.v1.BamlValuePromptAst
+	(*BamlOutboundHandle)(nil),         // 24: baml_bridge.cffi.v1.BamlOutboundHandle
+	(*BamlOutboundValue)(nil),          // 25: baml_bridge.cffi.v1.BamlOutboundValue
+	(*BamlOutboundResult)(nil),         // 26: baml_bridge.cffi.v1.BamlOutboundResult
 }
 var file_baml_bridge_cffi_v1_baml_inbound_proto_depIdxs = []int32{
-	9,  // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	19, // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
 	1,  // 1: baml_bridge.cffi.v1.InboundValue.list_value:type_name -> baml_bridge.cffi.v1.InboundListValue
 	2,  // 2: baml_bridge.cffi.v1.InboundValue.map_value:type_name -> baml_bridge.cffi.v1.InboundMapValue
 	4,  // 3: baml_bridge.cffi.v1.InboundValue.class_value:type_name -> baml_bridge.cffi.v1.InboundClassValue
 	5,  // 4: baml_bridge.cffi.v1.InboundValue.enum_value:type_name -> baml_bridge.cffi.v1.InboundEnumValue
-	10, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
-	9,  // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	11, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	12, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
-	13, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
+	20, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
+	19, // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	21, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	22, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
+	23, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
 	0,  // 10: baml_bridge.cffi.v1.InboundListValue.values:type_name -> baml_bridge.cffi.v1.InboundValue
 	3,  // 11: baml_bridge.cffi.v1.InboundMapValue.entries:type_name -> baml_bridge.cffi.v1.InboundMapEntry
 	5,  // 12: baml_bridge.cffi.v1.InboundMapEntry.enum_key:type_name -> baml_bridge.cffi.v1.InboundEnumValue
 	0,  // 13: baml_bridge.cffi.v1.InboundMapEntry.value:type_name -> baml_bridge.cffi.v1.InboundValue
 	3,  // 14: baml_bridge.cffi.v1.InboundClassValue.fields:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	9,  // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	11, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	3,  // 17: baml_bridge.cffi.v1.CallFunctionArgs.kwargs:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	6,  // 18: baml_bridge.cffi.v1.CallFunctionArgs.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	19, // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	21, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	6,  // 17: baml_bridge.cffi.v1.InterfaceMethodTarget.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	19, // 18: baml_bridge.cffi.v1.ConcreteMethodTarget.interface_pattern:type_name -> baml_bridge.cffi.v1.BamlTy
+	6,  // 19: baml_bridge.cffi.v1.ConcreteMethodTarget.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	3,  // 20: baml_bridge.cffi.v1.CallFunctionArgs.kwargs:type_name -> baml_bridge.cffi.v1.InboundMapEntry
+	6,  // 21: baml_bridge.cffi.v1.CallFunctionArgs.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	7,  // 22: baml_bridge.cffi.v1.CallFunctionArgs.interface_method:type_name -> baml_bridge.cffi.v1.InterfaceMethodTarget
+	8,  // 23: baml_bridge.cffi.v1.CallFunctionArgs.concrete_method:type_name -> baml_bridge.cffi.v1.ConcreteMethodTarget
+	12, // 24: baml_bridge.cffi.v1.RegisterHostAdapterRequest.implementations:type_name -> baml_bridge.cffi.v1.HostAdapterImplementation
+	6,  // 25: baml_bridge.cffi.v1.RegisterHostAdapterRequest.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	19, // 26: baml_bridge.cffi.v1.HostAdapterImplementation.interface_template:type_name -> baml_bridge.cffi.v1.BamlTy
+	24, // 27: baml_bridge.cffi.v1.RegisteredHostAdapter.adapter_type:type_name -> baml_bridge.cffi.v1.BamlOutboundHandle
+	24, // 28: baml_bridge.cffi.v1.RegisteredHostAdapter.class_type:type_name -> baml_bridge.cffi.v1.BamlOutboundHandle
+	14, // 29: baml_bridge.cffi.v1.RegisteredHostAdapter.callbacks:type_name -> baml_bridge.cffi.v1.HostAdapterCallbackSlot
+	24, // 30: baml_bridge.cffi.v1.RegisteredHostAdapter.interface_types:type_name -> baml_bridge.cffi.v1.BamlOutboundHandle
+	0,  // 31: baml_bridge.cffi.v1.CreateHostAdapterRequest.receiver:type_name -> baml_bridge.cffi.v1.InboundValue
+	0,  // 32: baml_bridge.cffi.v1.CreateHostAdapterRequest.callbacks:type_name -> baml_bridge.cffi.v1.InboundValue
+	6,  // 33: baml_bridge.cffi.v1.ProjectInterfaceRequest.interface_type:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	11, // 34: baml_bridge.cffi.v1.HostOperationRequest.register:type_name -> baml_bridge.cffi.v1.RegisterHostAdapterRequest
+	15, // 35: baml_bridge.cffi.v1.HostOperationRequest.create:type_name -> baml_bridge.cffi.v1.CreateHostAdapterRequest
+	16, // 36: baml_bridge.cffi.v1.HostOperationRequest.project:type_name -> baml_bridge.cffi.v1.ProjectInterfaceRequest
+	13, // 37: baml_bridge.cffi.v1.HostOperationResult.registered:type_name -> baml_bridge.cffi.v1.RegisteredHostAdapter
+	25, // 38: baml_bridge.cffi.v1.HostOperationResult.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	26, // 39: baml_bridge.cffi.v1.HostOperationResult.failure:type_name -> baml_bridge.cffi.v1.BamlOutboundResult
+	40, // [40:40] is the sub-list for method output_type
+	40, // [40:40] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_baml_bridge_cffi_v1_baml_inbound_proto_init() }
@@ -1163,7 +2129,7 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 			}
 		}
 		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CallFunctionArgs); i {
+			switch v := v.(*InterfaceMethodTarget); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1175,7 +2141,127 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 			}
 		}
 		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ConcreteMethodTarget); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CallFunctionArgs); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CallAck); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RegisterHostAdapterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostAdapterImplementation); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RegisteredHostAdapter); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostAdapterCallbackSlot); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CreateHostAdapterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ProjectInterfaceRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostOperationRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostOperationResult); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1210,12 +2296,29 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 		(*InboundMapEntry_BoolKey)(nil),
 		(*InboundMapEntry_EnumKey)(nil),
 	}
-	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[7].OneofWrappers = []interface{}{
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[6].OneofWrappers = []interface{}{}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8].OneofWrappers = []interface{}{
+		(*ConcreteMethodTarget_InterfacePattern)(nil),
+		(*ConcreteMethodTarget_Inherent)(nil),
+	}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[9].OneofWrappers = []interface{}{
 		(*CallFunctionArgs_FunctionName)(nil),
 		(*CallFunctionArgs_FunctionHandle)(nil),
+		(*CallFunctionArgs_InterfaceMethod)(nil),
+		(*CallFunctionArgs_ConcreteMethod)(nil),
 	}
-	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[8].OneofWrappers = []interface{}{
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[10].OneofWrappers = []interface{}{
 		(*CallAck_Error)(nil),
+	}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[17].OneofWrappers = []interface{}{
+		(*HostOperationRequest_Register)(nil),
+		(*HostOperationRequest_Create)(nil),
+		(*HostOperationRequest_Project)(nil),
+	}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[18].OneofWrappers = []interface{}{
+		(*HostOperationResult_Registered)(nil),
+		(*HostOperationResult_Value)(nil),
+		(*HostOperationResult_Failure)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1223,7 +2326,7 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -346,9 +346,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyArg: Sendable {
   /// Clears the value of `typeValue`. Subsequent reads from it will return its default value.
   mutating func clearTypeValue() {self._typeValue = nil}
 
-  /// Preferred for a runtime reflected type. Mutually exclusive with
-  /// `type_value` by convention; retained as separate fields for backwards
-  /// compatibility with already generated SDKs.
+  /// Explicit portable definition: importing it creates fresh runtime types.
   var typeDefinition: BamlBridge_Cffi_V1_BamlTyDef {
     get {_typeDefinition ?? BamlBridge_Cffi_V1_BamlTyDef()}
     set {_typeDefinition = newValue}
@@ -358,12 +356,92 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyArg: Sendable {
   /// Clears the value of `typeDefinition`. Subsequent reads from it will return its default value.
   mutating func clearTypeDefinition() {self._typeDefinition = nil}
 
+  /// Borrowed session reference to an engine-owned reflected type. Exactly one
+  /// of type_value, type_definition or type_reference must be present.
+  var typeReference: UInt64 {
+    get {_typeReference ?? 0}
+    set {_typeReference = newValue}
+  }
+  /// Returns true if `typeReference` has been explicitly set.
+  var hasTypeReference: Bool {self._typeReference != nil}
+  /// Clears the value of `typeReference`. Subsequent reads from it will return its default value.
+  mutating func clearTypeReference() {self._typeReference = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _typeValue: BamlBridge_Cffi_V1_BamlTy? = nil
   fileprivate var _typeDefinition: BamlBridge_Cffi_V1_BamlTyDef? = nil
+  fileprivate var _typeReference: UInt64? = nil
+}
+
+/// Type arguments for a method are ordered by its checked declaration. Live
+/// references preserve identity; definitions explicitly create fresh types.
+/// Each BamlTyArg.type_var must be empty on this positional path.
+nonisolated struct BamlBridge_Cffi_V1_InterfaceMethodTarget: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var view: UInt64 = 0
+
+  var member: String = String()
+
+  var typeArgs: [BamlBridge_Cffi_V1_BamlTyArg] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+/// A compiler-selected method on a concrete class.
+/// The receiver is borrowed and pinned during preparation. Class variables in
+/// interface_pattern index the receiver's stored class arguments, never the
+/// host's method arguments. The engine checks the exact class declaration and
+/// complete obligation before invoking the concrete implementation contract.
+nonisolated struct BamlBridge_Cffi_V1_ConcreteMethodTarget: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var receiver: UInt64 = 0
+
+  var className: String = String()
+
+  var dispatch: BamlBridge_Cffi_V1_ConcreteMethodTarget.OneOf_Dispatch? = nil
+
+  var interfacePattern: BamlBridge_Cffi_V1_BamlTy {
+    get {
+      if case .interfacePattern(let v)? = dispatch {return v}
+      return BamlBridge_Cffi_V1_BamlTy()
+    }
+    set {dispatch = .interfacePattern(newValue)}
+  }
+
+  /// Must be true when selected; a missing dispatch is an invalid request.
+  var inherent: Bool {
+    get {
+      if case .inherent(let v)? = dispatch {return v}
+      return false
+    }
+    set {dispatch = .inherent(newValue)}
+  }
+
+  var member: String = String()
+
+  var typeArgs: [BamlBridge_Cffi_V1_BamlTyArg] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  nonisolated enum OneOf_Dispatch: Equatable, Sendable {
+    case interfacePattern(BamlBridge_Cffi_V1_BamlTy)
+    /// Must be true when selected; a missing dispatch is an invalid request.
+    case inherent(Bool)
+
+  }
+
+  init() {}
 }
 
 nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
@@ -403,11 +481,29 @@ nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
     set {callTarget = .functionHandle(newValue)}
   }
 
+  var interfaceMethod: BamlBridge_Cffi_V1_InterfaceMethodTarget {
+    get {
+      if case .interfaceMethod(let v)? = callTarget {return v}
+      return BamlBridge_Cffi_V1_InterfaceMethodTarget()
+    }
+    set {callTarget = .interfaceMethod(newValue)}
+  }
+
+  var concreteMethod: BamlBridge_Cffi_V1_ConcreteMethodTarget {
+    get {
+      if case .concreteMethod(let v)? = callTarget {return v}
+      return BamlBridge_Cffi_V1_ConcreteMethodTarget()
+    }
+    set {callTarget = .concreteMethod(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_CallTarget: Equatable, Sendable {
     case functionName(String)
     case functionHandle(UInt64)
+    case interfaceMethod(BamlBridge_Cffi_V1_InterfaceMethodTarget)
+    case concreteMethod(BamlBridge_Cffi_V1_ConcreteMethodTarget)
 
   }
 
@@ -436,6 +532,246 @@ nonisolated struct BamlBridge_Cffi_V1_CallAck: Sendable {
 
   nonisolated enum OneOf_Response: Equatable, Sendable {
     case error(String)
+
+  }
+
+  init() {}
+}
+
+/// Host adapter registration. No host callbacks are acquired at this stage.
+/// Template type-var index 0 denotes Self. Index n+1 selects type_args[n].
+/// Type arguments are positional and shared across the whole registration;
+/// definitions are materialized once, references retain their issuing identity.
+nonisolated struct BamlBridge_Cffi_V1_RegisterHostAdapterRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var name: String = String()
+
+  var implementations: [BamlBridge_Cffi_V1_HostAdapterImplementation] = []
+
+  var typeArgs: [BamlBridge_Cffi_V1_BamlTyArg] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct BamlBridge_Cffi_V1_HostAdapterImplementation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var interfaceTemplate: BamlBridge_Cffi_V1_BamlTy {
+    get {_interfaceTemplate ?? BamlBridge_Cffi_V1_BamlTy()}
+    set {_interfaceTemplate = newValue}
+  }
+  /// Returns true if `interfaceTemplate` has been explicitly set.
+  var hasInterfaceTemplate: Bool {self._interfaceTemplate != nil}
+  /// Clears the value of `interfaceTemplate`. Subsequent reads from it will return its default value.
+  mutating func clearInterfaceTemplate() {self._interfaceTemplate = nil}
+
+  var methods: [String] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _interfaceTemplate: BamlBridge_Cffi_V1_BamlTy? = nil
+}
+
+nonisolated struct BamlBridge_Cffi_V1_RegisteredHostAdapter: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var adapterType: BamlBridge_Cffi_V1_BamlOutboundHandle {
+    get {_adapterType ?? BamlBridge_Cffi_V1_BamlOutboundHandle()}
+    set {_adapterType = newValue}
+  }
+  /// Returns true if `adapterType` has been explicitly set.
+  var hasAdapterType: Bool {self._adapterType != nil}
+  /// Clears the value of `adapterType`. Subsequent reads from it will return its default value.
+  mutating func clearAdapterType() {self._adapterType = nil}
+
+  var classType: BamlBridge_Cffi_V1_BamlOutboundHandle {
+    get {_classType ?? BamlBridge_Cffi_V1_BamlOutboundHandle()}
+    set {_classType = newValue}
+  }
+  /// Returns true if `classType` has been explicitly set.
+  var hasClassType: Bool {self._classType != nil}
+  /// Clears the value of `classType`. Subsequent reads from it will return its default value.
+  mutating func clearClassType() {self._classType = nil}
+
+  var callbacks: [BamlBridge_Cffi_V1_HostAdapterCallbackSlot] = []
+
+  /// Exact checked interface types in request implementation order, including
+  /// interfaces with no callbacks. Borrow these when projecting a new instance;
+  /// importing a portable type definition again would create different types.
+  var interfaceTypes: [BamlBridge_Cffi_V1_BamlOutboundHandle] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _adapterType: BamlBridge_Cffi_V1_BamlOutboundHandle? = nil
+  fileprivate var _classType: BamlBridge_Cffi_V1_BamlOutboundHandle? = nil
+}
+
+nonisolated struct BamlBridge_Cffi_V1_HostAdapterCallbackSlot: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Index into RegisterHostAdapterRequest.implementations. The pair of this
+  /// index and method identifies an operation even when obligations share names.
+  var implementationIndex: UInt32 = 0
+
+  var method: String = String()
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+/// adapter_type is borrowed and pinned by synchronous preparation. Receiver
+/// and callbacks transfer their occurrences as one batch, including on failure.
+nonisolated struct BamlBridge_Cffi_V1_CreateHostAdapterRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var adapterType: UInt64 = 0
+
+  var receiver: BamlBridge_Cffi_V1_InboundValue {
+    get {_receiver ?? BamlBridge_Cffi_V1_InboundValue()}
+    set {_receiver = newValue}
+  }
+  /// Returns true if `receiver` has been explicitly set.
+  var hasReceiver: Bool {self._receiver != nil}
+  /// Clears the value of `receiver`. Subsequent reads from it will return its default value.
+  mutating func clearReceiver() {self._receiver = nil}
+
+  var callbacks: [BamlBridge_Cffi_V1_InboundValue] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _receiver: BamlBridge_Cffi_V1_InboundValue? = nil
+}
+
+/// The receiver is borrowed and retained during preparation. Type evidence has
+/// the same named/definition/reference semantics as method type arguments.
+nonisolated struct BamlBridge_Cffi_V1_ProjectInterfaceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var receiver: UInt64 = 0
+
+  var interfaceType: BamlBridge_Cffi_V1_BamlTyArg {
+    get {_interfaceType ?? BamlBridge_Cffi_V1_BamlTyArg()}
+    set {_interfaceType = newValue}
+  }
+  /// Returns true if `interfaceType` has been explicitly set.
+  var hasInterfaceType: Bool {self._interfaceType != nil}
+  /// Clears the value of `interfaceType`. Subsequent reads from it will return its default value.
+  mutating func clearInterfaceType() {self._interfaceType = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _interfaceType: BamlBridge_Cffi_V1_BamlTyArg? = nil
+}
+
+/// Private SDK administrative channel. Each request selects exactly one
+/// operation; preparation consumes create-input transfers before admission.
+nonisolated struct BamlBridge_Cffi_V1_HostOperationRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var operation: BamlBridge_Cffi_V1_HostOperationRequest.OneOf_Operation? = nil
+
+  var register: BamlBridge_Cffi_V1_RegisterHostAdapterRequest {
+    get {
+      if case .register(let v)? = operation {return v}
+      return BamlBridge_Cffi_V1_RegisterHostAdapterRequest()
+    }
+    set {operation = .register(newValue)}
+  }
+
+  var create: BamlBridge_Cffi_V1_CreateHostAdapterRequest {
+    get {
+      if case .create(let v)? = operation {return v}
+      return BamlBridge_Cffi_V1_CreateHostAdapterRequest()
+    }
+    set {operation = .create(newValue)}
+  }
+
+  var project: BamlBridge_Cffi_V1_ProjectInterfaceRequest {
+    get {
+      if case .project(let v)? = operation {return v}
+      return BamlBridge_Cffi_V1_ProjectInterfaceRequest()
+    }
+    set {operation = .project(newValue)}
+  }
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  nonisolated enum OneOf_Operation: Equatable, Sendable {
+    case register(BamlBridge_Cffi_V1_RegisterHostAdapterRequest)
+    case create(BamlBridge_Cffi_V1_CreateHostAdapterRequest)
+    case project(BamlBridge_Cffi_V1_ProjectInterfaceRequest)
+
+  }
+
+  init() {}
+}
+
+/// Carried by the same owned delivery/receipt as ordinary call results.
+/// Registration metadata is not a BAML value. Failure reuses the ordinary
+/// structured error/panic envelope (its ok arm is never produced here).
+nonisolated struct BamlBridge_Cffi_V1_HostOperationResult: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var result: BamlBridge_Cffi_V1_HostOperationResult.OneOf_Result? = nil
+
+  var registered: BamlBridge_Cffi_V1_RegisteredHostAdapter {
+    get {
+      if case .registered(let v)? = result {return v}
+      return BamlBridge_Cffi_V1_RegisteredHostAdapter()
+    }
+    set {result = .registered(newValue)}
+  }
+
+  var value: BamlBridge_Cffi_V1_BamlOutboundValue {
+    get {
+      if case .value(let v)? = result {return v}
+      return BamlBridge_Cffi_V1_BamlOutboundValue()
+    }
+    set {result = .value(newValue)}
+  }
+
+  var failure: BamlBridge_Cffi_V1_BamlOutboundResult {
+    get {
+      if case .failure(let v)? = result {return v}
+      return BamlBridge_Cffi_V1_BamlOutboundResult()
+    }
+    set {result = .failure(newValue)}
+  }
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  nonisolated enum OneOf_Result: Equatable, Sendable {
+    case registered(BamlBridge_Cffi_V1_RegisteredHostAdapter)
+    case value(BamlBridge_Cffi_V1_BamlOutboundValue)
+    case failure(BamlBridge_Cffi_V1_BamlOutboundResult)
 
   }
 
@@ -927,7 +1263,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundEnumValue: SwiftProtobuf.Message
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTyArg"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0\u{3}type_definition\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0\u{3}type_definition\0\u{3}type_reference\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -938,6 +1274,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
       case 1: try { try decoder.decodeSingularStringField(value: &self.typeVar) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._typeValue) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._typeDefinition) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self._typeReference) }()
       default: break
       }
     }
@@ -957,6 +1294,9 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
     try { if let v = self._typeDefinition {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._typeReference {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -964,6 +1304,124 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
     if lhs.typeVar != rhs.typeVar {return false}
     if lhs._typeValue != rhs._typeValue {return false}
     if lhs._typeDefinition != rhs._typeDefinition {return false}
+    if lhs._typeReference != rhs._typeReference {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_InterfaceMethodTarget: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InterfaceMethodTarget"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}view\0\u{1}member\0\u{3}type_args\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.view) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.member) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.typeArgs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.view != 0 {
+      try visitor.visitSingularUInt64Field(value: self.view, fieldNumber: 1)
+    }
+    if !self.member.isEmpty {
+      try visitor.visitSingularStringField(value: self.member, fieldNumber: 2)
+    }
+    if !self.typeArgs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.typeArgs, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_InterfaceMethodTarget, rhs: BamlBridge_Cffi_V1_InterfaceMethodTarget) -> Bool {
+    if lhs.view != rhs.view {return false}
+    if lhs.member != rhs.member {return false}
+    if lhs.typeArgs != rhs.typeArgs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_ConcreteMethodTarget: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ConcreteMethodTarget"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}receiver\0\u{3}class_name\0\u{3}interface_pattern\0\u{1}member\0\u{3}type_args\0\u{1}inherent\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.receiver) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.className) }()
+      case 3: try {
+        var v: BamlBridge_Cffi_V1_BamlTy?
+        var hadOneofValue = false
+        if let current = self.dispatch {
+          hadOneofValue = true
+          if case .interfacePattern(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.dispatch = .interfacePattern(v)
+        }
+      }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.member) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.typeArgs) }()
+      case 6: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.dispatch != nil {try decoder.handleConflictingOneOf()}
+          self.dispatch = .inherent(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.receiver != 0 {
+      try visitor.visitSingularUInt64Field(value: self.receiver, fieldNumber: 1)
+    }
+    if !self.className.isEmpty {
+      try visitor.visitSingularStringField(value: self.className, fieldNumber: 2)
+    }
+    try { if case .interfacePattern(let v)? = self.dispatch {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if !self.member.isEmpty {
+      try visitor.visitSingularStringField(value: self.member, fieldNumber: 4)
+    }
+    if !self.typeArgs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.typeArgs, fieldNumber: 5)
+    }
+    try { if case .inherent(let v)? = self.dispatch {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_ConcreteMethodTarget, rhs: BamlBridge_Cffi_V1_ConcreteMethodTarget) -> Bool {
+    if lhs.receiver != rhs.receiver {return false}
+    if lhs.className != rhs.className {return false}
+    if lhs.dispatch != rhs.dispatch {return false}
+    if lhs.member != rhs.member {return false}
+    if lhs.typeArgs != rhs.typeArgs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -971,7 +1429,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
 
 nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".CallFunctionArgs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0\u{3}interface_method\0\u{3}concrete_method\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -996,6 +1454,32 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
         if let v = v {
           if self.callTarget != nil {try decoder.handleConflictingOneOf()}
           self.callTarget = .functionHandle(v)
+        }
+      }()
+      case 6: try {
+        var v: BamlBridge_Cffi_V1_InterfaceMethodTarget?
+        var hadOneofValue = false
+        if let current = self.callTarget {
+          hadOneofValue = true
+          if case .interfaceMethod(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.callTarget = .interfaceMethod(v)
+        }
+      }()
+      case 7: try {
+        var v: BamlBridge_Cffi_V1_ConcreteMethodTarget?
+        var hadOneofValue = false
+        if let current = self.callTarget {
+          hadOneofValue = true
+          if case .concreteMethod(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.callTarget = .concreteMethod(v)
         }
       }()
       default: break
@@ -1025,6 +1509,14 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     case .functionHandle?: try {
       guard case .functionHandle(let v)? = self.callTarget else { preconditionFailure() }
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 5)
+    }()
+    case .interfaceMethod?: try {
+      guard case .interfaceMethod(let v)? = self.callTarget else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .concreteMethod?: try {
+      guard case .concreteMethod(let v)? = self.callTarget else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -1077,6 +1569,420 @@ nonisolated extension BamlBridge_Cffi_V1_CallAck: SwiftProtobuf.Message, SwiftPr
 
   static func ==(lhs: BamlBridge_Cffi_V1_CallAck, rhs: BamlBridge_Cffi_V1_CallAck) -> Bool {
     if lhs.response != rhs.response {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_RegisterHostAdapterRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".RegisterHostAdapterRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}implementations\0\u{3}type_args\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.implementations) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.typeArgs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.implementations.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.implementations, fieldNumber: 2)
+    }
+    if !self.typeArgs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.typeArgs, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_RegisterHostAdapterRequest, rhs: BamlBridge_Cffi_V1_RegisterHostAdapterRequest) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.implementations != rhs.implementations {return false}
+    if lhs.typeArgs != rhs.typeArgs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostAdapterImplementation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostAdapterImplementation"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}interface_template\0\u{1}methods\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._interfaceTemplate) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.methods) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._interfaceTemplate {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.methods.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.methods, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostAdapterImplementation, rhs: BamlBridge_Cffi_V1_HostAdapterImplementation) -> Bool {
+    if lhs._interfaceTemplate != rhs._interfaceTemplate {return false}
+    if lhs.methods != rhs.methods {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_RegisteredHostAdapter: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".RegisteredHostAdapter"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}adapter_type\0\u{3}class_type\0\u{1}callbacks\0\u{3}interface_types\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._adapterType) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._classType) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.callbacks) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.interfaceTypes) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._adapterType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._classType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if !self.callbacks.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.callbacks, fieldNumber: 3)
+    }
+    if !self.interfaceTypes.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.interfaceTypes, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_RegisteredHostAdapter, rhs: BamlBridge_Cffi_V1_RegisteredHostAdapter) -> Bool {
+    if lhs._adapterType != rhs._adapterType {return false}
+    if lhs._classType != rhs._classType {return false}
+    if lhs.callbacks != rhs.callbacks {return false}
+    if lhs.interfaceTypes != rhs.interfaceTypes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostAdapterCallbackSlot: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostAdapterCallbackSlot"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}method\0\u{4}\u{2}implementation_index\0\u{c}\u{2}\u{1}")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.method) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.implementationIndex) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.method.isEmpty {
+      try visitor.visitSingularStringField(value: self.method, fieldNumber: 1)
+    }
+    if self.implementationIndex != 0 {
+      try visitor.visitSingularUInt32Field(value: self.implementationIndex, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostAdapterCallbackSlot, rhs: BamlBridge_Cffi_V1_HostAdapterCallbackSlot) -> Bool {
+    if lhs.implementationIndex != rhs.implementationIndex {return false}
+    if lhs.method != rhs.method {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_CreateHostAdapterRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".CreateHostAdapterRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}adapter_type\0\u{1}receiver\0\u{1}callbacks\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.adapterType) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._receiver) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.callbacks) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.adapterType != 0 {
+      try visitor.visitSingularUInt64Field(value: self.adapterType, fieldNumber: 1)
+    }
+    try { if let v = self._receiver {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if !self.callbacks.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.callbacks, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_CreateHostAdapterRequest, rhs: BamlBridge_Cffi_V1_CreateHostAdapterRequest) -> Bool {
+    if lhs.adapterType != rhs.adapterType {return false}
+    if lhs._receiver != rhs._receiver {return false}
+    if lhs.callbacks != rhs.callbacks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_ProjectInterfaceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ProjectInterfaceRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}receiver\0\u{3}interface_type\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.receiver) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._interfaceType) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.receiver != 0 {
+      try visitor.visitSingularUInt64Field(value: self.receiver, fieldNumber: 1)
+    }
+    try { if let v = self._interfaceType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_ProjectInterfaceRequest, rhs: BamlBridge_Cffi_V1_ProjectInterfaceRequest) -> Bool {
+    if lhs.receiver != rhs.receiver {return false}
+    if lhs._interfaceType != rhs._interfaceType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostOperationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostOperationRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}register\0\u{1}create\0\u{1}project\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: BamlBridge_Cffi_V1_RegisterHostAdapterRequest?
+        var hadOneofValue = false
+        if let current = self.operation {
+          hadOneofValue = true
+          if case .register(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operation = .register(v)
+        }
+      }()
+      case 2: try {
+        var v: BamlBridge_Cffi_V1_CreateHostAdapterRequest?
+        var hadOneofValue = false
+        if let current = self.operation {
+          hadOneofValue = true
+          if case .create(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operation = .create(v)
+        }
+      }()
+      case 3: try {
+        var v: BamlBridge_Cffi_V1_ProjectInterfaceRequest?
+        var hadOneofValue = false
+        if let current = self.operation {
+          hadOneofValue = true
+          if case .project(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operation = .project(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.operation {
+    case .register?: try {
+      guard case .register(let v)? = self.operation else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .create?: try {
+      guard case .create(let v)? = self.operation else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .project?: try {
+      guard case .project(let v)? = self.operation else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostOperationRequest, rhs: BamlBridge_Cffi_V1_HostOperationRequest) -> Bool {
+    if lhs.operation != rhs.operation {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostOperationResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostOperationResult"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}registered\0\u{1}value\0\u{1}failure\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: BamlBridge_Cffi_V1_RegisteredHostAdapter?
+        var hadOneofValue = false
+        if let current = self.result {
+          hadOneofValue = true
+          if case .registered(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.result = .registered(v)
+        }
+      }()
+      case 2: try {
+        var v: BamlBridge_Cffi_V1_BamlOutboundValue?
+        var hadOneofValue = false
+        if let current = self.result {
+          hadOneofValue = true
+          if case .value(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.result = .value(v)
+        }
+      }()
+      case 3: try {
+        var v: BamlBridge_Cffi_V1_BamlOutboundResult?
+        var hadOneofValue = false
+        if let current = self.result {
+          hadOneofValue = true
+          if case .failure(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.result = .failure(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.result {
+    case .registered?: try {
+      guard case .registered(let v)? = self.result else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .value?: try {
+      guard case .value(let v)? = self.result else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .failure?: try {
+      guard case .failure(let v)? = self.result else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostOperationResult, rhs: BamlBridge_Cffi_V1_HostOperationResult) -> Bool {
+    if lhs.result != rhs.result {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
