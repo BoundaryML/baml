@@ -15,7 +15,7 @@
 #   vbv: [oncall-releases]
 # END_ONCALL_METADATA
 
-2026-09-04 oncall-releases=paulo
+2026-09-04 oncall-releases=sam
 2026-09-11 oncall-releases=sam
 2026-09-18 oncall-releases=vbv
 2026-09-25 oncall-releases=aaron
