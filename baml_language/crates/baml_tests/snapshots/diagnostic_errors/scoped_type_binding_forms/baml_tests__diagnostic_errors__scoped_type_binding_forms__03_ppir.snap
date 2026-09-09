@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Wrapper {
+  inner: T
+}
+class user.Wrapper$stream {
+  inner: T | null
+}
+function user.hole_in_a_static_binding() -> int  [expr] {
+  { type T = user.Wrapper<_> } 1
+}
+function user.ident(v: T) -> T  [expr] {
+  {  } v
+}
+function user.operand_solved_to_int() -> int  [expr] {
+  { let v = ident(1); type T = unreflect(v) } 1
+}
+function user.unknown_operand(x: unknown) -> bool  [expr] {
+  { type T = unreflect(x) } reflect.Type.of() Eq reflect.Type.of()
+}

@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+    ╭─[scoped_type_binding_forms.baml:12:22]
+ 12 │     type T = Wrapper<_>
+    ·                      ─
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:20:24]
+ 20 │     type T = unreflect(x)
+    ·                        ┬
+    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `unknown`
+    ╰────

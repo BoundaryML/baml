@@ -188,6 +188,32 @@ function collected_as_unknown_list(t: reflect.Type) -> unknown[] {
     vs
 }
 
+// A binding's frame slot is keyed by the parameter's identity, never by its
+// name, so even the compiler's own effect-parameter spelling is just a name.
+function binding_named_like_an_effect_param(t: reflect.Type) -> reflect.Type {
+    type __effect_param_0 = unreflect(t)
+    reflect.Type.of<__effect_param_0>()
+}
+
+// An `unknown` is not a type operand: narrow it to `reflect.Type` with
+// `match` or `is` first, and the non-type case is handled where it is
+// decided, never erased into the frame.
+function bind_narrowed(x: unknown) -> string {
+    match (x) {
+        let t: reflect.Type => {
+            type T = unreflect(t)
+            reflect.Type.of<T>().to_string()
+        },
+        _ => "not a type",
+    }
+}
+
+test "an operand is narrowed to a type before it binds" {
+    let erased: unknown = reflect.Type.of<int>()
+    assert.equal(bind_narrowed(erased), "int")
+    assert.equal(bind_narrowed(1), "not a type")
+}
+
 test "values and effects leave a block only through binding-free types" {
     let int_t = reflect.Type.of<int>()
     let string_t = reflect.Type.of<string>()
@@ -200,6 +226,7 @@ test "values and effects leave a block only through binding-free types" {
     let collected = collected_as_unknown_list(int_t)
     assert.is_true(reflect.Type.of_value(collected) == reflect.Type.of<unknown[]>())
     assert.is_true(reflect.Type.of_value(collected[0]) == int_t)
+    assert.is_true(binding_named_like_an_effect_param(int_t) == int_t)
 }
 
 // Sibling blocks reuse one frame slot for their bindings. A descriptor

@@ -1951,6 +1951,9 @@ impl BexVm {
         {
             return result.map_err(VmError::thrown_fresh);
         }
+        // Static checking admits only `reflect.Type | reflect.TypeView` and a
+        // pending builder type here, so any other value is a compiler bug,
+        // not a program error.
         Err(VmInternalError::TypeError {
             expected: Type::Object(ObjectType::Type),
             got: self.type_of(&value),

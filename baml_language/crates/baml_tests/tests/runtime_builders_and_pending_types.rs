@@ -126,9 +126,9 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
             }
 
             let unresolved = reflect.class.builder("UnbuiltTenant")
-            let erased: unknown = unresolved.type()
+            let pending = unresolved.type()
             let pending_error = {
-                type Pending = unreflect(erased)
+                type Pending = unreflect(pending)
                 Extract@render_prompt<Pending>()
             } catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].message

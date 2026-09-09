@@ -23,6 +23,12 @@ impl ParamTy {
         self.index
     }
 
+    /// Whether this is a block-scoped `type T = …` parameter (its index
+    /// carries [`SCOPED_PARAM_BIT`]) rather than a declared generic.
+    pub fn is_scoped(&self) -> bool {
+        self.index & SCOPED_PARAM_BIT != 0
+    }
+
     pub fn name(&self) -> &Name {
         &self.name
     }
@@ -57,12 +63,22 @@ pub struct RuntimeGenericLayout {
     params: Vec<ParamTy>,
 }
 
+/// The index bit that marks a block-scoped `type T = …` parameter. Declared
+/// generic parameters are De Bruijn positions in a frame and never reach it;
+/// a scoped parameter's identity is a hash of its binding statement, and
+/// this bit keeps the two spaces disjoint.
+pub const SCOPED_PARAM_BIT: u32 = 0x8000_0000;
+
 impl RuntimeGenericLayout {
     pub fn new(params: &[ParamTy]) -> Self {
         Self {
             params: params
                 .iter()
-                .filter(|param| !is_synthetic_effect_param(param.name()))
+                // A synthetic effect parameter (`__effect_param_N`, minted
+                // into item signatures) is slot-less by ABI. A block-scoped
+                // binding is told apart by its index bit, never by its name,
+                // so a user's `type __effect_param_0 = …` keeps its slot.
+                .filter(|param| param.is_scoped() || !is_synthetic_effect_param(param.name()))
                 .cloned()
                 .collect(),
         }
@@ -114,12 +130,23 @@ mod tests {
         let first = ParamTy::new(0, Name::new("T"));
         let effect = ParamTy::new(1, Name::new("__effect_param_0"));
         let last = ParamTy::new(2, Name::new("U"));
-        let layout = RuntimeGenericLayout::new(&[first.clone(), effect.clone(), last.clone()]);
+        // A scoped binding is a slot whatever it is called.
+        let scoped = ParamTy::new(SCOPED_PARAM_BIT | 5, Name::new("__effect_param_0"));
+        let layout = RuntimeGenericLayout::new(&[
+            first.clone(),
+            effect.clone(),
+            last.clone(),
+            scoped.clone(),
+        ]);
 
-        assert_eq!(layout.params(), &[first.clone(), last.clone()]);
+        assert_eq!(
+            layout.params(),
+            &[first.clone(), last.clone(), scoped.clone()]
+        );
         assert_eq!(layout.slot(&first), Some(0));
         assert_eq!(layout.slot(&effect), None);
         assert_eq!(layout.slot(&last), Some(1));
-        assert_eq!(layout.slots().collect::<Vec<_>>(), vec![0, 1]);
+        assert_eq!(layout.slot(&scoped), Some(2));
+        assert_eq!(layout.slots().collect::<Vec<_>>(), vec![0, 1, 2]);
     }
 }

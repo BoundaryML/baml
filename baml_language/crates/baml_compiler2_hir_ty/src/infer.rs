@@ -2462,6 +2462,7 @@ impl<'db> InferenceContext<'db> {
                         let (lowered, diagnostics) = self.lower_body_type_ref_at(
                             target_ref,
                             crate::lower::TypePosition::Existential,
+                            crate::lower::HolePolicy::Allowed,
                         );
                         self.queue_body_lowering_diagnostics(diagnostics);
                         self.reject_expr_position_holes(&lowered, expr)
@@ -3114,11 +3115,15 @@ impl<'db> InferenceContext<'db> {
                     .unwrap_or_else(|| {
                         unreachable!("every static type binding is collected as a body type ref")
                     });
-                let (ty, diagnostics) =
-                    self.lower_body_type_ref_at(type_ref, crate::lower::TypePosition::Existential);
-                self.queue_body_lowering_diagnostics(diagnostics);
                 // A static template is a stored/structural position: a `_`
-                // inside it is a ruling-4 rejection, never a fresh variable.
+                // inside it has nothing to infer from, and is diagnosed at
+                // the hole, where the span is (`HolePolicy::Forbidden`).
+                let (ty, diagnostics) = self.lower_body_type_ref_at(
+                    type_ref,
+                    crate::lower::TypePosition::Existential,
+                    crate::lower::HolePolicy::Forbidden(crate::lower::NoInferReason::TypeBinding),
+                );
+                self.queue_body_lowering_diagnostics(diagnostics);
                 ScopedTypeSource::Static(Ty::from_plain(&crate::lower::reject_holes(&ty)))
             }
         };
@@ -3420,12 +3425,14 @@ impl<'db> InferenceContext<'db> {
         store: &baml_compiler2_hir::type_ref::TypeRefStore,
         type_ref: baml_compiler2_hir::type_ref::TypeRefId,
         position: crate::lower::TypePosition,
+        holes: crate::lower::HolePolicy,
     ) -> (baml_type::LoweringTy, Vec<crate::lower::LoweringDiag>) {
         self.lower.lower_type_ref_with_overlay_and_diagnostics(
             store,
             type_ref,
             position,
             &self.scoped_type_params(),
+            holes,
         )
     }
 
@@ -3441,14 +3448,24 @@ impl<'db> InferenceContext<'db> {
             );
     }
 
+    /// Lower a body type reference at `position`; `holes` says whether the
+    /// position has something to infer a `_` from (a `let` annotation does,
+    /// a `type T = …` right-hand side does not).
     fn lower_body_type_ref_at(
         &mut self,
         type_ref: BodyTypeRefId,
         position: crate::lower::TypePosition,
+        holes: crate::lower::HolePolicy,
     ) -> (baml_type::LoweringTy, Vec<crate::lower::LoweringDiag>) {
         let type_refs = Arc::clone(&self.type_refs);
-        self.lower_scoped_type_ref_at(&type_refs.store, type_refs.raw_id(type_ref), position)
+        self.lower_scoped_type_ref_at(
+            &type_refs.store,
+            type_refs.raw_id(type_ref),
+            position,
+            holes,
+        )
     }
+
     fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> baml_type::LoweringTy {
         self.lower
             .lower_type_path_with_overlay(segments, &self.scoped_type_params())
@@ -5228,11 +5245,14 @@ impl<'db> InferenceContext<'db> {
                 && name.namespace().iter().map(baml_type::Name::as_str)
                     .eq(["class"])
                 && name.name().as_str() == "PendingType");
-        if pending_type
-            || got.has_error()
-            || got.has_infer()
-            || matches!(got.kind(), InferTy::Unknown { .. })
-        {
+        // A diagnosed operand stays quiet; a pending builder type is a
+        // known value the VM resolves (or refuses) at the boundary. Nothing
+        // else is exempt: an `unknown` must be narrowed to a type with
+        // `match` or `is` before it binds, since a value the checker has not
+        // typed may not be erased into the frame and fail at run time. An
+        // open operand deposits the contract as a bound and is re-judged
+        // here once it solves.
+        if pending_type || got.has_error() {
             return;
         }
         // The operand contract is `reflect.Type | reflect.TypeView`: a kind
@@ -5253,12 +5273,9 @@ impl<'db> InferenceContext<'db> {
             ]),
             TyAttr::default(),
         ));
-        let saved_anchor = self.obligation_anchor.replace(operand);
-        let fits = self.sub(&got, &expected);
-        self.obligation_anchor = saved_anchor;
-        if !fits {
-            self.result.type_mismatches.insert(operand, (expected, got));
-        }
+        // The ordinary checking road: a ground mismatch is recorded here, an
+        // open operand is re-judged at finish once its variable solves.
+        self.check_inferred(operand, got, &expected);
     }
 
     /// Seed the otherwise-unconstrained schema parameter of the three legacy
@@ -7219,7 +7236,8 @@ impl<'db> InferenceContext<'db> {
         let member = member.clone();
 
         let lower = |this: &mut Self, type_ref, position| {
-            let (ty, diagnostics) = this.lower_body_type_ref_at(type_ref, position);
+            let (ty, diagnostics) =
+                this.lower_body_type_ref_at(type_ref, position, crate::lower::HolePolicy::Allowed);
             this.queue_body_lowering_diagnostics(diagnostics);
             this.reject_expr_position_holes(&ty, expr)
         };
@@ -7596,6 +7614,7 @@ impl<'db> InferenceContext<'db> {
                         let (lowered, diagnostics) = self.lower_body_type_ref_at(
                             *type_ref,
                             crate::lower::TypePosition::Existential,
+                            crate::lower::HolePolicy::Allowed,
                         );
                         self.queue_body_lowering_diagnostics(diagnostics);
                         self.reject_expr_position_holes(&lowered, anchor)
@@ -8452,7 +8471,8 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             let computed = self.computed_generic_argument_name(*type_ref, site);
-            let (lowered, diagnostics) = self.lower_body_type_ref_at(*type_ref, position);
+            let (lowered, diagnostics) =
+                self.lower_body_type_ref_at(*type_ref, position, crate::lower::HolePolicy::Allowed);
             if let Some(name) = computed {
                 self.specialize_computed_generic_diagnostic(diagnostics, *type_ref, site, &name);
             } else {
@@ -9884,8 +9904,11 @@ impl<'db> InferenceContext<'db> {
         if let Some(cached) = self.annotation_cache.get(&type_ref) {
             return cached.clone();
         }
-        let (lowered, diagnostics) =
-            self.lower_body_type_ref_at(type_ref, crate::lower::TypePosition::Existential);
+        let (lowered, diagnostics) = self.lower_body_type_ref_at(
+            type_ref,
+            crate::lower::TypePosition::Existential,
+            crate::lower::HolePolicy::Allowed,
+        );
         self.queue_body_lowering_diagnostics(diagnostics);
         // Written-type well-formedness (rustc's wfcheck at body
         // annotations): generic arguments must satisfy their heads'
@@ -12868,11 +12891,7 @@ fn external_target_path(target: &crate::callable::ExternalCallTarget) -> baml_ty
     baml_type::Name::new(path)
 }
 
-/// The index bit that marks a block-scoped `type T = …` parameter. Declared
-/// generic parameters are De Bruijn positions in a frame and never reach it;
-/// a scoped parameter's identity is a hash of its binding statement, and
-/// this bit keeps the two spaces disjoint.
-pub(crate) const SCOPED_PARAM_BIT: u32 = 0x8000_0000;
+pub(crate) use baml_type::SCOPED_PARAM_BIT;
 
 /// Whether a finalized (plain) type names a block-scoped parameter.
 fn mentions_scoped_param(ty: &baml_type::Ty) -> bool {

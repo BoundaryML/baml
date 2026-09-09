@@ -94,6 +94,9 @@ pub enum NoInferReason {
     /// part of it may be inferred: the only body to infer from is a default
     /// that binds no implementor (`TYPE_SYSTEM.md` Functions rule 1).
     InterfaceSignature,
+    /// The right-hand side of a `type T = …` binding. It fills `T`'s frame
+    /// slot when the statement runs, from the written type alone.
+    TypeBinding,
 }
 
 /// Whether the types a [`LowerCtx`] lowers may contain an inference hole.
@@ -323,7 +326,7 @@ impl<'db> LowerCtx<'db> {
         id: TypeRefId,
         position: TypePosition,
     ) -> (LoweringTy, Vec<LoweringDiag>) {
-        self.lower_type_ref_with_overlay_and_diagnostics(store, id, position, &[])
+        self.lower_type_ref_with_overlay_and_diagnostics(store, id, position, &[], self.holes)
     }
 
     /// [`Self::lower_type_ref`] at an explicit [`TypePosition`]. The
@@ -370,8 +373,10 @@ impl<'db> LowerCtx<'db> {
         id: TypeRefId,
         position: TypePosition,
         overlay: &[ParamTy],
+        holes: HolePolicy,
     ) -> (LoweringTy, Vec<LoweringDiag>) {
-        let fork = self.fork_with_overlay_and_diagnostics(overlay);
+        let mut fork = self.fork_with_overlay_and_diagnostics(overlay);
+        fork.holes = holes;
         let ty = fork.lower_type_ref_at(store, id, position);
         (ty, fork.take_diagnostics())
     }
@@ -2515,7 +2520,7 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         // `interface_lowering_diagnostics`); this is the generic spelling for
         // any other consumer that drains the sink.
         LoweringDiagKind::HoleNotAllowed {
-            reason: NoInferReason::InterfaceSignature,
+            reason: NoInferReason::InterfaceSignature | NoInferReason::TypeBinding,
         } => TirTypeError::CannotInferType,
     }
 }
