@@ -674,13 +674,14 @@ jobs:
     if: github.event_name != 'push' && needs.determine_changes.outputs.developer_docs == 'true'
     uses: ./.github/workflows/developer-docs.reusable.yaml
     with:
-      can-use-secrets: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
+      can-use-secrets: ${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
     permissions:
       contents: read
+    # Merge groups can include fork code; validate them without credentials.
     secrets:
-      GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      GENERATED_CONTENT_DATABASE_URL: ${{ github.event_name != 'merge_group' && secrets.GENERATED_CONTENT_DATABASE_URL || '' }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ github.event_name != 'merge_group' && secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID || '' }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ github.event_name != 'merge_group' && secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY || '' }}
 
   webview-tests:
     name: "Webview Tests"

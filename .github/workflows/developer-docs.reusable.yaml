@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       can-use-secrets:
-        description: Whether the caller is trusted to run checks against the published documentation store
+        description: Whether the caller is trusted to use the shared cache and published documentation store
         type: boolean
         default: true
     secrets:
@@ -69,8 +69,8 @@ jobs:
     timeout-minutes: 45
     env:
       # .envrc supplies the R2 configuration, with a local cache for secretless PRs.
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ inputs.can-use-secrets && secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID || '' }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ inputs.can-use-secrets && secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY || '' }}
       CARGO_INCREMENTAL: 0
       CARGO_NET_RETRY: 10
       CARGO_TERM_COLOR: always
