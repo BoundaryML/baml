@@ -670,8 +670,8 @@ jobs:
   developer-docs:
     name: "Developer Docs"
     needs: determine_changes
-    # Push validation has its own entry point in developer-docs.yaml.
-    if: github.event_name != 'push' && needs.determine_changes.outputs.developer_docs == 'true'
+    # Push and manual runs use the entry point in developer-docs.yaml.
+    if: (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.determine_changes.outputs.developer_docs == 'true'
     uses: ./.github/workflows/developer-docs.reusable.yaml
     with:
       can-use-secrets: ${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
