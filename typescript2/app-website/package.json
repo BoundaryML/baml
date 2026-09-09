@@ -147,7 +147,6 @@
     "postbuild": "next-sitemap --config next-sitemap.config.cjs",
     "start": "next start",
     "test": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/baml-monarch.test.mjs",
-    "test:mdx": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/mdx-highlighting.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "version": "0.1.0"
