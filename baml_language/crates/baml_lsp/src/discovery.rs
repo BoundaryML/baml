@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::SourceRootKind;
+use baml_base::{Name, SourceRootKind};
 
 use crate::{
     mutation::RootSpec,
@@ -54,8 +54,10 @@ pub trait ProjectFs: Send + Sync {
     fn discover_roots(&self, folder: &Path) -> Vec<DiscoveredRoot>;
 }
 
-/// The `Workspace` root spec every discovered project gets: an unnamed
-/// package, until discovery reads `[package].name` from the manifest.
+/// The `Workspace` root spec for a project that declares no name: one
+/// discovered by a `baml_src/` marker alone, or minted for a document that
+/// lies outside every project. A project with a manifest is named by
+/// [`declared_package_name`].
 pub fn workspace_root_spec(path: PathBuf) -> RootSpec {
     RootSpec {
         path,
@@ -82,6 +84,31 @@ pub fn retain_outermost_manifest_projects(
                 .iter()
                 .any(|manifest| candidate != manifest && candidate.starts_with(manifest))
     });
+}
+
+/// The name a project declares in its manifest, or `None`.
+///
+/// Discovery is lenient where the CLI loader is strict: a project with no
+/// `baml.toml`, one whose manifest does not parse, or one that omits
+/// `[package].name` is simply unnamed here. Refusing to serve a project
+/// because its manifest has a typo would take the editor down over the very
+/// thing the editor exists to help fix.
+#[cfg(not(target_arch = "wasm32"))]
+fn declared_package_name(root: &Path) -> Option<Name> {
+    use baml_db::project_resolution::BAML_TOML;
+    let toml_path = root.join(BAML_TOML);
+    let text = std::fs::read_to_string(&toml_path).ok()?;
+    let manifest = baml_db::manifest::parse(&text)
+        .inspect_err(|error| {
+            tracing::debug!(
+                path = %toml_path.display(),
+                %error,
+                "unparseable manifest; the project stays unnamed"
+            );
+        })
+        .ok()?;
+    let name = manifest.package.as_ref()?.name.as_ref()?.trim();
+    (!name.is_empty()).then(|| Name::new(name))
 }
 
 /// A filesystem-less host: reads fail with `Unsupported` and discovery finds
@@ -167,7 +194,10 @@ impl ProjectFs for NativeFs {
             .map(|root| {
                 let files = baml_db::discover_baml_files(&project_source_root(&root));
                 DiscoveredRoot {
-                    spec: workspace_root_spec(root),
+                    spec: RootSpec {
+                        self_name: declared_package_name(&root),
+                        ..workspace_root_spec(root)
+                    },
                     files,
                 }
             })
@@ -299,7 +329,14 @@ mod tests {
 
         let roots = NativeFs.discover_roots(&ws.join("baml_src/nested"));
         assert_eq!(roots.len(), 1, "{roots:?}");
-        assert_eq!(roots[0].spec, workspace_root_spec(ws.clone()));
+        assert_eq!(
+            roots[0].spec,
+            RootSpec {
+                self_name: Some(Name::new("p")),
+                ..workspace_root_spec(ws.clone())
+            },
+            "the name the manifest declares is read at discovery"
+        );
         assert_eq!(
             roots[0].files,
             vec![
@@ -311,6 +348,47 @@ mod tests {
         // Discovery from the workspace root finds the same single project.
         let from_root = NativeFs.discover_roots(&ws);
         assert_eq!(from_root, roots);
+    }
+
+    /// Most projects declare no name: one found by its `baml_src/` marker
+    /// has no manifest to read, and a manifest may omit `[package].name`.
+    /// Neither is an error here, and neither may be given the unnamed
+    /// default as if it were a name.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_project_that_declares_no_name_is_unnamed() {
+        let temp = tempfile::tempdir().unwrap();
+        let ws = temp.path().canonicalize().unwrap();
+        std::fs::create_dir_all(ws.join("marker_only/baml_src")).unwrap();
+        std::fs::write(ws.join("marker_only/baml_src/a.baml"), "").unwrap();
+        std::fs::create_dir_all(ws.join("no_name/baml_src")).unwrap();
+        std::fs::write(ws.join("no_name/baml.toml"), "[package]\n").unwrap();
+        std::fs::write(ws.join("no_name/baml_src/a.baml"), "").unwrap();
+
+        let named: Vec<Option<Name>> = NativeFs
+            .discover_roots(&ws)
+            .into_iter()
+            .map(|root| root.spec.self_name)
+            .collect();
+        assert_eq!(named, vec![None, None], "neither project names itself");
+    }
+
+    /// A manifest the editor cannot parse leaves its project unnamed and
+    /// served. Refusing to serve it would take the editor down over exactly
+    /// the mistake the editor exists to help fix.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn an_unparseable_manifest_leaves_the_project_served_and_unnamed() {
+        let temp = tempfile::tempdir().unwrap();
+        let ws = temp.path().canonicalize().unwrap();
+        std::fs::write(ws.join("baml.toml"), "[package\nname = broken").unwrap();
+        std::fs::create_dir_all(ws.join("baml_src")).unwrap();
+        std::fs::write(ws.join("baml_src/a.baml"), "").unwrap();
+
+        let roots = NativeFs.discover_roots(&ws);
+        assert_eq!(roots.len(), 1, "the project is still discovered: {roots:?}");
+        assert_eq!(roots[0].spec.self_name, None);
+        assert_eq!(roots[0].files, vec![ws.join("baml_src/a.baml")]);
     }
 
     #[cfg(not(target_arch = "wasm32"))]

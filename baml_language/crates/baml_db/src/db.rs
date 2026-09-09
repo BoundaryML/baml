@@ -776,12 +776,12 @@ impl ProjectDatabase {
         self.table().roots(self).clone()
     }
 
-    /// The sole `Workspace` root, if one has been added.
+    /// The first `Workspace` root, if one has been added.
     ///
-    /// Single-workspace stopgap: the LSP's one-workspace guard is its only
-    /// production caller and goes with the guard. Code that compiles or
-    /// inspects a project holds the root it added and threads that instead of
-    /// asking the database which root is "the" workspace.
+    /// Test scaffolding: a fixture that adds one workspace root reads it back
+    /// here. Production code holds the root it added and threads that — a
+    /// database may hold several workspace roots, and none of them is "the"
+    /// workspace.
     pub fn workspace_root(&self) -> Option<SourceRoot> {
         self.table()
             .roots(self)

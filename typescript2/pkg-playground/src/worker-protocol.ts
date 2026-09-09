@@ -10,6 +10,7 @@
 // Log decoration types (inline log display like ErrorLens)
 // ---------------------------------------------------------------------------
 
+import type { ProjectEntry } from './project-label';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogDecoration {
@@ -151,7 +152,7 @@ export interface ProjectUpdate {
 }
 
 export type PlaygroundNotification =
-  | { type: 'listProjects'; projects: string[] }
+  | { type: 'listProjects'; projects: ProjectEntry[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | {
       type: 'openPlayground';

@@ -27,7 +27,7 @@ function announceProject(port: FakeRuntimePort, update: ProjectUpdate): void {
   act(() => {
     port.emit({
       type: 'playgroundNotification',
-      notification: { type: 'listProjects', projects: ['project'] },
+      notification: { type: 'listProjects', projects: [{ path: 'project' }] },
     });
     port.emit({
       type: 'playgroundNotification',

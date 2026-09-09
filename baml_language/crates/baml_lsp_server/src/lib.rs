@@ -48,7 +48,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use baml_lsp::{GlobalState, OwnerEvent, SessionKey, discovery::NativeFs, executor::Executors};
+use baml_lsp::{GlobalState, OwnerEvent, discovery::NativeFs, executor::Executors};
 
 use crate::{
     lsp_runtime::{LspRuntime, SubmitResult},
@@ -596,6 +596,15 @@ fn run_server_inner(
                 return Err(error);
             }
             tracing::error!("Could not find a playground port: {error}");
+            // BUG: port 0 is a sentinel this host does not act on. The panel
+            // handler is installed unconditionally below, so `baml.openBamlPanel`
+            // still answers, sending `baml/openPlayground` with `port: 0`; the
+            // extension then builds a webview whose port mapping and injected
+            // `ws://localhost:0/api/ws` name no server, and it spins forever
+            // with no message saying why. Either withhold the handler when
+            // there is no listener (no lenses, `RequestNotSupported`, which the
+            // extension already surfaces) or send the failure so the client can
+            // say the playground is unavailable.
             (None, 0)
         }
     };
@@ -659,16 +668,18 @@ fn run_server_inner(
     // routes those per session.
     let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<OutboundFrame>(256);
 
-    if open_target == PlaygroundOpenTarget::Browser {
-        // No editor client to announce workspace folders, so discover the CLI
-        // roots directly.
+    // The command line's roots are the host's own workspace folders:
+    // discovered now, before any client connects (a session that initializes
+    // later receives the standing diagnostics in full), and covering their
+    // projects for the life of the process. In editor mode they join whatever
+    // folders the client announces; in browser mode they are the only ones.
+    {
         let roots = workspace_roots.clone();
         runtime
             .owner()
             .post(OwnerEvent::Call(Box::new(move |state| {
-                for root in roots {
-                    tracing::info!(path = %root.display(), "discovering playground root");
-                    state.spawn_discovery(baml_lsp::paths::canonical_physical_path(&root));
+                for root in &roots {
+                    state.add_host_folder(root);
                 }
             })));
     }
@@ -678,14 +689,7 @@ fn run_server_inner(
             open_target == PlaygroundOpenTarget::LspClient,
             "could not start the playground server"
         );
-        return run_stdio_loop(
-            &runtime,
-            &writer_tx,
-            &writer_budget,
-            writer_rx,
-            &lsp_sender,
-            &workspace_roots,
-        );
+        return run_stdio_loop(&runtime, &writer_tx, &writer_budget, writer_rx, &lsp_sender);
     };
 
     if open_target == PlaygroundOpenTarget::Browser {
@@ -750,18 +754,11 @@ fn run_server_inner(
         lsp_out_tx,
         runtime.clone(),
         doc_mirror,
-        workspace_roots.clone(),
+        workspace_roots,
         current_open_target,
     ));
 
-    run_stdio_loop(
-        &runtime,
-        &writer_tx,
-        &writer_budget,
-        writer_rx,
-        &lsp_sender,
-        &workspace_roots,
-    )
+    run_stdio_loop(&runtime, &writer_tx, &writer_budget, writer_rx, &lsp_sender)
 }
 
 /// The playground host in editor mode: a background task, whose exit is only
@@ -813,7 +810,6 @@ fn run_stdio_loop(
     writer_budget: &Arc<OutboundBudget>,
     writer_rx: crossbeam_channel::Receiver<OutboundFrame>,
     lsp_sender: &Arc<native_lsp_sender::NativeLspSender>,
-    workspace_roots: &[PathBuf],
 ) -> anyhow::Result<()> {
     // The stdio session: a bounded sink into the writer channel. Saturation
     // is backpressure (the response stays reserved and is retried), never
@@ -825,21 +821,12 @@ fn run_stdio_loop(
     let stdio_close: lsp_runtime::Close = Arc::new(move || {
         stdio_closed_for_endpoint.store(true, std::sync::atomic::Ordering::Release);
     });
-    let after_notification = (!workspace_roots.is_empty()).then(|| {
-        let roots = workspace_roots.to_vec();
-        let hook: lsp_runtime::NotificationHook = Arc::new(move |state, session, notification| {
-            if notification.method == "initialized" {
-                apply_cli_workspace_roots(state, session, &roots);
-            }
-        });
-        hook
-    });
     let stdio_session = runtime
         .open_session(
             lsp_ingress::TransportKind::Stdio,
             stdio_sink,
             stdio_close,
-            after_notification,
+            None,
         )
         .session_id;
 
@@ -936,34 +923,6 @@ fn run_stdio_loop(
 
     tracing::info!("LSP server shutting down");
     Ok(())
-}
-
-/// `--workspace` roots given on the command line join the stdio session's
-/// workspace folders once the client has finished `initialize`/`initialized`
-/// (so the client's own folders, applied by `initialize`, are not clobbered)
-/// and are discovered exactly like folders the client announced. A root the
-/// client already announced is left alone: `initialized` discovers it.
-fn apply_cli_workspace_roots(state: &mut GlobalState, session: SessionKey, roots: &[PathBuf]) {
-    let session_state = match state.session_mut(session) {
-        Ok(session_state) => session_state,
-        Err(error) => {
-            tracing::warn!(%error, "could not add --workspace roots to the stdio session");
-            return;
-        }
-    };
-    let mut added = Vec::new();
-    for root in roots {
-        let folder = baml_lsp::paths::canonical_physical_path(root);
-        if session_state.workspace_folders.contains(&folder) || added.contains(&folder) {
-            continue;
-        }
-        session_state.workspace_folders.push(folder.clone());
-        added.push(folder);
-    }
-    for folder in added {
-        tracing::info!(path = %folder.display(), "discovering --workspace root");
-        state.spawn_discovery(folder);
-    }
 }
 
 fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {

@@ -565,6 +565,15 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
             }
         }
         // CLASS generic-bound diagnostics.
+        //
+        // BUG: an unresolved field type is reported twice — once at the
+        // field's type-ref span (from `class_lowering_diagnostics`) and once
+        // at an EMPTY range rendered as `1:1`. Reproduce: `class Bad { x
+        // Undefined }` alone in a project; `baml check` prints two E0002 for
+        // it (`bad.baml:1:1` and `bad.baml:2:7-2:16`), the LSP publishes both.
+        // Suspect (unverified): the class's synthesized `$stream` companion
+        // re-lowers the same annotation with an empty declaration span
+        // through a walk other than the guarded one below.
         for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
             for (range, error) in
                 baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)

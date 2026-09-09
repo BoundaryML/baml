@@ -125,7 +125,9 @@ const App: React.FC = () => {
         setActiveProject(n.project);
       } else if (n.type === 'listProjects' && n.projects.length > 0) {
         // Only adopt the first discovered project if we don't have one yet.
-        setActiveProject((prev) => prev ?? n.projects[0]);
+        // A project is identified by its root path everywhere in this
+        // protocol; the entry's name is for display.
+        setActiveProject((prev) => prev ?? n.projects[0].path);
       }
     });
     // The port buffers incoming messages and replays them only to the FIRST

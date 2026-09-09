@@ -48,7 +48,10 @@ use crate::{
     },
     lsp_runtime::LspRuntime,
     playground_env::PlaygroundEnvState,
-    playground_notify::{PlaygroundNotification, ProjectDiagnostic, TestExpandError},
+    playground_notify::{
+        PlaygroundNotification, ProjectDiagnostic, ProjectEntry as PlaygroundProjectEntry,
+        TestExpandError,
+    },
     playground_sender::NativePlaygroundSender,
 };
 
@@ -209,6 +212,26 @@ impl PlaygroundSeam {
 
     /// Absolute paths of the workspace roots, in table order. These are the
     /// "projects" of the playground wire protocol.
+    /// Every workspace root with the name its manifest declares, in the
+    /// order the roots table holds them. [`Self::workspace_roots`] is the
+    /// same set for callers that only address projects by path.
+    pub async fn workspace_projects(&self) -> Vec<(PathBuf, Option<String>)> {
+        self.call(|state| {
+            state
+                .roots()
+                .workspace_roots()
+                .map(|entry| {
+                    (
+                        entry.path.clone(),
+                        entry.self_name.as_ref().map(ToString::to_string),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
     pub async fn workspace_roots(&self) -> Vec<PathBuf> {
         self.call(|state| {
             state
@@ -469,10 +492,13 @@ impl PlaygroundSeam {
 
     pub async fn send_list_projects(&self) {
         let projects = self
-            .workspace_roots()
+            .workspace_projects()
             .await
             .into_iter()
-            .map(|root| root.to_string_lossy().into_owned())
+            .map(|(path, name)| PlaygroundProjectEntry {
+                path: path.to_string_lossy().into_owned(),
+                name,
+            })
             .collect();
         self.sender
             .send_playground_notification(&PlaygroundNotification::ListProjects { projects });
@@ -812,7 +838,7 @@ impl PlaygroundSeam {
                     .roots()
                     .workspace_roots()
                     .find(|entry| entry.path == root_path)?
-                    .display_name
+                    .spelling
                     .to_string();
                 let ticket = runtimes
                     .existing(&root_path)?

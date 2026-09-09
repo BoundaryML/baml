@@ -45,11 +45,18 @@ function isBamlEditor(editor: TextEditor): boolean {
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
   private readonly _panel: VSCodeWebviewPanel;
+  /**
+   * The playground server port this panel was built for. Its port mapping
+   * and the WS URL baked into its HTML both name it, so a panel serves one
+   * port for its whole life; a request for another port gets a new panel.
+   */
+  public readonly port: number;
   private _disposables: Disposable[] = [];
   private _openTarget: OpenPlaygroundTarget;
 
-  private constructor(panel: VSCodeWebviewPanel, openTarget: OpenPlaygroundTarget) {
+  private constructor(panel: VSCodeWebviewPanel, port: number, openTarget: OpenPlaygroundTarget) {
     this._panel = panel;
+    this.port = port;
     this._openTarget = openTarget;
 
     // Dispose listener
@@ -82,13 +89,17 @@ export class WebviewPanel {
   }
 
   public static async render(extensionUri: Uri, port: number, openTarget: OpenPlaygroundTarget) {
-    if (WebviewPanel.currentPanel) {
-      WebviewPanel.currentPanel._openTarget = openTarget;
-      WebviewPanel.currentPanel._panel.reveal(ViewColumn.Beside, true);
-      WebviewPanel.currentPanel.forwardOpenPlayground();
-      WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
+    const current = WebviewPanel.currentPanel;
+    if (current?.port === port) {
+      current._openTarget = openTarget;
+      current._panel.reveal(ViewColumn.Beside, true);
+      current.forwardOpenPlayground();
+      current.forwardActiveEditorCursorPosition();
       return;
     }
+    // Another port is another server (the language server was restarted):
+    // this panel's port mapping and WS URL name a process that is gone.
+    current?.dispose();
 
     const panel = window.createWebviewPanel(
       'bamlPlayground',
@@ -105,7 +116,7 @@ export class WebviewPanel {
       }
     );
 
-    WebviewPanel.currentPanel = new WebviewPanel(panel, openTarget);
+    WebviewPanel.currentPanel = new WebviewPanel(panel, port, openTarget);
 
     // Show a loading message while we load the packaged playground shell.
     panel.webview.html = `<!DOCTYPE html>

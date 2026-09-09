@@ -106,13 +106,29 @@ pub struct ProjectUpdate {
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
+/// One project the playground can be pointed at.
+///
+/// `path` is the project's identity everywhere else in this protocol: it is
+/// what `UpdateProject` and `OpenPlayground` name. `name` is what the package
+/// calls itself in `[package].name`, omitted entirely when it declares no
+/// name, which is most projects. A reader showing a project to a person uses
+/// the name when there is one and falls back to the directory, never to the
+/// unnamed default, which is the same string for every unnamed project.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectEntry {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 // ── Notifications ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
-    ListProjects { projects: Vec<String> },
+    ListProjects { projects: Vec<ProjectEntry> },
     #[serde(rename_all = "camelCase")]
     UpdateProject {
         project: String,
