@@ -82,22 +82,6 @@ pub fn workspace_roots(db: &dyn crate::Db) -> Vec<SourceRoot> {
         .collect()
 }
 
-/// The sole workspace root, if there is one.
-///
-/// Stopgap for the single-workspace-root state: every unnamed package spells
-/// as the one default name (see [`Spelling`]), and the CLI and LSP still
-/// model exactly one project, so they install at most one `Workspace` root.
-/// Callers that need "the user's package" without a request file to derive
-/// it from use this, so the multi-root sweep has one seam to widen.
-pub fn sole_workspace_root(db: &dyn crate::Db) -> Option<SourceRoot> {
-    let roots = workspace_roots(db);
-    debug_assert!(
-        roots.len() <= 1,
-        "multiple workspace roots in one database need a viewpoint, not a sole root"
-    );
-    roots.first().copied()
-}
-
 /// The packages `viewer` can see: itself, then its dependency closure in
 /// deterministic order. Every "which impls (or items) exist?" question is
 /// asked from a package and answered over exactly this set — never the

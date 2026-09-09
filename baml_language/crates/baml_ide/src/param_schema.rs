@@ -394,14 +394,14 @@ mod tests {
         test_support::TestDbExt,
     };
 
-    fn db_with(files: &[(&str, &str)]) -> ProjectDatabase {
+    fn db_with(files: &[(&str, &str)]) -> (ProjectDatabase, baml_base::SourceRoot) {
         let mut db = ProjectDatabase::new();
-        db.workspace(std::path::Path::new("/tmp"));
+        let package = db.workspace(std::path::Path::new("/tmp"));
         for (path, source) in files {
             let full = format!("/tmp/{path}");
             db.file(std::path::Path::new(&full), source);
         }
-        db
+        (db, package)
     }
 
     /// The serialized `params` for `fn_name`, exactly as the playground
@@ -427,13 +427,13 @@ mod tests {
 
     #[test]
     fn primitives_lists_and_nullable_unions() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             function prim(a: int, b: string, c: bool, d: float?, e: string[], f: map<string, float>) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "prim"),
             json!([
@@ -454,14 +454,14 @@ mod tests {
 
     #[test]
     fn nullary_function_gets_empty_schema_not_none() {
-        let db = db_with(&[("main.baml", "function zero() -> int { 1 }")]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", "function zero() -> int { 1 }")]);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(params_json(&listing, "zero"), json!([]));
     }
 
     #[test]
     fn enum_and_nested_class_become_table_refs() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             enum Color { Red Green Blue }
@@ -474,7 +474,7 @@ mod tests {
             function f(p: Person, c: Color) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "f"),
             json!([
@@ -503,7 +503,7 @@ mod tests {
 
     #[test]
     fn shared_class_gets_one_table_entry_across_functions() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             class Shared { x int }
@@ -511,7 +511,7 @@ mod tests {
             function b(s: Shared, t: Shared) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         let expected_ref = json!({ "type": "ref", "name": "user.Shared" });
         assert_eq!(params_json(&listing, "a")[0]["schema"], expected_ref);
         assert_eq!(params_json(&listing, "b")[0]["schema"], expected_ref);
@@ -536,8 +536,8 @@ mod tests {
             writeln!(src, "class C{i} {{ a C{next} b C{next} c C{next} }}").unwrap();
         }
         src.push_str("class C12 { x int }\nfunction f(p: C0) -> int { 1 }\n");
-        let db = db_with(&[("main.baml", &src)]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db, package);
         let params_bytes = serde_json::to_string(&params_json(&listing, "f"))
             .unwrap()
             .len();
@@ -552,14 +552,14 @@ mod tests {
 
     #[test]
     fn namespaced_class_uses_canonical_dotted_fqn() {
-        let db = db_with(&[
+        let (db, package) = db_with(&[
             (
                 "ns_shapes/shapes.baml",
                 "class Box { w int }\nfunction make(b: Box) -> int { 1 }",
             ),
             ("main.baml", "function use_box(b: shapes.Box) -> int { 1 }"),
         ]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         let expected_ref = json!({ "type": "ref", "name": "user.shapes.Box" });
         assert_eq!(
             params_json(&listing, "shapes.make")[0]["schema"],
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn recursive_class_refers_to_itself_through_the_table() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             class Tree {
@@ -586,7 +586,7 @@ mod tests {
             function walk(t: Tree) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "walk")[0]["schema"],
             json!({ "type": "ref", "name": "user.Tree" })
@@ -604,14 +604,14 @@ mod tests {
 
     #[test]
     fn recursive_alias_gets_a_table_entry() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             type JSON = string | JSON[]
             function g(j: JSON) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "g")[0]["schema"],
             json!({ "type": "ref", "name": "user.JSON" })
@@ -629,11 +629,11 @@ mod tests {
     fn non_recursive_alias_gets_a_table_entry_too() {
         // Aliases are memoized like classes — inlining would re-expand the
         // target per reference site (exponential on alias DAGs).
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             "type Age = int\nfunction h(a: Age) -> int { 1 }",
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "h")[0]["schema"],
             json!({ "type": "ref", "name": "user.Age" })
@@ -656,8 +656,8 @@ mod tests {
             writeln!(src, "type A{i} = A{prev}[] | map<string, A{prev}>").unwrap();
         }
         src.push_str("function f(a: A14) -> int { 1 }\n");
-        let db = db_with(&[("main.baml", &src)]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db, package);
         let total = serde_json::to_string(&params_json(&listing, "f"))
             .unwrap()
             .len()
@@ -683,8 +683,8 @@ mod tests {
             writeln!(src, "class C{i} {{ a C{next} }}").unwrap();
         }
         src.push_str("class C100 { x int }\nfunction f(p: C0) -> int { 1 }\n");
-        let db = db_with(&[("main.baml", &src)]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "f")[0]["schema"],
             json!({ "type": "ref", "name": "user.C0" })
@@ -705,11 +705,11 @@ mod tests {
     fn pure_alias_cycle_degrades_to_mutual_refs() {
         // `type A = B; type B = A` compiles clean; the table ties the cycle
         // with mutual refs, which the UI resolves to the raw-JSON fallback.
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             "type A = B\ntype B = A\nfunction c(x: A) -> int { 1 }",
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "c")[0]["schema"],
             json!({ "type": "ref", "name": "user.A" })
@@ -725,14 +725,14 @@ mod tests {
 
     #[test]
     fn enum_variant_param_is_self_contained() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             enum Status { Active Inactive }
             function v(s: Status.Active) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "v")[0]["schema"],
             json!({ "type": "enumVariant", "name": "user.Status", "value": "Active" })
@@ -741,11 +741,11 @@ mod tests {
 
     #[test]
     fn non_nullable_union_lists_variants() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             "function u(x: int | string, y: (int | string)?) -> int { 1 }",
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         let params = params_json(&listing, "u");
         assert_eq!(
             params[0]["schema"],
@@ -761,8 +761,8 @@ mod tests {
 
     #[test]
     fn unresolved_param_type_degrades_to_unsupported() {
-        let db = db_with(&[("main.baml", "function bad(x: Nope) -> int { 1 }")]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", "function bad(x: Nope) -> int { 1 }")]);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "bad")[0]["schema"]["type"],
             "unsupported"
@@ -771,8 +771,8 @@ mod tests {
 
     #[test]
     fn generic_param_degrades_to_unsupported() {
-        let db = db_with(&[("main.baml", "function id<T>(x: T) -> T { x }")]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", "function id<T>(x: T) -> T { x }")]);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "id")[0]["schema"]["type"],
             "unsupported"
@@ -781,11 +781,11 @@ mod tests {
 
     #[test]
     fn dependency_package_class_expands_through_its_interface() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             "function d(d: baml.time.PlainDate) -> int { 1 }",
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "d")[0]["schema"],
             json!({ "type": "ref", "name": "baml.time.PlainDate" })
@@ -800,8 +800,8 @@ mod tests {
 
     #[test]
     fn media_param_carries_its_kind() {
-        let db = db_with(&[("main.baml", "function med(i: image) -> int { 1 }")]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", "function med(i: image) -> int { 1 }")]);
+        let listing = list_functions_with_metadata(&db, package);
         assert_eq!(
             params_json(&listing, "med")[0]["schema"],
             json!({ "type": "media", "kind": "image" })
@@ -810,11 +810,11 @@ mod tests {
 
     #[test]
     fn param_with_default_sets_has_default() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             "function pair(a: int, b: int) -> int { a + b }\nfunction def(x: int, y: int = pair(b = 2, a = 1)) -> int { 1 }",
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         let params = params_json(&listing, "def");
         assert_eq!(params[0]["hasDefault"], false);
         assert_eq!(params[1]["hasDefault"], true);
@@ -835,8 +835,8 @@ function plain(x: int) -> int { x }
 
     #[test]
     fn injected_client_param_is_dropped_from_llm_functions() {
-        let db = db_with(&[("main.baml", LLM_FIXTURE)]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", LLM_FIXTURE)]);
+        let listing = list_functions_with_metadata(&db, package);
         // Only the user-declared param survives; the compiler-injected
         // trailing `client: ai.Client?` must not reach the form.
         assert_eq!(
@@ -861,7 +861,7 @@ function plain(x: int) -> int { x }
     /// On drift, update the fixture and both mirrors together.
     #[test]
     fn wire_shape_matches_the_ts_golden_fixture() {
-        let db = db_with(&[(
+        let (db, package) = db_with(&[(
             "main.baml",
             r#"
             enum Color { Red Green Blue }
@@ -877,7 +877,7 @@ function plain(x: int) -> int { x }
             function golden(p: Person, c: Color, j: JSON, s: Status.Active, l: string[], m: map<string, float>, u: int | string, i: image, x: int = 3) -> int { 1 }
             "#,
         )]);
-        let listing = list_functions_with_metadata(&db);
+        let listing = list_functions_with_metadata(&db, package);
         let actual = serde_json::json!({
             "params": params_json(&listing, "golden"),
             "types": types_json(&listing),
@@ -896,8 +896,8 @@ function plain(x: int) -> int { x }
 
     #[test]
     fn extraction_is_skipped_for_sub_functions_and_non_user_origins() {
-        let db = db_with(&[("main.baml", LLM_FIXTURE)]);
-        let listing = list_functions_with_metadata(&db);
+        let (db, package) = db_with(&[("main.baml", LLM_FIXTURE)]);
+        let listing = list_functions_with_metadata(&db, package);
         let skipped: Vec<_> = listing
             .functions
             .iter()

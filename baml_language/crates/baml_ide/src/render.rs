@@ -21,7 +21,7 @@
 
 use baml_base::{LangRoots, Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
-    package::{PackageItems, Spelling, lang_roots, sole_workspace_root, spelling},
+    package::{PackageItems, Spelling, lang_roots, spelling},
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
@@ -124,14 +124,19 @@ pub fn canonical_path(db: &dyn baml_compiler2_ppir::Db, qtn: &DeclName) -> Strin
     canonical_path_in(spelling(db), qtn)
 }
 
-/// The addressable spelling of a declaration: the shortest form that pastes
-/// back into `baml describe` (and name resolution generally) and finds it
-/// again from any scope — a builtin companion's lowercase alias (`string`);
-/// a workspace type's bare name at package root, `root.<ns>.<Name>` in a
-/// namespace (the workspace package is addressed as `root`); any other
-/// package's type by its full path (`baml.json.JsonObject`).
-pub fn addressable_path(db: &dyn baml_compiler2_ppir::Db, qtn: &DeclName) -> String {
-    AddressableTyRender::new(db).path(qtn)
+/// The addressable spelling of a declaration as `viewer` writes it: the
+/// shortest form that pastes back into `baml describe` (and name resolution
+/// generally) and finds it again from any scope of that package — a builtin
+/// companion's lowercase alias (`string`); the viewer's own type by its bare
+/// name at package root, `root.<ns>.<Name>` in a namespace (the viewer's
+/// package is addressed as `root`); any other package's type by the path the
+/// viewer reaches it under (`baml.json.JsonObject`).
+pub fn addressable_path(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
+    qtn: &DeclName,
+) -> String {
+    AddressableTyRender::new(db, viewer).path(qtn)
 }
 
 /// Package-context-free strategy: full canonical paths, hides `(evolving)`,
@@ -215,29 +220,32 @@ pub fn display_owner_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
     })
 }
 
-/// Render `ty` for a `baml describe` row: every named type in the
-/// paste-back spelling of [`QualifiedTypeName::render_addressable`]
-/// (`string`, `Foo`, `root.ns.Foo`, `baml.json.JsonObject`), so a type a
-/// row names can be fed straight back into `baml describe` from any scope.
-pub fn display_addressable_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
-    ty.render_with(&AddressableTyRender::new(db))
+/// Render `ty` for a `baml describe` row read from `viewer`: every named type
+/// in the paste-back spelling of [`addressable_path`] (`string`, `Foo`,
+/// `root.ns.Foo`, `baml.json.JsonObject`), so a type a row names can be fed
+/// straight back into `baml describe` from any scope of that package.
+pub fn display_addressable_ty(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
+    ty: &Ty,
+) -> String {
+    ty.render_with(&AddressableTyRender::new(db, viewer))
 }
 
 /// Strategy for [`display_addressable_ty`]: [`OwnerTyRender`] with the QTN
 /// spelling swapped for the describe addressing convention.
 struct AddressableTyRender<'a> {
-    spelling: &'a Spelling,
+    /// How the reader's package reaches every other: its own is elided (and
+    /// addressed as `root`), a dependency carries the reader's edge name.
+    viewpoint: Viewpoint<'a>,
     lang: LangRoots,
-    /// The workspace package, addressed as `root`.
-    workspace: Option<SourceRoot>,
 }
 
 impl<'a> AddressableTyRender<'a> {
-    fn new(db: &'a dyn baml_compiler2_ppir::Db) -> Self {
+    fn new(db: &'a dyn baml_compiler2_ppir::Db, viewer: SourceRoot) -> Self {
         Self {
-            spelling: spelling(db),
+            viewpoint: Viewpoint::user_facing(db, viewer),
             lang: lang_roots(db),
-            workspace: sole_workspace_root(db),
         }
     }
 
@@ -245,21 +253,19 @@ impl<'a> AddressableTyRender<'a> {
         if let Some(alias) = qtn.builtin_alias(self.lang) {
             return alias.to_string();
         }
-        if Some(qtn.root()) == self.workspace {
-            // Runtime-minted declarations no longer thread a discriminator
-            // through the namespace (their identity is the type tag), so
-            // the written namespace is the address.
-            return if qtn.namespace().is_empty() {
-                qtn.name().to_string()
-            } else {
-                std::iter::once(baml_type::ADDRESSABLE_USER_PACKAGE)
-                    .chain(qtn.namespace().iter().map(Name::as_str))
-                    .chain(std::iter::once(qtn.name().as_str()))
-                    .collect::<Vec<_>>()
-                    .join(".")
-            };
-        }
-        canonical_path_in(self.spelling, qtn)
+        // Runtime-minted declarations no longer thread a discriminator
+        // through the namespace (their identity is the type tag), so the
+        // written namespace is the address.
+        let package = match self.viewpoint.package_prefix(qtn.root()) {
+            None if qtn.namespace().is_empty() => return qtn.name().to_string(),
+            None => baml_type::ADDRESSABLE_USER_PACKAGE,
+            Some(package) => package,
+        };
+        std::iter::once(package)
+            .chain(qtn.namespace().iter().map(Name::as_str))
+            .chain(std::iter::once(qtn.name().as_str()))
+            .collect::<Vec<_>>()
+            .join(".")
     }
 }
 

@@ -36,7 +36,7 @@
 //!
 //! - `ResolvedName::Unknown` or cursor not on a WORD token — returns `None`.
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler_syntax::{SyntaxKind, SyntaxToken};
 use baml_compiler2_hir::{contributions::Definition, loc::FunctionLoc};
 use baml_compiler2_hir_ty::package_interface::ExportedFunction;
@@ -398,6 +398,9 @@ pub fn type_at(
 ) -> Option<TypeInfo> {
     // ── Step 1: find the token at the cursor ─────────────────────────────────
     let token = crate::syntax::find_token_at_offset(db, file, offset)?;
+    // The reader is wherever the cursor is: paths in the answer are spelled
+    // from the file's package.
+    let viewer = baml_compiler2_hir::file_package::file_package(db, file).root;
 
     if let Some(info) = literal_type_info(&token) {
         return Some(info);
@@ -420,9 +423,11 @@ pub fn type_at(
     // templates hover their driver function.
     if let Some(position) = crate::resolve::template_position_at(db, file, offset) {
         return match position {
-            crate::resolve::TemplatePosition::Driver(func) => {
-                Some(type_info_for_definition(db, Definition::Function(func)))
-            }
+            crate::resolve::TemplatePosition::Driver(func) => Some(type_info_for_definition(
+                db,
+                viewer,
+                Definition::Function(func),
+            )),
             crate::resolve::TemplatePosition::DefaultText => Some(TypeInfo::Documentation {
                 label: "template string".to_string(),
                 detail: "Backtick template literal (BEP-049). `${…}` holes interpolate \
@@ -442,7 +447,7 @@ form stringifies each value and produces a `string`."
     // and navigation provably agree on `+`/`<`/`[` too.
     if token.kind() != SyntaxKind::WORD {
         let target = crate::resolve::symbol_at(db, file, offset)?;
-        return target_type_info(db, target);
+        return target_type_info(db, viewer, target);
     }
 
     let name_text = token.text();
@@ -461,7 +466,7 @@ form stringifies each value and produces a `string`."
     let Some(target) = crate::resolve::symbol_at(db, file, offset) else {
         return template_frame_param_info(db, file, offset, &name);
     };
-    target_type_info(db, target)
+    target_type_info(db, viewer, target)
 }
 
 /// Build `TypeInfo` for a resolved [`SymbolTarget`]. Every arm reads
@@ -469,12 +474,13 @@ form stringifies each value and produces a `string`."
 /// no span-equality matching, no name heuristics.
 fn target_type_info(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
     target: crate::resolve::SymbolTarget<'_>,
 ) -> Option<TypeInfo> {
     use crate::resolve::SymbolTarget;
 
     match target {
-        SymbolTarget::Item(def) => Some(type_info_for_definition(db, def)),
+        SymbolTarget::Item(def) => Some(type_info_for_definition(db, viewer, def)),
         SymbolTarget::Local {
             func,
             func_scope,
@@ -1044,8 +1050,13 @@ fn generic_type_parameter_info_at(
 
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
-/// Build `TypeInfo` for a top-level item definition.
-pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> TypeInfo {
+/// Build `TypeInfo` for a top-level item definition. `viewer` is the package
+/// the reader is in: the addressable paths in the result are spelled from it.
+pub fn type_info_for_definition(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
+    def: Definition<'_>,
+) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
             let file = func_loc.file(db);
@@ -1140,7 +1151,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 .collect();
 
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &class_data.name);
-            let canonical_fqn = render::addressable_path(db, &qtn);
+            let canonical_fqn = render::addressable_path(db, viewer, &qtn);
             let methods = class_method_sigs(db, class_loc);
 
             let generic_params =
@@ -1208,7 +1219,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 default_methods,
                 docstring: iface.docstring.clone(),
                 owner: Some(owning_path(db, iface_loc.file(db))),
-                canonical_fqn: render::addressable_path(db, &qtn),
+                canonical_fqn: render::addressable_path(db, viewer, &qtn),
             }
         }
 

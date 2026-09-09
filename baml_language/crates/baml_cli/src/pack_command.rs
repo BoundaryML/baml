@@ -314,6 +314,7 @@ impl PackArgs {
         let warmth = session.warm_prep();
         let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
         let db = &session.db;
+        let package = session.package;
         let cache = &session.cache;
 
         // Keep `baml pack` quiet during compilation. Its visible progress is
@@ -325,7 +326,7 @@ impl PackArgs {
         // their cached blobs, returning the fresh per-file blobs to persist.
         // Without a cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
             bail_on_error_diagnostics(
                 db,
                 &incremental.merged,
@@ -349,12 +350,11 @@ impl PackArgs {
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                db,
+                &session,
                 &compiled,
                 fresh,
                 reuse_plan.as_ref(),
                 stdlib_interface_hit,
-                || session.honest_db(),
             )?;
         }
         Ok((session.db, compiled.program, needs_format_hint))

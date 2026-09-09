@@ -853,8 +853,7 @@ mod tests {
     #[test]
     fn test_name_from_qtn_preserves_full_path() {
         let mut db = ProjectDatabase::new();
-        db.workspace(Path::new("/tmp/symbol_pool_qtn_path"));
-        let root = baml_compiler2_hir::package::sole_workspace_root(&db).expect("workspace root");
+        let root = db.workspace(Path::new("/tmp/symbol_pool_qtn_path"));
         let qtn = DeclName::in_root(root, vec![Name::new("foo")], Name::new("Sentiment"));
         let cg_name = name_from_qtn(spelling(&db), &qtn);
         assert_eq!(cg_name.package().as_str(), "user");
@@ -871,8 +870,7 @@ mod tests {
     #[test]
     fn test_name_from_qtn_stream_suffix() {
         let mut db = ProjectDatabase::new();
-        db.workspace(Path::new("/tmp/symbol_pool_qtn_stream"));
-        let root = baml_compiler2_hir::package::sole_workspace_root(&db).expect("workspace root");
+        let root = db.workspace(Path::new("/tmp/symbol_pool_qtn_stream"));
         let qtn = DeclName::in_root(root, vec![], Name::new("Resume$stream"));
         let cg_name = name_from_qtn(spelling(&db), &qtn);
         assert!(cg_name.is_stream());

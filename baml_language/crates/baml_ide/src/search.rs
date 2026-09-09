@@ -13,11 +13,12 @@
 //! plainly: a query only finds a symbol that shares a word with its name or
 //! its prose. Reaching past that needs a semantic index, which this is not.
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    package::{package_items, sole_workspace_root, spelling},
+    package::package_items,
 };
+use baml_compiler2_hir_ty::render::Viewpoint;
 use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
 
@@ -114,11 +115,13 @@ pub struct SearchHit {
 }
 
 /// Whole-word ranked search over the items, members, and impl methods of
-/// `packages`. Results are sorted best-first (ties by path) and truncated to
-/// `limit`.
+/// `packages`, with every hit's path spelled as `viewer` addresses it (its
+/// own package as `root`, a dependency by the viewer's edge name). Results
+/// are sorted best-first (ties by path) and truncated to `limit`.
 pub fn search_ranked(
     db: &dyn baml_compiler2_ppir::Db,
-    packages: &[baml_base::SourceRoot],
+    viewer: SourceRoot,
+    packages: &[SourceRoot],
     query: &str,
     limit: usize,
 ) -> Vec<SearchHit> {
@@ -128,7 +131,7 @@ pub fn search_ranked(
     }
 
     let mut hits: Vec<SearchHit> = Vec::new();
-    for candidate in ranked_candidates(db, packages) {
+    for candidate in ranked_candidates(db, viewer, packages) {
         let leaf = haystack(&candidate.leaf);
         let owner = haystack(&candidate.path);
         let docs = candidate
@@ -288,26 +291,27 @@ struct Candidate {
     docstring: Option<String>,
 }
 
-/// Everything in `packages` the ranked search can land on.
+/// Everything in `packages` the ranked search can land on, addressed from
+/// `viewer`.
 fn ranked_candidates(
     db: &dyn baml_compiler2_ppir::Db,
-    packages: &[baml_base::SourceRoot],
+    viewer: SourceRoot,
+    packages: &[SourceRoot],
 ) -> Vec<Candidate> {
+    let viewpoint = Viewpoint::user_facing(db, viewer);
     let mut out = Vec::new();
     for &package in packages {
         db.unwind_if_revision_cancelled();
-        let prefix = if Some(package) == sole_workspace_root(db) {
-            baml_type::ADDRESSABLE_USER_PACKAGE.to_string()
-        } else {
-            spelling(db).of(package).to_string()
-        };
+        let prefix = viewpoint
+            .package_prefix(package)
+            .unwrap_or(baml_type::ADDRESSABLE_USER_PACKAGE);
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {
                 if is_synthesized(db, name, *def) {
                     continue;
                 }
-                let path = dotted(&prefix, ns_path, name.as_str());
+                let path = dotted(prefix, ns_path, name.as_str());
                 collect_definition_candidates(db, *def, name, &path, &mut out);
             }
         }
@@ -461,8 +465,6 @@ fn def_kind(def: Definition<'_>) -> DefinitionKind {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_hir::package::sole_workspace_root;
-
     use super::*;
     use crate::test_support::ProjectTest;
 
@@ -524,10 +526,10 @@ enum Mood {
     #[test]
     fn ranked_search_finds_symbols_through_their_prose() {
         let test = project();
-        let packages = [sole_workspace_root(&test.db).unwrap()];
+        let packages = [test.package];
         // "read a file" appears in no symbol name — only in LoadFile's
         // docstring.
-        let hits = search_ranked(&test.db, &packages, "read a file", 10);
+        let hits = search_ranked(&test.db, test.package, &packages, "read a file", 10);
         assert!(
             hits.iter().any(|hit| hit.path == "root.load_file"),
             "docstring words must reach load_file, got: {hits:?}"
@@ -545,11 +547,11 @@ enum Mood {
     #[test]
     fn ranked_search_splits_camel_case_names() {
         let test = project();
-        let packages = [sole_workspace_root(&test.db).unwrap()];
+        let packages = [test.package];
         // Typed as one PascalCase word, found via the camelCase-split
         // haystack; and the plain word "zoned" reaches it too.
         for query in ["ZonedDateTime", "zoned"] {
-            let hits = search_ranked(&test.db, &packages, query, 10);
+            let hits = search_ranked(&test.db, test.package, &packages, query, 10);
             assert!(
                 hits.first()
                     .is_some_and(|hit| hit.path == "root.ZonedDateTime"),
@@ -561,8 +563,8 @@ enum Mood {
     #[test]
     fn ranked_search_ranks_names_above_prose_and_members_carry_paths() {
         let test = project();
-        let packages = [sole_workspace_root(&test.db).unwrap()];
-        let hits = search_ranked(&test.db, &packages, "happy", 10);
+        let packages = [test.package];
+        let hits = search_ranked(&test.db, test.package, &packages, "happy", 10);
         assert!(
             hits.first()
                 .is_some_and(|hit| hit.path == "root.Mood.Happy"),
@@ -571,7 +573,7 @@ enum Mood {
 
         // Companions synthesized from LoadFile (`@parse`, etc.) must not
         // duplicate its docstring hits.
-        let hits = search_ranked(&test.db, &packages, "read a file", 20);
+        let hits = search_ranked(&test.db, test.package, &packages, "read a file", 20);
         let load_hits = hits
             .iter()
             .filter(|hit| hit.path.contains("load_file"))

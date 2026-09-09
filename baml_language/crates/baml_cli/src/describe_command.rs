@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_db::{ProjectDatabase, baml_compiler2_hir};
+use baml_db::{ProjectDatabase, SourceRoot, baml_compiler2_hir};
 use baml_ide::{ResolvedTarget, SymbolDescription, describe};
 use clap::Args;
 
@@ -96,12 +96,18 @@ pub struct DescribeArgs {
     pub export: bool,
 }
 
-/// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
+/// Find FQNs across the packages `viewer` can name — its own and the ones it
+/// reaches by name — that are fuzzy-similar to `name`.
 ///
 /// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
 /// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
-pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<String> {
-    suggest_similar_kinded(db, name, limit)
+pub fn suggest_similar(
+    db: &ProjectDatabase,
+    viewer: SourceRoot,
+    name: &str,
+    limit: usize,
+) -> Vec<String> {
+    suggest_similar_kinded(db, viewer, name, limit)
         .into_iter()
         .map(|(path, _)| path)
         .collect()
@@ -111,21 +117,22 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
 /// (`None` for namespace/package paths) so callers can color the leaf by kind.
 pub fn suggest_similar_kinded(
     db: &ProjectDatabase,
+    viewer: SourceRoot,
     name: &str,
     limit: usize,
 ) -> Vec<(String, Option<baml_ide::DefinitionKind>)> {
-    use baml_compiler2_hir::package::{package_items, spelling};
+    use baml_compiler2_hir::package::package_items;
 
     type Kind = Option<baml_ide::DefinitionKind>;
     let mut all_paths: Vec<(String, Kind)> = Vec::new();
 
-    // User package: items (kinded) + namespace dotted paths (no kind).
-    let user_pkg = user_package(db);
-    for entry in baml_ide::list_package_items(db, user_pkg) {
+    // The viewer's own package: items (kinded) + namespace dotted paths (no
+    // kind).
+    for entry in baml_ide::list_package_items(db, viewer) {
         all_paths.push((entry.fqn(), Some(entry.kind)));
     }
-    let user_pkg_items = package_items(db, user_pkg);
-    for ns_path in user_pkg_items.namespaces.keys() {
+    let own_items = package_items(db, viewer);
+    for ns_path in own_items.namespaces.keys() {
         if !ns_path.is_empty() {
             all_paths.push((
                 ns_path
@@ -138,12 +145,11 @@ pub fn suggest_similar_kinded(
         }
     }
 
-    // Builtin packages: bare package name + item paths + namespaces.
-    for pkg_name in baml_ide::non_workspace_package_names(db) {
+    // Every package the viewer reaches by name: the name itself + item paths
+    // + namespaces.
+    for dependency in viewer.dependencies(db) {
+        let (pkg_name, pkg) = (&dependency.name, dependency.root);
         all_paths.push((pkg_name.as_str().to_string(), None));
-        let Some(pkg) = spelling(db).root(&pkg_name) else {
-            continue;
-        };
         for entry in baml_ide::list_package_items(db, pkg) {
             all_paths.push((entry.fqn(), Some(entry.kind)));
         }
@@ -195,8 +201,8 @@ pub fn suggest_similar_kinded(
 }
 
 /// Print a "Did you mean?" hint for `name` to stderr if any similar paths exist.
-fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
-    let suggestions = suggest_similar_kinded(db, name, 5);
+fn print_did_you_mean(db: &ProjectDatabase, viewer: SourceRoot, name: &str) {
+    let suggestions = suggest_similar_kinded(db, viewer, name, 5);
     if !suggestions.is_empty() {
         eprintln!();
         eprintln!("did you mean:");
@@ -209,25 +215,24 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
     }
 }
 
-/// Dispatch a name string to a `ResolvedTarget`.
+/// Dispatch a name string to a `ResolvedTarget`, resolving from `viewer` —
+/// the user's package.
 ///
-/// Handles the package-name prefix routing (user vs. builtin packages) and
-/// delegates within-package path resolution to `baml_ide::resolve_target`.
+/// Handles the package-name prefix routing (the viewer's own package vs. the
+/// packages it reaches by name) and delegates within-package path resolution
+/// to `baml_ide::resolve_target`.
 ///
-/// The user's package: CLI databases always hold exactly one workspace root
-/// (`project_load::workspace_db` is their single constructor).
-pub(crate) fn user_package(db: &ProjectDatabase) -> baml_db::SourceRoot {
-    baml_compiler2_hir::package::sole_workspace_root(db)
-        .unwrap_or_else(|| unreachable!("CLI databases are built by `workspace_db`"))
-}
-
-/// - Empty string → `Package(user)`
+/// - Empty string → `Package(viewer)`
 /// - `"baml"` → `Package(baml)`
 /// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
-/// - `"foo.bar.Baz"` → `resolve_target(user_pkg, "foo.bar.Baz")` → `Item`
-pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTarget<'db>> {
+/// - `"foo.bar.Baz"` → `resolve_target(viewer, "foo.bar.Baz")` → `Item`
+pub fn dispatch<'db>(
+    db: &'db ProjectDatabase,
+    viewer: SourceRoot,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
     if name.is_empty() {
-        return Some(ResolvedTarget::Package(user_package(db)));
+        return Some(ResolvedTarget::Package(viewer));
     }
 
     // Lowercase primitive/keyword aliases resolve to their builtin `baml`
@@ -245,17 +250,18 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         return Some(ResolvedTarget::Keyword(name.to_string()));
     }
 
-    // Force user-package resolution with `root.` prefix.
+    // Force own-package resolution with the `root.` prefix.
     if let Some(rest) = name.strip_prefix("root.") {
-        return baml_ide::resolve_target(db, user_package(db), rest);
+        return baml_ide::resolve_target(db, viewer, rest);
     }
 
     let (first, rest) = name.split_once('.').unwrap_or((name, ""));
 
-    // Builtin package shadows user namespace with same name.
-    let builtin_packages = baml_ide::non_workspace_package_names(db);
-    if builtin_packages.iter().any(|pkg| pkg.as_str() == first) {
-        let pkg = baml_compiler2_hir::package::spelling(db).root(&baml_db::Name::new(first))?;
+    // A package the viewer reaches by name shadows a namespace of its own
+    // spelled the same.
+    if let Some(pkg) =
+        baml_compiler2_hir::package::dependency_named(db, viewer, &baml_db::Name::new(first))
+    {
         return if rest.is_empty() {
             Some(ResolvedTarget::Package(pkg))
         } else {
@@ -263,8 +269,8 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         };
     }
 
-    // User package.
-    if let Some(target) = baml_ide::resolve_target(db, user_package(db), name) {
+    // The viewer's own package.
+    if let Some(target) = baml_ide::resolve_target(db, viewer, name) {
         return Some(target);
     }
 
@@ -308,7 +314,7 @@ impl DescribeArgs {
         // the whole-package aggregates, which otherwise derive serially.
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
@@ -321,13 +327,18 @@ impl DescribeArgs {
 
         // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
-            let mut packages = vec![user_package(&db)];
-            packages.extend(
-                baml_ide::non_workspace_package_names(&db)
-                    .into_iter()
-                    .filter_map(|pkg| baml_compiler2_hir::package::spelling(&db).root(&pkg)),
-            );
-            let hits = baml_ide::search_ranked(&db, &packages, name, usize::from(self.limit));
+            // The user's package and every package it reaches by name — the
+            // ones a hit's path can address.
+            let packages: Vec<SourceRoot> = std::iter::once(package)
+                .chain(
+                    package
+                        .dependencies(&db)
+                        .iter()
+                        .map(|dependency| dependency.root),
+                )
+                .collect();
+            let hits =
+                baml_ide::search_ranked(&db, package, &packages, name, usize::from(self.limit));
             if self.json {
                 println!(
                     "{}",
@@ -342,7 +353,7 @@ impl DescribeArgs {
                 // for `iterate` matches no docstring, because they all say
                 // "iterator", but it is close enough to a name to be offered.
                 println!("no symbol matches: {name}");
-                print_did_you_mean(&db, name);
+                print_did_you_mean(&db, package, name);
             } else {
                 for hit in &hits {
                     let summary = hit
@@ -358,13 +369,13 @@ impl DescribeArgs {
 
         // ── --export: the whole-package surface document ────────────────────
         if self.export {
-            let Some(ResolvedTarget::Package(package)) = dispatch(&db, name) else {
+            let Some(ResolvedTarget::Package(exported)) = dispatch(&db, package, name) else {
                 eprintln!(
                     "error: `--export` takes a package name (`baml`, `user`, …), got `{name}`"
                 );
                 return Ok(crate::ExitCode::Other);
             };
-            let export = baml_ide::export_package(&db, package);
+            let export = baml_ide::export_package(&db, exported);
             println!(
                 "{}",
                 serde_json::to_string_pretty(&export)
@@ -373,7 +384,7 @@ impl DescribeArgs {
             return Ok(crate::ExitCode::Success);
         }
 
-        let target = dispatch(&db, name);
+        let target = dispatch(&db, package, name);
 
         match target {
             Some(ResolvedTarget::Keyword(ref kw)) => {
@@ -405,18 +416,21 @@ impl DescribeArgs {
                     render_listing(&entries, &from);
                 }
                 // Check for name collision: does the user also have an item
-                // matching the package name? Only hint when the resolved package
-                // is a builtin (i.e., the bare name matches a non-user package).
+                // matching the package name? Only hint when the bare name named
+                // a package the user's package reaches, not a user item.
                 let pkg_name = name.split('.').next().unwrap_or(name);
-                let builtin_names = baml_ide::non_workspace_package_names(&db);
-                if builtin_names.iter().any(|pkg| pkg.as_str() == pkg_name) {
-                    if baml_ide::resolve_target(&db, user_package(&db), pkg_name).is_some() {
-                        eprintln!();
-                        eprintln!(
-                            "note: your project also defines `{pkg_name}`. \
-                             Use `baml describe root.{pkg_name}` to see your definition."
-                        );
-                    }
+                let names_dependency = baml_compiler2_hir::package::dependency_named(
+                    &db,
+                    package,
+                    &baml_db::Name::new(pkg_name),
+                )
+                .is_some();
+                if names_dependency && baml_ide::resolve_target(&db, package, pkg_name).is_some() {
+                    eprintln!();
+                    eprintln!(
+                        "note: your project also defines `{pkg_name}`. \
+                         Use `baml describe root.{pkg_name}` to see your definition."
+                    );
                 }
                 Ok(crate::ExitCode::Success)
             }
@@ -440,11 +454,9 @@ impl DescribeArgs {
             }
             Some(ResolvedTarget::Item(def)) => {
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) =
-                    describe::describe_by_definition(&db, user_package(&db), &files, def)
-                else {
+                let Some(desc) = describe::describe_by_definition(&db, package, &files, def) else {
                     eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
+                    print_did_you_mean(&db, package, name);
                     return Ok(crate::ExitCode::Other);
                 };
                 self.emit_description(&db, &desc, &from)?;
@@ -459,7 +471,7 @@ impl DescribeArgs {
                     describe::describe_item_member(&db, &files, parent, member_name.as_str())
                 else {
                     eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
+                    print_did_you_mean(&db, package, name);
                     return Ok(crate::ExitCode::Other);
                 };
                 self.emit_description(&db, &desc, &from)?;
@@ -471,11 +483,11 @@ impl DescribeArgs {
                 // `shapes/`), or be a local (parameter, let binding). Scan
                 // the compiler-visible files and show every match.
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let matches = describe::describe(&db, user_package(&db), &files, name);
+                let matches = describe::describe(&db, package, &files, name);
 
                 if matches.is_empty() {
                     eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
+                    print_did_you_mean(&db, package, name);
                     return Ok(crate::ExitCode::Other);
                 }
 

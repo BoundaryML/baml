@@ -158,7 +158,7 @@ pub struct TestExpandError {
 
 // ── Projection from analysis facts ───────────────────────────────────────────
 
-/// Build the project's playground surface from a database snapshot.
+/// Build the playground surface of `package` from a database snapshot.
 ///
 /// `is_bex_current`/`generation` come from the engine runtime, and
 /// `diagnostics` from the LSP diagnostics candidate — both read on the owner
@@ -166,11 +166,12 @@ pub struct TestExpandError {
 /// two revisions' facts.
 pub fn build_project_update(
     db: &baml_db::ProjectDatabase,
+    package: baml_db::SourceRoot,
     is_bex_current: bool,
     generation: u64,
     diagnostics: Vec<ProjectDiagnostic>,
 ) -> ProjectUpdate {
-    let listing = baml_ide::list_functions_with_metadata(db);
+    let listing = baml_ide::list_functions_with_metadata(db, package);
 
     let functions = listing
         .functions

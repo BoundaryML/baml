@@ -508,16 +508,16 @@ fn describe_top_level(
     let definition = resolve_definition(db, file, sym);
 
     // ── Shape generation ─────────────────────────────────────────────────────
-    let shape = build_shape(db, sym, definition);
+    let shape = build_shape(db, viewer, sym, definition);
 
     // ── Docstring extraction ─────────────────────────────────────────────────
     let docstring = extract_docstring(db, file, item_range);
 
     // ── Dependency discovery ─────────────────────────────────────────────────
-    let dependencies = find_dependencies(db, files, file, sym, definition);
+    let dependencies = find_dependencies(db, viewer, files, file, sym, definition);
 
     // ── Resolved type ────────────────────────────────────────────────────────
-    let resolved_type = resolve_type_for_item(db, definition);
+    let resolved_type = resolve_type_for_item(db, viewer, definition);
 
     // ── Reference finding ────────────────────────────────────────────────────
     let mut references = find_references(db, files, file, sym.name_span, item_range);
@@ -530,7 +530,7 @@ fn describe_top_level(
                 _ => (Vec::new(), Vec::new()),
             };
             SymbolKind::Class {
-                canonical_fqn: canonical_fqn(db, sym, definition),
+                canonical_fqn: canonical_fqn(db, viewer, sym, definition),
                 instance_methods,
                 static_methods,
             }
@@ -544,14 +544,14 @@ fn describe_top_level(
                 _ => (Vec::new(), Vec::new()),
             };
             SymbolKind::Interface {
-                canonical_fqn: canonical_fqn(db, sym, definition),
+                canonical_fqn: canonical_fqn(db, viewer, sym, definition),
                 members,
                 implementations,
             }
         }
         KindClass::Item(kind) => SymbolKind::Item {
             kind,
-            canonical_fqn: canonical_fqn(db, sym, definition),
+            canonical_fqn: canonical_fqn(db, viewer, sym, definition),
         },
         // `describe_symbol` routes members and locals to their own builders;
         // one reaching this path (a search hit with no member context)
@@ -1048,13 +1048,14 @@ fn resolve_definition<'db>(
 /// then formats it without the markdown code fences.
 fn build_shape<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     sym: &SymbolInfo,
     def: Option<Definition<'db>>,
 ) -> String {
     let Some(def) = def else {
         return format!("{} {}", sym.kind.as_str(), sym.name);
     };
-    let type_info = type_info_for_definition(db, def);
+    let type_info = type_info_for_definition(db, viewer, def);
     // The canonical block (fields-only for classes), without fences/docstring/hint.
     type_info.to_describe_block()
 }
@@ -1211,7 +1212,7 @@ fn collect_interface_impls(
             let file = block.file(db);
             let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
             Some(ImplRow {
-                display: render_impl_row(db, facts),
+                display: render_impl_row(db, viewer, facts),
                 file,
                 file_path: file_path_string(db, file),
                 span: source_map.span,
@@ -1229,6 +1230,7 @@ fn collect_interface_impls(
 /// is the instantiation and the implementor.
 fn render_impl_row(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>,
 ) -> String {
     let iface = facts.interface.to_plain();
@@ -1236,13 +1238,13 @@ fn render_impl_row(
     let mut args: Vec<String> = iface
         .generics
         .iter()
-        .map(|ty| render::display_addressable_ty(db, ty))
+        .map(|ty| render::display_addressable_ty(db, viewer, ty))
         .collect();
     args.extend(iface.associated_types.iter().map(|(name, ty)| {
         format!(
             "{} = {}",
             name.as_str(),
-            render::display_addressable_ty(db, ty)
+            render::display_addressable_ty(db, viewer, ty)
         )
     }));
     if !args.is_empty() {
@@ -1252,7 +1254,7 @@ fn render_impl_row(
     }
     format!(
         "implement {head} for {}",
-        render::display_addressable_ty(db, &facts.for_ty_pattern.to_plain())
+        render::display_addressable_ty(db, viewer, &facts.for_ty_pattern.to_plain())
     )
 }
 
@@ -1527,6 +1529,7 @@ fn function_def_name_span(
 /// already in `seen`, so it is never listed as its own dependency.
 fn collect_method_signature_deps(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
     deps: &mut Vec<DepRef>,
@@ -1559,10 +1562,10 @@ fn collect_method_signature_deps(
             continue;
         };
         for param in &ef.params {
-            collect_ty_deps(db, files, &param.ty, deps, seen);
+            collect_ty_deps(db, viewer, files, &param.ty, deps, seen);
         }
-        collect_ty_deps(db, files, &ef.return_type, deps, seen);
-        collect_ty_deps(db, files, &ef.callable_throws, deps, seen);
+        collect_ty_deps(db, viewer, files, &ef.return_type, deps, seen);
+        collect_ty_deps(db, viewer, files, &ef.callable_throws, deps, seen);
     }
 }
 
@@ -1574,13 +1577,14 @@ fn collect_method_signature_deps(
 /// root (or an unresolved symbol) returns `None`.
 fn canonical_fqn(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     sym: &SymbolInfo,
     def: Option<Definition<'_>>,
 ) -> Option<String> {
     let def = def?;
     let name = baml_base::Name::new(&sym.name);
     let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &name);
-    let fqn = render::addressable_path(db, &qtn);
+    let fqn = render::addressable_path(db, viewer, &qtn);
     (fqn != sym.name).then_some(fqn)
 }
 
@@ -1637,11 +1641,12 @@ fn resolve_member_type(
 /// For locals: the inferred type
 fn resolve_type_for_item(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     def: Option<Definition<'_>>,
 ) -> Option<String> {
     use crate::info::TypeInfo;
 
-    let type_info = type_info_for_definition(db, def?);
+    let type_info = type_info_for_definition(db, viewer, def?);
     match type_info {
         TypeInfo::Function {
             params,
@@ -1717,6 +1722,7 @@ fn extract_docstring(
 /// For other kinds: empty (self-contained or not applicable).
 fn find_dependencies(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     file: SourceFile,
     sym: &SymbolInfo,
@@ -1744,12 +1750,12 @@ fn find_dependencies(
         baml_compiler2_hir::contributions::Definition::Class(class_loc) => {
             let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
             for (_field_name, ty, _attrs) in resolved {
-                collect_ty_deps(db, files, ty, &mut deps, &mut seen);
+                collect_ty_deps(db, viewer, files, ty, &mut deps, &mut seen);
             }
             // Types referenced in method signatures (params/return/throws) are
             // dependencies too — e.g. `WrapperMarker` in `-> T | WrapperMarker`.
             // The class's own name is in `seen`, so it is never its own dep.
-            collect_method_signature_deps(db, files, class_loc, &mut deps, &mut seen);
+            collect_method_signature_deps(db, viewer, files, class_loc, &mut deps, &mut seen);
         }
         baml_compiler2_hir::contributions::Definition::Enum(_) => {
             // Enums are self-contained, no type dependencies.
@@ -1933,12 +1939,13 @@ fn collect_type_ref_deps(
 /// into `seen`, so a type is never listed as a dependency of itself.
 fn collect_qtn_dep(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     qtn: &baml_type::DeclName,
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
-    if Some(qtn.root()) != baml_compiler2_hir::package::sole_workspace_root(db) {
+    if qtn.root() != viewer {
         return;
     }
     let short = qtn.name().as_str().to_string();
@@ -1951,6 +1958,7 @@ fn collect_qtn_dep(
 
 fn collect_ty_deps(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     ty: &baml_type::Ty,
     deps: &mut Vec<DepRef>,
@@ -1959,26 +1967,26 @@ fn collect_ty_deps(
     use baml_type::Ty;
     match ty {
         Ty::Class(qtn, generics, _) => {
-            collect_qtn_dep(db, files, qtn, deps, seen);
+            collect_qtn_dep(db, viewer, files, qtn, deps, seen);
             for generic in generics {
-                collect_ty_deps(db, files, generic, deps, seen);
+                collect_ty_deps(db, viewer, files, generic, deps, seen);
             }
         }
         Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
-            collect_qtn_dep(db, files, qtn, deps, seen);
+            collect_qtn_dep(db, viewer, files, qtn, deps, seen);
         }
         Ty::List(inner, _) => {
-            collect_ty_deps(db, files, inner, deps, seen);
+            collect_ty_deps(db, viewer, files, inner, deps, seen);
         }
         Ty::Map {
             key: k, value: v, ..
         } => {
-            collect_ty_deps(db, files, k, deps, seen);
-            collect_ty_deps(db, files, v, deps, seen);
+            collect_ty_deps(db, viewer, files, k, deps, seen);
+            collect_ty_deps(db, viewer, files, v, deps, seen);
         }
         Ty::Union(members, _) => {
             for m in members {
-                collect_ty_deps(db, files, m, deps, seen);
+                collect_ty_deps(db, viewer, files, m, deps, seen);
             }
         }
         Ty::Function {
@@ -1988,10 +1996,10 @@ fn collect_ty_deps(
             ..
         } => {
             for param in params {
-                collect_ty_deps(db, files, &param.ty, deps, seen);
+                collect_ty_deps(db, viewer, files, &param.ty, deps, seen);
             }
-            collect_ty_deps(db, files, ret, deps, seen);
-            collect_ty_deps(db, files, throws, deps, seen);
+            collect_ty_deps(db, viewer, files, ret, deps, seen);
+            collect_ty_deps(db, viewer, files, throws, deps, seen);
         }
         _ => {}
     }
@@ -2322,8 +2330,6 @@ fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::O
 mod tests {
     use std::fmt::Write as _;
 
-    use baml_compiler2_hir::package::sole_workspace_root;
-
     use super::SymbolDescription;
     use crate::test_support::{ProjectTest, offset_to_line_col};
 
@@ -2338,22 +2344,12 @@ mod tests {
 
     impl DescribeExt for ProjectTest {
         fn describe(&self, name: &str) -> Vec<SymbolDescription> {
-            super::describe(
-                &self.db,
-                sole_workspace_root(&self.db).expect("workspace root"),
-                &self.files,
-                name,
-            )
+            super::describe(&self.db, self.package, &self.files, name)
         }
 
         fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
             let files = baml_compiler2_hir::compiler2_all_files(&self.db);
-            super::describe(
-                &self.db,
-                sole_workspace_root(&self.db).expect("workspace root"),
-                &files,
-                name,
-            )
+            super::describe(&self.db, self.package, &files, name)
         }
 
         fn format_description(&self, desc: &SymbolDescription) -> String {
@@ -2503,7 +2499,7 @@ class Config {
     #[test]
     fn describe_by_definition_class_in_namespace() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let ns_path = vec![baml_base::Name::new("llm")];
@@ -2511,13 +2507,8 @@ class Config {
         let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
-        let desc = super::describe_by_definition(
-            &project.db,
-            sole_workspace_root(&project.db).expect("workspace root"),
-            &files,
-            def,
-        )
-        .unwrap();
+        let desc =
+            super::describe_by_definition(&project.db, project.package, &files, def).unwrap();
         assert_eq!(desc.name, "Config");
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Class);
     }
@@ -2525,7 +2516,7 @@ class Config {
     #[test]
     fn describe_item_member_field() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let root_ns: Vec<baml_base::Name> = vec![];
@@ -2541,7 +2532,7 @@ class Config {
     #[test]
     fn describe_item_member_nonexistent() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
 
         let root_ns: Vec<baml_base::Name> = vec![];
@@ -2716,7 +2707,7 @@ implement Other for Robot {
     fn named_interface_def(
         project: &ProjectTest,
     ) -> baml_compiler2_hir::contributions::Definition<'_> {
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
         pkg.lookup_type(&[], &baml_base::Name::new("Named"))
             .unwrap()

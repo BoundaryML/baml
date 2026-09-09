@@ -127,20 +127,18 @@ impl From<baml_compiler2_ast::ast::FunctionOrigin> for FunctionOrigin {
     }
 }
 
-/// List user-facing functions with metadata for the playground, along with
-/// the shared type table their param schemas reference.
+/// List the user-facing functions of `package` with metadata for the
+/// playground, along with the shared type table their param schemas
+/// reference.
 ///
 /// Extracts LLM metadata (client name, `is_llm`) from `declarative_meta` on the
 /// compiler2 [`Function`](baml_compiler2_hir::item_tree::Function) item tree entry.
-pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
-    let Some(pkg_id) = baml_compiler2_hir::package::sole_workspace_root(db) else {
-        return FunctionListing {
-            functions: Vec::new(),
-            types: std::collections::BTreeMap::new(),
-        };
-    };
-    let pkg = package_items(db, pkg_id);
-    let iface = package_interface(db, pkg_id);
+pub fn list_functions_with_metadata(
+    db: &ProjectDatabase,
+    package: baml_base::SourceRoot,
+) -> FunctionListing {
+    let pkg = package_items(db, package);
+    let iface = package_interface(db, package);
     let mut functions = Vec::new();
     let mut types = std::collections::BTreeMap::new();
     for (namespace_path, ns_items) in &pkg.namespaces {
@@ -317,15 +315,15 @@ mod tests {
     use super::*;
     use crate::test_support::TestDbExt;
 
-    fn make_db() -> ProjectDatabase {
+    fn make_db() -> (ProjectDatabase, baml_base::SourceRoot) {
         let mut db = ProjectDatabase::new();
-        db.workspace(std::path::Path::new("/tmp"));
-        db
+        let package = db.workspace(std::path::Path::new("/tmp"));
+        (db, package)
     }
 
     #[test]
     fn playground_function_metadata_preserves_namespace_paths() {
-        let mut db = make_db();
+        let (mut db, package) = make_db();
         db.file(
             std::path::Path::new("/tmp/main.baml"),
             "function root_main() -> int { 1 }",
@@ -339,7 +337,7 @@ mod tests {
             "function inner_func() -> int { 3 }",
         );
 
-        let names = list_functions_with_metadata(&db)
+        let names = list_functions_with_metadata(&db, package)
             .functions
             .into_iter()
             .map(|function| function.name)
@@ -357,7 +355,7 @@ mod tests {
 
     #[test]
     fn playground_function_metadata_includes_signature_and_source_position() {
-        let mut db = make_db();
+        let (mut db, package) = make_db();
         let root = std::path::Path::new("/tmp")
             .canonicalize()
             .unwrap_or_else(|_| "/tmp".into());
@@ -366,7 +364,7 @@ mod tests {
             "\n\nfunction transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
         );
 
-        let functions = list_functions_with_metadata(&db).functions;
+        let functions = list_functions_with_metadata(&db, package).functions;
         let function = functions
             .iter()
             .find(|function| function.name == "demo.transform")

@@ -129,16 +129,24 @@ impl<'a> Viewpoint<'a> {
         self.spelling
     }
 
+    /// The package prefix of a path from this viewpoint, for display: `None`
+    /// inside the viewer's own package (elided), the viewer's edge name for a
+    /// dependency, and the provenance spelling for a package the viewer has
+    /// no edge to (a diagnostic must still name it). What [`path`](Self::path)
+    /// joins; callers assembling dotted paths of their own take it directly.
+    pub fn package_prefix(&self, root: SourceRoot) -> Option<&'a str> {
+        match self.package_segment(root) {
+            Ok(package) => package,
+            Err(_) => Some(self.spelling.of(root).as_str()),
+        }
+    }
+
     /// The dotted path of a declaration for display: `ns.Name` inside the
     /// viewer's own package, `edge.ns.Name` for a dependency, and the
     /// provenance spelling for a package the viewer has no edge to (a
     /// diagnostic must still name it).
     pub fn path(&self, decl: &DeclName) -> String {
-        let package = match self.package_segment(decl.root()) {
-            Ok(package) => package,
-            Err(_) => Some(self.spelling.of(decl.root()).as_str()),
-        };
-        join_path(package, decl)
+        join_path(self.package_prefix(decl.root()), decl)
     }
 }
 

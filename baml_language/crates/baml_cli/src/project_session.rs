@@ -26,7 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use baml_db::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRoot};
 
 use crate::{
     bytecode_cache::{CacheContext, ReusePlan},
@@ -58,6 +58,9 @@ pub(crate) struct SessionWarmth {
 pub(crate) struct ProjectSession {
     pub(crate) resolved: ResolvedProject,
     pub(crate) db: ProjectDatabase,
+    /// The user's package — the `Workspace` root the project's sources were
+    /// added under — which every command-level query is asked of.
+    pub(crate) package: SourceRoot,
     pub(crate) cache: Option<CacheContext>,
 }
 
@@ -82,7 +85,7 @@ impl ProjectSession {
             Some(resolved) => Ok(Self::from_resolved(resolved, cache_use)),
             None => {
                 let root = crate::project_load::projectless_search_dir(from)?;
-                let (db, _workspace) = workspace_db(&root);
+                let (db, package) = workspace_db(&root);
                 Ok(Self {
                     resolved: ResolvedProject {
                         root,
@@ -90,6 +93,7 @@ impl ProjectSession {
                         files: Vec::new(),
                     },
                     db,
+                    package,
                     cache: None,
                 })
             }
@@ -97,7 +101,7 @@ impl ProjectSession {
     }
 
     fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Self {
-        let db = build_db_from_sources(&resolved, |_| {});
+        let (db, package) = build_db_from_sources(&resolved, |_| {});
         let cache = match cache_use {
             CacheUse::Off => None,
             _ => CacheContext::open(&resolved),
@@ -105,6 +109,7 @@ impl ProjectSession {
         Self {
             resolved,
             db,
+            package,
             cache,
         }
     }
@@ -139,7 +144,7 @@ impl ProjectSession {
                 stdlib_interface_hit: false,
             };
         };
-        let prep = ctx.prepare_warm_db(&mut self.db);
+        let prep = ctx.prepare_warm_db(&mut self.db, self.package);
         SessionWarmth {
             reuse_plan: prep.reuse_plan,
             stdlib_interface_hit: prep.stdlib_interface_hit,
@@ -161,7 +166,7 @@ impl ProjectSession {
             };
         };
         let stdlib_interface_hit = ctx.seed_stdlib_interface(&mut self.db);
-        let reuse_plan = ctx.plan_reuse(&self.db).and_then(|mut plan| {
+        let reuse_plan = ctx.plan_reuse(&self.db, self.package).and_then(|mut plan| {
             if !plan.no_delta {
                 return None;
             }
@@ -185,9 +190,10 @@ impl ProjectSession {
         baml_db::prime_file_indexes_parallel(&self.db);
     }
 
-    /// A fresh, un-seeded database over the same sources — the honest
-    /// baseline the sampled verify oracle compares served artifacts against.
-    pub(crate) fn honest_db(&self) -> ProjectDatabase {
+    /// A fresh, un-seeded database over the same sources, with the package
+    /// they were added under — the honest baseline the sampled verify oracle
+    /// compares served artifacts against.
+    pub(crate) fn honest_db(&self) -> (ProjectDatabase, SourceRoot) {
         build_db_from_sources(&self.resolved, |_| {})
     }
 

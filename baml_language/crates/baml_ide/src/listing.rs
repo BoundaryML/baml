@@ -326,32 +326,6 @@ pub fn list_namespace_items(
     Some(entries)
 }
 
-/// Every package name known to the database except the workspace packages':
-/// the packages of non-`Workspace` source roots (stdlib builtins plus
-/// source-bearing dependency and dynamic roots) and the mounted source-less
-/// packages, deduplicated and sorted.
-///
-/// The `baml describe` dispatcher uses this for cross-package routing: a
-/// leading path segment naming one of these packages addresses that package
-/// instead of a workspace item.
-pub fn non_workspace_package_names(db: &dyn baml_compiler2_ppir::Db) -> Vec<Name> {
-    let mut names: Vec<Name> = db
-        .source_roots()
-        .roots(db)
-        .iter()
-        .filter(|root| match root.kind(db) {
-            baml_base::SourceRootKind::Stdlib
-            | baml_base::SourceRootKind::Dependency
-            | baml_base::SourceRootKind::Dynamic => true,
-            baml_base::SourceRootKind::Workspace => false,
-        })
-        .map(|root| spelling(db).of(*root).clone())
-        .collect();
-    names.sort();
-    names.dedup();
-    names
-}
-
 /// Return whether `package_name` identifies the implicit local (workspace)
 /// package.
 ///
@@ -422,8 +396,6 @@ fn entry_line<'db>(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_hir::package::sole_workspace_root;
-
     use super::*;
     use crate::test_support::ProjectTest;
 
@@ -431,7 +403,7 @@ mod tests {
 
     /// Run `list_package_items()` for the fixture's workspace package.
     fn list_package_items_user(project: &ProjectTest) -> Vec<ListingEntry> {
-        let package_id = sole_workspace_root(&project.db).unwrap();
+        let package_id = project.package;
         list_package_items(&project.db, package_id)
     }
 
@@ -440,7 +412,7 @@ mod tests {
         project: &ProjectTest,
         ns_segments: &[&str],
     ) -> Option<Vec<ListingEntry>> {
-        let package_id = sole_workspace_root(&project.db).unwrap();
+        let package_id = project.package;
         let ns_path: Vec<Name> = ns_segments.iter().map(Name::new).collect();
         list_namespace_items(&project.db, package_id, &ns_path)
     }
@@ -600,7 +572,7 @@ test "identity" {
 "#,
         );
         let project = builder.build();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
         let (internal_name, internal_def) = pkg
             .namespaces
@@ -643,7 +615,7 @@ function summarize_structured(input: string) -> Summary {
 "##,
         );
         let project = builder.build();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let entries = list_package_items(&project.db, pkg_id);
 
         for name in [
@@ -720,7 +692,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_listing_to_resolve() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let entries = list_package_items(&project.db, pkg_id);
 
         for entry in &entries {
@@ -738,7 +710,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_listing_to_resolve_deep_ns() {
         let project = make_deep_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let entries = list_package_items(&project.db, pkg_id);
 
         assert!(
@@ -761,7 +733,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_namespace() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
 
         for ns_path in pkg.namespaces.keys() {
@@ -786,7 +758,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_namespace_deep() {
         let project = make_deep_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
 
         let mut checked = 0;
@@ -817,7 +789,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_member() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_root(&project.db).unwrap();
+        let pkg_id = project.package;
         let entries = list_package_items(&project.db, pkg_id);
 
         let mut checked = 0;
@@ -863,30 +835,5 @@ function summarize_structured(input: string) -> Summary {
         }
 
         assert!(checked > 0, "expected at least one member to be checked");
-    }
-
-    // ── Package-name enumeration ─────────────────────────────────────────────
-
-    #[test]
-    fn non_workspace_package_names_excludes_workspace_and_is_sorted() {
-        let project = make_multi_ns_project();
-        let names = non_workspace_package_names(&project.db);
-        let workspace = spelling(&project.db)
-            .of(sole_workspace_root(&project.db).unwrap())
-            .clone();
-
-        assert!(
-            names.iter().all(|name| *name != workspace),
-            "workspace package must not be listed; got {names:?}"
-        );
-        assert!(
-            names.iter().any(|name| name.as_str() == "baml"),
-            "stdlib packages should be listed; got {names:?}"
-        );
-        assert!(names.is_sorted(), "names should be sorted; got {names:?}");
-        assert!(
-            names.windows(2).all(|pair| pair[0] != pair[1]),
-            "names should be deduplicated; got {names:?}"
-        );
     }
 }

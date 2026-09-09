@@ -204,6 +204,9 @@ pub(crate) fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize)
 /// A test project with multiple BAML files for project-level IDE features.
 pub(crate) struct ProjectTest {
     pub(crate) db: ProjectDatabase,
+    /// The package every source was added under: the fixture's `Workspace`
+    /// root.
+    pub(crate) package: SourceRoot,
     pub(crate) files: Vec<SourceFile>,
 }
 
@@ -231,7 +234,7 @@ impl ProjectTestBuilder {
     /// Build the project test.
     pub(crate) fn build(self) -> ProjectTest {
         let mut db = ProjectDatabase::default();
-        db.workspace(Path::new("/test"));
+        let package = db.workspace(Path::new("/test"));
 
         let mut files: Vec<SourceFile> = Vec::new();
         for (filename, content) in &self.sources {
@@ -239,7 +242,7 @@ impl ProjectTestBuilder {
             files.push(db.file(&path, content));
         }
 
-        ProjectTest { db, files }
+        ProjectTest { db, package, files }
     }
 }
 

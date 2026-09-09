@@ -9,7 +9,7 @@ use baml_db::{ProjectDatabase, baml_compiler2_hir};
 use baml_ide::ResolvedTarget;
 
 use crate::describe_command::{
-    definition_line_range, dispatch, user_package, write_description, write_keyword, write_listing,
+    definition_line_range, dispatch, write_description, write_keyword, write_listing,
 };
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -34,6 +34,13 @@ fn make_db(files: &[(&str, &str)]) -> ProjectDatabase {
         db.add_or_update_file_in(workspace, &full_path, content);
     }
     db
+}
+
+/// The package of a database built by [`make_db`] — its `Workspace` root —
+/// which every describe query is asked from.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("`make_db` adds the workspace root"))
 }
 
 /// Capture `write_description` output as a String.
@@ -162,7 +169,7 @@ class Baz {
 /// exercise the same code path as `baml describe <name>`.
 fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     let files = baml_compiler2_hir::compiler2_all_files(db);
-    match dispatch(db, name) {
+    match dispatch(db, package(db), name) {
         Some(ResolvedTarget::Keyword(ref kw)) => capture_keyword(kw),
         Some(ResolvedTarget::Package(pkg)) => {
             let entries = baml_ide::list_package_items(db, pkg);
@@ -173,8 +180,7 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
             capture_listing(&entries)
         }
         Some(ResolvedTarget::Item(def)) => {
-            if let Some(desc) = baml_ide::describe_by_definition(db, user_package(db), &files, def)
-            {
+            if let Some(desc) = baml_ide::describe_by_definition(db, package(db), &files, def) {
                 capture_description(db, &desc, 30)
             } else {
                 format!("NO DESCRIPTION: {name}\n")
@@ -194,7 +200,7 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
         }
         None => {
             // Fallback: substring describe (CLI behavior).
-            let descs = baml_ide::describe(db, user_package(db), &files, name);
+            let descs = baml_ide::describe(db, package(db), &files, name);
             if descs.is_empty() {
                 format!("NOT FOUND: {name}\n")
             } else {
@@ -295,7 +301,7 @@ fn render_namespace_listing_llm() {
 fn render_describe_class() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Point");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Point");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -305,7 +311,7 @@ fn render_describe_class() {
 fn render_describe_enum() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Color");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Color");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -332,7 +338,7 @@ class Person {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Named");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Named");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -390,7 +396,7 @@ implement Named for Robot {
 
 fn describe_named(db: &ProjectDatabase) -> baml_ide::SymbolDescription {
     let files = baml_compiler2_hir::compiler2_all_files(db);
-    let mut descs = baml_ide::describe(db, user_package(db), &files, "Named");
+    let mut descs = baml_ide::describe(db, package(db), &files, "Named");
     assert_eq!(descs.len(), 1);
     descs.remove(0)
 }
@@ -478,7 +484,7 @@ class IntDecoder {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "IntDecoder");
+    let descs = baml_ide::describe(&db, package(&db), &files, "IntDecoder");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(
@@ -541,7 +547,7 @@ class IntDecoder {
 fn render_describe_function_with_docstring() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "ExtractPoint");
+    let descs = baml_ide::describe(&db, package(&db), &files, "ExtractPoint");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -560,7 +566,7 @@ fn render_describe_ns_item() {
     let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_by_definition(&db, user_package(&db), &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, package(&db), &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -676,7 +682,7 @@ fn render_assert_package_listing() {
 fn render_describe_builtin_string() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "String");
+    let descs = baml_ide::describe(&db, package(&db), &files, "String");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -687,7 +693,7 @@ fn render_describe_builtin_string() {
 fn render_describe_builtin_deep_copy() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "deep_copy");
+    let descs = baml_ide::describe(&db, package(&db), &files, "deep_copy");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -714,17 +720,22 @@ fn render_describe_builtin_item_by_definition() {
     let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_by_definition(&db, user_package(&db), &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, package(&db), &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
 
-/// `non_workspace_package_names()` should return the builtin packages.
+/// The dispatcher routes a leading segment through the packages the user's
+/// package reaches by name: the builtin packages, and never `user`.
 #[test]
-fn non_workspace_package_names_includes_builtins() {
+fn user_package_reaches_the_builtin_packages_by_name() {
     let db = simple_project();
-    let names = baml_ide::non_workspace_package_names(&db);
-    let has = |name: &str| names.iter().any(|pkg| pkg.as_str() == name);
+    let names: Vec<&str> = package(&db)
+        .dependencies(&db)
+        .iter()
+        .map(|dependency| dependency.name.as_str())
+        .collect();
+    let has = |name: &str| names.contains(&name);
     assert!(has("baml"), "expected 'baml' in {names:?}");
     assert!(has("testing"), "expected 'testing' in {names:?}");
     assert!(has("assert"), "expected 'assert' in {names:?}");
@@ -844,7 +855,7 @@ use crate::describe_command::suggest_similar;
 #[test]
 fn suggest_typo_in_item_name() {
     let db = multi_ns_project();
-    let suggestions = suggest_similar(&db, "Confg", 5);
+    let suggestions = suggest_similar(&db, package(&db), "Confg", 5);
     assert!(
         suggestions.iter().any(|s| s == "llm.Config"),
         "expected `llm.Config` suggestion for typo `Confg`, got {suggestions:?}",
@@ -855,7 +866,7 @@ fn suggest_typo_in_item_name() {
 #[test]
 fn suggest_typo_in_namespace() {
     let db = multi_ns_project();
-    let suggestions = suggest_similar(&db, "llmm", 5);
+    let suggestions = suggest_similar(&db, package(&db), "llmm", 5);
     assert!(
         suggestions.iter().any(|s| s == "llm"),
         "expected `llm` suggestion for typo `llmm`, got {suggestions:?}",
@@ -866,7 +877,7 @@ fn suggest_typo_in_namespace() {
 #[test]
 fn suggest_substring_of_symbol() {
     let db = simple_project();
-    let suggestions = suggest_similar(&db, "Extract", 5);
+    let suggestions = suggest_similar(&db, package(&db), "Extract", 5);
     assert!(
         suggestions.iter().any(|s| s == "ExtractPoint"),
         "expected `ExtractPoint` suggestion for substring `Extract`, got {suggestions:?}",
@@ -877,7 +888,7 @@ fn suggest_substring_of_symbol() {
 #[test]
 fn suggest_typo_in_builtin_namespace() {
     let db = simple_project();
-    let suggestions = suggest_similar(&db, "baml.evn", 5);
+    let suggestions = suggest_similar(&db, package(&db), "baml.evn", 5);
     assert!(
         suggestions.iter().any(|s| s == "baml.env"),
         "expected `baml.env` suggestion for typo `baml.evn`, got {suggestions:?}",
@@ -888,7 +899,7 @@ fn suggest_typo_in_builtin_namespace() {
 #[test]
 fn suggest_unrelated_input_returns_few_or_no_results() {
     let db = simple_project();
-    let suggestions = suggest_similar(&db, "qzqzqzqzqz", 5);
+    let suggestions = suggest_similar(&db, package(&db), "qzqzqzqzqz", 5);
     assert!(
         suggestions.is_empty(),
         "expected no suggestions for garbage input, got {suggestions:?}",
@@ -900,14 +911,14 @@ fn suggest_unrelated_input_returns_few_or_no_results() {
 fn suggest_is_case_insensitive() {
     let db = simple_project();
     // Lowercase input should still find the correctly-cased item.
-    let suggestions = suggest_similar(&db, "extractpoint", 5);
+    let suggestions = suggest_similar(&db, package(&db), "extractpoint", 5);
     assert!(
         suggestions.iter().any(|s| s == "ExtractPoint"),
         "expected `ExtractPoint` for lowercase `extractpoint`, got {suggestions:?}",
     );
 
     // Uppercase typo should also find the correctly-cased item.
-    let suggestions = suggest_similar(&db, "POINT", 5);
+    let suggestions = suggest_similar(&db, package(&db), "POINT", 5);
     assert!(
         suggestions.iter().any(|s| s == "Point"),
         "expected `Point` for uppercase `POINT`, got {suggestions:?}",
@@ -973,7 +984,7 @@ class Wrapper<T> {
 fn render_describe_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "User");
+    let descs = baml_ide::describe(&db, package(&db), &files, "User");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -984,7 +995,7 @@ fn render_describe_class_with_methods() {
 fn render_describe_class_with_static_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Counter");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Counter");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(output.contains("methods:"));
@@ -998,7 +1009,7 @@ fn render_describe_class_with_static_methods() {
 fn render_describe_generic_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Wrapper");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Wrapper");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -1017,7 +1028,10 @@ fn dispatch_lowercase_aliases_resolve_to_items() {
     let db = simple_project();
     for alias in ["string", "int", "bigint", "float", "bool", "image", "json"] {
         assert!(
-            matches!(dispatch(&db, alias), Some(ResolvedTarget::Item(_))),
+            matches!(
+                dispatch(&db, package(&db), alias),
+                Some(ResolvedTarget::Item(_))
+            ),
             "alias `{alias}` should resolve to a builtin class item"
         );
     }
@@ -1041,7 +1055,7 @@ keep this line
 "##,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "PromptFn");
+    let descs = baml_ide::describe(&db, package(&db), &files, "PromptFn");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
 
@@ -1193,7 +1207,7 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 fn render_describe_methods_respect_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "String");
+    let descs = baml_ide::describe(&db, package(&db), &files, "String");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1255,13 +1269,13 @@ fn render_describe_methods_respect_budget() {
 fn render_describe_budget_hint_covers_dependencies_and_references() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let point = baml_ide::describe(&db, user_package(&db), &files, "Point");
+    let point = baml_ide::describe(&db, package(&db), &files, "Point");
     assert_eq!(point.len(), 1);
     assert_reported_budget_is_minimum(&db, &point[0], 0);
 
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let wrapper = baml_ide::describe(&db, user_package(&db), &files, "Wrapper");
+    let wrapper = baml_ide::describe(&db, package(&db), &files, "Wrapper");
     assert_eq!(wrapper.len(), 1);
     assert_reported_budget_is_minimum(&db, &wrapper[0], 0);
 }
@@ -1272,7 +1286,7 @@ fn render_describe_budget_hint_covers_dependencies_and_references() {
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "User");
+    let descs = baml_ide::describe(&db, package(&db), &files, "User");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1311,7 +1325,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
 fn render_describe_no_hint_when_full() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_ide::describe(&db, user_package(&db), &files, "Point");
+    let descs = baml_ide::describe(&db, package(&db), &files, "Point");
     assert_eq!(descs.len(), 1);
     // Point has only a few lines; budget of 30 is sufficient.
     let output = capture_description(&db, &descs[0], 30);
@@ -1326,7 +1340,7 @@ fn render_describe_no_hint_when_full() {
 fn suggest_respects_limit() {
     let db = multi_ns_project();
     // A common substring like "n" should match many things.
-    let suggestions = suggest_similar(&db, "n", 3);
+    let suggestions = suggest_similar(&db, package(&db), "n", 3);
     assert!(
         suggestions.len() <= 3,
         "got {} suggestions, expected ≤ 3",
@@ -1421,7 +1435,10 @@ fn dispatch_defer_and_cleanup_resolve_to_keyword() {
     let db = simple_project();
     for name in ["defer", "cleanup"] {
         assert!(
-            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            matches!(
+                dispatch(&db, package(&db), name),
+                Some(ResolvedTarget::Keyword(_))
+            ),
             "`{name}` should resolve to a keyword topic, not fall through to 'No symbol found'"
         );
     }
@@ -1441,7 +1458,10 @@ fn dispatch_language_topic_resolves_to_keyword() {
         "playground",
     ] {
         assert!(
-            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            matches!(
+                dispatch(&db, package(&db), name),
+                Some(ResolvedTarget::Keyword(_))
+            ),
             "`{name}` should resolve to a keyword topic"
         );
     }
@@ -1452,7 +1472,10 @@ fn dispatch_schema_attributes_and_intrinsic_types_resolve_to_topics() {
     let db = simple_project();
     for name in ["alias", "description", "skip", "void", "never", "unknown"] {
         assert!(
-            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            matches!(
+                dispatch(&db, package(&db), name),
+                Some(ResolvedTarget::Keyword(_))
+            ),
             "`baml describe {name}` should resolve to a shared language topic"
         );
     }

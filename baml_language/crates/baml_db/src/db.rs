@@ -777,6 +777,11 @@ impl ProjectDatabase {
     }
 
     /// The sole `Workspace` root, if one has been added.
+    ///
+    /// Single-workspace stopgap: the LSP's one-workspace guard is its only
+    /// production caller and goes with the guard. Code that compiles or
+    /// inspects a project holds the root it added and threads that instead of
+    /// asking the database which root is "the" workspace.
     pub fn workspace_root(&self) -> Option<SourceRoot> {
         self.table()
             .roots(self)
@@ -1029,19 +1034,16 @@ impl ProjectDatabase {
             .map(|(_, file)| *file)
     }
 
-    /// Add compiler-generated source for a `Session.eval` submission to the
-    /// workspace root. Session files use the dedicated CST→AST lowering mode
-    /// that admits persistent root bindings; ordinary source files remain
-    /// unchanged.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the database has no `Workspace` root — a session is
-    /// workspace-bound by construction.
-    pub fn add_session_file(&mut self, path: impl AsRef<Path>, content: &str) -> SourceFile {
-        let Some(root) = self.workspace_root() else {
-            panic!("add_session_file requires a Workspace source root");
-        };
+    /// Add compiler-generated source for a `Session.eval` submission to
+    /// `root`, the session's workspace. Session files use the dedicated
+    /// CST→AST lowering mode that admits persistent root bindings; ordinary
+    /// source files remain unchanged.
+    pub fn add_session_file_in(
+        &mut self,
+        root: SourceRoot,
+        path: impl AsRef<Path>,
+        content: &str,
+    ) -> SourceFile {
         let file = self.add_or_update_file_in(root, path.as_ref(), content);
         file.set_is_session_submission(self).to(true);
         file
@@ -1683,7 +1685,7 @@ mod tests {
         // A live session file re-upserted as an ordinary file loses the flag
         // (the flag is set AFTER upsert by `add_session_file`, so an
         // ordinary upsert is the only way the file re-enters the maps).
-        let session = db.add_session_file("/ws/s.baml", "let a = 1;");
+        let session = db.add_session_file_in(workspace, "/ws/s.baml", "let a = 1;");
         assert!(session.is_session_submission(&db));
         let plain = db.add_or_update_file_in(workspace, Path::new("/ws/s.baml"), "class A {}");
         assert_eq!(plain, session, "same input, updated in place");
@@ -1691,7 +1693,7 @@ mod tests {
 
         // A tombstoned session file revived as an ordinary file loses the
         // flag too.
-        let session = db.add_session_file("/ws/t.baml", "let b = 2;");
+        let session = db.add_session_file_in(workspace, "/ws/t.baml", "let b = 2;");
         assert!(session.is_session_submission(&db));
         db.remove_file(Path::new("/ws/t.baml"));
         let revived = db.add_or_update_file_in(workspace, Path::new("/ws/t.baml"), "enum E { X }");

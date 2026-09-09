@@ -510,16 +510,25 @@ impl PlaygroundSeam {
         let is_bex_current = installed.is_some_and(|receipt| receipt.source_revision == revision);
         let generation = installed.map_or(0, |receipt| receipt.generation);
 
+        let project = root.to_path_buf();
         let Some(update) = self
             .read(Lane::Request, move |snap| {
-                crate::playground_notify::build_project_update(
+                // `None` when `root` is not (or is no longer) a workspace root
+                // of this snapshot: nothing to describe.
+                let entry = snap
+                    .roots()
+                    .workspace_roots()
+                    .find(|entry| entry.path == project)?;
+                Some(crate::playground_notify::build_project_update(
                     snap.db(),
+                    entry.root,
                     is_bex_current,
                     generation,
                     diagnostics,
-                )
+                ))
             })
             .await
+            .flatten()
         else {
             return;
         };

@@ -256,7 +256,7 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
         // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
         // the root too so Windows short paths and `\\?\` paths can be relativized.
         let from = from
@@ -268,7 +268,7 @@ impl GenerateArgs {
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
-        let source_files = db.workspace_files();
+        let source_files = package.files(&db).clone();
         let diagnostics = baml_db::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()

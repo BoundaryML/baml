@@ -1383,9 +1383,12 @@ struct SessionCompile {
     lease: bex_vm_types::SessionEvalLease,
 }
 
-fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
-    let package_id = db.workspace_root()?;
-    let package_items = baml_compiler2_hir::package::package_items(db, package_id);
+fn let_initializer_type(
+    db: &ProjectDatabase,
+    package: baml_base::SourceRoot,
+    name: &str,
+) -> Option<baml_type::Ty> {
+    let package_items = baml_compiler2_hir::package::package_items(db, package);
     let Definition::Let(let_loc) = package_items.lookup_value(&[], &Name::new(name))? else {
         return None;
     };
@@ -2179,7 +2182,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             // prefix in diagnostics.
             let path = runtime_source_virtual_path(&path);
             if session.is_some() {
-                db.add_session_file(path, &source);
+                db.add_session_file_in(workspace, path, &source);
             } else {
                 db.add_or_update_file_in(workspace, &path, &source);
             }
@@ -2204,7 +2207,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         {
             let file = session.artifact.submission_name.as_str();
             let result_name = session.result_name.as_str();
-            let Some(actual) = let_initializer_type(&db, result_name) else {
+            let Some(actual) = let_initializer_type(&db, workspace, result_name) else {
                 return Err(vec![RuntimeCompileDiagnostic {
                     code: "E_RUNTIME_SESSION".to_string(),
                     message: format!(

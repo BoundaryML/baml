@@ -118,8 +118,9 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
             search_start.display()
         );
     };
-    let (_db, root, files) = load_project_from(Some(&marked_root))?;
-    if files.is_empty() {
+    let project = load_project_from(Some(&marked_root))?;
+    let root = project.root().to_path_buf();
+    if project.files.is_empty() {
         anyhow::bail!("no `.baml` files found in {}", root.display());
     }
     Ok(vec![root])
