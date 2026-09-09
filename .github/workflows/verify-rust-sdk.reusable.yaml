@@ -27,6 +27,11 @@ name: BAML SDK Release - Verify Rust
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -48,6 +53,11 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   platform-matrix:
@@ -121,7 +131,6 @@ jobs:
           # Default mirrors the setup-rust action default; the MSRV leg pins the
           # crate's minimum supported Rust instead.
           toolchain: ${{ matrix.toolchain || '1.98.0' }}
-          enable-cache: false
 
       - name: Download release artifacts
         uses: actions/download-artifact@v8

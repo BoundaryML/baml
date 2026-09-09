@@ -4,6 +4,11 @@ name: BAML Language Release - Verify artifacts
 # consume artifacts from the caller's run and use its frozen release plan.
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -113,6 +118,9 @@ jobs:
       release_plan_json: ${{ inputs.release_plan_json }}
       source_sha: ${{ inputs.source_sha }}
       platform_matrix_json: ${{ inputs.csharp_platform_matrix_json }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   verify-rust-sdk:
     name: Verify Rust SDK
@@ -122,3 +130,6 @@ jobs:
     with:
       release_plan_json: ${{ inputs.release_plan_json }}
       source_sha: ${{ inputs.source_sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}

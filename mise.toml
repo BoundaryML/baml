@@ -49,6 +49,9 @@ protoc = "27.1"
 "npm:pnpm" = "11.1.3"
 "npm:@infisical/cli" = "latest"
 
+flyctl = "0.4.100"
+"cargo:cargo-codspeed" = "4.7.0"
+
 actionlint = "latest"
 ast-grep = "0.44.1"
 

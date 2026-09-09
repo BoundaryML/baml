@@ -1,4 +1,4 @@
-# Size-gate jobs share cargo tests' R2 sccache and read-only rust-cache entries.
+# Size-gate jobs share cargo tests' repository R2 sccache configuration.
 # .envrc configures sccache, with secretless fork PRs falling back to local cache.
 name: Size Gate (Reusable)
 
@@ -49,22 +49,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -135,22 +120,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "macos-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -228,41 +198,11 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "windows-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
-        working-directory: baml_language
-
-      - name: "Build native sccache wrapper"
-        run: |
-          set -euo pipefail
-          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
-          # execs sccache; cargo launches it via CreateProcess (32767-char
-          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
-          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
-          # lives in the build tree, so build it first — .envrc leaves
-          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
-          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
-          # below.
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
         working-directory: baml_language
 
       - name: "Run size-gate check"
@@ -331,22 +271,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -416,7 +341,7 @@ jobs:
           path: reports
 
       # Build cargo-size-gate from source. We share the linux size-gate
-      # job's rust-cache (same shared-key, same runner OS), so this is a
+      # job's R2 sccache entries, so this is a
       # near-instant cache hit in the common case — no upload/download of
       # the binary required.
       - name: "Install Rust toolchain"
@@ -431,22 +356,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-cargo"
-          # The linux size-gate job already populated this cache; we just
-          # consume it here.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

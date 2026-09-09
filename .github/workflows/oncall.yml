@@ -29,7 +29,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: "uv"
+
       - run: ./tools/bctl oncall check
 
       - name: Scope check - schedule-file-only PR?
@@ -66,7 +69,10 @@ jobs:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: "uv"
+
       - name: Validate schedule
         run: ./tools/bctl oncall check
       - name: Post weekly handoff
@@ -78,7 +84,10 @@ jobs:
     environment: boundary-tools-prod
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: "uv"
+
       - run: ./tools/bctl oncall fill-schedule
       - name: Check for changes
         id: check_changes
@@ -108,7 +117,10 @@ jobs:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: "uv"
+
       - name: Identify failed jobs
         id: failed
         run: |

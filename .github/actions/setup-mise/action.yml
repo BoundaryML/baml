@@ -65,8 +65,7 @@ runs:
         # v3 also prevents old caches from restoring mise 2025.10.13, which
         # cannot install the current Python layout or clang 22.1.7.
         cache_key_prefix: mise-baml3
-        # Only WRITE the cache on canary — mirrors the Swatinem rust-cache
-        # `save-if` on the same branch. mise-action's default cache key
+        # Only WRITE the tool cache on canary. mise-action's default cache key
         # includes an install_args hash, so each distinct tool set is its own
         # entry; letting every PR and merge-queue run save its own copy of each
         # (scoped to its own ref) is what produced dozens of `mise-baml2-*`

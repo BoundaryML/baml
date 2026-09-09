@@ -22,22 +22,6 @@ inputs:
     description: "Additional Rust targets to install (space-separated)"
     required: false
     default: ""
-  workspace:
-    description: "Workspace path for Rust cache"
-    required: false
-    default: "baml_language"
-  prefix-key:
-    description: "Cache key prefix for Rust cache"
-    required: false
-    default: "key-1"
-  cache-on-failure:
-    description: "Cache even if the workflow fails"
-    required: false
-    default: "false"
-  enable-cache:
-    description: "Enable Rust cache"
-    required: false
-    default: "true"
   skip-protoc:
     description: "Skip protoc installation (useful for cross-compilation targets)"
     required: false
@@ -93,13 +77,8 @@ runs:
         done
       shell: bash
 
-    - name: Setup Rust cache
-      if: inputs.enable-cache == 'true'
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: ${{ inputs.workspace }}
-        prefix-key: ${{ inputs.prefix-key }}
-        cache-on-failure: ${{ inputs.cache-on-failure }}
+    - name: Setup repository R2 sccache
+      uses: ./.github/actions/setup-sccache
 
     - name: Add wasm32 target
       if: inputs.enable-wasm == 'true'
@@ -108,14 +87,18 @@ runs:
 
     - name: Install wasm-pack
       if: inputs.enable-wasm == 'true'
-      run: cargo install wasm-pack --version ${{ inputs.wasm-pack-version }}
-      shell: bash
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: github:rustwasm/wasm-pack@${{ inputs.wasm-pack-version }}
 
     - name: Install cross-rs
       if: inputs.enable-cross == 'true'
-      run: cargo install cross --git https://github.com/cross-rs/cross
-      shell: bash
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: cargo:cross
 
     - name: Install Protoc
       if: inputs.skip-protoc != 'true'
-      uses: ./.github/actions/setup-protoc
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: protoc

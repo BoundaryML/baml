@@ -20,12 +20,32 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
+  github-actions-rules:
+    name: GitHub Actions conventions (BAML)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: BoundaryML/setup-baml@01c5b25be8c853c3192c3891a0fc62f2a3ea4969 # main; upstream has no v1 tag yet
+        with:
+          toolchain: nightly
+      - name: Check the BAML convention linter
+        run: baml --project tools/baml-github-actions-rules check
+      - name: Test GitHub Actions conventions
+        run: baml --project tools/baml-github-actions-rules test
+      - name: Lint every workflow and action
+        run: baml --project tools/baml-github-actions-rules run main
+
   determine_changes:
     name: "Determine changes"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -440,25 +460,15 @@ jobs:
         with:
           persist-credentials: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      # Select the pinned Rust toolchain before configuring compilation caching.
       - name: "Install Rust toolchain"
         run: |
           rustup toolchain install
           rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
-          save-if: false
-          shared-key: "linux-cargo"
+      - uses: ./.github/actions/setup-sccache
 
-      # prek hooks invoke cargo (from rustup), mise tasks that shell out
-      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
-      # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/etc here, just the prek binary, a python/uv pair
-      # for hook scripts, node for the grammar check, and clang-format.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
@@ -584,6 +594,9 @@ jobs:
     uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
     with:
       source_sha: ${{ github.sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   cargo-tests:
     name: "Cargo Tests"
@@ -775,15 +788,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      # Select the pinned Rust toolchain before configuring compilation caching..
       - name: "Install Rust toolchain"
         run: rustup toolchain install
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "prof-concurrency"
+      - uses: ./.github/actions/setup-sccache
 
       - name: "Fetch cargo dependencies"
         run: cargo fetch
@@ -830,22 +840,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      # Select the pinned Rust toolchain before configuring compilation caching..
       - name: "Install Rust toolchain"
         run: rustup toolchain install
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
-          save-if: false
-          shared-key: "linux-cargo"
+      - uses: ./.github/actions/setup-sccache
 
-      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
-      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
-      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
-      # (not mise), so we don't need `go` itself here either.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
@@ -955,11 +956,7 @@ jobs:
         working-directory: baml_language
         run: rustup show
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "sdk-parity-baml-cli"
+      - uses: ./.github/actions/setup-sccache
 
       - name: "Build local BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
@@ -1016,31 +1013,17 @@ jobs:
         with:
           persist-credentials: false
 
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      # Select the pinned Rust toolchain before configuring compilation caching.
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
 
-      # Swatinem caches the compiled target/ for this build job's own speed
-      # (canary is the sole saver; PRs restore read-only). It is bench-specific
-      # on purpose — its only saver compiles just baml_tests benches, a thin
-      # seed not worth sharing with a general ARM job.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          cache-all-crates: true
-          cache-workspace-crates: true
-          shared-key: "linux-arm-bench"
+      - uses: ./.github/actions/setup-sccache
 
-      # Pin to the same major+minor as codspeed-divan-compat in Cargo.lock
-      # (4.7.0). cargo codspeed run aborts on a major-version mismatch.
-      - name: "Install cargo-codspeed"
-        uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-mise
         with:
-          tool: cargo-codspeed@4.7.0
+          install_args: "cargo:cargo-codspeed"
 
-      # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
@@ -1116,10 +1099,9 @@ jobs:
       - name: "Unpack cargo home into ~/.cargo"
         run: tar -C "$HOME" -xf /tmp/cargo-home/cargo-home.tar
 
-      - name: "Install cargo-codspeed"
-        uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-mise
         with:
-          tool: cargo-codspeed@4.7.0
+          install_args: "cargo:cargo-codspeed"
 
       - name: "Download prebuilt benchmark binaries"
         uses: actions/download-artifact@v8
@@ -1242,6 +1224,7 @@ jobs:
     name: "CI-v2 Failure Alert"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
+      - github-actions-rules
       - prek
       - release-metadata
       - bridge-cffi-release
@@ -1271,6 +1254,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| github-actions-rules | ${{ needs.github-actions-rules.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1310,6 +1294,7 @@ jobs:
     name: "Tag Release Source & Dispatch Canary Cut"
     runs-on: ubuntu-latest
     needs:
+      - github-actions-rules
       - prek
       - release-metadata
       - bridge-cffi-release

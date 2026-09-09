@@ -42,6 +42,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   build:
     name: "Build the matrix and the site"
@@ -73,20 +78,11 @@ jobs:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
-      # No mise: nothing here comes from it. Rust arrives through rustup and
-      # baml_language/rust-toolchain.toml, node and pnpm through the setup-node
-      # actions below, and jq is on the image. Installing it with no
-      # `install_args` pulls every tool in mise.toml — including `cargo:bacon`,
-      # whose binstall failed and took the job with it.
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "stdlib-matrix-baml-cli"
+      - uses: ./.github/actions/setup-sccache
 
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
@@ -95,9 +91,12 @@ jobs:
       # `typescript` and `@types/node` resolved against the ROOT package.json,
       # while the web app lives in typescript2's separate pnpm workspace.
       - name: "Setup Node for the root workspace"
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/setup-mise
         with:
-          enable-turbo-cache: "false"
+          install_args: node@24 npm:pnpm@9.12.0
+
+      - name: Install root workspace dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: "Setup Node for the web app"
         uses: ./.github/actions/setup-node2

@@ -10,6 +10,11 @@ name: BAML SDK Release - Build Rust
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -35,6 +40,11 @@ defaults:
   run:
     shell: bash
 
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   package-crate:
     name: package baml_bridge crate
@@ -59,8 +69,6 @@ jobs:
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
-        with:
-          enable-cache: false
 
       - name: Package and verify the crate
         working-directory: baml_language

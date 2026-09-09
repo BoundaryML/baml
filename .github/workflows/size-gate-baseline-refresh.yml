@@ -46,6 +46,11 @@ defaults:
   run:
     shell: bash
 
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   refresh:
     name: "Refresh baselines from latest canary CI"
@@ -61,13 +66,7 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Reuse the linux size-gate job's cache so building the debug
-          # cargo-size-gate binary is a near-instant cache hit.
-          shared-key: "linux-cargo"
-          save-if: false
+      - uses: ./.github/actions/setup-sccache
 
       - name: "Adopt latest CI sizes (bake --branch)"
         id: bake

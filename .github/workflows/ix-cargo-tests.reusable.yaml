@@ -1,13 +1,5 @@
-# ix preview copy of .github/workflows/cargo-tests.reusable.yaml - the
-# same jobs pointed at the ix runner pool (runs-on labels, parallelism
-# env pins, and per-lane timeout adjustments). It runs side by side with
-# the original via ix-ci.yml, is never a required check, and changes
-# nothing about how the original runs. Promote or delete after the
-# trial; do not evolve both copies.
-#
-# sccache stores Rust compilation artifacts in R2. This preview never writes
-# rust-cache entries; ix warmth comes from the seed disk. .envrc configures
-# sccache, with secretless fork PRs falling back to local cache.
+# Rust compilation uses the repository .envrc R2 sccache configuration.
+# Secretless fork PRs fall back to sccache on the runner-local disk.
 name: Cargo Tests (Reusable)
 
 on:
@@ -87,20 +79,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -202,20 +181,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       - name: "Fetch cargo dependencies"
         run: cargo fetch
@@ -828,11 +794,10 @@ jobs:
         with:
           ruby-version: "3.2.2"
 
-      - name: "Install .NET SDK"
+      - uses: ./.github/actions/setup-mise
         if: matrix.sdk-label == 'csharp'
-        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.301
+          install_args: "dotnet"
 
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'
@@ -893,38 +858,16 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: ${{ matrix.rust-cache-key }}
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
 
-      # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
-      # .exe. See the matching step in the gating cargo-tests.reusable.yaml
-      # for why.
-      - name: "Build native sccache wrapper"
+      - name: Configure Windows build concurrency
         if: matrix.os-label == 'windows'
-        run: |
-          set -euo pipefail
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-          # CARGO_BUILD_JOBS oversubscription only matters for the Windows build.
-          echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
-        working-directory: baml_language
+        run: echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
 
       # Windows Python only: setup.ps1 builds one baml_bridge wheel and strips
       # the editable source block from each fixture so `uv sync` installs that
@@ -1051,20 +994,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-wasm"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1162,20 +1092,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-msrv"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1243,20 +1160,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -1323,20 +1227,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sccache
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

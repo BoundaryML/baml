@@ -11,6 +11,6 @@ runs:
   using: "composite"
   steps:
     - name: Setup Ruby
-      uses: ruby/setup-ruby@v1
+      uses: ./.github/actions/setup-mise
       with:
-        ruby-version: ${{ inputs.ruby-version }}
+        install_args: ruby@${{ inputs.ruby-version }}

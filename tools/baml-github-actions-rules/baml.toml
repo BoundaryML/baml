@@ -1,0 +1,5 @@
+[package]
+name = "baml-github-actions-rules"
+
+[toolchain]
+channel = "nightly"

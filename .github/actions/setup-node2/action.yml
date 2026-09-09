@@ -4,7 +4,7 @@
 # Key differences from setup-node:
 # - Defaults to typescript2/ working directory and lockfile
 # - No Turbo cache (typescript2 doesn't use Turbo for caching)
-# - Uses Node 24 and actions/setup-node@v7
+# - Uses Node 24 through the shared mise action
 
 name: 'Setup Node.js for typescript2'
 description: 'Setup Node.js with pnpm for the typescript2 workspace'
@@ -24,23 +24,10 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v6
+    - name: Setup Node.js and pnpm through mise
+      uses: ./.github/actions/setup-mise
       with:
-        version: ${{ inputs.pnpm-version }}
-        # Point at typescript2/package.json explicitly — otherwise the action
-        # reads the root package.json (which pins a different pnpm version for
-        # the legacy workspace) and aborts on the mismatch.
-        package_json_file: ${{ inputs.working-directory }}/package.json
-        run_install: false
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v7
-      with:
-        node-version: '24'
-        cache: pnpm
-        cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
-        registry-url: 'https://registry.npmjs.org'
+        install_args: node@24 npm:pnpm@${{ inputs.pnpm-version }}
 
     - name: Install dependencies
       run: pnpm install --frozen-lockfile

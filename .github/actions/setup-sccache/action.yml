@@ -1,0 +1,24 @@
+name: Setup repository sccache
+description: Install cache tools through mise and load the existing .envrc R2 configuration
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-mise
+      with:
+        install_args: sccache direnv
+    - name: Load repository cache configuration
+      shell: bash
+      run: |
+        set -euo pipefail
+        direnv allow .envrc
+        direnv export gha >> "$GITHUB_ENV"
+    # Cargo cannot use a .cmd wrapper for long Windows compiler command lines.
+    # This is the sole uncached bootstrap: compile the wrapper before using it.
+    - name: Build native Windows cache wrapper
+      if: runner.os == 'Windows'
+      shell: bash
+      working-directory: baml_language
+      run: |
+        set -euo pipefail
+        RUSTC_WRAPPER= cargo build -p tools_sccache
+        echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"

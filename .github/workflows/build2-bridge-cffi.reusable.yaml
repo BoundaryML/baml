@@ -47,6 +47,11 @@ name: BAML Release - Build bridge_cffi
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -71,6 +76,11 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
@@ -158,7 +168,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix._.target }}
-          enable-cache: false
           skip-protoc: true
 
       - name: Exclude optional AWS-LC jitter exports on Windows

@@ -2,6 +2,11 @@ name: BAML C# - Verify product package slice
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -23,6 +28,11 @@ defaults:
   run:
     shell: bash
 
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   prepare:
     name: Prepare C# verification fixtures
@@ -34,13 +44,12 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: ./.github/actions/setup-mise
         with:
-          dotnet-version: 10.0.301
+          install_args: "dotnet"
 
       - uses: ./.github/actions/setup-rust
         with:
-          enable-cache: false
           enable-cross: false
           skip-protoc: true
 
@@ -64,7 +73,6 @@ jobs:
         working-directory: baml_language
         env:
           BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS: ${{ runner.temp }}/optional-host-call-vectors.tsv
-          RUSTC_WRAPPER: ""
         run: |
           set -euo pipefail
           cargo run -p sdk_test_csharp --bin emit_optional_host_call_vectors
@@ -76,7 +84,6 @@ jobs:
       - name: Prepare ABI bytecode and generated consumer sources
         env:
           BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ runner.temp }}/csharp-neutral/function-calls.bytecode
-          RUSTC_WRAPPER: ""
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/csharp-neutral"
@@ -129,9 +136,9 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: ./.github/actions/setup-mise
         with:
-          dotnet-version: 10.0.301
+          install_args: "dotnet"
 
       - uses: actions/download-artifact@v8
         with:
@@ -189,10 +196,10 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: ./.github/actions/setup-mise
         if: matrix.libc != 'musl'
         with:
-          dotnet-version: 10.0.301
+          install_args: "dotnet"
 
       - uses: actions/download-artifact@v8
         with:

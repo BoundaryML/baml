@@ -72,6 +72,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -337,6 +339,9 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       version: ${{ needs.plan.outputs.version }}
       toolchain_matrix_json: ${{ needs.build-matrix.outputs.toolchain }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   build-vsix:
     name: Build platform-neutral VSIX
@@ -356,9 +361,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: wasm32-unknown-unknown
-          workspace: baml_language
-          prefix-key: v5-rust-baml-vsix-wasm
-          cache-on-failure: true
           enable-wasm: true
           enable-cross: false
           skip-protoc: true
@@ -407,6 +409,9 @@ jobs:
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   build-python-sdk:
     name: Build Python SDK
@@ -422,6 +427,7 @@ jobs:
     name: Build Node.js SDK
     needs: [plan]
     uses: ./.github/workflows/build2-nodejs-sdk.reusable.yaml
+    secrets: inherit
     permissions:
       contents: read
     with:
@@ -437,6 +443,9 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   build-web-sdk:
     name: Build Web SDK
@@ -447,6 +456,9 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   # Language-neutral engine cdylib, shared by every dylib-loader SDK.
   build-bridge-cffi:
@@ -458,6 +470,9 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   build-go-sdk:
     name: Build Go SDK mirror
@@ -473,10 +488,10 @@ jobs:
           name: release-plan
       - name: Stamp version
         run: scripts/baml-language-version stamp --plan release-plan.json
-      - uses: actions/setup-go@v7
+      - uses: ./.github/actions/setup-mise
         with:
-          go-version-file: baml_language/sdks/go/baml_go/go.mod
-          cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
+          install_args: "go"
+
       - name: Assemble and test public module
         env:
           VERSION: ${{ needs.plan.outputs.version }}
@@ -514,6 +529,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show active-toolchain || rustup toolchain install
         working-directory: baml_language
+      - uses: ./.github/actions/setup-sccache
       - name: Build XCFramework (all 5 Apple slices, bitcode-stripped)
         # build-xcframework.sh --all self-provisions the pinned toolchain's
         # Apple targets + deployment-target pins. No `swift` invocation on
@@ -575,6 +591,9 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   all-builds:
     name: All builds gate
@@ -1722,13 +1741,14 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup-mise
         with:
-          python-version: "3.12"
-      - uses: actions/setup-go@v7
+          install_args: "python"
+
+      - uses: ./.github/actions/setup-mise
         with:
-          go-version-file: baml_language/sdks/go/baml_go/go.mod
-          cache: false
+          install_args: "go"
+
       - name: Prove installation and runtime call outside the repository
         run: |
           python scripts/smoke-go-release.py \
@@ -2226,6 +2246,7 @@ jobs:
     # allow the skipped branch, while requiring the active branch to succeed.
     if: ${{ !cancelled() && needs.all-builds.result == 'success' && (needs.publish-pkg-channel.result == 'success' || needs.dry-run-summary.result == 'success') }}
     uses: ./.github/workflows/verify-baml-language-release.reusable.yaml
+    secrets: inherit
     permissions:
       contents: read
     with:

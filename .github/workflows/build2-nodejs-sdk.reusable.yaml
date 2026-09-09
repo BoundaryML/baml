@@ -12,6 +12,11 @@ name: BAML SDK Release - Build Node.js
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
     inputs:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
@@ -42,6 +47,9 @@ defaults:
     shell: bash
 
 env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
@@ -127,36 +135,10 @@ jobs:
         if: contains(matrix._.target, 'linux') && !contains(matrix._.target, 'musl')
         run: ldd --version
 
-      - name: Align HOME with container root
-        if: matrix._.container
-        # The manylinux container runs as root (euid home /root), but GitHub sets
-        # HOME=/github/home. mise/npm/rustup install under HOME yet npm resolves
-        # against the euid home, so binaries land where PATH can't see them. Point
-        # HOME at the real root home before any tool setup runs.
-        run: echo "HOME=/root" >> "$GITHUB_ENV"
-
       - name: Setup tools (sccache, direnv, node, pnpm)
         uses: ./.github/actions/setup-mise
         with:
           install_args: "sccache direnv node npm:pnpm"
-
-      - name: Set up Node.js (container)
-        if: matrix._.container
-        # The manylinux container has no system node/npm and mise doesn't expose
-        # npm on PATH here, but pnpm/action-setup shells out to npm. Provide a real
-        # node/npm first (this is what the setup-node composite did in the original
-        # all-green run).
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-
-      - name: Set up pnpm (container)
-        if: matrix._.container
-        # mise's npm backend doesn't expose pnpm inside the manylinux container
-        # (it works on every hosted runner); install it with the official action.
-        # No version here: the action reads packageManager from package.json (as
-        # the setup-node composite did), avoiding a hardcoded/conflicting version.
-        uses: pnpm/action-setup@v6
 
       - name: Setup Rust toolchain
         working-directory: baml_language
@@ -173,6 +155,8 @@ jobs:
           # cross target (setup-rust used to do this via its `targets:` input).
           rustup show
           rustup target add ${{ matrix._.target }}
+
+      - uses: ./.github/actions/setup-sccache
 
       - name: Build tools setup
         if: matrix._.before

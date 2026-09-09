@@ -23,6 +23,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: 0
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   determine-changes:
     name: Determine documentation changes
@@ -138,11 +143,8 @@ jobs:
       - name: Install Rust toolchain
         working-directory: baml_language
         run: rustup show
-      - name: Cache compiler build
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: developer-docs-snippets-${{ hashFiles('typescript2/app-developer-docs/lib/snippets/**/*.ts', 'typescript2/app-developer-docs/scripts/validate-snippets.ts', 'typescript2/app-developer-docs/content/code/**') }}
-          workspaces: "baml_language -> target"
+      - uses: ./.github/actions/setup-sccache
+
       - name: Build the selected BAML CLI
         run: cargo build -p baml_cli --bin baml-cli
         working-directory: baml_language

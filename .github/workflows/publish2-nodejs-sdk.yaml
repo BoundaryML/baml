@@ -60,14 +60,10 @@ jobs:
           # so `npm publish` of the umbrella includes the built JS/types.
           name: nodejs-umbrella-dist
           path: baml_language/sdks/typescript/bridge_typescript/dist
-      - name: Setup Node.js
-        # The publisher only uses npm. Avoid the repository composite here because
-        # it always enables pnpm caching, whose post-job save fails when this job
-        # intentionally does not install a pnpm store.
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup-mise
         with:
-          node-version: latest
-          registry-url: "https://registry.npmjs.org"
+          install_args: "node@24"
+
       - name: Ensure npm CLI supports trusted publishing
         run: |
           set -euo pipefail
@@ -109,13 +105,12 @@ jobs:
           # full dependency tree, so install just that. Version comes from the
           # bridge devDependencies so it stays in sync with local builds.
           napi_version="$(jq -r '.devDependencies["@napi-rs/cli"]' package.json)"
-          npm install -g "@napi-rs/cli@${napi_version}"
           # pre-publish only updates the umbrella package.json optionalDependencies
           # (pinned to the stamped version) over the already-assembled npm/ tree.
           # --skip-optional-publish: we publish each package explicitly below so we
           #   can attach the channel dist-tag (napi prepublish cannot set one).
           # --no-gh-release: GitHub releases are handled by publish-github-release.
-          napi pre-publish -t npm --no-gh-release --skip-optional-publish
+          npm exec --yes --package="@napi-rs/cli@${napi_version}" -- napi pre-publish -t npm --no-gh-release --skip-optional-publish
       - name: Publish to npm
         working-directory: baml_language/sdks/typescript/bridge_typescript
         env:
