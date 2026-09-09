@@ -1,0 +1,70 @@
+# PRs with user-visible effects
+
+Range: `baml-language-0.17.0..baml-language-0.18.0` (lower tag excluded; upper tag included). Sources were inspected at the upper tag, not current canary.
+
+64 PRs retained after checking the net result at the release tag. #4502 is outside the procedure’s literal path/workflow filters but changes the installed v1 Node bridge. See the backtest report for this exception.
+
+- [#4453](https://github.com/BoundaryML/baml/pull/4453): perf(runtime): precompile stdlib prefix for Package.compile
+- [#4458](https://github.com/BoundaryML/baml/pull/4458): perf(compiler): memoize canonical body inference facts
+- [#4460](https://github.com/BoundaryML/baml/pull/4460): fix: harden runtime compilation boundaries
+- [#4463](https://github.com/BoundaryML/baml/pull/4463): perf(compiler): restore alias memos for impl scans
+- [#4408](https://github.com/BoundaryML/baml/pull/4408): feat: log when shutdown waits for active futures
+- [#4409](https://github.com/BoundaryML/baml/pull/4409): fix(cli): surface log events from baml run
+- [#4466](https://github.com/BoundaryML/baml/pull/4466): fix: restore E0007 for member access on unknown receivers
+- [#4478](https://github.com/BoundaryML/baml/pull/4478): fix(compiler): literal patterns are membership tests, not `==` (B-1073)
+- [#4489](https://github.com/BoundaryML/baml/pull/4489): fmt: strip redundant same-precedence parens in binary chains and call args (B-1562)
+- [#4467](https://github.com/BoundaryML/baml/pull/4467): fix: preserve mutable identities across loop calls
+- [#4470](https://github.com/BoundaryML/baml/pull/4470): fix: reject non-data LLM output schemas
+- [#4473](https://github.com/BoundaryML/baml/pull/4473): fix: diagnose unspecialized reflected generics
+- [#4491](https://github.com/BoundaryML/baml/pull/4491): feat(reflect): add read-only AnyClass reflection
+- [#4493](https://github.com/BoundaryML/baml/pull/4493): feat(reflect): apply the AnyClass follow-up rulings
+- [#4490](https://github.com/BoundaryML/baml/pull/4490): fix(hir_ty): compiler abort on for-loops over joined map arms and Iterable-bounded generics
+- [#4495](https://github.com/BoundaryML/baml/pull/4495): fix: thread type arguments through optional-chained calls
+- [#4501](https://github.com/BoundaryML/baml/pull/4501): fix(reflect): runtime type definitions through dispatch, nested views, and pending-field metadata (B-1582)
+- [#4498](https://github.com/BoundaryML/baml/pull/4498): feat(language): truthiness in condition positions (B-1563)
+- [#4518](https://github.com/BoundaryML/baml/pull/4518): Diagnose inline unreflect type arguments that escape their call
+- [#4516](https://github.com/BoundaryML/baml/pull/4516): Carry minted type identity through interface dispatch
+- [#4529](https://github.com/BoundaryML/baml/pull/4529): Make a let binding that lives in a global behave like an ordinary binding
+- [#4531](https://github.com/BoundaryML/baml/pull/4531): Type-check a Session assignment against its binding
+- [#4530](https://github.com/BoundaryML/baml/pull/4530): Extend the runtime-type escape rule to throws and optional chains
+- [#4441](https://github.com/BoundaryML/baml/pull/4441): feat: first-class UnknownError wrapping
+- [#4502](https://github.com/BoundaryML/baml/pull/4502): fix: make sure Node SDK musl runtime works on alpine
+- [#4535](https://github.com/BoundaryML/baml/pull/4535): fix: c# now always generates as baml_sdk, not baml_client
+- [#4459](https://github.com/BoundaryML/baml/pull/4459): Enable the Python SDK migration primitives used by VetRec
+- [#4526](https://github.com/BoundaryML/baml/pull/4526): fix: return a well-formed error, not a panic, when `naming_convention = "language"` is used for SDKs
+- [#4510](https://github.com/BoundaryML/baml/pull/4510): feat(stdlib): add take/skip/take_while/skip_while iterator adapters to baml.iter
+- [#4536](https://github.com/BoundaryML/baml/pull/4536): Keep a compiled package's types identical through interface dispatch
+- [#4500](https://github.com/BoundaryML/baml/pull/4500): Interface member projections
+- [#4508](https://github.com/BoundaryML/baml/pull/4508): fix: materialize reassigned short-circuit locals
+- [#4544](https://github.com/BoundaryML/baml/pull/4544): fix: prove stack-carried locals by predecessor coverage
+- [#4522](https://github.com/BoundaryML/baml/pull/4522): fix: generate baml_sdk in next to `baml.toml` by default
+- [#4547](https://github.com/BoundaryML/baml/pull/4547): fix: preserve array ascriptions in match coverage
+- [#4548](https://github.com/BoundaryML/baml/pull/4548): feat(profiling): segmented local backend (CCT + exact evidence + CAS)
+- [#4541](https://github.com/BoundaryML/baml/pull/4541): fmt: strip redundant receiver parens; fix unreflect MIR ICE
+- [#4543](https://github.com/BoundaryML/baml/pull/4543): Make reflect a root package
+- [#4565](https://github.com/BoundaryML/baml/pull/4565): B-1559: Reject hash string literals
+- [#4566](https://github.com/BoundaryML/baml/pull/4566): fix(compiler2): preserve type-ref diagnostic ownership
+- [#4135](https://github.com/BoundaryML/baml/pull/4135): Use `Rng` for all primitive random methods
+- [#4580](https://github.com/BoundaryML/baml/pull/4580): Type views should not be subtypes of `reflect.Type`
+- [#4570](https://github.com/BoundaryML/baml/pull/4570): Agent de-generification + unified on_event across Agent, direct calls, and streams
+- [#4563](https://github.com/BoundaryML/baml/pull/4563): baml query: SQL over local execution profiles (P0 store, query core, provider, CLI)
+- [#4578](https://github.com/BoundaryML/baml/pull/4578): playground: Telemetry tab over the canonical profile store
+- [#4573](https://github.com/BoundaryML/baml/pull/4573): fix(compiler2): diagnose untyped empty containers
+- [#4567](https://github.com/BoundaryML/baml/pull/4567): B-1592: restore ctx.output_format options
+- [#4581](https://github.com/BoundaryML/baml/pull/4581): LSP
+- [#4568](https://github.com/BoundaryML/baml/pull/4568): Version compiler artifact envelopes
+- [#4571](https://github.com/BoundaryML/baml/pull/4571): Represent reflection runtime state with enums
+- [#4577](https://github.com/BoundaryML/baml/pull/4577): Preserve runtime type identity across reflection seams
+- [#4574](https://github.com/BoundaryML/baml/pull/4574): Allow unreflect in any type position
+- [#4583](https://github.com/BoundaryML/baml/pull/4583): Preserve runtime diagnostics and reflected schemas
+- [#4601](https://github.com/BoundaryML/baml/pull/4601): Make baml.json.to_string and to_json non-generic
+- [#4600](https://github.com/BoundaryML/baml/pull/4600): Validate reflect.call_any return values against R
+- [#4602](https://github.com/BoundaryML/baml/pull/4602): [B-1630] Remove legacy test declarations
+- [#4604](https://github.com/BoundaryML/baml/pull/4604): Runner interface, async-iterable Python streams, and drain-ready TurnStream batching
+- [#4606](https://github.com/BoundaryML/baml/pull/4606): B-207: implement BEP-069 Read and Write interfaces
+- [#4599](https://github.com/BoundaryML/baml/pull/4599): Infer stored lambda parameters from later uses
+- [#4609](https://github.com/BoundaryML/baml/pull/4609): fix(cli): enable bundle-http for HTTP support in baml run and playground
+- [#4612](https://github.com/BoundaryML/baml/pull/4612): fix(sap): preserve optional classes with omitted fields
+- [#4619](https://github.com/BoundaryML/baml/pull/4619): fix(compiler): reject missing required class fields
+- [#4621](https://github.com/BoundaryML/baml/pull/4621): fix(compiler): reject unspecialized generic function values
+- [#4593](https://github.com/BoundaryML/baml/pull/4593): fix(compiler): reject imprecise throws unknown declarations
