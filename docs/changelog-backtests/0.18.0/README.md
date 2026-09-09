@@ -1,12 +1,12 @@
 # BAML 0.18.0 changelog backtest
 
-The procedure produces useful release notes, but needs two additional safeguards: inspect release-relevant changes outside `baml_language/`, and verify every advertised API at the final tag. This backtest found one workflow-only runtime fix that the prescribed filter misses, one advertised reflection feature that was removed before release, and substantial missing migration guidance.
+The original procedure produces useful release notes, but the backtest established two additional safeguards: inspect release-relevant changes outside `baml_language/`, and verify every advertised API at the final tag. This backtest found one workflow-only runtime fix that the prescribed filter misses, one advertised reflection feature that was removed before release, and substantial missing migration guidance.
 
 The [unpublished draft](../../../typescript2/app-website/blog-releases/2026-08-27-baml-0.18.0-backtest.md) is separate from the [historical post](../../../typescript2/app-website/blog-releases/2026-08-27-baml-0.18.0.md). It has a unique slug and `isPublished: false`; the website loader excludes such posts. No release was published and no followup was sent.
 
 ## Scope and artifacts
 
-This applies [the provided procedure](../../prepare-changelog.md) to `baml-language-0.17.0..baml-language-0.18.0`, with the lower tag excluded and upper tag included. The lower commit is `36545fde3913aa3699a27aed11365541c8123821`; the upper commit is `7622555396a99db466afaea09dea2cad259d4033`. Current canary was not substituted for the upper bound. Tags were fetched before inventorying.
+This applies the originally provided procedure (now [updated with the findings](../../prepare-changelog.md)) to `baml-language-0.17.0..baml-language-0.18.0`, with the lower tag excluded and upper tag included. The lower commit is `36545fde3913aa3699a27aed11365541c8123821`; the upper commit is `7622555396a99db466afaea09dea2cad259d4033`. Current canary was not substituted for the upper bound. Tags were fetched before inventorying.
 
 | Measure | Result |
 | --- | ---: |
@@ -99,7 +99,9 @@ The nine external-authored PR destinations include Ruby groundwork and CI/test-o
 
 Recommendation: keep release-note inclusion and contributor notification eligibility separate. Resolve linked issue and source-thread context before drafting a response. Preserve partial scope and deduplicate destinations.
 
-## Suggested procedure changes
+## Procedure improvements from the backtest
+
+The preparation guide now incorporates the range, filtering, final-source, migration, and validation safeguards below.
 
 1. Accept explicit lower and upper revision bounds. Resolve both to commit IDs before scanning. Use current release discovery only when bounds are absent.
 2. Inventory every commit in the range before filtering. Include packaging/workflow fixes that affect shipped artifacts. Keep this complete inventory for followups.

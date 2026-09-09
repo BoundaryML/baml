@@ -207,6 +207,6 @@ Release notes: https://boundaryml.com/changelog
 
 # Retrieval and coverage notes
 
-All GraphQL PR comment/review connections reported complete first pages. REST inline review and issue-comment collections were fetched with pagination. The GitHub reference scan also inspected linked out-of-range PR metadata to distinguish PR links from issues; those PRs are context, not additions to the release inventory. Two regex matches (`#0` and `#55062759600785`) returned 404 and were rejected as non-issue numeric text.
+All 110 non-v0 PR comment connections and all 110 review connections reported `pageInfo.hasNextPage=false` on the fetched page; none required a second GraphQL page. REST inline review and issue-comment collections were fetched with pagination. The GitHub reference scan also inspected linked out-of-range PR metadata to distinguish PR links from issues; those PRs are context, not additions to the release inventory. Two regex matches (`#0` and `#55062759600785`) returned 404 and were rejected as non-issue numeric text.
 
 The Ruby PR also links an external Shortcut story. No Shortcut credential was provided or used; its private contents were not verified. The GitHub PR author and reviewer are both included above, so this does not block their contribution acknowledgment. Historical comments and issue state were read at backtest time; they are not a snapshot of what was visible on release day.

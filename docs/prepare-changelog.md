@@ -1,42 +1,41 @@
-Prepare a new changelog blog post, in `typescript2/app-website/blog-releases/`
+Prepare a new changelog blog post in `typescript2/app-website/blog-releases/`.
 
-Figure out the latest canary release that went out:
+Use explicit lower and upper tags or commit IDs when the human supplies them. Otherwise, discover the latest released version from [pkg.boundaryml.com](https://pkg.boundaryml.com), `release.json` / `baml-language.cfg`, and the `baml-language-a.b.c` tags; use the current `origin/canary` as the upper bound only when none was supplied. Record the assumed release date and timezone.
 
-- [pkg.boundaryml.com](http://pkg.boundaryml.com)
-- release.json / baml-language.cfg
-- baml-language-a.b.c git tags
+In a fresh checkout of BoundaryML/baml, fetch tags and resolve both bounds to immutable commit IDs before scanning. Set `LOWER_REF` and `UPPER_REF` to those selected references. The lower bound is excluded; the upper bound is included.
 
-In a fresh checkout of BoundaryML/baml, run the following commands:
-
-```
+```sh
 git fetch origin --tags
-git log --reverse --format='%h %s' ${LATEST_CANARY_RELEASE_TAG}..origin/canary -- baml_language/
-
+LOWER_SHA=$(git rev-parse --verify "${LOWER_REF}^{commit}")
+UPPER_SHA=$(git rev-parse --verify "${UPPER_REF}^{commit}")
+git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}"
+# This is a supplemental view, not the complete release inventory:
+git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}" -- baml_language/
 ```
+
+Keep the full-range inventory and record why each excluded PR was omitted. Do not keep moving the upper bound while preparing the draft. For a backtest, preserve the historical post and give the draft a unique slug. All unpublished website drafts must set `isPublished: false`.
 
 Then prepare the changelog draft to target the human's goals:
 
 1. Exclude PRs with no user-visible effect.
-  - Users do not need to know about PRs that only refactor BAML internals.
-  - Users do not need to know about PRs that only change GitHub workflows.
-  - Users do not need to know about changes to BAML v0: changes to `engine/` or `typescript/` are irrelevant to BAML users.
-  - Write the list of PRs with user-visible effect to [`step1b-prs-only-user-visible.md`](http://step1b-prs-only-user-visible.md)
-2. Prepare a list of user-facing changes present in this release.
-  - For each PR with user-visible effect, prepare a concise explanation, from the user's POV, of what changed.
-    - Write short sentences that each make one point. If a sentence needs several commas or a parenthetical, split it up.
-    - If a PR's commit message does not have enough detail about what changed, inspect the diff for the PR itself to understand.
-    - Write the list of PRs &amp; each PR's what-changed-for-the-user list to [`step2a-pr-user-effects.md`](http://step2a-pr-user-effects.md).
-  - Then, aggregate this into a list of what-changed-for-the-user entries, where each entry is a concise what-changed-for-the-user.
-    - If individual what-changed-for-the-user entries span multiple PRs, group them together.
-    - Avoid grouping more than three PRs at a time into a single entry.
-    - Write this list to [`step2b-pr-user-effects-reaggregated.md`](http://step2b-pr-user-effects-reaggregated.md).
-3. For each what-changed-for-the-user entry, identify whether it is best described as: HEADLINE_CHANGE or FEATURE or BREAKING_CHANGE or BUGFIX.
-  - Most changes are **not** headline changes, this is very rare.
-  - If a change can be described as two or more of FEATURE, BREAKING_CHANGE, BUGFIX, use your best judgment to choose exactly one of them to classify it as.
-  - Performance improvements are FEATURE.
+   - Users do not need to know about PRs that only refactor BAML internals or change internal workflows.
+   - Inspect the shipped effect before excluding a workflow or packaging change. A build-only diff can fix an installed SDK, installer, or other shipped artifact even when it does not touch `baml_language/`.
+   - Exclude BAML v0-only changes under `engine/` or `typescript/`. Do not exclude a mixed PR without checking its v1 effect. Review v1 SDKs, installers, editor integrations, and user-facing documentation outside the language directory too.
+   - Write the list of PRs with user-visible effect to [`step1b-prs-only-user-visible.md`](step1b-prs-only-user-visible.md).
+2. Prepare a list of user-facing changes present at the upper release boundary.
+   - For each retained PR, explain what changed from the user's point of view. Write short sentences that each make one point. If a sentence needs several commas or a parenthetical, split it up.
+   - Inspect merged diffs when the title or description is insufficient, especially for broad PRs with several public surfaces.
+   - Check every proposed entry against the net result at `UPPER_SHA`. Remove changes that were reverted, superseded, or removed before that boundary. Verify final API names, return types, configuration keys, and generated imports rather than copying an intermediate PR description.
+   - Write the per-PR effects to [`step2a-pr-user-effects.md`](step2a-pr-user-effects.md).
+   - Aggregate related effects in [`step2b-pr-user-effects-reaggregated.md`](step2b-pr-user-effects-reaggregated.md). Avoid grouping more than three PRs into one entry.
+3. Classify each effect exactly once as HEADLINE_CHANGE, FEATURE, BREAKING_CHANGE, or BUGFIX.
+   - Headline changes are rare. Use judgment when more than one category seems applicable.
+   - Performance improvements are FEATURE, but a refactor alone is not evidence of improved performance.
 4. Review the generated changelog.
-  - Every HEADLINE_CHANGE, FEATURE, or BREAKING_CHANGE involving a syntax or library change must have at least one code block demonstrating how the user can use it.
-  - If a FEATURE is performance-only, instead just include the data analysis from the PR that proves the performance improvement.
+   - Every HEADLINE_CHANGE, FEATURE, or BREAKING_CHANGE involving syntax or a library API must include a code block demonstrating the final API.
+   - Every BREAKING_CHANGE must include migration instructions, including changes to behavior, paths, CLI commands, configuration, and generated artifacts. For code migrations, show before and after. State required user action even when an effect is categorized as BUGFIX.
+   - For a performance-only FEATURE, include the PR's data analysis instead of a code example. Record the measured revision, workload, build profile, baseline, and measurement scope (for example parser-only, static instruction counts, or end-to-end latency). Verify that the measured implementation remains in the release. Do not use superseded intermediate measurements or neutral/noisy benchmarks as proof of a release-level improvement; qualify results when only a narrower workload was measured.
+   - Check examples with the target release compiler, and compare migration examples with the lower release when possible. Distinguish compile-only validation from execution. A passing check does not establish that a runtime crash or provider failure is fixed.
 
 The final format of the changelog blog post should look like this:
 
@@ -132,7 +131,7 @@ In parallel, we should also collect every BAML v1 PR (i.e. all PRs in the specif
   - every GitHub PR opened by an external user which was included in this release
   - every GitHub issue opened by an external user which was fixed (partial or complete) in this release
   - every Discord thread started by an external user which was addressed by this release
-- Prepare a [`step3-followup-actions.md`](http://step3-followup-actions.md) that includes everything we need to do.
+- Prepare a [`step3-followup-actions.md`](step3-followup-actions.md) that includes everything we need to do.
 
 `[step3-followup-actions]`
 
