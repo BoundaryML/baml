@@ -85,6 +85,19 @@ runs:
         # tools fall back to failing source compiles, it breaks the job.
         add_shims_to_path: false
 
+    - name: Export explicitly requested tool paths
+      if: inputs.install_args != ''
+      shell: bash
+      env:
+        REQUESTED_TOOLS: ${{ inputs.install_args }}
+      run: |
+        set -euo pipefail
+        # mise-action exports `mise env` for the config defaults. Explicit
+        # overrides (node@24, python@3.10, npm:pnpm@9) also need their actual
+        # bin directories on PATH. bin-paths does not install missing tools.
+        read -r -a requested_tools <<< "$REQUESTED_TOOLS"
+        mise bin-paths "${requested_tools[@]}" >> "$GITHUB_PATH"
+
     - name: Disable mise task auto-install
       shell: bash
       run: |

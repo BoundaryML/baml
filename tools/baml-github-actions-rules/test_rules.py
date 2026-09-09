@@ -1,6 +1,8 @@
 from contextlib import redirect_stdout
 import io
 import json
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -435,6 +437,34 @@ class RuleTests(unittest.TestCase):
                 self.assertIn("::error file=.github/workflows/future.yml", output.getvalue())
             else:
                 self.assertIn("tool-action:", output.getvalue())
+
+    def test_setup_mise_exports_explicit_version_paths_without_installing(self):
+        action = yaml.safe_load((HERE.parents[1] / MISE).read_text())
+        step = next(
+            s
+            for s in action["runs"]["steps"]
+            if s.get("name") == "Export explicitly requested tool paths"
+        )
+        fake_mise = self.write(
+            "bin/mise",
+            '#!/bin/bash\nset -eu\ntest "$1" = bin-paths\nshift\nfor tool in "$@"; do printf "/tools/%s/bin\\n" "$tool"; done\n',
+        )
+        fake_mise.chmod(0o755)
+        output = self.root / "github-path"
+        subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", step["run"]],
+            check=True,
+            env={
+                **os.environ,
+                "PATH": str(fake_mise.parent) + os.pathsep + os.environ["PATH"],
+                "REQUESTED_TOOLS": "node@24 python@3.10 npm:pnpm@9.12.0",
+                "GITHUB_PATH": str(output),
+            },
+        )
+        self.assertEqual(
+            ["/tools/node@24/bin", "/tools/python@3.10/bin", "/tools/npm:pnpm@9.12.0/bin"],
+            output.read_text().splitlines(),
+        )
 
     def test_repository_exclusions_and_policy_pass(self):
         self.assertEqual([], Linter(HERE.parents[1]).run())
