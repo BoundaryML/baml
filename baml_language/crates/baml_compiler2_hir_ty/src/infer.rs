@@ -1498,7 +1498,7 @@ fn infer_body_impl<'db>(
         stable_body_owner_identity(db, owner),
     );
     if !declared_throws_open {
-        ctx.throws_channels[0].expected = declared_throws.clone();
+        ctx.throws_channels[0].expected.clone_from(&declared_throws);
     }
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
