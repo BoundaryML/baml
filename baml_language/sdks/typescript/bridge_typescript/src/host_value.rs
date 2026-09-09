@@ -44,7 +44,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, LazyLock, Mutex, OnceLock,
+        Arc, LazyLock, Mutex, MutexGuard, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -106,6 +106,17 @@ static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
     table: Mutex::new(HashMap::new()),
 });
 
+/// Lock the dispatch table, recovering from poisoning: the map holds only
+/// primitive keys and `Arc`s and no user code runs under the lock, so it is
+/// structurally intact after an unwind and refusing to touch it would only
+/// leak entries.
+fn dispatch_table() -> MutexGuard<'static, HashMap<u64, Arc<DispatchTsfn>>> {
+    REGISTRY
+        .table
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
 fn next_key() -> u64 {
     loop {
         let k = REGISTRY.next_key.fetch_add(1, Ordering::Relaxed);
@@ -135,7 +146,7 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
     let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, Arc::new(tsfn));
+    dispatch_table().insert(key, Arc::new(tsfn));
     Ok(HandleKey::from_u64(key))
 }
 
@@ -161,29 +172,13 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 
 /// Remove and drop the registry entry for `host_value_key` (if present).
 ///
-/// Dropping the `ThreadsafeFunction` releases the underlying napi reference
-/// (and its strong `weak::<false>` libuv ref), allowing the user's JS
-/// callable to become GC-eligible and unpinning the event loop. Shared by the
+/// Dropping the `ThreadsafeFunction` releases the underlying napi reference,
+/// allowing the user's JS callable to become GC-eligible. Shared by the
 /// engine-driven release path ([`host_release_callback`]) and the encoder's
-/// rollback path ([`release_host_callable`]).
+/// rollback path ([`release_host_callable`]). The entry is dropped after the
+/// table lock is released so the napi teardown never runs under it.
 fn drop_registry_entry(host_value_key: u64) {
-    let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
-        Ok(mut t) => t.remove(&host_value_key),
-        Err(e) => {
-            // Poisoning means an earlier panic occurred while holding the
-            // lock; the table is in an unknown state. Don't try to mutate
-            // it (could double-drop), but log so the underlying panic is
-            // attributable. We accept the leak: the engine has already
-            // dropped its `Arc<HostValueArc>` (we're on the release path),
-            // and a poisoned global registry implies the process is in a
-            // failing state anyway.
-            log::warn!(
-                "host-callable registry mutex poisoned during release of key \
-                 {host_value_key}: {e}; entry leaked"
-            );
-            return;
-        }
-    };
+    let popped = dispatch_table().remove(&host_value_key);
     drop(popped);
 }
 
@@ -361,21 +356,7 @@ pub extern "C" fn host_dispatch_callback(
     // Look up the dispatch wrapper. The `Arc::clone` is cheap (refcount bump);
     // we drop the registry mutex before scheduling the JS call so a long
     // dispatch never blocks `register_host_callable` / `host_release_callback`.
-    let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
-        Ok(t) => t.get(&host_value_key).cloned(),
-        Err(e) => {
-            // Treat poisoning as a "no callable" condition for this
-            // dispatch (the engine call must still complete), but log so
-            // the originating panic is attributable instead of being
-            // swallowed silently as an opaque `no-callable` error.
-            log::warn!(
-                "host-callable registry mutex poisoned during dispatch of key \
-                 {host_value_key}: {e}; treating as no-callable"
-            );
-            None
-        }
-    };
-    let Some(tsfn) = tsfn else {
+    let Some(tsfn) = dispatch_table().get(&host_value_key).cloned() else {
         send_dispatch_error_no_callable(call_id, host_value_key);
         return;
     };
