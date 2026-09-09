@@ -655,3 +655,36 @@ test "failed direct cache setup cannot establish caching and nested builds need 
     );
     assert.equal(rules(workflow(compile)), ["RUST-SETUP"])
 }
+
+test "literal GitHub boolean expressions preserve fail-fast cache readiness" {
+    let mise = "      - uses: ./.github/actions/setup-mise\n        with: {install_args: sccache direnv}\n";
+    let load = "      - run: |\n          direnv allow .envrc\n          direnv export gha >> \"$GITHUB_ENV\"\n";
+    let compile = "      - run: cargo test\n";
+    for (let value in ["false", "${{ false }}", "${{false}}", "${{  false  }}"]) {
+        let strict = `        continue-on-error: ${value}\n`;
+        assert.equal(rules(workflow(mise + strict + load + compile)), []);
+        assert.equal(rules(workflow(mise + load + strict + compile)), []);
+        assert.equal(
+            rules(workflow("      - uses: ./.github/actions/setup-sccache\n" + strict + compile)),
+            [],
+        );
+    }
+    for (let value in ["${{ true }}", "${{ inputs.allow_failure }}"]) {
+        assert.equal(
+            rules(workflow(mise + `        continue-on-error: ${value}\n` + load + compile)),
+            ["RUST-SETUP"],
+        );
+    }
+    assert.equal(
+        rules(
+            workflow("      - uses: ./.github/actions/setup-sccache\n        if: ${{ true }}\n" + compile),
+        ),
+        [],
+    );
+    assert.equal(
+        rules(
+            workflow("      - uses: ./.github/actions/setup-sccache\n        if: ${{ false }}\n" + compile),
+        ),
+        ["RUST-SETUP"],
+    )
+}

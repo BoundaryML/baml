@@ -180,10 +180,7 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
                 let args = string_value(field(field(step, "with"), "install_args"));
                 if (
                     guard == ""
-                        && (
-                            field(step, "continue-on-error") == null
-                                || field(step, "continue-on-error") == false
-                        )
+                        && fails_fast(step)
                         && (
                             args == ""
                                 || (
@@ -200,10 +197,7 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
                     base == "./.github/actions/setup-sccache"
                         || base == "./.github/actions/setup-rust"
                 )
-                    && (
-                        field(step, "continue-on-error") == null
-                            || field(step, "continue-on-error") == false
-                    )
+                    && fails_fast(step)
             ) {
                 cache_guards.push(guard);
             }
@@ -238,10 +232,7 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
             }
             if (
                 cache_tools
-                    && (
-                        field(step, "continue-on-error") == null
-                            || field(step, "continue-on-error") == false
-                    )
+                    && fails_fast(step)
                     && commands.some((c) -> {
                         executable_words(c) == ["direnv", "allow", ".envrc"]
                     })
@@ -255,10 +246,35 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
     }
 }
 
+// GitHub permits boolean fields to use a literal expression as well as YAML bools.
+function literal_boolean(value: Json, expected: bool) -> bool {
+    if (value == expected) {
+        return true;
+    }
+    let text = string_value(value).trim();
+    if (text.starts_with("${{") && text.ends_with("}}")) {
+        text.slice(3, text.length() - 2).trim()
+            == if (expected) {
+                "true"
+            } else {
+                "false"
+            }
+    } else {
+        false
+    }
+}
+
+function fails_fast(step: Json) -> bool {
+    let value = field(step, "continue-on-error");
+    value == null || literal_boolean(value, false)
+}
+
 function condition(step: Json) -> string {
     let value = field(step, "if");
-    if (value == null || value == true) {
+    if (value == null || literal_boolean(value, true)) {
         ""
+    } else if (literal_boolean(value, false)) {
+        "false"
     } else {
         baml.json.stringify(value)
     }
