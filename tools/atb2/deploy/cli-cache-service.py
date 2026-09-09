@@ -35,7 +35,24 @@ def cached(version):
 
 
 def ensure(version):
-    found = cached(version)
+    publication_root = ROOT
+    if version == 'canary':
+        clean = {'PATH':'/usr/bin:/bin','HOME':'/nonexistent','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null'}
+        ref = subprocess.run(['/usr/bin/git','ls-remote','https://github.com/BoundaryML/baml.git','refs/heads/canary'], env=clean, capture_output=True, text=True, check=True, timeout=30).stdout.split()
+        if len(ref) != 2 or not re.fullmatch('[0-9a-f]{40}',ref[0]) or ref[1] != 'refs/heads/canary':
+            raise ValueError('invalid canary revision')
+        revision = ref[0]
+        # Canary builds sharing a version number must not make release lookups ambiguous.
+        publication_root = ROOT/'canary'
+        paths = list(publication_root.glob('*/'+revision+'/baml-cli'))
+        if len(paths) == 1:
+            path = paths[0]
+            if path.is_symlink() or path.resolve()!=path or path.stat().st_uid!=0 or path.stat().st_mode & 0o222:raise ValueError('unsafe cached CLI')
+            return str(path)
+        version = 'canary:'+revision
+        found = None
+    else:
+        found = cached(version)
     if found:
         return found
     env = {'PATH': '/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin',
@@ -61,8 +78,8 @@ def ensure(version):
                 pass
             child.wait()
         artifact.seek(0)
-        revision = artifact.readline(128).decode().strip()
-        return str(cache.publish(ROOT, version, revision, artifact))
+        metadata = json.loads(artifact.readline(512))
+        return str(cache.publish(publication_root, metadata['version'], metadata['revision'], artifact))
 
 
 class Handler(socketserver.StreamRequestHandler):
@@ -81,7 +98,7 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 def request(version):
-    if not VERSION.fullmatch(version):
+    if version != 'canary' and not VERSION.fullmatch(version):
         raise ValueError('invalid CLI version')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(2500)
@@ -89,7 +106,7 @@ def request(version):
         connection.sendall((version+'\n').encode())
         response = json.loads(connection.makefile('rb').readline(4096))
         path = response.get('path')
-        if not path or not Path(path).is_relative_to(ROOT/version):
+        if not path or not Path(path).is_relative_to(ROOT if version == 'canary' else ROOT/version):
             raise ValueError(response.get('error', 'invalid cache response'))
         return path
 

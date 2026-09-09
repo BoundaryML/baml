@@ -306,6 +306,9 @@ function slack_http_inner(req: baml.http.Request) -> baml.http.Response {
     if (path == "/health" && req.method == "GET") {
         return intake_response(200, { "ok": true }.to_json());
     };
+    if (path == "/ui") {
+        return website_http(req);
+    };
     if (path != "/slack/events") {
         return intake_response(404, baml.json.parse("{}"));
     };

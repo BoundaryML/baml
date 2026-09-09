@@ -339,7 +339,31 @@ function save_issue(issue: Issue) -> null {
         return null;
     };
     guard_dataset(issue.id);
-    upsert("issues", [issue_row(issue)].to_json());
+    let row = issue_row(issue);
+    if (dataset() == "eval") {
+        upsert("issues", [row].to_json());
+        return null;
+    };
+    let inserted = rows_of(
+        supabase_send(
+            "POST",
+            "issues?on_conflict=id",
+            baml.json.stringify([row]),
+            "resolution=ignore-duplicates,return=representation",
+        ),
+    );
+    if (inserted.length() == 0) {
+        // These collections can change while an agent holds an older snapshot.
+        // Their writers append explicitly; lifecycle saves must not replace them.
+        let fields = baml.json.from_json<map<string, json>>(row);
+        let patch: map<string, json> = {};
+        for (let key in fields.keys()) {
+            if (!["comments", "repros", "feedback_ids", "slack_ts", "slack_channel"].includes(key)) {
+                patch.set(key, fields.get(key) ?? baml.json.parse("null"));
+            };
+        }
+        update("issues", "id=" + eq(issue.id) + "&dataset=" + eq(dataset()), patch.to_json());
+    };
     null
 }
 

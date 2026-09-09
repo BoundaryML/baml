@@ -20,8 +20,14 @@ class Store:
             self.run.update(body);return [self.run]
         return []
     def update_session(self,session,values):session.update(values)
+    def ensure_private_run(self,run_id):pass
 
 class TaskTests(unittest.TestCase):
+    def setUp(self):
+        for name,value in [('latest_cli','/data/cli-cache/0.19.0/'+'a'*40+'/baml-cli'),('cli_feedback',[])]:
+            patcher=patch.object(t,name,return_value=value);patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch.object(t,'session_transcript',side_effect=lambda session,path:t.visible_transcript(path));patcher.start();self.addCleanup(patcher.stop)
+
     def test_shirt_retries_claim_same_identity_without_posting_code_to_thread(self):
         store=Mock();store.send.return_value='fixture-code'
         store.slack.side_effect=[{'channel':{'id':'D1'}},ValueError('DM unavailable'),{'channel':{'id':'D1'}},{'ok':True}]
@@ -57,12 +63,14 @@ class TaskTests(unittest.TestCase):
             turn={'id':'turn','prompt':'try a task','feedback':{'id':'SL-1','slack_event_id':'Ev1','source':'Slack'}}
             agent=Mock(return_value=(json.dumps({'summary':'Reproduced parser bug','worked':False,'feedback':[{'title':'Parser bug','description':'steps'}]}),str(journal),{'usage':{'input_tokens':10,'output_tokens':5},'num_turns':2}))
             bind=Mock()
+            t.cli_feedback.side_effect=[[],[{'id':'PH-11111111-1111-4111-8111-111111111111','title':'Parser bug','description':'steps','status':'anonymous'}]]
             result=t.play(store,session,turn,agent,bind)
             self.assertIn('Reproduced parser bug',result)
             self.assertEqual(store.run['tokens'],15);self.assertEqual(store.run['play_status'],'completed')
-            feedback=[c[2] for c in store.calls if c[0]=='feedback'][0]
-            self.assertEqual(feedback['issue_ids'],[]);self.assertNotIn('slack_event_id',feedback)
-            self.assertEqual(session['feedback_ids'],['PLAY-turn-0'])
+            self.assertFalse(any(c[0]=='feedback' for c in store.calls))
+            self.assertEqual(session['feedback_ids'],['PH-11111111-1111-4111-8111-111111111111'])
+            self.assertIn('feedback --anonymous',agent.call_args.args[1])
+            self.assertIn('/data/cli-cache/0.19.0/',agent.call_args.args[1])
             t.play(store,session,turn,agent,bind);agent.assert_called_once()
             self.assertEqual(agent.call_args.kwargs['tools'],'Read,Glob,Grep,Write,Edit,Bash')
 
@@ -81,6 +89,29 @@ class TaskTests(unittest.TestCase):
             with self.assertRaises(ValueError):t.play(store,{'id':'fixture'}, {'id':'t','prompt':'try'},agent,Mock())
             self.assertFalse(victim.exists());self.assertFalse((root/'missing').exists())
             self.assertEqual(store.run['play_status'],'failed')
+
+    def test_transcript_preserves_large_tool_results_and_later_turns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'large.jsonl'
+            content='x'*600000
+            path.write_text(json.dumps({'type':'user','message':{'content':[{'type':'tool_result','content':content}]}})+'\n'+json.dumps({'type':'assistant','message':{'content':[{'type':'text','text':'last message'}]}}))
+            turns=t.visible_transcript(path)
+            self.assertEqual(turns[0]['content'][0]['text'],content)
+            self.assertEqual(turns[-1]['content'][0]['text'],'last message')
+
+    def test_public_run_storage_is_refused_before_prompt_or_transcript_writes(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(t,'WORKTREES',Path(tmp).resolve()):
+            store=Store();store.ensure_private_run=Mock(side_effect=ValueError('public runs'))
+            agent=Mock()
+            with self.assertRaises(ValueError):t.play(store,{'id':'fixture'}, {'id':'t','prompt':'private prompt'},agent,Mock())
+            agent.assert_not_called()
+            self.assertNotIn('private prompt',json.dumps(store.calls))
+            self.assertEqual(store.run['play_status'],'failed')
+
+    def test_eval_does_not_send_real_feedback(self):
+        store=Store();store.dataset='eval';agent=Mock()
+        with self.assertRaises(ValueError):t.play(store,{}, {},agent,Mock())
+        self.assertEqual(store.calls,[]);agent.assert_not_called()
 
     def test_invalid_model_result_is_rejected(self):
         for text in ['{}','{"summary":"ok","worked":"yes"}','{"summary":"ok","worked":true,"feedback":[{}]}']:

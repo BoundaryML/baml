@@ -472,3 +472,47 @@ Before generating a repro, triage checks whether the feedback describes a concre
 problem or feature request. Vague reports stay in feedback storage with a terminal
 `no_issue` event (`reason=needs_details`), without creating an issue or pinging a
 shepherd. Specific reports do not need a complete repro to pass this check.
+
+### Website comments, Linear export, and run transcripts
+
+The existing final stack branch includes the website actions and runner API.
+Issue pages remain public. Comments, Linear export, and play-session transcripts
+require GitHub sign-in with active BoundaryML organization membership. Sessions
+expire after one hour. The OAuth app uses only `read:org`; GitHub tokens are not
+stored in browser cookies. Approval still happens in Slack.
+
+Configure `app-feedback` with `ATB2_GITHUB_CLIENT_ID`,
+`ATB2_GITHUB_CLIENT_SECRET`, `ATB2_UI_SESSION_SECRET` (a random secret of at least
+32 characters), `ATB2_UI_URL` (the canonical HTTPS website origin), and
+`ATB2_UI_RUNNER_SECRET` (a different random secret of at least 32 characters).
+Set the OAuth callback to `<ATB2_UI_URL>/api/auth/github/callback`.
+`ATB2_RUNNER_URL` defaults to `https://atb2-runner.fly.dev`.
+Put the same `ATB2_UI_RUNNER_SECRET` in boundary-tools/prod for Fly. The existing
+Linear token/team configuration is used by the runner, never the browser.
+
+Play runs resolve the current canary commit at the beginning of each task. The
+isolated builder lazily caches its CLI by version and exact revision. The agent
+uses that executable's actual `feedback --anonymous` command; PostHog intake
+continues to create the feedback rows. Run pages show the full visible session
+(messages, tool calls/results, and follow-ups), report delivery state, and links
+to the issues triage creates. Thinking and authentication metadata are excluded.
+Transcripts refresh while the agent works and survive failed runs. Historical
+runs that only saved truncated transcripts cannot recover missing data from the
+old database snapshot alone.
+
+`FEEDBACK_SUPABASE_ANON_KEY` must be present in boundary-tools/prod so each play
+run can verify that the public role cannot read it. Before storing the prompt or
+transcript, the worker reads the new, empty run with the anonymous role and
+refuses to continue if it is visible. Supabase must hide `kind = 'play'` runs
+from public readers. No schema migration is included in this repository.
+CLI-reporting play runs are live-only; eval attempts are refused before any
+external report can be sent.
+
+Title deduplication is deterministic: normalize case/punctuation, remove common
+filler words, normalize a few compiler terms, then match identical token sets or
+Dice similarity of at least 0.60 with at least four shared terms. Candidates must
+have the same subsystem and BAML version and remain open, awaiting approval,
+approved, or in progress. A stable issue-ID tie-break handles older duplicates.
+A match appends unique repros and feedback IDs without resetting approval/status,
+then replies in the existing Slack thread. This is intentionally conservative;
+it does not infer semantic equivalence or automatically consolidate old issues.

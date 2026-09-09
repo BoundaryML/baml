@@ -354,6 +354,29 @@ function triage_feedback(fb: Feedback) -> Issue? {
             null
         },
         let issue: Issue => {
+            let duplicate = duplicate_issue(issue);
+            if (duplicate != null) {
+                let merged = merge_duplicate(duplicate ?? baml.sys.panic("checked duplicate"), issue);
+                update(
+                    "issues",
+                    "id=" + eq(merged.id) + "&dataset=" + eq(dataset()),
+                    { "repros": merged.repros, "feedback_ids": merged.feedback_ids }.to_json(),
+                );
+                if (db_configured()) {
+                    update(
+                        "feedback",
+                        "id=" + eq(fb.id) + "&dataset=" + eq(dataset()),
+                        { "issue_ids": with_issue(fb, merged.id).issue_ids }.to_json(),
+                    );
+                };
+                notify(
+                    "feedback_linked",
+                    merged,
+                    "Added a related feedback report and its repros to this issue.",
+                    { "feedback": fb.id }.to_json(),
+                );
+                return merged;
+            };
             //# organize + gauge
             let gauged = with_status(gauge_issue(organize_issue(issue)), AwaitingApproval { state: "awaiting_approval" });
             save_issue(gauged);

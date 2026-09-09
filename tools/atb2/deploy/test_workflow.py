@@ -19,7 +19,7 @@ CLI = Path(os.environ.get('BAML_CLI', str(Path.home() / '.atb2/target/debug/baml
 
 @unittest.skipUnless(CLI.is_file(), 'canary baml-cli required')
 class WorkflowTests(unittest.TestCase):
-    def run_expression(self, expression, respond, reject_feedback=False, push_exit_code=None, fixture_logs=False):
+    def run_expression(self, expression, respond, reject_feedback=False, push_exit_code=None, fixture_logs=False, fixture_issue=False):
         calls = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -54,6 +54,11 @@ class WorkflowTests(unittest.TestCase):
                 end = code.index('\n}', start) + 2
                 code = code[:start] + f'function run_with(c: Cmd, env: map<string, string>) -> CmdResult {{ CmdResult {{ cmd: "fixture", exit_code: {push_exit_code}, stdout: "", stderr: "private fixture diagnostic", ok: false }} }}' + code[end:]
                 path.write_text(code)
+            if fixture_issue:
+                path = root / 'baml_src/create_issue.baml'
+                code = path.read_text();start=code.index('function create_issue(');end=code.index('\n}',start)+2
+                replacement = 'function create_issue(fb: Feedback) -> Issue? { let row = baml.json.from_json<map<string,json>>(issue_row(gh_issue(99, Difficulty.Medium))); row.set("feedback_ids", [fb.id].to_json()); row.set("repros", [Repro { files: { "main.baml": "fixture" }, command: "baml check", setup: null, expectation: ShouldCompile { check: "should_compile" } }].to_json()); issue_from_row(row.to_json()) }'
+                path.write_text(code[:start]+replacement+code[end:])
             if fixture_logs:
                 path = root / 'baml_src/merge_issue.baml'
                 code = path.read_text()
@@ -70,7 +75,7 @@ class WorkflowTests(unittest.TestCase):
                 env = {'PATH': os.environ['PATH'], 'HOME': tmp,
                        'FEEDBACK_SUPABASE_URL': f'http://127.0.0.1:{server.server_port}',
                        'FEEDBACK_SUPABASE_KEY': 'offline-fixture', 'BAML_AGENT_SKILL_CHECK':'off',
-                       'BAML_TELEMETRY_DISABLED':'1'}
+                       'BAML_TELEMETRY_DISABLED':'1','ATB2_UI_RUNNER_SECRET':'offline-website-signing-fixture-key-00000'}
                 try:
                     result = subprocess.run([str(CLI), 'run', '-e', expression], cwd=root, env=env,
                                             capture_output=True, text=True, timeout=60)
@@ -82,6 +87,48 @@ class WorkflowTests(unittest.TestCase):
     def test_checks_in_one_workflow_fetch_and_include_logs_once(self):
         expression = '\n            let logs = failed_logs(PrFeedback { checks: [\n                CheckRow { name: "first", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/1" },\n                CheckRow { name: "second", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/2" }\n            ], comments: [] });\n            assert.equal(logs.get("first") ?? "", "unique failure");\n            assert.contains(logs.get("second") ?? "", "included above");\n            assert.equal(baml.fs.read(atb2_home() + "/log-fetches"), "x");\n        '
         self.assertEqual(self.run_expression(expression, lambda *_: (500, {}), fixture_logs=True), [])
+
+    def test_lifecycle_saves_do_not_replace_concurrent_comments_or_repros(self):
+        expression='let row = baml.json.from_json<map<string,json>>(issue_row(gh_issue(7,Difficulty.Medium))); row.set("id","ISSUE-fixture".to_json()); save_issue(issue_from_row(row.to_json()));'
+        calls=self.run_expression(expression,lambda *_:(200,[]))
+        self.assertEqual([c[0] for c in calls],['POST','PATCH'])
+        self.assertIn('on_conflict',calls[0][2])
+        for key in ['comments','repros','feedback_ids','slack_ts','slack_channel']:self.assertNotIn(key,calls[1][3])
+        self.assertIn('status',calls[1][3])
+
+    def test_similar_feedback_reuses_issue_and_only_appends_repros_and_report_links(self):
+        issue={'id':'ISSUE-original','title':'0.17.0: `throws` clause with an unresolved type panics the compiler (index out of bounds)',
+               'version':'0.17.0','subsystem':'Compiler','feedback_ids':['PH-original'],'status':{'state':'awaiting_approval'},'repros':[]}
+        def respond(method,table,query,body):
+            if method=='GET' and table=='issues':return 200,[issue] if query.get('state')==['eq.awaiting_approval'] else []
+            return 200,[{'id':1}]
+        expression='let fb = Feedback { id: "PH-new", title: "same defect", body: "repro", source: FeedbackSource.BamlFeedback, author: Author { email: null, github: null, device_id: "fixture" }, toolchain: null, files: {}, comments: [], issue_ids: [] }; let result = triage_feedback(fb); assert.equal(result?.id ?? "", "ISSUE-original");'
+        calls=self.run_expression(expression,respond,fixture_issue=True)
+        patches=[c for c in calls if c[0]=='PATCH' and c[1]=='issues']
+        self.assertEqual(len(patches),1);self.assertEqual(set(patches[0][3]),{'repros','feedback_ids'})
+        self.assertEqual(patches[0][3]['feedback_ids'],['PH-original','PH-new']);self.assertEqual(len(patches[0][3]['repros']),1)
+        self.assertFalse(any(m=='POST' and t=='issues' for m,t,_,_ in calls))
+        event=next(body for m,t,_,body in calls if m=='POST' and t=='events')
+        self.assertEqual(event[0]['kind'],'feedback_linked')
+        self.assertEqual(event[0]['issue_id'],'ISSUE-original')
+
+    def test_website_authentication_and_comment_compare_and_swap(self):
+        def respond(method,table,query,body):
+            if method=='GET':return 200,[{'id':'ISSUE-fixture','comments':[]}]
+            return 200,[] # A simultaneous comment won the compare-and-swap.
+        expression = '''
+            let body = `{"operation":"comment","id":"ISSUE-fixture","author":"fixture-user","dataset":"live","body":"Useful context"}`;
+            let ts = baml.time.Instant.now().to_timestamp_seconds().to_string();
+            let req = baml.http.Request { method:"POST", url:"/ui", body:body, headers:{} };
+            assert.equal(website_http(req).status_code,403);
+            let signed = baml.http.Request { method:"POST", url:"/ui", body:body, headers:{"X-ATB2-Timestamp":ts,"X-ATB2-Signature":"v0=" + hmac_sha256_hex("offline-website-signing-fixture-key-00000", "v0:"+ts+":"+body)} };
+            assert.equal(website_http(signed).status_code,409);
+        '''
+        calls=self.run_expression(expression,respond)
+        self.assertEqual(len(calls),3)
+        patch=calls[-1];self.assertEqual(patch[0],'PATCH');self.assertEqual(patch[2]['comments'],['eq.[]'])
+        self.assertEqual(patch[3]['comments'][0]['author'],'fixture-user')
+        self.assertEqual(set(patch[3]),{'comments'})
 
     def test_denied_push_writes_an_outcome_and_returns_to_the_worker(self):
         expression = '''

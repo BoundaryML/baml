@@ -5,6 +5,7 @@ function session_environment() -> map<string, string> {
         let name in [
             "FEEDBACK_SUPABASE_URL",
             "FEEDBACK_SUPABASE_KEY",
+            "FEEDBACK_SUPABASE_ANON_KEY",
             "ATB_SLACK_BOT_TOKEN",
             "ATB2_SLACK_BOT_TOKEN",
             "ATB2_DATASET",

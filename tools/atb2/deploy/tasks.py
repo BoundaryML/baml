@@ -1,12 +1,17 @@
 """Shirt claims and sandboxed BAML play runs, using the shared session worker."""
 import json
+import io
+import contextlib
 import os
 from pathlib import Path
 import re
 import time
+import uuid
+import importlib.util
 from urllib.parse import urlsplit
 
 WORKTREES = Path('/data/worktrees')
+SESSIONS = Path('/data/agent-sessions')
 
 def run_link(run_id):
     value=os.environ.get('ATB2_UI_URL','')
@@ -28,12 +33,11 @@ def shirt(store, turn):
     return 'I sent your shirt promo code in a Slack direct message.'
 
 
-def visible_transcript(path):
+def visible_transcript(path, stream=None):
     """Keep text/tool turns only; omit initialization, auth metadata and thinking."""
-    turns=[];budget=400_000
-    with Path(path).open() as stream:
+    turns=[]
+    with (contextlib.nullcontext(stream) if stream is not None else Path(path).open()) as stream:
         for line in stream:
-            if len(line)>1_000_000:continue
             try:event=json.loads(line)
             except ValueError:continue
             if event.get('type') not in ('assistant','user'):continue
@@ -44,12 +48,12 @@ def visible_transcript(path):
             for block in content:
                 if not isinstance(block,dict):continue
                 kind=block.get('type')
-                if kind=='text':item={'type':'text','text':str(block.get('text',''))[:20000]}
-                elif kind=='tool_use':item={'type':'tool_use','name':str(block.get('name',''))[:100],'text':json.dumps(block.get('input',{}))[:20000]}
-                elif kind=='tool_result':item={'type':'tool_result','text':json.dumps(block.get('content',''))[:20000]}
+                if kind=='text':item={'type':'text','text':str(block.get('text',''))}
+                elif kind=='tool_use':item={'type':'tool_use','name':str(block.get('name',''))[:100],'text':json.dumps(block.get('input',{}),indent=2)}
+                elif kind=='tool_result':
+                    content=block.get('content','')
+                    item={'type':'tool_result','text':content if isinstance(content,str) else json.dumps(content,indent=2)}
                 else:continue
-                budget-=len(json.dumps(item))
-                if budget<0:return turns
                 blocks.append(item)
             if blocks:turns.append({'role':event['type'],'content':blocks})
     return turns
@@ -65,7 +69,61 @@ def play_report(text):
     return {'summary':value['summary'][:8000],'worked':value['worked'],'feedback':feedback}
 
 
+def latest_cli():
+    spec=importlib.util.spec_from_file_location('cli_cache_service',Path(__file__).with_name('cli-cache-service.py'))
+    service=importlib.util.module_from_spec(spec);spec.loader.exec_module(service)
+    return service.request('canary')
+
+
+def session_transcript(session, fallback):
+    # Open each agent-controlled path component without following links.
+    identity=str(uuid.UUID(session['id']));conversation=str(uuid.UUID(session['claude_session_id']))
+    fd=os.open(SESSIONS/identity/'home',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        for part in ['.claude','projects','-workspace']:
+            next_fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+            os.close(fd);fd=next_fd
+        journal=os.open(conversation+'.jsonl',os.O_RDONLY|os.O_NOFOLLOW,dir_fd=fd)
+        with os.fdopen(journal) as stream:return visible_transcript(None,stream)
+    except FileNotFoundError:return visible_transcript(fallback)
+    finally:os.close(fd)
+
+
+def update_play_session(store, session, transcript):
+    rows=store.send('runs',{'session_id':'eq.'+session['id'],'kind':'eq.play','dataset':'eq.'+store.dataset,'order':'created_at.desc','limit':'1'})
+    if not rows:return
+    row=rows[0];reports=cli_feedback(session['id'])
+    report=dict(row.get('report') or {});report['feedback']=reports
+    store.send('runs',{'id':'eq.'+str(row['id']),'dataset':'eq.'+store.dataset},
+        {'transcript':session_transcript(session,transcript),'feedback_ids':[r['id'] for r in reports],'report':report},'PATCH')
+
+
+def cli_feedback(session_id):
+    """Read only the agent's feedback journal, never follow agent-controlled symlinks."""
+    if str(uuid.UUID(session_id))!=session_id:raise ValueError('invalid session')
+    root=SESSIONS/session_id/'home'
+    descriptors=[]
+    try:
+        fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);descriptors.append(fd)
+        fd=os.open('.baml',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);descriptors.append(fd)
+        fd=os.open('feedback.json',os.O_RDONLY|os.O_NOFOLLOW,dir_fd=fd)
+        with os.fdopen(fd) as stream:
+            data=stream.read(10_000_001)
+        if len(data)>10_000_000:raise ValueError('feedback journal too large')
+        rows=json.loads(data).get('reports',[]);result=[]
+        for row in rows:
+            identity=str(uuid.UUID(row['event_uuid']))
+            result.append({'id':'PH-'+identity,'title':str(row.get('title','')),
+                'description':str(row.get('description') or ''),'status':str(row.get('status','open')),
+                'created_at':row.get('created_at')})
+        return result
+    except FileNotFoundError:return []
+    finally:
+        for fd in reversed(descriptors):os.close(fd)
+
+
 def play(store, session, turn, agent, bind):
+    if store.dataset != 'live':raise ValueError('CLI feedback play runs require the live dataset')
     existing=store.send('runs',{'turn_id':'eq.'+turn['id'],'dataset':'eq.'+store.dataset,'limit':'1'})
     if existing:
         row=existing[0]
@@ -85,31 +143,49 @@ def play(store, session, turn, agent, bind):
         (source/'main.baml').write_text('// Scratch BAML task.\n')
     bind(store,session,str(folder))
     store.update_session(session,{'kind':'play'})
-    marker=Path('/data/target/.baml-cli-rev')
-    revision=marker.read_text().strip() if marker.is_file() else ''
-    revision=revision if re.fullmatch('[0-9a-f]{40}',revision) else None
     row=store.send('runs',body={'issue_id':None,'kind':'play','mode':'Live','dataset':store.dataset,
-        'session_id':session['id'],'turn_id':turn['id'],'prompt':turn['prompt'],'play_status':'running','canary_sha':revision},method='POST')[0]
+        'session_id':session['id'],'turn_id':turn['id'],'play_status':'running'},method='POST')[0]
     started=time.monotonic()
+    ids=[];reports=[];transcript=None;stage="privacy"
+    query={'id':'eq.'+str(row['id']),'dataset':'eq.'+store.dataset}
     try:
-        prompt='''Try this task in the scratch BAML project at /workspace. Use /data/target/debug/baml-cli, with --agent-skill-check off, and its describe command to verify APIs. Implement and run appropriate checks/tests. The toolchain is the runner's pinned canary build; do not claim unverified execution. You may edit this scratch project and run commands, but never push, deploy, access other projects, or fetch credentials. Missing model credentials are a limitation, not a compiler bug. File feedback only for reproducible BAML defects. Return only JSON {"summary":"what was tried and verified","worked":true,"feedback":[{"title":"defect","description":"reproduction and evidence"}]}. At most 3 feedback items; use an empty list when there is no verified defect.
-Task: '''+turn['prompt']
-        text,transcript,final=agent(session,prompt,tools='Read,Glob,Grep,Write,Edit,Bash')
-        report=play_report(text);ids=[]
-        for index,item in enumerate(report['feedback']):
-            feedback=dict(turn['feedback']);feedback.pop('slack_event_id',None)
-            identity=('GH-' if store.dataset=='eval' else 'PLAY-')+turn['id']+'-'+str(index)
-            feedback.update(id=identity,title=item['title'][:120],body=item['description'][:8000],issue_ids=[],files={},dataset=store.dataset)
-            store.send('feedback',{'on_conflict':'id'},feedback,'POST','resolution=ignore-duplicates,return=representation');ids.append(identity)
+        store.ensure_private_run(row['id'])
+        store.send('runs',query,{'prompt':turn['prompt']},'PATCH')
+        stage='toolchain'
+        cli=latest_cli()
+        version=Path(cli).parent.parent.name;revision=Path(cli).parent.name
+        before={r['id'] for r in cli_feedback(session['id'])}
+        store.send('runs',query,{'canary_sha':revision,'report':{'version':version,'summary':'Running with latest canary'}},'PATCH')
+        def progress(path):
+            nonlocal transcript,ids,reports
+            transcript=path
+            reports=cli_feedback(session['id'])
+            ids=[r['id'] for r in reports]
+            store.send('runs',query,{'transcript':session_transcript(session,path),'feedback_ids':ids,
+                'report':{'version':version,'feedback':reports,'summary':'Running'}},'PATCH')
+        prompt=f"""Try this task in /workspace using the latest canary CLI at {cli} (version {version}, revision {revision}).
+Use its describe/help commands to verify APIs and run checks/tests. Do not use the runner's older /data/target CLI.
+Report every verified defect with `{cli} feedback --anonymous --title ... --description ...` (attach repro files with --files).
+Use the real feedback command, not a JSON suggestion or a direct database write. Preserve its local report journal in ~/.baml.
+Do not file speculative defects. Missing model credentials are a limitation, not a compiler bug.
+Never push, deploy, fetch credentials, or access other projects. Return JSON {{"summary":"what was tried and verified","worked":true,"feedback":[]}}.
+Task: """+turn['prompt']
+        stage='agent'
+        text,transcript,final=agent(session,prompt,tools='Read,Glob,Grep,Write,Edit,Bash',on_transcript=progress)
+        progress(transcript)
+        report=play_report(text);report.update(version=version,feedback=reports)
         usage=final.get('usage',{})
         counts=[usage.get(k) for k in ('input_tokens','output_tokens')] if isinstance(usage,dict) else []
         tokens=sum(counts) if counts and all(type(n) is int and n>=0 for n in counts) else None
         store.send('runs',{'id':'eq.'+str(row['id']),'dataset':'eq.'+store.dataset},
-            {'play_status':'completed','report':report,'transcript':visible_transcript(transcript),
+            {'play_status':'completed','report':report,'transcript':session_transcript(session,transcript),
              'tokens':tokens,'feedback_ids':ids,'turns':final.get('num_turns',0),'seconds':int(time.monotonic()-started)},'PATCH')
         store.update_session(session,{'last_summary':report['summary'],'feedback_ids':list(dict.fromkeys(session.get('feedback_ids',[])+ids))})
-        return report['summary']+'\n'+str(len(ids))+' feedback report(s) filed.\n'+run_link(row['id'])
+        return report['summary']+'\n'+str(len(set(ids)-before))+' feedback report(s) filed.\n'+run_link(row['id'])
     except Exception:
+        reason={'privacy':'Play storage privacy check failed. Configure the anonymous key and hide play runs from public readers.',
+                'toolchain':'The latest canary CLI could not be resolved or built.',
+                'agent':'Play run did not complete; see the saved transcript.'}[stage]
         store.send('runs',{'id':'eq.'+str(row['id']),'dataset':'eq.'+store.dataset},
-            {'play_status':'failed','reason':'Play run did not complete; no push was authorized.','seconds':int(time.monotonic()-started)},'PATCH')
+            {'play_status':'failed','reason':reason,'feedback_ids':ids,'seconds':int(time.monotonic()-started)},'PATCH')
         raise

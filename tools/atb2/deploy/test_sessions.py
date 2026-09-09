@@ -14,6 +14,15 @@ def module(name, filename):
 s=module('sessions','sessions.py');h=module('home','session_home.py')
 
 class SessionTests(unittest.TestCase):
+    def test_run_privacy_check_uses_the_anonymous_role_and_refuses_visible_rows(self):
+        store=object.__new__(s.Store);store.host='example.invalid';store.key='private-fixture'
+        with patch.dict(s.os.environ,{'FEEDBACK_SUPABASE_ANON_KEY':'public-fixture'}),patch.object(s,'request',return_value=[]) as request:
+            store.ensure_private_run(1)
+            self.assertEqual(request.call_args.args[2],'public-fixture')
+            self.assertEqual(request.call_args.kwargs['key'],'public-fixture')
+            request.return_value=[{'id':1}]
+            with self.assertRaises(ValueError):store.ensure_private_run(1)
+
     def test_followup_uses_existing_session_and_explicit_tasks_route_separately(self):
         self.assertEqual(s.route('why did that test fail?',True),'chat')
         self.assertEqual(s.route('give me a t-shirt',True),'shirt')
