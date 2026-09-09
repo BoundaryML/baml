@@ -114,6 +114,11 @@ impl Printable for InterfaceDecl {
             previous = requires.rightmost_token();
         }
         printer.print_separator(previous, Some(self.open_brace.span()), shape.indent, " ");
+        if self.items.is_empty()
+            && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+        {
+            return PrintInfo::default_single_line();
+        }
         print_declaration_body(
             &self.open_brace,
             &self.items,

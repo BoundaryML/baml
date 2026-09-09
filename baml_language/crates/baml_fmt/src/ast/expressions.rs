@@ -3709,18 +3709,11 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // An empty block with no comment trapped inside collapses to `{}`
-        // (e.g. an empty match arm `null => {},` or an empty `if` body).
-        if self.stmts.is_empty() && self.expr.is_none() {
-            let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-            let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-            if !open_trailing.iter().any(EmittableTrivia::is_comment)
-                && !close_leading.iter().any(EmittableTrivia::is_comment)
-            {
-                printer.print_raw_token(&self.open_brace);
-                printer.print_raw_token(&self.close_brace);
-                return PrintInfo::default_single_line();
-            }
+        if self.stmts.is_empty()
+            && self.expr.is_none()
+            && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+        {
+            return PrintInfo::default_single_line();
         }
 
         printer.print_raw_token(&self.open_brace);

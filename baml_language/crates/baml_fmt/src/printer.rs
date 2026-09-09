@@ -320,6 +320,25 @@ impl<'a> Printer<'a> {
         }
     }
 
+    pub(crate) fn try_print_empty_braces(
+        &mut self,
+        open_brace: &impl Token,
+        close_brace: &impl Token,
+    ) -> bool {
+        let (_, open_trailing) = self.trivia.get_for_range_split(open_brace.span());
+        let (close_leading, _) = self.trivia.get_for_range_split(close_brace.span());
+        if open_trailing
+            .iter()
+            .chain(close_leading)
+            .any(EmittableTrivia::is_comment)
+        {
+            return false;
+        }
+        self.print_raw_token(open_brace);
+        self.print_raw_token(close_brace);
+        true
+    }
+
     pub(crate) fn print_semicolon(
         &mut self,
         previous: TextRange,

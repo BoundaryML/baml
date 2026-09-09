@@ -2353,7 +2353,20 @@ mod interface_format_tests {
     fn formats_empty_and_attributed_interfaces() {
         let options = FormatOptions::default();
         for (source, expected) in [
-            ("interface  Empty{}", "interface Empty {\n}\n"),
+            ("interface  Empty{}", "interface Empty {}\n"),
+            ("interface Marker {\n\n}", "interface Marker {}\n"),
+            (
+                "interface Marker<T> requires Base {}",
+                "interface Marker<T> requires Base {}\n",
+            ),
+            (
+                "@@internal interface Marker {}",
+                "@@internal\ninterface Marker {}\n",
+            ),
+            (
+                "interface Marker {\n// kept\n}",
+                "interface Marker {\n    // kept\n}\n",
+            ),
             (
                 "interface Empty{/* kept */}",
                 "interface Empty { /* kept */\n}\n",

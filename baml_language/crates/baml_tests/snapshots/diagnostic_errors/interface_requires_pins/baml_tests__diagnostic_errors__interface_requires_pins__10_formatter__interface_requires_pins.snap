@@ -14,11 +14,9 @@ interface HasKey {
     key: Self.Key,
 }
 
-interface Entity requires HasKey<Key = string> {
-}
+interface Entity requires HasKey<Key = string> {}
 
-interface Loose requires HasKey {
-}
+interface Loose requires HasKey {}
 
 function wants_int_key(e: HasKey<Key = int>) -> void throws never {}
 
