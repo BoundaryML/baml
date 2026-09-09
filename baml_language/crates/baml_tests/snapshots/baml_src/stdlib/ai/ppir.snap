@@ -250,7 +250,7 @@ function ai.content.kind(self: ?) -> string  [expr] {
   {  } match (self.media) { image: baml.media.Image => "image", audio: baml.media.Audio => "audio", video: baml.media.Video => "video", pdf: baml.media.Pdf => "pdf" }
 }
 function ai.content.new(value: image | audio | video | pdf, provider_id: string? = null, revised_prompt: string? = null) -> ai.content.Media  [expr] {
-  { let envelope = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let part: root.MediaPart = baml.json.from_json(envelope) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } } } ai.content.Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+  {  } ai.content.Media { media: value, provider_id: provider_id, revised_prompt: revised_prompt }
 }
 
 --- <builtin>/ai/ns_errors/errors.baml ---

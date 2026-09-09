@@ -1560,8 +1560,8 @@ function ai.Journal.new(spec: ai.FunctionSpec<#0>) -> ai.Journal {
     return
 }
 
-function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf)[] {
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+function ai.ModelTurn.media(self: ai.ModelTurn) -> (image | audio | video | pdf)[] {
+    load_type image | audio | video | pdf
     alloc_array 0
     store_var out
     load_var self
@@ -1585,7 +1585,7 @@ function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.medi
     load_var _9
     narrow_bind ai.content.Media, slot=5
     pop_jump_if_false L0
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_type image | audio | video | pdf
     load_var2 2 5
     load_field .media
     call baml.Array.push
@@ -3220,17 +3220,17 @@ function ai.content.Media.kind(self: ai.content.Media) -> string {
     load_var _2
     store_var _3
     load_var _3
-    narrow_bind baml.media.Image, slot=3
+    narrow_bind image, slot=3
     pop_jump_if_true L2
     load_var _2
     store_var _4
     load_var _4
-    narrow_bind baml.media.Audio, slot=4
+    narrow_bind audio, slot=4
     pop_jump_if_true L1
     load_var _2
     store_var _5
     load_var _5
-    narrow_bind baml.media.Video, slot=5
+    narrow_bind video, slot=5
     pop_jump_if_true L0
     load_const "pdf"
     jump L3
@@ -3267,50 +3267,7 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     store_var revised_prompt
 
   L1:
-    load_var value
-    call baml.json.to_json
-    store_var envelope
-    jump L2
-    load_var e
-    throw_if_panic
-    load_type baml.json.SerializationError
-    load_var e
-    call baml.String.from
-    store_var _11
-    load_type string
-    load_var _11
-    call baml.String.from
-    store_var _10
-    load_const "media output could not be encoded: "
-    load_var _10
-    bin_op +
-    init_instance baml.errors.InvalidArgument .message
-    throw
-
-  L2:
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var envelope
-    call baml.json.from_json
-    store_var part
-    jump L3
-    load_var e
-    throw_if_panic
-    load_type baml.json.DecodeError
-    load_var e
-    call baml.String.from
-    store_var _21
-    load_type string
-    load_var _21
-    call baml.String.from
-    store_var _20
-    load_const "media output could not be decoded: "
-    load_var _20
-    bin_op +
-    init_instance baml.errors.InvalidArgument .message
-    throw
-
-  L3:
-    load_var2 8 2
+    load_var2 1 2
     load_var revised_prompt
     init_instance ai.content.Media .media, .provider_id, .revised_prompt
     return
@@ -7433,21 +7390,21 @@ function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fall
     return
 }
 
-function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
+function ai.wire.resolve_media(media: image | audio | video | pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _3
     load_var _3
-    narrow_bind baml.media.Image, slot=3
+    narrow_bind image, slot=3
     pop_jump_if_true L5
     load_var media
     store_var _16
     load_var _16
-    narrow_bind baml.media.Audio, slot=10
+    narrow_bind audio, slot=10
     pop_jump_if_true L3
     load_var media
     store_var _29
     load_var _29
-    narrow_bind baml.media.Video, slot=17
+    narrow_bind video, slot=17
     pop_jump_if_true L1
     load_var media
     call baml.media.Pdf.file
@@ -7585,21 +7542,21 @@ function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml
     return
 }
 
-function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf) -> ai.wire.ResolvedMedia {
+function ai.wire.resolve_media_preview(media: image | audio | video | pdf) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _2
     load_var _2
-    narrow_bind baml.media.Image, slot=2
+    narrow_bind image, slot=2
     pop_jump_if_true L5
     load_var media
     store_var _15
     load_var _15
-    narrow_bind baml.media.Audio, slot=9
+    narrow_bind audio, slot=9
     pop_jump_if_true L3
     load_var media
     store_var _28
     load_var _28
-    narrow_bind baml.media.Video, slot=16
+    narrow_bind video, slot=16
     pop_jump_if_true L1
     load_var media
     call baml.media.Pdf.file

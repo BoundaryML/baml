@@ -33,6 +33,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod codegen_ty;
+pub mod compiler_aliases;
 pub mod decl_cycles;
 mod declaration_name;
 mod defs;
