@@ -25,10 +25,28 @@ class Undecided {
 
 type Knowledge = Relation | Undecided;
 
-/// One rule application and the knowledge it leaves.
-class Step {
+/// A rule that states the relation of a pair of types directly.
+class Asserted {
     rule: root.engine.Rule,
-    after: Knowledge,
+    left: Ty,
+    right: Ty,
+    relation: Relation,
+}
+
+/// A rule that wraps both sides of a pair in a constructor and transforms
+/// what is known about them.
+class Transferred {
+    rule: root.engine.Rule,
+    transfer: (Knowledge) -> Knowledge throws never,
+}
+
+type Step = Asserted | Transferred;
+
+function step_rule(step: Step) -> root.engine.Rule throws never {
+    match (step) {
+        let a: Asserted => a.rule,
+        let t: Transferred => t.rule,
+    }
 }
 
 /// Two types and the derivation of what is known about their relation.
@@ -43,11 +61,61 @@ function start(ty: Ty) -> Derivation throws never {
     Derivation { left: ty, right: ty, steps: [] }
 }
 
+/// The knowledge after each step, replayed under `model` where it has an
+/// opinion and under the spec elsewhere. The spec's own trajectory is
+/// `trajectory(d, null)`.
+function trajectory(d: Derivation, model: Model?) -> Knowledge[] throws never {
+    let states: Knowledge[] = [];
+    let current: Knowledge = Relation.Equiv;
+    for (let step in d.steps) {
+        current
+            = match (step) {
+                let a: Asserted => believed(model, a) ?? a.relation,
+                let t: Transferred => match (transferred(model, t, current)) {
+                    let k: Knowledge => k,
+                    null => t.transfer(current),
+                },
+            };
+        let _ = states.push(current);
+    }
+    states
+}
+
+/// What the spec knows about `d`.
 function knowledge(d: Derivation) -> Knowledge throws never {
-    match (d.steps.at(d.steps.length() - 1)) {
-        let last: Step => last.after,
+    last_state(trajectory(d, null))
+}
+
+/// What a naive model would conclude about `d`.
+function under(d: Derivation, model: Model) -> Knowledge throws never {
+    last_state(trajectory(d, model))
+}
+
+function last_state(states: Knowledge[]) -> Knowledge throws never {
+    match (states.at(states.length() - 1)) {
+        let k: Knowledge => k,
         null => Relation.Equiv,
     }
+}
+
+/// How many times the trajectory turns a subtype into a supertype or back.
+function flips(d: Derivation) -> int throws never {
+    let count = 0;
+    let previous: Knowledge = Relation.Equiv;
+    for (let state in trajectory(d, null)) {
+        let flipped = match (state) {
+            Relation.Sub => previous == Relation.Super,
+            Relation.Super => previous == Relation.Sub,
+            Relation.Equiv => false,
+            Relation.Unrelated => false,
+            Undecided => false,
+        };
+        if (flipped) {
+            count = count + 1;
+        }
+        previous = state;
+    }
+    count
 }
 
 /// `Sub` becomes `Super` and back; the rest are their own mirror.
@@ -125,7 +193,11 @@ function pair(
     relation: Relation,
     rule: root.engine.Rule,
 ) -> Derivation throws never {
-    Derivation { left: left, right: right, steps: [Step { rule: rule, after: relation }] }
+    Derivation {
+        left: left,
+        right: right,
+        steps: [Asserted { rule: rule, left: left, right: right, relation: relation }],
+    }
 }
 
 /// Wrap both sides in a constructor whose effect on the relation is
@@ -137,11 +209,10 @@ function then(
     right: Ty,
     transfer: (Knowledge) -> Knowledge throws never,
 ) -> Derivation throws never {
-    let after = transfer(knowledge(d));
     Derivation {
         left: left,
         right: right,
-        steps: d.steps.concat([Step { rule: rule, after: after }]),
+        steps: d.steps.concat([Transferred { rule: rule, transfer: transfer }]),
     }
 }
 

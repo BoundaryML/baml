@@ -60,24 +60,41 @@ class FlowItem {
                     });
                     let names = site_names(site_draw.next, reserved);
                     let probe = root.algebra.probe(site, source, target, names);
-                    let key: root.engine.Verdict = if (root.algebra.flows(flowing)) {
+                    let compiles = root.algebra.flows(flowing);
+                    let key: root.engine.Verdict = if (compiles) {
                         root.engine.Compiles { tests: [] }
                     } else {
                         root.engine.Rejected { codes: [rejection_code(site)], anchor: probe.anchor }
                     };
-                    let features: map<string, float> = {};
+                    let traps = models().filter_map((model) -> {
+                        match (root.algebra.under(d, model)) {
+                            root.algebra.Undecided => null,
+                            let believed: root.algebra.Relation => {
+                                let flowing_under = if (reverse) {
+                                    root.algebra.mirror(believed)
+                                } else {
+                                    believed
+                                };
+                                if (root.algebra.flows(flowing_under) != compiles) {
+                                    model.id
+                                } else {
+                                    null
+                                }
+                            },
+                        }
+                    });
                     root.engine.Candidate {
                         case: root.engine.Case {
                             files: { "case.baml": probe.source },
                             key: key,
                             trace: d.steps
                                 .map((step) -> {
-                                    step.rule
+                                    root.algebra.step_rule(step)
                                 })
                                 .concat([flow_requires_subtype()]),
                         },
-                        features: features,
-                        traps: [],
+                        features: features_of(d, source, target, traps),
+                        traps: traps,
                     }
                 },
             }

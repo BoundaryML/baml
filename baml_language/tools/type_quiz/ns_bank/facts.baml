@@ -218,7 +218,20 @@ function literal_subtype(seed: root.engine.Seed) -> Derived throws never {
 }
 
 function concrete_atomic(seed: root.engine.Seed) -> Derived throws never {
-    let l = pick_leaves(seed, 2);
+    // Half the seeds pit the two numeric types against each other, so the
+    // TypeScript intuition that they are one `number` is exercised often.
+    let choice = root.engine.below(seed, 2);
+    let l = if (choice.value == 0) {
+        let order = root.engine.below(choice.next, 2);
+        let tys = if (order.value == 0) {
+            [root.algebra.int(), root.algebra.float()]
+        } else {
+            [root.algebra.float(), root.algebra.int()]
+        };
+        Leaves { tys: tys, next: order.next }
+    } else {
+        pick_leaves(choice.next, 2)
+    };
     derived(
         root.algebra.pair(
             l.tys[0],

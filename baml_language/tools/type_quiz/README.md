@@ -11,7 +11,7 @@ compiler, so the quiz cannot drift from the language without CI noticing.
 |---|---|---|
 | `ns_engine` | substrate: seeds, cases, verdicts, the verifier, sampling, the learner | never for a type-system change |
 | `ns_algebra` | tested material: the `Ty` model, rendering, relations, sites | the type system changes |
-| `ns_bank` | tested material: the rule table quoted from the spec, fact generators, items, name pools | what or how we teach changes |
+| `ns_bank` | tested material: the rule table quoted from the spec, fact generators, items, naive models, features, weights, name pools | what or how we teach changes |
 | `ns_conformance` | the tripwire suites | — |
 
 Two ledgers sit beside the code. `SPEC_GAPS.md` records principles the spec
@@ -30,6 +30,14 @@ return, a field initializer, and an array element, flowing the pair forwards
 or backwards so the shape never gives the verdict away. The trace of rules is
 the explanation. Every item is generated across several seeds and checked
 against the compiler on every run.
+
+A case is *interesting* when a plausible wrong intuition predicts the wrong
+verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
+it disagrees with; replaying a case's derivation under the model gives the
+model's verdict, and a mismatch makes the case a trap for that model. The
+sampler scores candidates by traps, rule count, relation flips, and a hinged
+penalty on size and depth, then a session alternates the verdict it wants so
+that how interesting a case looks never predicts its answer.
 
 Dependencies flow bank → algebra → engine and `lint.sh` rejects anything
 else. The engine owns nothing the compiler can answer: the
@@ -99,3 +107,11 @@ minimal single-file packages; none is fixed at the time of writing.
    throws never` prints as `(int, int) -> int throws never`: names and the
    optional marker are dropped, so the printed spelling denotes a different
    function type than the value describes.
+9. **A closure capturing a local assigned from an earlier closure call reads
+   the wrong slot.** With `items: Sc[]`,
+   `let top = items.reduce((acc, s) -> { if (s.score > acc) { s.score } else { acc } }, items[0].score);`
+   followed by `items.map((s) -> { (s.score - top).exp() })` fails at run time
+   with `VM internal error: type error: expected map, got float`, the closure
+   parameter having been read from the captured float's slot. Copying `top`
+   into a fresh local first does not help; the same code with `top` a literal
+   works. Workaround in `ns_engine/sample.baml` (`pick` uses loops).
