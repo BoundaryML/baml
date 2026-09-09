@@ -262,6 +262,13 @@ impl InferenceTable {
     /// block has its type fixed at allocation, and the parameter's frame
     /// slot is bound only when the statement runs, so that value cannot
     /// carry `T` even though it dies with the block.
+    ///
+    /// Depths are reused: two sibling blocks each binding one parameter both
+    /// open universe `n + 1`. That is sound because a universe only ever
+    /// compares against the depth a parameter was bound at, every variable
+    /// a block leaves open is demoted or decided when it closes (the leak
+    /// check in `finish_scoped_type_bindings`), and a closed parameter stays
+    /// registered, so a sibling's variable can never take it.
     pub fn bind_scoped_param(&mut self, param: &ParamTy) {
         self.universe += 1;
         self.scoped_params.insert(param.index(), self.universe);

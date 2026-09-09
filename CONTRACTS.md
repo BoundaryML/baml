@@ -1,5 +1,17 @@
 # BEP-066 `hir_ty` port contracts
 
+> **Superseded (2026-09):** the runtime-slot model this checklist records —
+> inline `unreflect(...)` type arguments, deferred runtime checks
+> (`deferred_checks` / `RuntimeCheck`), the `unreflect` pattern, and the
+> streaming/`from_json` slot rules (rows T-01, B-01, B-05 through B-08, B-13,
+> B-18, B-19, B-21, B-22) — was replaced by the rigid statement model:
+> `type T = unreflect(e)` is the only spelling, `T` is a rigid frame parameter,
+> nothing is deferred to a runtime gate, and nothing typed by `T` leaves its
+> block (E0171). See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type
+> bindings". Rows marked done below describe the superseded behavior as it
+> was verified at the time.
+
+
 This document freezes the compiler-core contracts for the BEP-066 port after
 the TIR-to-`hir_ty` cutover. `TYPE_SYSTEM.md` and the current `hir_ty` behavior
 remain authoritative. The names below may be shortened during implementation,

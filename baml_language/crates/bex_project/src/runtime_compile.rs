@@ -1041,7 +1041,7 @@ fn owned_diagnostic(
     });
     RuntimeCompileDiagnostic {
         code: diagnostic.code().to_string(),
-        message: diagnostic.message_with_primary_label().into_owned(),
+        message: demangle_session_names(&diagnostic.message_with_primary_label()),
         severity: match diagnostic.severity {
             Severity::Error => RuntimeDiagnosticSeverity::Error,
             Severity::Warning => RuntimeDiagnosticSeverity::Warning,
@@ -1049,6 +1049,32 @@ fn owned_diagnostic(
         },
         span,
     }
+}
+
+/// Strip the session generator's internal prefixes from a message, so a
+/// diagnostic quotes the name the author wrote (`T`) rather than the
+/// per-submission global it was lowered to (`__baml_session_3_T`). A backing
+/// type-value global has no user spelling at all; it reads as its binding.
+fn demangle_session_names(message: &str) -> String {
+    const PREFIX: &str = "__baml_session_";
+    let mut out = String::with_capacity(message.len());
+    let mut rest = message;
+    while let Some(at) = rest.find(PREFIX) {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + PREFIX.len()..];
+        let digits = after.bytes().take_while(u8::is_ascii_digit).count();
+        match after[digits..].strip_prefix('_') {
+            Some(tail) if digits > 0 => {
+                rest = tail.strip_prefix("type_value_").unwrap_or(tail);
+            }
+            _ => {
+                out.push_str(PREFIX);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn runtime_diagnostic(
@@ -1428,6 +1454,8 @@ struct LoweredSession {
     source: String,
     artifact: RuntimeSessionCompileArtifact,
     result_global: String,
+    /// Each step's extent within `source`, parallel to `artifact.steps`.
+    step_ranges: Vec<std::ops::Range<usize>>,
 }
 
 /// Everything a compile carries *because* it is a session.
@@ -1459,8 +1487,14 @@ fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::T
         .and_then(|root| inference.type_of_expr.get(&root).cloned())
 }
 
+/// `erase_steps` names steps (by index into the lowered `steps`) whose value
+/// is typed by a session `type T = …` binding, as a first compile reported at
+/// their block tails (E0171). Such a step publishes through the erasing helper
+/// so its global carries `unknown` — the only type a binding-typed value may
+/// leave its block as — while every other step keeps its precise type.
 fn lower_session_submission(
     request: &RuntimeSessionCompileRequest,
+    erase_steps: &HashSet<usize>,
 ) -> Result<LoweredSession, Vec<RuntimeCompileDiagnostic>> {
     // P-6 is deliberately unavailable in a Session: its lexical package would
     // be ambiguous between the submitting package and the transient unit.
@@ -1618,8 +1652,22 @@ fn lower_session_submission(
         .filter(|(_, symbol)| matches!(symbol.kind, SessionVisibleKind::TypeBinding { .. }))
         .map(|(name, symbol)| (name.clone(), symbol.clone()))
         .collect::<IndexMap<_, _>>();
+    // A call gives its argument a ground context: routing an erased step's
+    // block through this helper is the ordinary road by which a binding-typed
+    // value leaves as `unknown` (the same spelling a user writes with
+    // `let v: unknown = { … }`), and needs no ascription on the step's own
+    // `let`, which a session binding does not admit. Hoisted with the
+    // declarations so a replayed step still finds it.
+    let erase_helper = format!("__baml_erase_{sequence}");
+    if !erase_steps.is_empty() {
+        let _ = writeln!(
+            declaration_source,
+            "function {erase_helper}(v: unknown) -> unknown throws never {{ v }}"
+        );
+    }
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
+    let mut step_ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut result_step = None;
 
     for (index, element) in elements.iter().enumerate() {
@@ -1776,16 +1824,27 @@ fn lower_session_submission(
                     &HashSet::new(),
                     &local_names,
                 );
+                // A step's value leaves its block into a global that later
+                // submissions read, and a scoped `type T = …` binding lives
+                // only inside that block: a value typed by one cannot leave
+                // (E0171) unless the block's context is a ground type. A
+                // step the first compile reported at its tail is re-lowered
+                // through the erasing helper; see `lower_session_submission`.
+                let block_step = |body: String| {
+                    if erase_steps.contains(&steps.len()) {
+                        format!("let {generated_name} = {erase_helper}({{\n{body}\n}})\n")
+                    } else {
+                        format!("let {generated_name} = {{\n{body}\n}}\n")
+                    }
+                };
                 let source = if is_outer_let && prelude.is_empty() {
                     format!("{rewritten}\n")
                 } else if is_outer_let {
-                    format!(
-                        "let {generated_name} = {{\n{prelude}{rewritten}\n{generated_name}\n}}\n"
-                    )
+                    block_step(format!("{prelude}{rewritten}\n{generated_name}"))
                 } else if !is_statement && !has_semicolon && prelude.is_empty() {
                     format!("let {generated_name} = ({rewritten})\n")
                 } else if !is_statement && !has_semicolon {
-                    format!("let {generated_name} = {{\n{prelude}{rewritten}\n}}\n")
+                    block_step(format!("{prelude}{rewritten}"))
                 } else {
                     format!("let {generated_name} = {{\n{prelude}{rewritten}\nnull\n}}\n")
                 };
@@ -1793,7 +1852,9 @@ fn lower_session_submission(
             };
             (generated_name, source, commit_global, binding)
         };
+        let step_start = generated.len();
         generated.push_str(&step_source);
+        step_ranges.push(step_start..generated.len());
         let returns_value =
             index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
         if returns_value {
@@ -1826,7 +1887,9 @@ fn lower_session_submission(
         // otherwise a user binding called `result` collides with it.
         let generated_name = format!("__baml_result_{sequence}");
         let step_source = format!("let {generated_name} = null\n");
+        let step_start = generated.len();
         generated.push_str(&step_source);
+        step_ranges.push(step_start..generated.len());
         result_step = Some(steps.len());
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
@@ -1847,7 +1910,31 @@ fn lower_session_submission(
             initializers: Vec::new(),
         },
         result_global,
+        step_ranges,
     })
+}
+
+/// The steps a compile of `lowered` reported an E0171 inside: their value is
+/// typed by a session binding and must publish as `unknown`. Diagnostics are
+/// keyed by the submission's virtual path, in generated-source offsets.
+fn steps_publishing_a_binding(
+    diagnostics: &[RuntimeCompileDiagnostic],
+    submission_name: &str,
+    lowered: &LoweredSession,
+) -> HashSet<usize> {
+    let submission = runtime_relative_virtual_path(&runtime_source_virtual_path(submission_name));
+    diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagnosticId::ScopedTypeEscapesBlock.code())
+        .filter_map(|diagnostic| diagnostic.span.as_ref())
+        .filter(|span| span.file == submission)
+        .filter_map(|span| {
+            lowered
+                .step_ranges
+                .iter()
+                .position(|range| range.contains(&span.start))
+        })
+        .collect()
 }
 
 /// Retain only initializer helpers owned by the new submission. A fresh
@@ -2067,22 +2154,24 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             packages,
             mode,
         } = request;
+        let mut session_request = None;
+        let mut lowered_session = None;
         let (files, mut session) = match mode {
             RuntimeCompileMode::Package => (files, None),
             RuntimeCompileMode::Session(session) => {
                 let session = *session;
-                let lowered = lower_session_submission(&session)?;
+                let lowered = lower_session_submission(&session, &HashSet::new())?;
                 let mut files = session.history.clone();
-                files.insert(session.submission_name.clone(), lowered.source);
-                (
-                    files,
-                    Some(SessionCompile {
-                        artifact: lowered.artifact,
-                        result_global: lowered.result_global,
-                        expected: session.expected,
-                        lease: session.lease,
-                    }),
-                )
+                files.insert(session.submission_name.clone(), lowered.source.clone());
+                let compile = SessionCompile {
+                    artifact: lowered.artifact.clone(),
+                    result_global: lowered.result_global.clone(),
+                    expected: session.expected.clone(),
+                    lease: session.lease.clone(),
+                };
+                lowered_session = Some(lowered);
+                session_request = Some(session);
+                (files, Some(compile))
             }
         };
         let stdlib = crate::precompiled_stdlib::load().map_err(|message| {
@@ -2193,10 +2282,33 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
         }
 
-        let diagnostics: Vec<_> = collect_diagnostics(&db)
+        let mut diagnostics: Vec<_> = collect_diagnostics(&db)
             .iter()
             .map(|diagnostic| owned_diagnostic(&db, diagnostic))
             .collect();
+        // A step whose value is typed by a session binding cannot leave its
+        // block as written; only the compiler knows which steps those are, so
+        // the first compile finds them (E0171 at the step) and one re-lower
+        // publishes them as `unknown`. Every other diagnostic stands.
+        if let (Some(request), Some(lowered), Some(compile)) =
+            (&session_request, &mut lowered_session, session.as_mut())
+        {
+            let erase = steps_publishing_a_binding(&diagnostics, &request.submission_name, lowered);
+            if !erase.is_empty() {
+                let relowered = lower_session_submission(request, &erase)?;
+                db.add_session_file(
+                    runtime_source_virtual_path(&request.submission_name),
+                    &relowered.source,
+                );
+                compile.artifact.clone_from(&relowered.artifact);
+                compile.result_global.clone_from(&relowered.result_global);
+                *lowered = relowered;
+                diagnostics = collect_diagnostics(&db)
+                    .iter()
+                    .map(|diagnostic| owned_diagnostic(&db, diagnostic))
+                    .collect();
+            }
+        }
         if diagnostics
             .iter()
             .any(|diagnostic| diagnostic.severity == RuntimeDiagnosticSeverity::Error)
@@ -2436,6 +2548,23 @@ mod tests {
                 .map(Name::as_str)
                 .collect::<Vec<_>>(),
             ["tools", "nested"]
+        );
+    }
+
+    #[test]
+    fn session_internal_names_demangle_to_what_the_author_wrote() {
+        assert_eq!(
+            demangle_session_names("scoped runtime type `__baml_session_3_T` cannot leave"),
+            "scoped runtime type `T` cannot leave"
+        );
+        assert_eq!(
+            demangle_session_names("`__baml_session_12_type_value_Out` and `__baml_session_0_v`"),
+            "`Out` and `v`"
+        );
+        // Not the generator's shape: left alone.
+        assert_eq!(
+            demangle_session_names("__baml_session_x `__baml_session_`"),
+            "__baml_session_x `__baml_session_`"
         );
     }
 

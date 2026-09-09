@@ -65,8 +65,8 @@ pub struct RuntimeGenericLayout {
 
 /// The index bit that marks a block-scoped `type T = …` parameter. Declared
 /// generic parameters are De Bruijn positions in a frame and never reach it;
-/// a scoped parameter's identity is a hash of its binding statement, and
-/// this bit keeps the two spaces disjoint.
+/// a scoped parameter's identity is its binding statement's index in the
+/// body, and this bit keeps the two spaces disjoint.
 pub const SCOPED_PARAM_BIT: u32 = 0x8000_0000;
 
 impl RuntimeGenericLayout {

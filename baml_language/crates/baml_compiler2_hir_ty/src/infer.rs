@@ -1462,7 +1462,6 @@ fn infer_body_impl<'db>(
         return_ty,
         type_refs,
         plain_bounds,
-        stable_body_owner_identity(db, owner),
     );
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
@@ -1501,34 +1500,6 @@ fn infer_body_impl<'db>(
         ctx.infer_expr_body(expr_body);
     }
     ctx.finish()
-}
-
-/// Architecture-stable owner key for lexical synthetic parameters. This is
-/// deliberately derived from source identity rather than Salsa intern IDs.
-fn stable_body_owner_identity(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> u32 {
-    let mut hash = 0x811c_9dc5_u32;
-    let mut write = |bytes: &[u8]| {
-        for byte in bytes {
-            hash ^= u32::from(*byte);
-            hash = hash.wrapping_mul(0x0100_0193);
-        }
-    };
-    write(owner.file(db).path(db).to_string_lossy().as_bytes());
-    match owner {
-        BodyOwnerId::Function(function) => {
-            write(&[0]);
-            write(&function.id(db).as_u32().to_le_bytes());
-        }
-        BodyOwnerId::Let(let_binding) => {
-            write(&[1]);
-            write(&let_binding.id(db).as_u32().to_le_bytes());
-        }
-        BodyOwnerId::ParameterDefaults(function) => {
-            write(&[2]);
-            write(&function.id(db).as_u32().to_le_bytes());
-        }
-    }
-    hash
 }
 
 /// Which bounded-var classes a finish-fixpoint round may commit: the
@@ -1665,7 +1636,6 @@ struct InferenceContext<'db> {
     scoped_type_bindings: Vec<ScopedTypeBinding<Ty>>,
     /// Stable hash of the body owner, combined with `StmtId` for scoped rigid
     /// parameter identity.
-    body_owner_identity: u32,
     /// Full owner identity for the Session top-level-let value tier. Keeping
     /// this lets a malformed self-reference fail closed instead of recursively
     /// asking Salsa for the inference result currently being built.
@@ -1827,7 +1797,6 @@ impl<'db> InferenceContext<'db> {
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
         bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
-        body_owner_identity: u32,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
@@ -1839,7 +1808,6 @@ impl<'db> InferenceContext<'db> {
             flow: FxHashMap::default(),
             lower,
             scoped_type_bindings: Vec::new(),
-            body_owner_identity,
             body_owner_id: None,
             param_tys,
             type_refs,
@@ -3140,17 +3108,19 @@ impl<'db> InferenceContext<'db> {
                 ScopedTypeSource::Static(Ty::from_plain(&crate::lower::reject_holes(&ty)))
             }
         };
-        let mut identity = self.body_owner_identity;
-        for byte in stmt.into_raw().into_u32().to_le_bytes() {
-            identity ^= u32::from(byte);
-            identity = identity.wrapping_mul(0x0100_0193);
-        }
+        // The parameter's identity is its statement's index in the body:
+        // exact (two statements never share an index) and source-derived,
+        // so it is stable across runs. A scoped parameter never leaves its
+        // body, so no cross-body component is needed.
+        let index = stmt.into_raw().into_u32();
+        debug_assert_eq!(
+            index & SCOPED_PARAM_BIT,
+            0,
+            "a body's statement arena stays below the scoped-parameter bit"
+        );
         let binding = ScopedTypeBinding {
             name: name.clone(),
-            parameter: baml_type::ParamTy::new(
-                SCOPED_PARAM_BIT | (identity & !SCOPED_PARAM_BIT),
-                name,
-            ),
+            parameter: baml_type::ParamTy::new(SCOPED_PARAM_BIT | index, name),
             source,
         };
         self.result.type_bindings.insert(stmt, binding.clone());
@@ -3258,6 +3228,10 @@ impl<'db> InferenceContext<'db> {
             let fits = self.sub(value, &context);
             self.obligation_anchor = saved_anchor;
             if fits {
+                // The value takes the context's type, so the ordinary
+                // checking road never relates the two; a function-typed
+                // value still needs its adapter recorded here.
+                self.record_checked_function_adapter(at, value, &context);
                 return context;
             }
         }
