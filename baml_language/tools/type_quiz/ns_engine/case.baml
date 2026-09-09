@@ -20,10 +20,29 @@ type SpecRef = Section | Gap;
 /// Rules are values: a case's trace holds the rules themselves, so a trace can
 /// never name a rule that does not exist. `name` is the identity used by the
 /// learner profile and by naive models and must be unique across the bank.
+///
+/// The principle is held as the words `spec` uses for it, never a paraphrase:
+/// the conformance suite finds every quote in the cited section or ledger
+/// entry, so a rule cannot drift from the text it claims to state. A
+/// principle the source spells across separate sentences takes several
+/// quotes rather than one sentence of ours.
 class Rule {
     name: string,
     spec: SpecRef,
-    statement: string,
+    /// The first quote. Held apart from the rest so a rule without any words
+    /// of the spec is unrepresentable.
+    quote: string,
+    more: string[],
+
+    /// Every quote, in order.
+    function quotes(self) -> string[] throws never {
+        [self.quote].concat(self.more)
+    }
+
+    /// The principle as one line, elisions marked.
+    function statement(self) -> string throws never {
+        self.quotes().join(" … ")
+    }
 }
 
 /// One line of a case's explanation: a rule, and what it says at this case's

@@ -11,12 +11,26 @@ function gap(id: string) -> root.engine.SpecRef throws never {
     root.engine.Gap { id: id }
 }
 
+/// A rule the spec states in one run of words.
 function rule(
     name: string,
     spec: root.engine.SpecRef,
-    statement: string,
+    quote: string,
 ) -> root.engine.Rule throws never {
-    root.engine.Rule { name: name, spec: spec, statement: statement }
+    root.engine.Rule { name, spec, quote, more: [] }
+}
+
+/// A rule the spec states across separate runs of words: a sentence and the
+/// example that qualifies it, or a clause and the code comment that completes
+/// it. Every quote is checked against the source, so the elision is visible
+/// rather than smoothed over by a paraphrase of ours.
+function composite(
+    name: string,
+    spec: root.engine.SpecRef,
+    quote: string,
+    more: string[],
+) -> root.engine.Rule throws never {
+    root.engine.Rule { name, spec, quote, more }
 }
 
 // ─── flow ────────────────────────────────────────────────────────────────────
@@ -27,7 +41,7 @@ function flow_requires_subtype() -> root.engine.Rule throws never {
     rule(
         "flow/requires-subtype",
         gap("G-001"),
-        "A value of type `S` is accepted where type `T` is expected exactly when `S <: T`.",
+        "A value of type `S` is accepted where `T` is expected if and only if `S <: T`",
     )
 }
 
@@ -42,10 +56,13 @@ function concrete_types_atomic() -> root.engine.Rule throws never {
 }
 
 function literal_subtype_of_concrete() -> root.engine.Rule throws never {
-    rule(
+    composite(
         "taxonomy/literal-subtype-of-concrete",
         section("Literal Types"),
-        "Literal types represent subsets of concrete types. They correspond to exactly one concrete type (literal type `1` is of concrete type `int`).",
+        "Literal types",
+        [
+            "represent subsets of concrete types. They correspond to exactly one concrete type (literal type `1` is of concrete type `int`)",
+        ],
     )
 }
 
@@ -116,10 +133,11 @@ function literal_absorbed() -> root.engine.Rule throws never {
 }
 
 function unknown_absorbs() -> root.engine.Rule throws never {
-    rule(
+    composite(
         "subtyping/unknown-absorbs",
         section("BAML Subtyping Cases"),
-        "In nearly all contexts, we can thus simplify types and maintain equivalence: `anything | unknown == unknown`",
+        "In nearly all contexts, we can thus simplify types and maintain equivalence",
+        ["`anything | unknown == unknown`"],
     )
 }
 
@@ -174,10 +192,13 @@ function fn_error_covariant() -> root.engine.Rule throws never {
 }
 
 function fn_optional_superset() -> root.engine.Rule throws never {
-    rule(
+    composite(
         "functions/optional-arguments-superset",
         section("BAML Subtyping Cases"),
-        "Each optional argument `boN` has a corresponding `aoN` of the same name where `boN <: aoN` (contravariant, subset function type has superset of optional args)",
+        "Each optional argument",
+        [
+            "`boN` has a corresponding `aoN` of the same name where `boN <: aoN` (contravariant, subset function type has superset of optional args)",
+        ],
     )
 }
 
@@ -224,10 +245,11 @@ function unguarded_member_vacuous() -> root.engine.Rule throws never {
 }
 
 function unguarded_cycle_rejected() -> root.engine.Rule throws never {
-    rule(
+    composite(
         "aliases/unguarded-cycle-rejected",
         section("Productivity"),
-        "a fully unguarded cycle is uninhabited: `type B = B` denotes `never` (and is a compile error, E0068)",
+        "a fully unguarded cycle is uninhabited",
+        ["denotes `never` (and is a compile error, E0068)"],
     )
 }
 
