@@ -81,8 +81,7 @@ impl HostValueArc {
     /// when the last clone (across the entire process) drops — even when BAML
     /// returns a host callable to the host and it is later passed back in.
     pub fn intern(key: u64, kind: HostValueKind) -> Arc<Self> {
-        let mut map = INTERNER.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(existing) = map.get(&key).and_then(Weak::upgrade) {
+        Self::try_intern(key, kind).unwrap_or_else(|existing| {
             debug_assert_eq!(
                 existing.kind, kind,
                 "host-value key {key} re-interned with a different kind \
@@ -93,13 +92,28 @@ impl HostValueArc {
             // Prefer the existing live identity. The same key always carries
             // the same kind in practice; if a buggy caller disagrees we keep
             // the established one rather than mint a conflicting second Arc.
-            return existing;
+            existing
+        })
+    }
+
+    /// [`intern`](Self::intern) for untrusted input: a `kind` that disagrees
+    /// with the live registration for `key` is reported (as that registration)
+    /// instead of asserted, so a forged wire discriminator can neither panic
+    /// the boundary nor alias the established identity.
+    pub fn try_intern(key: u64, kind: HostValueKind) -> Result<Arc<Self>, Arc<Self>> {
+        let mut map = INTERNER.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(existing) = map.get(&key).and_then(Weak::upgrade) {
+            return if existing.kind == kind {
+                Ok(existing)
+            } else {
+                Err(existing)
+            };
         }
         // No live entry (absent, or a dangling `Weak` whose `Arc` already
         // dropped). Create a fresh identity and record a `Weak` to it.
         let arc = Arc::new(Self { key, kind });
         map.insert(key, Arc::downgrade(&arc));
-        arc
+        Ok(arc)
     }
 }
 
