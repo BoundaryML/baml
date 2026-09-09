@@ -1,4 +1,4 @@
-"""Find the current primary on-call assignees in the local schedule."""
+"""Find a rotation's current on-call assignee in the local schedule."""
 
 from datetime import date, datetime
 from pathlib import Path
@@ -7,10 +7,14 @@ from zoneinfo import ZoneInfo
 from .parser import parse
 
 
-def current_oncall(today: date | None = None) -> list[str]:
-    """Return primary assignee names, using today's Pacific date by default."""
+def current_oncall(
+    today: date | None = None, *, rotation: str = "oncall-releases"
+) -> list[str]:
+    """Return the rotation's assignee, using today's Pacific date by default."""
     schedule_path = Path(__file__).parent / "data" / "schedule.oncall"
     schedule = parse(schedule_path.read_text())
+    if rotation not in schedule.roster.rotations_in_order():
+        raise ValueError(f"unknown on-call rotation: {rotation}")
     if today is None:
         today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
     current = max(
@@ -20,14 +24,7 @@ def current_oncall(today: date | None = None) -> list[str]:
     )
     if current is None:
         raise RuntimeError("no on-call shift covers today")
-    # Founders are an escalation rotation, not the primary on-call.
-    names = list(
-        dict.fromkeys(
-            current.assignments[rotation]
-            for rotation in schedule.roster.rotations_in_order()
-            if rotation != "oncall-founders"
-        )
-    )
-    if not names:
-        raise RuntimeError("no primary on-call assignee")
-    return names
+    name = current.assignments.get(rotation)
+    if not name or name not in schedule.roster.by_rotation[rotation]:
+        raise RuntimeError(f"no valid current assignee for {rotation}")
+    return [name]

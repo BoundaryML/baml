@@ -1,0 +1,36 @@
+name: Weekly release reminder
+
+on:
+  schedule:
+    - cron: '0 8 * * 5'
+      timezone: America/Los_Angeles
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-release-reminder
+  cancel-in-progress: false
+
+env:
+  UV_FROZEN: '1'
+
+jobs:
+  notify-slack:
+    name: Remind release oncall in Slack
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: tools/
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Validate schedule
+        run: ./tools/bctl oncall check
+      - name: Remind release oncall in general
+        env:
+          SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+        run: ./tools/bctl oncall remind-release --channel '#general' --post-to-slack

@@ -152,7 +152,7 @@ def notification_source_url(repository: str) -> str:
 
 def current_oncall_mentions(slack_client: WebClient) -> list[str]:
     try:
-        names = current_oncall()
+        names = current_oncall(rotation="oncall-releases")
     except (OSError, ValueError, KeyError, RuntimeError) as error:
         print(f"Could not read current on-call schedule: {error}", file=sys.stderr)
         return []
