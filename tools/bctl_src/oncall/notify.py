@@ -77,9 +77,14 @@ def compose_handoff(
         footer = "\n\n_To swap shifts or update the roster, see <https://github.com/BoundaryML/baml/tree/canary/tools/bctl_src/oncall/README.md|the oncall README>._"
 
         reminder = (
-            "\n\nPlease prepare the changelog and put out this week's BAML release. "
-            "See <https://github.com/BoundaryML/baml/blob/canary/"
-            "baml_language/RELEASING.md|RELEASING.md> for the release steps."
+            "\n\n1. Prep the next release by pointing your agent at "
+            "<https://github.com/BoundaryML/baml/blob/canary/"
+            "baml_language/RELEASING.md|baml_language/RELEASING.md>.\n"
+            "2. Prep the changelog, point your agent at "
+            "<https://github.com/BoundaryML/baml/blob/canary/"
+            "docs/prepare-changelog.md|docs/prepare-changelog.md>.\n"
+            "3. Once the changelog is out, tell your agent to thank all external "
+            "contributors, as described in the newest `blog-release/&lt;version&gt;.todo.md`."
         )
         body = f"""*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}{reminder}{upcoming_block}{footer}"""
 
