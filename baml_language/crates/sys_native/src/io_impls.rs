@@ -13,6 +13,8 @@ use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
+#[cfg(feature = "bundle-http")]
+use sys_ops::io::{ObjectType, Type};
 use sys_types::VmInternalError;
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
@@ -2660,6 +2662,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         server: owned::http::Server,
         handler: bex_external_types::Handle,
+        websocket: bex_external_types::Handle,
         tls_config: Option<owned::http::TlsConfig>,
         allow_http1: bool,
         allow_http2: bool,
@@ -2671,6 +2674,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         crate::http_server::serve(
             server,
             handler,
+            websocket,
             tls_config,
             allow_http1,
             allow_http2,
@@ -2704,6 +2708,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         _server: owned::http::Server,
         _handler: bex_external_types::Handle,
+        _websocket: bex_external_types::Handle,
         _tls_config: Option<owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -3169,40 +3174,110 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 }
 
-impl io::IoClassWsWsStream for NativeSysOps {
+/// The VM [`Type`] an owned sys-op argument denotes.
+///
+/// Arguments reach a sys-op through `as_owned_but_very_slow`, so these are the
+/// shapes it can hand back. The reference-like variants have no VM object type
+/// to name here — a `Handle` needs the heap to resolve, a host value has no VM
+/// object at all — so they report [`ObjectType::Any`], the documented top of
+/// the lattice, rather than a fabricated tag.
+#[cfg(feature = "bundle-http")]
+fn arg_value_type(value: &BexExternalValue) -> Type {
+    match value {
+        // `Type::of` likewise reports the lattice top for null.
+        BexExternalValue::Null => Type::Object(ObjectType::Any),
+        BexExternalValue::Int(_) => Type::Int,
+        BexExternalValue::Float(_) => Type::Float,
+        BexExternalValue::Bool(_) => Type::Bool,
+        BexExternalValue::Bigint(_) => Type::Object(ObjectType::Bigint),
+        BexExternalValue::String(_) => Type::Object(ObjectType::String),
+        BexExternalValue::Uint8Array(_) => Type::Object(ObjectType::Uint8Array),
+        BexExternalValue::Array { .. } => Type::Object(ObjectType::Array),
+        BexExternalValue::Map { .. } => Type::Object(ObjectType::Map),
+        BexExternalValue::Instance { .. } => Type::Object(ObjectType::Instance),
+        // `ObjectType::of` folds both enum objects into `Enum`.
+        BexExternalValue::Variant { .. } => Type::Object(ObjectType::Enum),
+        BexExternalValue::RustData(_) => Type::Object(ObjectType::RustData),
+        // A union tag is not itself a runtime type; the payload carries one.
+        BexExternalValue::Union { value, .. } => arg_value_type(value),
+        BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Handle(_)
+        | BexExternalValue::HostValue(_)
+        | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),
+    }
+}
+
+/// Resolve the registry resource behind a `baml.ws.WebSocket`'s opaque
+/// `_handle`. Both failure modes are engine bugs — the handle is minted by
+/// `baml.ws._connect` and only ever read back here — so neither is something a
+/// BAML program is expected to catch.
+#[cfg(feature = "bundle-http")]
+fn ws_resource(
+    websocket: &owned::ws::WebSocket,
+) -> Result<Arc<crate::registry::WsStreamResource>, VmInternalError> {
+    let handle = Arc::clone(&websocket._handle)
+        .downcast::<bex_resource_types::ResourceHandle>()
+        .map_err(|handle| VmInternalError::RustTypeError {
+            expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+            got: handle.as_ref().type_id(),
+        })?;
+    crate::registry::REGISTRY.get_ws_stream(handle.key()).ok_or(
+        VmInternalError::UnresolvedResourceHandle {
+            kind: "WebSocket",
+            key: handle.key(),
+        },
+    )
+}
+
+/// Build the `baml.ws.CloseEvent` that `next` hands back once the connection
+/// has ended.
+#[cfg(feature = "bundle-http")]
+fn ws_close_event(close: &crate::registry::WsClose) -> BexExternalValue {
+    use sys_ops::io::AsBexExternalValue;
+
+    owned::ws::CloseEvent {
+        code: i64::from(close.code),
+        reason: close.reason.clone(),
+    }
+    .into_bex_external_value()
+}
+
+impl io::IoClassWsWebSocket for NativeSysOps {
     #[cfg(feature = "bundle-http")]
     fn send(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
-        text: String,
+        websocket: owned::ws::WebSocket,
+        data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use futures::SinkExt;
         use tokio_tungstenite::tungstenite::Message;
 
+        // `data: string | uint8array` is enforced by the compiler, so any other
+        // shape here is a VM/codegen fault rather than a caller error. `Type`
+        // has no union form, so `expected` names the string arm.
+        let frame = match data {
+            BexExternalValue::String(text) => Message::text(text.to_string()),
+            BexExternalValue::Uint8Array(bytes) => Message::binary(bytes),
+            other => {
+                return SysOpOutput::err(VmInternalError::TypeError {
+                    expected: Type::Object(ObjectType::String),
+                    got: arg_value_type(&other),
+                });
+            }
+        };
+
         SysOpOutput::async_op(async move {
-            let handle = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|handle| VmInternalError::RustTypeError {
-                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.type_id(),
-                })?;
-            let (sink, _) = crate::registry::REGISTRY
-                .get_ws_stream(handle.key())
-                .ok_or(VmInternalError::UnresolvedResourceHandle {
-                    kind: "WebSocket stream",
-                    key: handle.key(),
-                })?;
-            sink.lock()
-                .await
-                .send(Message::text(text))
-                .await
-                .map_err(|error| VmBamlError::Io {
-                    message: format!("WebSocket send failed: {error}"),
-                })?;
+            let ws = ws_resource(&websocket)?;
+            let mut sink = ws.sink.lock().await;
+            let sink = sink.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: "WebSocket send failed: the connection is closed".to_string(),
+            })?;
+            sink.send(frame).await.map_err(|error| VmBamlError::Io {
+                message: format!("WebSocket send failed: {error}"),
+            })?;
             Ok(())
         })
     }
@@ -3212,12 +3287,12 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _stream: owned::ws::WsStream,
-        _text: String,
+        _websocket: owned::ws::WebSocket,
+        _data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -3227,58 +3302,78 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        websocket: owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        use futures::{SinkExt, StreamExt};
+    ) -> SysOpOutput<BexExternalValue> {
+        use futures::StreamExt;
         use tokio_tungstenite::tungstenite::Message;
 
+        use crate::registry::WsClose;
+
         SysOpOutput::async_op(async move {
-            let handle = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|handle| VmInternalError::RustTypeError {
-                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.type_id(),
-                })?;
-            let (sink, source) = crate::registry::REGISTRY
-                .get_ws_stream(handle.key())
-                .ok_or(VmInternalError::UnresolvedResourceHandle {
-                    kind: "WebSocket stream",
-                    key: handle.key(),
-                })?;
-            let mut source = source.lock().await;
+            let ws = ws_resource(&websocket)?;
+            if let Some(close) = ws.close.get() {
+                return Ok(ws_close_event(close));
+            }
+            let mut source = ws.source.lock().await;
             loop {
-                match source.next().await {
-                    Some(Ok(Message::Text(text))) => {
-                        return Ok(Some(text.as_str().to_string()));
+                // Re-checked under the lock: a concurrent `next` may have ended
+                // the connection, which publishes the close event and drops the
+                // transport in one step.
+                let Some(stream) = source.as_mut() else {
+                    break Ok(ws_close_event(ws.close.get().unwrap_or_else(|| {
+                        unreachable!("WebSocket transport released without a close event")
+                    })));
+                };
+                let frame = match stream.next().await {
+                    Some(Ok(frame)) => frame,
+                    // End of stream with no closing handshake.
+                    None => {
+                        let close = WsClose {
+                            code: 1006,
+                            reason: String::new(),
+                        };
+                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
                     }
-                    Some(Ok(Message::Binary(bytes))) => {
-                        return Err(VmBamlError::Io {
-                            message: format!(
-                                "received unexpected binary WebSocket frame ({} bytes) on a text-oriented stream",
-                                bytes.len()
-                            ),
-                        }
-                        .into());
-                    }
-                    Some(Ok(Message::Close(_))) | None => return Ok(None),
-                    Some(Ok(Message::Ping(payload))) => {
-                        sink.lock()
-                            .await
-                            .send(Message::Pong(payload))
-                            .await
-                            .map_err(|error| VmBamlError::Io {
-                                message: format!("WebSocket pong failed: {error}"),
-                            })?;
-                    }
-                    Some(Ok(Message::Pong(_) | Message::Frame(_))) => {}
+                    // tokio-tungstenite fuses the stream on any read error —
+                    // every later poll is `None` — so the connection is over
+                    // as of this frame. Publish that now, so `send` and
+                    // `hangup` answer from `close`, then report what ended it.
                     Some(Err(error)) => {
+                        let close = WsClose {
+                            code: 1006,
+                            reason: String::new(),
+                        };
+                        ws.finish(&mut source, close).await;
                         return Err(VmBamlError::Io {
                             message: format!("WebSocket receive failed: {error}"),
                         }
                         .into());
                     }
+                };
+                match frame {
+                    Message::Text(text) => {
+                        break Ok(BexExternalValue::String(text.as_str().into()));
+                    }
+                    Message::Binary(bytes) => {
+                        break Ok(BexExternalValue::Uint8Array(bytes.to_vec()));
+                    }
+                    Message::Close(frame) => {
+                        let close = frame.map_or(
+                            WsClose {
+                                code: 1005,
+                                reason: String::new(),
+                            },
+                            |frame| WsClose {
+                                code: u16::from(frame.code),
+                                reason: frame.reason.as_str().to_string(),
+                            },
+                        );
+                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
+                    }
+                    // Tungstenite answers pings itself while reading; neither
+                    // control frame is part of the BAML surface.
+                    Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
                 }
             }
         })
@@ -3289,11 +3384,11 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _stream: owned::ws::WsStream,
+        _websocket: owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -3303,22 +3398,57 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        websocket: owned::ws::WebSocket,
+        code: i64,
+        reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_resource_types::ResourceRegistryRef;
         use futures::SinkExt;
-        use tokio_tungstenite::tungstenite::Message;
+        use tokio_tungstenite::tungstenite::{
+            Message,
+            protocol::{CloseFrame, frame::coding::CloseCode},
+        };
+
+        // RFC 6455 §7.4: an endpoint may send 1000-1003, 1007-1013, and the
+        // registered (3000-3999) and private (4000-4999) ranges. The undefined
+        // codes and the four a peer may only ever infer (1004/1005/1006/1015)
+        // are caller errors — `is_allowed` draws exactly that line.
+        let close_code = match u16::try_from(code).map(CloseCode::from) {
+            Ok(close_code) if close_code.is_allowed() => close_code,
+            Ok(_) | Err(_) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("{code} is not a valid WebSocket close code"),
+                });
+            }
+        };
+
+        // RFC 6455 §5.5: a control frame carries at most 125 payload bytes,
+        // and a close frame spends two on the status code. Tungstenite checks
+        // this only when reading — `Frame::close` neither checks nor
+        // truncates — so an oversized reason would reach the wire as a
+        // protocol violation for the peer to fail the connection over.
+        if reason.len() > 123 {
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "WebSocket close reason is {} bytes; a close frame carries at most 123",
+                    reason.len()
+                ),
+            });
+        }
 
         SysOpOutput::async_op(async move {
-            if let Ok(handle) = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-            {
-                if let Some((sink, _)) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
-                    let _ = sink.lock().await.send(Message::Close(None)).await;
-                }
-                crate::registry::REGISTRY.remove(handle.key());
+            let ws = ws_resource(&websocket)?;
+            // Best effort from here on: `close` declares only
+            // `InvalidArgument`, and a peer that has already gone away is not a
+            // caller error. The socket itself is released by `next` when the
+            // peer's echo (or the end of the stream) arrives.
+            if let Some(sink) = ws.sink.lock().await.as_mut() {
+                let _ = sink
+                    .send(Message::Close(Some(CloseFrame {
+                        code: close_code,
+                        reason: reason.into(),
+                    })))
+                    .await;
             }
             Ok(())
         })
@@ -3329,18 +3459,15 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        _websocket: owned::ws::WebSocket,
+        _code: i64,
+        _reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_resource_types::ResourceRegistryRef;
-
-        if let Ok(handle) = stream
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        {
-            crate::registry::REGISTRY.remove(handle.key());
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -3354,9 +3481,8 @@ impl io::IoNamespaceWs for NativeSysOps {
         headers: indexmap::IndexMap<String, String>,
         timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::ws::WsStream> {
+    ) -> SysOpOutput<owned::ws::WebSocket> {
         use futures::StreamExt;
-        use tokio::sync::Mutex;
         use tokio_tungstenite::tungstenite::{
             client::IntoClientRequest,
             http::{HeaderName, HeaderValue},
@@ -3401,12 +3527,9 @@ impl io::IoNamespaceWs for NativeSysOps {
                 message: format!("WebSocket connect failed: {error}"),
             })?;
             let (sink, source) = transport.split();
-            let handle = crate::registry::REGISTRY.register_ws_stream(
-                Arc::new(Mutex::new(sink)),
-                Arc::new(Mutex::new(source)),
-                url,
-            );
-            Ok(owned::ws::WsStream {
+            let handle =
+                crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
+            Ok(owned::ws::WebSocket {
                 _handle: Arc::new(handle),
             })
         })
@@ -3421,9 +3544,9 @@ impl io::IoNamespaceWs for NativeSysOps {
         _headers: indexmap::IndexMap<String, String>,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::ws::WsStream> {
+    ) -> SysOpOutput<owned::ws::WebSocket> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
