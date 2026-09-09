@@ -664,6 +664,7 @@ class Cmd {
     args: string[],
     cwd: string,
     timeout_ms: int,
+    stdin: string?,
 }
 
 class CmdResult {
@@ -753,7 +754,7 @@ function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let out = baml.sys.exec(
         awake.program,
         awake.args,
-        baml.sys.ProcessOptions { cwd: c.cwd, env: env, timeout_ms: c.timeout_ms, stdin: null },
+        baml.sys.ProcessOptions { cwd: c.cwd, env: env, timeout_ms: c.timeout_ms, stdin: c.stdin },
     ) catch (e) {
         baml.errors.Timeout => {
             return CmdResult {
@@ -984,10 +985,9 @@ class AgentRun {
 
 /// The `claude -p` argv, mirroring what claude_code.ClaudeCodeClient builds
 /// minus --json-schema (the prompt carries the schema via ctx.output_format).
-function claude_args(prompt: string, tools: string[]) -> string[] {
+function claude_args(tools: string[]) -> string[] {
     [
         "-p",
-        prompt,
         "--output-format",
         "stream-json",
         "--verbose",
@@ -1031,11 +1031,17 @@ function run_claude(
     let r = run_with(
         Cmd {
             program: "claude",
-            args: claude_args(prompt, tools),
+            args: claude_args(tools),
+            stdin: prompt,
             cwd: cwd,
             timeout_ms: timeout_s * 1000,
         },
         env,
+    );
+    // Persist only numeric diagnostics, never prompts or raw stderr.
+    baml.fs.write(
+        transcript_path + ".status.json",
+        baml.json.stringify({ "exit_code": r.exit_code }.to_json()),
     );
     //# read the result event back: reply text + turn count
     let transcript = if (baml.fs.exists(transcript_path)) {
@@ -2246,10 +2252,27 @@ testset "handle_issue" {
         assert.is_true(!repro_file_path("../../../etc/passwd", true).includes(".."));
     }
 
+    test "large prompts travel through stdin without appearing in argv" {
+        let prompt = "large prompt\n".repeat(100000);
+        let result = run_with(
+            Cmd {
+                program: "/usr/bin/wc",
+                args: ["-c"],
+                cwd: "/tmp",
+                timeout_ms: 30000,
+                stdin: prompt,
+            },
+            { "PATH": "/usr/bin:/bin" },
+        );
+        assert.equal(result.exit_code, 0);
+        assert.equal(result.stdout.trim(), "1300000");
+        assert.equal(result.cmd, "/usr/bin/wc -c");
+    }
+
     test "claude argv mirrors the client's flags plus --tools" {
-        let a = claude_args("hi", fix_tools());
+        let a = claude_args(fix_tools());
         assert.equal(a.at(0) ?? "", "-p");
-        assert.equal(a.at(1) ?? "", "hi");
+        assert.equal(a.at(1) ?? "", "--output-format");
         assert.is_true(
             a.includes("--no-session-persistence")
                 && a.includes("stream-json")

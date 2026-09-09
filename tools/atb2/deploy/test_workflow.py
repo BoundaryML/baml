@@ -19,7 +19,7 @@ CLI = Path(os.environ.get('BAML_CLI', str(Path.home() / '.atb2/target/debug/baml
 
 @unittest.skipUnless(CLI.is_file(), 'canary baml-cli required')
 class WorkflowTests(unittest.TestCase):
-    def run_expression(self, expression, respond, reject_feedback=False, push_exit_code=None):
+    def run_expression(self, expression, respond, reject_feedback=False, push_exit_code=None, fixture_logs=False):
         calls = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -54,6 +54,13 @@ class WorkflowTests(unittest.TestCase):
                 end = code.index('\n}', start) + 2
                 code = code[:start] + f'function run_with(c: Cmd, env: map<string, string>) -> CmdResult {{ CmdResult {{ cmd: "fixture", exit_code: {push_exit_code}, stdout: "", stderr: "private fixture diagnostic", ok: false }} }}' + code[end:]
                 path.write_text(code)
+            if fixture_logs:
+                path = root / 'baml_src/merge_issue.baml'
+                code = path.read_text()
+                start = code.index('function gh(')
+                end = code.index('\n}', start) + 2
+                code = code[:start] + 'function gh(args: string[]) -> CmdResult {\n                    let path = atb2_home() + "/log-fetches";\n                    let old = if (baml.fs.exists(path)) { baml.fs.read(path) } else { "" };\n                    baml.fs.write(path, old + "x");\n                    CmdResult { cmd: "fixture", exit_code: 0, stdout: "unique failure", stderr: "", ok: true }\n                }' + code[end:]
+                path.write_text(code)
             with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 # Production still requires HTTPS. This substitution exists only
@@ -71,6 +78,10 @@ class WorkflowTests(unittest.TestCase):
                     server.shutdown(); thread.join()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return calls
+
+    def test_checks_in_one_workflow_fetch_and_include_logs_once(self):
+        expression = '\n            let logs = failed_logs(PrFeedback { checks: [\n                CheckRow { name: "first", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/1" },\n                CheckRow { name: "second", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/2" }\n            ], comments: [] });\n            assert.equal(logs.get("first") ?? "", "unique failure");\n            assert.contains(logs.get("second") ?? "", "included above");\n            assert.equal(baml.fs.read(atb2_home() + "/log-fetches"), "x");\n        '
+        self.assertEqual(self.run_expression(expression, lambda *_: (500, {}), fixture_logs=True), [])
 
     def test_denied_push_writes_an_outcome_and_returns_to_the_worker(self):
         expression = '''

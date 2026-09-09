@@ -609,12 +609,18 @@ function run_id_of(link: string?) -> string? {
 /// are not lost under a long final step.
 function failed_logs(fb: PrFeedback) -> map<string, string> {
     let logs: map<string, string> = {};
+    let seen_runs: string[] = [];
     for (let c in fb.checks) {
         let id = run_id_of(c.link);
         let log = match (id) {
             null => "(no actions run linked)",
             let i: string => {
-                failed_steps_tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 80)
+                if (seen_runs.includes(i)) {
+                    "(failure logs included above for workflow run " + i + ")"
+                } else {
+                    seen_runs.push(i);
+                    failed_steps_tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 80)
+                }
             },
         };
         logs.set(c.name, log);

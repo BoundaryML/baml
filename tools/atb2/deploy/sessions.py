@@ -137,14 +137,14 @@ def agent(session, prompt, tools='Read,Glob,Grep'):
     """The caller owns the session lock; sandbox.py receives no store/Slack keys."""
     run_id=str(uuid.uuid4());out=Path('/data/runs')/('session-'+session['id']);out.mkdir(parents=True,exist_ok=True)
     transcript=out/(run_id+'.jsonl')
-    args=['claude','-p',prompt,'--output-format','stream-json','--verbose','--model',os.environ.get('ATB2_MODEL','claude-fable-5'),
+    args=['claude','-p','--output-format','stream-json','--verbose','--model',os.environ.get('ATB2_MODEL','claude-fable-5'),
           '--permission-mode','bypassPermissions','--safe-mode','--setting-sources','','--strict-mcp-config','--mcp-config','{"mcpServers":{}}',
           '--settings','{"disableAllHooks":true}','--max-turns','12','--tools',tools]
     # Pass the held lock FD so the nested sandbox does not deadlock. The FD is
     # deliberately NOT passed into bubblewrap/the agent itself.
     result=subprocess.run(['/usr/bin/python3','-I','/usr/local/lib/atb2/sandbox.py',session['workspace'],*args],
         env={'PATH':'/usr/local/bin:/usr/bin:/bin','ATB2_TRANSCRIPT':str(transcript),'ATB2_SESSION_LOCK_FD':str(LOCK_FD)},
-        pass_fds=(LOCK_FD,), capture_output=True,timeout=360)
+        pass_fds=(LOCK_FD,), input=prompt.encode(), capture_output=True,timeout=360)
     if result.returncode:raise ValueError('agent session failed')
     final=None
     for line in transcript.read_text().splitlines():

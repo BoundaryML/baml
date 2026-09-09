@@ -106,6 +106,14 @@ class BoundaryTests(unittest.TestCase):
         return subprocess.run(sandbox.command(str(self.work),list(argv)),env={'PATH':sandbox.SAFE_PATH},
             capture_output=True,text=True,timeout=30)
 
+    def test_large_prompt_crosses_the_filesystem_boundary_on_stdin(self):
+        prompt = ('--no-session-persistence\n' + 'x' * 1000) * 1000
+        result = subprocess.run(sandbox.command(str(self.work), ['/usr/bin/python3', '-c',
+            'import sys; print(len(sys.stdin.buffer.read()))']), input=prompt.encode(),
+            env={'PATH':sandbox.SAFE_PATH}, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(int(result.stdout), len(prompt.encode()))
+
     def test_files_processes_and_controller_git_are_not_visible(self):
         (self.work/'escape').symlink_to('/data/home/security-fixture')
         code='''import os,pathlib

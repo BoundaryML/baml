@@ -33,10 +33,10 @@ class SessionTests(unittest.TestCase):
             root=Path(tmp).resolve();sid=str(uuid.uuid4());cid=str(uuid.uuid4())
             home=root/sid/'home';home.mkdir(parents=True)
             (root/'workspaces').mkdir();(root/'workspaces'/'checkout').write_text(json.dumps({'id':sid,'claude_session_id':cid}))
-            args=['claude','-p','--no-session-persistence','--no-session-persistence','--tools','Read,Glob,Grep']
+            args=['claude','-p','--no-session-persistence','--tools','Read,Glob,Grep']
             with h.conversation('/data/worktrees/checkout',args) as (argv,mount):
                 self.assertEqual(argv[-2:],['--session-id',cid]);self.assertEqual(mount,home)
-                self.assertEqual(argv[2],'--no-session-persistence') # prompt is not an option
+                self.assertNotIn('--no-session-persistence',argv)
                 self.assertIn('Read,Glob,Grep',argv)
             journal=home/'.claude/projects/-workspace'/f'{cid}.jsonl';journal.parent.mkdir(parents=True);journal.write_text('{}\n')
             with h.conversation('/data/worktrees/checkout',args) as (argv,_):

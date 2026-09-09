@@ -39,8 +39,8 @@ def conversation(workspace, argv):
         previous=home/'.claude/projects/-workspace'/f'{session_id}.jsonl'
         if previous.is_symlink():raise ValueError('unsafe conversation file')
         args=list(argv)
-        prompt_index = args.index('-p') + 1 if '-p' in args else -1
-        args=[arg for index,arg in enumerate(args) if arg!='--no-session-persistence' or index==prompt_index]
+        # Prompts arrive on stdin, so every argv entry is an option.
+        args=[arg for arg in args if arg!='--no-session-persistence']
         # Every invocation still supplies its current explicit tool allowlist,
         # disabled hooks and MCP settings. Resume carries context, not permission.
         args += ['--resume' if previous.is_file() else '--session-id',session_id]
