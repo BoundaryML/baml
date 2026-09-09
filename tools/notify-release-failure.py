@@ -190,7 +190,7 @@ def main() -> int:
         if failures or not release_succeeded:
             mentions = current_oncall_mentions(slack_client)
             oncall_text = (
-                f"\n{' '.join(mentions)} is current oncall, please investigate; "
+                f"\n\n{' '.join(mentions)} is current oncall, please investigate; "
                 "see also <https://github.com/BoundaryML/baml/blob/canary/"
                 "baml_language/RELEASING.md|RELEASING.md>."
                 if mentions
