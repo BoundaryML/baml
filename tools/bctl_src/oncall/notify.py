@@ -90,11 +90,16 @@ def compose_handoff(
         sections = [
             f"*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}",
             "*1. Prep the next release*\n"
-            "> Prepare the next BAML release by following baml_language/RELEASING.md.",
-            "*2. Prep the changelog*\n"
-            "> Prepare the changelog by following docs/prepare-changelog.md.",
-            "*3. Once the changelog is out, thank external contributors*\n"
-            "> The changelog is published. Find the newest blog-release/&lt;version&gt;.todo.md "
+            "> Prepare a PR to trigger the next BAML language canary release. See "
+            "<https://github.com/BoundaryML/baml/blob/canary/"
+            "baml_language/RELEASING.md|baml_language/RELEASING.md> for instructions.",
+            "*2. Prep the changelog, then review and clean it up before merging it*\n"
+            "> Prepare the changelog for the next BAML language canary release: see "
+            "<https://github.com/BoundaryML/baml/blob/canary/"
+            "docs/prepare-changelog.md|docs/prepare-changelog.md>",
+            "*3. Tell your agent to thank external contributors.* "
+            "`&lt;version&gt;.todo.md` will have instructions for your agent to handle this for you.\n"
+            "> The changelog is published. Find the newest `blog-release/&lt;version&gt;.todo.md` "
             "and follow its instructions to thank all external contributors.",
         ]
         blocks: list[dict[str, Any]] = [
