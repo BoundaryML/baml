@@ -507,7 +507,7 @@ function array_of_unfolded_alias(seed: root.engine.Seed) -> Derived throws never
 function bottom_beside_member(seed: root.engine.Seed) -> Derived throws never {
     let inner = never_bottom(seed);
     let extra = pick_leaves(inner.next, 2);
-    let other = if (extra.value[0] == inner.value.right) {
+    let other = if (extra.value[0] == root.algebra.right_of(inner.value)) {
         extra.value[1]
     } else {
         extra.value[0]

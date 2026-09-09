@@ -184,29 +184,33 @@ test "facts: reflection sees the generators" {
 
 /// The last rule of a trace before the flow rule, or the last rule when the
 /// trace has no flow rule.
-function isolated_rule(trace: root.engine.Rule[]) -> string? throws never {
+function isolated_rule(trace: root.engine.Claim[]) -> string? throws never {
     let flow = root.bank.flow_requires_subtype().name;
-    let own = trace.filter((r) -> {
-        r.name != flow
+    let own = trace.filter((claim) -> {
+        claim.rule.name != flow
     });
-    own.at(own.length() - 1)?.name
+    own.at(-1)?.rule.name
+}
+
+/// The isolated rule of every case over the first four seeds of every item.
+function isolated_rules() -> string[] throws never {
+    root.bank.items().flat_map((item) -> {
+        let id = item.id();
+        baml.iter.Range.new(0, 4)
+            .filter_map((i) -> {
+                let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
+                    ?? return null;
+                isolated_rule(candidate.case.trace)
+            })
+            .collect()
+    })
 }
 
 function rules_without_an_isolating_item() -> string[] throws never {
-    let isolated: map<string, bool> = {};
-    for (let item in root.bank.items()) {
-        let i = 0;
-        while (i < 4) {
-            if let candidate: root.engine.Candidate = item.generate(root.engine.seed_for(item.id(), i)) {
-                if let name: string = isolated_rule(candidate.case.trace) {
-                    let _ = isolated.set(name, true);
-                }
-            }
-            i = i + 1;
-        }
-    }
+    let isolated = isolated_rules();
+    let flow = root.bank.flow_requires_subtype().name;
     root.bank.rules().filter_map((rule) -> {
-        if (isolated.has(rule.name) || rule.name == root.bank.flow_requires_subtype().name) {
+        if (isolated.includes(rule.name) || rule.name == flow) {
             null
         } else {
             rule.name

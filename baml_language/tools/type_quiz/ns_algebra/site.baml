@@ -109,3 +109,14 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
 function all_sites() -> SiteKind[] throws never {
     [SiteKind.Let, SiteKind.CallArgument, SiteKind.Return, SiteKind.Field, SiteKind.ArrayElement]
 }
+
+/// The site in prose, for a case's explanation.
+function site_phrase(site: SiteKind) -> string throws never {
+    match (site) {
+        SiteKind.Let => "the initializer of an annotated binding",
+        SiteKind.CallArgument => "a call argument",
+        SiteKind.Return => "a function's return value",
+        SiteKind.Field => "a field initializer",
+        SiteKind.ArrayElement => "an element of an annotated array",
+    }
+}

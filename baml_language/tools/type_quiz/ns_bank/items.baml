@@ -12,9 +12,76 @@ function rejection_code(site: root.algebra.SiteKind) -> string throws never {
     }
 }
 
+/// A derivation's pair oriented as a flow: a value of `source` meets a slot
+/// of `target`, and `relation` is how `source` relates to `target`.
+class Oriented {
+    source: root.algebra.Ty,
+    target: root.algebra.Ty,
+    relation: root.algebra.Relation,
+    reversed: bool,
+}
+
+/// `d`'s pair flowing forwards (left into right) or, `reversed`, backwards.
+function orient(
+    d: root.algebra.Derivation,
+    relation: root.algebra.Relation,
+    reversed: bool,
+) -> Oriented throws never {
+    if (reversed) {
+        Oriented {
+            source: root.algebra.right_of(d),
+            target: root.algebra.left_of(d),
+            relation: root.algebra.mirror(relation),
+            reversed,
+        }
+    } else {
+        Oriented {
+            source: root.algebra.left_of(d),
+            target: root.algebra.right_of(d),
+            relation,
+            reversed,
+        }
+    }
+}
+
+/// `relation`, which holds between the derivation's left and right, read in
+/// the flow's direction.
+function in_direction(
+    relation: root.algebra.Relation,
+    flow: Oriented,
+) -> root.algebra.Relation throws never {
+    if (flow.reversed) {
+        root.algebra.mirror(relation)
+    } else {
+        relation
+    }
+}
+
+/// The flow rule at this case: which type meets which slot, at which site,
+/// and what follows.
+function flow_claim(
+    site: root.algebra.SiteKind,
+    flow: Oriented,
+    compiles: bool,
+) -> root.engine.Claim throws never {
+    let s = `\`${root.algebra.render(flow.source)}\``;
+    let t = `\`${root.algebra.render(flow.target)}\``;
+    let outcome = if (compiles) {
+        "holds, so the program compiles"
+    } else {
+        "does not hold, so the program is rejected"
+    };
+    root.engine.Claim {
+        rule: flow_requires_subtype(),
+        instance: `at ${root.algebra.site_phrase(site)}, a value of type ${s} meets a slot of type ${t}: ${s} <: ${t} ${outcome}`,
+    }
+}
+
 /// A fact exercised at a flow site. Half the seeds flow the pair forwards
-/// and half backwards, so a strict subtype fact yields a compiling case as
-/// often as a rejected one and the shape never gives the verdict away.
+/// and half backwards, so a strict-subtype fact yields a compiling case as
+/// often as a rejected one and the shape never gives the verdict away. The
+/// direction is part of the explanation: the flow claim names which type
+/// meets which slot.
 class FlowItem {
     fact: Fact,
     status: root.engine.Status,
@@ -32,70 +99,37 @@ class FlowItem {
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
             let streams = root.engine.split(seed);
             let d = self.fact.generate(streams.left).value;
-            match (root.algebra.knowledge(d)) {
-                root.algebra.Undecided => null,
-                let relation: root.algebra.Relation => {
-                    let direction = root.engine.below(streams.right, 2);
-                    let reverse = direction.value == 1;
-                    let source = if (reverse) {
-                        d.right
-                    } else {
-                        d.left
-                    };
-                    let target = if (reverse) {
-                        d.left
-                    } else {
-                        d.right
-                    };
-                    let flowing = if (reverse) {
-                        root.algebra.mirror(relation)
-                    } else {
-                        relation
-                    };
-                    let site_draw = root.engine.below(direction.next, self.sites.length());
-                    let site = self.sites[site_draw.value];
-                    let reserved = root.algebra.decls_of_all([source, target]).map((decl) -> {
-                        root.algebra.decl_name(decl)
-                    });
-                    let names = site_names(site_draw.next, reserved);
-                    let probe = root.algebra.probe(site, source, target, names);
-                    let compiles = root.algebra.flows(flowing);
-                    let key: root.engine.Verdict = if (compiles) {
-                        root.engine.Compiles { tests: [] }
-                    } else {
-                        root.engine.Rejected { codes: [rejection_code(site)], anchor: probe.anchor }
-                    };
-                    let traps = models().filter_map((model) -> {
-                        match (root.algebra.under(d, model)) {
-                            root.algebra.Undecided => null,
-                            let believed: root.algebra.Relation => {
-                                let flowing_under = if (reverse) {
-                                    root.algebra.mirror(believed)
-                                } else {
-                                    believed
-                                };
-                                if (root.algebra.flows(flowing_under) != compiles) {
-                                    model.id
-                                } else {
-                                    null
-                                }
-                            },
-                        }
-                    });
-                    root.engine.Candidate {
-                        case: root.engine.Case {
-                            files: { "case.baml": probe.source },
-                            key: key,
-                            trace: root.algebra.steps(d)
-                                .map((step) -> {
-                                    root.algebra.step_rule(step)
-                                })
-                                .concat([flow_requires_subtype()]),
-                        },
-                        features: features_of(d, source, target, traps),
-                        traps: traps,
-                    }
-                },
+            let relation = root.algebra.decided(root.algebra.knowledge(d))
+                ?? return null;
+            let direction = root.engine.below(streams.right, 2);
+            let flow = orient(d, relation, direction.value == 1);
+            let site_draw = root.engine.below(direction.next, self.sites.length());
+            let site = self.sites[site_draw.value];
+            let reserved = root.algebra.decls_of_all([flow.source, flow.target]).map((decl) -> {
+                root.algebra.decl_name(decl)
+            });
+            let names = site_names(site_draw.next, reserved);
+            let probe = root.algebra.probe(site, flow.source, flow.target, names);
+            let compiles = root.algebra.flows(flow.relation);
+            let key: root.engine.Verdict = if (compiles) {
+                root.engine.Compiles { tests: [] }
+            } else {
+                root.engine.Rejected { codes: [rejection_code(site)], anchor: probe.anchor }
+            };
+            let traps = models().filter_map((model) -> {
+                let believed = root.algebra.decided(root.algebra.under(d, model))
+                    ?? return null;
+                if (root.algebra.flows(in_direction(believed, flow)) != compiles) {
+                    model.id
+                } else {
+                    null
+                }
+            });
+            let trace = root.algebra.claims(d).concat([flow_claim(site, flow, compiles)]);
+            root.engine.Candidate {
+                case: root.engine.Case { files: { "case.baml": probe.source }, key, trace },
+                features: features_of(trace, root.algebra.flips(d), [flow.source, flow.target], traps),
+                traps,
             }
         }
     }
@@ -118,24 +152,29 @@ class UnguardedCycleItem {
             let form = root.engine.below(names.next, 2);
             let a = names.value[0];
             let b = names.value[1];
-            let source = if (form.value == 0) {
-                `
-                    type ${a} = ${a};
-                `
+            let decl = if (form.value == 0) {
+                root.algebra.AliasDecl.recursive(a, (cycle) -> {
+                    cycle
+                })
             } else {
-                `
-                    type ${a} = ${b};
-                    type ${b} = ${a};
-                `
+                root.algebra.AliasDecl.recursive(a, (cycle) -> {
+                    root.algebra.Alias { decl: root.algebra.AliasDecl { name: b, body: cycle } }
+                })
             };
-            let features: map<string, float> = {};
+            let ty: root.algebra.Ty = root.algebra.Alias { decl };
+            let trace = [
+                root.engine.Claim {
+                    rule: unguarded_cycle_rejected(),
+                    instance: `\`${a}\` is a fully unguarded cycle: it denotes \`never\` and is rejected`,
+                },
+            ];
             root.engine.Candidate {
                 case: root.engine.Case {
-                    files: { "case.baml": source },
+                    files: { "case.baml": root.algebra.render_decls(root.algebra.decls_of(ty)) },
                     key: root.engine.Rejected { codes: ["E0068"], anchor: a },
-                    trace: [unguarded_cycle_rejected()],
+                    trace,
                 },
-                features: features,
+                features: features_of(trace, 0, [ty], []),
                 traps: [],
             }
         }

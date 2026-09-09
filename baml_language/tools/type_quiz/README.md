@@ -9,7 +9,7 @@ compiler, so the quiz cannot drift from the language without CI noticing.
 
 | Namespace | Role | Changes when |
 |---|---|---|
-| `ns_engine` | substrate: seeds, cases, verdicts, the verifier, sampling, the learner | never for a type-system change |
+| `ns_engine` | substrate: seeds, cases, claims, verdicts, the verifier, sampling and sessions | never for a type-system change |
 | `ns_algebra` | tested material: the `Ty` model, rendering, relations, sites | the type system changes |
 | `ns_bank` | tested material: the rule table quoted from the spec, fact generators, items, naive models, features, weights, name pools | what or how we teach changes |
 | `ns_conformance` | the tripwire suites | — |
@@ -27,17 +27,24 @@ map, class argument, function parameter, return, error, union member) to
 another fact, and records the relation that follows. An *item* exercises a
 fact at a flow site, chosen by seed among a binding, a call argument, a
 return, a field initializer, and an array element, flowing the pair forwards
-or backwards so the shape never gives the verdict away. The trace of rules is
-the explanation. Every item is generated across several seeds and checked
-against the compiler on every run.
+or backwards so the shape never gives the verdict away. The trace of claims,
+each rule instantiated at the case's types, is the explanation; its last claim
+names which type met which slot. Every item is generated across several seeds
+and checked against the compiler on every run.
 
 A case is *interesting* when a plausible wrong intuition predicts the wrong
 verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
 it disagrees with; replaying a case's derivation under the model gives the
 model's verdict, and a mismatch makes the case a trap for that model. The
 sampler scores candidates by traps, rule count, relation flips, and a hinged
-penalty on size and depth, then a session alternates the verdict it wants so
-that how interesting a case looks never predicts its answer.
+penalty on size, depth, and union width, with a soft penalty on single-rule
+cases every model agrees with. A session fixes each step's verdict from a
+seeded, balanced schedule before it looks at a candidate, re-drawing within a
+budget until one has that verdict, so how interesting a case looks never
+predicts its answer; the schedule is a uniform shuffle, so the
+step index and the previous answer predict nothing either. Only items the
+compiler is verified to agree on are served, and the suite verifies every case
+a fixed session serves.
 
 Dependencies flow bank → algebra → engine and `lint.sh` rejects anything
 else. The engine owns nothing the compiler can answer: the
@@ -60,12 +67,15 @@ and the `type-quiz-lint` prek hook.
 Building the quiz is dogfooding, and each of these was found by it. Repros are
 minimal single-file packages; none is fixed at the time of writing.
 
-1. **Emit panic on existential dispatch inside a nested closure.**
-   `crates/baml_compiler2_emit/src/emit.rs:2025` panics with
+1. **Emit panic on an interface method call on a captured existential inside
+   a closure.** `crates/baml_compiler2_emit/src/emit.rs:2025` panics with
    `undefined function: user.Item.id` for
    `items().filter_map((item) -> { [0].every((i) -> { item.id() == "x" }); null })`
-   where `items(): Item[]` and `Item` is an interface. One closure level works.
-   Workaround in `ns_conformance/engine.baml` (`item_is_deterministic`).
+   where `items(): Item[]` and `Item` is an interface: the inner closure calls
+   a method on `item`, which it captures from the outer one. A method call on
+   a closure's own parameter works at any depth, and so does handing the
+   captured value to a function that makes the call, which is what
+   `root.engine.generate` in `ns_engine/sample.baml` is for.
 2. **Run-time membership of a function value is exact, not a subtyping
    check, and `Package.tests()` lies about its value type.** The map is
    declared `map<string, () -> null throws unknown>` but its values reflect as
@@ -107,11 +117,12 @@ minimal single-file packages; none is fixed at the time of writing.
    throws never` prints as `(int, int) -> int throws never`: names and the
    optional marker are dropped, so the printed spelling denotes a different
    function type than the value describes.
-9. **A closure capturing a local assigned from an earlier closure call reads
-   the wrong slot.** With `items: Sc[]`,
+9. **A closure reads the wrong slot when a method call's receiver reads a
+   captured local that an earlier closure call assigned.** With `items: Sc[]`,
    `let top = items.reduce((acc, s) -> { if (s.score > acc) { s.score } else { acc } }, items[0].score);`
    followed by `items.map((s) -> { (s.score - top).exp() })` fails at run time
    with `VM internal error: type error: expected map, got float`, the closure
    parameter having been read from the captured float's slot. Copying `top`
    into a fresh local first does not help; the same code with `top` a literal
-   works. Workaround in `ns_engine/sample.baml` (`pick` uses loops).
+   works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
+   which `pick` in `ns_engine/sample.baml` uses.

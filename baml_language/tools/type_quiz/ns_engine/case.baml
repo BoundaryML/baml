@@ -1,5 +1,5 @@
 // The shapes every layer above the engine speaks in. Nothing here knows what
-// a BAML type is: the engine sees source files, a verdict, and opaque ids.
+// a BAML type is: the engine sees source files, a verdict, rules, and prose.
 
 /// A heading in `TYPE_SYSTEM.md`.
 class Section {
@@ -26,6 +26,18 @@ class Rule {
     statement: string,
 }
 
+/// One line of a case's explanation: a rule, and what it says at this case's
+/// types. Rules are the currency of the learner profile and of naive models;
+/// instances are the rubric a grader reads. Together, a case's claims
+/// determine its verdict, so two cases built from the same rules but flowing
+/// in opposite directions read differently.
+class Claim {
+    rule: Rule,
+    /// The rule instantiated at the case's types, as prose with the types in
+    /// backticks.
+    instance: string,
+}
+
 /// The case compiles, and every listed test (by canonical id, `root::name`)
 /// passes.
 class Compiles {
@@ -41,13 +53,27 @@ class Rejected {
 
 type Verdict = Compiles | Rejected;
 
+/// A verdict without its details: what a session schedules and a learner
+/// answers.
+enum VerdictKind {
+    Compiles,
+    Rejected,
+}
+
+function verdict_kind(verdict: Verdict) -> VerdictKind throws never {
+    match (verdict) {
+        Compiles => VerdictKind.Compiles,
+        Rejected => VerdictKind.Rejected,
+    }
+}
+
 /// A generated quiz case: what the learner sees, what the compiler must say,
-/// and the rules that say why.
+/// and the claims that say why.
 class Case {
     /// Source text keyed by path, exactly as handed to `reflect.Package.compile`.
     files: map<string, string>,
     key: Verdict,
-    trace: Rule[],
+    trace: Claim[],
 }
 
 /// A case together with the numbers the sampler scores it by.

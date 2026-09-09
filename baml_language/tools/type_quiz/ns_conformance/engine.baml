@@ -238,22 +238,11 @@ test "verify: rejected key on compiling case is unexpected compile" {
 // ─── items ───────────────────────────────────────────────────────────────────
 
 function item_is_deterministic(item: root.engine.Item) -> bool throws never {
-    // BUG: calling an interface method through an existential (`item.id()`,
-    // `item.generate(..)`) from inside a closure that is itself nested in
-    // another closure panics the emitter:
-    //   crates/baml_compiler2_emit/src/emit.rs:2025 "undefined function: user.Item.id"
-    // Minimal repro: `items().filter_map((item) -> { [0].every((i) -> { item.id() == "x" }); null })`.
-    // One closure level is fine, so this helper keeps the inner loop closure-free.
     let id = item.id();
-    let i = 0;
-    while (i < 3) {
+    baml.iter.Range.new(0, 3).every((i) -> {
         let seed = root.engine.seed_for(id, i);
-        if (item.generate(seed) != item.generate(seed)) {
-            return false;
-        }
-        i = i + 1;
-    }
-    true
+        root.engine.generate(item, seed) == root.engine.generate(item, seed)
+    })
 }
 
 function nondeterministic_items() -> string[] throws never {

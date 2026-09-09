@@ -26,6 +26,14 @@ class Undecided {
 
 type Knowledge = Relation | Undecided;
 
+/// `k` as a relation, or `null` when nothing is known.
+function decided(k: Knowledge) -> Relation? throws never {
+    match (k) {
+        let r: Relation => r,
+        Undecided => null,
+    }
+}
+
 /// A rule that states the relation of a pair of types directly.
 class Asserted {
     rule: root.engine.Rule,
@@ -35,9 +43,11 @@ class Asserted {
 }
 
 /// A rule that wraps both sides of a pair in a constructor and transforms
-/// what is known about them.
+/// what is known about them. `left` and `right` are the wrapped pair.
 class Transferred {
     rule: root.engine.Rule,
+    left: Ty,
+    right: Ty,
     transfer: (Knowledge) -> Knowledge throws never,
 }
 
@@ -50,11 +60,24 @@ function step_rule(step: Step) -> root.engine.Rule throws never {
     }
 }
 
-/// Two types and the derivation of what is known about their relation: one
-/// asserted pair, then the constructors applied to both sides.
+function step_left(step: Step) -> Ty throws never {
+    match (step) {
+        let a: Asserted => a.left,
+        let t: Transferred => t.left,
+    }
+}
+
+function step_right(step: Step) -> Ty throws never {
+    match (step) {
+        let a: Asserted => a.right,
+        let t: Transferred => t.right,
+    }
+}
+
+/// The derivation of what is known about a pair of types: one asserted
+/// pair, then the constructors applied to both sides. The pair the
+/// derivation is about is its last step's.
 class Derivation {
-    left: Ty,
-    right: Ty,
     head: Asserted,
     rest: Transferred[],
 }
@@ -71,19 +94,47 @@ function steps(d: Derivation) -> Step[] throws never {
     )
 }
 
-/// The knowledge after each step, replayed under `model` where it has an
-/// opinion and under the spec elsewhere. The spec's own trajectory is
-/// `trajectory(d, null)`.
-function trajectory(d: Derivation, model: Model?) -> Knowledge[] throws never {
+/// The step whose pair `d` is about.
+function last_step(d: Derivation) -> Step throws never {
+    let fallback: Step = d.head;
+    steps(d).at(-1) ?? fallback
+}
+
+function left_of(d: Derivation) -> Ty throws never {
+    step_left(last_step(d))
+}
+
+function right_of(d: Derivation) -> Ty throws never {
+    step_right(last_step(d))
+}
+
+/// A step and the knowledge after it.
+class Judged {
+    step: Step,
+    after: Knowledge,
+}
+
+/// Every step of `d` with the knowledge after it, replayed under `model`
+/// where it has an opinion and under the spec elsewhere. The spec's own
+/// reading is `judgments(d, null)`.
+function judgments(d: Derivation, model: Model?) -> Judged[] throws never {
     let first: Knowledge = believed(model, d.head) ?? d.head.relation;
+    let start: Judged[] = [Judged { step: d.head, after: first }];
     d.rest.reduce(
-        (states, t) -> {
-            let current = states.at(-1) ?? first;
+        (acc, t) -> {
+            let current = acc.at(-1)?.after ?? first;
             let after = transferred(model, t, current) ?? t.transfer(current);
-            states.concat([after])
+            acc.concat([Judged { step: t, after }])
         },
-        [first],
+        start,
     )
+}
+
+/// The knowledge after each step of `d`.
+function trajectory(d: Derivation, model: Model?) -> Knowledge[] throws never {
+    judgments(d, model).map((j) -> {
+        j.after
+    })
 }
 
 /// What the spec knows about `d`.
@@ -119,6 +170,41 @@ function flips(d: Derivation) -> int throws never {
         0,
     )
 }
+
+// ─── explaining derivations ──────────────────────────────────────────────────
+
+/// The explanation of `d` under the spec: one claim per step, each rule
+/// instantiated at the step's pair.
+function claims(d: Derivation) -> root.engine.Claim[] throws never {
+    judgments(d, null).map((j) -> {
+        root.engine.Claim { rule: step_rule(j.step), instance: instance_of(j) }
+    })
+}
+
+/// A step's rule at its pair, in prose. A transferred step reads as a
+/// consequence of the step before it.
+function instance_of(j: Judged) -> string throws never {
+    let sentence = relates(step_left(j.step), step_right(j.step), j.after);
+    match (j.step) {
+        Asserted => sentence,
+        Transferred => `so ${sentence}`,
+    }
+}
+
+/// `a` and `b` with `k` between them, in prose, the types in backticks.
+function relates(a: Ty, b: Ty, k: Knowledge) -> string throws never {
+    let l = `\`${render(a)}\``;
+    let r = `\`${render(b)}\``;
+    match (k) {
+        Relation.Sub => `${l} is a strict subtype of ${r}`,
+        Relation.Super => `${l} is a strict supertype of ${r}`,
+        Relation.Equiv => `${l} and ${r} are the same type`,
+        Relation.Unrelated => `neither of ${l} and ${r} is a subtype of the other`,
+        Undecided => `how ${l} relates to ${r} does not follow`,
+    }
+}
+
+// ─── transfers ───────────────────────────────────────────────────────────────
 
 /// `Sub` becomes `Super` and back; the rest are their own mirror.
 function mirror(r: Relation) -> Relation throws never {
@@ -194,16 +280,11 @@ function pair(
     relation: Relation,
     rule: root.engine.Rule,
 ) -> Derivation throws never {
-    Derivation {
-        left: left,
-        right: right,
-        head: Asserted { rule: rule, left: left, right: right, relation: relation },
-        rest: [],
-    }
+    Derivation { head: Asserted { rule, left, right, relation }, rest: [] }
 }
 
 /// Wrap both sides in a constructor whose effect on the relation is
-/// `transfer`, as stated by `rule`.
+/// `transfer`, as stated by `rule`; `left` and `right` are the wrapped pair.
 function then(
     d: Derivation,
     rule: root.engine.Rule,
@@ -211,22 +292,17 @@ function then(
     right: Ty,
     transfer: (Knowledge) -> Knowledge throws never,
 ) -> Derivation throws never {
-    Derivation {
-        left: left,
-        right: right,
-        head: d.head,
-        rest: d.rest.concat([Transferred { rule: rule, transfer: transfer }]),
-    }
+    Derivation { head: d.head, rest: d.rest.concat([Transferred { rule, left, right, transfer }]) }
 }
 
 /// `T[]` against `U[]`: invariant.
 function in_array(d: Derivation, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Array.new(d.left), Array.new(d.right), invariant)
+    then(d, rule, Array.new(left_of(d)), Array.new(right_of(d)), invariant)
 }
 
 /// `map<string, T>` against `map<string, U>`: invariant.
 function in_map_value(d: Derivation, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Map.new(d.left), Map.new(d.right), invariant)
+    then(d, rule, Map.new(left_of(d)), Map.new(right_of(d)), invariant)
 }
 
 /// `C<T>` against `C<U>` for a single-parameter class: invariant.
@@ -235,7 +311,7 @@ function in_class_arg(
     decl: ClassDecl,
     rule: root.engine.Rule,
 ) -> Derivation throws never {
-    then(d, rule, Class.new(decl, [d.left]), Class.new(decl, [d.right]), invariant)
+    then(d, rule, Class.new(decl, [left_of(d)]), Class.new(decl, [right_of(d)]), invariant)
 }
 
 /// `(T) -> R` against `(U) -> R`: contravariant.
@@ -243,20 +319,26 @@ function in_fn_param(d: Derivation, ret: Ty, rule: root.engine.Rule) -> Derivati
     then(
         d,
         rule,
-        Fn.new([d.left], [], ret, Never {  }),
-        Fn.new([d.right], [], ret, Never {  }),
+        Fn.new([left_of(d)], [], ret, Never {  }),
+        Fn.new([right_of(d)], [], ret, Never {  }),
         contravariant,
     )
 }
 
 /// `() -> T` against `() -> U`: covariant.
 function in_fn_return(d: Derivation, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Fn.new([], [], d.left, Never {  }), Fn.new([], [], d.right, Never {  }), covariant)
+    then(
+        d,
+        rule,
+        Fn.new([], [], left_of(d), Never {  }),
+        Fn.new([], [], right_of(d), Never {  }),
+        covariant,
+    )
 }
 
 /// `() -> R throws T` against `() -> R throws U`: covariant.
 function in_fn_error(d: Derivation, ret: Ty, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Fn.new([], [], ret, d.left), Fn.new([], [], ret, d.right), covariant)
+    then(d, rule, Fn.new([], [], ret, left_of(d)), Fn.new([], [], ret, right_of(d)), covariant)
 }
 
 /// `T | X` against `U | X`. The relation survives only when `X` is a leaf
@@ -267,12 +349,14 @@ function in_union_with(
     extra: Ty,
     rule: root.engine.Rule,
 ) -> Derivation throws never {
-    let transfer = if (is_leaf(extra) && !mentions(d.left, extra) && !mentions(d.right, extra)) {
+    let l = left_of(d);
+    let r = right_of(d);
+    let transfer = if (is_leaf(extra) && !mentions(l, extra) && !mentions(r, extra)) {
         absorbing
     } else {
         undecided
     };
-    then(d, rule, Union.new([d.left, extra]), Union.new([d.right, extra]), transfer)
+    then(d, rule, Union.new([l, extra]), Union.new([r, extra]), transfer)
 }
 
 /// A builtin concrete type, which the spec makes unrelated to every other.

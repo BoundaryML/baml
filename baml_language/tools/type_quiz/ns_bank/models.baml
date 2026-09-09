@@ -1,6 +1,11 @@
 // The naive models: intuitions a learner might arrive with, each a sparse
 // list of the rules where it disagrees with the spec. A case is a trap for a
 // model when replaying its derivation under the model flips the verdict.
+//
+// A model is trapped only in the directions it is wrong in. One that accepts
+// less than the spec (`spelling`) is trapped by compiling cases alone, one
+// that accepts more (`typescript`) by rejected cases alone, and one that
+// gets a variance backwards (`covariant`) by both.
 
 function is_numeric(ty: root.algebra.Ty) -> bool throws never {
     match (ty) {
@@ -48,11 +53,20 @@ function positional_arity(ty: root.algebra.Ty) -> int? throws never {
     }
 }
 
+// ─── constant beliefs ────────────────────────────────────────────────────────
+
 function unrelated(
     left: root.algebra.Ty,
     right: root.algebra.Ty,
 ) -> root.algebra.Relation? throws never {
     root.algebra.Relation.Unrelated
+}
+
+function subset(
+    left: root.algebra.Ty,
+    right: root.algebra.Ty,
+) -> root.algebra.Relation? throws never {
+    root.algebra.Relation.Sub
 }
 
 function superset(
@@ -62,16 +76,28 @@ function superset(
     root.algebra.Relation.Super
 }
 
-/// Different spelling, different type. Equivalence is syntactic identity,
-/// so every algebraic identity the spec states is a surprise.
+function equivalent(
+    left: root.algebra.Ty,
+    right: root.algebra.Ty,
+) -> root.algebra.Relation? throws never {
+    root.algebra.Relation.Equiv
+}
+
+// ─── models ──────────────────────────────────────────────────────────────────
+
+/// Different spelling, different type, with the subtyping rules otherwise
+/// intact: a union of literals fits its concrete type but is not it, a
+/// union that lists a type beside extra members is strictly bigger than
+/// that type, and a reordering, a re-bracketing, an alias, or an unfolding
+/// of a recursive alias spells a different type.
 function spelling() -> root.algebra.Model throws never {
     root.algebra.Model {
         id: "spelling",
-        description: "You treat a type's spelling as its identity: two types written differently are different types, so `true | false` is not `bool`, an alias is a new type, a reordered union is another union, and a recursive alias is only itself.",
+        description: "You treat a type's spelling as its identity: two types written differently are never the same type, though the subtyping rules still apply one at a time. So `true | false` fits where `bool` is expected but is a different, smaller type; `1 | int`, `int | never`, and `int | unknown` each list a type beside more members, so each is strictly bigger than that type; a reordered or re-bracketed union is another union; an alias is a new type; and a recursive alias is only itself, not its unfolding.",
         believes: {
-            "subtyping/bool-is-true-or-false": unrelated,
-            "subtyping/enum-is-union-of-variants": unrelated,
-            "subtyping/literal-absorbed": unrelated,
+            "subtyping/bool-is-true-or-false": subset,
+            "subtyping/enum-is-union-of-variants": subset,
+            "subtyping/literal-absorbed": superset,
             "subtyping/unknown-absorbs": superset,
             "never/omitted-from-unions": superset,
             "subtyping/union-commutative": unrelated,
@@ -86,11 +112,13 @@ function spelling() -> root.algebra.Model throws never {
 }
 
 /// Numbers are one type, containers and generics are covariant, parameters
-/// are bivariant, and a function may take fewer parameters than expected.
+/// are bivariant, a function may take fewer positional parameters than
+/// expected, and optional parameters may be present or absent on either
+/// side.
 function typescript() -> root.algebra.Model throws never {
     root.algebra.Model {
         id: "typescript",
-        description: "You reason as TypeScript does: `int` and `float` are both `number`, arrays and generics are covariant so `int[]` fits where `(int | string)[]` is expected, method parameters are bivariant, and a function with fewer parameters is accepted where more are expected.",
+        description: "You reason as TypeScript does: `int` and `float` are both `number`; arrays and generics are covariant, so `int[]` fits where `(int | string)[]` is expected; method parameters are bivariant; a function with fewer positional parameters is accepted where more are expected; and optional parameters are interchangeable with their absence, so adding or dropping one changes nothing.",
         believes: {
             "taxonomy/concrete-types-atomic": (left, right) -> {
                 if (is_numeric(left) && is_numeric(right)) {
@@ -112,10 +140,26 @@ function typescript() -> root.algebra.Model throws never {
                     null
                 }
             },
+            "functions/optional-arguments-superset": equivalent,
         },
         transfers: {
             "variance/generics-invariant": root.algebra.covariant,
             "variance/function-parameter-contravariant": bivariant,
+        },
+    }
+}
+
+/// Every constructor preserves subtyping, as arrays do in Java and as many
+/// people first assume of functions: a parameter position is covariant too,
+/// so contravariance never enters the picture.
+function covariant_everywhere() -> root.algebra.Model throws never {
+    root.algebra.Model {
+        id: "covariant",
+        description: "You assume every type constructor preserves subtyping: if `S` is a subtype of `T`, then `S[]` fits where `T[]` is expected, `Box<S>` where `Box<T>` is, and a function taking `S` where a function taking `T` is expected, parameters included. Contravariance never crosses your mind.",
+        believes: {},
+        transfers: {
+            "variance/generics-invariant": root.algebra.covariant,
+            "variance/function-parameter-contravariant": root.algebra.covariant,
         },
     }
 }
@@ -133,5 +177,5 @@ function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws n
 }
 
 function models() -> root.algebra.Model[] throws never {
-    [spelling(), typescript()]
+    [spelling(), typescript(), covariant_everywhere()]
 }
