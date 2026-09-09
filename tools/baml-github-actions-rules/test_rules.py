@@ -291,6 +291,23 @@ class RuleTests(unittest.TestCase):
                 self.workflow([{"run": run}])
                 self.assertEqual([], self.lint())
 
+    def test_cargo_global_options_do_not_hide_builds_or_installers(self):
+        for prefix in [
+            "cargo --color always",
+            "cargo +nightly -Z unstable-options",
+            "cargo --config net.retry=10",
+            "cross --color=always",
+            "cargo +stable -C workspace",
+        ]:
+            with self.subTest(prefix=prefix):
+                self.workflow([{"run": prefix + " build"}])
+                self.assertIn("r2-required", self.codes())
+                if prefix.startswith("cargo"):
+                    self.workflow([{"run": prefix + " install cross"}])
+                    self.assertIn("tool-install", self.codes())
+        self.workflow([{"run": "cargo --color always fetch"}])
+        self.assertEqual([], self.lint())
+
     def test_install_commands_shell_syntax_and_wrappers(self):
         banned = [
             "cargo install cross",

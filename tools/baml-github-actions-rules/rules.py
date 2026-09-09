@@ -180,13 +180,28 @@ def shell_commands(source: str):
                         yield nested, row + offset
 
 
+def cargo_subcommand(args):
+    """Cargo accepts global options (some with values) before its command."""
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in {"--help", "-h", "--version", "-V"}:
+            return ""
+        if arg in {"--color", "--config", "-C", "-Z", "--manifest-path", "--target-dir"}:
+            index += 2
+        elif arg.startswith(("-", "+")):
+            index += 1
+        else:
+            return arg
+    return ""
+
+
 def installation(words):
     cmd, *args = words
     args = [a for a in args if a not in {"--no-cache", "--quiet", "-q", "--verbose", "-v"}]
     # cargo tool installation != cargo build/test; uv tool install != uv sync/run.
-    cargo_args = [a for a in args if not a.startswith(("-", "+"))]
     if cmd in {"cargo", "cargo-binstall"} and (
-        cmd == "cargo-binstall" or cargo_args[:1] in (["install"], ["binstall"])
+        cmd == "cargo-binstall" or cargo_subcommand(args) in {"install", "binstall"}
     ):
         return True
     if cmd == "go" and "install" in args:
@@ -225,10 +240,9 @@ def rust_build(words):
     cmd, *args = words
     if cmd in {"$cargo", "${cargo}"}:
         cmd = "cargo"
-    return (
-        cmd in {"cargo", "cross"}
-        and next((a for a in args if not a.startswith(("-", "+"))), "") in RUST_BUILD
-    ) or (cmd == "wasm-pack" and args[:1] in (["build"], ["test"]))
+    return (cmd in {"cargo", "cross"} and cargo_subcommand(args) in RUST_BUILD) or (
+        cmd == "wasm-pack" and args[:1] in (["build"], ["test"])
+    )
 
 
 class Linter:
