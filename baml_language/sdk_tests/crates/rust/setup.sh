@@ -3,17 +3,16 @@
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
-# selects any sdk_test_rust test. For plain `cargo test` (no nextest)
-# run this manually after `cargo test --no-run` populates each
-# fixture's `generated/` crate.
+# selects any sdk_test_rust test. Run the outer harness through nextest;
+# its build script populates each fixture's generated crate first.
 #
 # Unlike the python/node targets there is no package manager or native
 # addon to install — the only toolchain is cargo itself. What this
 # script buys:
 #
-#   1. A serial `cargo test --no-run` per fixture into the shared
+#   1. A serial `cargo nextest list --list-type binaries-only` per fixture into the shared
 #      CARGO_TARGET_DIR pre-builds the bridge_rust → BEX runtime stack
-#      once, so the test-time `cargo clippy` / `cargo test` invocations
+#      once, so the test-time `cargo clippy` / `cargo nextest run` invocations
 #      (which nextest fans out in parallel, all flock-queueing on the
 #      same target dir) hit a warm cache instead of racing a cold build.
 #
@@ -51,8 +50,9 @@ for fixture_dir in */generated; do
         echo "==> skipping $fixture_dir (no Cargo.toml — codegen failed?)"
         continue
     fi
-    echo "==> cargo test --no-run in $fixture_dir"
-    (cd "$fixture_dir" && cargo test --no-run --manifest-path Cargo.toml)
+    fixture_manifest="$WORKSPACE_ROOT/sdk_tests/crates/rust/$fixture_dir/Cargo.toml"
+    echo "==> nextest pre-warm for $fixture_dir"
+    (cd "$WORKSPACE_ROOT" && cargo nextest list --list-type binaries-only --manifest-path "$fixture_manifest")
 done
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV
