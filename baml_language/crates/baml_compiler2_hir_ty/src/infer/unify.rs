@@ -19,12 +19,13 @@
 //! ACI-equality cases (reordered/var-bearing unions in invariant positions)
 //! are the deferred-with-budget class that arrives with `Sub` constraints.
 
+use baml_compiler2_ast::ExprId;
 use baml_type::{
     ParamTy,
     interned::{InferTy, InferVar, Ty, for_each_child},
 };
 use ena::unify as ut;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Local ena key for [`InferVar`] (orphan rules keep `UnifyKey` out of
 /// `baml_type`).
@@ -185,6 +186,19 @@ impl ut::UnifyValue for VarValue {
     }
 }
 
+/// Every inference variable `ty` names, in walk order (`ty` is expected to
+/// be resolved, so each is an open class or an alias of one).
+fn collect_infer_vars(ty: &Ty, out: &mut Vec<InferVar>) {
+    if !ty.has_infer() {
+        return;
+    }
+    if let InferTy::InferVar { var, .. } = ty.kind() {
+        out.push(*var);
+        return;
+    }
+    for_each_child(ty.kind(), |child| collect_infer_vars(child, out));
+}
+
 /// A structural mismatch: the innermost pair of types that failed to unify.
 /// `escaped` names the block-scoped parameter when the failure is a
 /// solution that would leave its block (`right` mentions it; `left` is the
@@ -196,14 +210,24 @@ pub struct UnifyError {
     pub escaped: Option<ParamTy>,
 }
 
+/// One deposited bound and where it was deposited: the expression the
+/// relation was checked at, when the road had one (a pattern walk has
+/// none). A bound that turns out to carry a block-scoped parameter past
+/// its block is reported at its anchor.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bound {
+    pub ty: Ty,
+    pub anchor: Option<ExprId>,
+}
+
 /// Sub-constraint evidence accumulated on an unsolved variable's class:
 /// lower bounds are values flowing INTO the variable, upper bounds are
 /// contexts it flows into. Resolution derives the solution from these
 /// (widen fresh lowers, lowers must agree, checked against the uppers).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct VarBounds {
-    pub lowers: Vec<Ty>,
-    pub uppers: Vec<Ty>,
+    pub lowers: Vec<Bound>,
+    pub uppers: Vec<Bound>,
 }
 
 /// A revertible point in the table's history; see
@@ -504,6 +528,9 @@ impl InferenceTable {
                     if !(merged.lowers.is_empty() && merged.uppers.is_empty()) {
                         self.bounds.insert(merged_root, merged);
                     }
+                    // The merged class took the shallower universe; every
+                    // variable its bounds carry is observable through it now.
+                    self.generalize_bounds_into(InferVar::new(merged_root));
                 }
                 Ok(())
             }
@@ -548,16 +575,106 @@ impl InferenceTable {
         self.vars.commit(snapshot.vars);
     }
 
-    /// Records a lower bound (a value flowing into the variable).
-    pub fn add_lower_bound(&mut self, var: InferVar, ty: Ty) {
+    /// Records a lower bound (a value flowing into the variable), deposited
+    /// at `anchor`.
+    pub fn add_lower_bound(&mut self, var: InferVar, ty: Ty, anchor: Option<ExprId>) {
+        self.generalize_into(var, &ty);
         let root = self.vars.find(VarKey(var)).0.index();
-        self.bounds.entry(root).or_default().lowers.push(ty);
+        self.bounds
+            .entry(root)
+            .or_default()
+            .lowers
+            .push(Bound { ty, anchor });
     }
 
-    /// Records an upper bound (a context the variable flows into).
-    pub fn add_upper_bound(&mut self, var: InferVar, ty: Ty) {
+    /// Records an upper bound (a context the variable flows into),
+    /// deposited at `anchor`.
+    pub fn add_upper_bound(&mut self, var: InferVar, ty: Ty, anchor: Option<ExprId>) {
+        self.generalize_into(var, &ty);
         let root = self.vars.find(VarKey(var)).0.index();
-        self.bounds.entry(root).or_default().uppers.push(ty);
+        self.bounds
+            .entry(root)
+            .or_default()
+            .uppers
+            .push(Bound { ty, anchor });
+    }
+
+    /// rustc's generalizer at a relation: once `ty` is a bound or the
+    /// solution of `var`'s class, every open variable inside it is
+    /// observable through that class, so it may take no block-scoped
+    /// parameter the class may not. Each is lowered to the class's
+    /// universe, and so is everything that can flow into it (the open
+    /// variables in its own bounds, transitively): a value reaches an
+    /// outer class through any of them, and the universe check at its
+    /// eventual solve is what refuses the parameter, at the deposit's
+    /// anchor. A var-var union keeps the shallower depth for the same
+    /// reason. Universes only differ while some binding is open, so the
+    /// walk is skipped otherwise.
+    pub fn generalize_into(&mut self, var: InferVar, ty: &Ty) {
+        if self.scoped_params.is_empty() {
+            return;
+        }
+        let VarValue::Unsolved { universe, .. } = self.vars.probe_value(VarKey(var)) else {
+            return;
+        };
+        let ty = self.resolve_completely(ty);
+        let mut worklist = Vec::new();
+        collect_infer_vars(&ty, &mut worklist);
+        let mut visited = FxHashSet::default();
+        while let Some(inner) = worklist.pop() {
+            let root_key = self.vars.find(VarKey(inner));
+            let root = root_key.0;
+            if !visited.insert(root.index()) {
+                continue;
+            }
+            let VarValue::Unsolved {
+                universe: inner_universe,
+                ..
+            } = self.vars.probe_value(root_key)
+            else {
+                continue;
+            };
+            if inner_universe <= universe {
+                continue;
+            }
+            self.demote_to(root, universe);
+            if let Some(bounds) = self.bounds.get(&root.index()) {
+                let carried: Vec<Ty> = bounds
+                    .lowers
+                    .iter()
+                    .chain(bounds.uppers.iter())
+                    .map(|bound| bound.ty.clone())
+                    .collect();
+                for bound in carried {
+                    let bound = self.resolve_completely(&bound);
+                    collect_infer_vars(&bound, &mut worklist);
+                }
+            }
+        }
+    }
+
+    /// [`InferenceTable::generalize_into`] over every bound `var`'s class
+    /// already carries: for a class whose universe just dropped.
+    fn generalize_bounds_into(&mut self, var: InferVar) {
+        if self.scoped_params.is_empty() {
+            return;
+        }
+        let root = self.vars.find(VarKey(var)).0.index();
+        let carried: Vec<Ty> = self
+            .bounds
+            .get(&root)
+            .map(|bounds| {
+                bounds
+                    .lowers
+                    .iter()
+                    .chain(bounds.uppers.iter())
+                    .map(|bound| bound.ty.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for bound in carried {
+            self.generalize_into(var, &bound);
+        }
     }
 
     /// The accumulated bounds of `var`'s equivalence class (empty when
@@ -614,6 +731,7 @@ impl InferenceTable {
     /// [`InferenceTable::unify`] this performs no occurs check because the
     /// solution was derived from resolved bounds).
     pub fn solve(&mut self, var: InferVar, ty: Ty) {
+        self.generalize_into(var, &ty);
         self.vars.union_value(VarKey(var), VarValue::Solved(ty));
     }
 
@@ -634,6 +752,7 @@ impl InferenceTable {
                 escaped: Some(param),
             });
         }
+        self.generalize_into(var, ty);
         self.vars
             .union_value(VarKey(var), VarValue::Solved(ty.clone()));
         Ok(())
@@ -1281,6 +1400,67 @@ mod tests {
         table.demote_to(solved, 0);
         assert!(table.is_solved(solved));
         assert!(table.unsolved_vars_deeper_than(0).is_empty());
+    }
+
+    #[test]
+    fn a_deposit_generalizes_the_variables_it_carries_to_the_receiving_class() {
+        let mut table = InferenceTable::new();
+        let outer = table.new_var();
+        let param = ParamTy::new(
+            super::super::SCOPED_PARAM_BIT | 3,
+            baml_type::Name::new("T"),
+        );
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+        table.bind_scoped_param(&param);
+        let inner = table.new_var();
+        let carried = table.new_var();
+        table.add_lower_bound(inner, Ty::infer_var(carried), None);
+        // Minted inside the binding's scope: both may take the parameter.
+        assert_eq!(table.escaping_scoped_param(inner, &scoped), None);
+        assert_eq!(table.escaping_scoped_param(carried, &scoped), None);
+        // Depositing `inner[]` into the outer class makes `inner` observable
+        // from outside, and through its own bound so is `carried`: neither
+        // may take the parameter any more (rustc's generalizer).
+        table.add_lower_bound(outer, Ty::list(Ty::infer_var(inner)), None);
+        assert_eq!(
+            table.escaping_scoped_param(inner, &scoped),
+            Some(param.clone())
+        );
+        assert_eq!(
+            table.escaping_scoped_param(carried, &scoped),
+            Some(param.clone())
+        );
+        // A solution generalizes the same way, and so does a var-var union
+        // with a class that already carries bounds.
+        let solved_into = table.new_var();
+        let via_solution = table.new_var();
+        table.close_scopes_to(0);
+        let later = table.new_var();
+        assert_eq!(table.escaping_scoped_param(via_solution, &scoped), None);
+        table.solve(later, Ty::list(Ty::infer_var(via_solution)));
+        assert_eq!(
+            table.escaping_scoped_param(via_solution, &scoped),
+            Some(param.clone())
+        );
+        let bound_of_solved_into = {
+            table.bind_scoped_param(&param);
+            let deep = table.new_var();
+            table.add_upper_bound(solved_into, Ty::infer_var(deep), None);
+            table.close_scopes_to(0);
+            deep
+        };
+        assert_eq!(
+            table.escaping_scoped_param(bound_of_solved_into, &scoped),
+            None
+        );
+        let outermost = table.new_var();
+        table
+            .unify(&Ty::infer_var(outermost), &Ty::infer_var(solved_into))
+            .unwrap();
+        assert_eq!(
+            table.escaping_scoped_param(bound_of_solved_into, &scoped),
+            Some(param)
+        );
     }
 
     #[test]

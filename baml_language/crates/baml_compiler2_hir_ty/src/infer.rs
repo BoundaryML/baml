@@ -3263,10 +3263,15 @@ impl<'db> InferenceContext<'db> {
     /// die it may not be solved to one of them. A variable whose bounds
     /// already mention a closing parameter IS a value of that parameter and
     /// is solved now, while the parameter is still open, so the block's
-    /// value check sees it; one whose bounds mention a closing parameter
-    /// but cannot decide it escapes (E0171 at `at`, `Error` fill); every
-    /// other open variable moves out to the enclosing universe, where the
-    /// ordinary universe check keeps the closed parameters out of it.
+    /// value check sees it; every other open variable the block minted
+    /// moves out to the enclosing universe. Then every open class is
+    /// judged once more: a bound naming a parameter the class may not take
+    /// (deposited while the class was still inner, or carried into an
+    /// outer class by a deposit, a union, or an assignment, and decided
+    /// only now) is an escape, reported at the bound's own deposit and
+    /// filled with `Error`. This is the same universe rule the deposit
+    /// applies eagerly, applied at the last moment the bound's anchor is
+    /// still the right place to report.
     fn generalize_closing_scope(
         &mut self,
         outer_universe: u32,
@@ -3281,7 +3286,7 @@ impl<'db> InferenceContext<'db> {
                     .lowers
                     .iter()
                     .chain(bounds.uppers.iter())
-                    .any(|ty| self.closing_param_in(ty, closing).is_some());
+                    .any(|bound| self.closing_param_in(&bound.ty, closing).is_some());
                 if decides_a_closing_param && self.try_solve_bounded_var(var, &bounds) {
                     progressed = true;
                 }
@@ -3291,28 +3296,29 @@ impl<'db> InferenceContext<'db> {
             }
         }
         for var in self.table.unsolved_vars_deeper_than(outer_universe) {
-            let bounds = self.table.var_bounds(var);
+            self.table.demote_to(var, outer_universe);
+        }
+        for (var, bounds) in self.table.unsolved_bounded_vars() {
             let escaped = bounds
                 .lowers
                 .iter()
                 .chain(bounds.uppers.iter())
-                .find_map(|ty| {
-                    self.closing_param_in(ty, closing)
-                        .map(|param| (param, ty.clone()))
+                .find_map(|bound| {
+                    self.table
+                        .escaping_scoped_param(var, &bound.ty)
+                        .map(|param| (param, bound.clone()))
                 });
-            match escaped {
-                Some((param, value)) => {
-                    let value = self.table.resolve_completely(&value);
-                    self.report_scoped_type_escape(
-                        at,
-                        &param,
-                        &value,
-                        ScopedTypeEscapeKind::Inferred,
-                    );
-                    self.table.solve(var, Ty::error());
-                }
-                None => self.table.demote_to(var, outer_universe),
-            }
+            let Some((param, bound)) = escaped else {
+                continue;
+            };
+            let value = self.table.resolve_completely(&bound.ty);
+            self.report_scoped_type_escape(
+                bound.anchor.unwrap_or(at),
+                &param,
+                &value,
+                ScopedTypeEscapeKind::Inferred,
+            );
+            self.table.solve(var, Ty::error());
         }
     }
 
@@ -3801,9 +3807,13 @@ impl<'db> InferenceContext<'db> {
                 if self.reject_scoped_escape_into_var(*var, &expected) {
                     return false;
                 }
-                self.table.add_upper_bound(*var, expected.clone());
+                let anchor = self.obligation_anchor;
+                self.table.add_upper_bound(*var, expected.clone(), anchor);
                 if let InferTy::InferVar { var: other, .. } = expected.kind() {
-                    self.table.add_lower_bound(*other, actual.clone());
+                    if self.reject_scoped_escape_into_var(*other, &actual) {
+                        return false;
+                    }
+                    self.table.add_lower_bound(*other, actual.clone(), anchor);
                 }
                 true
             }
@@ -3811,7 +3821,8 @@ impl<'db> InferenceContext<'db> {
                 if self.reject_scoped_escape_into_var(*var, &actual) {
                     return false;
                 }
-                self.table.add_lower_bound(*var, actual.clone());
+                let anchor = self.obligation_anchor;
+                self.table.add_lower_bound(*var, actual.clone(), anchor);
                 true
             }
             // A union flowing into a context decomposes universally:
@@ -10684,6 +10695,19 @@ impl<'db> InferenceContext<'db> {
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
+        // An escape refused on a road with no anchor after its block had
+        // closed (a pattern walk's deposit resolved late) has no block
+        // tail left to report at; the body is the last enclosing scope.
+        if let Some(root) = self.body_root {
+            for (param, value) in std::mem::take(&mut self.anchorless_escapes) {
+                self.report_scoped_type_escape(
+                    root,
+                    &param,
+                    &value,
+                    ScopedTypeEscapeKind::Inferred,
+                );
+            }
+        }
         let unresolved_infer_diagnostics = self.take_unresolved_infer_diagnostics();
         let throws = match self.declared_throws.clone() {
             // A closed clause IS the surface (declared wins, rule 1),
@@ -12221,7 +12245,7 @@ impl<'db> InferenceContext<'db> {
                 .lowers
                 .iter()
                 .chain(bounds.uppers.iter())
-                .all(|ty| !self.table.resolve_completely(ty).has_infer());
+                .all(|bound| !self.table.resolve_completely(&bound.ty).has_infer());
             if !fully_ground {
                 return false;
             }
@@ -12248,15 +12272,21 @@ impl<'db> InferenceContext<'db> {
         if self.table.is_solved(var) {
             return false;
         }
-        let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
+        let (lower_bounds, deferred_lowers): (Vec<unify::Bound>, Vec<unify::Bound>) = bounds
             .lowers
             .iter()
-            .map(|ty| self.table.resolve_completely(ty))
-            .partition(|ty| !ty.has_infer());
-        let (uppers, deferred_uppers): (Vec<Ty>, Vec<Ty>) = bounds
+            .map(|bound| unify::Bound {
+                ty: self.table.resolve_completely(&bound.ty),
+                anchor: bound.anchor,
+            })
+            .partition(|bound| !bound.ty.has_infer());
+        let (upper_bounds, deferred_uppers): (Vec<unify::Bound>, Vec<unify::Bound>) = bounds
             .uppers
             .iter()
-            .map(|ty| self.table.resolve_completely(ty))
+            .map(|bound| unify::Bound {
+                ty: self.table.resolve_completely(&bound.ty),
+                anchor: bound.anchor,
+            })
             // A TOP-TYPE upper is no constraint (everything satisfies
             // it) and therefore no EVIDENCE: the minimum-upper meet must
             // not commit a class to `unknown` from a vacuous bound while
@@ -12264,8 +12294,10 @@ impl<'db> InferenceContext<'db> {
             // only the declared `throws unknown` check when the lambda's
             // `never` has not landed yet). Informative uppers keep the
             // meet (B-898's `?D <= Generate<int>` solves the class).
-            .filter(|ty| !matches!(ty.kind(), InferTy::Unknown { .. }))
-            .partition(|ty| !ty.has_infer());
+            .filter(|bound| !matches!(bound.ty.kind(), InferTy::Unknown { .. }))
+            .partition(|bound| !bound.ty.has_infer());
+        let lowers: Vec<Ty> = lower_bounds.iter().map(|bound| bound.ty.clone()).collect();
+        let uppers: Vec<Ty> = upper_bounds.iter().map(|bound| bound.ty.clone()).collect();
         if lowers.is_empty() && uppers.is_empty() {
             // GENERALIZATION (rustc's combine/generalize shape):
             // a var whose only information is one var-carrying
@@ -12283,12 +12315,12 @@ impl<'db> InferenceContext<'db> {
             // conflicting bound is a mismatch, not a join.
             if deferred_uppers.is_empty()
                 && let Some((first, rest)) = deferred_lowers.split_first()
-                && rest.iter().all(|lower| lower == first)
+                && rest.iter().all(|lower| lower.ty == first.ty)
             {
                 // No widening here: this tier is occurs-guarded
                 // ALIASING, not a meet, and a deferred (var-carrying)
                 // lower can never be a top-level fresh literal anyway.
-                let alias = first.clone();
+                let alias = first.ty.clone();
                 if self.table.unify(&Ty::infer_var(var), &alias).is_ok() {
                     return true;
                 }
@@ -12297,10 +12329,12 @@ impl<'db> InferenceContext<'db> {
         }
         let var_ty = Ty::infer_var(var);
         for deferred in deferred_lowers {
-            self.deferred_subs.push((deferred, var_ty.clone(), None));
+            self.deferred_subs
+                .push((deferred.ty, var_ty.clone(), deferred.anchor));
         }
         for deferred in deferred_uppers {
-            self.deferred_subs.push((var_ty.clone(), deferred, None));
+            self.deferred_subs
+                .push((var_ty.clone(), deferred.ty, deferred.anchor));
         }
         let solution = if lowers.is_empty() {
             // No values flowed in: the MINIMUM upper is the meet
@@ -12400,12 +12434,33 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         };
-        // Every deposit was universe-checked, but a var-var chain can route
-        // a scoped parameter here through a deeper class that solved to it.
-        // There is no site to anchor a report on, so the class stays
-        // unsolved and reports as an unresolved type at its origin.
-        if self.table.escaping_scoped_param(var, &solution).is_some() {
-            return false;
+        // Every deposit was universe-checked when it was made, and every
+        // open variable a deposit carried was lowered to this class's
+        // universe then, so a block-scoped parameter reaches the solution
+        // only through a bound whose own variable was decided after the
+        // deposit (at its block's closing brace). That bound is the
+        // escape, reported where it was deposited; the class takes the
+        // `Error` fill so the failure does not cascade.
+        if let Some(param) = self.table.escaping_scoped_param(var, &solution) {
+            let offending = lower_bounds
+                .iter()
+                .chain(upper_bounds.iter())
+                .find(|bound| self.table.escaping_scoped_param(var, &bound.ty).is_some())
+                .cloned();
+            match offending {
+                Some(unify::Bound {
+                    ty,
+                    anchor: Some(at),
+                }) => {
+                    self.report_scoped_type_escape(at, &param, &ty, ScopedTypeEscapeKind::Inferred);
+                }
+                Some(unify::Bound { ty, anchor: None }) => {
+                    self.anchorless_escapes.push((param, ty));
+                }
+                None => self.anchorless_escapes.push((param, solution)),
+            }
+            self.table.solve(var, Ty::error());
+            return true;
         }
         self.table.solve(var, solution);
         true
@@ -12673,11 +12728,15 @@ impl<'db> InferenceContext<'db> {
         let mut progressed = false;
         for (solution, bounds) in solved {
             for lower in bounds.lowers {
-                let _ = self.sub(&lower, &solution);
+                let saved_anchor = std::mem::replace(&mut self.obligation_anchor, lower.anchor);
+                let _ = self.sub(&lower.ty, &solution);
+                self.obligation_anchor = saved_anchor;
                 progressed = true;
             }
             for upper in bounds.uppers {
-                let _ = self.sub(&solution, &upper);
+                let saved_anchor = std::mem::replace(&mut self.obligation_anchor, upper.anchor);
+                let _ = self.sub(&solution, &upper.ty);
+                self.obligation_anchor = saved_anchor;
                 progressed = true;
             }
         }
@@ -12704,13 +12763,14 @@ impl<'db> InferenceContext<'db> {
             }
             if !actual.has_infer() && !expected.has_infer() {
                 // A failed post-hoc bound reports at the expr that
-                // deposited it (check_expr's anchor rides the pair):
-                // `let m = []; m = {}` retires `map <: list` here, the
-                // only place both sides are ground. Anchorless pairs
-                // (the VarBounds flush) still drop - threading THEIR
-                // provenance is VarBounds' business. The quiescence
-                // tiering makes a failure here reachable only for
-                // genuinely ill-typed programs.
+                // deposited it (check_expr's anchor rides the pair, and
+                // a bound flushed from a class's ledger carries the
+                // anchor it was deposited with): `let m = []; m = {}`
+                // retires `map <: list` here, the only place both sides
+                // are ground. A pair a pattern walk deposited has no
+                // anchor and still drops. The quiescence tiering makes
+                // a failure here reachable only for genuinely ill-typed
+                // programs.
                 if !self.cached_subtype(&actual, &expected)
                     && let Some(anchor) = anchor
                 {

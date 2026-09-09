@@ -166,3 +166,39 @@ source: crates/baml_tests/src/generated_tests.rs
  168 │ function erroneous_context(t: reflect.Type) -> Undefined {
      ·                                                ─────────
      ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:182:23]
+ 182 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:193:23]
+ 193 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:205:37]
+ 205 │         xs.push(Cell { value: ident(as_t<T>(1)) })
+     ·                                     ─────┬────
+     ·                                          ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:215:23]
+ 215 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────

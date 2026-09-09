@@ -8,6 +8,12 @@ class user.Boom {
 class user.Boom$stream {
   payload: T | null
 }
+class user.Cell {
+  value: T
+}
+class user.Cell$stream {
+  value: T | null
+}
 function user.as_t(v: unknown) -> T  [expr] {
   {  } match (v) { x: T => x, _ => throw "not a T" }
 }
@@ -43,6 +49,18 @@ function user.list_relaxed_wrongly(t: reflect.Type) -> string  [expr] {
 }
 function user.outer_container_takes_the_binding(t: reflect.Type) -> unknown  [expr] {
   { let xs = []; { type T = unreflect(t) } xs.push(as_t(1)) } xs
+}
+function user.outer_list_through_a_class_literal(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t) } xs.push(user.Cell { value: ident(as_t(1)) }) } xs
+}
+function user.outer_list_through_an_inner_variable(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))) } xs.push(ys) } xs
+}
+function user.outer_map_through_an_inner_variable(t: reflect.Type) -> unknown  [expr] {
+  { let m = map {  }; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))) } m.set("k", ys) } m
+}
+function user.outer_variable_through_assignment(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))); xs = ys } } xs
 }
 function user.return_against_a_narrower_type(t: reflect.Type) -> int  [expr] {
   { type T = unreflect(t); return as_t(1) }

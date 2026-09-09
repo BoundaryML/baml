@@ -178,3 +178,53 @@ function erroneous_context(t: reflect.Type) -> Undefined {
     type T = unreflect(t)
     as_t<T>(1)
 }
+
+// The same rule through an INDIRECT deposit: the value reaches the outer
+// list's element slot through the inner list's, which is still open when
+// the deposit is made and becomes `T` only at the closing brace. The escape
+// is reported where the outer deposit was made, on every deposit road.
+function outer_list_through_an_inner_variable(t: reflect.Type) -> unknown {
+    let xs = [];
+    {
+        type T = unreflect(t)
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
+        xs.push(ys)
+    };
+    xs
+}
+
+function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
+    let m = map {  };
+    {
+        type T = unreflect(t)
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
+        m.set("k", ys)
+    };
+    m
+}
+
+class Cell<T> {
+    value: T,
+}
+
+function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
+    let xs = [];
+    {
+        type T = unreflect(t)
+        xs.push(Cell { value: ident(as_t<T>(1)) })
+    };
+    xs
+}
+
+function outer_variable_through_assignment(t: reflect.Type) -> unknown {
+    let xs = [];
+    {
+        type T = unreflect(t)
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
+        xs = ys
+    };
+    xs
+}
