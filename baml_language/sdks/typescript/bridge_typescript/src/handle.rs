@@ -2,8 +2,8 @@
 //! Mirrors bridge_python/src/handle.rs.
 
 use bridge_cffi::{
-    __testonly_seed_function_ref, __testonly_seed_generic_media, BamlCffiStatus, baml_handle_clone,
-    baml_handle_release,
+    __testonly_seed_function_ref, __testonly_seed_generic_media, __testonly_seed_heap_handle,
+    BamlCffiStatus, baml_handle_clone, baml_handle_release,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -145,4 +145,33 @@ pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
         BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
         status => Err(status_to_napi("_seedGenericMediaHandle", status)),
     }
+}
+
+/// Test-only: seed an engine-heap (`BexHeapHandle`) entry into `HANDLE_TABLE`
+/// — the identity-bearing, deduplicating arm — returning `[key, handleType]`.
+/// Two seeds of one `slabKey` share a key.
+#[napi(js_name = "_seedHeapHandle")]
+pub fn seed_heap_handle(slab_key: u32) -> napi::Result<(HandleKey, i32)> {
+    let mut key = 0;
+    let mut handle_type = 0;
+    match unsafe { __testonly_seed_heap_handle(u64::from(slab_key), &mut key, &mut handle_type) } {
+        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
+        status => Err(status_to_napi("_seedHeapHandle", status)),
+    }
+}
+
+/// Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
+/// row counts once however many owners it has).
+#[napi(js_name = "_liveHandleCount")]
+pub fn live_handle_count() -> u32 {
+    u32::try_from(bridge_cffi::handle::live_handle_count()).unwrap_or(u32::MAX)
+}
+
+/// Test-only: the outstanding ownership count of a live key — the releases it
+/// still owes — or `null` for a dead/unknown key. Lets an audit see an
+/// exactly-once imbalance on a shared engine-heap key, which row counts hide.
+#[napi(js_name = "_handleRefcount")]
+pub fn handle_refcount(key: HandleKey) -> Option<u32> {
+    bridge_cffi::handle::handle_refcount(key.to_u64())
+        .map(|count| u32::try_from(count).unwrap_or(u32::MAX))
 }

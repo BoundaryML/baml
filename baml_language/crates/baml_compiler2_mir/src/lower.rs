@@ -1571,8 +1571,8 @@ struct InterfaceMethodShape {
     /// The interface's own declared generic parameter count.
     interface_generics: usize,
     /// Frame index where the method's OWN generics start:
-    /// `1 (Self) + interface generics + associated slots`, clamped to the
-    /// frame length.
+    /// `1 (Self) + interface generics`, clamped to the frame length
+    /// (associated types are not frame slots).
     own_start: usize,
     /// Total generic-frame length.
     frame_len: usize,
@@ -2578,8 +2578,8 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = pkg_info.root;
         // The per-param bound CONJUNCTIONS (the dispatch view), from hir_ty's
         // function_generic_bounds - the ONE declaration-bounds road (class
-        // prefix, interface Self env with frame-pinned associated slots and
-        // the Self bound, free-impl generics, own params). `T extends A & B`
+        // prefix, interface Self env with its Self bound — associated types
+        // are projections, not slots — impl generics, own params). `T extends A & B`
         // keeps both conjuncts.
         let generic_param_bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>> =
             baml_compiler2_hir_ty::lower::function_generic_bounds(db, func_loc)
@@ -3689,8 +3689,9 @@ impl<'db> LoweringContext<'db> {
 
     /// The recorded instantiation frame of an interface-item reference,
     /// split per the interface's shape: the STATIC prefix `[Self] ++
-    /// interface generics ++ associated slots` (no surface syntax can make
-    /// those runtime — turbofish binds the method's OWN generics only), and
+    /// interface generics` (associated types are not slots; no surface
+    /// syntax can make the prefix runtime — turbofish binds the method's
+    /// OWN generics only), and
     /// the method's own type arguments as OPERANDS — written static args and
     /// scoped runtime slots (`m<T>(…)` under `type T = unreflect(t)`) alike,
     /// so neither shape can fall off this road.
@@ -11757,7 +11758,7 @@ impl<'db> LoweringContext<'db> {
 
     /// The frame shape of a SOURCE interface's method: whether it takes a
     /// `self` receiver, and how its generic frame `[Self] ++ interface
-    /// generics ++ associated slots ++ own generics` divides. Mounted
+    /// generics ++ own generics` divides (associated types are not slots). Mounted
     /// interfaces have no source method item and answer `None` — TIR rejects
     /// those references upstream.
     fn interface_method_shape(

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 801
 expression: "capture_description(&db, &descs[0], 30)"
 ---
 class Wrapper  methods.baml:31-41
@@ -15,5 +14,8 @@ methods:
 
 dependencies:
   class            WrapperMarker                    methods.baml:27
+
+implementations (1):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
 
 references (0):

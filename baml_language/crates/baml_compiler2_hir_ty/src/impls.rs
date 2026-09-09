@@ -821,8 +821,9 @@ pub(crate) fn resolved_pin(
 }
 
 /// The interface's declared DEFAULT for `member`, realized at a use site:
-/// `Self` = `self_ty`, generic and associated slots via the shared
-/// positional instantiation (a Self-referencing default like `type Items
+/// `Self` = `self_ty` and the interface's generic parameters via the shared
+/// positional instantiation `[Self, args..]` (associated types are not
+/// slots; a Self-referencing default like `type Items
 /// = Self.Item[]` becomes a projection on `self_ty` that the canonical
 /// walk re-reduces, fuel-bounded). This implements the spec's
 /// fill-at-reference rule ("associated types with defaults may be omitted

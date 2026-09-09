@@ -65,7 +65,10 @@ fn resolve_media(key: u64, handle_type: i32) -> Result<Arc<MediaValue>, HandleEr
     }
 }
 
-/// Clone one live ordinary handle-table row into a distinct owned key.
+/// Take one more ownership of a live ordinary handle-table row and return the
+/// key to release it through: a distinct key for identity-free rows (media,
+/// function refs), the SAME key for an engine-heap handle (one key per heap
+/// object; the row's refcount tracks its owners).
 pub fn clone_handle(key: u64) -> Result<u64, HandleError> {
     HANDLE_TABLE
         .clone_handle(key)
@@ -81,12 +84,22 @@ pub fn release_handle(key: u64) -> Result<(), HandleError> {
     }
 }
 
-/// Return the number of currently owned ordinary handle-table keys.
+/// Return the number of live ordinary handle-table rows. A refcounted
+/// engine-heap row counts once however many owners it has.
 ///
 /// This is exposed by target adapters only as focused test instrumentation;
 /// it is not part of the generated SDK surface.
 pub fn live_handle_count() -> usize {
     HANDLE_TABLE.len()
+}
+
+/// The outstanding ownership count of a live ordinary handle-table key
+/// (`None` for a dead or unknown key) — the audits' view of the
+/// exactly-once release contract on a shared engine-heap key, which
+/// [`live_handle_count`] cannot show. Test instrumentation only; not part of
+/// the generated SDK surface.
+pub fn handle_refcount(key: u64) -> Option<u64> {
+    HANDLE_TABLE.refcount(key)
 }
 
 /// Seed a function-reference handle for focused bridge tests.
@@ -101,6 +114,34 @@ pub fn seed_generic_media_handle() -> HandleParts {
     insert_entry(CffiHandleTableEntry::Adt(BexExternalAdt::Media(
         MediaValue::from_url(MediaKind::Generic, "https://example.com/", None),
     )))
+}
+
+/// A no-op heap for minting real engine-heap [`bex_project::Handle`]s without
+/// a VM. Process-global so that seeding one slab key twice names the SAME
+/// object: a `Handle`'s identity is (slab key, issuing heap), which is what
+/// the handle table's dedup arm keys on.
+struct SeedHeap;
+
+impl bex_project::WeakHeapRef for SeedHeap {
+    fn release_handle(&self, _slab_key: usize) {}
+
+    fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_project::HeapPtr> {
+        None
+    }
+}
+
+static SEED_HEAP: std::sync::LazyLock<Arc<dyn bex_project::WeakHeapRef>> =
+    std::sync::LazyLock::new(|| Arc::new(SeedHeap));
+
+/// Seed an engine-heap handle (`BexHeapHandle`) for focused bridge tests —
+/// the identity-bearing, DEDUPLICATING arm the SDK leak audits could not
+/// otherwise reach (every other seed mints an identity-free row). Two seeds of
+/// one `slab_key` return the same table key with one more ownership on it;
+/// distinct slab keys get distinct table keys.
+pub fn seed_heap_handle(slab_key: u64) -> HandleParts {
+    insert_entry(CffiHandleTableEntry::BexHeapHandle(
+        bex_project::Handle::new(slab_key as usize, Arc::clone(&SEED_HEAP)),
+    ))
 }
 
 /// Construct an owned media handle from a URL descriptor.

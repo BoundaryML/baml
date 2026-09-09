@@ -933,9 +933,11 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaMimeType<'local>(
     }
 }
 
-/// `nativeHandleClone(long key) -> long`. Mint a new owned key pointing at the
-/// same underlying row (used to hand a fresh key to the engine on the inbound
-/// wire so the Java object keeps its own). Throws on an invalid key.
+/// `nativeHandleClone(long key) -> long`. Take one more ownership of the row
+/// behind `key` and return the key to release it through — a new key for an
+/// identity-free row (media), the SAME key for an engine-heap handle. Used to
+/// hand the engine its own ownership on the inbound wire so the Java object
+/// keeps its own. Throws on an invalid key.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
     mut env: JNIEnv<'_>,
@@ -954,9 +956,11 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
     }
 }
 
-/// `nativeHandleRelease(long key)`. Release one owned key. Best-effort: an
-/// invalid/stale key (double release, JVM teardown race) is silently ignored,
-/// matching `bridge_python`'s `BamlPyHandle::drop`.
+/// `nativeHandleRelease(long key)`. Release one ownership of `key`, exactly
+/// once per owner. An invalid/stale key (JVM teardown race) is silently
+/// ignored, matching `bridge_python`'s `BamlPyHandle::drop` — but a double
+/// release is NOT detectable for an engine-heap handle whose key other owners
+/// share: it silently takes a live co-owner's ownership.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
     _env: JNIEnv<'_>,

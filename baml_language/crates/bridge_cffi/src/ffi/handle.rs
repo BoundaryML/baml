@@ -166,6 +166,21 @@ pub unsafe extern "C" fn __testonly_seed_generic_media(
 }
 
 /// # Safety
+/// `out_key` and `out_handle_type` must be either null or valid for writing
+/// one value of their pointee type.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __testonly_seed_heap_handle(
+    slab_key: u64,
+    out_key: *mut u64,
+    out_handle_type: *mut i32,
+) -> BamlCffiStatus {
+    if out_key.is_null() || out_handle_type.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    write_handle_parts(handle::seed_heap_handle(slab_key), out_key, out_handle_type)
+}
+
+/// # Safety
 /// `url` and `mime_type_or_null`, when non-null, must point to valid
 /// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
 /// null or valid for writing one value of their pointee type.

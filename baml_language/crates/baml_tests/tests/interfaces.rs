@@ -6977,9 +6977,12 @@ fn bounded_blanket_impl_does_not_discharge_against_unrelated_env_param() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("expected `ProbeMarker`, found `int`")),
         "a bounded blanket impl must not resolve on an unsolved receiver via \
-         env-identity coincidence"
+         env-identity coincidence: the impl's `T extends ProbeMarker` must be \
+         checked against the eventual solution (`int`) and fail there; got {errors:?}"
     );
 }
 

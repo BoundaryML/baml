@@ -4099,8 +4099,10 @@ fn own_generic_bound_after_associated_type_still_rejects_at_call() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("expected `Tagged`, found `Blank`")),
         "a call whose `X` violates the bound must be rejected even with an \
-         associated type declared before the method"
+         associated type declared before the method; got {errors:?}"
     );
 }

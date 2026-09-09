@@ -52,11 +52,13 @@ pub fn lookup_method<'db>(
     name: &Name,
 ) -> Option<MethodCandidate<'db>> {
     if let Some((class, class_args)) = receiver_class(facts, receiver, 8) {
-        // Implements-block methods resolve here too (static dispatch to the
-        // provided method, builtin-backed receivers included); the AMBIGUITY rule -
-        // several implemented interfaces declaring the name need `as<I>`
-        // qualification even when a candidate exists - is the callers'
-        // `concrete_member_ambiguity` pre-check, not an exclusion here.
+        // INHERENT methods only: post-erasure an implements-block method is
+        // owned by its block (`MethodOwner::Impl`), never listed in
+        // `class_data.methods`, and resolves through the impl tier
+        // (`lookup_impl_member`). The AMBIGUITY rule - several implemented
+        // interfaces declaring the name need `as<I>` qualification even when
+        // a candidate exists - is the callers' `concrete_member_ambiguity`
+        // pre-check, not an exclusion here.
         let method = baml_compiler2_ppir::item_data::class_data(db, class)
             .methods
             .iter()
@@ -801,6 +803,60 @@ fn assoc_bound_roots<'db>(
     }
 }
 
+/// The impl tier of a concrete type's member surface: the methods of the
+/// interfaces its impls provide. A bare `C.member` also resolves as
+/// `(C as I).member` with the qualifier inferred, so these belong to the
+/// type's members (fields do not — see [`type_member_candidates`]). The impl
+/// set is [`impls_of_type`] — the same one the IDE's listings show, so
+/// completion and describe cannot disagree.
+fn extend_from_impls<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+    out: &mut Vec<MemberCandidate<'db>>,
+    self_ty: &baml_type::Ty,
+) {
+    let facts = Facts::new(db);
+    for resolved in impls_of_type(db, viewer, self_ty) {
+        let implemented = resolved.implemented();
+        for (name, is_method, is_static, decl) in
+            interface_member_rows(db, &facts, &implemented, false)
+        {
+            if !is_method {
+                continue;
+            }
+            push_candidate(
+                out,
+                name,
+                true,
+                is_static,
+                MemberSource::Interface(implemented.clone()),
+                decl,
+            );
+        }
+    }
+}
+
+/// The impls a CONCRETE TYPE's member surface draws on — the ONE enumeration
+/// behind completion ([`type_member_candidates`]) and the IDE's type listings
+/// (describe, hover): every impl [`crate::impls::impls_for_type`] finds for
+/// the type at its own generic params ([`crate::lower::declaration_self_ty`])
+/// — in-body, out-of-body in any file, blanket, mounted or precompiled alike
+/// (rustdoc parity) — kept only when an EMPTY param env discharges the
+/// rigid-bound obligations the match leaves. A declaration's members do not
+/// depend on where the reader stands, and an impl whose bounds an empty env
+/// cannot discharge is one a bare qualifier cannot reach either.
+pub fn impls_of_type<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+    self_ty: &baml_type::Ty,
+) -> Vec<crate::impls::ResolvedImpl<'db>> {
+    let facts = Facts::new(db);
+    crate::impls::impls_for_type(db, viewer, self_ty)
+        .into_iter()
+        .filter(|resolved| env_discharges_rigid_bounds(db, &facts, resolved))
+        .collect()
+}
+
 /// [`crate::impls::impls_for_type`] for an ENGINE (interned) receiver.
 ///
 /// Enumeration takes a plain goal, so the interned receiver states its
@@ -1349,34 +1405,17 @@ pub fn type_member_candidates<'db>(
             // `(C as I).member` with the qualifier inferred, so the methods of
             // the interfaces C's impls provide belong to the type's member
             // surface (fields do not — see above). Enumerated in an empty
-            // param env and from the declaring package's viewpoint: a
-            // declaration's members do not depend on where the reader
-            // stands, and an impl whose bounds an empty env cannot discharge
-            // is one a bare qualifier cannot reach either.
-            let facts = Facts::new(db);
-            let self_ty = crate::lower::class_self_ty(db, class);
+            // param env and from the DECLARING package's viewpoint: a
+            // declaration's members do not depend on where the reader stands,
+            // and an impl whose bounds an empty env cannot discharge is one a
+            // bare qualifier cannot reach either.
             let declaring = baml_compiler2_hir::file_package::file_package(db, class.file(db)).root;
-            for resolved in crate::impls::impls_for_type(db, declaring, &self_ty) {
-                if !env_discharges_rigid_bounds(db, &facts, &resolved) {
-                    continue;
-                }
-                let implemented = resolved.implemented();
-                for (name, is_method, is_static, decl) in
-                    interface_member_rows(db, &facts, &implemented, false)
-                {
-                    if !is_method {
-                        continue;
-                    }
-                    push_candidate(
-                        &mut out,
-                        name,
-                        true,
-                        is_static,
-                        MemberSource::Interface(implemented.clone()),
-                        decl,
-                    );
-                }
-            }
+            extend_from_impls(
+                db,
+                declaring,
+                &mut out,
+                &crate::lower::class_self_ty(db, class),
+            );
         }
         Definition::Enum(enum_loc) => {
             let data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
@@ -1390,6 +1429,16 @@ pub fn type_member_candidates<'db>(
                     MemberDecl::EnumVariant { enum_loc, index },
                 );
             }
+            // An enum is a concrete type like any other: it cannot carry an
+            // in-body block, but in-body is not special.
+            let declaring =
+                baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db)).root;
+            extend_from_impls(
+                db,
+                declaring,
+                &mut out,
+                &crate::lower::enum_self_ty(db, enum_loc),
+            );
         }
         Definition::Interface(interface) => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface);

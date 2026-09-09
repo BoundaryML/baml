@@ -5877,7 +5877,7 @@ impl BexVm {
     /// implements-block method referenced in value position binds through
     /// `MakeVirtualBoundMethod` (or a shim's `shim_rule_method`) instead,
     /// where the impl rule's `realize_frame` supplies the owner frame a
-    /// receiver's class args cannot express (blanket impls, inherited
+    /// receiver's class args cannot express (blanket impls, adopted
     /// defaults).
     pub(crate) fn bound_method_curried_type_args(
         &self,
@@ -9435,7 +9435,7 @@ impl BexVm {
                 // method from the receiver's concrete `Self` at *bind* time (the
                 // receiver value — and hence its type — is fixed here), producing
                 // a regular `BoundMethod` that additionally carries the impl's
-                // realized frame type args (a blanket impl's or inherited
+                // realized frame type args (a blanket impl's or adopted
                 // default's frame, which the receiver's class args can't express).
                 // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
                 OpCode::MakeVirtualBoundMethod => {

@@ -763,10 +763,10 @@ fn build_packages<'db>(
     // with symbolic `Self` by the shared query) where one is declared. Rule
     // construction bakes the default into every impl that leaves the member
     // unpinned, so the registry answers every declared member identically —
-    // pinned or defaulted — and an adopted default's frame layout
-    // (`[Self ++ interface generic args ++ associated types]`, matching MIR's
-    // `enclosing_generic_params` for interface-owned bodies) carries a real
-    // binding in every slot.
+    // pinned or defaulted. Associated types are NOT frame slots (an adopted
+    // default's frame is `[Self ++ interface generic args]`; a body's
+    // `Self.Assoc` lowers as a projection), so this table is the RULE's
+    // reduction source for those projections, never a frame filler.
     let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
         indexmap::IndexMap::new();
     // Per field-bearing interface, its declared field names **in declaration order** —

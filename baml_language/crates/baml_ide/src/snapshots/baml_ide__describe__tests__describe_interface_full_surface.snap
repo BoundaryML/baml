@@ -22,4 +22,6 @@ members:
     (body: 4 lines)
 implementations:
   implement Named for Person
+    type Output = int
   implement Named for Robot
+    type Output = string

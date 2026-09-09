@@ -1761,13 +1761,13 @@ impl Continuation for ClassFromJsonCont {
     }
 }
 
-/// If `ty` is a class/interface type whose `baml.FromJson` rule carries an
-/// override, returns a `YieldToCall` dispatching that `from_json(j)` with the
-/// rule's realized frame. The deserialize analog of
-/// `try_yield_user_from_json`, but resolved through the impl rules (so
+/// If `ty` is a class/interface type whose `baml.FromJson` rule PROVIDES
+/// `from_json`, returns a `YieldToCall` dispatching that `from_json(j)` with
+/// the rule's realized frame. The deserialize counterpart of the `ToJson`
+/// shim (`make_to_json_callee`), resolved through the impl rules like it (so
 /// blanket and out-of-body impls and runtime-declared classes all reach
-/// their override). Returns `None` for non-class types, media, and types
-/// whose rule is absent or inherits the structural default body (→ the
+/// their provided method). Returns `None` for non-class types, media, and
+/// types whose rule is absent or adopts the structural default body (→ the
 /// structural fallback, which is what that default delegates to).
 fn try_yield_interface_from_json(
     vm: &mut BexVm,

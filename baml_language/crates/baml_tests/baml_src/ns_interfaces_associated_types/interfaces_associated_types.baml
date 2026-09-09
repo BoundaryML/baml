@@ -888,10 +888,13 @@ interface FipConv<T> {
     type Out
 }
 
+// The two instantiations' `Out` pins DIFFER on purpose: were they equal, a
+// lane that wrongly resolved the outer qualifier against the `int`
+// instantiation would still type-check, and the pin below would be vacuous.
 class FipBoth {
     implements FipConv<int> {
         type Wide = string;
-        type Out = string;
+        type Out = int;
     }
     implements FipConv<float> {
         type Wide = bool;

@@ -464,7 +464,7 @@ pub struct ResolvedMethod {
 /// separate receiver slot), so this is the whole test — for the dispatch
 /// shape `resolved_exported_function` records and for the member
 /// enumeration alike.
-pub(crate) fn exported_takes_self(function: &ExportedFunction) -> bool {
+pub fn exported_takes_self(function: &ExportedFunction) -> bool {
     function
         .params
         .first()
