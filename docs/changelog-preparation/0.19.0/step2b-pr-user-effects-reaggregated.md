@@ -78,7 +78,7 @@ Evidence: PR #4759: Snapshot Regression Audit and Before/After Bytecode.
 
 Category: `BREAKING_CHANGE`. PRs: [#4623](https://github.com/BoundaryML/baml/pull/4623).
 
-Use `Fn@spec(...)` and `Fn@stream(...)` in BAML source. Compiler-generated `$spec` and `$stream` callables are no longer exposed there. The generated TypeScript SDK still uses `Fn$stream`; Python keeps its `Fn_stream` exports. Stream directly from the function rather than calling `stream()` on a bound spec.
+Use `Fn@spec(...)` and `Fn@stream(...)` in BAML source. Compiler-generated `$spec` and `$stream` callables are no longer exposed there. The generated TypeScript SDK still uses `Fn$stream`; Python keeps its `Fn_stream` exports. Generated spec and stream companions are also omitted from reflection and function listings.
 
 Evidence: baml_language/crates/baml_tests/baml_src/ns_llm_stream_contract/stream_contract.baml.
 

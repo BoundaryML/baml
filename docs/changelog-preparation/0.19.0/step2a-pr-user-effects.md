@@ -11,7 +11,7 @@
 ## [#4623](https://github.com/BoundaryML/baml/pull/4623)
 
 - C01 — FEATURE: Call and parse bound LLM specifications. A bound `ai.FunctionSpec<Out>` now exposes `call()` and `parse()`. Use `call(client = ..., on_event = ...)` to run it. Use `parse()` to turn an existing model reply into its output type. The example parses locally without calling a model.
-- C10 — BREAKING_CHANGE: Use @ projections in BAML source. Use `Fn@spec(...)` and `Fn@stream(...)` in BAML source. Compiler-generated `$spec` and `$stream` callables are no longer exposed there. The generated TypeScript SDK still uses `Fn$stream`; Python keeps its `Fn_stream` exports. Stream directly from the function rather than calling `stream()` on a bound spec.
+- C10 — BREAKING_CHANGE: Use @ projections in BAML source. Use `Fn@spec(...)` and `Fn@stream(...)` in BAML source. Compiler-generated `$spec` and `$stream` callables are no longer exposed there. The generated TypeScript SDK still uses `Fn$stream`; Python keeps its `Fn_stream` exports. Generated spec and stream companions are also omitted from reflection and function listings.
 - C11 — BREAKING_CHANGE: Rename the request client override. The named argument on `FunctionSpec.build_request()` is now `client`, replacing `override_client`.
 
 ## [#4646](https://github.com/BoundaryML/baml/pull/4646)
