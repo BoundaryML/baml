@@ -196,9 +196,9 @@ impl<'db> InferenceContext<'db> {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
         let mut applicable = None;
         for facts in candidates {
-            let snapshot = self.table.snapshot();
+            let probe = self.probe();
             let applies = self.confirm_impl(goal, interface, facts).is_some();
-            self.table.rollback_to(snapshot);
+            self.rollback_probe(probe);
             if applies {
                 if applicable.is_some() {
                     return Attempt::Stalled;
@@ -235,9 +235,9 @@ impl<'db> InferenceContext<'db> {
         let goal_target = goal.clone();
         let mut applicable = None;
         for head in &heads {
-            let snapshot = self.table.snapshot();
+            let probe = self.probe();
             let applies = self.confirm_object(head, &goal_target);
-            self.table.rollback_to(snapshot);
+            self.rollback_probe(probe);
             if applies {
                 if applicable.is_some() {
                     return Attempt::Stalled;
@@ -470,9 +470,9 @@ impl<'db> InferenceContext<'db> {
             if !crate::impls::provides_concrete_members(&facts.interface.name) {
                 continue;
             }
-            let snapshot = self.table.snapshot();
+            let probe = self.probe();
             let applies = self.probe_candidate(receiver, name, facts).is_some();
-            self.table.rollback_to(snapshot);
+            self.rollback_probe(probe);
             if applies {
                 if applicable.is_some() {
                     return None;

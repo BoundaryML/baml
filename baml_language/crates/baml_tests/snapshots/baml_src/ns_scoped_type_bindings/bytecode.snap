@@ -74,15 +74,22 @@ function scoped_type_bindings.$init_test_ns_scoped_type_bindings_scoped_type_bin
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "a descriptor keeps its own binding past a sibling rebinding"
+    load_const "a speculatively probed arm naming the binding is not an escape"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.scoped_type_bindings"
-    load_const "an agent spec takes a scoped runtime type"
+    load_const "a descriptor keeps its own binding past a sibling rebinding"
     make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scoped_type_bindings"
+    load_const "an agent spec takes a scoped runtime type"
+    make_closure .<lambda($init_test_ns_scoped_type_bindings_scoped_type_bindings, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -389,6 +396,17 @@ function scoped_type_bindings.narrowing_ends_with_the_block(t: reflect.Type, v: 
   L0:
     load_var v
     is_type string
+    return
+}
+
+function scoped_type_bindings.probed_union_arm_names_the_binding(t: reflect.Type) -> int {
+    make_closure .<lambda(probed_union_arm_names_the_binding, 0)>, 0
+    store_var f
+    load_var t
+    bind_type 0
+    load_const 7
+    load_var f
+    call_indirect
     return
 }
 

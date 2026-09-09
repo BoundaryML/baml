@@ -261,6 +261,24 @@ test "values and effects leave a block only through binding-free types" {
     assert.equal(discarded_by_a_wildcard(int_t), 2)
 }
 
+// An expectation that is a UNION of function types makes the adapter road
+// try each arm speculatively. An arm naming the binding cannot be taken, but
+// that refusal belongs to the attempt, not to the program: the `int` arm
+// fits, so this compiles and the lambda still works afterwards.
+function probed_union_arm_names_the_binding(t: reflect.Type) -> int throws never {
+    let f = (a) -> { a }
+    {
+        type T = unreflect(t)
+        let h: ((a: int) -> int throws never) | ((a: T) -> T throws never) = f
+        let _ = h
+    }
+    f(7)
+}
+
+test "a speculatively probed arm naming the binding is not an escape" {
+    assert.equal(probed_union_arm_names_the_binding(reflect.Type.of<string>()), 7)
+}
+
 // Sibling blocks reuse one frame slot for their bindings. A descriptor
 // computed under the first binding keeps that binding wherever it is
 // consumed, even after the second block has rebound the slot and even when

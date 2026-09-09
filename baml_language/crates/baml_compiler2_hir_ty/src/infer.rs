@@ -647,6 +647,31 @@ enum InferVarOrigin {
     },
 }
 
+/// Everything a speculative probe may append to, captured as one value.
+///
+/// A probe relates types to learn whether they COULD relate and must leave
+/// no trace of the attempt. The table's snapshot covers the union-find and
+/// the bound ledger; this covers the accumulators the relation writes
+/// through on the way - `sub` reports scoped escapes and registers
+/// obligations, resolution defers pairs it cannot decide yet, and checking
+/// stashes provisional re-checks. One value so a new accumulator is
+/// restored in exactly one place rather than at each probe site.
+///
+/// `type_mismatches` is a keyed, first-writer-wins map rather than a
+/// journal, so it cannot be truncated; nothing on a probe road writes it
+/// (its only writer is the checking road, which a probe does not take) and
+/// the rollback asserts as much.
+struct ProbeCheckpoint {
+    table: unify::Snapshot,
+    deferred_subs: usize,
+    obligations: usize,
+    pending_diags: usize,
+    anchorless_escapes: usize,
+    provisional_checks: usize,
+    infer_var_origins: usize,
+    type_mismatches: usize,
+}
+
 #[derive(Debug, Clone)]
 struct ReturnFrame {
     expected: Option<Ty>,
@@ -2128,8 +2153,7 @@ impl<'db> InferenceContext<'db> {
     /// Tests a union's function arm without committing any additional
     /// inference. Ground pairs can use the semantic oracle directly. An
     /// accepted generic function may still carry inference variables here,
-    /// so probe the ordinary subtype relation under a table snapshot and
-    /// discard any deferred work or obligations created by the probe.
+    /// so probe the ordinary subtype relation and discard the attempt.
     fn function_adapter_candidate_compatible(&mut self, actual: &Ty, candidate: &Ty) -> bool {
         if !actual.has_infer() && !candidate.has_infer() {
             return self.cached_subtype(actual, candidate);
@@ -2164,9 +2188,7 @@ impl<'db> InferenceContext<'db> {
             return false;
         }
 
-        let snapshot = self.table.snapshot();
-        let deferred_len = self.deferred_subs.len();
-        let obligations_len = self.obligations.len();
+        let probe = self.probe();
         let mut compatible = true;
         for (actual, candidate) in actual_required.iter().zip(candidate_required.iter()) {
             compatible &= self.sub(&candidate.ty, &actual.ty);
@@ -2186,10 +2208,45 @@ impl<'db> InferenceContext<'db> {
         }
         compatible &= self.sub(actual_ret, candidate_ret);
         compatible &= self.sub(actual_throws, candidate_throws);
-        self.table.rollback_to(snapshot);
-        self.deferred_subs.truncate(deferred_len);
-        self.obligations.truncate(obligations_len);
+        self.rollback_probe(probe);
         compatible
+    }
+
+    /// Opens a speculative probe: relate freely, then discard the whole
+    /// attempt with [`InferenceContext::rollback_probe`]. See
+    /// [`ProbeCheckpoint`].
+    fn probe(&mut self) -> ProbeCheckpoint {
+        ProbeCheckpoint {
+            table: self.table.snapshot(),
+            deferred_subs: self.deferred_subs.len(),
+            obligations: self.obligations.len(),
+            pending_diags: self.pending_diags.len(),
+            anchorless_escapes: self.anchorless_escapes.len(),
+            provisional_checks: self.provisional_checks.len(),
+            infer_var_origins: self.infer_var_origin_order.len(),
+            type_mismatches: self.result.type_mismatches.len(),
+        }
+    }
+
+    /// Discards everything a probe did, in the order the state depends on:
+    /// the accumulators first (they name variables), then the table, whose
+    /// rollback frees those variables' keys for reuse.
+    fn rollback_probe(&mut self, probe: ProbeCheckpoint) {
+        self.deferred_subs.truncate(probe.deferred_subs);
+        self.obligations.truncate(probe.obligations);
+        self.pending_diags.truncate(probe.pending_diags);
+        self.anchorless_escapes.truncate(probe.anchorless_escapes);
+        self.provisional_checks.truncate(probe.provisional_checks);
+        for var in self.infer_var_origin_order.drain(probe.infer_var_origins..) {
+            self.infer_var_origins.remove(&var);
+        }
+        debug_assert_eq!(
+            self.result.type_mismatches.len(),
+            probe.type_mismatches,
+            "a probe must not record a type mismatch: the attempt is discarded, \
+             and the map is keyed rather than journalled, so the entry would outlive it"
+        );
+        self.table.rollback_to(probe.table);
     }
 
     fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
