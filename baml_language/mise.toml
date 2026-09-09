@@ -80,11 +80,30 @@ sources = ["crates/baml_builtins2/baml_std/**/*.baml"]
 [tasks.type-quiz-lint]
 description = "Check the structural invariants of tools/type_quiz (layering, banned APIs)"
 run = "tools/type_quiz/lint.sh"
+sources = ["tools/type_quiz/**/*.baml", "tools/type_quiz/lint.sh"]
 
 [tasks.type-quiz-test]
 description = "Run the type-quiz conformance suite (offline profile)"
-run = "cargo run -p baml_cli -- test --from tools/type_quiz"
+# Deliberately no `sources`: the suite's real inputs include the whole
+# compiler, because its job is to notice when a compiler change makes the quiz
+# stale. Listing only the package's own files would let an up-to-date check
+# skip exactly the run that matters.
+run = '''
+set -euo pipefail
+# The CLI writes its home, cache and profile streams beside the package unless
+# told otherwise, which leaves a few hundred megabytes under tools/type_quiz.
+# Keep all three under target/, as crates/baml_tests/tests/type_quiz.rs does.
+home="$PWD/target/baml-type-quiz-home"
+mkdir -p "$home"
+printf '[update]\nauto_check = false\n' > "$home/config.toml"
+BAML_CLI_ALLOW_DIRECT=1 \
+BAML_HOME="$home" \
+BAML_CACHE_DIR="$PWD/target/baml-type-quiz-cache" \
+BAML_PROFILE_DIR="$PWD/target/baml-type-quiz-profiles" \
+    cargo run -p baml_cli -- test --from tools/type_quiz
+'''
 
 [tasks.fmt-type-quiz]
 description = "Run the BAML formatter on tools/type_quiz"
 run = "cargo run -p baml_cli -- fmt --project tools/type_quiz"
+sources = ["tools/type_quiz/**/*.baml"]

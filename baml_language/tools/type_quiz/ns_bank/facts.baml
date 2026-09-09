@@ -44,30 +44,34 @@ class LiteralPair {
     concrete: root.algebra.Ty,
 }
 
+/// The strings literal types are drawn from. One is multi-byte, so a
+/// generated case exercises the byte arithmetic that locates a rejection
+/// just as the fixed corpus does.
+function literal_words() -> string[] throws never {
+    ["sheep", "🐑"]
+}
+
+/// A literal type and the concrete type it belongs to.
+///
+/// The pool is built before the draw that indexes it, so the draw is bounded
+/// by the pool's own size: a literal kind cannot be added and left
+/// unreachable, as it could when the bound was written out beside the arms.
 function pick_literal(seed: root.engine.Seed) -> root.engine.Rolled<LiteralPair> throws never {
-    let kind = root.engine.below(seed, 3);
-    let n = root.engine.below(kind.next, 100);
-    let pair = match (kind.value) {
-        0 => {
-            LiteralPair {
-                literal: root.algebra.Lit.new(n.value),
-                concrete: root.algebra.Prim.int(),
-            }
+    let n = root.engine.below(seed, 100);
+    let words = literal_words();
+    let pool = [
+        LiteralPair { literal: root.algebra.Lit.new(n.value), concrete: root.algebra.Prim.int() },
+        LiteralPair {
+            literal: root.algebra.Lit.new(words[n.value % words.length()]),
+            concrete: root.algebra.Prim.string(),
         },
-        1 => {
-            LiteralPair {
-                literal: root.algebra.Lit.new("sheep"),
-                concrete: root.algebra.Prim.string(),
-            }
+        LiteralPair {
+            literal: root.algebra.Lit.new(n.value % 2 == 0),
+            concrete: root.algebra.Prim.bool(),
         },
-        _ => {
-            LiteralPair {
-                literal: root.algebra.Lit.new(n.value % 2 == 0),
-                concrete: root.algebra.Prim.bool(),
-            }
-        },
-    };
-    root.engine.Rolled<LiteralPair> { value: pair, next: n.next }
+    ];
+    let kind = root.engine.below(n.next, pool.length());
+    root.engine.Rolled<LiteralPair> { value: pool[kind.value], next: kind.next }
 }
 
 function pick_type_name(seed: root.engine.Seed) -> root.engine.Rolled<string> throws never {
@@ -440,15 +444,13 @@ function distinct_classes_same_shape(seed: root.engine.Seed) -> Derived throws n
 
 /// A seeded strict-subtype pair from one of the pair-introducing facts, so
 /// context facts vary in what they wrap. Not a fact of its own.
+///
+/// The generators are a pool the draw is bounded by, rather than match arms
+/// beside a written-out count that has to be kept in step with them.
 function strict_pair(seed: root.engine.Seed) -> Derived throws never {
-    let d = root.engine.below(seed, 5);
-    match (d.value) {
-        0 => never_bottom(d.next),
-        1 => unknown_top(d.next),
-        2 => union_member(d.next),
-        3 => union_subset(d.next),
-        _ => literal_subtype(d.next),
-    }
+    let pool: ((root.engine.Seed) -> Derived throws never)[] = [never_bottom, unknown_top, union_member, union_subset, literal_subtype];
+    let choice = root.engine.below(seed, pool.length());
+    pool[choice.value](choice.next)
 }
 
 function class_arg_invariant(seed: root.engine.Seed) -> Derived throws never {

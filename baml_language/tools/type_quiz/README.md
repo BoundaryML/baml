@@ -48,21 +48,32 @@ step index and the previous answer predict nothing either. Only items the
 compiler is verified to agree on are served, and the suite verifies every case
 a fixed session serves.
 
-Dependencies flow bank → algebra → engine and `lint.sh` rejects anything
-else. The engine owns nothing the compiler can answer: the
-only judgments about BAML come from `reflect.Package.compile`.
+Dependencies flow bank → algebra → engine. `lint.sh` fails on a reference that
+runs the other way, on a wildcard match arm outside the engine (so that a new
+type kind is a compile error rather than a silently-taken arm), and on a
+directory gone missing, which would otherwise let a check pass by scanning
+nothing. The engine owns nothing the compiler can answer: the only judgments
+about BAML come from `reflect.Package.compile`.
 
 ## Running
 
 ```bash
 # from baml_language/, under mise
-target/debug/baml-cli test --from tools/type_quiz          # offline: every tripwire
-target/debug/baml-cli test --from tools/type_quiz --profile live   # grader calibration
-tools/type_quiz/lint.sh                                    # layering and bans
+mise run type-quiz-test    # the whole suite
+mise run type-quiz-lint    # layering, banned APIs, wildcard arms
+mise run fmt-type-quiz     # the formatter this package is kept under
 ```
 
-CI runs the same two commands through `crates/baml_tests/tests/type_quiz.rs`
-and the `type-quiz-lint` prek hook.
+`crates/baml_tests/tests/type_quiz.rs` runs the suite in CI, and the
+`type-quiz-lint` prek hook runs the lint after the formatter. Both of those
+and the `mise` task keep the CLI's home, cache and profile streams under
+`target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
+leaves a few hundred megabytes of them in `tools/type_quiz/.baml`, which the
+CLI marks ignored but does not clean up.
+
+The `live` profile is reserved for calibrating the answer grader against a
+real model. It selects no tests yet, and `baml-cli` exits 5 on an empty
+selection, so there is nothing to run under it until the grader lands.
 
 ## Compiler issues surfaced by this tool
 
@@ -128,6 +139,11 @@ minimal single-file packages; none is fixed at the time of writing.
    into a fresh local first does not help; the same code with `top` a literal
    works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
    which `pick` in `ns_engine/sample.baml` uses.
+11. **String literals have no numeric or unicode escape.** `"\u{1F411}"` is
+   nine characters and `"\x41"` is four: only `\\`, `\"`, `\n`, `\r` and `\t`
+   are escapes, so a character outside them can only be written as itself. The
+   renderer's `quote` in `ns_algebra/render.baml` therefore cannot spell a
+   control character at all, and the name pools hold the characters they mean.
 10. **A local inferred from a `match` with a `.map` arm is typed wrongly, and
    a method call on it fails at run time.** With `type Either = Wrapped |
    string`,
