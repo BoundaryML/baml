@@ -7,16 +7,12 @@ use std::{
 };
 
 use bex_project::Bex;
-use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
-use crate::{
-    BridgeError, baml_to_host, call_and_encode, call_handle_and_encode, error_to_outbound,
-    function_call_context_builder,
-};
+use crate::{BridgeError, baml_to_host, error_to_outbound};
 
 #[path = "api.rs"]
 pub mod api;
@@ -143,40 +139,21 @@ pub extern "C" fn call_function(encoded_args: *const u8, length: usize, id: u32)
 }
 
 fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Result<(), BridgeError> {
-    use bridge_ctypes::baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget};
-
     let runtime = get_runtime()?;
-
-    let args = if encoded_args.is_null() || length == 0 {
-        CallFunctionArgs::default()
+    let bytes: &[u8] = if encoded_args.is_null() || length == 0 {
+        &[]
     } else {
-        unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
+        // SAFETY: the caller promises `encoded_args` is valid for `length` bytes.
+        unsafe { std::slice::from_raw_parts(encoded_args, length) }
     };
-    let call_id = decoded_call_id(args.call_id)?;
-    let target = args.call_target.ok_or(BridgeError::MissingCallTarget)?;
-    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
-        return Err(BridgeError::FunctionHandleTypeArgs);
-    }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
-    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-    let call_ctx = function_call_context_builder(call_id)
-        .with_type_args(type_args.type_args)
-        .with_type_defs(type_args.type_defs);
+    // Pin the target before yielding to the executor: the SDK may release the
+    // callable's key as soon as this returns.
+    let prepared = crate::prepare_call(bytes)?;
 
     get_tokio_runtime()?.spawn(async move {
-        let encoded = AssertUnwindSafe(async move {
-            match target {
-                CallTarget::FunctionName(function_name) => {
-                    call_and_encode(runtime, function_name, kwargs.into(), call_ctx.build()).await
-                }
-                CallTarget::FunctionHandle(handle_key) => {
-                    call_handle_and_encode(runtime, handle_key, kwargs.into(), call_ctx.build())
-                        .await
-                }
-            }
-        })
-        .catch_unwind()
-        .await;
+        let encoded = AssertUnwindSafe(crate::invoke_prepared(runtime, prepared))
+            .catch_unwind()
+            .await;
 
         let bytes = match encoded {
             Ok(bytes) => bytes,
@@ -186,11 +163,4 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     });
 
     Ok(())
-}
-
-fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
-    if id == 0 {
-        return Err(BridgeError::InvalidCallId);
-    }
-    Ok(sys_types::CallId(id))
 }
