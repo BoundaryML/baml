@@ -36,3 +36,27 @@ function pick_distinct(seed: root.engine.Seed, pool: string[], n: int) -> Picked
     }
     Picked { names: names, next: s }
 }
+
+/// Names for a flow probe, avoiding `reserved` (the declarations the probe
+/// already contains).
+function site_names(
+    seed: root.engine.Seed,
+    reserved: string[],
+) -> root.algebra.SiteNames throws never {
+    let fns = pick_distinct(seed, function_names(), 2);
+    let bindings = pick_distinct(fns.next, binding_names(), 2);
+    let holders = pick_distinct(
+        bindings.next,
+        type_names().filter((n) -> {
+            !reserved.includes(n)
+        }),
+        1,
+    );
+    root.algebra.SiteNames {
+        function_name: fns.names[0],
+        sink: fns.names[1],
+        value: bindings.names[0],
+        target: bindings.names[1],
+        holder: holders.names[0],
+    }
+}

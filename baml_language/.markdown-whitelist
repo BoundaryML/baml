@@ -58,3 +58,7 @@ sdks/cpp/STYLE.md
 # C# SDK documentation
 sdks/csharp/ABI.md
 sdks/csharp/DEVELOPMENT.md
+
+# Type-system quiz ledgers
+tools/type_quiz/SPEC_GAPS.md
+tools/type_quiz/COMPILER_DIVERGENCE.md

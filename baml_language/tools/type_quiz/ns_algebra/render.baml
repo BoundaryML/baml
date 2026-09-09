@@ -293,6 +293,13 @@ function visit(decl: Decl, out: Decl[], seen: map<string, Decl>) -> void throws 
     }
 }
 
+/// Whether the alias refers back to itself through its body.
+function is_recursive(decl: AliasDecl) -> bool throws never {
+    decls_of(decl.body).some((d) -> {
+        decl_name(d) == decl.name
+    })
+}
+
 /// All declarations rendered in order, each followed by a blank line.
 function render_decls(decls: Decl[]) -> string throws never {
     decls

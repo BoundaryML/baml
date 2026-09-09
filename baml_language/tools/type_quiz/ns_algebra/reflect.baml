@@ -52,7 +52,15 @@ function expected_kind(ty: Ty) -> Kind? throws never {
         Class => Kind.Class,
         Enum => Kind.Enum,
         Iface => Kind.Interface,
-        Alias => Kind.Primitive,
+        // A recursive alias survives lowering as a name and reflects as a
+        // primitive; a non-recursive one is transparent and reflects as its body.
+        let a: Alias => {
+            if (is_recursive(a.decl)) {
+                Kind.Primitive
+            } else {
+                expected_kind(a.decl.body)
+            }
+        },
         Var => null,
     }
 }

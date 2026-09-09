@@ -33,8 +33,8 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
             let probe = package.get_function<ProbeFn>("root.probe") catch (e) {
                 reflect.errors.CompilationError => null,
             };
-            // A function value never matches a function-typed pattern (see
-            // `passes` in verify.baml), so this narrows by null check instead.
+            // Narrowed by null check rather than a function-typed pattern:
+            // see the note on run-time function membership in verify.baml.
             if (probe != null) {
                 match (probe()) {
                     let t: reflect.Type => t,

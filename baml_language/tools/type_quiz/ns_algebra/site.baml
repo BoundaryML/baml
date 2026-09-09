@@ -39,6 +39,9 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     let decls = render_decls(decls_of_all([source, target]));
     let s = render(source);
     let t = render(target);
+    // Spelled through `render` so a union or function target keeps its
+    // parentheses inside the element position.
+    let t_array = render(array(target));
     match (site) {
         SiteKind.Let => {
             Probe {
@@ -91,7 +94,7 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
             Probe {
                 source: `
                     ${decls}function ${names.function_name}(${names.value}: ${s}) -> void {
-                        let ${names.target}: ${t}[] = [${names.value}];
+                        let ${names.target}: ${t_array} = [${names.value}];
                     }
                 `,
                 anchor: names.target,

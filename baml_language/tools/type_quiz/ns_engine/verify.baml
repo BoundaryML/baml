@@ -197,12 +197,12 @@ function run_tests(package: reflect.Package, names: string[]) -> Outcome throws 
 }
 
 function passes(table: TestTable, name: string) -> bool throws never {
-    // BUG: a function value never matches a function-typed pattern at run
-    // time: with `t: map<string, () -> null throws unknown>`, both
-    // `if let run: () -> null throws unknown = t.get(k)` and
-    // `t.get(k) is (() -> null throws unknown)` report no match for a present
-    // key, while `t.get(k) != null` and `t[k]` work. So the lookup goes
-    // through `has` and a subscript.
+    // BUG: `tests()` is declared as `map<string, () -> null throws unknown>`
+    // but its values reflect as `() -> void throws never`, and a run-time
+    // membership test on a function value is exact rather than a subtyping
+    // check, so `if let run: () -> null throws unknown = table.get(name)` and
+    // the matching `is` both fail for a present key. The lookup therefore
+    // goes through `has` and a subscript, which do not test the type.
     if (!table.has(name)) {
         return false;
     }

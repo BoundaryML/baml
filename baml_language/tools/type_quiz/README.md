@@ -11,8 +11,25 @@ compiler, so the quiz cannot drift from the language without CI noticing.
 |---|---|---|
 | `ns_engine` | substrate: seeds, cases, verdicts, the verifier, sampling, the learner | never for a type-system change |
 | `ns_algebra` | tested material: the `Ty` model, rendering, relations, sites | the type system changes |
-| `ns_bank` | tested material: rules, naive models, items, weights | what or how we teach changes |
+| `ns_bank` | tested material: the rule table quoted from the spec, fact generators, items, name pools | what or how we teach changes |
 | `ns_conformance` | the tripwire suites | — |
+
+Two ledgers sit beside the code. `SPEC_GAPS.md` records principles the spec
+omits or under-specifies; a rule with no section to cite must cite an entry
+there. `COMPILER_DIVERGENCE.md` records where the compiler contradicts the
+spec; an item marked as diverging must cite an entry there, and the suite
+fails the moment the compiler stops diverging so the entry gets closed.
+
+## How a case is made
+
+A *fact* applies one spec rule to seeded types, or a context rule (array,
+map, class argument, function parameter, return, error, union member) to
+another fact, and records the relation that follows. An *item* exercises a
+fact at a flow site, chosen by seed among a binding, a call argument, a
+return, a field initializer, and an array element, flowing the pair forwards
+or backwards so the shape never gives the verdict away. The trace of rules is
+the explanation. Every item is generated across several seeds and checked
+against the compiler on every run.
 
 Dependencies flow bank → algebra → engine and `lint.sh` rejects anything
 else. The engine owns nothing the compiler can answer: the
@@ -41,11 +58,15 @@ minimal single-file packages; none is fixed at the time of writing.
    `items().filter_map((item) -> { [0].every((i) -> { item.id() == "x" }); null })`
    where `items(): Item[]` and `Item` is an interface. One closure level works.
    Workaround in `ns_conformance/engine.baml` (`item_is_deterministic`).
-2. **Function values never match function-typed patterns.** With
-   `t: map<string, () -> null throws unknown>` and a present key,
-   `if let f: () -> null throws unknown = t.get(k)` takes the `else` branch and
-   `t.get(k) is (() -> null throws unknown)` is `false`; `t.get(k) != null` and
-   `t[k]` behave. Workaround in `ns_engine/verify.baml` (`passes`).
+2. **Run-time membership of a function value is exact, not a subtyping
+   check, and `Package.tests()` lies about its value type.** The map is
+   declared `map<string, () -> null throws unknown>` but its values reflect as
+   `() -> void throws never`, so `if let f: () -> null throws unknown = t.get(k)`
+   and the matching `is` are both false for a present key, while a value from
+   `get_function<F>` matches `F` exactly. Either `void`/`never` should satisfy
+   `null`/`unknown` under function subtyping, or `tests()` should declare what
+   it returns. Workaround in `ns_engine/verify.baml` (`passes`); see also
+   SPEC_GAPS.md G-002.
 3. **Parse ambiguities at block boundaries.** `else { "none" }` parses the block
    as a map literal (`expected ':'`), and an `if let … { `…` } else …` whose
    then-block is a bare template literal fails with `expected expression, found
