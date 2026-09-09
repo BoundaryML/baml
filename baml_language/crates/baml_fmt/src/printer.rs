@@ -320,6 +320,22 @@ impl<'a> Printer<'a> {
         }
     }
 
+    pub(crate) fn print_semicolon(
+        &mut self,
+        previous: TextRange,
+        original: Option<TextRange>,
+        continuation_indent: usize,
+    ) {
+        if let Some(original) = original {
+            self.print_separator(previous, Some(original), continuation_indent, "");
+            let trimmed = self.output.trim_end_matches(' ');
+            if !trimmed.ends_with('\n') {
+                self.output.truncate(trimmed.len());
+            }
+        }
+        self.print_str(";");
+    }
+
     /// Append the output and warnings from another printer to this one.
     ///
     /// Generally used to append the output from a nested printer.

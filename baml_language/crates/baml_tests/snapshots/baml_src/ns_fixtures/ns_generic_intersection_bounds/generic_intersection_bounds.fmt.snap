@@ -15,13 +15,13 @@ interface Named {
 }
 
 interface Sized {
-    function size(self) -> int throws never
+    function size(self) -> int throws never;
 }
 
 interface Tagged {
-    type Label
+    type Label;
 
-    function tag(self) -> Self.Label throws never
+    function tag(self) -> Self.Label throws never;
 }
 
 class Both {
@@ -36,7 +36,7 @@ class Both {
     }
 
     implements Tagged {
-        type Label = string
+        type Label = string;
 
         function tag(self) -> string {
             self.name
@@ -83,15 +83,15 @@ class Holder<T extends Named & Sized> {
 
 // Interface generics, and an interface method signature's own generics.
 interface Registry<T extends Named & Sized> {
-    function put(self, item: T) -> void throws never
+    function put(self, item: T) -> void throws never;
 
-    function summarize<U extends Named & Sized>(self, other: U) -> string throws never
+    function summarize<U extends Named & Sized>(self, other: U) -> string throws never;
 }
 
 // An out-of-body `implements` block applies only to types satisfying every
 // conjunct of its own bound list.
 interface Printable {
-    function display(self) -> string throws never
+    function display(self) -> string throws never;
 }
 
 implements<T extends Named & Sized> Printable for T {

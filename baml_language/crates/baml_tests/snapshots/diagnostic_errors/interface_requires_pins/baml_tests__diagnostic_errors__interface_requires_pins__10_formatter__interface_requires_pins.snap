@@ -10,7 +10,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // discharges a weaker one — which is what `pinned_exact` relies on.
 
 interface HasKey {
-    type Key
+    type Key;
     key: Self.Key,
 }
 

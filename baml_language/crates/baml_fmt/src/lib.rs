@@ -2250,6 +2250,52 @@ mod interface_format_tests {
     }
 
     #[test]
+    fn declaration_semicolons_are_canonical() {
+        let options = FormatOptions::default();
+        for terminator in ["", ";"] {
+            let source = format!(
+                "type Name = string{terminator}\ninterface Named {{\n type Key{terminator}\n type Error = never{terminator}\n name: Name,\n function label(self) -> string throws never{terminator}\n function display(self) -> string throws never {{ self.label() }}\n}}\nclass Item {{\n name: Name,\n implements Named {{ type Key = string{terminator}\n function label(self) -> string {{ self.name }} }}\n}}"
+            );
+            let formatted = assert_round_trip(&source, &options);
+            for expected in [
+                "type Name = string;",
+                "type Key;",
+                "type Error = never;",
+                "name: Name,",
+                "function label(self) -> string throws never;",
+                "type Key = string;",
+            ] {
+                assert!(
+                    formatted.contains(expected),
+                    "missing {expected}:\n{formatted}"
+                );
+            }
+            assert!(!formatted.contains("};"), "{formatted}");
+        }
+    }
+
+    #[test]
+    fn preserves_interface_terminator_comments() {
+        for declaration in ["function f(self) -> int throws never", "type Key = int"] {
+            for separator in [
+                " /* before */; // after\n",
+                " // before\n; // after\n",
+                "; /* after */\n",
+            ] {
+                let source = format!("interface I {{ {declaration}{separator} }}");
+                let formatted = assert_round_trip(&source, &FormatOptions::default());
+                for marker in ["/* before */", "// before", "// after", "/* after */"] {
+                    assert_eq!(
+                        formatted.matches(marker).count(),
+                        source.matches(marker).count(),
+                        "{formatted}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn preserves_line_comments_inside_interface_headers() {
         for source in [
             "interface I // name\n requires A, // target\n B { // body\n}\n",
@@ -2289,7 +2335,7 @@ mod interface_format_tests {
 
     #[test]
     fn required_signature_uses_full_available_width() {
-        let signature = "    function name(self) -> string throws never";
+        let signature = "    function name(self) -> string throws never;";
         let source = format!("interface I {{\n{signature}\n}}\n");
         let options = FormatOptions {
             line_width: signature.len(),
@@ -2314,7 +2360,7 @@ mod interface_format_tests {
             ),
             (
                 "@@internal interface  I{@@internal function f(self)->int throws never}",
-                "@@internal\ninterface I {\n    @@internal\n    function f(self) -> int throws never\n}\n",
+                "@@internal\ninterface I {\n    @@internal\n    function f(self) -> int throws never;\n}\n",
             ),
         ] {
             assert_eq!(assert_round_trip(source, &options), expected);
@@ -2431,7 +2477,7 @@ interface /* keyword */ Named /* name */ <T> /* generics */ requires /* requires
     #[test]
     fn formats_interface_members() {
         let source = "interface  Named < T > requires  Display , Identity {\n type Key extends string = string;\n name  :string;\n function label( self ,value:T )->string throws never\n function fallback(self)->string throws never{return self.name}\n}\n";
-        let expected = "interface Named<T> requires Display, Identity {\n    type Key extends string = string\n    name: string,\n    function label(self, value: T) -> string throws never\n    function fallback(self) -> string throws never {\n        return self.name;\n    }\n}\n";
+        let expected = "interface Named<T> requires Display, Identity {\n    type Key extends string = string;\n    name: string,\n    function label(self, value: T) -> string throws never;\n    function fallback(self) -> string throws never {\n        return self.name;\n    }\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).unwrap();
         assert_eq!(formatted, expected);

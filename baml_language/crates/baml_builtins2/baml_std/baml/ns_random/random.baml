@@ -13,7 +13,7 @@ interface Rng {
     /// - If `bytes` bytes cannot be allocated (`baml.panics.AllocFailure`).
     /// - If the implementation fails to produce the requested number of bytes
     ///   (for example, if the underlying system random number generator is unavailable)
-    function random(self, bytes: int) -> uint8array throws never
+    function random(self, bytes: int) -> uint8array throws never;
 
     /// Returns a uniformly random `int` over the full `[int.min_value(),
     /// int.max_value()]` range.

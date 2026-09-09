@@ -25,12 +25,12 @@ class Done {
 /// `T[]` and `string` implement it at the bottom of this file.
 interface Iterable {
     /// The type of the elements yielded by the iterator.
-    type Item
+    type Item;
     /// The type of error iterating can throw.
     ///
     /// Defaults to `never`, so an implementation that cannot fail may leave it
     /// out entirely.
-    type Error = never
+    type Error = never;
 
     /// Creates an iterator over the value.
     ///
@@ -43,7 +43,7 @@ interface Iterable {
     /// already an iterator hands back the same, shared iterator. It does not
     /// rewind a partly-consumed one, and two callers will pull from the same
     /// cursor.
-    function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
+    function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never;
 }
 
 /// Implemented by types that produce a sequence of values, often from some
@@ -72,12 +72,12 @@ interface Iterable {
 /// track nothing of the sort — there a throwing callback simply propagates.
 interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     /// The type of the elements yielded by the iterator.
-    type Item
+    type Item;
     /// The type of error iterating can throw.
     ///
     /// Defaults to `never`. An adapter's `Error` is the union of its source's and
     /// of any callback's, which is how a fallible step propagates down a chain.
-    type Error = never
+    type Error = never;
 
     /// Advances the iterator and returns the next element, or `baml.iter.Done`
     /// once there are none left.
@@ -94,7 +94,7 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     ///
     /// - `Self.Error` if an error occurs while iterating. Depends on the
     ///   implementation.
-    function next(self) -> Self.Item | Done throws Self.Error
+    function next(self) -> Self.Item | Done throws Self.Error;
 
     /// Returns an iterator that applies `fn` to each element — Python's `map`,
     /// JavaScript's `Iterator.prototype.map`.
@@ -565,8 +565,8 @@ class ArrayIterator<T> {
     }
 
     implements Iterable {
-        type Item = T
-        type Error = never
+        type Item = T;
+        type Error = never;
 
         function iter(self) -> Iterator<Item = T, Error = never> throws never {
             self
@@ -574,8 +574,8 @@ class ArrayIterator<T> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = never
+        type Item = T;
+        type Error = never;
 
         function next(self) -> T | Done throws never {
             // Bounds-check by index, not by matching the element against null: when
@@ -634,8 +634,8 @@ class Range {
     }
 
     implements Iterable {
-        type Item = int
-        type Error = never
+        type Item = int;
+        type Error = never;
 
         function iter(self) -> Iterator<Item = int, Error = never> throws never {
             self
@@ -643,8 +643,8 @@ class Range {
     }
 
     implements Iterator {
-        type Item = int
-        type Error = never
+        type Item = int;
+        type Error = never;
 
         function next(self) -> int | Done throws never {
             if (self.i < self.max) {
@@ -684,8 +684,8 @@ class Repeat<T> {
     }
 
     implements Iterable {
-        type Item = T
-        type Error = never
+        type Item = T;
+        type Error = never;
 
         function iter(self) -> Iterator<Item = T, Error = never> throws never {
             self
@@ -693,8 +693,8 @@ class Repeat<T> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = never
+        type Item = T;
+        type Error = never;
 
         function next(self) -> T | Done throws never {
             if (self.count < 0) {
@@ -725,8 +725,8 @@ class Map<T, R, E, E2> {
     func: (T) -> R throws E2,
 
     implements Iterable {
-        type Item = R
-        type Error = E | E2
+        type Item = R;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
             self
@@ -734,8 +734,8 @@ class Map<T, R, E, E2> {
     }
 
     implements Iterator {
-        type Item = R
-        type Error = E | E2
+        type Item = R;
+        type Error = E | E2;
 
         function next(self) -> R | Done throws E | E2 {
             match (self.source.next()) {
@@ -758,8 +758,8 @@ class Filter<T, E, E2> {
     predicate: (T) -> bool throws E2,
 
     implements Iterable {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
@@ -767,8 +767,8 @@ class Filter<T, E, E2> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function next(self) -> T | Done throws E | E2 {
             while (true) {
@@ -800,8 +800,8 @@ class FilterMap<T, R, E, E2> {
     func: (T) -> R? throws E2,
 
     implements Iterable {
-        type Item = R
-        type Error = E | E2
+        type Item = R;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
             self
@@ -809,8 +809,8 @@ class FilterMap<T, R, E, E2> {
     }
 
     implements Iterator {
-        type Item = R
-        type Error = E | E2
+        type Item = R;
+        type Error = E | E2;
 
         function next(self) -> R | Done throws E | E2 {
             while (true) {
@@ -850,8 +850,8 @@ class FlatMap<T, R, E, E2, E3> {
     inner: Iterator<Item = R, Error = E3> | Done,
 
     implements Iterable {
-        type Item = R
-        type Error = E | E2 | E3
+        type Item = R;
+        type Error = E | E2 | E3;
 
         function iter(self) -> Iterator<Item = R, Error = E | E2 | E3> throws never {
             self
@@ -859,8 +859,8 @@ class FlatMap<T, R, E, E2, E3> {
     }
 
     implements Iterator {
-        type Item = R
-        type Error = E | E2 | E3
+        type Item = R;
+        type Error = E | E2 | E3;
 
         function next(self) -> R | Done throws E | E2 | E3 {
             while (true) {
@@ -906,8 +906,8 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
     inner: Iterator<Item = R, Error = E3> | Done,
 
     implements Iterable {
-        type Item = R
-        type Error = E | E3
+        type Item = R;
+        type Error = E | E3;
 
         function iter(self) -> Iterator<Item = R, Error = E | E3> throws never {
             self
@@ -915,8 +915,8 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
     }
 
     implements Iterator {
-        type Item = R
-        type Error = E | E3
+        type Item = R;
+        type Error = E | E3;
 
         function next(self) -> R | Done throws E | E3 {
             while (true) {
@@ -989,8 +989,8 @@ class Peekable<T, E> {
     }
 
     implements Iterable {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
@@ -998,8 +998,8 @@ class Peekable<T, E> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function next(self) -> T | Done throws E {
             if (self.has_buffer) {
@@ -1029,8 +1029,8 @@ class StepBy<T, E> {
     first: bool,
 
     implements Iterable {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
@@ -1038,8 +1038,8 @@ class StepBy<T, E> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function next(self) -> T | Done throws E {
             if (self.first) {
@@ -1073,8 +1073,8 @@ class Chain<T, E, E2> {
     first_done: bool,
 
     implements Iterable {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
@@ -1082,8 +1082,8 @@ class Chain<T, E, E2> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function next(self) -> T | Done throws E | E2 {
             if (!self.first_done) {
@@ -1114,8 +1114,8 @@ class Take<T, E> {
     remaining: int,
 
     implements Iterable {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
@@ -1123,8 +1123,8 @@ class Take<T, E> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function next(self) -> T | Done throws E {
             if (self.remaining <= 0) {
@@ -1162,8 +1162,8 @@ class Skip<T, E> {
     remaining: int,
 
     implements Iterable {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
@@ -1171,8 +1171,8 @@ class Skip<T, E> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E
+        type Item = T;
+        type Error = E;
 
         function next(self) -> T | Done throws E {
             while (self.remaining > 0) {
@@ -1210,8 +1210,8 @@ class TakeWhile<T, E, E2> {
     done: bool,
 
     implements Iterable {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
@@ -1219,8 +1219,8 @@ class TakeWhile<T, E, E2> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function next(self) -> T | Done throws E | E2 {
             if (self.done) {
@@ -1256,8 +1256,8 @@ class SkipWhile<T, E, E2> {
     skipping: bool,
 
     implements Iterable {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
@@ -1265,8 +1265,8 @@ class SkipWhile<T, E, E2> {
     }
 
     implements Iterator {
-        type Item = T
-        type Error = E | E2
+        type Item = T;
+        type Error = E | E2;
 
         function next(self) -> T | Done throws E | E2 {
             while (self.skipping) {

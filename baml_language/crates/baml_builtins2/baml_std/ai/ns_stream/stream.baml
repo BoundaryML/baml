@@ -51,7 +51,7 @@ interface StreamingClient requires root.Client {
     function invoke_stream(
         self,
         input: root.ModelTurnInput,
-    ) -> TurnStream throws root.errors.InvokeError
+    ) -> TurnStream throws root.errors.InvokeError;
 }
 
 /// One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:

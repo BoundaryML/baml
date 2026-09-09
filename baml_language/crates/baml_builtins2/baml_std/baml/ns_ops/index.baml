@@ -32,7 +32,7 @@
 interface Index<Idx> requires root.Concrete {
     /// The element type. Unbounded, deliberately: an element may be any type at
     /// all, including ones that are not `baml.Concrete`.
-    type Output
+    type Output;
     /// Reads the element of `self` at `idx`.
     ///
     /// The standard library's containers index as Python does: a list or
@@ -41,7 +41,7 @@ interface Index<Idx> requires root.Concrete {
     /// key. They are all-or-nothing, so use a list's `at` or a map's `get` —
     /// both of which return an optional — when a missing element should be a
     /// value rather than a panic.
-    function index(self, idx: Idx) -> Self.Output throws never
+    function index(self, idx: Idx) -> Self.Output throws never;
 }
 
 implement<T> Index<int> for T[] {

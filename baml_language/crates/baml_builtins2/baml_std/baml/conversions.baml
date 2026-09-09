@@ -161,7 +161,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.Serializa
 /// method may not return `Self`, so the structural fallback lives in
 /// `baml.json.to` instead.
 interface FromJson {
-    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError;
 }
 
 /// (internal) Dispatches `from_json` on the target type `T`, honoring a

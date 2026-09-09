@@ -12,7 +12,7 @@ interface Read {
     /// asks for no bytes gets an empty read back rather than an EOF signal.
     /// Every implementor agrees on this — driving a loop off `read` therefore
     /// requires a positive limit, as `bytes` and `text` below use.
-    function read(self, limit: int) -> uint8array? throws root.errors.Io
+    function read(self, limit: int) -> uint8array? throws root.errors.Io;
 
     /// Consume all remaining bytes through EOF.
     function bytes(self) -> uint8array throws root.errors.Io {

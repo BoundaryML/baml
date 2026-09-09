@@ -53,9 +53,12 @@ impl FromCST for InterfaceDecl {
                     AssociatedTypeDecl::from_cst(elem)?,
                     ClassFieldDelimiter::take(&mut it)?,
                 ),
-                SyntaxKind::METHOD_SIG => {
-                    InterfaceItem::RequiredMethod(FunctionSignature::from_cst(elem)?)
-                }
+                SyntaxKind::METHOD_SIG => InterfaceItem::RequiredMethod(
+                    FunctionSignature::from_cst(elem)?,
+                    it.next_if_kind(SyntaxKind::SEMICOLON)
+                        .map(t::Semicolon::from_cst)
+                        .transpose()?,
+                ),
                 SyntaxKind::FUNCTION_DEF => {
                     InterfaceItem::DefaultMethod(FunctionDecl::from_cst(elem)?)
                 }
@@ -134,7 +137,7 @@ impl Printable for InterfaceDecl {
 pub enum InterfaceItem {
     Field(ClassField, Option<ClassFieldDelimiter>),
     AssociatedType(AssociatedTypeDecl, Option<ClassFieldDelimiter>),
-    RequiredMethod(FunctionSignature),
+    RequiredMethod(FunctionSignature, Option<t::Semicolon>),
     DefaultMethod(FunctionDecl),
     Attribute(BlockAttribute),
 }
@@ -150,7 +153,16 @@ impl Printable for InterfaceItem {
             Self::AssociatedType(decl, delimiter) => {
                 decl.print_delimited(delimiter.as_ref(), shape, printer)
             }
-            Self::RequiredMethod(method) => method.print(shape, printer),
+            Self::RequiredMethod(method, semicolon) => {
+                let continuation = shape.indent + printer.config.indent_width;
+                let info = method.print(shape, printer);
+                printer.print_semicolon(
+                    method.rightmost_token(),
+                    semicolon.as_ref().map(Token::span),
+                    continuation,
+                );
+                info
+            }
             Self::DefaultMethod(method) => method.print(shape, printer),
             Self::Attribute(attr) => attr.print(shape, printer),
         }
@@ -159,7 +171,7 @@ impl Printable for InterfaceItem {
         match self {
             Self::Field(field, _) => field.leftmost_token(),
             Self::AssociatedType(decl, _) => decl.leftmost_token(),
-            Self::RequiredMethod(method) => method.leftmost_token(),
+            Self::RequiredMethod(method, _) => method.leftmost_token(),
             Self::DefaultMethod(method) => method.leftmost_token(),
             Self::Attribute(attr) => attr.leftmost_token(),
         }
@@ -172,7 +184,9 @@ impl Printable for InterfaceItem {
             Self::AssociatedType(decl, delimiter) => {
                 ClassFieldDelimiter::rightmost(delimiter.as_ref(), || decl.rightmost_token())
             }
-            Self::RequiredMethod(method) => method.rightmost_token(),
+            Self::RequiredMethod(method, semicolon) => semicolon
+                .as_ref()
+                .map_or_else(|| method.rightmost_token(), Token::span),
             Self::DefaultMethod(method) => method.rightmost_token(),
             Self::Attribute(attr) => attr.rightmost_token(),
         }

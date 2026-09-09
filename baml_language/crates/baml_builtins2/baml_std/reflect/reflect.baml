@@ -47,7 +47,7 @@ class Diagnostic {
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
     /// The `type` value this view wraps, restoring the unnarrowed type.
-    function as_type(self) -> reflect.Type throws never
+    function as_type(self) -> reflect.Type throws never;
 }
 
 /// The closed set of reflection views for a runtime `type` value.
@@ -70,9 +70,9 @@ type TypeKind = reflect.class.Type
 /// `reflect.signature`.
 interface AnyFunction {
     /// The held function's return type. `unknown` accepts any return.
-    type Returns = unknown
+    type Returns = unknown;
     /// The held function's error type. `unknown` accepts any throws clause.
-    type Throws = unknown
+    type Throws = unknown;
 }
 
 /// A read-only reflected view implemented automatically by class values.

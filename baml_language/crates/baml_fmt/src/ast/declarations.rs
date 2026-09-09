@@ -252,9 +252,9 @@ impl FunctionSignature {
         self.params
             .print(Shape::unlimited_single_line(), &mut candidate);
         self.print_return_and_throws(body, &Shape::unlimited_single_line(), &mut candidate);
-        let body_width = usize::from(body.is_some());
+        let terminator_width = 1;
         if !candidate.output.contains('\n')
-            && printer.current_line_len() + candidate.output.len() + body_width
+            && printer.current_line_len() + candidate.output.len() + terminator_width
                 <= printer.config.line_width
         {
             printer.append_from_printer(candidate);
@@ -302,7 +302,7 @@ impl FunctionSignature {
             Shape {
                 width: printer
                     .current_line_remaining_width()
-                    .saturating_sub(if body.is_some() { 2 } else { 0 }),
+                    .saturating_sub(if body.is_some() { 2 } else { 1 }),
                 indent: shape.indent,
                 first_line_offset: printer.current_line_len().saturating_sub(shape.indent),
             }
@@ -1572,18 +1572,16 @@ impl AssociatedTypeDecl {
     pub(super) fn print_delimited(
         &self,
         delimiter: Option<&ClassFieldDelimiter>,
-        shape: Shape,
+        mut shape: Shape,
         printer: &mut Printer,
     ) -> PrintInfo {
         let continuation = shape.indent + printer.config.indent_width;
+        shape.width = shape.width.saturating_sub(1);
         let info = self.print(shape, printer);
-        if let Some(delimiter) = delimiter {
-            let span = ClassFieldDelimiter::rightmost(Some(delimiter), || self.rightmost_token());
-            printer.print_separator(self.rightmost_token(), Some(span), continuation, "");
-            printer
-                .output
-                .truncate(printer.output.trim_end_matches(' ').len());
-        }
+        let delimiter_span = delimiter.map(|delimiter| {
+            ClassFieldDelimiter::rightmost(Some(delimiter), || self.rightmost_token())
+        });
+        printer.print_semicolon(self.rightmost_token(), delimiter_span, continuation);
         info
     }
 }
