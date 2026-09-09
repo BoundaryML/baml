@@ -135,13 +135,13 @@ def notify(
     if post_to_slack:
         from oncall.slack import post as slack_post
 
-        for channel, body in msgs:
-            slack_post(wc, channel, body)
+        for message in msgs:
+            slack_post(wc, message.channel, message.text, blocks=message.blocks)
         console.print(f"[green]posted {len(msgs)} message(s)[/]")
     else:
-        for channel, body in msgs:
-            console.print(f"[bold]→ {channel}[/]")
-            console.print(body)
+        for message in msgs:
+            console.print(f"[bold]→ {message.channel}[/]")
+            console.print(message.text)
             console.print()
 
 
