@@ -8,6 +8,8 @@
 #[cfg(test)]
 mod array_rest;
 #[cfg(test)]
+mod callable_throws_scope;
+#[cfg(test)]
 mod explicit_type_args;
 #[cfg(test)]
 mod inference;
