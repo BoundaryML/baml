@@ -1,7 +1,6 @@
 #!/usr/bin/env -S uv run --script
-# Run from the repository root to create a campaign:
-#   infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py tools/sheep-council/email-data/my-email.lmx
-# To update an existing campaign, add --campaign-id ID and optionally --email-message-id ID.
+# Run from the repository root. Use `upload FILE` to create a campaign, or `download` to fetch every Sheep Council campaign.
+# Add --campaign-id ID and optionally --email-message-id ID to update an existing campaign.
 # /// script
 # requires-python = ">=3.11"
 # dependencies = []
@@ -12,12 +11,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import urllib.error
+import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 LOOPS_API_BASE_URL = "https://app.loops.so/api"
+SHEEP_COUNCIL_CAMPAIGN_GROUP_ID = "cmtc7a2fx078l0j4jwqydy4m4"
+DEFAULT_DOWNLOAD_DIR = Path(__file__).with_name("email-data") / "downloads"
 CAMPAIGN_FIELDS = ("name", "campaignGroupId", "mailingListId")
 MESSAGE_FIELDS = (
     "subject",
@@ -74,6 +78,110 @@ def request(
         ) from error
 
 
+def list_sheep_council_campaigns(api_key: str) -> list[dict[str, Any]]:
+    campaigns: list[dict[str, Any]] = []
+    cursor: str | None = None
+    while True:
+        query = {"perPage": "50"}
+        if cursor:
+            query["cursor"] = cursor
+        page = request(api_key, f"/v1/campaigns?{urllib.parse.urlencode(query)}")
+        campaigns.extend(
+            campaign
+            for campaign in page["data"]
+            if campaign["campaignGroupId"] == SHEEP_COUNCIL_CAMPAIGN_GROUP_ID
+        )
+        cursor = page["pagination"]["nextCursor"]
+        if not cursor:
+            return campaigns
+
+
+def lmx_source(campaign: dict[str, Any], message: dict[str, Any]) -> str:
+    values = {
+        **{field: campaign[field] for field in CAMPAIGN_FIELDS},
+        **{field: message[field] for field in MESSAGE_FIELDS},
+    }
+    frontmatter = "\n".join(
+        f"{field}: {json.dumps(value, ensure_ascii=False, separators=(',', ':'))}"
+        for field, value in values.items()
+    )
+    return f"---\n{frontmatter}\n---\n{message['lmx'].strip()}\n"
+
+
+def markdown_node(node: ET.Element) -> str:
+    content = node.text or ""
+    for child in node:
+        content += markdown_node(child)
+        content += child.tail or ""
+    if node.tag == "Style":
+        return ""
+    if node.tag == "Paragraph":
+        return f"{content.strip()}\n\n" if content.strip() else "\n"
+    if node.tag == "UnorderedList":
+        return "".join(f"- {markdown_node(child).strip()}\n" for child in node) + "\n"
+    if node.tag == "ListItem":
+        return content
+    if node.tag == "Strong":
+        return f"**{content}**"
+    if node.tag == "Code":
+        return f"`{content}`"
+    if node.tag == "Link":
+        return f"[{content}]({node.attrib['href']})"
+    if node.tag == "Text" and node.attrib.get("textColor"):
+        return f'<span style="color: {node.attrib["textColor"]}">{content}</span>'
+    if node.tag == "Br":
+        return "\n"
+    return content
+
+
+def markdown_preview(campaign: dict[str, Any], message: dict[str, Any]) -> str:
+    root = ET.fromstring(f"<Root>{message['lmx']}</Root>")
+    body = re.sub(
+        r"\n{3,}", "\n\n", "".join(markdown_node(child) for child in root)
+    ).strip()
+    metadata = {
+        "campaignId": campaign["id"],
+        "campaignUrl": campaign["url"],
+        "subject": message["subject"],
+        "previewText": message["previewText"],
+        "fromName": message["fromName"],
+        "fromEmail": message["fromEmail"],
+        "replyToEmail": message["replyToEmail"],
+    }
+    frontmatter = "\n".join(
+        f"{field}: {json.dumps(value, ensure_ascii=False)}"
+        for field, value in metadata.items()
+    )
+    return f"---\n{frontmatter}\n---\n{body}\n"
+
+
+def campaign_file_stem(campaign: dict[str, Any]) -> str:
+    created_date = campaign["createdAt"][:10]
+    slug = re.sub(r"[^a-z0-9]+", "-", campaign["name"].lower()).strip("-")
+    return f"{created_date}-{slug}-{campaign['id']}"
+
+
+def download(api_key: str, output_dir: Path) -> list[dict[str, str]]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    downloaded = []
+    for campaign in list_sheep_council_campaigns(api_key):
+        message = request(api_key, f"/v1/email-messages/{campaign['emailMessageId']}")
+        stem = campaign_file_stem(campaign)
+        lmx_path = output_dir / f"{stem}.lmx"
+        markdown_path = output_dir / f"{stem}.md"
+        lmx_path.write_text(lmx_source(campaign, message))
+        markdown_path.write_text(markdown_preview(campaign, message))
+        downloaded.append(
+            {
+                "campaignId": campaign["id"],
+                "campaignUrl": campaign["url"],
+                "lmx": str(lmx_path),
+                "markdown": str(markdown_path),
+            }
+        )
+    return downloaded
+
+
 def upload(
     api_key: str,
     campaign_input: dict[str, Any],
@@ -111,14 +219,28 @@ def upload(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Upload an LMX email to Loops.")
-    parser.add_argument("file", type=Path)
-    parser.add_argument("--campaign-id")
-    parser.add_argument("--email-message-id")
+    parser = argparse.ArgumentParser(
+        description="Manage Sheep Council emails in Loops."
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    upload_parser = commands.add_parser("upload", help="Upload an LMX email.")
+    upload_parser.add_argument("file", type=Path)
+    upload_parser.add_argument("--campaign-id")
+    upload_parser.add_argument("--email-message-id")
+    download_parser = commands.add_parser(
+        "download", help="Download all Sheep Council campaign emails."
+    )
+    download_parser.add_argument(
+        "--output-dir", type=Path, default=DEFAULT_DOWNLOAD_DIR
+    )
     args = parser.parse_args()
+    api_key = os.environ["LOOPS_EMAIL_CAMPAIGNS_API_KEY"]
+    if args.command == "download":
+        result = download(api_key, args.output_dir)
+        print(json.dumps(result, indent=2))
+        return
     if args.email_message_id and not args.campaign_id:
         parser.error("--email-message-id requires --campaign-id")
-    api_key = os.environ["LOOPS_EMAIL_CAMPAIGNS_API_KEY"]
     campaign, message = parse_source(args.file.read_text())
     result = upload(
         api_key,

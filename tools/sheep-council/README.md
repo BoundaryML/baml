@@ -13,13 +13,23 @@ Prepare and upload the Loops email before the human chooses the week's topic. Do
 5. Upload the prepared email to Loops. Creating a campaign requires the explicit LMX file:
 
 ```sh
-infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py tools/sheep-council/email-data/YYYY-MM-DD-sheep-council.lmx
+infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py upload tools/sheep-council/email-data/YYYY-MM-DD-sheep-council.lmx
 ```
 
 To update a campaign that was already created, choose it explicitly with `--campaign-id`. Pass `--email-message-id` as well when the campaign's specific email message must be selected:
 
 ```sh
-infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py tools/sheep-council/email-data/YYYY-MM-DD-sheep-council.lmx --campaign-id CAMPAIGN_ID --email-message-id EMAIL_MESSAGE_ID
+infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py upload tools/sheep-council/email-data/YYYY-MM-DD-sheep-council.lmx --campaign-id CAMPAIGN_ID --email-message-id EMAIL_MESSAGE_ID
 ```
 
 The uploader prints a `campaignUrl`. Give that exact link to the human so they can open the draft in Loops, choose or revise the topic, update the subject and body, review the rendered email, and schedule or send it for Friday at 1:00 PM PT. The uploader does not schedule or send the campaign.
+
+## Download the campaign archive
+
+Download every campaign and email message in the Sheep Council campaign group as uploadable LMX source and Markdown previews:
+
+```sh
+infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans -- uv run tools/sheep-council/prepare-sheep-council-email.py download
+```
+
+Files are written to the ignored `email-data/downloads/` directory by default. Pass `--output-dir PATH` to choose a different destination.
