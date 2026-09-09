@@ -1,4 +1,4 @@
-"""Find the current primary on-call assignees in the local schedule."""
+"""Find the current release on-call assignee in the local schedule."""
 
 from datetime import date, datetime
 from pathlib import Path
@@ -8,7 +8,7 @@ from .parser import parse
 
 
 def current_oncall(today: date | None = None) -> list[str]:
-    """Return primary assignee names, using today's Pacific date by default."""
+    """Return the release assignee, using today's Pacific date by default."""
     schedule_path = Path(__file__).parent / "data" / "schedule.oncall"
     schedule = parse(schedule_path.read_text())
     if today is None:
@@ -20,14 +20,7 @@ def current_oncall(today: date | None = None) -> list[str]:
     )
     if current is None:
         raise RuntimeError("no on-call shift covers today")
-    # Founders are an escalation rotation, not the primary on-call.
-    names = list(
-        dict.fromkeys(
-            current.assignments[rotation]
-            for rotation in schedule.roster.rotations_in_order()
-            if rotation != "oncall-founders"
-        )
-    )
-    if not names:
-        raise RuntimeError("no primary on-call assignee")
-    return names
+    name = current.assignments.get("oncall-releases")
+    if not name or name not in schedule.roster.by_rotation.get("oncall-releases", []):
+        raise RuntimeError("no valid current assignee for oncall-releases")
+    return [name]
