@@ -1621,6 +1621,8 @@ mod tests {
         });
     }
 
+    #[test]
+    #[serial]
     fn test_selected_call_prefers_later_success_over_earlier_success() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
