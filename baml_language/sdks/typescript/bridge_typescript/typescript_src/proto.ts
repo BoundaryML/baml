@@ -853,16 +853,17 @@ function unwrapUnionVariant(
     return h;
 }
 
+/**
+ * Decode the value carried by an `error`/`panic` envelope. A failure while
+ * decoding it (a generated class whose constructor throws, an unmapped
+ * handle, ...) is the caller's real error and propagates; hiding it behind a
+ * `BamlError` with `value: undefined` would strip the only diagnostic.
+ */
 function decodeThrown(
     holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
 ): { value: unknown; className: string | undefined; message: string } {
     const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
-    let value: unknown;
-    try {
-        value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
-    } catch {
-        value = undefined;
-    }
+    const value: unknown = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
     let message = '';
     if (value != null && typeof value === 'object' && 'message' in (value as object)) {
         const m = (value as Record<string, unknown>).message;
