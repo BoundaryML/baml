@@ -80,10 +80,6 @@ test('the changelog renders directly from the complete canonical source', async 
   assert.equal(changelog.entries[0]?.version, firstVersion);
   assert.ok(changelog.entries.length > 100);
   assert.equal(
-    changelog.headingIds.filter((id) => id !== undefined).length,
-    changelog.entries.length,
-  );
-  assert.equal(
     new Set(changelog.entries.map(({ id }) => id)).size,
     changelog.entries.length,
   );
@@ -91,11 +87,16 @@ test('the changelog renders directly from the complete canonical source', async 
 
   const rendered = renderToStaticMarkup(
     createElement(ChangelogContent, {
-      headingIds: changelog.headingIds,
       markdown: changelog.markdown,
     }),
   );
-  assert.match(rendered, new RegExp(`id="${changelog.entries[0]?.id}"`));
+  const renderedIds = [...rendered.matchAll(/<h2 id="([^"]+)">/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(
+    renderedIds,
+    changelog.entries.map(({ id }) => id),
+  );
 });
 
 test('legacy non-version level-two headings do not shift release anchors', () => {
@@ -112,20 +113,44 @@ test('legacy non-version level-two headings do not shift release anchors', () =>
     '/canonical/CHANGELOG.md',
   );
 
-  assert.deepEqual(changelog.headingIds, [
-    changelogVersionId('1.2.0'),
-    undefined,
-    changelogVersionId('1.1.0'),
-  ]);
   const rendered = renderToStaticMarkup(
     createElement(ChangelogContent, {
-      headingIds: changelog.headingIds,
       markdown: changelog.markdown,
     }),
   );
   assert.match(rendered, /<h2 id="v1-2-0">/);
   assert.match(rendered, /<h2>Migration notes<\/h2>/);
   assert.match(rendered, /<h2 id="v1-1-0">/);
+});
+
+test('fenced code blocks do not create or shift release anchors', () => {
+  const changelog = parseCanonicalChangelog(
+    [
+      '# Changelog',
+      '',
+      '## [1.2.0] - 2026-01-02',
+      '',
+      '```markdown',
+      '## [0.0.0] - example snippet',
+      '```',
+      '',
+      '## [1.1.0] - 2026-01-01',
+    ].join('\n'),
+    '/canonical/CHANGELOG.md',
+  );
+  assert.deepEqual(
+    changelog.entries.map(({ id }) => id),
+    [changelogVersionId('1.2.0'), changelogVersionId('1.1.0')],
+  );
+
+  const rendered = renderToStaticMarkup(
+    createElement(ChangelogContent, { markdown: changelog.markdown }),
+  );
+  const renderedIds = [...rendered.matchAll(/<h2 id="([^"]+)">/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(renderedIds, ['v1-2-0', 'v1-1-0']);
+  assert.doesNotMatch(rendered, /id="v0-0-0"/);
 });
 
 test('authored MDX never embeds a second BAML source block', async () => {

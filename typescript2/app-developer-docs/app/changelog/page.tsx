@@ -27,10 +27,7 @@ export default async function ChangelogPage() {
         This page renders the repository&apos;s canonical release history
         directly. It is not copied into a second documentation source.
       </p>
-      <ChangelogContent
-        headingIds={changelog.headingIds}
-        markdown={changelog.markdown}
-      />
+      <ChangelogContent markdown={changelog.markdown} />
     </DocsShell>
   );
 }
