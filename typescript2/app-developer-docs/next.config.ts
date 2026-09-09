@@ -18,6 +18,15 @@ export default function createNextConfig(phase: string): NextConfig {
     outputFileTracingRoot: path.join(applicationDirectory, '..'),
     poweredByHeader: false,
     reactStrictMode: true,
+    async redirects() {
+      return [
+        {
+          destination: 'https://boundaryml.com/blog?tags=release',
+          permanent: true,
+          source: '/changelog',
+        },
+      ];
+    },
     trailingSlash: false,
     transpilePackages: ['@b/pkg-grammar'],
   });
