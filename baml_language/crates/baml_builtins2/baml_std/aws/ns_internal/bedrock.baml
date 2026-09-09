@@ -130,16 +130,12 @@ class ToolUseBlock {
     input: map<string, unknown>,
 }
 
-/// One piece of a tool's result. Only `text` is modeled: `ai.events` carries
-/// tool output as a string (`ToolCompleted.output` / `ToolFailed.message`), so
-/// the `json`/`image`/`document` members of the wire union have no source.
-class ToolResultContentBlock {
-    text: string,
-}
-
+/// `content` is a `ToolResultContentBlock[]` on the wire — `text`, `image`,
+/// `document` or `video`, the same members spelled the same way as in a
+/// message `ContentBlock`, so the one class serves both.
 class ToolResultBlock {
     toolUseId: string,
-    content: ToolResultContentBlock[],
+    content: ContentBlock[],
     status: string?, // success | error
 }
 
@@ -561,40 +557,48 @@ class BedrockPrompt {
     messages: Message[],
 }
 
-/// (internal) One rendered prompt message -> Converse content blocks.
-function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
-    let blocks: ContentBlock[] = [];
-    for (let part in message.parts) {
-        match (part) {
-            let text: string => {
-                // Converse rejects empty and whitespace-only text blocks, and a
-                // rendered prompt routinely produces them around media parts —
-                // the same filter the Anthropic client applies in
-                // `_prompt_blocks`.
-                if (text.trim() != "") {
-                    blocks.push(ContentBlock.of_text(text));
-                }
+/// (internal) One content block -> its Converse `ContentBlock`, or null when it lowers to
+/// nothing. Converse takes every media kind in a conversation message; a tool
+/// result carries `text`, `image`, `document` and `video` but has no audio
+/// member, so audio in a result degrades into a trailing user turn
+/// (`_lower_journal`); system content is text only (`_prompt_system`).
+///
+///   position    | text   | image  | pdf    | audio   | video
+///   system      | Accept | Reject | Reject | Reject  | Reject
+///   user        | Accept | Accept | Accept | Accept  | Accept
+///   assistant   | Accept | Accept | Accept | Accept  | Accept
+///   tool_result | Accept | Accept | Accept | Degrade | Accept
+function _lower_block(block: ai.content.ContentBlock, preview: bool = false) -> ContentBlock? {
+    match (block) {
+        let text: ai.content.Text => {
+            // Converse rejects empty and whitespace-only text blocks, and a
+            // rendered prompt routinely produces them around media parts —
+            // the same filter the Anthropic client applies.
+            if (text.text.trim() == "") {
                 null
-            },
-            let image: baml.media.Image => {
-                blocks.push(_image_block(image, preview = preview));
-                null
-            },
-            let audio: baml.media.Audio => {
-                blocks.push(_audio_block(audio, preview = preview));
-                null
-            },
-            let video: baml.media.Video => {
-                blocks.push(_video_block(video, preview = preview));
-                null
-            },
-            let pdf: baml.media.Pdf => {
-                blocks.push(_document_block(pdf, preview = preview));
-                null
-            },
-        };
+            } else {
+                ContentBlock.of_text(text.text)
+            }
+        },
+        let media: ai.content.Media => {
+            match (media.media) {
+                let image: baml.media.Image => _image_block(image, preview = preview),
+                let audio: baml.media.Audio => _audio_block(audio, preview = preview),
+                let video: baml.media.Video => _video_block(video, preview = preview),
+                let pdf: baml.media.Pdf => _document_block(pdf, preview = preview),
+            }
+        },
     }
-    blocks
+}
+
+function _lower_blocks(blocks: ai.content.ContentBlock[], preview: bool = false) -> ContentBlock[] {
+    let out: ContentBlock[] = [];
+    for (let block in blocks) {
+        if let lowered: ContentBlock = _lower_block(block, preview = preview) {
+            out.push(lowered);
+        }
+    }
+    out
 }
 
 /// (internal) System content is text-only; a media part in a system message is rejected
@@ -633,8 +637,8 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 /// metadata, so nothing populates this yet from the prompt DSL. Until that
 /// lands, use the client's `cache_system_prompt` / `cache_tools` options,
 /// which do not depend on per-message metadata.
-function _wants_cache_point(message: ai.PromptMessage) -> bool {
-    match (message.metadata.get("cache_point")) {
+function _wants_cache_point(metadata: map<string, baml.json.json>) -> bool {
+    match (metadata.get("cache_point")) {
         null => false,
         _ => true,
     }
@@ -670,17 +674,17 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             for (let block in _prompt_system(message)) {
                 system.push(block);
             }
-            if (_wants_cache_point(message)) {
+            if (_wants_cache_point(message.metadata)) {
                 system.push(SystemContentBlock.of_cache_point());
             }
             null
         } else {
-            let content = _prompt_content(message, preview = preview);
+            let content = _lower_blocks(ai.wire.prompt_blocks(message), preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                if (_wants_cache_point(message)) {
+                if (_wants_cache_point(message.metadata)) {
                     content.push(ContentBlock.of_cache_point());
                 }
                 messages.push(Message { role: _conversation_role(message.role), content: content });
@@ -705,35 +709,6 @@ class PendingMessage {
     tool_results: bool,
 }
 
-function _assistant_content(content: ai.content.Block[]) -> ContentBlock[] {
-    let out: ContentBlock[] = [];
-    for (let block in content) {
-        match (block) {
-            let text: ai.content.Text => {
-                out.push(ContentBlock.of_text(text.text));
-                null
-            },
-            // Dropped: Converse replays reasoning as `reasoningContent` with
-            // the provider's opaque `signature`, which `ai.content.Reasoning`
-            // (a readable summary) cannot reproduce; replaying it unsigned is
-            // rejected.
-            let reasoning: ai.content.Reasoning => null,
-            // Dropped: a generated media payload is an output, not replayable
-            // model input.
-            let media: ai.content.Media => null,
-            let use: ai.content.ToolUse => {
-                out.push(
-                    ContentBlock.of_tool_use(
-                        ToolUseBlock { toolUseId: use.id, name: use.name, input: use.args },
-                    ),
-                );
-                null
-            },
-        };
-    }
-    out
-}
-
 /// (internal) `ToolResultBlock.status` "is only supported by Amazon Nova and Anthropic
 /// Claude 3 and 4 models" (API_runtime_ToolResultBlock). Sending it to any
 /// other family ships a member that model does not accept, so it is gated on a
@@ -753,7 +728,7 @@ function _supports_tool_result_status(model: string) -> bool {
 function _push_tool_result(
     pending: PendingMessage[],
     id: string,
-    output: string,
+    content: ContentBlock[],
     is_error: bool,
     with_status: bool,
 ) -> void {
@@ -765,11 +740,7 @@ function _push_tool_result(
         "success"
     };
     let block = ContentBlock.of_tool_result(
-        ToolResultBlock {
-            toolUseId: id,
-            content: [ToolResultContentBlock { text: output }],
-            status: status,
-        },
+        ToolResultBlock { toolUseId: id, content: content, status: status },
     );
     // `.at` is null on an empty list, which covers the no-messages case.
     if let last: PendingMessage = pending.at(pending.length() - 1) {
@@ -785,28 +756,61 @@ function _push_tool_result(
 
 /// (internal) `ai.RunStarted` / `ai.ToolRequested` / `ai.Usage` / `ai.FinalProduced` are
 /// journal-only and skip; skipping never closes an open tool-result group.
-function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
+function _lower_journal(
+    journal: ai.Journal,
+    with_status: bool,
+    preview: bool = false,
+) -> Message[] {
     let pending: PendingMessage[] = [];
     for (let event in journal.entries()) {
         match (event) {
             let user: ai.events.UserMessage => {
-                pending.push(
-                    PendingMessage {
-                        message: Message { role: "user", content: [ContentBlock.of_text(user.content)] },
-                        tool_results: false,
-                    },
-                );
+                let content = _lower_blocks(user.content, preview = preview);
+                if (content.length() > 0) {
+                    if (_wants_cache_point(user.metadata)) {
+                        content.push(ContentBlock.of_cache_point());
+                    }
+                    pending.push(
+                        PendingMessage {
+                            message: Message { role: "user", content: content },
+                            tool_results: false,
+                        },
+                    );
+                }
                 null
             },
             let assistant: ai.events.AssistantMessage => {
-                let content = _assistant_content(assistant.content);
+                let content: ContentBlock[] = [];
+                for (let block in assistant.content) {
+                    match (block) {
+                        let inner: ai.content.ContentBlock => {
+                            if let lowered: ContentBlock = _lower_block(inner, preview = preview) {
+                                content.push(lowered);
+                            }
+                            null
+                        },
+                        let use: ai.content.ToolUse => {
+                            content.push(
+                                ContentBlock.of_tool_use(
+                                    ToolUseBlock { toolUseId: use.id, name: use.name, input: use.args },
+                                ),
+                            );
+                            null
+                        },
+                        // Dropped: Converse replays reasoning as
+                        // `reasoningContent` with the provider's opaque
+                        // `signature`, which `ai.content.Reasoning` (a readable
+                        // summary) cannot reproduce; replaying it unsigned is
+                        // rejected.
+                        let reasoning: ai.content.Reasoning => null,
+                    };
+                }
                 // An assistant turn that lowers to nothing is dropped rather
                 // than sent as `content: []`, which Converse rejects with a
                 // ValidationException. A reasoning-only turn is exactly that
-                // shape: `_assistant_content` drops Reasoning and Media, and
-                // `ai.wire.sanitize_for_client` KEEPS same-client reasoning,
-                // so nothing upstream removes it. Mirrors the Anthropic
-                // client's guard in `_lower_journal`.
+                // shape, and `ai.wire.sanitize_for_client` KEEPS same-client
+                // reasoning, so nothing upstream removes it. Mirrors the
+                // Anthropic client's guard in `_lower_journal`.
                 if (content.length() > 0) {
                     pending.push(
                         PendingMessage {
@@ -818,10 +822,39 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
                 null
             },
             let completed: ai.events.ToolCompleted => {
-                _push_tool_result(pending, completed.id, completed.output, false, with_status);
+                // A toolResult carries text, image, document and video inline.
+                let split = ai.wire.tool_result_blocks(journal, completed, ["image", "pdf", "video"]);
+                _push_tool_result(
+                    pending,
+                    completed.id,
+                    _lower_blocks(split.inline, preview = preview),
+                    false,
+                    with_status,
+                );
+                // Degrade: the media the result cannot carry follows it as a
+                // user turn; `_merge_adjacent_roles` folds it into the same
+                // wire message after the toolResult blocks.
+                if (split.trailing.length() > 0) {
+                    pending.push(
+                        PendingMessage {
+                            message: Message {
+                                role: "user",
+                                content: _lower_blocks(split.trailing, preview = preview),
+                            },
+                            tool_results: false,
+                        },
+                    );
+                }
+                null
             },
             let failed: ai.events.ToolFailed => {
-                _push_tool_result(pending, failed.id, failed.message, true, with_status);
+                _push_tool_result(
+                    pending,
+                    failed.id,
+                    [ContentBlock.of_text(failed.message)],
+                    true,
+                    with_status,
+                );
             },
             _ => null,
         };
@@ -983,6 +1016,7 @@ function converse_request(
     let journal_messages = _lower_journal(
         ai.wire.sanitize_for_client(input.journal, client.id()),
         _supports_tool_result_status(client.model),
+        preview = preview,
     );
     for (let message in journal_messages) {
         messages.push(message);

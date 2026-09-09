@@ -1128,3 +1128,55 @@ testset "live" with testing.Sequential() {
     // no key to gate on. Add one here (same shape as above, gated on
     // AI_GATEWAY_API_KEY) once the account exists.
 }
+
+// ─── journal content blocks ──────────────────────────────────────────────────
+//
+// The Images clients lower a journal user turn through the same collector as
+// the prompt: OpenAI's endpoint takes text only, so an image in a user turn
+// is Rejected; the gateway takes images as `files[]`, so it is Accepted
+// there. Tool traffic has no representation on either.
+
+function _images_media_input(spec: ai.FunctionSpec<image>) -> ai.ModelTurnInput {
+    ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: ai.Journal {
+            log: [ai.events.UserMessage.of(["make it warmer", root.llm_mock.media_png()])],
+        },
+        toolbox: ai.tools.Toolbox.new([]),
+        output_type: spec.output_type(),
+    }
+}
+
+function openai_images_journal_image_rejected() -> string {
+    let cl = openai.ImageClient.new(model = "gpt-image-1", api_key = "test-key");
+    openai.internal.images_render(cl, _images_media_input(ImagesDraw@spec("a lamp"))).url catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => invalid.detail,
+        _ => `unexpected error class: ${e.to_string()}`,
+    }
+}
+
+test "openai_images_journal_image_rejected" {
+    assert.equal(
+        openai_images_journal_image_rejected(),
+        "Images API only supports text prompts; found image input",
+    )
+}
+
+function gateway_images_journal_image_accepted() -> string {
+    let cl = vercel.AiGatewayImageClient.new(model = "bfl/flux-2-pro", api_key = "test-key");
+    let body = baml.json.parse(
+        vercel.internal.gateway_images_render(cl, _images_media_input(GatewayDraw@spec("a lamp"))).body,
+    );
+    [
+        baml.json.path<string>(body, ".prompt"),
+        baml.json.path<string>(body, ".files[0].type"),
+        baml.json.path<string>(body, ".files[0].data"),
+    ].join("|")
+}
+
+test "gateway_images_journal_image_accepted" {
+    assert.equal(
+        gateway_images_journal_image_accepted(),
+        "A studio photograph of a lamp.\n\nmake it warmer|file|SGVsbG8=",
+    )
+}

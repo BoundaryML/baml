@@ -74,10 +74,12 @@ class AnthToolUseBlock {
     cache_control: baml.json.json?,
 }
 
+/// `content` is the plain string for a text-only result and a block list
+/// (text, image, document) when the result carries media.
 class AnthToolResultBlock {
     type: string,
     tool_use_id: string,
-    content: string,
+    content: string | AnthBlock[],
     is_error: bool,
     cache_control: baml.json.json?,
 }
@@ -334,57 +336,69 @@ function _media_block(
     AnthMediaBlock { type: block_type, source: source, cache_control: null }
 }
 
-function _prompt_blocks(
-    message: ai.PromptMessage,
-    role: string,
+/// One content block at `position` -> its wire block, or null when it lowers
+/// to nothing. The Messages API's input modalities, per position:
+///
+///   position    | text   | image  | pdf    | audio  | video
+///   system      | Accept | Reject | Reject | Reject | Reject
+///   user        | Accept | Accept | Accept | Reject | Reject
+///   assistant   | Accept | Reject | Reject | Reject | Reject
+///   tool_result | Accept | Accept | Accept | Reject | Reject
+///
+/// Image and document blocks are user input: they belong in a user message
+/// or inside a `tool_result` (whose content is a list of the same blocks).
+/// There is no audio or video input block at all, so those are rejected
+/// everywhere — an invented `{"type":"input_audio"}` used to guarantee a 400.
+function _lower_block(
+    block: ai.content.ContentBlock,
+    position: string,
+    preview: bool = false,
+) -> AnthBlock? {
+    match (block) {
+        let text: ai.content.Text => {
+            // The API rejects empty and whitespace-only text blocks, and a
+            // rendered prompt routinely produces them around media parts.
+            if (text.text.trim() == "") {
+                null
+            } else {
+                AnthTextBlock { type: "text", text: text.text, cache_control: null }
+            }
+        },
+        let media: ai.content.Media => {
+            let block_type = match (media.media) {
+                let image: baml.media.Image => "image",
+                let pdf: baml.media.Pdf => "document",
+                let audio: baml.media.Audio => {
+                    throw _reject(
+                        "Anthropic does not support audio prompt input: the Messages API has no audio content block",
+                    )
+                },
+                let video: baml.media.Video => {
+                    throw _reject("Anthropic does not support video prompt input")
+                },
+            };
+            if (position != "user" && position != "tool_result") {
+                throw _reject(
+                    `Anthropic only supports ${media.kind()} input in user messages, found ${position}`,
+                )
+            }
+            _media_block(media.media, block_type, preview = preview)
+        },
+    }
+}
+
+function _lower_blocks(
+    blocks: ai.content.ContentBlock[],
+    position: string,
     preview: bool = false,
 ) -> AnthBlock[] {
-    let blocks: AnthBlock[] = [];
-    for (let part in message.parts) {
-        match (part) {
-            let text: string => {
-                // The API rejects empty and whitespace-only text blocks, and a
-                // rendered prompt routinely produces them around media parts.
-                if (text.trim() != "") {
-                    blocks.push(AnthTextBlock { type: "text", text: text, cache_control: null });
-                }
-                null
-            },
-            let image: baml.media.Image => {
-                if (role != "user") {
-                    throw _reject(
-                        `Anthropic only supports image input in user messages, found ${role}`,
-                    )
-                }
-                blocks.push(_media_block(image, "image", preview = preview));
-                null
-            },
-            // The Messages API has NO audio input content block — audio is not
-            // an input modality for it at all (the 17 documented input blocks
-            // contain nothing of the kind). This used to emit an invented
-            // `{"type":"input_audio"}` block, so every audio-bearing request was
-            // a guaranteed provider 400; it is a client-side error now, exactly
-            // like video below.
-            let audio: baml.media.Audio => {
-                throw _reject(
-                    "Anthropic does not support audio prompt input: the Messages API has no audio content block",
-                )
-            },
-            let pdf: baml.media.Pdf => {
-                if (role != "user") {
-                    throw _reject(
-                        `Anthropic only supports PDF input in user messages, found ${role}`,
-                    )
-                }
-                blocks.push(_media_block(pdf, "document", preview = preview));
-                null
-            },
-            let video: baml.media.Video => {
-                throw _reject("Anthropic does not support video prompt input")
-            },
-        };
+    let out: AnthBlock[] = [];
+    for (let block in blocks) {
+        if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
+            out.push(lowered);
+        }
     }
-    blocks
+    out
 }
 
 function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
@@ -393,7 +407,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
     for (let message in prompt.messages()) {
         let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
-            let blocks = _prompt_blocks(message, "system", preview = preview);
+            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), "system", preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             for (let block in blocks) {
                 system.push(block);
@@ -405,7 +419,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
             } else {
                 "user"
             };
-            let blocks = _prompt_blocks(message, role, preview = preview);
+            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), role, preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
@@ -423,42 +437,27 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
 // tool_result blocks in a user message immediately after the assistant
 // tool_use message, so consecutive tool results group into ONE user message.
 
-function _assistant_blocks(content: ai.content.Block[]) -> AnthBlock[] {
-    let out: AnthBlock[] = [];
-    for (let b in content) {
-        match (b) {
-            let t: ai.content.Text => {
-                if (t.text.trim() != "") {
-                    out.push(AnthTextBlock { type: "text", text: t.text, cache_control: null });
-                }
-                null
-            },
-            // Dropped: replaying thinking without its signature is rejected
-            // by the API, and ai.content.Reasoning has no signature field.
-            // ai.wire.sanitize_for_client already drops foreign-client
-            // reasoning; this drops the rest.
-            let r: ai.content.Reasoning => null,
-            // Dropped: a generated image is an output, not replayable input.
-            let m: ai.content.Media => null,
-            let u: ai.content.ToolUse => {
-                out.push(
-                    AnthToolUseBlock {
-                        type: "tool_use",
-                        id: u.id,
-                        name: u.name,
-                        input: baml.json.to_json(u.args),
-                        cache_control: null,
-                    },
-                );
-                null
-            },
-        };
+/// (internal) A tool result's `content`: the plain string when the result is
+/// text only (one text block, or nothing), the block list otherwise.
+function _tool_result_content(blocks: AnthBlock[]) -> string | AnthBlock[] {
+    if (blocks.length() == 0) {
+        return "";
     }
-    out
+    if (blocks.length() == 1) {
+        if let text: AnthTextBlock = blocks.at(0) {
+            return text.text;
+        }
+    }
+    blocks
 }
 
 /// (internal) Append one tool_result block, extending the trailing group when open.
-function _push_tool_result(msgs: Message[], id: string, content: string, is_error: bool) -> void {
+function _push_tool_result(
+    msgs: Message[],
+    id: string,
+    content: string | AnthBlock[],
+    is_error: bool,
+) -> void {
     let block = AnthToolResultBlock {
         type: "tool_result",
         tool_use_id: id,
@@ -480,22 +479,47 @@ function _push_tool_result(msgs: Message[], id: string, content: string, is_erro
 
 /// (internal) ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
 /// skipped events never close an open tool_result group.
-function _lower_journal(j: ai.Journal) -> Message[] {
+function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
     let msgs: Message[] = [];
     for (let e in j.entries()) {
         match (e) {
             let m: ai.events.UserMessage => {
-                msgs.push(
-                    Message {
-                        role: "user",
-                        tool_results: false,
-                        blocks: [AnthTextBlock { type: "text", text: m.content, cache_control: null }],
-                    },
-                );
+                let blocks = _lower_blocks(m.content, "user", preview = preview);
+                _anth_apply_cache_control(blocks, m.metadata.get("cache_control"));
+                if (blocks.length() > 0) {
+                    msgs.push(Message { role: "user", tool_results: false, blocks: blocks });
+                }
                 null
             },
             let m: ai.events.AssistantMessage => {
-                let blocks = _assistant_blocks(m.content);
+                let blocks: AnthBlock[] = [];
+                for (let b in m.content) {
+                    match (b) {
+                        let content: ai.content.ContentBlock => {
+                            if let lowered: AnthBlock = _lower_block(content, "assistant", preview = preview) {
+                                blocks.push(lowered);
+                            }
+                            null
+                        },
+                        let u: ai.content.ToolUse => {
+                            blocks.push(
+                                AnthToolUseBlock {
+                                    type: "tool_use",
+                                    id: u.id,
+                                    name: u.name,
+                                    input: baml.json.to_json(u.args),
+                                    cache_control: null,
+                                },
+                            );
+                            null
+                        },
+                        // Dropped: replaying thinking without its signature is
+                        // rejected by the API, and ai.content.Reasoning has no
+                        // signature field. ai.wire.sanitize_for_client already
+                        // drops foreign-client reasoning; this drops the rest.
+                        let r: ai.content.Reasoning => null,
+                    };
+                }
                 // An assistant turn that lowers to nothing is dropped rather
                 // than sent as `content: []` (the reasoning-only turn that made
                 // the API 400). ai.wire.sanitize_for_client removes most of
@@ -506,7 +530,12 @@ function _lower_journal(j: ai.Journal) -> Message[] {
                 null
             },
             let c: ai.events.ToolCompleted => {
-                _push_tool_result(msgs, c.id, c.output, false);
+                _push_tool_result(
+                    msgs,
+                    c.id,
+                    _tool_result_content(_lower_blocks(c.content, "tool_result", preview = preview)),
+                    false,
+                );
             },
             let f: ai.events.ToolFailed => {
                 _push_tool_result(msgs, f.id, f.message, true);
@@ -631,7 +660,12 @@ function messages_request(
     let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
-    for (let message in _lower_journal(ai.wire.sanitize_for_client(input.journal, params.client_id))) {
+    for (
+        let message in _lower_journal(
+            ai.wire.sanitize_for_client(input.journal, params.client_id),
+            preview = preview,
+        )
+    ) {
         lowered.push(message);
     }
 

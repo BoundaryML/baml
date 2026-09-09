@@ -64,7 +64,7 @@ function _chat_input_with_history() -> ai.ModelTurnInput {
     let args: map<string, unknown> = { "city": "SF" };
     let journal = ai.Journal {
         log: [
-            ai.events.UserMessage { content: "weather in SF?" },
+            ai.events.UserMessage.new("weather in SF?"),
             ai.events.AssistantMessage {
                 content: [
                     ai.content.Text { text: "checking" },
@@ -72,7 +72,7 @@ function _chat_input_with_history() -> ai.ModelTurnInput {
                 ],
                 client_id: "openai-chat/gpt-4o-mini",
             },
-            ai.events.ToolCompleted { id: "call_1", output: "sunny in SF" },
+            ai.events.ToolCompleted.new("call_1", "sunny in SF"),
         ],
     };
     ai.ModelTurnInput {
@@ -1779,4 +1779,74 @@ testset "live" with testing.Sequential() {
     } else {
         log.warn("live::openrouter not registered: OPENROUTER_API_KEY is unset")
     }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Chat column of the lowering table (`_chat_lower_block` in chat.baml): a
+// `tool` message is text only, so every media kind in a result Degrades into
+// a trailing user turn; user turns Accept image, audio and pdf; video has no
+// part at all and is Rejected.
+
+function _chat_media_input(media: image | audio | video | pdf) -> ai.ModelTurnInput {
+    let spec = ChatEcho@spec("and tomorrow?");
+    ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: root.llm_mock.media_journal("openai-chat/gpt-4o-mini", media),
+        toolbox: ai.tools.Toolbox.new([ai.tools.tool(chat_get_weather)]),
+        output_type: spec.output_type(),
+    }
+}
+
+// messages: [system, user, assistant(tool_calls), tool, tool, user(note +
+// image), user(text + image)]. Both tool messages keep plain-string content.
+function chat_journal_image_degrades() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let _ = cl.invoke(_chat_media_input(root.llm_mock.media_png()));
+            let body = mock.last_request().json();
+            [
+                baml.json.path<string>(body, ".messages[3].content"),
+                baml.json.path<string>(body, ".messages[4].tool_call_id"),
+                baml.json.path<string>(body, ".messages[4].content"),
+                baml.json.path<string>(body, ".messages[5].role"),
+                baml.json.path<string>(body, ".messages[5].content[0].text"),
+                baml.json.path<string>(body, ".messages[5].content[1].image_url.url"),
+                baml.json.path<string>(body, ".messages[6].role"),
+                baml.json.path<string>(body, ".messages[6].content[0].text"),
+                baml.json.path<string>(body, ".messages[6].content[1].type"),
+                baml.json.path_or<string>(body, ".messages[7].role", "absent"),
+            ].join("|")
+        },
+    )
+}
+
+test "chat_journal_image_degrades" {
+    assert.equal(
+        chat_journal_image_degrades(),
+        `sunny in SF|call_media|captured:|user|${root.llm_mock.degrade_note("capture")}|data:image/png;base64,SGVsbG8=|user|Screenshot after the tool ran:|image_url|absent`,
+    )
+}
+
+function chat_journal_video_rejected() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let clip = baml.media.Video.from_base64("QUJD", "video/mp4");
+            let detail = cl.invoke(_chat_media_input(clip)).stop_reason.to_string() catch_all (e) {
+                let invalid: ai.errors.InvalidRequest => invalid.detail,
+                _ => `unexpected error class: ${e.to_string()}`,
+            };
+            `${detail}|requests=${mock.request_count()}`
+        },
+    )
+}
+
+test "chat_journal_video_rejected" {
+    let got = chat_journal_video_rejected();
+    assert.contains(got, "OpenAI Chat Completions has no video input part");
+    assert.contains(got, "|requests=0")
 }

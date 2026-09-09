@@ -157,15 +157,45 @@ function _gw_images_file(media: ai.MediaPart, preview: bool = false) -> GwImages
     }
 }
 
+/// (internal) Collect a turn into the endpoint's two inputs: text blocks trimmed into
+/// `parts` (blanks dropped), image blocks into `files` — how this endpoint
+/// does image editing / variations (image-model protocol v4) — at every
+/// position. The other media kinds have no representation and are rejected.
+function _gw_images_collect(
+    blocks: ai.content.ContentBlock[],
+    parts: string[],
+    files: GwImagesFile[],
+    preview: bool = false,
+) -> void {
+    for (let block in blocks) {
+        match (block) {
+            let text: ai.content.Text => {
+                let trimmed = text.text.trim();
+                if (trimmed != "") {
+                    parts.push(trimmed);
+                }
+                null
+            },
+            let media: ai.content.Media => {
+                match (media.media) {
+                    let image: baml.media.Image => {
+                        files.push(_gw_images_file(image, preview = preview));
+                        null
+                    },
+                    _ => {
+                        throw _gw_images_media_rejected(media.kind())
+                    },
+                }
+            },
+        };
+    }
+}
+
 /// (internal) The rendered prompt lowered to the endpoint's two inputs.
 ///
 /// Text: every text part, trimmed, blanks dropped, joined with a blank line —
-/// sys_llm's `prompt_to_text`, roles discarded. Journal user messages follow so
+/// sys_llm's `prompt_to_text`, roles discarded. Journal user turns follow so
 /// a re-ask still reaches the model.
-///
-/// Files: image parts become `files[]` entries, which is how this endpoint does
-/// image editing / variations (image-model protocol v4). The other media kinds
-/// have no representation and are still rejected.
 function _gw_images_input(
     prompt: ai.Prompt,
     journal: ai.Journal,
@@ -174,37 +204,11 @@ function _gw_images_input(
     let parts: string[] = [];
     let files: GwImagesFile[] = [];
     for (let message in prompt.messages()) {
-        for (let part in message.parts) {
-            match (part) {
-                let text: string => {
-                    let trimmed = text.trim();
-                    if (trimmed != "") {
-                        parts.push(trimmed);
-                    }
-                    null
-                },
-                let image: baml.media.Image => {
-                    files.push(_gw_images_file(image, preview = preview));
-                    null
-                },
-                let audio: baml.media.Audio => {
-                    throw _gw_images_media_rejected("audio")
-                },
-                let video: baml.media.Video => {
-                    throw _gw_images_media_rejected("video")
-                },
-                let pdf: baml.media.Pdf => {
-                    throw _gw_images_media_rejected("pdf")
-                },
-            };
-        }
+        _gw_images_collect(ai.wire.prompt_blocks(message), parts, files, preview = preview);
     }
     for (let event in journal.entries()) {
         if let user: ai.events.UserMessage = event {
-            let trimmed = user.content.trim();
-            if (trimmed != "") {
-                parts.push(trimmed);
-            }
+            _gw_images_collect(user.content, parts, files, preview = preview);
         }
     }
     let joined = parts.join("\n\n");

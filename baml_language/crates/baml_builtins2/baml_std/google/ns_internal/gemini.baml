@@ -38,9 +38,12 @@ class GmFunctionCall {
     args: map<string, unknown>,
 }
 
+/// `parts` carries the media a tool result produced (`inlineData` /
+/// `fileData` parts only — text rides in `response`); omitted when empty.
 class GmFunctionResponse {
     name: string,
     response: map<string, unknown>,
+    parts: GmPart[]?,
 }
 
 /// One `Part` of a content. Exactly one payload field is set; the rest are
@@ -460,35 +463,36 @@ function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = fa
     }
 }
 
-function _gm_prompt_parts(
-    message: ai.PromptMessage,
+/// One content block -> one `Part`. Gemini takes every media kind at every
+/// position, so the table is all Accept and no position is passed:
+///
+///   position    | text   | image  | pdf    | audio  | video
+///   system      | Accept | Accept | Accept | Accept | Accept
+///   user        | Accept | Accept | Accept | Accept | Accept
+///   assistant   | Accept | Accept | Accept | Accept | Accept
+///   tool_result | Accept | Accept | Accept | Accept | Accept
+///
+/// A tool result's text goes in `functionResponse.response`; its media parts
+/// go in `functionResponse.parts` (`lower_journal`).
+function _lower_block(
+    block: ai.content.ContentBlock,
+    fetch_url: bool,
+    preview: bool = false,
+) -> GmPart {
+    match (block) {
+        let text: ai.content.Text => GmPart.of_text(text.text),
+        let media: ai.content.Media => _gm_media_part(media.media, fetch_url, preview = preview),
+    }
+}
+
+function _lower_blocks(
+    blocks: ai.content.ContentBlock[],
     fetch_url: bool,
     preview: bool = false,
 ) -> GmPart[] {
     let parts: GmPart[] = [];
-    for (let part in message.parts) {
-        match (part) {
-            let text: string => {
-                parts.push(GmPart.of_text(text));
-                null
-            },
-            let image: baml.media.Image => {
-                parts.push(_gm_media_part(image, fetch_url, preview = preview));
-                null
-            },
-            let audio: baml.media.Audio => {
-                parts.push(_gm_media_part(audio, fetch_url, preview = preview));
-                null
-            },
-            let video: baml.media.Video => {
-                parts.push(_gm_media_part(video, fetch_url, preview = preview));
-                null
-            },
-            let pdf: baml.media.Pdf => {
-                parts.push(_gm_media_part(pdf, fetch_url, preview = preview));
-                null
-            },
-        };
+    for (let block in blocks) {
+        parts.push(_lower_block(block, fetch_url, preview = preview));
     }
     parts
 }
@@ -508,7 +512,7 @@ function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool =
     let system_parts: GmPart[] = [];
     let contents: GmContent[] = [];
     for (let message in prompt.messages()) {
-        let parts = _gm_prompt_parts(message, fetch_url = fetch_url, preview = preview);
+        let parts = _lower_blocks(ai.wire.prompt_blocks(message), fetch_url, preview = preview);
         if (message.role == "system") {
             for (let part in parts) {
                 system_parts.push(part);
@@ -572,39 +576,12 @@ function _gm_call_id_signature(id: string) -> string? {
     }
 }
 
-/// (internal) Gemini correlates tool results by NAME, not id: find the tool name for a
-/// result id by scanning the ai.AssistantMessage ai.ToolUse blocks in the journal.
-function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
-    let name = "";
-    for (let e in j.entries()) {
-        match (e) {
-            let a: ai.events.AssistantMessage => {
-                for (let b in a.content) {
-                    match (b) {
-                        let u: ai.content.ToolUse => {
-                            if (u.id == id) {
-                                name = u.name;
-                                null
-                            } else {
-                                null
-                            }
-                        },
-                        _ => null,
-                    };
-                }
-                null
-            },
-            _ => null,
-        };
-    }
-    name
-}
-
 /// ai.Journal -> generateContent `contents`. Only promptable events lower;
 /// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
 /// Consecutive tool results merge into ONE user content of functionResponse
-/// parts, matching how Gemini expects results for a multi-call turn.
-function lower_journal(j: ai.Journal) -> GmContent[] {
+/// parts, matching how Gemini expects results for a multi-call turn. Gemini
+/// correlates results by tool NAME, not id (`ai.wire.tool_name`).
+function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) -> GmContent[] {
     let contents: GmContent[] = [];
     let pending: GmPart[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
@@ -617,7 +594,10 @@ function lower_journal(j: ai.Journal) -> GmContent[] {
                 } else {
                     null
                 };
-                contents.push(GmContent { role: "user", parts: [GmPart.of_text(u.content)] });
+                let parts = _lower_blocks(u.content, fetch_url, preview = preview);
+                if (parts.length() > 0) {
+                    contents.push(GmContent { role: "user", parts: parts });
+                }
                 null
             },
             let a: ai.events.AssistantMessage => {
@@ -631,8 +611,8 @@ function lower_journal(j: ai.Journal) -> GmContent[] {
                 let parts: GmPart[] = [];
                 for (let b in a.content) {
                     match (b) {
-                        let t: ai.content.Text => {
-                            parts.push(GmPart.of_text(t.text));
+                        let content: ai.content.ContentBlock => {
+                            parts.push(_lower_block(content, fetch_url, preview = preview));
                             null
                         },
                         let use: ai.content.ToolUse => {
@@ -649,9 +629,8 @@ function lower_journal(j: ai.Journal) -> GmContent[] {
                         },
                         // Reasoning replay needs the `thoughtSignature` Gemini
                         // issued with the thought, which ai.content.Reasoning
-                        // does not carry; generated media is an output, not
-                        // replayable input. Both lower to nothing.
-                        _ => null,
+                        // does not carry: it lowers to nothing.
+                        let r: ai.content.Reasoning => null,
                     };
                 }
                 if (parts.length() > 0) {
@@ -663,11 +642,30 @@ function lower_journal(j: ai.Journal) -> GmContent[] {
                 null
             },
             let c: ai.events.ToolCompleted => {
+                // Text is the `result`; media rides beside it in `parts`.
+                let result = "";
+                let media: GmPart[] = [];
+                for (let part in _lower_blocks(c.content, fetch_url, preview = preview)) {
+                    if let text: string = part.text {
+                        result = `${result}${text}`;
+                    } else {
+                        media.push(part);
+                    }
+                }
                 let response: map<string, unknown> = {};
-                let _ = response.set("result", c.output);
+                let _ = response.set("result", result);
+                let parts: GmPart[]? = if (media.length() > 0) {
+                    media
+                } else {
+                    null
+                };
                 pending.push(
                     GmPart.of_function_response(
-                        GmFunctionResponse { name: _gm_tool_name_for(j, c.id), response: response },
+                        GmFunctionResponse {
+                            name: ai.wire.tool_name(j, c.id) ?? "",
+                            response: response,
+                            parts: parts,
+                        },
                     ),
                 );
                 null
@@ -677,7 +675,11 @@ function lower_journal(j: ai.Journal) -> GmContent[] {
                 let _ = response.set("error", f.message);
                 pending.push(
                     GmPart.of_function_response(
-                        GmFunctionResponse { name: _gm_tool_name_for(j, f.id), response: response },
+                        GmFunctionResponse {
+                            name: ai.wire.tool_name(j, f.id) ?? "",
+                            response: response,
+                            parts: null,
+                        },
                     ),
                 );
                 null
@@ -718,7 +720,7 @@ function gemini_build_body(
     let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, client_id);
-    for (let item in lower_journal(journal)) {
+    for (let item in lower_journal(journal, fetch_url, preview = preview)) {
         contents.push(item);
     }
 

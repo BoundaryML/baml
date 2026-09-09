@@ -7,8 +7,10 @@ function transcript_text(j: ai.Journal) -> string {
     let lines: string[] = [];
     for (let e in j.entries()) {
         match (e) {
+            // The CLI takes text only: `text()` renders a media block as a
+            // readable `[image]`-style placeholder.
             let u: ai.events.UserMessage => {
-                lines.push(`user: ${u.content}`);
+                lines.push(`user: ${u.text()}`);
             },
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
@@ -28,7 +30,7 @@ function transcript_text(j: ai.Journal) -> string {
                 }
             },
             let done: ai.events.ToolCompleted => {
-                lines.push(`tool result id=${done.id} is_error=false: ${done.output}`);
+                lines.push(`tool result id=${done.id} is_error=false: ${done.text()}`);
             },
             let failed: ai.events.ToolFailed => {
                 lines.push(`tool result id=${failed.id} is_error=true: ${failed.message}`);

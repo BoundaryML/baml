@@ -613,35 +613,36 @@ function _chat_media_part(
     }
 }
 
-function _chat_prompt_parts(
-    message: ai.PromptMessage,
+/// (internal) One content block -> one typed content part. Chat completions imposes no
+/// role restriction on media, so every position accepts what the endpoint
+/// has a part for — except a `tool` message, whose content is text only, so
+/// media in a tool result degrades into a trailing user turn
+/// (`chat_lower_journal`). There is no video part at all (`_chat_media_part`).
+///
+///   position    | text   | image   | pdf     | audio   | video
+///   system      | Accept | Accept  | Accept  | Accept  | Reject
+///   user        | Accept | Accept  | Accept  | Accept  | Reject
+///   assistant   | Accept | Accept  | Accept  | Accept  | Reject
+///   tool_result | Accept | Degrade | Degrade | Degrade | Reject
+function _chat_lower_block(
+    block: ai.content.ContentBlock,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatContentPart {
+    match (block) {
+        let text: ai.content.Text => ChatTextPart { type: "text", text: text.text },
+        let media: ai.content.Media => _chat_media_part(media.media, compat, preview = preview),
+    }
+}
+
+function _chat_lower_blocks(
+    blocks: ai.content.ContentBlock[],
     compat: ChatCompat,
     preview: bool = false,
 ) -> ChatContentPart[] {
     let parts: ChatContentPart[] = [];
-    for (let part in message.parts) {
-        match (part) {
-            let text: string => {
-                parts.push(ChatTextPart { type: "text", text: text });
-                null
-            },
-            let image: baml.media.Image => {
-                parts.push(_chat_media_part(image, compat, preview = preview));
-                null
-            },
-            let audio: baml.media.Audio => {
-                parts.push(_chat_media_part(audio, compat, preview = preview));
-                null
-            },
-            let pdf: baml.media.Pdf => {
-                parts.push(_chat_media_part(pdf, compat, preview = preview));
-                null
-            },
-            let video: baml.media.Video => {
-                parts.push(_chat_media_part(video, compat, preview = preview));
-                null
-            },
-        };
+    for (let block in blocks) {
+        parts.push(_chat_lower_block(block, compat, preview = preview));
     }
     parts
 }
@@ -714,7 +715,7 @@ function chat_lower_prompt(
             "tool" => "user",
             _ => message.role,
         };
-        let parts = _chat_prompt_parts(message, compat, preview = preview);
+        let parts = _chat_lower_blocks(ai.wire.prompt_blocks(message), compat, preview = preview);
         // Placement happens BEFORE the adjacent-same-role merge, so a directive
         // stays on the part it was authored after even when this message is
         // folded into the previous one.
@@ -757,15 +758,26 @@ function chat_lower_prompt(
 ///
 /// Callers pass the journal through `ai.wire.sanitize_for_client` first, so
 /// foreign reasoning, empty turns and unanswered tool calls are already handled.
-function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
+///
+/// A journal turn's text always collapses to a bare string (`_chat_content`
+/// with `collapse = true`): a text-only turn was always sent that way, and a
+/// bare string is the one content shape every compatible server accepts. A
+/// turn carrying media, or a user turn carrying `metadata`, is a part list.
+function chat_lower_journal(
+    j: ai.Journal,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatMessage[] {
     let out: ChatMessage[] = [];
     for (let event in j.entries()) {
         match (event) {
             let user: ai.events.UserMessage => {
+                let parts = _chat_lower_blocks(user.content, compat, preview = preview);
+                _chat_apply_metadata(parts, user.metadata);
                 out.push(
                     ChatMessage {
                         role: "user",
-                        content: user.content,
+                        content: _chat_content(parts, true),
                         tool_calls: null,
                         tool_call_id: null,
                     },
@@ -773,12 +785,12 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
                 null
             },
             let assistant: ai.events.AssistantMessage => {
-                let text = "";
+                let parts: ChatContentPart[] = [];
                 let calls: ChatToolCall[] = [];
                 for (let block in assistant.content) {
                     match (block) {
-                        let t: ai.content.Text => {
-                            text = `${text}${t.text}`;
+                        let content: ai.content.ContentBlock => {
+                            parts.push(_chat_lower_block(content, compat, preview = preview));
                             null
                         },
                         let use: ai.content.ToolUse => {
@@ -794,15 +806,14 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
                             );
                             null
                         },
-                        // Reasoning has no replayable wire form here, and a
-                        // generated image is an output, not model input.
-                        _ => null,
+                        // Reasoning has no replayable wire form here.
+                        let r: ai.content.Reasoning => null,
                     };
                 }
-                let content: ChatMessageContent? = if (text == "") {
+                let content: ChatMessageContent? = if (parts.length() == 0) {
                     null
                 } else {
-                    text
+                    _chat_content(parts, true)
                 };
                 let tool_calls: ChatToolCall[]? = if (calls.length() == 0) {
                     null
@@ -822,14 +833,26 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
                 null
             },
             let completed: ai.events.ToolCompleted => {
+                // A `tool` message is text only: every media kind degrades.
+                let split = ai.wire.tool_result_blocks(j, completed, []);
                 out.push(
                     ChatMessage {
                         role: "tool",
-                        content: completed.output,
+                        content: _chat_content(_chat_lower_blocks(split.inline, compat, preview = preview), true),
                         tool_calls: null,
                         tool_call_id: completed.id,
                     },
                 );
+                if (split.trailing.length() > 0) {
+                    out.push(
+                        ChatMessage {
+                            role: "user",
+                            content: _chat_content(_chat_lower_blocks(split.trailing, compat, preview = preview), true),
+                            tool_calls: null,
+                            tool_call_id: null,
+                        },
+                    );
+                }
                 null
             },
             let failed: ai.events.ToolFailed => {
@@ -1061,7 +1084,7 @@ function chat_build_request(
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let messages = chat_lower_prompt(prompt, compat, preview = preview);
     let journal = ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params));
-    for (let message in chat_lower_journal(journal)) {
+    for (let message in chat_lower_journal(journal, compat, preview = preview)) {
         messages.push(message);
     }
 

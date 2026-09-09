@@ -85,3 +85,43 @@ test "explicit Agent accepts and swallows a throwing listener" {
     assert.equal(out.value.message, "hi");
     assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage", "FinalProduced"])
 }
+
+// ─── content blocks: constructors and the text projection ────────────────────
+
+// `new` wraps text in one block, `of` wraps bare values, `text()` joins the
+// text blocks with a `[kind]` placeholder per media block.
+function content_block_projections() -> string {
+    let png = root.llm_mock.media_png();
+    let user = ai.events.UserMessage.of(["look: ", png, " ok"]);
+    let plain = ai.events.UserMessage.new("hi");
+    let done = ai.events.ToolCompleted.new("t1", `{"k":1}`);
+    let shot = ai.events.ToolCompleted.of("t2", [png]);
+    [
+        user.text(),
+        user.content.length().to_string(),
+        user.metadata.keys().length().to_string(),
+        plain.text(),
+        done.text(),
+        shot.text(),
+        shot.content.length().to_string(),
+    ].join("|")
+}
+
+test "content_block_projections" {
+    assert.equal(content_block_projections(), `look: [image] ok|3|0|hi|{"k":1}|[image]|1`)
+}
+
+// The Claude Code CLI folds the journal into one text prompt: every turn
+// renders through `text()`, media as a readable placeholder, in order.
+function claude_code_transcript_with_media() -> string {
+    claude_code.internal.transcript_text(
+        root.llm_mock.media_journal("claude-code/opus", root.llm_mock.media_png()),
+    )
+}
+
+test "claude_code_transcript_with_media" {
+    assert.contains(
+        claude_code_transcript_with_media(),
+        "tool result id=call_text is_error=false: sunny in SF\ntool result id=call_media is_error=false: captured:[image]\nuser: Screenshot after the tool ran:[image]",
+    )
+}

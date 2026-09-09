@@ -133,44 +133,39 @@ function _oai_images_media_rejected(kind: string) -> ai.errors.InvalidRequest {
     }
 }
 
-/// (internal) The rendered prompt as one text block: every text part trimmed, blanks
-/// dropped, joined with a blank line. Roles carry no meaning for an image
-/// endpoint, so they are discarded (sys_llm's gateway builder does the same).
-/// Journal user messages follow the prompt so a re-ask still reaches the model;
-/// assistant turns and tool traffic have no representation here.
+/// (internal) Collect a turn's text into `parts`: every text block trimmed, blanks
+/// dropped. Any media block is a hard error: /v1/images/generations takes
+/// text only, at every position.
+function _oai_images_collect(blocks: ai.content.ContentBlock[], parts: string[]) -> void {
+    for (let block in blocks) {
+        match (block) {
+            let text: ai.content.Text => {
+                let trimmed = text.text.trim();
+                if (trimmed != "") {
+                    parts.push(trimmed);
+                }
+                null
+            },
+            let media: ai.content.Media => {
+                throw _oai_images_media_rejected(media.kind())
+            },
+        };
+    }
+}
+
+/// (internal) The rendered prompt as one text block, joined with a blank line. Roles
+/// carry no meaning for an image endpoint, so they are discarded (sys_llm's
+/// gateway builder does the same). Journal user turns follow the prompt so a
+/// re-ask still reaches the model; assistant turns and tool traffic have no
+/// representation here.
 function _oai_images_prompt_text(prompt: ai.Prompt, journal: ai.Journal) -> string {
     let parts: string[] = [];
     for (let message in prompt.messages()) {
-        for (let part in message.parts) {
-            match (part) {
-                let text: string => {
-                    let trimmed = text.trim();
-                    if (trimmed != "") {
-                        parts.push(trimmed);
-                    }
-                    null
-                },
-                let image: baml.media.Image => {
-                    throw _oai_images_media_rejected("image")
-                },
-                let audio: baml.media.Audio => {
-                    throw _oai_images_media_rejected("audio")
-                },
-                let video: baml.media.Video => {
-                    throw _oai_images_media_rejected("video")
-                },
-                let pdf: baml.media.Pdf => {
-                    throw _oai_images_media_rejected("pdf")
-                },
-            };
-        }
+        _oai_images_collect(ai.wire.prompt_blocks(message), parts);
     }
     for (let event in journal.entries()) {
         if let user: ai.events.UserMessage = event {
-            let trimmed = user.content.trim();
-            if (trimmed != "") {
-                parts.push(trimmed);
-            }
+            _oai_images_collect(user.content, parts);
         }
     }
     let joined = parts.join("\n\n");

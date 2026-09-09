@@ -98,7 +98,7 @@ class Agent {
                     },
                 };
                 if let output: string = outcome {
-                    j.append_all([root.events.ToolCompleted { id: call.id, output: output }]);
+                    j.append_all([root.events.ToolCompleted.new(call.id, output)]);
                 }
                 null
             },
@@ -286,9 +286,9 @@ class Agent {
             turn
         } else if (attempts_left > 1) {
             batch.push(
-                root.events.UserMessage {
-                    content: "The reply did not match the required schema. Answer again with only the corrected value.",
-                },
+                root.events.UserMessage.new(
+                    "The reply did not match the required schema. Answer again with only the corrected value.",
+                ),
             );
             j.append_all(batch);
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)

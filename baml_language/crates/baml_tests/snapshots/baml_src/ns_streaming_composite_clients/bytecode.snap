@@ -115,7 +115,7 @@ function streaming_composite_clients.<(user.streaming_composite_clients.NonStrea
 function streaming_composite_clients.<(user.streaming_composite_clients.NonStreamingClient as ai.Client)>.invoke(self: streaming_composite_clients.NonStreamingClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_const "not streamed"
     init_instance ai.content.Text .text
-    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_type ai.content.Text | ai.content.Media | ai.content.Reasoning | ai.content.ToolUse
     alloc_array 1
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
@@ -159,7 +159,7 @@ function streaming_composite_clients.<(user.streaming_composite_clients.Scripted
     store_var _6
     load_var _6
     init_instance ai.content.Text .text
-    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_type ai.content.Text | ai.content.Media | ai.content.Reasoning | ai.content.ToolUse
     alloc_array 1
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
