@@ -1,19 +1,23 @@
 Prepare a new changelog blog post in `typescript2/app-website/blog-releases/`.
 
-Use explicit lower and upper tags or commit IDs when the human supplies them. Otherwise, discover the latest released version from [pkg.boundaryml.com](https://pkg.boundaryml.com), `release.json` / `baml-language.cfg`, and the `baml-language-a.b.c` tags; use the current `origin/canary` as the upper bound only when none was supplied. Record the assumed release date and timezone.
+Figure out the latest canary release that went out:
 
-In a fresh checkout of BoundaryML/baml, fetch tags and resolve both bounds to immutable commit IDs before scanning. Set `LOWER_REF` and `UPPER_REF` to those selected references. The lower bound is excluded; the upper bound is included.
+- [pkg.boundaryml.com](https://pkg.boundaryml.com)
+- `release.json` / `baml-language.cfg`
+- `baml-language-a.b.c` git tags
+
+Use explicit lower and upper tags or commit IDs when supplied. Otherwise, use the latest released tag as `LOWER_REF` and `origin/canary` as `UPPER_REF`. Set both variables to the selected references, then fetch and pin them in a fresh checkout of BoundaryML/baml:
 
 ```sh
 git fetch origin --tags
 LOWER_SHA=$(git rev-parse --verify "${LOWER_REF}^{commit}")
 UPPER_SHA=$(git rev-parse --verify "${UPPER_REF}^{commit}")
 git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}"
-# This is a supplemental view, not the complete release inventory:
+# Supplemental view; retain the full inventory above for classification and followups:
 git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}" -- baml_language/
 ```
 
-Keep the full-range inventory and record why each excluded PR was omitted. Do not keep moving the upper bound while preparing the draft. For a backtest, preserve the historical post and give the draft a unique slug. All unpublished website drafts must set `isPublished: false`.
+The lower bound is excluded and the upper bound is included. Record both commit IDs, the assumed release date, and timezone. Keep the complete inventory with exclusion reasons, and hold the upper bound fixed throughout preparation. For a backtest, preserve the historical post and give the draft a unique slug. Unpublished website drafts must set `isPublished: false`.
 
 Then prepare the changelog draft to target the human's goals:
 
@@ -115,8 +119,8 @@ example usage of $def
 
 # Bug fixes
 
-- Fixed: $abc now $correct-behavior
-- Fixed: $def no longer $wrong-behavior
+- Fixed: $abc$ now $correct-behavior$
+- Fixed: $def$ no longer $wrong-behavior$
 - etc
 
 `[/blog post format]`
@@ -131,9 +135,9 @@ In parallel, we should also collect every BAML v1 PR (i.e. all PRs in the specif
   - every GitHub PR opened by an external user which was included in this release
   - every GitHub issue opened by an external user which was fixed (partial or complete) in this release
   - every Discord thread started by an external user which was addressed by this release
-- Prepare a [`step3-followup-actions.md`](step3-followup-actions.md) that includes everything we need to do.
+- Prepare a `<version>.todo.md`, in `typescript2/app-website/blog-releases/`, next to the changelog release notes, that includes everything we need to do once we post the changelog and the release goes out. Give this internal checklist YAML frontmatter containing `isPublished: false`, and keep that flag false when publishing the release post so the website never lists or serves the checklist as a blog post.
 
-`[step3-followup-actions]`
+`[<version>.todo.md]`
 
 # GitHub PR: link
 
@@ -162,4 +166,4 @@ In parallel, we should also collect every BAML v1 PR (i.e. all PRs in the specif
 
 ```
 
-`[/step3-followup-actions]`
+`[/<version>.todo.md]`
