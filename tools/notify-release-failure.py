@@ -190,9 +190,10 @@ def main() -> int:
         if failures or not release_succeeded:
             mentions = current_oncall_mentions(slack_client)
             oncall_text = (
-                f"\n\n{' '.join(mentions)} is current oncall, please investigate; "
-                "see also <https://github.com/BoundaryML/baml/blob/canary/"
-                "baml_language/RELEASING.md|RELEASING.md>."
+                f"cc {' '.join(mentions)} to investigate, here's a prompt you can use:\n\n"
+                f"```\nInvestigate the BAML release failure for {version}:\n\n"
+                f"- Failed workflow run: {run_url}\n"
+                "- Docs: baml_language/RELEASING.md\n```"
                 if mentions
                 else ""
             )
@@ -202,17 +203,20 @@ def main() -> int:
                 )
             else:
                 failure_text = "• Required release completion gate did not succeed"
-            message = (
+            paragraphs = [
                 f"❌ BAML {channel} release failed: {version}, "
-                f"started at {format_pacific_time(started_at)}{oncall_text}\n\n"
-                f"*Failures:*\n{failure_text}"
-            )
+                f"started at {format_pacific_time(started_at)}"
+            ]
+            if oncall_text:
+                paragraphs.append(oncall_text)
+            paragraphs.append(f"*Failures:*\n{failure_text}")
         else:
-            message = (
+            paragraphs = [
                 f"✅ BAML {channel} release succeeded: {version}, "
                 f"started at {format_pacific_time(started_at)}"
-            )
+            ]
 
+        message = "\n\n".join(paragraphs)
         blocks = [
             {
                 "type": "section",
@@ -225,7 +229,7 @@ def main() -> int:
                     ),
                 },
             }
-            for paragraph in message.split("\n\n")
+            for paragraph in paragraphs
         ]
         footer = (
             f"<{run_url}|View workflow run> · "
