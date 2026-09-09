@@ -48,14 +48,15 @@ defaults:
 
 env:
   CARGO_INCREMENTAL: 0
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   refresh:
     name: "Refresh baselines from latest canary CI"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:

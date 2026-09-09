@@ -56,8 +56,6 @@ defaults:
 
 env:
   CARGO_INCREMENTAL: 0
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   platform-matrix:
@@ -98,6 +96,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v7

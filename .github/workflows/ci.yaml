@@ -20,8 +20,6 @@ defaults:
     shell: bash
 
 env:
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -454,6 +452,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: "Checkout Branch"
         uses: useblacksmith/checkout@v1
@@ -782,6 +783,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.prof == 'true'
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: "Checkout"
         uses: useblacksmith/checkout@v1
@@ -834,6 +838,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 20
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: "Checkout"
         uses: useblacksmith/checkout@v1
@@ -940,6 +947,9 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.sdk_tests == 'true'
     timeout-minutes: 15
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: "Checkout Branch"
         uses: useblacksmith/checkout@v1
@@ -1007,6 +1017,9 @@ jobs:
     # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
     if: needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: "Checkout Branch"
         uses: actions/checkout@v7

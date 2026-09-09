@@ -639,3 +639,19 @@ test "cross container setup mounts installed tools and forwards credential names
     }
     assert.equal(output.includes("must-never-be-serialized"), false)
 }
+
+test "failed direct cache setup cannot establish caching and nested builds need setup" {
+    let mise = "      - uses: ./.github/actions/setup-mise\n        with: {install_args: sccache direnv}\n";
+    let load = "      - run: |\n          direnv allow .envrc\n          direnv export gha >> \"$GITHUB_ENV\"\n";
+    let compile = "      - run: bash -c 'cargo test'\n";
+    assert.equal(rules(workflow(mise + load + compile)), []);
+    assert.equal(
+        rules(workflow(mise + "        continue-on-error: true\n" + load + compile)),
+        ["RUST-SETUP"],
+    );
+    assert.equal(
+        rules(workflow(mise + load + "        continue-on-error: true\n" + compile)),
+        ["RUST-SETUP"],
+    );
+    assert.equal(rules(workflow(compile)), ["RUST-SETUP"])
+}

@@ -72,8 +72,6 @@ defaults:
     shell: bash
 
 env:
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -347,6 +345,9 @@ jobs:
     name: Build platform-neutral VSIX
     needs: [plan]
     runs-on: ubuntu-latest
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -427,7 +428,9 @@ jobs:
     name: Build Node.js SDK
     needs: [plan]
     uses: ./.github/workflows/build2-nodejs-sdk.reusable.yaml
-    secrets: inherit
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
     with:
@@ -516,6 +519,9 @@ jobs:
     name: Build Swift SDK (XCFramework + mirror)
     needs: [plan]
     runs-on: macos-14
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1385,6 +1391,9 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -2246,7 +2255,9 @@ jobs:
     # allow the skipped branch, while requiring the active branch to succeed.
     if: ${{ !cancelled() && needs.all-builds.result == 'success' && (needs.publish-pkg-channel.result == 'success' || needs.dry-run-summary.result == 'success') }}
     uses: ./.github/workflows/verify-baml-language-release.reusable.yaml
-    secrets: inherit
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
     with:

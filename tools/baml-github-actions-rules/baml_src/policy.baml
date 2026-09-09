@@ -181,6 +181,10 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
                 if (
                     guard == ""
                         && (
+                            field(step, "continue-on-error") == null
+                                || field(step, "continue-on-error") == false
+                        )
+                        && (
                             args == ""
                                 || (
                                     args.split(" ").includes("sccache")
@@ -234,6 +238,10 @@ function lint_steps(path: string, location: string, steps: Json, ds: Diagnostic[
             }
             if (
                 cache_tools
+                    && (
+                        field(step, "continue-on-error") == null
+                            || field(step, "continue-on-error") == false
+                    )
                     && commands.some((c) -> {
                         executable_words(c) == ["direnv", "allow", ".envrc"]
                     })

@@ -44,8 +44,6 @@ permissions:
 
 env:
   CARGO_INCREMENTAL: 0
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   build:
@@ -68,6 +66,9 @@ jobs:
     environment: boundary-tools-prod
     outputs:
       changed: ${{ steps.ratchet.outputs.changed }}
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       # A `workflow_run` job checks out the default branch unless told
       # otherwise, which would publish a matrix of whatever canary happens to

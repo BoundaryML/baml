@@ -21,8 +21,6 @@ defaults:
 
 env:
   # .envrc supplies the remaining sccache configuration.
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -45,6 +43,9 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-gnu)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -136,6 +137,8 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 35
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
     steps:
       - uses: useblacksmith/checkout@v1
@@ -316,6 +319,8 @@ jobs:
     # native Windows Rust builds (build-caching/04 Exp 7/9).
     runs-on: blacksmith-8vcpu-windows-2025
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_JOBS: "16"
       # Windows debug builds emit very large PDBs; full debuginfo across the
       # whole `--all-features` test build overruns the runner's ~130 GB disk
@@ -834,6 +839,8 @@ jobs:
       # CoreCompile input on every push and would defeat the C# MSBuild
       # cache below for any new commit. Test builds need neither; only
       # dotnet reads these, so the other SDK matrix legs are unaffected.
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       EnableSourceLink: "false"
       IncludeSourceRevisionInInformationalVersion: "false"
     steps:
@@ -1120,6 +1127,9 @@ jobs:
     name: "cargo test (wasm32-unknown-unknown)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -1217,6 +1227,9 @@ jobs:
     name: "cargo build (msrv)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -1291,6 +1304,9 @@ jobs:
     name: "cargo doc"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -1353,6 +1369,9 @@ jobs:
     name: "snapshot tests"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:

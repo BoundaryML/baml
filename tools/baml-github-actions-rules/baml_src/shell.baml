@@ -381,6 +381,16 @@ function rust_build(words: string[]) -> bool {
     let w = executable_words(words);
     let exe = w.at(0) ?? "";
     let args = w.slice(1, w.length());
+    if (
+        ["bash", "sh", "zsh", "pwsh", "powershell"].includes(exe)
+            && (args.includes("-c") || args.includes("-command"))
+    ) {
+        return args.some((arg) -> {
+            shell_commands(arg).some((cmd) -> {
+                rust_build(cmd)
+            })
+        });
+    }
     if (["cargo", "cross"].includes(exe)) {
         if (args.includes("miri")) {
             return false;

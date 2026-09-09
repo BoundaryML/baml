@@ -21,8 +21,6 @@ defaults:
 
 env:
   # .envrc supplies the remaining sccache configuration.
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -57,6 +55,9 @@ jobs:
     # 40, not 25: a machine without a warm seed compiles cold and can
     # exceed 25 minutes; the cap is a hang backstop, not a perf gate.
     timeout-minutes: 40
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -145,6 +146,8 @@ jobs:
     # 45, not 35: same reasoning as the gnu lane above.
     timeout-minutes: 45
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
       # The ix machine image ships musl-gcc; setup-musl-cross is skipped
       # there, so wire the same env the action would export.
@@ -760,6 +763,8 @@ jobs:
     env:
       # The machine image defaults these to 16; 32 runs clean on the
       # 64-vCPU machines.
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       NEXTEST_TEST_THREADS: "32"
       RUST_TEST_THREADS: "32"
       # Same reasoning as CARGO_BUILD_JOBS: the go fixture gates run
@@ -958,6 +963,9 @@ jobs:
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1062,6 +1070,9 @@ jobs:
     # without a warm seed rebuilds everything from cold and can exceed 25
     # minutes. Warm runs sit far inside the old budget.
     timeout-minutes: 40
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1140,6 +1151,9 @@ jobs:
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1207,6 +1221,9 @@ jobs:
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
     # 45, not 30: cold headroom, same reasoning as the gnu lane above.
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
