@@ -1,0 +1,38 @@
+name: Developer Docs
+
+on:
+  push:
+    branches: [main, canary]
+    paths:
+      - "typescript2/app-developer-docs/**"
+      - "typescript2/pkg-grammar/**"
+      - "typescript2/package.json"
+      - "typescript2/pnpm-lock.yaml"
+      - "typescript2/pnpm-workspace.yaml"
+      - "baml_language/**"
+      - ".envrc"
+      - "mise.toml"
+      - "tools/baml-sccache"
+      - ".github/actions/setup-mise/**"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/developer-docs.yaml"
+      - ".github/workflows/developer-docs.reusable.yaml"
+      - ".github/workflows/ci.yaml"
+      - ".github/workflows/release-baml-language.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  developer-docs:
+    name: Developer Docs
+    uses: ./.github/workflows/developer-docs.reusable.yaml
+    secrets:
+      GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}

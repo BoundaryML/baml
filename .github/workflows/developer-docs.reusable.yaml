@@ -2,6 +2,11 @@ name: Developer Docs (Reusable)
 
 on:
   workflow_call:
+    inputs:
+      can-use-secrets:
+        description: Whether the caller is trusted to run checks against the published documentation store
+        type: boolean
+        default: true
     secrets:
       GENERATED_CONTENT_DATABASE_URL:
         description: Read-only runtime credential for the published documentation store
@@ -16,71 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  determine-changes:
-    name: Determine documentation changes
-    runs-on: ubuntu-24.04
-    outputs:
-      can-use-secrets: ${{ steps.changes.outputs.can-use-secrets }}
-      should-run: ${{ steps.changes.outputs.should-run }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Check documentation and runtime inputs
-        id: changes
-        env:
-          ACTOR: ${{ github.actor }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          can_use_secrets=true
-          if [[ "$EVENT_NAME" == "pull_request" ]] && \
-             { [[ "$HEAD_REPOSITORY" != "$REPOSITORY" ]] || [[ "$ACTOR" == "dependabot[bot]" ]]; }; then
-            can_use_secrets=false
-          fi
-          echo "can-use-secrets=$can_use_secrets" >> "$GITHUB_OUTPUT"
-
-          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
-            echo "should-run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Capture first so a failed diff fails the job instead of passing silently.
-          changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
-          should_run=false
-          while IFS= read -r file; do
-            case "$file" in
-              typescript2/app-developer-docs/* | \
-              typescript2/pkg-grammar/* | \
-              typescript2/package.json | \
-              typescript2/pnpm-lock.yaml | \
-              typescript2/pnpm-workspace.yaml | \
-              baml_language/* | \
-              .envrc | \
-              mise.toml | \
-              tools/baml-sccache | \
-              .github/actions/setup-mise/* | \
-              .github/actions/setup-node2/* | \
-              .github/workflows/developer-docs.reusable.yaml | \
-              .github/workflows/ci.yaml | \
-              .github/workflows/release-baml-language.yml)
-                should_run=true
-                break
-                ;;
-            esac
-          done <<< "$changed_files"
-          echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
-
   quality:
     name: Lint, tests, type-check, and build
-    needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -105,8 +47,6 @@ jobs:
 
   authored-content:
     name: Authored content and routes
-    needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -125,8 +65,6 @@ jobs:
 
   snippets:
     name: BAML snippets
-    needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -181,8 +119,6 @@ jobs:
 
   database-integration:
     name: Immutable document-store integration
-    needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
@@ -214,10 +150,7 @@ jobs:
 
   production-path:
     name: DB-backed SSR and HTTP contracts
-    needs: determine-changes
-    if: >-
-      needs.determine-changes.outputs.should-run == 'true' &&
-      needs.determine-changes.outputs.can-use-secrets == 'true'
+    if: inputs.can-use-secrets
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -287,7 +220,6 @@ jobs:
   checks:
     name: Developer Docs Checks
     needs:
-      - determine-changes
       - quality
       - authored-content
       - snippets
@@ -296,35 +228,16 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require affected documentation checks
+      - name: Require documentation checks
         env:
           AUTHORED_CONTENT_RESULT: ${{ needs.authored-content.result }}
           DATABASE_INTEGRATION_RESULT: ${{ needs.database-integration.result }}
-          DETERMINE_CHANGES_RESULT: ${{ needs.determine-changes.result }}
-          CAN_USE_SECRETS: ${{ needs.determine-changes.outputs.can-use-secrets }}
+          CAN_USE_SECRETS: ${{ inputs.can-use-secrets }}
           PRODUCTION_PATH_RESULT: ${{ needs.production-path.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
-          SHOULD_RUN: ${{ needs.determine-changes.outputs.should-run }}
           SNIPPETS_RESULT: ${{ needs.snippets.result }}
         run: |
           set -euo pipefail
-          if [[ "$DETERMINE_CHANGES_RESULT" != "success" ]]; then
-            echo "::error::Could not determine whether documentation checks are required"
-            exit 1
-          fi
-          if [[ "$SHOULD_RUN" == "false" ]]; then
-            echo "No documentation or BAML language runtime inputs changed"
-            exit 0
-          fi
-          if [[ "$SHOULD_RUN" != "true" ]]; then
-            echo "::error::Documentation change detection returned an invalid result"
-            exit 1
-          fi
-          if [[ "$CAN_USE_SECRETS" != "true" && "$CAN_USE_SECRETS" != "false" ]]; then
-            echo "::error::Pull-request trust detection returned an invalid result"
-            exit 1
-          fi
-
           failed=false
           for result in \
             "$QUALITY_RESULT" \

@@ -44,6 +44,8 @@ jobs:
       codegen: ${{ steps.check_codegen.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for developer documentation and its runtime/build inputs
+      developer_docs: ${{ steps.check_developer_docs.outputs.changed }}
       # Flag for typescript2/webview changes
       webview: ${{ steps.check_webview.outputs.changed }}
       # Flag for typescript2 grammar changes
@@ -206,6 +208,46 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Check if developer docs changed
+        id: check_developer_docs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Capture first so a failed diff fails the job instead of passing silently.
+          changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          changed=false
+          while IFS= read -r file; do
+            case "$file" in
+              typescript2/app-developer-docs/* | \
+              typescript2/pkg-grammar/* | \
+              typescript2/package.json | \
+              typescript2/pnpm-lock.yaml | \
+              typescript2/pnpm-workspace.yaml | \
+              baml_language/* | \
+              .envrc | \
+              mise.toml | \
+              tools/baml-sccache | \
+              .github/actions/setup-mise/* | \
+              .github/actions/setup-node2/* | \
+              .github/workflows/developer-docs.reusable.yaml | \
+              .github/workflows/developer-docs.yaml | \
+              .github/workflows/ci.yaml | \
+              .github/workflows/release-baml-language.yml)
+                changed=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Check if webview changed
         id: check_webview
@@ -627,7 +669,12 @@ jobs:
 
   developer-docs:
     name: "Developer Docs"
+    needs: determine_changes
+    # Push validation has its own entry point in developer-docs.yaml.
+    if: github.event_name != 'push' && needs.determine_changes.outputs.developer_docs == 'true'
     uses: ./.github/workflows/developer-docs.reusable.yaml
+    with:
+      can-use-secrets: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
     permissions:
       contents: read
     secrets:
