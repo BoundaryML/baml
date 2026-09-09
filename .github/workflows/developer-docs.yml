@@ -2,16 +2,6 @@ name: Developer Docs
 
 on:
   pull_request:
-    paths:
-      - "typescript2/app-developer-docs/**"
-      - "typescript2/pkg-grammar/**"
-      - "typescript2/package.json"
-      - "typescript2/pnpm-lock.yaml"
-      - "typescript2/pnpm-workspace.yaml"
-      - "baml_language/**"
-      - ".github/actions/setup-node2/**"
-      - ".github/workflows/developer-docs.yml"
-      - ".github/workflows/release-baml-language.yml"
   push:
     branches: [main, canary]
     paths:
@@ -34,8 +24,53 @@ permissions:
   contents: read
 
 jobs:
+  determine-changes:
+    name: Determine documentation changes
+    runs-on: ubuntu-24.04
+    outputs:
+      should-run: ${{ steps.changes.outputs.should-run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check documentation and runtime inputs
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          should_run=false
+          while IFS= read -r file; do
+            case "$file" in
+              typescript2/app-developer-docs/* | \
+              typescript2/pkg-grammar/* | \
+              typescript2/package.json | \
+              typescript2/pnpm-lock.yaml | \
+              typescript2/pnpm-workspace.yaml | \
+              baml_language/* | \
+              .github/actions/setup-node2/* | \
+              .github/workflows/developer-docs.yml | \
+              .github/workflows/release-baml-language.yml)
+                should_run=true
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Lint, tests, type-check, and build
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -60,6 +95,8 @@ jobs:
 
   authored-content:
     name: Authored content and routes
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -78,6 +115,8 @@ jobs:
 
   snippets:
     name: BAML snippets
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -106,6 +145,8 @@ jobs:
 
   database-integration:
     name: Immutable document-store integration
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
@@ -137,6 +178,8 @@ jobs:
 
   production-path:
     name: DB-backed SSR and HTTP contracts
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -196,5 +239,62 @@ jobs:
             "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add"
           grep -q "baml generate add" "$RUNNER_TEMP/cli.html"
           grep -q "noindex" "$RUNNER_TEMP/cli.html"
+          curl --silent --head --output "$RUNNER_TEMP/changelog.headers" \
+            "http://127.0.0.1:4173/changelog"
+          grep -q '^HTTP/1.1 308' "$RUNNER_TEMP/changelog.headers"
+          grep -qi '^location: https://boundaryml.com/blog?tags=release' "$RUNNER_TEMP/changelog.headers"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:4173/cli/$VERSION/commands/not-a-command")" = "404"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4173/cli/v0.0.0-missing)" = "404"
+
+  pre-merge-gate:
+    name: Developer Docs Pre-merge Gate
+    needs:
+      - determine-changes
+      - quality
+      - authored-content
+      - snippets
+      - database-integration
+      - production-path
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require affected documentation checks
+        env:
+          AUTHORED_CONTENT_RESULT: ${{ needs.authored-content.result }}
+          DATABASE_INTEGRATION_RESULT: ${{ needs.database-integration.result }}
+          DETERMINE_CHANGES_RESULT: ${{ needs.determine-changes.result }}
+          PRODUCTION_PATH_RESULT: ${{ needs.production-path.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SHOULD_RUN: ${{ needs.determine-changes.outputs.should-run }}
+          SNIPPETS_RESULT: ${{ needs.snippets.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$DETERMINE_CHANGES_RESULT" != "success" ]]; then
+            echo "::error::Could not determine whether documentation checks are required"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" == "false" ]]; then
+            echo "No documentation or BAML language runtime inputs changed"
+            exit 0
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "::error::Documentation change detection returned an invalid result"
+            exit 1
+          fi
+
+          failed=false
+          for result in \
+            "$QUALITY_RESULT" \
+            "$AUTHORED_CONTENT_RESULT" \
+            "$SNIPPETS_RESULT" \
+            "$DATABASE_INTEGRATION_RESULT" \
+            "$PRODUCTION_PATH_RESULT"; do
+            if [[ "$result" != "success" ]]; then
+              failed=true
+            fi
+          done
+          if [[ "$failed" == "true" ]]; then
+            echo "::error::One or more required Developer Docs jobs did not succeed"
+            exit 1
+          fi
+          echo "All required Developer Docs jobs succeeded"
