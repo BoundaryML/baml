@@ -50,3 +50,7 @@ jobs:
           fi
           pnpm format:ci --since="$base" --reporter=github
         working-directory: typescript2
+
+      - name: Test website MDX highlighting
+        run: pnpm --filter app-website test:mdx
+        working-directory: typescript2
