@@ -188,11 +188,7 @@ def main() -> int:
             f"/attempts/{run_attempt}"
         )
         if failures or not release_succeeded:
-            mentions = (
-                current_oncall_mentions(slack_client)
-                if channel in {"nightly", "nightly dispatch"}
-                else []
-            )
+            mentions = current_oncall_mentions(slack_client)
             oncall_text = (
                 f"\n{' '.join(mentions)} is current oncall, please investigate; "
                 "see also <https://github.com/BoundaryML/baml/blob/canary/"
