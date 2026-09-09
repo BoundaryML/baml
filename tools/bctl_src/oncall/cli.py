@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from oncall.current import current_oncall
 from oncall.notify import compose_handoff
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
@@ -28,6 +29,18 @@ def _parse_or_die(path: Path) -> tuple[str, ScheduleFile]:
         console.print(f"[red]parse error[/]: {e}")
         raise typer.Exit(1)
     return text, sched
+
+
+@app.command()
+def current() -> None:
+    """Print the current primary on-call names, one per line (Pacific time)."""
+    try:
+        names = current_oncall()
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        typer.echo(f"Could not read current on-call schedule: {error}", err=True)
+        raise typer.Exit(1)
+    for name in names:
+        typer.echo(name)
 
 
 @app.command()
