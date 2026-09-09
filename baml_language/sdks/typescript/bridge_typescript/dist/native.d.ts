@@ -195,6 +195,16 @@ export declare function _seedFunctionRefHandle(globalIndex: number): [HandleKey,
 /** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
 export declare function _seedGenericMediaHandle(): [HandleKey, number]
 
+/**
+ * Resolve once the process-global runtime has no active call and no pending
+ * spawned future, without closing it. The SDK's `beforeExit` hook awaits
+ * this before `shutdownRuntime`: registered host callables no longer pin the
+ * event loop (their tsfns are weak), so this pending promise is what keeps
+ * Node alive while real BAML work — including a host callback that re-enters
+ * the engine — is still in flight. A never-initialized runtime is idle.
+ */
+export declare function _waitForRuntimeIdle(): Promise<void>
+
 export declare function cancelFunctionCall(callId: string): boolean
 
 /**
@@ -302,9 +312,8 @@ export declare function registerUnhandledSpawnErrorCallback(callback: (errorByte
  * registers a callable for an early kwarg and then fails to encode a later
  * kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
  * (and so never releases) that key. Without this, the registry entry — and
- * its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
- * would leak for the life of the process. The encoder calls this for every
- * key it registered during a failed encode.
+ * the user's callable it pins — would leak for the life of the process. The
+ * encoder calls this for every key it registered during a failed encode.
  */
 export declare function releaseHostCallable(key: HandleKey): void
 

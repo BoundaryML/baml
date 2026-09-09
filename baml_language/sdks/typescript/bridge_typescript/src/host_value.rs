@@ -30,16 +30,16 @@
 //! `ThreadsafeFunction`'s `Drop` releases the underlying JS reference, which
 //! lets the user's callable become GC-eligible.
 //!
-//! Release is therefore GC/drain-driven: the entry — and its strong
-//! (`weak::<false>`) tsfn ref, which pins the libuv loop — lives until the
-//! engine collects or drops the owning `Object::HostClosure` and the deferred
+//! Release is therefore GC/drain-driven: the entry lives until the engine
+//! collects or drops the owning `Object::HostClosure` and the deferred
 //! release is drained (`host_release_dispatch::drain`, run at GC safepoints
-//! and after each call). A callable that is never collected before the
-//! process tears down keeps its ref, which is why the Node test suite runs
-//! jest with `forceExit`. A teardown-time drain (releasing every still-live
-//! host value when a runtime is dropped) would close that gap but depends on
-//! heap-teardown semantics owned by the engine/heap layer; it is left to that
-//! layer rather than worked around here.
+//! and after each call). The dispatch tsfn is *weak*
+//! (`napi_unref_threadsafe_function`), so a registered-but-idle callable never
+//! pins the libuv loop: only work that is actually pending — a `callFunction`
+//! promise, or the SDK's `beforeExit` wait for the engine to go idle
+//! (`_waitForRuntimeIdle`) — keeps the process alive, and a host call
+//! dispatched while such work is pending is delivered because that work holds
+//! the loop open.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -73,10 +73,12 @@ type DispatchArgs = FnArgs<(u32, Buffer)>;
 /// - `CalleeHandled = false`: the JS wrapper is responsible for catching
 ///   its own errors and reporting them via `complete_host_call`; we don't
 ///   want napi-rs to interpret a Result on the Rust side.
-/// - `Weak = false` / `MaxQueueSize = DISPATCH_QUEUE_SIZE`: a strong ref with a
-///   bounded queue (see [`DISPATCH_QUEUE_SIZE`]).
+/// - `Weak = true`: registration is ownership, not activity, so the ref must
+///   not pin the libuv loop (see the module docs).
+/// - `MaxQueueSize = DISPATCH_QUEUE_SIZE`: a bounded queue (see
+///   [`DISPATCH_QUEUE_SIZE`]).
 type DispatchTsfn =
-    ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false, false, DISPATCH_QUEUE_SIZE>;
+    ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false, true, DISPATCH_QUEUE_SIZE>;
 
 /// Upper bound on queued, not-yet-delivered host-call dispatches per callable.
 ///
@@ -141,7 +143,7 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
     let tsfn: DispatchTsfn = callable
         .build_threadsafe_function()
         .callee_handled::<false>()
-        .weak::<false>()
+        .weak::<true>()
         // Bound the queue (napi's default is unbounded); see DISPATCH_QUEUE_SIZE.
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
@@ -255,9 +257,7 @@ static HOST_VALUE_RELEASE: OnceLock<ReleaseChannel> = OnceLock::new();
 
 impl ReleaseChannel {
     fn pending(&self) -> MutexGuard<'_, PendingReleases> {
-        self.pending
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.pending.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Any thread: park `key` and ensure exactly one wakeup is in flight.
@@ -314,7 +314,9 @@ impl ReleaseChannel {
                     pending.keys.remove(&key);
                 }
             }
-            Err(err) => log::warn!("host-value release callback threw: {err}; batch will be retried"),
+            Err(err) => {
+                log::warn!("host-value release callback threw: {err}; batch will be retried")
+            }
         }
         if pending.keys.is_empty() {
             pending.scheduled = false;
@@ -382,9 +384,8 @@ pub fn register_host_value_release_callback(callback: Function<'_, (), ()>) -> n
 /// registers a callable for an early kwarg and then fails to encode a later
 /// kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
 /// (and so never releases) that key. Without this, the registry entry — and
-/// its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
-/// would leak for the life of the process. The encoder calls this for every
-/// key it registered during a failed encode.
+/// the user's callable it pins — would leak for the life of the process. The
+/// encoder calls this for every key it registered during a failed encode.
 #[napi(js_name = "releaseHostCallable")]
 pub fn release_host_callable(key: HandleKey) {
     drop_registry_entry(key.to_u64());
