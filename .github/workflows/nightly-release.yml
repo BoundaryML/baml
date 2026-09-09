@@ -306,7 +306,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-mise
             mise.toml
-            tools/notify-release-failure.py
+            tools/
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/setup-mise

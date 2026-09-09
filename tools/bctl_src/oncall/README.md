@@ -17,6 +17,7 @@ The file has three types of data:
 
 # Tooling
 
+- `bctl oncall current` prints the current primary on-call usernames, one per line, from the local schedule using today's Pacific date; the founders' escalation rotation is excluded.
 - `bctl oncall check [--fix]` parses `schedule.oncall` and validates it, ensuring that the file is well-formed
 	- runs on every change to `schedule.oncall`
 - `bctl oncall notify [--post-to-slack]`
