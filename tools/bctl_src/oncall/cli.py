@@ -32,12 +32,10 @@ def _parse_or_die(path: Path) -> tuple[str, ScheduleFile]:
 
 
 @app.command()
-def current(
-    rotation: str = typer.Option("oncall-releases", "--rotation", help="On-call rotation"),
-) -> None:
-    """Print the rotation's current on-call name (Pacific time)."""
+def current() -> None:
+    """Print the current release on-call name (Pacific time)."""
     try:
-        names = current_oncall(rotation=rotation)
+        names = current_oncall()
     except (OSError, ValueError, KeyError, RuntimeError) as error:
         typer.echo(f"Could not read current on-call schedule: {error}", err=True)
         raise typer.Exit(1)
@@ -148,31 +146,6 @@ def notify(
             console.print()
 
 
-@app.command(name="remind-release")
-def remind_release(
-    channel: str = typer.Option("#general", "--channel", help="Slack channel"),
-    post_to_slack: bool = typer.Option(False, "--post-to-slack", help="Actually post to Slack"),
-) -> None:
-    """Remind the release oncaller to prepare the changelog and publish a release."""
-    from slack_sdk.errors import SlackClientError
-
-    from oncall.releases import compose_release_reminder
-    from oncall.slack import client as slack_client
-    from oncall.slack import post as slack_post
-
-    try:
-        wc = slack_client() if post_to_slack else None
-        body = compose_release_reminder(wc=wc)
-        if wc is not None:
-            slack_post(wc, channel, body)
-            typer.echo(f"Posted release reminder to {channel}")
-        else:
-            typer.echo(f"→ {channel}\n{body}")
-    except (OSError, ValueError, KeyError, RuntimeError, SlackClientError) as error:
-        typer.echo(f"Could not send release reminder: {error}", err=True)
-        raise typer.Exit(1)
-
-
 @app.command(name="notify-failure")
 def notify_failure(
     jobs: str = typer.Option(..., "--jobs", help="Comma- or space-separated failed job names"),
@@ -212,10 +185,9 @@ def notify_failure(
     if sched is not None:
         current = _current_shift(sched, datetime.date.today())
         if current is not None:
-            for rot in sched.roster.rotations_in_order():
-                name = current.assignments.get(rot)
-                if name:
-                    oncall_names.append(name)
+            name = current.assignments.get("oncall-releases")
+            if name:
+                oncall_names.append(name)
 
     def _build(mentions: list[str]) -> str:
         prefix = (" ".join(mentions) + " ") if mentions else ""

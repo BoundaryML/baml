@@ -30,7 +30,28 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
       - name: Validate schedule
         run: ./tools/bctl oncall check
+      - name: Find current release oncall
+        id: oncall
+        run: |
+          oncall_name=$(./tools/bctl oncall current)
+          echo "name=$oncall_name" >> "$GITHUB_OUTPUT"
       - name: Remind release oncall in general
         env:
           SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
-        run: ./tools/bctl oncall remind-release --channel '#general' --post-to-slack
+          ONCALL_NAME: ${{ steps.oncall.outputs.name }}
+        run: |
+          uv run --project tools python - <<'PY'
+          import os
+
+          from tools.bctl_src.oncall.slack import client, email_for, lookup_user_id, post
+
+          wc = client()
+          user_id = lookup_user_id(wc, email_for(os.environ["ONCALL_NAME"]))
+          message = (
+              f"cc current oncall <@{user_id}>: please prepare the changelog "
+              "and put out this week's BAML release.\n\n"
+              "See <https://github.com/BoundaryML/baml/blob/canary/"
+              "baml_language/RELEASING.md|RELEASING.md> for the release steps."
+          )
+          post(wc, "#general", message)
+          PY
