@@ -1528,9 +1528,6 @@ mod tests {
 
     #[test]
     #[serial]
-
-    #[test]
-    #[serial]
     fn test_selected_call_uses_attempt_order_not_request_id_lex_order() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
