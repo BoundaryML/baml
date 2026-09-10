@@ -457,9 +457,6 @@ function persist_mention(m: SlackMention) -> bool {
     };
     let table = "";
     let row: map<string, json> = {};
-    if (m.route.kind == "babysit") {
-        return true;
-    };
     if (m.route.kind == "babysit" && m.route.pr != null) {
         // Both intake paths share the same request ownership. The worker also
         // coalesces races before it starts a proposal or implementation.
@@ -519,7 +516,7 @@ function mention_ack(m: SlackMention) -> string {
         if (m.route.pr == null) {
             return "Use babysit followed by a GitHub PR URL.";
         };
-        return "PR monitoring is not enabled in the issue MVP yet.";
+        return "Queued this PR for babysitting.";
     };
     "Queued your request; I will reply in this thread."
 }

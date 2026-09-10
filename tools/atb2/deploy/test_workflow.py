@@ -190,6 +190,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(list(stored),['GHI-4801'])
         self.assertEqual(cursor,{'after':4900,'newest':4900,'page':1})
 
+    def test_automatic_fix_claim_is_exact_head_and_stops_after_request_cancellation(self):
+        active=True
+        def respond(method,table,query,body):
+            nonlocal active
+            if method=='GET' and table=='babysit_requests':
+                self.assertEqual(query['status'],['eq.running'])
+                result=[{'id':7}] if active else [];active=False;return 200,result
+            return 500,{}
+        expression='baml.fs.mkdir(atb2_home()+"/automatic-fixes",baml.fs.MkdirOptions {recursive:true}); let head="a".repeat(40); baml.fs.write(automatic_fix_path("fixture"),baml.json.stringify({"request_id":7,"dataset":"live","fix":{"head":head,"status":"executing"}}.to_json())); assert.equal(babysit_push_allowed("fixture","b".repeat(40)),false); assert.equal(babysit_push_allowed("fixture",head),true); assert.equal(babysit_push_allowed("fixture",head),false); finish_automatic_fix("fixture","failed"); assert.equal(babysit_push_allowed("fixture",head),false);'
+        self.run_expression(expression,respond)
+
     def test_live_transcripts_require_a_signature_and_keep_failed_output(self):
         expression = '''
             baml.fs.mkdir(atb2_home(), baml.fs.MkdirOptions { recursive: true });
@@ -210,6 +221,18 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(calls),1)
         self.assertEqual(calls[0][2]['id'],['eq.proposal-fixture'])
 
+    def test_ddl_repair_is_bounded_and_rescanned_before_any_push(self):
+        for codes in ([0], [66, 0], [66, 66], [65]):
+            failed = codes[-1] != 0
+            expression = '''
+                let sb = Sandbox { branch: "fixture", worktree: atb2_home(), run_dir: atb2_home(), reused_branch: true, base_head: null, source_head: "base" };
+                let result = prepare_push(sb, gh_issue(7, Difficulty.Easy), "approved plan", sample_report()) catch (e) { PushError => null };
+                assert.equal(result == null, FAILED);
+                assert.equal(baml.fs.read(atb2_home() + "/scan-count").length(), SCANS);
+                assert.equal(baml.fs.exists(atb2_home() + "/repair-count"), REPAIRED);
+            '''.replace('FAILED',str(failed).lower()).replace('SCANS',str(len(codes))).replace('REPAIRED',str(codes[0] == 66).lower())
+            self.assertEqual(self.run_expression(expression,lambda *_:(500,{}),ddl_scan_codes=codes), [])
+
     def test_cancellation_patch_is_scoped_and_conditional(self):
         issue = {'id':'ISSUE-fixture','title':'Fixture','status':{'state':'approved'},
                  'shepherd':'owner','slack_ts':'123.4','slack_channel':'C1'}
@@ -228,6 +251,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(query['slack_ts'], ['eq.123.4'])
         self.assertEqual(body['status']['state'], 'cancelled')
         self.assertEqual(set(body), {'status'})
+
+    def test_checks_in_one_workflow_fetch_and_include_logs_once(self):
+        expression = '\n            let logs = failed_logs(PrFeedback { checks: [\n                CheckRow { name: "first", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/1" },\n                CheckRow { name: "second", bucket: "fail", link: "https://github.com/BoundaryML/baml/actions/runs/123/job/2" }\n            ], comments: [] });\n            assert.equal(logs.get("first") ?? "", "unique failure");\n            assert.contains(logs.get("second") ?? "", "included above");\n            assert.equal(baml.fs.read(atb2_home() + "/log-fetches"), "x");\n        '
+        self.assertEqual(self.run_expression(expression, lambda *_: (500, {}), fixture_logs=True), [])
 
     def test_lifecycle_saves_do_not_replace_concurrent_comments_or_repros(self):
         expression='let row = baml.json.from_json<map<string,json>>(issue_row(gh_issue(7,Difficulty.Medium))); row.set("id","ISSUE-fixture".to_json()); save_issue(issue_from_row(row.to_json()));'
@@ -317,6 +344,74 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(terminal[0]['issue_id'])
         self.assertIsNone(terminal[0]['slack_ts'])
         self.assertEqual([(method, table) for method, table, _, _ in calls if method != 'GET'], [('POST', 'events'), ('POST', 'events')])
+
+    def test_issue_and_direct_requests_reuse_one_existing_babysitter(self):
+        calls = self.run_expression('request_merge("https://github.com/BoundaryML/baml/pull/1")',
+                                   lambda method, table, query, body: (200, [{'id': 7}]))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0:2], ('GET', 'babysit_requests'))
+        self.assertNotIn('awaiting_approval', calls[0][2]['or'][0])
+
+    def test_retired_approval_does_not_block_a_fresh_babysit_request(self):
+        def respond(method, table, query, body):
+            if table == 'babysit_requests':
+                self.assertNotIn('awaiting_approval', query['or'][0])
+                return 200, []
+            return 200, []
+        calls = self.run_expression('assert.equal(active_babysit_request("https://github.com/BoundaryML/baml/pull/1"), null)', respond)
+        self.assertTrue(all(method == 'GET' for method, _, _, _ in calls))
+
+    def test_created_fix_cannot_wake_worker_before_outcome_and_cleanup(self):
+        def respond(method, table, query, body):
+            if method == 'POST' and table == 'babysit_requests': return 200, [{'id':7}]
+            return 200, []
+        expression = 'handoff_issue_pr(issue_in(Subsystem.Compiler, "owner"), "https://github.com/BoundaryML/baml/pull/1", "fixture plan", SlackRef { channel: "C1", ts: "1.2" })'
+        calls = self.run_expression(expression, respond)
+        writes = [(table,body) for method,table,query,body in calls if method == 'PATCH']
+        self.assertEqual([table for table,body in writes], ['issues'])
+        self.assertEqual(writes[0][1]['status']['pr'], 'https://github.com/BoundaryML/baml/pull/1')
+        self.assertFalse(any(table == "babysit_requests" for _, table, _, _ in calls))
+
+    def test_duplicate_claim_is_finished_before_any_agent_runs(self):
+        def respond(method, table, query, body):
+            if method == 'GET' and table == 'babysit_requests':
+                if query.get('status') == ['eq.queued']:
+                    return 200, [{'id': 8, 'pr':'https://github.com/BoundaryML/baml/pull/1','status':'queued'}]
+                if 'or' in query: return 200, [{'id': 7}]
+            if method == 'PATCH' and table == 'babysit_requests': return 200, [{'id': 8}]
+            return 200, []
+        calls = self.run_expression('recover_and_claim_babysit("fixture", 21600)', respond)
+        duplicates = [body for method, table, query, body in calls if method == 'PATCH' and body.get('result', {}).get('kind') == 'duplicate']
+        self.assertEqual(duplicates, [{'status':'done','result':{'kind':'duplicate','request_id':7},'finished_at':'now()'}])
+        requeues = [query for method, table, query, body in calls if method == 'PATCH' and query.get('result->>kind')]
+        self.assertEqual(requeues[0]['result->>kind'], ['in.(green,waiting_on_checks)'])
+        claims = [query for method, table, query, body in calls if method == 'GET' and query.get('status') == ['eq.queued']]
+        self.assertEqual(claims[0]['order'], ['finished_at.asc.nullsfirst,created_at'])
+
+    def test_recovery_outage_is_caught_by_worker_retry_boundary(self):
+        calls = self.run_expression('merge_issue_loop(once = true)', lambda *args: (503, {'error':'fixture outage'}))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], 'babysit_requests')
+
+    def test_pr_events_keep_issue_and_thread_association(self):
+        def respond(method, table, query, body):
+            if table == 'issues': return 200, [{'id':'ISSUE-1'}]
+            if method == 'POST': return 200, [{'id':9}]
+            return 200, []
+        calls = self.run_expression('record_pr_event("https://github.com/BoundaryML/baml/pull/1", "babysit_proposed", { "proposal_id": "p1" }.to_json(), SlackRef { channel: "C1", ts: "1.2" })', respond)
+        saved = [body for method, table, query, body in calls if method == 'POST'][0][0]
+        self.assertEqual(saved['issue_id'], 'ISSUE-1')
+        self.assertEqual(saved['slack_ts'], '1.2')
+        self.assertEqual(saved['payload'], {'pr':'https://github.com/BoundaryML/baml/pull/1','proposal_id':'p1'})
+
+    def test_automatic_round_needs_no_approval_table_or_reaction(self):
+        def respond(method,table,query,body):
+            if table=='babysit_proposals':self.fail('automatic fixes must not depend on approval records')
+            if table=='babysit_requests':return 200,[{'id':7}]
+            if method=='POST' and table=='events':return 200,[{'id':1}]
+            return 200,[]
+        expression='let snapshot=snap([],[]); snapshot.head="a".repeat(40); let result=begin_babysit_fix(snapshot,PrFeedback {checks:[],comments:[]},"fixture",7,null,null); assert.is_true(result is BabysitProposal); if (result is BabysitProposal) { assert.equal(result.status,"executing"); assert.equal(babysit_push_allowed(result.id,snapshot.head),true); };'
+        self.run_expression(expression,respond,fixture_auto_plan=True)
 
     def test_duplicate_initial_issue_claim_stops_before_agent_launch(self):
         def respond(method,table,query,body):
