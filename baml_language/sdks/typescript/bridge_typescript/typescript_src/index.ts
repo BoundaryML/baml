@@ -5,11 +5,6 @@ import {
     BamlHandle,
     BamlCallContext,
     HostSpanManager,
-    Collector as NativeCollector,
-    FunctionLog as NativeFunctionLog,
-    Timing,
-    Usage,
-    LLMCall,
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
@@ -29,7 +24,6 @@ export {
     getVersion,
     flushEvents,
 } from './native.js';
-export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
@@ -103,53 +97,11 @@ export class FunctionResult {
     }
 }
 
-export class FunctionLog {
-    private _inner: NativeFunctionLog;
-    constructor(inner: NativeFunctionLog) { this._inner = inner; }
-    get id(): string { return this._inner.id; }
-    get functionName(): string { return this._inner.functionName; }
-    get timing(): Timing { return this._inner.timing; }
-    get usage(): Usage { return this._inner.usage; }
-    get calls(): LLMCall[] { return this._inner.calls; }
-    get tags(): Record<string, string> { return this._inner.tags; }
-    // FIXME: Returns null for both "no serialized result" (bytes == null) and a legitimate
-    // BAML null result (decodeCallResult returns null). Legacy engine/ had no result getter
-    // on FunctionLog at all. bridge_python has the same ambiguity (None for both cases).
-    // Leaving as-is for parity with bridge_python; narrow edge case in practice.
-    get result(): unknown {
-        const bytes = this._inner.result;
-        if (bytes == null) return null;
-        return decodeCallResult(bytes);
-    }
-}
-
-export class Collector {
-    private _inner: NativeCollector;
-    constructor(name?: string) { this._inner = new NativeCollector(name ?? null); }
-    get name(): string { return this._inner.name; }
-    get logs(): FunctionLog[] {
-        return this._inner.logs.map((l: NativeFunctionLog) => new FunctionLog(l));
-    }
-    get last(): FunctionLog | null {
-        const l = this._inner.last;
-        return l ? new FunctionLog(l) : null;
-    }
-    get usage(): Usage { return this._inner.usage; }
-    clear(): number { return this._inner.clear(); }
-    id(functionLogId: string): FunctionLog | null {
-        const l = this._inner.id(functionLogId);
-        return l ? new FunctionLog(l) : null;
-    }
-    /** Internal: get native collector for passing to Rust */
-    _native(): NativeCollector { return this._inner; }
-}
-
 export function callFunctionSync(
     rt: BamlRuntime,
     functionName: string,
     kwargs: Record<string, unknown>,
     ctx?: HostSpanManager,
-    collectors?: Collector[],
     callCtx?: BamlCallContext,
 ): FunctionResult {
     // Encode in sync mode so a host callable in the kwargs fast-fails
@@ -159,7 +111,6 @@ export function callFunctionSync(
     const callId = newFunctionCall();
     const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
-    const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
@@ -168,7 +119,7 @@ export function callFunctionSync(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null, nativeCollectors);
+            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null);
         } catch (err) {
             throw wrapNativeError(err);
         }
@@ -183,13 +134,11 @@ export async function callFunction(
     functionName: string,
     kwargs: Record<string, unknown>,
     ctx?: HostSpanManager,
-    collectors?: Collector[],
     callCtx?: BamlCallContext,
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
     const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
-    const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
@@ -198,7 +147,7 @@ export async function callFunction(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = await rt.callFunction(argsProto, ctx ?? null, nativeCollectors);
+            resultBytes = await rt.callFunction(argsProto, ctx ?? null);
         } catch (err) {
             throw wrapNativeError(err);
         }

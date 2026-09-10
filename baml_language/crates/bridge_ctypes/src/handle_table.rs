@@ -71,7 +71,6 @@ impl CffiHandleTableEntry {
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
             Self::RustData(_) => BamlHandleType::UntaggedRustData,
             Self::Adt(adt) => match adt {
-                BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
                 BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => BamlHandleType::AdtType,
                 BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
                 BexExternalAdt::Media(media) => match media.kind {

@@ -75,7 +75,7 @@ pub const FUTURE: i64 = 9;
 /// `Type` meta-type tag.
 pub const TYPE: i64 = 10;
 
-/// `Collector` type tag.
+/// Reserved legacy `Collector` type tag; no runtime value produces it.
 pub const COLLECTOR: i64 = 11;
 
 /// Uint8Array type tag.

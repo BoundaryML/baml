@@ -1,10 +1,10 @@
-import { BamlCallContext, BamlRuntime, Collector, HostSpanManager, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
+import { BamlCallContext, BamlRuntime, HostSpanManager, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
 import { decodeCallResult, encodeCallArgs, makeHostCallableDispatch } from "./shared/proto.js";
 import { attachCallContext } from "./shared/call_context.js";
 
 installHostCallableDispatchFactory(makeHostCallableDispatch);
 
-export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
+export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, HostSpanManager, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
 export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
@@ -32,23 +32,23 @@ export class FunctionResult {
   toString(): string { return `FunctionResult(${JSON.stringify(this.value)})`; }
 }
 
-export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult {
+export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, callCtx?: BamlCallContext): FunctionResult {
   const callId = nativeNewFunctionCall();
   const args = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null)));
   } finally {
     callCtxBinding.detach();
   }
 }
 
-export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult> {
+export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, callCtx?: BamlCallContext): Promise<FunctionResult> {
   const callId = nativeNewFunctionCall();
   const args = encodeCallArgs(kwargs, { callId, functionName });
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(await rt.callFunction(args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(await rt.callFunction(args, ctx ?? null)));
   } finally {
     callCtxBinding.detach();
   }

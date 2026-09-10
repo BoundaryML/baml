@@ -15,7 +15,6 @@ pub struct BamlHandle {
 /// Stdlib symbols with special host-side decoding rules today:
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
-///    - baml.llm.Collector                     -> ADT_COLLECTOR
 ///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///    - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
 ///    - runtime-created nominal values         -> ADT_RUNTIME_VALUE
@@ -46,6 +45,7 @@ pub enum BamlHandleType {
     AdtMediaPdf = 9,
     AdtMediaGeneric = 10,
     AdtPromptAst = 11,
+    /// Reserved legacy collector tag; no current runtime value produces it.
     AdtCollector = 12,
     AdtType = 13,
     AdtTaggedHeapHandle = 14,
