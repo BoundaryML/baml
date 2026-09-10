@@ -17,7 +17,7 @@ export function activityText(event: IssueEvent): string {
     case "cancelled": return "Shepherd cancelled the issue: not an issue.";
     case "approved": return "Shepherd approved the issue.";
     case "fix_started": return "Creating a fix and preparing the PR.";
-    case "pr_opened": return "Initial draft fix PR created; the shepherd owns review and merge.";
+    case "pr_opened": return "Initial draft fix PR created; automatic CI and CodeRabbit follow-up continues.";
     case "needs_human": return "Fix creation needs a human.";
     case "fixed_dry_run": return "Dry-run fix passed; nothing pushed.";
     case "merged": return "PR merged.";
