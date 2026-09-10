@@ -683,6 +683,13 @@ struct ThrowsChannel {
     contributions: Vec<(ExprId, Ty)>,
 }
 
+#[derive(Debug, Clone)]
+struct ThrowsContract {
+    declared: Ty,
+    contributions: Vec<(ExprId, Ty)>,
+    at: ExprId,
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback. Short-lived and
@@ -1724,6 +1731,8 @@ struct InferenceContext<'db> {
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
     throws_channels: Vec<ThrowsChannel>,
+    /// Explicit, closed contracts whose coverage is checked after inference.
+    throws_contracts: Vec<ThrowsContract>,
     /// S17 pending diagnostics: anchored on arena ids, interned payloads;
     /// finalized into `InferenceResult::diagnostics` (plain types) at
     /// finish - r-a's `InferenceDiagnostic` discipline.
@@ -1897,6 +1906,7 @@ impl<'db> InferenceContext<'db> {
             declared_throws: None,
             declared_throws_open: false,
             throws_channels: vec![ThrowsChannel::default()],
+            throws_contracts: Vec::new(),
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
             infer_var_origins: FxHashMap::default(),
@@ -3403,6 +3413,15 @@ impl<'db> InferenceContext<'db> {
                         replace_rigid_param(expected, &binding.parameter, &binding.occurrence_ty);
                 }
                 for (_, contribution) in &mut channel.contributions {
+                    *contribution = replace_rigid_param(
+                        contribution,
+                        &binding.parameter,
+                        &binding.occurrence_ty,
+                    );
+                }
+            }
+            for contract in &mut self.throws_contracts {
+                for (_, contribution) in &mut contract.contributions {
                     *contribution = replace_rigid_param(
                         contribution,
                         &binding.parameter,
@@ -8400,6 +8419,8 @@ impl<'db> InferenceContext<'db> {
             .as_ref()
             .and_then(|sig| sig.throws)
             .map(|type_ref| self.lower_body_annotation(type_ref));
+        // Capture openness before inference solves a written effect hole.
+        let coverage_clause = written_throws.clone().filter(|ty| !ty.has_infer());
 
         // The scope the lambda opened, via the semantic index's SPAN-FREE
         // lambda join (keyed by the lambda expression itself). Registering
@@ -8488,26 +8509,9 @@ impl<'db> InferenceContext<'db> {
             .pop()
             .expect("pushed above")
             .contributions;
-        // A WRITTEN closed clause is the lambda's contract: its body's
-        // contributions check against it exactly as a function's do
-        // (open contributions judge at finalize).
         if let Some(declared) = &written_throws {
-            // The annotation funnel already instantiated any written `_`
-            // member as a fresh effect variable, so a lambda clause is never
-            // PARTIAL here — the variable itself carries the openness, and
-            // `sub` below binds contributions into it (the pre-split
-            // `throws_clause_parts` probe on the instantiated clause was
-            // vacuously closed).
-            if !declared.has_error() {
-                for (at, contribution) in &channel {
-                    if contribution.has_infer() || !self.sub(contribution, declared) {
-                        self.pending_diags.push(PendingDiag::ThrowsViolation {
-                            at: *at,
-                            declared: declared.clone(),
-                            extra: contribution.clone(),
-                        });
-                    }
-                }
+            for (at, contribution) in &channel {
+                self.check_throws_contribution(*at, contribution, declared);
             }
         }
         let throws_ty = written_throws.unwrap_or_else(|| {
@@ -8525,6 +8529,13 @@ impl<'db> InferenceContext<'db> {
                 self.union_of(&tys)
             }
         });
+        if let Some(declared) = coverage_clause {
+            self.throws_contracts.push(ThrowsContract {
+                declared,
+                contributions: channel,
+                at: def.body.unwrap_or(expr),
+            });
+        }
 
         let params: Box<[baml_type::interned::InferFunctionParamTy]> = def
             .params
@@ -11120,6 +11131,20 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// Ground contributions constrain written holes immediately. Open
+    /// contributions must wait for writeback rather than acquiring an upper
+    /// bound from the contract that could block callback effect inference.
+    fn check_throws_contribution(&mut self, at: ExprId, contribution: &Ty, declared: &Ty) {
+        if !declared.has_error() && (contribution.has_infer() || !self.sub(contribution, declared))
+        {
+            self.pending_diags.push(PendingDiag::ThrowsViolation {
+                at,
+                declared: declared.clone(),
+                extra: contribution.clone(),
+            });
+        }
+    }
+
     /// One effect contribution: a thrown value or a callee's throws,
     /// accumulated into the current channel and, when the owner DECLARED
     /// its clause, checked against that contract - including when the
@@ -11155,21 +11180,9 @@ impl<'db> InferenceContext<'db> {
         // remainder joins the surface at finalize instead of erroring.
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
-            && !declared.has_error()
             && self.throws_channels.len() == 1
         {
-            // An OPEN contribution (a callee's still-unsolved effect param)
-            // is judged at finalize only - running `sub` on it here would
-            // DEPOSIT `?effect <= declared` as a bound and wedge the var
-            // against the callback's actual surface. Ground contributions
-            // judge (and stash for finalize re-judgment) immediately.
-            if contribution.has_infer() || !self.sub(&contribution, &declared) {
-                self.pending_diags.push(PendingDiag::ThrowsViolation {
-                    at,
-                    declared,
-                    extra: contribution.clone(),
-                });
-            }
+            self.check_throws_contribution(at, &contribution, &declared);
         }
         self.throws_channels
             .last_mut()
@@ -11481,16 +11494,27 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         };
-        // E0097: with a CLOSED declared clause, a declared fact nothing
-        // thrown matches exactly (interface-implementor coverage aside)
-        // is extraneous, anchored at the body root (the clause itself
-        // lives in the signature store). An imprecise `unknown` contract
-        // is an error; other extraneous members remain warnings.
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
-            && !declared.has_error()
             && let Some(root) = self.body_root
         {
+            self.throws_contracts.push(ThrowsContract {
+                declared,
+                contributions: std::mem::take(&mut self.throws_channels[0].contributions),
+                at: root,
+            });
+        }
+        // E0097 judges only explicit, closed clauses, at their body roots.
+        // Contextual expectations constrain effects but do not claim coverage.
+        for ThrowsContract {
+            declared,
+            contributions,
+            at: root,
+        } in std::mem::take(&mut self.throws_contracts)
+        {
+            if declared.has_error() {
+                continue;
+            }
             let is_open_contract = crate::lower::is_open_throws_contract(self.db, &declared);
             // Coverage compares WIDENED facts (TIR's fact grain: a thrown
             // `"boom"` covers a declared `string`) while the report keeps
@@ -11507,27 +11531,11 @@ impl<'db> InferenceContext<'db> {
             };
             let declared_facts =
                 crate::package_interface::flatten_ty_to_facts(&declared_for_coverage);
-            let effective: std::collections::BTreeSet<baml_type::Ty> = self.throws_channels[0]
-                .contributions
-                .clone()
+            let effective: std::collections::BTreeSet<baml_type::Ty> = contributions
                 .iter()
                 .flat_map(|(_, ty)| {
                     crate::throw_facts::flatten_declared_ty_to_facts(&self.plain_finalized(ty))
                 })
-                .collect();
-            let extraneous: Vec<baml_type::Ty> = declared_facts
-                .iter()
-                .filter(|decl| {
-                    let widened_decl: std::collections::BTreeSet<baml_type::Ty> =
-                        crate::throw_facts::flatten_declared_ty_to_facts(decl);
-                    let covered = widened_decl.iter().all(|w| effective.contains(w));
-                    !(covered
-                        || matches!(decl, baml_type::Ty::Interface(..))
-                            && effective.iter().any(|eff| {
-                                baml_type::normalize::is_subtype(eff, decl, &self.facts)
-                            }))
-                })
-                .cloned()
                 .collect();
             if is_open_contract {
                 let throws_unknown = effective
@@ -11543,39 +11551,35 @@ impl<'db> InferenceContext<'db> {
                             at: root,
                             inferred_types,
                         });
-                } else {
-                    // The `unknown` member is meaningful, but any other
-                    // uncovered members remain ordinary E0097 warnings. Do
-                    // not report an alias that expands to `unknown` as an
-                    // extraneous member merely because coverage compares the
-                    // alias's written surface with the resolved thrown type.
-                    let mut extra_types: Vec<String> = extraneous
+                    continue;
+                }
+            }
+            // A meaningful `unknown` (including aliases) is not extraneous,
+            // but uncovered named members of its union still are.
+            let mut extra_types: Vec<String> = declared_facts
+                .iter()
+                .filter(|decl| {
+                    let covered = crate::throw_facts::flatten_declared_ty_to_facts(decl)
                         .iter()
-                        .filter(|ty| {
-                            !crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty))
-                        })
-                        .map(|ty| ty.spell(&self.viewpoint()))
-                        .collect();
-                    extra_types.sort();
-                    if !extra_types.is_empty() {
-                        self.pending_diags.push(PendingDiag::ExtraneousThrows {
-                            at: root,
-                            extra_types,
-                        });
-                    }
-                }
-            } else if !extraneous.is_empty() {
-                let mut extra_types: Vec<String> = extraneous
-                    .iter()
-                    .map(|ty| ty.spell(&self.viewpoint()))
-                    .collect();
-                extra_types.sort();
-                if !extra_types.is_empty() {
-                    self.pending_diags.push(PendingDiag::ExtraneousThrows {
-                        at: root,
-                        extra_types,
-                    });
-                }
+                        .all(|w| effective.contains(w));
+                    !(covered
+                        || matches!(decl, baml_type::Ty::Interface(..))
+                            && effective.iter().any(|eff| {
+                                baml_type::normalize::is_subtype(eff, decl, &self.facts)
+                            }))
+                })
+                .filter(|ty| {
+                    !is_open_contract
+                        || !crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty))
+                })
+                .map(|ty| ty.spell(&self.viewpoint()))
+                .collect();
+            extra_types.sort();
+            if !extra_types.is_empty() {
+                self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                    at: root,
+                    extra_types,
+                });
             }
         }
         let mut result = std::mem::take(&mut self.result);
