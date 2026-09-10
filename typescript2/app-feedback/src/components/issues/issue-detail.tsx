@@ -1,41 +1,14 @@
+import { InvestigationPrompt } from "./investigation-prompt";
+import { investigationPrompt } from "@/lib/investigation";
+import { CodeBlock, FormattedText } from "@/components/code";
 import Link from "next/link";
-import { ArrowLeft, Check, CircleDashed, ExternalLink, Loader2, X } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { Issue, Repro } from "@/lib/types";
-import { STAGE_LABELS, formatSeconds, stageInfo, type StageState } from "@/lib/pipeline";
-import { cn } from "@/lib/utils";
+import { formatSeconds, stageInfo } from "@/lib/pipeline";
 import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStripLabeled } from "./pipeline-strip";
-
-function StageIcon({ state }: { state: StageState }) {
-  const base = "h-5 w-5 rounded-full flex items-center justify-center shrink-0";
-  switch (state) {
-    case "done":
-      return (
-        <span className={cn(base, "bg-stage-done text-white")}>
-          <Check className="h-3 w-3" />
-        </span>
-      );
-    case "running":
-      return (
-        <span className={cn(base, "bg-stage-running text-white")}>
-          <Loader2 className="h-3 w-3 animate-spin" />
-        </span>
-      );
-    case "failed":
-      return (
-        <span className={cn(base, "bg-stage-failed text-white")}>
-          <X className="h-3 w-3" />
-        </span>
-      );
-    default:
-      return (
-        <span className={cn(base, "border text-muted-foreground")}>
-          <CircleDashed className="h-3 w-3" />
-        </span>
-      );
-  }
-}
 
 function expectationLabel(r: Repro): string {
   switch (r.expectation.check) {
@@ -72,33 +45,27 @@ export function IssueDetail({ issue }: { issue: Issue }) {
         <ArrowLeft className="h-4 w-4" /> All issues
       </Link>
 
-      <div className="mt-3 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="font-mono text-xs text-muted-foreground">{issue.id}</div>
-          <h1 className="mt-1 text-2xl font-semibold leading-tight">{issue.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <StatusBadge issue={issue} />
-            <SubsystemBadge subsystem={issue.subsystem} />
-            <DifficultyBadge difficulty={issue.difficulty} />
-            <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
-            <span>·</span>
-            <span>seen on v{issue.version}</span>
-            <span>·</span>
-            <span>
-              {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
-            </span>
+      <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
+        <div className="min-w-0 space-y-8">
+          <div className="min-w-0">
+            <div className="font-mono text-xs text-muted-foreground">{issue.id}</div>
+            <h1 className="mt-1 text-2xl font-semibold leading-tight" title={issue.title}>{issue.title.length > 110 ? issue.title.slice(0, 107) + "…" : issue.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <StatusBadge issue={issue} />
+              <SubsystemBadge subsystem={issue.subsystem} />
+              <DifficultyBadge difficulty={issue.difficulty} />
+              <span>{issue.shepherd ? `shepherd @${issue.shepherd}` : "unassigned"}</span>
+              <span>·</span>
+              <span>BAML version: {issue.version || "unknown"}</span>
+              <span>·</span>
+              <span>
+                {issue.feedback_ids.length} report{issue.feedback_ids.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="w-full lg:w-[380px] shrink-0 rounded-lg border bg-card p-4">
-          <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
-          <PipelineStripLabeled stages={stages} />
-        </div>
-      </div>
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
-        <div className="space-y-8 min-w-0">
           <Section title="Description">
-            <p className="text-sm leading-relaxed">{issue.description}</p>
+            <FormattedText text={issue.description.length > 450 ? issue.description.slice(0, 447).trimEnd() + "…" : issue.description} />
+            {issue.description.length > 450 && <details className="mt-2"><summary className="cursor-pointer text-sm text-muted-foreground">Full report details</summary><FormattedText text={issue.description} /></details>}
           </Section>
 
           {st.state === "rejected" && (
@@ -129,9 +96,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                     {Object.entries(r.files).map(([name, content]) => (
                       <div key={name}>
                         <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground border-t">{name}</div>
-                        <pre className="px-3 py-2 text-xs font-mono bg-code-bg text-code-fg overflow-x-auto">
-                          {content}
-                        </pre>
+                        <CodeBlock text={content} language={name} />
                       </div>
                     ))}
                   </div>
@@ -142,15 +107,13 @@ export function IssueDetail({ issue }: { issue: Issue }) {
 
           {issue.resolution_plan && (
             <Section title="Resolution plan (triage)">
-              <p className="text-sm leading-relaxed">{issue.resolution_plan}</p>
+              <FormattedText text={issue.resolution_plan} />
             </Section>
           )}
 
           {issue.design_doc && (
             <Section title="Design doc (agent)">
-              <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed rounded-md border p-3 bg-muted/30">
-                {issue.design_doc}
-              </pre>
+              <FormattedText text={issue.design_doc} />
             </Section>
           )}
 
@@ -164,7 +127,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                     <div className="text-xs text-muted-foreground">
                       @{c.author} · {new Date(c.at).toLocaleString()}
                     </div>
-                    <p className="mt-1 text-sm">{c.body}</p>
+                    <FormattedText text={c.body} />
                   </div>
                 ))}
               </div>
@@ -173,19 +136,12 @@ export function IssueDetail({ issue }: { issue: Issue }) {
         </div>
 
         <aside className="space-y-6">
-          <Section title="Timeline">
-            <ol className="relative border-l ml-2.5 space-y-4">
-              {stages.map((s) => (
-                <li key={s.stage} className="ml-5">
-                  <span className="absolute -left-2.5">
-                    <StageIcon state={s.state} />
-                  </span>
-                  <div className="text-sm font-medium leading-5">{STAGE_LABELS[s.stage]}</div>
-                  <div className="text-xs text-muted-foreground">{s.detail}</div>
-                </li>
-              ))}
-            </ol>
-          </Section>
+          <InvestigationPrompt prompt={investigationPrompt(issue)} />
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs text-muted-foreground mb-2">Pipeline</div>
+            <PipelineStripLabeled stages={stages} />
+          </div>
+
 
           {o && (
             <Section title="Last run">
