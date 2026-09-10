@@ -6732,6 +6732,8 @@ impl<'a> Parser<'a> {
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
             if text == "b" && self.parse_byte_string() {
                 // Byte string literal b"..."
+            } else if text == "map" && self.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace) {
+                self.parse_map_literal();
             } else if text == "env"
                 && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
                 && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
@@ -7432,6 +7434,9 @@ impl<'a> Parser<'a> {
     /// following token unambiguously starts another key.
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
+            if p.at(TokenKind::Word) {
+                p.bump(); // map
+            }
             p.expect(TokenKind::LBrace);
 
             // Parse map entries

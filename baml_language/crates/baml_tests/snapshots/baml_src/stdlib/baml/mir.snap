@@ -12584,7 +12584,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     }
 
     bb2: {
-        _3 = map {  };
+        _3 = {  }: map<string, baml.toml.Item>;
         _5 = load_type(string);
         _6 = load_type(baml.json.json);
         _4 = call const fn baml.Map.keys<copy _5, copy _6>(copy _1) -> [bb3];
