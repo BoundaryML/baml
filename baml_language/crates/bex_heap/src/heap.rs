@@ -788,28 +788,13 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `vec`'s chunk layout is not growing concurrently.
-    /// `ChunkedVec` never moves existing chunks, but its internal chunk
-    /// `Vec<Box<[UnsafeCell<T>]>>` can reallocate its buffer on growth, and
-    /// `num_chunks`/`chunk_start_ptr` are non-atomic reads of that buffer. Only
-    /// call this for spaces that grow exclusively at GC safepoints (Gen1/Gen2),
-    /// or while holding exclusive access to the space being scanned.
+    /// When `vec` comes from a generation's `UnsafeCell`, the caller must keep
+    /// that generation from being swapped/cleared by GC while it is borrowed
+    /// (a heap permit or exclusive GC access). `ChunkedVec` itself synchronizes
+    /// access to its storage descriptors, including concurrent growth.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        // `num_chunks` and `chunk_start_ptr` now serialize on the
-        // ChunkedVec's internal RwLock, so the brief window is safe even
-        // under a concurrent grower. `chunk_start_ptr` is still `unsafe`
-        // for the bounds precondition.
-        let num_chunks = vec.num_chunks();
-        for chunk_idx in 0..num_chunks {
-            // SAFETY: `chunk_idx < num_chunks` by loop bound.
-            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
-            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
-            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
-                return true;
-            }
-        }
-        false
+        vec.contains_ptr(raw_ptr)
     }
 
     /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
