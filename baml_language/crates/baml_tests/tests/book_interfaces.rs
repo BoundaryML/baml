@@ -37,6 +37,7 @@ function main() -> string throws never {
     assert_no_user_diagnostic_errors(&db);
     let program = baml_compiler2_emit::generate_project_bytecode_with_opt(
         &db,
+        db.workspace_root().expect("fixture has a workspace root"),
         baml_compiler2_emit::OptLevel::One,
     )
     .expect("cross-package notifier compiles");
