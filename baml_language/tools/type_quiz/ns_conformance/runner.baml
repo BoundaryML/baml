@@ -109,7 +109,7 @@ function prompts_are_bare() -> string throws never {
             let prompt: root.engine.Prompt => {
                 prompt.files == questions[i].case.files
                     && prompt.item == questions[i].item
-                    && prompt.seed == questions[i].seed
+                    && prompt.seed == questions[i].seed * 1n
             },
             null => false,
         }
@@ -332,7 +332,22 @@ function every_shape() -> root.engine.Transcript throws never {
                 judgement: root.engine.judge(question, answer, mark),
             }
         }),
+        learner: null,
     }
+}
+
+/// A transcript written before sittings carried a learner model reads back
+/// with none, rather than failing to read at all.
+function reads_without_learner() -> string throws never {
+    let text = `{"mode":"Simple","seed":1,"exchanges":[]}`;
+    match (root.engine.decode("older.json", text)) {
+        let failed: root.engine.LoadFailed => `failed: ${failed.message}`,
+        let transcript: root.engine.Transcript => `learner_absent=${transcript.learner == null}`,
+    }
+}
+
+test "transcript: one written without a learner model still reads back" {
+    assert.equal(reads_without_learner(), "learner_absent=true")
 }
 
 /// One plain answer for each question of the fixed sitting.

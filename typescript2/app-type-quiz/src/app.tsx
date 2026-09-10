@@ -1,255 +1,471 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { formatSource, loadFormatter } from './format';
-import { highlight } from './highlight';
-import { segments } from './prose';
+import { Home } from './home';
 import {
-  answerAt,
-  compilerReport,
-  type Exchange,
-  type Given,
+  Claims,
+  Code,
+  CompilerSays,
+  PointsRule,
+  signed,
+  Teach,
+} from './panels';
+import {
+  type Answered,
+  answerCase,
+  freshProfile,
   given,
-  type Prompt,
-  promptAt,
-  type Reported,
+  isSaid,
+  type Knobs,
+  knobsFrom,
+  knobValues,
+  type Next,
+  nextPrompt,
+  type Profile,
+  pointsOf,
+  replay,
   type Said,
-  type Score,
-  type Sitting,
-  score,
-  sittingLength,
+  type Standing,
+  standingOf,
+  type Taken,
+  taken,
   transcriptJson,
+  Why,
 } from './quiz';
+import { Readout } from './readout';
+import {
+  clearSlot,
+  readSlots,
+  type Save,
+  type SavedAnswer,
+  type Slot,
+  VERSION,
+  writeSlot,
+} from './saves';
+import { type Chosen, Setup } from './setup';
 
-/** Whether the learner is asked why, as well as whether. */
-type Mode = 'simple' | 'full';
+/** A sitting in progress: what the page keeps, and what follows from it. */
+interface Live {
+  slot: number;
+  session: number;
+  full: boolean;
+  knobs: Knobs;
+  history: Taken[];
+  /**
+   * Always what `replay(knobs, history)` gives. It is carried rather than
+   * worked out again on every answer, and every change to `history` below
+   * carries the profile the engine returned with it; loading a save is the
+   * one place it is worked out from scratch.
+   */
+  profile: Profile;
+}
 
-/** Where a sitting has got to. */
+/** A file of a case, laid out by the formatter. */
+interface Shown {
+  name: string;
+  source: string;
+}
+
+/** Where the page has got to. */
 type Phase =
-  | { kind: 'setup' }
-  | { kind: 'asking'; index: number; prompt: Prompt; source: string }
+  | { kind: 'home' }
+  | { kind: 'setup'; slot: number }
+  | { kind: 'asking'; live: Live; next: Next; shown: Shown[] }
   | {
       kind: 'revealed';
-      index: number;
-      prompt: Prompt;
-      source: string;
+      live: Live;
+      next: Next;
+      shown: Shown[];
       said: Said;
-      exchange: Exchange;
-      reported: Reported | null;
+      answered: Answered;
     }
-  | { kind: 'done' };
+  | { kind: 'done'; live: Live; standing: Standing; starved: boolean }
+  | { kind: 'broken'; message: string };
 
-function Code({ source }: { source: string }) {
-  const html = useMemo(() => highlight(source), [source]);
-  return (
-    <pre className="case">
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: highlight.js
-          returns HTML, and it is the only way to render its token spans. The
-          input is a program this app generated, never anything a user typed,
-          and highlight.js escapes the source it wraps. */}
-      <code dangerouslySetInnerHTML={{ __html: html }} />
-    </pre>
-  );
+type Posed = Extract<Phase, { kind: 'asking' | 'revealed' }>;
+
+const storage = window.localStorage;
+
+function savedAnswer(kept: Taken): SavedAnswer {
+  const { said } = kept.given;
+  if (!isSaid(said)) {
+    // Every answer the page keeps was built from a `Said`, so this cannot
+    // happen; it is checked rather than cast.
+    throw new Error(`an answer the page never offered: ${said}`);
+  }
+  return {
+    item: kept.item,
+    mark: kept.given.mark,
+    reasoning: kept.given.reasoning,
+    said,
+    seed: kept.seed.toString(),
+  };
 }
 
-/** Prose from BAML, with the types it names set as code. */
-function Prose({ text }: { text: string }) {
+function saveOf(live: Live): Save {
+  return {
+    answers: live.history.map(savedAnswer),
+    full: live.full,
+    knobs: knobValues(live.knobs),
+    session: live.session,
+    updated: new Date().toISOString(),
+    version: VERSION,
+  };
+}
+
+/** What a save holds, as the engine takes it. */
+function heldBy(save: Save): { knobs: Knobs; history: Taken[] } {
+  return {
+    history: save.answers.map((a) =>
+      taken(a.item, BigInt(a.seed), given(a.said, a.reasoning, a.mark)),
+    ),
+    knobs: knobsFrom(save.knobs),
+  };
+}
+
+function fromSave(slot: number, save: Save): Live {
+  const { knobs, history } = heldBy(save);
+  return {
+    full: save.full,
+    history,
+    knobs,
+    profile: replay(knobs, history),
+    session: save.session,
+    slot,
+  };
+}
+
+/** The phase a sitting is in given its answers so far: the next case, or the end. */
+function advance(live: Live): Phase {
+  const standing = standingOf(live.profile, live.knobs);
+  if (standing.why !== Why.Continue) {
+    return { kind: 'done', live, standing, starved: false };
+  }
+  const next = nextPrompt(
+    live.profile,
+    live.knobs,
+    live.session,
+    live.history.length,
+  );
+  if (next === null) {
+    return { kind: 'done', live, standing, starved: true };
+  }
+  const shown = Object.entries(next.prompt.files).map(([name, source]) => ({
+    name,
+    source: formatSource(source),
+  }));
+  return { kind: 'asking', live, next, shown };
+}
+
+function download(name: string, json: string): void {
+  const url = URL.createObjectURL(
+    new Blob([json], { type: 'application/json' }),
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function Reveal({
+  answered,
+  full,
+  onKeep,
+  onLeave,
+}: {
+  answered: Answered;
+  full: boolean;
+  onKeep: (mark: string) => void;
+  onLeave: () => void;
+}) {
+  const judged = answered.exchange.judgement.verdict_correct;
+  const [word, tone] =
+    judged === true
+      ? ['Right.', 'right']
+      : judged === false
+        ? ['Wrong.', 'wrong']
+        : ['You held back.', 'held'];
   return (
-    <>
-      {segments(text).map((segment, at) =>
-        segment.code ? (
-          <code key={`${at}-${segment.text}`}>{segment.text}</code>
-        ) : (
-          <span key={`${at}-${segment.text}`}>{segment.text}</span>
-        ),
+    <div className="reveal">
+      <p className={tone}>
+        {word}{' '}
+        {answered.reported.compiles
+          ? 'It compiles.'
+          : 'The compiler rejects it.'}
+        <span className="points">{signed(answered.points)}</span>
+      </p>
+      <Claims exchange={answered.exchange} />
+      <CompilerSays reported={answered.reported} />
+      {full ? (
+        <div className="choices">
+          <span className="ask">Your reasoning was</span>
+          <button onClick={() => onKeep('sound')} type="button">
+            Sound
+          </button>
+          <button onClick={() => onKeep('partial')} type="button">
+            Partial
+          </button>
+          <button onClick={() => onKeep('wrong')} type="button">
+            Wrong
+          </button>
+          <button className="quiet" onClick={() => onKeep('')} type="button">
+            Skip
+          </button>
+          <button className="quiet leave" onClick={onLeave} type="button">
+            Leave
+          </button>
+        </div>
+      ) : (
+        <div className="choices">
+          <button onClick={() => onKeep('')} type="button">
+            Next
+          </button>
+          <button className="quiet leave" onClick={onLeave} type="button">
+            Leave
+          </button>
+        </div>
       )}
-    </>
-  );
-}
-
-function Claims({ exchange }: { exchange: Exchange }) {
-  return (
-    <ol className="claims">
-      {exchange.question.case.trace.map((claim, at) => (
-        <li key={`${claim.rule.name}-${at}`}>
-          <span className="instance">
-            <Prose text={claim.instance} />
-          </span>
-          <span className="rule">{claim.rule.name}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function CompilerSays({ reported }: { reported: Reported | null }) {
-  if (reported === null) {
-    return null;
-  }
-  if (reported.compiles && reported.messages.length === 0) {
-    return <p className="compiler">The compiler accepts it.</p>;
-  }
-  return (
-    <div className="compiler">
-      <p>The compiler says:</p>
-      <ul>
-        {reported.messages.map((message, at) => (
-          <li key={`${reported.codes[at] ?? at}`}>
-            <code className="code">{reported.codes[at] ?? ''}</code>{' '}
-            <Prose text={message} />
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
 
-function Summary({
-  sitting,
-  full,
-  answers,
+function Question({
+  phase,
+  reasoning,
+  onReasoning,
+  onAnswer,
+  onKeep,
+  onLeave,
 }: {
-  sitting: Sitting;
-  full: boolean;
-  answers: Given[];
+  phase: Posed;
+  reasoning: string;
+  onReasoning: (text: string) => void;
+  onAnswer: (said: Said) => void;
+  onKeep: (mark: string) => void;
+  onLeave: () => void;
 }) {
-  const counted: Score = useMemo(
-    () => score(sitting, full, answers),
-    [sitting, full, answers],
-  );
+  const { live, next, shown } = phase;
+  const asked =
+    phase.kind === 'asking' ? live.history.length + 1 : live.history.length;
+  // In practice the count is known; in a mastery sitting the end is the
+  // model's to call, and no meter is shown along the way, since a visible
+  // one gets played to.
+  const progress = live.knobs.practice
+    ? `Case ${asked} of ${live.knobs.budget}`
+    : `Case ${asked}`;
+  // The two verdicts swap places from case to case, keyed by the case, so
+  // the same button cannot be pressed without reading.
+  const verdicts: [Said, string][] = [
+    ['compiles', 'It compiles'],
+    ['rejected', 'It is rejected'],
+  ];
+  const ordered =
+    next.prompt.seed % 2n === 1n ? [verdicts[1], verdicts[0]] : verdicts;
   return (
-    <table className="score">
-      <tbody>
-        <tr>
-          <th>Verdicts right</th>
-          <td>
-            {counted.verdicts_right} of {counted.asked}
-          </td>
-        </tr>
-        {full && (
-          <tr>
-            <th>Reasoning</th>
-            <td>
-              {counted.sound} sound, {counted.partial} partial, {counted.wrong}{' '}
-              wrong, {counted.unmarked} unmarked
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
+    <section className="question">
+      <p className="progress">{progress}</p>
+      {phase.kind === 'asking' && next.teach !== null && (
+        <Teach rule={next.teach} />
+      )}
+      {shown.map((file) => (
+        <Code key={file.name} source={file.source} />
+      ))}
+      {phase.kind === 'asking' && (
+        <>
+          {live.full && (
+            <label className="why">
+              Why?
+              <textarea
+                onChange={(e) => onReasoning(e.target.value)}
+                placeholder="What does this case turn on?"
+                rows={3}
+                value={reasoning}
+              />
+            </label>
+          )}
+          <div className="choices">
+            {ordered.map(([said, label]) => (
+              <button key={said} onClick={() => onAnswer(said)} type="button">
+                {label}
+              </button>
+            ))}
+            <button
+              className="quiet"
+              onClick={() => onAnswer('unsure')}
+              type="button"
+            >
+              Not sure
+            </button>
+            <button className="quiet leave" onClick={onLeave} type="button">
+              Leave
+            </button>
+          </div>
+          <PointsRule points={pointsOf(live.knobs)} />
+        </>
+      )}
+      {phase.kind === 'revealed' && (
+        <Reveal
+          answered={phase.answered}
+          full={live.full}
+          onKeep={onKeep}
+          onLeave={onLeave}
+        />
+      )}
+    </section>
   );
 }
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>('simple');
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100000));
-  const [length, setLength] = useState(10);
-  const [sitting, setSitting] = useState<Sitting | null>(null);
-  const [total, setTotal] = useState(0);
-  const [answers, setAnswers] = useState<Given[]>([]);
-  const [reasoning, setReasoning] = useState('');
-  const [phase, setPhase] = useState<Phase>({ kind: 'setup' });
+  const [phase, setPhase] = useState<Phase>({ kind: 'home' });
+  const [slots, setSlots] = useState<Slot[]>(() => readSlots(storage));
   const [ready, setReady] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const full = mode === 'full';
+  const [reasoning, setReasoning] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadFormatter().then(
       () => setReady(true),
       (error: unknown) =>
-        setFailure(`the formatter would not load: ${String(error)}`),
+        setNotice(`the formatter would not load: ${String(error)}`),
     );
   }, []);
 
-  const show = useCallback((at: Sitting, index: number, count: number) => {
-    const prompt = promptAt(at, index);
-    if (prompt === null || index >= count) {
-      setPhase({ kind: 'done' });
-      return;
-    }
-    setReasoning('');
-    setPhase({
-      index,
-      kind: 'asking',
-      prompt,
-      source: formatSource(prompt.files['case.baml'] ?? ''),
-    });
+  const store = useCallback((live: Live) => {
+    writeSlot(storage, live.slot, saveOf(live));
+    setSlots(readSlots(storage));
   }, []);
 
-  const start = useCallback(() => {
+  /** Move to the phase `act` works out, or say why that could not be done. */
+  const move = useCallback((doing: string, act: () => Phase) => {
     try {
-      const at = { length, seed };
-      const count = sittingLength(at);
-      setSitting(at);
-      setTotal(count);
-      setAnswers([]);
-      show(at, 0, count);
+      setPhase(act());
     } catch (error) {
-      setFailure(`could not start: ${String(error)}`);
+      setPhase({ kind: 'broken', message: `${doing}: ${String(error)}` });
     }
-  }, [seed, length, show]);
+  }, []);
 
+  const home = useCallback(() => {
+    setSlots(readSlots(storage));
+    setPhase({ kind: 'home' });
+  }, []);
+
+  const begin = useCallback(
+    (slot: number, chosen: Chosen) =>
+      move('starting the sitting', () => {
+        const live: Live = {
+          full: chosen.full,
+          history: [],
+          knobs: knobsFrom(chosen.knobs),
+          profile: freshProfile(),
+          session: Math.floor(Math.random() * 2 ** 31),
+          slot,
+        };
+        store(live);
+        setReasoning('');
+        return advance(live);
+      }),
+    [move, store],
+  );
+
+  const resume = useCallback(
+    (slot: number, save: Save) =>
+      move('resuming the sitting', () => {
+        setReasoning('');
+        return advance(fromSave(slot, save));
+      }),
+    [move],
+  );
+
+  // The answer is kept, unmarked, the moment it is given: a learner who
+  // leaves at the reveal has still answered, and coming back must not show
+  // them the same case now that they have seen its answer.
   const answer = useCallback(
     (said: Said) => {
-      if (phase.kind !== 'asking' || sitting === null) {
+      if (phase.kind !== 'asking') {
         return;
       }
-      const exchange = answerAt(
-        sitting,
-        phase.index,
-        given(said, reasoning, ''),
-      );
-      if (exchange === null) {
-        setPhase({ kind: 'done' });
-        return;
-      }
-      setPhase({
-        exchange,
-        index: phase.index,
-        kind: 'revealed',
-        prompt: phase.prompt,
-        reported: compilerReport(sitting, phase.index),
-        said,
-        source: phase.source,
+      const { live, next, shown } = phase;
+      move('answering', () => {
+        const what = given(said, reasoning, '');
+        const answered = answerCase(
+          live.profile,
+          live.knobs,
+          next.prompt.item,
+          next.prompt.seed,
+          what,
+        );
+        const after: Live = {
+          ...live,
+          history: [
+            ...live.history,
+            taken(next.prompt.item, next.prompt.seed, what),
+          ],
+          profile: answered.profile,
+        };
+        store(after);
+        return { answered, kind: 'revealed', live: after, next, said, shown };
       });
     },
-    [phase, sitting, reasoning],
+    [phase, reasoning, move, store],
   );
 
-  // In full mode the learner marks their own reasoning against the derivation
-  // they have just been shown. Only what they said is kept; the judgement is
-  // the engine's to make, and it makes it again from this when it is asked.
+  // In full mode the learner marks their own reasoning against the
+  // derivation they have just been shown. The mark is kept for the
+  // transcript and is not evidence: the profile already moved on the verdict.
   const keep = useCallback(
     (mark: string) => {
-      if (phase.kind !== 'revealed' || sitting === null) {
+      if (phase.kind !== 'revealed') {
         return;
       }
-      setAnswers([...answers, given(phase.said, reasoning, mark)]);
-      show(sitting, phase.index + 1, total);
+      const { live, said } = phase;
+      move('keeping the answer', () => {
+        const last = live.history.at(-1);
+        if (last === undefined) {
+          throw new Error('nothing was answered');
+        }
+        const marked = taken(
+          last.item,
+          last.seed,
+          given(said, reasoning, mark),
+        );
+        const after: Live = {
+          ...live,
+          history: [...live.history.slice(0, -1), marked],
+        };
+        store(after);
+        setReasoning('');
+        return advance(after);
+      });
     },
-    [phase, sitting, answers, reasoning, total, show],
+    [phase, reasoning, move, store],
   );
 
-  const download = useCallback(() => {
-    if (sitting === null) {
-      return;
-    }
-    const json = transcriptJson(sitting, full, answers);
-    const url = URL.createObjectURL(
-      new Blob([json], { type: 'application/json' }),
-    );
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `type-quiz-${mode}-${sitting.seed}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [mode, full, sitting, answers]);
+  const exportHistory = useCallback(
+    (session: number, full: boolean, knobs: Knobs, history: Taken[]) => {
+      try {
+        download(
+          `type-quiz-${session}.json`,
+          transcriptJson(session, full, knobs, history),
+        );
+      } catch (error) {
+        setNotice(`could not export the sitting: ${String(error)}`);
+      }
+    },
+    [],
+  );
 
-  if (failure !== null) {
-    return (
-      <main className="shell">
-        <p className="failure">{failure}</p>
-      </main>
-    );
-  }
+  const exportSave = useCallback(
+    (save: Save) => {
+      const { knobs, history } = heldBy(save);
+      exportHistory(save.session, save.full, knobs, history);
+    },
+    [exportHistory],
+  );
+
+  const reset = useCallback((slot: number) => {
+    clearSlot(storage, slot);
+    setSlots(readSlots(storage));
+  }, []);
 
   return (
     <main className="shell">
@@ -257,154 +473,83 @@ export default function App() {
         <h1>BAML type-system quiz</h1>
         <p className="blurb">
           Every program below was generated from the rules in TYPE_SYSTEM.md and
-          checked against the real compiler. Say whether it compiles.
+          checked against the real compiler. Say whether it compiles, or that
+          you are not sure.
         </p>
       </header>
 
+      {notice !== null && <p className="notice">{notice}</p>}
+
+      {phase.kind === 'home' && (
+        <Home
+          onExport={exportSave}
+          onNew={(slot) => setPhase({ kind: 'setup', slot })}
+          onReset={reset}
+          onResume={resume}
+          slots={slots}
+        />
+      )}
+
       {phase.kind === 'setup' && (
-        <section className="setup">
-          <label>
-            Mode
-            <select
-              onChange={(e) => setMode(e.target.value as Mode)}
-              value={mode}
-            >
-              <option value="simple">Simple — does it compile?</option>
-              <option value="full">Full — and why?</option>
-            </select>
-          </label>
-          <label>
-            Seed
-            <input
-              onChange={(e) => setSeed(Number(e.target.value))}
-              type="number"
-              value={seed}
-            />
-          </label>
-          <label>
-            Questions
-            <input
-              max={50}
-              min={1}
-              onChange={(e) => setLength(Number(e.target.value))}
-              type="number"
-              value={length}
-            />
-          </label>
-          <button disabled={!ready} onClick={start} type="button">
-            {ready ? 'Start' : 'Loading…'}
-          </button>
-          <p className="note">
-            The same seed asks the same questions, in the same order.
-          </p>
-        </section>
+        <Setup
+          onBack={home}
+          onStart={(chosen) => begin(phase.slot, chosen)}
+          ready={ready}
+        />
       )}
 
       {(phase.kind === 'asking' || phase.kind === 'revealed') && (
-        <section className="question">
-          <p className="progress">
-            Case {phase.index + 1} of {total}
-          </p>
-          <Code source={phase.source} />
-
-          {phase.kind === 'asking' && (
-            <>
-              {full && (
-                <label className="why">
-                  Why?
-                  <textarea
-                    onChange={(e) => setReasoning(e.target.value)}
-                    placeholder="What does this case turn on?"
-                    rows={3}
-                    value={reasoning}
-                  />
-                </label>
-              )}
-              <div className="choices">
-                <button onClick={() => answer('compiles')} type="button">
-                  It compiles
-                </button>
-                <button onClick={() => answer('rejected')} type="button">
-                  It is rejected
-                </button>
-              </div>
-            </>
-          )}
-
-          {phase.kind === 'revealed' && (
-            <div className="reveal">
-              <p
-                className={
-                  phase.exchange.judgement.verdict_correct === true
-                    ? 'right'
-                    : 'wrong'
-                }
-              >
-                {phase.exchange.judgement.verdict_correct === true
-                  ? 'Right.'
-                  : 'Wrong.'}{' '}
-                {phase.reported?.compiles
-                  ? 'It compiles.'
-                  : 'The compiler rejects it.'}
-              </p>
-              <Claims exchange={phase.exchange} />
-              <CompilerSays reported={phase.reported} />
-              {full ? (
-                <div className="choices">
-                  <span className="ask">Your reasoning was</span>
-                  <button onClick={() => keep('sound')} type="button">
-                    Sound
-                  </button>
-                  <button onClick={() => keep('partial')} type="button">
-                    Partial
-                  </button>
-                  <button onClick={() => keep('wrong')} type="button">
-                    Wrong
-                  </button>
-                  <button
-                    className="quiet"
-                    onClick={() => keep('')}
-                    type="button"
-                  >
-                    Skip
-                  </button>
-                </div>
-              ) : (
-                <div className="choices">
-                  <button onClick={() => keep('')} type="button">
-                    Next
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+        <Question
+          onAnswer={answer}
+          onKeep={keep}
+          onLeave={home}
+          onReasoning={setReasoning}
+          phase={phase}
+          reasoning={reasoning}
+        />
       )}
 
-      {phase.kind === 'done' && sitting !== null && (
+      {phase.kind === 'done' && (
         <section className="done">
           <h2>Done</h2>
-          <Summary answers={answers} full={full} sitting={sitting} />
+          <Readout
+            knobs={phase.live.knobs}
+            profile={phase.live.profile}
+            standing={phase.standing}
+            starved={phase.starved}
+          />
           <div className="choices">
             <button
-              disabled={answers.length === 0}
-              onClick={download}
+              disabled={phase.live.history.length === 0}
+              onClick={() =>
+                exportHistory(
+                  phase.live.session,
+                  phase.live.full,
+                  phase.live.knobs,
+                  phase.live.history,
+                )
+              }
               type="button"
             >
               Download the sitting
             </button>
-            <button
-              className="quiet"
-              onClick={() => setPhase({ kind: 'setup' })}
-              type="button"
-            >
-              Again
+            <button className="quiet" onClick={home} type="button">
+              Back to the slots
             </button>
           </div>
           <p className="note">
             The download is what <code>baml run review</code> reads back, case
             by case, to check every one of them against the compiler again.
           </p>
+        </section>
+      )}
+
+      {phase.kind === 'broken' && (
+        <section>
+          <p className="notice">{phase.message}</p>
+          <button className="quiet" onClick={home} type="button">
+            Back to the slots
+          </button>
         </section>
       )}
     </main>

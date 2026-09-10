@@ -255,3 +255,170 @@ pre.case code {
 .failure {
   color: var(--wrong);
 }
+
+.notice {
+  color: var(--wrong);
+}
+
+/* ─── the slots ─── */
+
+.home {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.slot {
+  padding: 0.9rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.slot h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+
+.slot p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+.slot .choices {
+  margin-top: 0.6rem;
+}
+
+button.danger {
+  border-color: var(--wrong);
+}
+
+/* ─── setting up ─── */
+
+fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kinds label,
+.check {
+  flex-direction: row;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: none;
+}
+
+input.count {
+  width: 4.5rem;
+  padding: 0.25rem 0.4rem;
+}
+
+details {
+  width: 100%;
+  max-width: 28rem;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+details summary {
+  margin-bottom: 0.6rem;
+  cursor: pointer;
+}
+
+details label {
+  margin-bottom: 0.7rem;
+}
+
+/* ─── asking ─── */
+
+.teach {
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  background: #1f2530;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.teach .ask {
+  margin: 0;
+}
+
+.teach blockquote {
+  padding-left: 0.8rem;
+  margin: 0.5rem 0 0;
+  border-left: 2px solid var(--edge);
+}
+
+.teach blockquote p {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.teach code {
+  padding: 0.05em 0.32em;
+  font-size: 0.87em;
+  background: #23272e;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+}
+
+.rule-line {
+  margin: 0.7rem 0 0;
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+
+.rule-line b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+button.leave {
+  margin-left: auto;
+}
+
+/* ─── the reveal ─── */
+
+.reveal .held {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.points {
+  margin-left: 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  font-weight: 400;
+  color: var(--dim);
+}
+
+/* ─── the readout ─── */
+
+.readout .why {
+  margin: 0 0 0.5rem;
+}
+
+.readout h3 {
+  margin: 1rem 0 0.3rem;
+  font-size: 0.95rem;
+}
+
+.readout p {
+  margin: 0 0 0.4rem;
+}
+
+.readout ul {
+  padding-left: 1.1rem;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.readout code {
+  font-size: 0.85em;
+}

@@ -1,11 +1,14 @@
 # BAML type-system quiz
 
 The browser front end for `baml_language/tools/type_quiz`. It shows generated
-BAML programs and asks whether the compiler accepts them.
+BAML programs, asks whether the compiler accepts them, and keeps asking until
+the model behind it is confident in the learner's intuition for the type
+system.
 
 Everything the page knows about the type system comes from the quiz package,
-compiled to WebAssembly: which programs to ask about, whether an answer is
-right, and why. The page chooses what to show and when, and decides nothing.
+compiled to WebAssembly: which program to ask next, whether an answer is right
+and why, what it was worth, and when a sitting is over. The page chooses what
+to show and when, and decides nothing.
 
 ## Running it
 
@@ -26,7 +29,8 @@ carries the compiler's commit fingerprint and the bridge refuses bytecode from
 a different one, so the bridge and the SDK have to come from the same tree at
 the same time; after any change under `baml_language`, run `prepare:deps`
 again rather than any one of its parts. Everything it produces is gitignored
-and nothing is edited by hand.
+and nothing is edited by hand. `wasm-pack` has to be on the path, which under
+this repository means running it through `mise exec`.
 
 Generation goes through this checkout's compiler (`cargo run -p baml_cli`)
 rather than a `baml` on your PATH, and deliberately so: the runtime refuses a
@@ -41,56 +45,105 @@ WebAssembly, against 7 MB for the formatter.
 
 ```bash
 pnpm typecheck
-pnpm test:smoke     # builds, then answers a question in a real browser
+pnpm test:smoke     # sits a short practice sitting in a real browser
 ```
 
 The smoke test is the only thing that can tell us the two WebAssembly modules
-load in a page and talk to each other, which is the part most likely to break
-and least likely to break loudly. It needs a browser once:
+load in a page and talk to each other, that what crosses the bridge comes
+back whole, and that a sitting survives a reload: the parts most likely to
+break and least likely to break loudly. It answers three cases, one of them
+"not sure", leaves and comes back between the second and the third, checks
+every reveal against itself, reads the downloaded transcript, and starts a
+mastery sitting to see that it shows no total. It needs a browser once:
 `npx playwright install chromium --only-shell`.
 
-## Two things worth knowing
+## How a sitting goes
 
-**A prompt does not carry its answer.** A sitting is a pure function of its
-seed, so the case can be worked out again when the answer is given. The page is
-handed the program and where it came from, and nothing else, until the learner
-has answered.
+There are two kinds. **Until mastered**, the default, runs until the model is
+confident in the learner's intuition for the type system as a whole (or in
+every rule separately, with the strict knob), or until the budget is spent, or
+until nothing has moved for a while, so nobody is left grinding. **Practice**
+asks a fixed number of cases and adapts all the way through. Both use the same
+model, described in `baml_language/tools/type_quiz/ns_engine/learner.baml`.
 
-**Highlighting is lexical, never semantic.** The grammar comes from
-`@b/pkg-grammar-hljs`, which is derived from the real lexer. A semantic
-highlighter would have to resolve the program, and an unresolved name or a
-mismatched type showing up in a colour would answer the question being asked.
-For the same reason the page does not load the browser language server, even
-though it would bring formatting with it: its diagnostics are the answer to
-every question here. The formatter is built on its own instead, so cases are
-laid out exactly as `baml fmt` lays them out without the generator having to
-track the formatter's rules.
+Every case takes one of three answers: it compiles, it is rejected, or not
+sure. Not sure is a real answer and the one that makes the other two worth
+believing: a committed answer from a learner who holds back when unsure
+carries far more evidence than a coin flip. The points follow from that. They
+are derived from the bar at which a learner is asked to commit (right +4,
+wrong −12 and not sure 0 at the default 75%), so that answering beats holding
+back exactly when the learner is surer than the bar: the honest play is the
+best one and there is nothing to game. The rule is shown under the buttons and
+each answer's points at its reveal. There is never a running total, because
+the cases follow the learner: in an adaptive sitting, how many one gets right
+measures the sitting rather than the learner. The two verdict buttons also
+swap places from case to case, so the same one cannot be pressed without
+reading.
+
+When a rule has been missed twice running and the next case turns on it, the
+spec's own words on that rule are shown before the case.
+
+At the end the readout gives mastery (how many rules, and which are least
+certain), calibration (how often the committed answers were right against the
+bar, and how often the learner held back), and, when one of the quiz's naive
+models explains the errors clearly, how the learner seems to reason.
+
+## Save slots
+
+Three slots, in the browser's local storage, written after every answer, so a
+sitting can be left and resumed. A slot holds the session, the knobs, and what
+was said about each case, and nothing else: on loading, the profile is rebuilt
+by replaying those through the engine. So a save can never disagree with
+itself, and a save made against a quiz whose bank or model has since changed
+fails to replay and says so instead of quietly resuming with beliefs its
+answers no longer support. A slot's knobs are checked against the model's own
+defaults, field by field, for the same reason. Export downloads the sitting's
+transcript; Reset takes two clicks.
 
 ## What crosses into BAML
 
-Only plain data: a bool and two strings per answer. The TypeScript bridge
-encodes an enum member as a bare string, because a TypeScript string enum's
-member *is* a string, and the engine then holds that string in a slot typed as
-the enum. A `match` on it panics; an `==` against a variant quietly answers
-false. The second cost this app a day in which every answer was marked wrong
-with no error anywhere, so the surface takes no enums and no classes holding
-one, and BAML turns what the learner said into the enums it speaks in. Values
-coming back may be as rich as they like: the bridge resolves those through the
-generated type map.
+Only plain data: strings, numbers, booleans, and the generated classes built
+from them. The TypeScript bridge encodes an enum member as a bare string,
+because a TypeScript string enum's member *is* a string, and the engine then
+holds that string in a slot typed as the enum. A `match` on it panics; an `==`
+against a variant quietly answers false. The second cost this app a day in
+which every answer was marked wrong with no error anywhere, so the surface
+takes no enums and no classes holding one, and BAML turns what the learner
+said into the enums it speaks in. Values coming back may be as rich as they
+like: the bridge resolves those through the generated type map.
 
-The page therefore keeps only what the learner said. Judging, counting and
-serialising all happen in BAML, so there is one account of how a sitting went
-rather than one on each side of the boundary.
+A seed crosses as a `bigint`. A stream state uses 63 bits, and an `int`
+reaches the page through a JavaScript number, which keeps 53: nearly every
+state would come back changed, and the page would judge a different case from
+the one it showed. Saves keep the seed as a decimal string, since JSON has no
+bigint either.
+
+The page therefore keeps only what the learner said and where each case came
+from. Judging, scoring, choosing and serialising all happen in BAML, so there
+is one account of how a sitting went rather than one on each side of the
+boundary.
+
+## Highlighting is lexical, never semantic
+
+The grammar comes from `@b/pkg-grammar-hljs`, which is derived from the real
+lexer. A semantic highlighter would have to resolve the program, and an
+unresolved name or a mismatched type showing up in a colour would answer the
+question being asked. For the same reason the page does not load the browser
+language server, even though it would bring formatting with it: its
+diagnostics are the answer to every question here. The formatter is built on
+its own instead, so cases are laid out exactly as `baml fmt` lays them out
+without the generator having to track the formatter's rules.
 
 ## The sitting you take away
 
-The transcript is held in memory and downloaded at the end: every case, the
-answer given, the mark, and the item and seed each case came from. Read it back
-with
+The transcript is downloaded from the readout or from a slot: every case, the
+answer given, the mark, the item and seed each case came from, and what the
+model concluded about the learner. Read it back with
 
 ```bash
-baml run review -- --path ~/Downloads/type-quiz-full-1234.json
+baml run review -- --path ~/Downloads/type-quiz-1234.json
 ```
 
-which reports how the sitting went and puts every case to the compiler again,
-so a transcript that no longer matches the language says so.
+which reports how the sitting went, what the model concluded, and puts every
+case to the compiler again, so a transcript that no longer matches the
+language says so.

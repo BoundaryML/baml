@@ -33,6 +33,13 @@ function typescripter(candidate: root.engine.Candidate) -> bool? throws never {
     }
 }
 
+/// Answers by a bit that has nothing to do with the question: whether the
+/// case's source has an even number of bytes.
+function parity(candidate: root.engine.Candidate) -> bool? throws never {
+    let bytes = candidate.case.files.get("case.baml")?.length() ?? 0;
+    bytes % 2 == 0
+}
+
 /// Knows the axioms cold and nothing about variance: right on one-rule cases,
 /// withholds on the rest.
 function beginner(candidate: root.engine.Candidate) -> bool? throws never {
@@ -53,11 +60,17 @@ class Sat {
     profile: root.engine.Profile,
     standing: root.engine.Standing,
     served: string[],
+    /// What a page would have kept.
+    taken: root.Taken[],
+    /// How many cases came with a rule to teach, and how many of those
+    /// cases did not turn on the rule taught.
+    taught: int,
+    taught_off_point: int,
 }
 
 function sit(learner: Learner, knobs: root.engine.Knobs, session: int) -> Sat throws never {
     let start = root.fresh_profile();
-    sit_from(learner, knobs, session, start, 0, [])
+    sit_from(learner, knobs, session, start, 0, [], 0, 0)
 }
 
 function sit_from(
@@ -66,16 +79,36 @@ function sit_from(
     session: int,
     profile: root.engine.Profile,
     step: int,
-    served: string[],
+    taken: root.Taken[],
+    taught: int,
+    taught_off_point: int,
 ) -> Sat throws never {
+    let served = taken.map((t) -> {
+        t.item
+    });
     let standing = root.engine.standing(profile, knobs);
     if (standing.why != root.engine.Why.Continue) {
-        return Sat { profile, standing, served };
+        return Sat { profile, standing, served, taken, taught, taught_off_point };
     }
     let next = root.next_prompt(profile, knobs, session, step)
-        ?? return Sat { profile, standing, served };
+        ?? return Sat { profile, standing, served, taken, taught, taught_off_point };
     let candidate = root.candidate_of(next.prompt.item, next.prompt.seed)
-        ?? return Sat { profile, standing, served };
+        ?? return Sat { profile, standing, served, taken, taught, taught_off_point };
+    let off_point = match (next.teach) {
+        let rule: root.engine.Rule => {
+            if (root.tracer_rules(candidate).includes(rule.name)) {
+                0
+            } else {
+                1
+            }
+        },
+        null => 0,
+    };
+    let taught_now = if (next.teach != null) {
+        1
+    } else {
+        0
+    };
     let said = match (learner(candidate)) {
         let says_compiles: bool => {
             if (says_compiles) {
@@ -88,7 +121,17 @@ function sit_from(
     };
     let given = root.Given { said, reasoning: "", mark: "" };
     let after = root.observe_answer(profile, knobs, next.prompt.item, next.prompt.seed, given);
-    sit_from(learner, knobs, session, after, step + 1, served.concat([next.prompt.item]))
+    let kept = root.Taken { item: next.prompt.item, seed: next.prompt.seed, given };
+    sit_from(
+        learner,
+        knobs,
+        session,
+        after,
+        step + 1,
+        taken.concat([kept]),
+        taught + taught_now,
+        taught_off_point + off_point,
+    )
 }
 
 // ─── what the model concludes ────────────────────────────────────────────────
@@ -97,7 +140,19 @@ function expert_report() -> string throws never {
     let knobs = root.engine.default_knobs();
     let sat = sit(expert, knobs, 1);
     let calibration = sat.standing.calibration ?? 0.0;
-    `why=${sat.standing.why} within_budget=${sat.profile.step < knobs.budget} withheld=${sat.standing.withheld} calibrated=${calibration >= 0.95}`
+    let suspected = sat.standing.suspected ?? "none";
+    `why=${sat.standing.why} within_budget=${sat.profile.step < knobs.budget} withheld=${sat.standing.withheld} calibrated=${calibration >= 0.95} suspected=${suspected}`
+}
+
+/// Practice asks a fixed number of cases and stops nowhere else: the expert
+/// is kept going well past the point at which certification would have let
+/// them stop.
+function practice_report() -> string throws never {
+    let knobs = root.engine.default_knobs();
+    let certified = sit(expert, knobs, 1);
+    let count = certified.profile.step + 10;
+    let practised = sit(expert, root.engine.Knobs { ...knobs, practice: true, budget: count }, 1);
+    `certified=${certified.standing.why} practised=${practised.standing.why} asked_all=${practised.profile.step == count}`
 }
 
 function silent_report() -> string throws never {
@@ -115,24 +170,32 @@ function coverage_report() -> string throws never {
     `loose_first=${loose.profile.step <= strict.profile.step} loose_done=${loose.standing.why} strict_done=${strict.standing.why}`
 }
 
-function suspected(profile: root.engine.Profile) -> string throws never {
-    profile.suspicions
+/// Every model's z-score in tenths, highest first.
+function leading(profile: root.engine.Profile) -> string throws never {
+    profile.suspicions.slice(0, profile.suspicions.length())
         .sort_by_key((s) -> {
-            0.0 - s.score
+            0.0 - root.engine.suspicion_z(s)
         })
-        .at(0)
-        ?.model
-        ?? "none"
+        .map((s) -> {
+            `${s.model}=${tenths(root.engine.suspicion_z(s))}`
+        })
+        .join(",")
 }
 
+function tenths(x: float) -> int throws never {
+    (x * 10.0).iround() catch (e) {
+        baml.errors.InvalidArgument => 0,
+    }
+}
+
+/// The standing names the model, and it stands well clear of the covariant
+/// model, which TypeScript's beliefs include and so is partly supported too.
+/// A learner who keeps missing the same rules is taught, and every rule
+/// taught is one the case before which it is taught turns on.
 function typescripter_report() -> string throws never {
     let sat = sit(typescripter, root.engine.default_knobs(), 4);
-    let by_model = sat.profile.suspicions.sort_by_key((s) -> {
-        0.0 - s.score
-    });
-    let top = by_model.at(0)?.score ?? 0.0;
-    let runner_up = by_model.at(1)?.score ?? 0.0;
-    `suspected=${suspected(sat.profile)} clear=${top >= 2.0 * runner_up && top >= 3.0}`
+    let named = sat.standing.suspected ?? "none";
+    `suspected=${named} leading=${leading(sat.profile)} taught=${sat.taught > 0} on_point=${sat.taught_off_point == 0}`
 }
 
 /// The beginner is certified on nothing above order one, and the rules left
@@ -149,7 +212,14 @@ function beginner_report() -> string throws never {
 }
 
 test "learner: an expert is certified well within the budget, and calibrated" {
-    assert.equal(expert_report(), "why=Mastered within_budget=true withheld=0.0 calibrated=true")
+    assert.equal(
+        expert_report(),
+        "why=Mastered within_budget=true withheld=0.0 calibrated=true suspected=none",
+    )
+}
+
+test "learner: practice asks its count and stops nowhere else" {
+    assert.equal(practice_report(), "certified=Mastered practised=Budget asked_all=true")
 }
 
 test "learner: a learner who never commits is never certified" {
@@ -160,8 +230,25 @@ test "learner: strict coverage costs more questions than an overall picture" {
     assert.equal(coverage_report(), "loose_first=true loose_done=Mastered strict_done=Mastered")
 }
 
+/// Noise names no model: a learner answering by a bit unrelated to the case
+/// is suspected of reasoning as none of them does, whatever the scores.
+function parity_report() -> string throws never {
+    let sat = sit(parity, root.engine.default_knobs(), 10);
+    `suspected=${sat.standing.suspected ?? "none"} why=${sat.standing.why} leading=${leading(sat.profile)}`
+}
+
+test "learner: answering by an unrelated bit is suspected of no model" {
+    assert.equal(
+        parity_report(),
+        "suspected=none why=Budget leading=spelling=14,typescript=-12,covariant=-15",
+    )
+}
+
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
-    assert.equal(typescripter_report(), "suspected=typescript clear=true")
+    assert.equal(
+        typescripter_report(),
+        "suspected=typescript leading=typescript=50,covariant=30,spelling=-45 taught=true on_point=true",
+    )
 }
 
 test "learner: knowing only the axioms certifies no variance rule" {
@@ -214,6 +301,110 @@ function profile_round_trip() -> string throws never {
 function sitting_is_deterministic() -> bool throws never {
     let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 15 };
     sit(typescripter, knobs, 7).served == sit(typescripter, knobs, 7).served
+}
+
+// ─── what a page keeps is enough ─────────────────────────────────────────────
+
+/// The profile a sitting ended with is the profile its answers replay to:
+/// nothing is believed about a learner that what they said does not determine.
+function replay_matches() -> bool throws never {
+    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 12 };
+    let sat = sit(typescripter, knobs, 6);
+    // A self-mark is kept for the transcript and is not evidence: the page
+    // records it after the profile has moved on, and replaying with it must
+    // land in the same place.
+    let marked = sat.taken.map((t) -> {
+        root.Taken { ...t, given: root.Given { ...t.given, reasoning: "because", mark: "sound" } }
+    });
+    root.replay(knobs, sat.taken) == sat.profile && root.replay(knobs, marked) == sat.profile
+}
+
+function word_for(verdict_correct: bool?) -> string throws never {
+    match (verdict_correct) {
+        let right: bool => {
+            if (right) {
+                "right"
+            } else {
+                "wrong"
+            }
+        },
+        null => "withheld",
+    }
+}
+
+/// One answer worked out all at once agrees with each part worked out on its
+/// own: the profile with `observe_answer`, the mark and the compiler's words
+/// with the key, and the points with the mark.
+function answered_report() -> string throws never {
+    let knobs = root.engine.default_knobs();
+    let profile = root.fresh_profile();
+    let next = root.next_prompt(profile, knobs, 8, 0)
+        ?? return "nothing to ask";
+    let item = next.prompt.item;
+    let seed = next.prompt.seed;
+    let candidate = root.candidate_of(item, seed)
+        ?? return "no such case";
+    let compiles = key_compiles(candidate);
+    let answers = [said(compiles, "", ""), said(!compiles, "", ""), unsure()];
+    let answered = answers.map((given) -> {
+        root.answer_case(profile, knobs, item, seed, given)
+    });
+    let marks = answered.map((a) -> {
+        word_for(a.exchange.judgement.verdict_correct)
+    });
+    let points = answered.map((a) -> {
+        a.points
+    });
+    let profiles = baml.iter.Range.new(0, answers.length()).every((i) -> {
+        answered[i].profile == root.observe_answer(profile, knobs, item, seed, answers[i])
+    });
+    let compiler = answered.every((a) -> {
+        a.reported.compiles == compiles
+    });
+    `marks=${marks} points=${points} profiles=${profiles} compiler=${compiler}`
+}
+
+/// The JSON an adaptive sitting downloads is what `review` reads back, the
+/// model's conclusions ride along, and the review says what it concluded.
+function adaptive_round_trip() -> string throws never {
+    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 6 };
+    let sat = sit(typescripter, knobs, 9);
+    let expected = root.adaptive_sitting(9, false, knobs, sat.taken);
+    let text = root.adaptive_json(9, false, knobs, sat.taken);
+    let back = baml.json.from_string<root.engine.Transcript>(text) catch_all (e) {
+        baml.json.ParseError => {
+            return "parsing threw";
+        },
+        baml.json.DecodeError => {
+            return `decoding threw on ${text}`;
+        },
+    };
+    let dir = scratch("adaptive");
+    clean_up(dir);
+    let reviewed = match (root.engine.save(expected, dir)) {
+        let failed: root.engine.SaveFailed => `saving failed: ${failed.message}`,
+        let saved: root.engine.Saved => root.review(saved.path),
+    };
+    clean_up(dir);
+    let concluded = reviewed.includes("every case still behaves as recorded")
+        && reviewed.includes("mastered")
+        && reviewed.includes("ended Budget");
+    `same=${back == expected} exchanges=${expected.exchanges.length()} learned=${expected.learner?.profile == sat.profile} reviewed=${concluded}`
+}
+
+test "page: the profile is exactly what the answers replay to" {
+    assert.is_true(replay_matches())
+}
+
+test "page: one answer worked out at once agrees with each part on its own" {
+    assert.equal(
+        answered_report(),
+        `marks=["right", "wrong", "withheld"] points=[4, -12, 0] profiles=true compiler=true`,
+    )
+}
+
+test "page: an adaptive sitting downloads, reads back, and reviews with what it concluded" {
+    assert.equal(adaptive_round_trip(), "same=true exchanges=6 learned=true reviewed=true")
 }
 
 test "profile: survives JSON" {

@@ -43,9 +43,27 @@ class Skill {
 }
 
 /// How much a learner's errors look like one naive model's predictions.
+///
+/// The score is measured against chance: on each case that traps the model,
+/// it moves by how much worse the learner did than their own estimate
+/// predicted, so a learner who is right as often as expected drifts nowhere,
+/// however many traps they meet, while one who answers as the model would
+/// falls short every time. `variance` is what the score's spread would be by
+/// chance, so `score / sqrt(variance)` reads as a z-score.
 class Suspicion {
     model: string,
     score: float,
+    variance: float,
+}
+
+/// How far a suspicion stands from chance, in standard deviations; zero
+/// before any evidence.
+function suspicion_z(suspicion: Suspicion) -> float throws never {
+    if (suspicion.variance <= 0.0) {
+        0.0
+    } else {
+        suspicion.score / baml.Float.sqrt(suspicion.variance)
+    }
 }
 
 class Profile {
@@ -96,6 +114,15 @@ class Knobs {
     rest: int,
     /// A mastered rule is rechecked after this many steps.
     recheck: int,
+    /// Stop at the budget and nowhere else: a fixed number of cases,
+    /// adapting all the way. Practice, as against certification.
+    practice: bool,
+    /// The z-score a naive model's suspicion must reach to be named as the
+    /// way the learner reasons, and how far, also in standard deviations,
+    /// it must stand clear of the next model: the models overlap, so a
+    /// learner who reasons as one does also looks a little like another.
+    suspect: float,
+    clear: float,
 }
 
 function default_knobs() -> Knobs throws never {
@@ -111,6 +138,9 @@ function default_knobs() -> Knobs throws never {
         aim: 0.8,
         rest: 3,
         recheck: 15,
+        practice: false,
+        suspect: 3.0,
+        clear: 1.0,
     }
 }
 
@@ -136,7 +166,7 @@ function fresh(rules: RuleOrder[], models: string[]) -> Profile throws never {
             }
         }),
         suspicions: models.map((model) -> {
-            Suspicion { model, score: 0.0 }
+            Suspicion { model, score: 0.0, variance: 0.0 }
         }),
         quiet: 0,
     }
@@ -364,23 +394,23 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         }
     });
     let suspicions = profile.suspicions.map((suspicion) -> {
-        if (seen.traps.includes(suspicion.model)) {
-            // Answering as the model would is evidence for it; beating it is
-            // evidence against, less strongly, since a right answer has a
-            // guess in it.
-            let moved = match (seen.verdict) {
-                let r: bool => {
-                    if (r) {
-                        suspicion.score - 0.5
-                    } else {
-                        suspicion.score + 1.0
+        // A committed answer on a case that traps the model is evidence for
+        // it by exactly the shortfall against the learner's own estimate. A
+        // withheld answer is not: the model predicts a particular wrong
+        // verdict, and not knowing is not that.
+        match (seen.verdict) {
+            bool => {
+                if (seen.traps.includes(suspicion.model)) {
+                    Suspicion {
+                        model: suspicion.model,
+                        score: suspicion.score + (p - outcome),
+                        variance: suspicion.variance + p * (1.0 - p),
                     }
-                },
-                null => suspicion.score + 0.25,
-            };
-            Suspicion { model: suspicion.model, score: moved.max(0.0) }
-        } else {
-            suspicion
+                } else {
+                    suspicion
+                }
+            },
+            null => suspicion,
         }
     });
     let next = Profile {
@@ -450,6 +480,9 @@ class Standing {
     calibration: float?,
     /// The share of answers withheld.
     withheld: float,
+    /// The naive model the learner's errors most resemble, when one stands
+    /// clear of the rest; `null` when none does.
+    suspected: string?,
 }
 
 /// Whether the learner has shown enough, under the coverage the knobs ask for.
@@ -469,7 +502,13 @@ function enough(profile: Profile, knobs: Knobs) -> bool throws never {
 }
 
 function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
-    let why = if (enough(profile, knobs)) {
+    let why = if (knobs.practice) {
+        if (profile.step >= knobs.budget) {
+            Why.Budget
+        } else {
+            Why.Continue
+        }
+    } else if (enough(profile, knobs)) {
         Why.Mastered
     } else if (profile.step >= knobs.budget) {
         Why.Budget
@@ -477,6 +516,25 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
         Why.Stalled
     } else {
         Why.Continue
+    };
+    // `sort_by_key` sorts in place, so it is given a copy.
+    let by_z = profile.suspicions.slice(0, profile.suspicions.length()).sort_by_key((s) -> {
+        0.0 - suspicion_z(s)
+    });
+    let runner_up = match (by_z.at(1)) {
+        let s: Suspicion => suspicion_z(s),
+        null => 0.0,
+    };
+    let suspected = match (by_z.at(0)) {
+        let top: Suspicion => {
+            let z = suspicion_z(top);
+            if (z >= knobs.suspect && z - runner_up >= knobs.clear) {
+                top.model
+            } else {
+                null
+            }
+        },
+        null => null,
     };
     let shaky = profile.skills
         .filter((skill) -> {
@@ -502,6 +560,7 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
         } else {
             0.0
         },
+        suspected,
     }
 }
 
@@ -545,6 +604,22 @@ function points(knobs: Knobs) -> Points throws never {
         },
     };
     Points { right: 4, wrong: 0 - wrong, unsure: 0 }
+}
+
+/// What one judged answer was worth: `verdict_correct` is absent when the
+/// learner withheld.
+function points_for(knobs: Knobs, verdict_correct: bool?) -> int throws never {
+    let scale = points(knobs);
+    match (verdict_correct) {
+        let right: bool => {
+            if (right) {
+                scale.right
+            } else {
+                scale.wrong
+            }
+        },
+        null => scale.unsure,
+    }
 }
 
 // ─── choosing the next case ──────────────────────────────────────────────────
@@ -606,7 +681,7 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
         })
         .reduce(
             (acc, s) -> {
-                acc.max(s.score)
+                acc.max(suspicion_z(s))
             },
             0.0,
         );

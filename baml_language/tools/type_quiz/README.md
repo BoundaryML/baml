@@ -60,30 +60,56 @@ about BAML come from `reflect.Package.compile`.
 
 The quiz is asked and answered through the top-level functions in
 `main.baml`, which are what a generated SDK exports. There is no loop and no
-state between calls: a sitting is a pure function of its seed, so a question
-is worked out again whenever it is wanted.
+state between calls. The page keeps, for each question, where its case came
+from and what the learner said; everything else is worked out again from
+those whenever it is wanted.
 
 | Function | For |
 |---|---|
-| `sitting_length(seed, length)` | how many questions a sitting has |
-| `prompt_at(seed, length, index)` | the program to show, carrying no answer |
-| `answer_at(seed, length, index, verdict, reasoning, understanding?)` | mark an answer against the key and get the derivation back |
-| `compiler_report(seed, length, index)` | what the compiler itself says, to show once answered |
-| `sitting_json(mode, seed, exchanges)` | the sitting as the JSON a learner takes away |
+| `fresh_profile()` | a learner the model knows nothing about, over every rule the bank can conclude a case with |
+| `next_prompt(profile, knobs, session, step)` | the case to ask next, and the rule to teach before it when the case turns on one the learner is stuck on |
+| `answer_case(profile, knobs, item, seed, given)` | the profile after an answer, the exchange to show, the compiler's own words, and the points |
+| `replay(knobs, taken)` | the profile a list of answers leads to, from nothing: how a saved sitting is resumed |
+| `adaptive_json(session, full, knobs, taken)` | the sitting as the JSON a learner takes away, with what the model concluded riding along |
+| `engine.default_knobs()`, `engine.standing(profile, knobs)`, `engine.points(knobs)` | the tunables, where a sitting stands and why it ended, and what an answer is worth |
+| `describe_model(id)` | what a learner who reasons as a naive model does believes, for the readout |
+| `sitting_length`, `prompt_at`, `answer_at`, `compiler_report`, `sitting_json` | a sitting planned by seed alone, with no learner model, which the conformance suite drives |
 | `review(path)` | read a downloaded sitting back and re-check its cases |
 
 A prompt deliberately holds the program and where it came from, and neither
 the key nor the derivation. Because a case can be generated again from its
 item and seed, the answer never has to be in front of the learner to be
-available when they answer.
+available when they answer. The seed crosses as a `bigint`: a stream state
+uses 63 bits, and an `int` reaches a page through a JavaScript number, which
+keeps 53.
+
+Nothing crossing into this surface is an enum, nor a class holding one: the
+web bridge encodes a TypeScript enum member as a bare string, which the
+engine then holds in a slot typed as the enum, where `match` panics and `==`
+quietly answers false. A learner's answer is `Given { said, reasoning, mark }`
+of strings, and `main.baml` turns it into the engine's enums.
+
+The learner model lives in `ns_engine/learner.baml`: Elo-style knowledge
+tracing with partial pooling (one global ability, a per-rule deviation that
+shrinks toward it), an abstained answer as evidence in its own right, points
+derived from the bar at which a learner is asked to commit, difficulty from
+the rule orders the bank derives, suspicion of each naive model measured as a
+z-score against the learner's own estimate, teaching at a stall, and a stop
+rule that is one of mastered, budget, or stalled. Every tunable is a field of
+`Knobs`. The scripted learners in `ns_conformance/learner.baml` are what the
+model is held to: an expert is certified within budget and calibrated, a
+learner who never commits is never certified, a learner who reasons as
+TypeScript does is found out as TypeScript while one answering by an
+unrelated bit is suspected of nothing, and a learner who knows only the
+axioms is certified on no variance rule.
 
 `review` is the one function meant for a terminal: point it at a downloaded
-transcript and it reports how the sitting went and whether every case still
-behaves as it did when it was asked.
+transcript and it reports how the sitting went, what the model concluded, and
+whether every case still behaves as it did when it was asked.
 
 ```bash
 # from baml_language/tools/type_quiz, under mise
-baml run review -- --path ~/Downloads/full-142593372-0.json
+baml run review -- --path ~/Downloads/type-quiz-142593372.json
 ```
 
 ## Running

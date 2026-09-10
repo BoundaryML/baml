@@ -30,7 +30,11 @@ function mode_name(mode: Mode) -> string throws never {
 /// there is nothing in front of them to read it off.
 class Prompt {
     item: string,
-    seed: int,
+    /// The stream state the case was drawn from, as a `bigint`: a state uses
+    /// 63 bits, and an `int` reaches a page through a JavaScript number,
+    /// which keeps 53. A `bigint` crosses whole, so the state a page hands
+    /// back is the state it was given.
+    seed: bigint,
     files: map<string, string>,
 }
 
@@ -46,7 +50,7 @@ class Question {
 
 /// What a learner is shown, from a question they have not answered yet.
 function prompt_of(question: Question) -> Prompt throws never {
-    Prompt { item: question.item, seed: question.seed, files: question.case.files }
+    Prompt { item: question.item, seed: question.seed * 1n, files: question.case.files }
 }
 
 /// What the learner said. `verdict` is absent when they said they were not
@@ -96,13 +100,24 @@ class Exchange {
     judgement: Judgement,
 }
 
+/// What an adaptive sitting concluded: the knobs it ran under and the
+/// profile it ended with.
+class Learned {
+    knobs: Knobs,
+    profile: Profile,
+}
+
 /// A whole sitting.
 class Transcript {
     mode: Mode,
-    /// The stream state the sitting was drawn from: the same state asks the
-    /// same questions in the same order.
+    /// The stream state the sitting was drawn from. For a sitting planned by
+    /// seed alone, the same state asks the same questions in the same order;
+    /// for an adaptive one, the same state and the same answers do.
     seed: int,
     exchanges: Exchange[],
+    /// What the model concluded about the learner. Absent from a sitting
+    /// planned by seed alone, which has no model of its learner.
+    learner: Learned?,
 }
 
 function understanding_word(understanding: Understanding) -> string throws never {

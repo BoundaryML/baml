@@ -126,11 +126,28 @@ function answer_at(
 ) -> root.engine.Exchange? throws never {
     let question = question_at(seed, length, index)
         ?? return null;
+    exchange_of(question, given)
+}
+
+/// The whole exchange for what was said about a question: the answer as the
+/// engine speaks it, marked against the key.
+function exchange_of(
+    question: root.engine.Question,
+    given: Given,
+) -> root.engine.Exchange throws never {
     let answer = root.engine.Answer { verdict: verdict_given(given), reasoning: given.reasoning };
     root.engine.Exchange {
         question,
         answer,
         judgement: root.engine.judge(question, answer, marked_given(given)),
+    }
+}
+
+function mode_of(full: bool) -> root.engine.Mode throws never {
+    if (full) {
+        root.engine.Mode.Full
+    } else {
+        root.engine.Mode.Simple
     }
 }
 
@@ -145,17 +162,12 @@ function sitting_of(
     full: bool,
     answers: Given[],
 ) -> root.engine.Transcript throws never {
-    let mode = if (full) {
-        root.engine.Mode.Full
-    } else {
-        root.engine.Mode.Simple
-    };
     let exchanges = baml.iter.Range.new(0, answers.length())
         .filter_map((index) -> {
             answer_at(seed, length, index, answers[index])
         })
         .collect();
-    root.engine.Transcript { mode, seed, exchanges }
+    root.engine.Transcript { mode: mode_of(full), seed, exchanges, learner: null }
 }
 
 /// How a sitting has gone so far.
@@ -209,7 +221,19 @@ function read_back(transcript: root.engine.Transcript) -> string throws never {
     } else {
         `cases that no longer behave as recorded:\n${stale.join("\n")}`
     };
-    `${score.verdicts_right} of ${score.asked} verdicts right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}`
+    let learned = match (transcript.learner) {
+        let learned: root.engine.Learned => concluded(learned),
+        null => "",
+    };
+    `${score.verdicts_right} of ${score.asked} verdicts right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}${learned}`
+}
+
+/// What the model concluded about the learner, as a line of the review.
+function concluded(learned: root.engine.Learned) -> string throws never {
+    let standing = root.engine.standing(learned.profile, learned.knobs);
+    let shaky = standing.shaky.slice(0, 5).join(", ");
+    let suspected = standing.suspected ?? "none";
+    `\nmastered ${standing.mastered.length()} of ${learned.profile.skills.length()} rules, ended ${standing.why}; shakiest: ${shaky}; reasoning suspected of: ${suspected}`
 }
 
 // ─── the adaptive sitting ────────────────────────────────────────────────────
@@ -230,14 +254,28 @@ function fresh_profile() -> root.engine.Profile throws never {
     )
 }
 
+/// A stream state a page handed back, narrowed to the `int` it came from.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if it does not fit: every state a page is given
+///   is an `int`, so one that is not is a defect in the page.
+function state_of(seed: bigint) -> int throws never {
+    seed.to_int() catch (e) {
+        baml.errors.InvalidArgument => {
+            throw baml.panics.Unreachable { message: `${seed} is not a stream state` }
+        },
+    }
+}
+
 /// The case behind a prompt, generated again from its item and seed, or
 /// `null` when no such item exists.
-function candidate_of(item: string, seed: int) -> root.engine.Candidate? throws never {
+function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? throws never {
     let found = bank_items().find((candidate) -> {
         candidate.id() == item
     })
         ?? return null;
-    root.engine.generate(found, root.engine.Seed { state: seed })
+    root.engine.generate(found, root.engine.Seed { state: state_of(seed) })
 }
 
 /// The rules a case holds as the tracer reads them: its trace, inner rule
@@ -253,8 +291,8 @@ function tracer_rules(candidate: root.engine.Candidate) -> string[] throws never
         })
 }
 
-/// The next case to put to a learner, and the rule to teach first if one is
-/// stuck.
+/// The next case to put to a learner, and the rule to teach before it when
+/// the case turns on one the learner is stuck on.
 class Next {
     prompt: root.engine.Prompt,
     teach: root.engine.Rule?,
@@ -286,10 +324,14 @@ function next_prompt(
         seed: chosen.scored.seed.state,
         case: chosen.scored.candidate.case,
     };
+    // The stuck rule is taught only before a case that turns on it: the
+    // selection leans toward such a case but does not insist, and the spec's
+    // words on one rule shown before a case about another would mislead.
+    let held = tracer_rules(chosen.scored.candidate);
     let teach = match (root.engine.to_teach(profile)) {
         let name: string => {
             root.bank.rules().find((rule) -> {
-                rule.name == name
+                rule.name == name && held.includes(name)
             })
         },
         null => null,
@@ -297,22 +339,33 @@ function next_prompt(
     Next { prompt: root.engine.prompt_of(question), teach }
 }
 
-/// The profile after the learner answered the case at `item` and `seed`.
+/// The case behind a prompt, generated again from its item and seed.
 ///
 /// # Panics
 ///
-/// - `baml.panics.Unreachable` if there is no such case: the page only hands
+/// - `baml.panics.Unreachable` if there is no such case. The page only hands
 ///   back what `next_prompt` gave it, so a missing case is a defect in the
-///   page rather than something to absorb.
-function observe_answer(
+///   page, or a saved sitting from a bank that no longer has the item, and
+///   neither is something to absorb.
+function case_at(item: string, seed: bigint) -> root.engine.Candidate throws never {
+    candidate_of(item, seed)
+        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` }
+}
+
+function question_for(
+    item: string,
+    seed: bigint,
+    candidate: root.engine.Candidate,
+) -> root.engine.Question throws never {
+    root.engine.Question { item, seed: state_of(seed), case: candidate.case }
+}
+
+function observe_candidate(
     profile: root.engine.Profile,
     knobs: root.engine.Knobs,
-    item: string,
-    seed: int,
+    candidate: root.engine.Candidate,
     given: Given,
 ) -> root.engine.Profile throws never {
-    let candidate = candidate_of(item, seed)
-        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` };
     let verdict = match (verdict_given(given)) {
         let said: root.engine.VerdictKind => {
             said == root.engine.verdict_kind(candidate.case.key)
@@ -324,4 +377,131 @@ function observe_answer(
         knobs,
         root.engine.Observed { rules: tracer_rules(candidate), traps: candidate.traps, verdict },
     )
+}
+
+/// The profile after the learner answered the case at `item` and `seed`.
+///
+/// # Panics
+///
+/// - As `case_at`.
+function observe_answer(
+    profile: root.engine.Profile,
+    knobs: root.engine.Knobs,
+    item: string,
+    seed: bigint,
+    given: Given,
+) -> root.engine.Profile throws never {
+    observe_candidate(profile, knobs, case_at(item, seed), given)
+}
+
+// ─── what a page keeps ───────────────────────────────────────────────────────
+//
+// A page holds, for each question of an adaptive sitting, where the case
+// came from and what the learner said, and nothing else. The profile, the
+// judgements, the transcript and the readout are all worked out again from
+// those, so a saved sitting is as small as it can be and can never disagree
+// with itself.
+
+/// One question of an adaptive sitting, as the page keeps it.
+class Taken {
+    item: string,
+    /// As a `Prompt` carries it.
+    seed: bigint,
+    given: Given,
+}
+
+/// Everything that follows from one answer, worked out together so the case
+/// is generated once and there is one account of what happened.
+class Answered {
+    profile: root.engine.Profile,
+    exchange: root.engine.Exchange,
+    /// What the compiler itself says about the case, in its own words.
+    reported: root.engine.Reported,
+    /// What the answer was worth under the knobs' bar.
+    points: int,
+}
+
+/// Answer the case at `item` and `seed`: the profile that follows, the
+/// exchange to show, the compiler's own words, and the points.
+///
+/// # Panics
+///
+/// - As `case_at`.
+function answer_case(
+    profile: root.engine.Profile,
+    knobs: root.engine.Knobs,
+    item: string,
+    seed: bigint,
+    given: Given,
+) -> Answered throws never {
+    let candidate = case_at(item, seed);
+    let exchange = exchange_of(question_for(item, seed, candidate), given);
+    Answered {
+        profile: observe_candidate(profile, knobs, candidate, given),
+        exchange,
+        reported: root.engine.report(candidate.case),
+        points: root.engine.points_for(knobs, exchange.judgement.verdict_correct),
+    }
+}
+
+/// The profile after every answer in `taken`, from nothing. A page loading a
+/// saved sitting rebuilds its profile with this rather than reading one back,
+/// so the profile is never stored beside the answers it follows from, where
+/// the two could drift apart.
+///
+/// # Panics
+///
+/// - As `case_at`, for any question the bank no longer has.
+function replay(knobs: root.engine.Knobs, taken: Taken[]) -> root.engine.Profile throws never {
+    taken.reduce(
+        (profile, t) -> {
+            observe_answer(profile, knobs, t.item, t.seed, t.given)
+        },
+        fresh_profile(),
+    )
+}
+
+/// An adaptive sitting rebuilt from what the page kept, with what the model
+/// concluded about the learner riding along. `review` reads back exactly
+/// this.
+///
+/// # Panics
+///
+/// - As `replay`.
+function adaptive_sitting(
+    session: int,
+    full: bool,
+    knobs: root.engine.Knobs,
+    taken: Taken[],
+) -> root.engine.Transcript throws never {
+    root.engine.Transcript {
+        mode: mode_of(full),
+        seed: session,
+        exchanges: taken.map((t) -> {
+            exchange_of(question_for(t.item, t.seed, case_at(t.item, t.seed)), t.given)
+        }),
+        learner: root.engine.Learned { knobs, profile: replay(knobs, taken) },
+    }
+}
+
+/// A finished adaptive sitting as the JSON a learner takes away.
+function adaptive_json(
+    session: int,
+    full: bool,
+    knobs: root.engine.Knobs,
+    taken: Taken[],
+) -> string throws never {
+    baml.json.to_string(adaptive_sitting(session, full, knobs, taken)) catch_all (e) {
+        baml.json.SerializationError => `{"error":"${e}"}`,
+    }
+}
+
+/// What a learner who reasons as the naive model `id` does believes, in the
+/// second person; `null` for a model the bank does not know.
+function describe_model(id: string) -> string? throws never {
+    root.bank.models()
+        .find((model) -> {
+            model.id == id
+        })
+        ?.description
 }
