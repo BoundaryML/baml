@@ -5,6 +5,36 @@ use web_time::Instant;
 
 use crate::BexHeap;
 
+/// Process CPU (user + kernel), and lifetime peak resident bytes. CPU deltas
+/// inside the collector are attributable only in isolated single-process tests;
+/// other host threads may consume CPU during the same interval.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn process_usage() -> Option<(Duration, u64)> {
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: getrusage initializes this correctly sized output on success.
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: the successful call initialized the structure.
+    let usage = unsafe { usage.assume_init() };
+    let duration = |t: libc::timeval| -> Option<Duration> {
+        Some(
+            Duration::from_secs(u64::try_from(t.tv_sec).ok()?)
+                + Duration::from_micros(u64::try_from(t.tv_usec).ok()?),
+        )
+    };
+    let peak = u64::try_from(usage.ru_maxrss).ok()?;
+    // Darwin reports bytes; Linux reports KiB. Other targets return unavailable.
+    #[cfg(target_os = "linux")]
+    let peak = peak.saturating_mul(1024);
+    Some((duration(usage.ru_utime)? + duration(usage.ru_stime)?, peak))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn process_usage() -> Option<(Duration, u64)> {
+    None
+}
+
 /// Storage counts, not payload bytes or a measurement of reachability.
 #[derive(Clone, Debug, Default)]
 pub struct GcHeapSnapshot {
@@ -51,6 +81,8 @@ pub struct GcProfile {
     pub reclaim: Duration,
     pub bookkeeping: Duration,
     pub heap_total: Duration,
+    /// Process CPU consumed over heap collection, excluding park wait and callbacks.
+    pub heap_cpu: Option<Duration>,
     pub park_wait: Duration,
     pub root_scan: Duration,
     pub holder_fixup: Duration,
@@ -62,12 +94,17 @@ pub struct GcProfile {
 pub(crate) struct GcClock {
     start: Instant,
     last: Instant,
+    cpu_start: Option<Duration>,
 }
 
 impl GcClock {
     pub(crate) fn new() -> Self {
         let start = Instant::now();
-        Self { start, last: start }
+        Self {
+            start,
+            last: start,
+            cpu_start: process_usage().map(|u| u.0),
+        }
     }
 
     pub(crate) fn lap(&mut self) -> Duration {
@@ -79,6 +116,10 @@ impl GcClock {
 
     pub(crate) fn elapsed(&self) -> Duration {
         self.start.elapsed()
+    }
+
+    pub(crate) fn cpu_elapsed(&self) -> Option<Duration> {
+        Some(process_usage()?.0.saturating_sub(self.cpu_start?))
     }
 }
 

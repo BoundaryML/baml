@@ -2,6 +2,7 @@
 """Summarize paired results and export collection timelines for trace viewers."""
 import argparse
 import collections
+import csv
 import json
 from pathlib import Path
 import statistics
@@ -61,7 +62,7 @@ def main():
                                          args={f'gen{i}': count * row['slot_bytes'] / 1048576
                                                for i, count in enumerate(sizes)}))
         row['recorded_phase_totals_ms'] = dict(sums)
-        row['recorded_max_pause_ms'] = max((c['profile']['pause_ms'] for c in profiled), default=None)
+        row['recorded_max_pause_ms'] = max((c['profile']['pause_ms'] for c in profiled), default=0.0 if row.get('measured_cycle_reasons') is not None else None)
         row['recorded_max_park_wait_ms'] = max((c['profile']['park_wait_ms'] for c in profiled), default=None)
         row['recorded_pauses_over_ms'] = {
             str(limit): sum(c['profile']['pause_ms'] > limit for c in profiled)
@@ -97,7 +98,7 @@ def main():
                      f'{med("candidate", "elapsed_seconds"):.3f} | {statistics.median(ratios):.2f}× '
                      f'({min(ratios):.2f}–{max(ratios):.2f}) | {slots} | {pause} |')
     lines += ['', '## Pause frequency and caller latency', '',
-              'Medians across runs. Pause counts cover harness-requested collections in the timed window; '
+              'Medians across runs. Pause counts cover recorded collections in the timed window (see each run’s cycle_coverage); '
               'validation and warmup GC are excluded. Counts over 5/20/100 ms are nested, not disjoint. '
               'Caller p99 can miss an infrequent long pause, so maxima are reported too. '
               'A shared budget floor is not necessarily equal peak memory: live-scaled policies can grant more headroom.', '',
@@ -120,10 +121,37 @@ def main():
                          f'{med("minor_count"):g} / {med("major_count"):g} | {gc_percent:.1f} | {counts} | '
                          f'{pause_text} | {med("call_ms_p99"):.2f} / {med("call_ms_max"):.1f} | '
                          f'{med("peak_slot_mib"):.1f} |')
+    tradeoffs = []
+    lines += ['', '## CPU, throughput and resident memory', '',
+              'Medians across fresh processes. CPU is user + kernel time. Heap GC CPU excludes engine root handling '
+              'and callbacks; remaining CPU is not pure application CPU. Lifetime peak RSS includes compilation and warmup; '
+              'sampled RSS can miss peaks. Final cleanup is shown separately so deferring GC is visible.', '',
+              '| Case | Variant | Wall s | CPU s | Heap GC CPU s | Peak RSS MiB | End RSS MiB | Final cleanup CPU s |',
+              '|---|---|---:|---:|---:|---:|---:|---:|']
+    metrics = ['elapsed_seconds', 'calls_per_second', 'process_cpu_seconds', 'gc_heap_cpu_seconds',
+               'non_gc_heap_cpu_seconds', 'process_lifetime_peak_rss_mib', 'initial_rss_mib',
+               'peak_sampled_rss_mib', 'end_rss_mib', 'after_cleanup_rss_mib', 'cleanup_seconds',
+               'cleanup_cpu_seconds', 'elapsed_with_cleanup_seconds', 'cpu_with_cleanup_seconds',
+               'recorded_max_pause_ms', 'call_ms_p99', 'call_ms_max', 'minor_count', 'major_count', 'charged_bytes']
+    for case, pairs in sorted(by_case.items()):
+        for variant in ['baseline', 'candidate']:
+            runs = [p[variant] for p in pairs]
+            entry = dict(case=case, variant=variant, runtime_settings=runs[0].get('runtime_settings'))
+            for key in metrics:
+                values = [r.get(key) for r in runs]
+                entry[key] = statistics.median(values) if all(v is not None for v in values) else None
+            tradeoffs.append(entry)
+            cells = [entry[k] for k in ['elapsed_seconds', 'process_cpu_seconds', 'gc_heap_cpu_seconds',
+                                      'process_lifetime_peak_rss_mib', 'end_rss_mib', 'cleanup_cpu_seconds']]
+            lines.append(f'| {case} | {variant} | ' + ' | '.join('-' if v is None else f'{v:.3f}' for v in cells) + ' |')
+    with (root / 'tradeoffs.csv').open('w', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=['case', 'variant', 'runtime_settings'] + metrics)
+        writer.writeheader()
+        writer.writerows(tradeoffs)
     lines += ['', '## Where collection time went', '',
-              'Medians of per-run totals for explicitly requested, measured collections. '
-              'Automatic collections are not included in returned-statistics profiles. New single-threaded '
-              'runs also record `measured_cycle_reasons` to audit coverage; concurrent runs do not use that audit.', '',
+              'Medians of per-run recorded totals. New single-threaded runs capture automatic and explicit cycles; '
+              'older runs and concurrent runs may capture only harness-requested collections. '
+              'Check cycle_coverage and measured_cycle_reasons in the raw results.', '',
               '| Case | Binary | Trace/copy ms | Error/finalizer scans ms | Pointer fixup ms | Reclaim ms | Wait to park ms |',
               '|---|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):

@@ -83,6 +83,8 @@ pub struct Tlab {
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
+    #[cfg(feature = "gc_policy_experiments")]
+    next_chunk_size: usize,
 }
 
 impl Tlab {
@@ -102,12 +104,9 @@ impl Tlab {
     /// TLAB mechanics without the permit infrastructure (those tests
     /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
-        let chunk = heap.alloc_tlab_chunk();
-        Self {
-            alloc_ptr: chunk.start,
-            alloc_limit: chunk.end,
-            heap,
-        }
+        let mut tlab = Self::new_empty(heap);
+        tlab.refill();
+        tlab
     }
 
     /// Create a TLAB without allocating an initial chunk.
@@ -121,6 +120,11 @@ impl Tlab {
         Self {
             alloc_ptr: 0,
             alloc_limit: 0,
+            #[cfg(feature = "gc_policy_experiments")]
+            // Zero marks the first reservation, so the first size is repeated:
+            // 32, 32, 64, ... gives aligned cumulative reservations of
+            // 32, 64, 128, ... rather than 32, 96, 224, ... .
+            next_chunk_size: if heap.gc_experiment().is_some() { 0 } else { heap.tlab_size() },
             heap,
         }
     }
@@ -131,6 +135,11 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, obj: Object) -> HeapPtr {
+        #[cfg(feature = "gc_policy_experiments")]
+        if self.heap.gc_experiment().is_some() {
+            self.heap
+                .charge_gc_bytes(crate::gc_experiment::payload_bytes(&obj));
+        }
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }
@@ -266,7 +275,29 @@ impl Tlab {
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
+        #[cfg(not(feature = "gc_policy_experiments"))]
         let chunk = self.heap.alloc_tlab_chunk();
+        #[cfg(feature = "gc_policy_experiments")]
+        let chunk = {
+            let size = if self.next_chunk_size == 0 {
+                self.heap
+                    .gc_experiment()
+                    .expect("first experimental reservation")
+                    .config
+                    .first_chunk
+            } else {
+                self.next_chunk_size
+            };
+            let chunk = self.heap.alloc_tlab_chunk_sized(size);
+            if let Some(policy) = self.heap.gc_experiment() {
+                self.next_chunk_size = if self.next_chunk_size == 0 {
+                    size
+                } else {
+                    size.saturating_mul(2).min(policy.config.max_chunk)
+                };
+            }
+            chunk
+        };
         self.alloc_ptr = chunk.start;
         self.alloc_limit = chunk.end;
     }

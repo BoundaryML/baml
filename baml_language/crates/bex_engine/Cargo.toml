@@ -57,6 +57,7 @@ workspace = true
 [features]
 default = [ "aws-crypto" ]
 gc_profiling = [ "bex_heap/gc_profiling" ]
+gc_policy_experiments = [ "bex_heap/gc_policy_experiments", "bex_vm/gc_policy_experiments" ]
 # `sys_native` is a dev-dependency only, so feature propagation here would
 # be a no-op for downstream consumers; its crypto feature is set directly
 # on the `[dev-dependencies]` entry above.

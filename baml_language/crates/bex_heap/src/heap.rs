@@ -103,8 +103,10 @@ pub struct HeapStats {
     pub runtime_objects: usize,
     /// Number of active handles.
     pub active_handles: usize,
-    /// Number of TLAB chunks allocated.
+    /// Gen0 reservations in default-sized TLAB units (rounded up).
     pub tlab_chunks: usize,
+    /// Exact Gen0 reservations, including unused slots and debug canaries.
+    pub reserved_slots: usize,
 }
 
 /// Unified heap for the BEX virtual machine.
@@ -231,6 +233,8 @@ pub struct BexHeap {
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
+    #[cfg(feature = "gc_policy_experiments")]
+    pub(crate) gc_experiment: std::sync::OnceLock<crate::gc_experiment::GcExperiment>,
 
     /// Lock for growing Gen0 (rare operation).
     ///
@@ -382,6 +386,8 @@ impl BexHeap {
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
             tlab_size,
+            #[cfg(feature = "gc_policy_experiments")]
+            gc_experiment: std::sync::OnceLock::new(),
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
             gen1_live_after_last_collection: AtomicUsize::new(0),
@@ -938,15 +944,22 @@ impl BexHeap {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
+        self.alloc_tlab_chunk_sized(self.tlab_size)
+    }
+
+    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize) -> TlabChunk {
+        assert!(size > 0);
+        #[cfg(feature = "gc_policy_experiments")]
+        self.charge_gc_bytes(size.saturating_mul(size_of::<Object>()));
         self.debug_verify_tlab_canaries();
 
         let use_canary = self.debug_config().enabled;
         let canary_slots = if use_canary { 1 } else { 0 };
 
         // Atomically reserve a chunk range within Gen0
-        let step = self.tlab_size + canary_slots;
+        let step = size + canary_slots;
         let runtime_start = self.gen0_next_chunk.fetch_add(step, Ordering::SeqCst);
-        let runtime_end = runtime_start + self.tlab_size;
+        let runtime_end = runtime_start + size;
         let reserve_end = runtime_end + canary_slots;
 
         // The chunk-allocation policy mutex still serializes the
@@ -1034,6 +1047,7 @@ impl BexHeap {
             runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
+            reserved_slots: self.gen0_next_chunk.load(Ordering::Relaxed),
         }
     }
 

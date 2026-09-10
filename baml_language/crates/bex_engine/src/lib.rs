@@ -149,6 +149,14 @@ struct RuntimeSchemaOverlay {
     named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
 }
 
+// Release collector arbitration even when a caller drops the checking future.
+struct GcCheckGuard<'a>(&'a AtomicBool);
+impl Drop for GcCheckGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
 ///
 /// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
@@ -3489,8 +3497,33 @@ impl BexEngine {
             stats.profile.pause = released_at - parked_at;
             stats.profile.post_gc = finished_at - released_at;
             stats.profile.total = finished_at - cycle_start;
+            let p = &stats.profile;
             tracing::debug!(target: "bex_gc", reason = reason, level = ?level,
-                profile = ?stats.profile, "GC cycle");
+                profile = ?p,
+                prepare_ms = p.prepare.as_secs_f64() * 1000.0,
+                trace_ms = p.trace.as_secs_f64() * 1000.0,
+                keepalive_ms = p.keepalive.as_secs_f64() * 1000.0,
+                fixup_ms = p.fixup.as_secs_f64() * 1000.0,
+                reclaim_ms = p.reclaim.as_secs_f64() * 1000.0,
+                bookkeeping_ms = p.bookkeeping.as_secs_f64() * 1000.0,
+                heap_total_ms = p.heap_total.as_secs_f64() * 1000.0,
+                heap_cpu_ms = p.heap_cpu.map_or(-1.0, |t| t.as_secs_f64() * 1000.0),
+                park_wait_ms = p.park_wait.as_secs_f64() * 1000.0,
+                root_scan_ms = p.root_scan.as_secs_f64() * 1000.0,
+                holder_fixup_ms = p.holder_fixup.as_secs_f64() * 1000.0,
+                pause_ms = p.pause.as_secs_f64() * 1000.0,
+                post_gc_ms = p.post_gc.as_secs_f64() * 1000.0,
+                total_ms = p.total.as_secs_f64() * 1000.0,
+                before_gen0 = p.before.generation_slots[0],
+                before_gen1 = p.before.generation_slots[1],
+                before_gen2 = p.before.generation_slots[2],
+                after_gen0 = p.after.generation_slots[0],
+                after_gen1 = p.after.generation_slots[1],
+                after_gen2 = p.after.generation_slots[2],
+                actual_new_objects = p.before.new_objects,
+                copied_objects = stats.live_count,
+                reclaimed_slots = stats.collected_count,
+                "GC cycle");
         }
         tracing::debug!(
             "GC completed: {} live, {} collected",
@@ -5129,14 +5162,17 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
             if let Some(level) = self.heap.should_collect() {
                 let inactive = permit.release();
                 self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
             }
-            self.checking_gc.store(false, Ordering::Release);
-            permit
+            drop(checking);
+            // An explicit collector can request parking even if our policy is
+            // not due. Renew so that it can acquire this permit too.
+            permit.renew().await
         } else {
             // Another thread is checking; park if they've requested it.
             permit.renew().await
@@ -5154,10 +5190,10 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let _checking = GcCheckGuard(&self.checking_gc);
             if let Some(level) = self.heap.should_collect() {
                 self.collect_garbage_with_reason(level, "automatic").await;
             }
-            self.checking_gc.store(false, Ordering::Release);
         }
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
@@ -6016,6 +6052,10 @@ impl BexEngine {
                 copy_objects,
             )
             .await;
+        #[cfg(feature = "gc_policy_experiments")]
+        if self.heap.gc_experiment().is_some() {
+            Box::pin(self.maybe_collect_garbage()).await;
+        }
         if profile_thread {
             let status = match &result {
                 Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {

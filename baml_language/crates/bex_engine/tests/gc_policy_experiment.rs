@@ -1,7 +1,9 @@
 //! Opt-in policy experiment. No production GC policy changes.
-//! GC checkpoints are before host calls, identical for all candidate policies.
+//! Harness policies check between calls; opt-in runtime policies check VM
+//! safepoints and completion. The runner records which mode was used.
 //! Run via `GC_POLICY` / `GC_WORKLOAD` and
 //! `cargo test --test gc_policy_experiment --profile fasttest -- --ignored --nocapture`.
+#![recursion_limit = "256"]
 #![expect(
     clippy::print_stdout,
     reason = "Manual experiments emit machine-readable results to the runner"
@@ -19,36 +21,49 @@ use sys_native::SysOpsExt;
 
 const MIB: usize = 1024 * 1024;
 
-// Audit all cycles on this single-threaded executor, including cycles the
-// engine starts itself. Phase profiles below still come from returned stats.
+// Capture structured collection events, including automatic cycles, on the
+// single-threaded executor used by this experiment.
 #[cfg(feature = "gc_profiling")]
 mod cycle_audit {
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone, Default)]
-    pub(super) struct Cycles(Arc<Mutex<Vec<String>>>);
-
-    impl Cycles {
-        pub(super) fn take(&self) -> Vec<String> {
-            std::mem::take(&mut *self.0.lock().unwrap())
+    use std::{
+        sync::{Arc, Mutex},
+        time::Instant,
+    };
+    #[derive(Clone)]
+    pub(super) struct Cycles(Arc<Mutex<(Instant, Vec<serde_json::Value>)>>);
+    impl Default for Cycles {
+        fn default() -> Self {
+            Self(Arc::new(Mutex::new((Instant::now(), Vec::new()))))
         }
     }
-
+    impl Cycles {
+        pub(super) fn take(&self) -> Vec<serde_json::Value> {
+            let mut state = self.0.lock().unwrap();
+            state.0 = Instant::now();
+            std::mem::take(&mut state.1)
+        }
+    }
     #[derive(Default)]
-    struct Reason(String);
-
-    impl tracing::field::Visit for Reason {
-        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-            if field.name() == "reason" {
-                value.clone_into(&mut self.0);
+    struct Fields(serde_json::Map<String, serde_json::Value>);
+    impl tracing::field::Visit for Fields {
+        fn record_str(&mut self, f: &tracing::field::Field, v: &str) {
+            self.0.insert(f.name().into(), v.into());
+        }
+        fn record_u64(&mut self, f: &tracing::field::Field, v: u64) {
+            self.0.insert(f.name().into(), v.into());
+        }
+        fn record_f64(&mut self, f: &tracing::field::Field, v: f64) {
+            self.0.insert(f.name().into(), v.into());
+        }
+        fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+            if f.name() == "level" {
+                self.0.insert("level".into(), format!("{v:?}").into());
             }
         }
-        fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
     }
-
     impl tracing::Subscriber for Cycles {
-        fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-            metadata.is_event() && metadata.target() == "bex_gc"
+        fn enabled(&self, m: &tracing::Metadata<'_>) -> bool {
+            m.is_event() && m.target() == "bex_gc"
         }
         fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
             tracing::span::Id::from_u64(1)
@@ -58,16 +73,100 @@ mod cycle_audit {
         fn enter(&self, _: &tracing::span::Id) {}
         fn exit(&self, _: &tracing::span::Id) {}
         fn event(&self, event: &tracing::Event<'_>) {
-            let mut reason = Reason::default();
-            event.record(&mut reason);
-            assert!(!reason.0.is_empty(), "GC event must carry a reason");
-            self.0.lock().unwrap().push(reason.0);
+            let mut fields = Fields::default();
+            event.record(&mut fields);
+            let mut state = self.0.lock().unwrap();
+            fields
+                .0
+                .insert("at_seconds".into(), state.0.elapsed().as_secs_f64().into());
+            state.1.push(fields.0.into());
         }
     }
+}
+
+fn runtime_policy(engine: &BexEngine) -> serde_json::Value {
+    let name = std::env::var("GC_RUNTIME_POLICY").unwrap_or_else(|_| "off".into());
+    if name == "off" {
+        return serde_json::json!({"name":"off"});
+    }
+    #[cfg(feature = "gc_policy_experiments")]
+    {
+        use bex_heap::gc_experiment::GcExperimentConfig;
+        assert!(matches!(name.as_str(), "full" | "mixed"));
+        let config = GcExperimentConfig {
+            young_budget: (name == "mixed")
+                .then(|| setting("GC_YOUNG_MIB", 8).checked_mul(MIB).unwrap()),
+            full_budget_floor: setting("GC_FULL_MIB", 64).checked_mul(MIB).unwrap(),
+            live_multiplier: setting("GC_LIVE_MULTIPLIER", 1),
+            live_budget_uses_slots: match std::env::var("GC_LIVE_BASIS")
+                .as_deref()
+                .unwrap_or("accounted")
+            {
+                "slots" => true,
+                "accounted" => false,
+                other => panic!("unknown live budget basis: {other}"),
+            },
+            first_chunk: setting("GC_FIRST_CHUNK", 32),
+            max_chunk: setting("GC_MAX_CHUNK", 1024),
+            poll_interval: u64::try_from(setting("GC_POLL", 4096)).unwrap(),
+        };
+        engine.heap().configure_gc_experiment(config);
+        serde_json::json!({"name":name,"young_budget":config.young_budget,
+            "live_basis":if config.live_budget_uses_slots {"slots"} else {"accounted"},
+            "full_budget_floor":config.full_budget_floor,"live_multiplier":config.live_multiplier,"first_chunk":config.first_chunk,
+            "max_chunk":config.max_chunk,"poll_interval":config.poll_interval})
+    }
+    #[cfg(not(feature = "gc_policy_experiments"))]
+    {
+        let _ = engine;
+        panic!("Runtime policy requires gc_policy_experiments");
+    }
+}
+
+#[cfg(feature = "gc_profiling")]
+fn process_usage() -> Option<(std::time::Duration, u64)> {
+    bex_heap::process_usage()
+}
+#[cfg(not(feature = "gc_profiling"))]
+fn process_usage() -> Option<(std::time::Duration, u64)> {
+    None
+}
+
+fn runtime_spending(engine: &BexEngine) -> Option<usize> {
+    #[cfg(feature = "gc_policy_experiments")]
+    {
+        engine
+            .heap()
+            .gc_experiment()
+            .map(|p| p.snapshot().total_charged)
+    }
+    #[cfg(not(feature = "gc_policy_experiments"))]
+    {
+        let _ = engine;
+        None
+    }
+}
+
+fn event_profile(event: &serde_json::Value) -> serde_json::Value {
+    let mut profile = event.clone();
+    for prefix in ["before", "after"] {
+        profile[format!("{prefix}_generations")] = serde_json::json!([
+            event[format!("{prefix}_gen0")],
+            event[format!("{prefix}_gen1")],
+            event[format!("{prefix}_gen2")]
+        ]);
+    }
+    profile
 }
 const SOURCE: &str = r#"
 class BenchNode { value int }
 function Identity(value: int) -> int { value }
+function Compute(n: int) -> int {
+    let i = 0;
+    let total = 0;
+    while (i < n) { total = total + i; i = i + 1; }
+    total
+}
 function Make(value: int) -> BenchNode { BenchNode { value: value } }
 function Churn(n: int) -> int {
     let i = 0;
@@ -258,10 +357,15 @@ fn compare_gc_policy() {
         .unwrap();
     runtime.block_on(async {
         let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
+        let runtime_settings = runtime_policy(&engine);
+        let runtime_enabled = runtime_settings["name"] != "off";
+        assert!(!runtime_enabled || policy_name == "current", "Runtime experiments must disable harness-triggered GC");
+        assert!(!runtime_enabled || cfg!(feature = "gc_profiling"), "Runtime experiments require cycle capture");
         let slot_size = std::mem::size_of::<bex_vm_types::Object>();
         let initial_gc = engine.collect_garbage(CollectionLevel::Major).await;
         let mut policy = Policy::new(policy_name, initial_gc.live_count * slot_size);
         let (default_calls, default_n, function, copy_result): (usize, usize, &str, bool) = match workload.as_str() {
+            "compute" => (128, 65_536, "Compute", true),
             "scalar" => (12_000, 123, "Identity", true),
             "tiny" => (12_000, 123, "Make", true),
             "churn" | "cache" => (1_024, 4_096, "Churn", true),
@@ -300,11 +404,13 @@ fn compare_gc_policy() {
         let mut snapshots = vec![];
         #[cfg(feature = "gc_profiling")]
         cycle_audit.take();
+        let cpu_start = process_usage().map(|p| p.0);
+        let charge_start = runtime_spending(&engine);
         let start = Instant::now();
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
             let stats = engine.heap_stats();
-            let nursery_slots = stats.tlab_chunks * engine.heap().tlab_size();
+            let nursery_slots = stats.reserved_slots;
             let nursery_bytes = nursery_slots * slot_size;
             let older_bytes = stats.runtime_objects.saturating_sub(nursery_slots) * slot_size;
             let call_start = Instant::now();
@@ -327,7 +433,7 @@ fn compare_gc_policy() {
                     BexExternalValue::Instance { fields, .. } => assert_eq!(fields["value"], BexExternalValue::Int(n)),
                     _ => panic!("wrong return shape"),
                 },
-                "churn" | "cache" => assert_eq!(result, BexExternalValue::Int(n * (n-1) / 2)),
+                "churn" | "cache" | "compute" => assert_eq!(result, BexExternalValue::Int(n * (n-1) / 2)),
                 _ => {
                     assert!(matches!(result, BexExternalValue::Handle(_)));
                     if workload == "retained" || workload == "payload" || workload == "burst_idle" || call < calls / 2 {
@@ -351,13 +457,28 @@ fn compare_gc_policy() {
         let elapsed = start.elapsed().as_secs_f64();
         let end_slots = engine.heap_stats().runtime_objects;
         let end_rss = rss_bytes();
+        let cpu_end = process_usage();
+        let process_cpu_seconds = cpu_start.zip(cpu_end).map(|(before, after)| after.0.saturating_sub(before).as_secs_f64());
+        let charged_bytes = charge_start.zip(runtime_spending(&engine)).map(|(a,b)| b.saturating_sub(a));
         #[cfg(feature = "gc_profiling")]
-        let measured_cycle_reasons = Some(cycle_audit.take());
+        let measured_records = Some(cycle_audit.take());
         #[cfg(not(feature = "gc_profiling"))]
-        let measured_cycle_reasons: Option<Vec<String>> = None;
-        if let Some(reasons) = &measured_cycle_reasons {
-            assert_eq!(reasons.iter().filter(|r| r.as_str() == "explicit").count(), cycles.len());
+        let measured_records: Option<Vec<serde_json::Value>> = None;
+        let measured_cycle_reasons = measured_records.as_ref().map(|rs| rs.iter().map(|r| r["reason"].clone()).collect::<Vec<_>>());
+        if let Some(records) = &measured_records {
+            assert_eq!(records.iter().filter(|r| r["reason"] == "explicit").count(), cycles.len());
+            gc_ms = records.iter().map(|r| r["total_ms"].as_f64().unwrap()).collect();
+            minor_count = records.iter().filter(|r| r["level"] == "Minor").count();
+            major_count = records.iter().filter(|r| r["level"] == "Major").count();
+            for r in records {
+                let slots: u64 = ["before_gen0", "before_gen1", "before_gen2"].iter().map(|k| r[k].as_u64().unwrap()).sum();
+                peak_slots = peak_slots.max(usize::try_from(slots).unwrap());
+            }
         }
+        let gc_cpu_seconds = measured_records.as_ref().and_then(|rs| {
+            let times: Option<Vec<f64>> = rs.iter().map(|r| r["heap_cpu_ms"].as_f64().filter(|t| *t >= 0.0)).collect();
+            times.map(|ts| ts.iter().sum::<f64>() / 1000.0)
+        });
         let idle_observation = if workload == "burst_idle" {
             kept.clear();
             let before = engine.heap_stats().runtime_objects;
@@ -370,7 +491,12 @@ fn compare_gc_policy() {
                 "before_rss_mib":rss_mib(before_rss),"after_rss_mib":rss_mib(rss_bytes())}))
         } else { None };
         // Verify retained native handles after a moving collection, outside timings.
+        let cleanup_cpu_start = process_usage().map(|p| p.0);
+        let cleanup_start = Instant::now();
         let validation_gc = engine.collect_garbage(CollectionLevel::Major).await;
+        let cleanup_seconds = cleanup_start.elapsed().as_secs_f64();
+        let cleanup_cpu_seconds = cleanup_cpu_start.zip(process_usage()).map(|(before, after)| after.0.saturating_sub(before).as_secs_f64());
+        let cleanup_rss = rss_bytes();
         if let Some(value) = &cache {
             let checked = engine.call_function("CheckBatch", vec![value.clone()], context(), true).await.unwrap();
             assert_eq!(checked, BexExternalValue::Int(cache_n * (cache_n-1) / 2));
@@ -380,15 +506,26 @@ fn compare_gc_policy() {
             assert_eq!(checked, BexExternalValue::Int(if workload == "payload" { n } else {n*(n-1)/2}));
         }
         if let Ok(path) = std::env::var("GC_TRACE") {
-            let events: Vec<_> = cycles.iter().map(|(call, at, stats, nursery, budget)| serde_json::json!({
+            let mut events: Vec<_> = cycles.iter().map(|(call, at, stats, nursery, budget)| serde_json::json!({
                 "call":call, "at_seconds":at, "trigger":"policy_before_host_call", "level":format!("{:?}",stats.level),
                 "nursery_reserved_bytes":nursery, "budget_bytes":budget, "profile":profile_json(stats),
                 "copied_objects":stats.live_count, "reclaimed_slots":stats.collected_count,
                 "promoted_gen1":stats.promoted_to_gen1, "promoted_gen2":stats.promoted_to_gen2,
             })).collect();
+            if let Some(records) = &measured_records {
+                events = records.iter().map(|r| serde_json::json!({
+                    "at_seconds":r["at_seconds"],"trigger":r["reason"],"level":r["level"],
+                    "copied_objects":r["copied_objects"],"reclaimed_slots":r["reclaimed_slots"],
+                    "profile":event_profile(r),
+                })).collect();
+            }
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
         }
         println!("GC_POLICY_RESULT {}", serde_json::json!({
+            "runtime_settings":runtime_settings,"charged_bytes":charged_bytes,
+            "process_cpu_seconds":process_cpu_seconds,"gc_heap_cpu_seconds":gc_cpu_seconds,
+            "non_gc_heap_cpu_seconds":process_cpu_seconds.zip(gc_cpu_seconds).map(|(total,gc)| (total-gc).max(0.0)),
+            "process_lifetime_peak_rss_mib":cpu_end.map(|p| p.1 as f64 / MIB as f64),
             "policy":policy.name, "budget_floor_bytes":policy.floor,
             "final_budget_bytes":policy.budget, "workload":workload, "calls":calls, "n":n, "retain":retain, "warmup":warmup, "slot_bytes":slot_size,
             "elapsed_seconds":elapsed, "calls_per_second":calls as f64/elapsed,
@@ -404,8 +541,12 @@ fn compare_gc_policy() {
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
+            "cleanup_seconds":cleanup_seconds,"cleanup_cpu_seconds":cleanup_cpu_seconds,
+            "elapsed_with_cleanup_seconds":elapsed + cleanup_seconds,
+            "cpu_with_cleanup_seconds":process_cpu_seconds.zip(cleanup_cpu_seconds).map(|(a,b)| a+b),
+            "after_cleanup_rss_mib":rss_mib(cleanup_rss),
             "measured_cycle_reasons":measured_cycle_reasons,
-            "cycle_coverage":"harness-requested collections only; automatic cycles require engine tracing",
+            "cycle_coverage":if measured_records.is_some() {"all engine cycles on the single-threaded executor"} else {"harness-requested cycles only"},
         }));
         kept.clear();
         drop(cache);
@@ -435,6 +576,7 @@ fn profile_json(stats: &bex_heap::GcStats) -> serde_json::Value {
         "keepalive_ms":p.keepalive.as_secs_f64()*1000.0, "fixup_ms":p.fixup.as_secs_f64()*1000.0,
         "reclaim_ms":p.reclaim.as_secs_f64()*1000.0, "bookkeeping_ms":p.bookkeeping.as_secs_f64()*1000.0,
         "heap_total_ms":p.heap_total.as_secs_f64()*1000.0,
+        "heap_cpu_ms":p.heap_cpu.map(|t| t.as_secs_f64()*1000.0),
         "park_wait_ms":p.park_wait.as_secs_f64()*1000.0, "root_scan_ms":p.root_scan.as_secs_f64()*1000.0,
         "holder_fixup_ms":p.holder_fixup.as_secs_f64()*1000.0, "pause_ms":p.pause.as_secs_f64()*1000.0,
         "post_gc_ms":p.post_gc.as_secs_f64()*1000.0, "total_ms":p.total.as_secs_f64()*1000.0,

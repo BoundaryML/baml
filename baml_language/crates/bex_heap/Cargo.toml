@@ -24,5 +24,9 @@ tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
 
 [features]
 default = [  ]
-gc_profiling = [ "dep:web-time" ]
+gc_profiling = [ "dep:web-time", "dep:libc" ]
+gc_policy_experiments = [ "bex_vm_types/gc_policy_experiments" ]
 heap_debug = [ "bex_vm_types/heap_debug" ]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }

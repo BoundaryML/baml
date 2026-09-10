@@ -1346,6 +1346,7 @@ dependencies = [
  "bex_str",
  "bex_vm_types",
  "indexmap",
+ "libc",
  "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",

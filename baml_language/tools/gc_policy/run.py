@@ -28,14 +28,27 @@ def main():
     parser.add_argument('--candidate-policy', help='Override candidate policy (same workload)')
     parser.add_argument('--budget-mib', type=int, help='Shared experimental headroom floor')
     parser.add_argument('--cache-n', type=int, help='Override permanent cache object count')
+    parser.add_argument('--calls', type=int, help='Shared call count override')
+    parser.add_argument('--baseline-setting', action='append', default=[], metavar='KEY=VALUE')
+    parser.add_argument('--candidate-setting', action='append', default=[], metavar='KEY=VALUE')
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[2]
     out = args.output.resolve()
     if args.repeats < 1 or args.timeout <= 0:
         parser.error('repeats and timeout must be positive')
-    if any(value is not None and value <= 0 for value in [args.budget_mib, args.cache_n]):
-        parser.error('budget-mib and cache-n must be positive')
+    if any(value is not None and value <= 0 for value in [args.budget_mib, args.cache_n, args.calls]):
+        parser.error('budget-mib, cache-n and calls must be positive')
     policies = {name: getattr(args, f'{name}_policy') for name in ['baseline', 'candidate']}
+    runtime_keys = {'GC_RUNTIME_POLICY', 'GC_YOUNG_MIB', 'GC_FULL_MIB', 'GC_LIVE_MULTIPLIER', 'GC_LIVE_BASIS', 'GC_FIRST_CHUNK', 'GC_MAX_CHUNK', 'GC_POLL'}
+    overrides = {}
+    for name in ['baseline', 'candidate']:
+        settings = {}
+        for item in getattr(args, f'{name}_setting'):
+            key, separator, value = item.partition('=')
+            if not separator or key not in runtime_keys or key in settings:
+                parser.error(f'Invalid/duplicate runtime setting: {item}')
+            settings[key] = value
+        overrides[name] = settings
     variants = {name: path.resolve() for name, path in
                 [('baseline', args.baseline), ('candidate', args.candidate)]}
     provenance = {}
@@ -49,6 +62,7 @@ def main():
         elif not args.allow_legacy_binaries:
             parser.error(f'{name}: use build.py, or explicitly allow legacy binaries')
     cases = [
+        ('compute', 'current', dict(GC_WORKLOAD='compute', GC_CALLS=128, GC_N=65536, GC_WARMUP=4)),
         ('scalar', 'full32', dict(GC_WORKLOAD='scalar', GC_CALLS=24000, GC_WARMUP=512)),
         ('tiny', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=24000, GC_WARMUP=512)),
         ('churn', 'full32', dict(GC_WORKLOAD='churn')),
@@ -75,11 +89,13 @@ def main():
         if unknown:
             parser.error(f'Unknown cases: {sorted(unknown)}')
         cases = [c for c in cases if c[0] in args.case]
-    if (any(policies.values()) or args.budget_mib is not None) and any(c[0] == 'concurrent' for c in cases):
+    if (any(policies.values()) or any(overrides.values()) or args.budget_mib is not None) and any(c[0] == 'concurrent' for c in cases):
         parser.error('Concurrent periodic GC does not use policy/budget overrides; select other cases')
     if args.cache_n is not None and not any(c[0] == 'cache' for c in cases):
         parser.error('cache-n requires the cache case')
     for case, _, settings in cases:
+        if args.calls is not None:
+            settings['GC_CALLS'] = args.calls
         if args.budget_mib is not None:
             settings['GC_BUDGET_MIB'] = args.budget_mib
         if case == 'cache' and args.cache_n is not None:
@@ -102,6 +118,7 @@ def main():
         build_provenance={name: f'{name}-build.json' if name in provenance else None for name in variants},
         allow_unprofiled=args.allow_unprofiled,
         policy_overrides=policies,
+        runtime_overrides=overrides,
     )
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Keep baseline/candidate adjacent, randomize their order inside each pair,
@@ -119,6 +136,7 @@ def main():
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})
+                env.update(overrides[variant])
                 requested_policy = policies[variant] or policy
                 env.update(GC_POLICY=requested_policy, GC_TRACE=str(out / f'{name}.cycles.json'))
                 try:
@@ -138,6 +156,22 @@ def main():
                     raise RuntimeError(f'{name}: missing/ambiguous result')
                 result = json.loads(lines[0])
                 if case != 'concurrent':
+                    expected_runtime = overrides[variant].get('GC_RUNTIME_POLICY', 'off')
+                    if result.get('runtime_settings', {}).get('name', 'off') != expected_runtime:
+                        raise RuntimeError(f'{name}: runtime policy unsupported or not applied')
+                    config_fields = {
+                        'GC_YOUNG_MIB': ('young_budget', 1048576),
+                        'GC_FULL_MIB': ('full_budget_floor', 1048576),
+                        'GC_LIVE_MULTIPLIER': ('live_multiplier', 1),
+                        'GC_FIRST_CHUNK': ('first_chunk', 1),
+                        'GC_MAX_CHUNK': ('max_chunk', 1),
+                        'GC_POLL': ('poll_interval', 1),
+                    }
+                    for key, (field, scale) in config_fields.items():
+                        if key in overrides[variant] and result.get('runtime_settings', {}).get(field) != int(overrides[variant][key]) * scale:
+                            raise RuntimeError(f'{name}: runtime setting {key} unsupported or not applied')
+                    if 'GC_LIVE_BASIS' in overrides[variant] and result.get('runtime_settings', {}).get('live_basis') != overrides[variant]['GC_LIVE_BASIS']:
+                        raise RuntimeError(f'{name}: runtime live basis unsupported or not applied')
                     if result['policy'] != requested_policy:
                         raise RuntimeError(f'{name}: policy override was not applied')
                     if args.budget_mib is not None and result.get('budget_floor_bytes') != args.budget_mib * 1048576:

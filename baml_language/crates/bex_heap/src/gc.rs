@@ -99,6 +99,10 @@ impl BexHeap {
     /// Note: There is no Gen0-only collection; Gen0 allocation pressure triggers
     /// a Minor GC (Gen0+Gen1) since that is the finest granularity available.
     pub fn should_collect(&self) -> Option<CollectionLevel> {
+        #[cfg(feature = "gc_policy_experiments")]
+        if let Some(policy) = self.gc_experiment() {
+            return policy.due();
+        }
         // Check Gen2 first (highest priority — expensive to defer).
         // SAFETY: Reading lengths at a check point; no mutation in progress.
         let gen2_live = unsafe { self.gen2_ref().len() };
@@ -611,6 +615,10 @@ impl BexHeap {
 
         // Update adaptive thresholds: all survivors are in Gen2 after a full GC.
         self.update_thresholds_after_major(live_count);
+        #[cfg(feature = "gc_policy_experiments")]
+        unsafe {
+            self.finish_gc_experiment(CollectionLevel::Major);
+        }
 
         // Reset the Gen0 allocation counter — `should_collect` uses it to
         // trigger pressure-based GC, and without the reset every subsequent
@@ -625,6 +633,7 @@ impl BexHeap {
         #[cfg(feature = "gc_profiling")]
         {
             profile.after = unsafe { crate::GcHeapSnapshot::capture(self) };
+            profile.heap_cpu = clock.cpu_elapsed();
             profile.heap_total = clock.elapsed();
         }
         let stats = GcStats {
@@ -1728,6 +1737,10 @@ impl BexHeap {
         // Update adaptive thresholds based on post-collection Gen1 and Gen2 sizes.
         let current_gen2_live = unsafe { self.gen2_ref().len() };
         self.update_thresholds_after_minor(new_gen1_count, current_gen2_live);
+        #[cfg(feature = "gc_policy_experiments")]
+        unsafe {
+            self.finish_gc_experiment(CollectionLevel::Minor);
+        }
 
         // Reset the Gen0 allocation counter. Without this, `should_collect`
         // would re-trigger Minor GC on every check after the first 10_000
@@ -1742,6 +1755,7 @@ impl BexHeap {
         #[cfg(feature = "gc_profiling")]
         {
             profile.after = unsafe { crate::GcHeapSnapshot::capture(self) };
+            profile.heap_cpu = clock.cpu_elapsed();
             profile.heap_total = clock.elapsed();
         }
         let stats = GcStats {

@@ -191,6 +191,8 @@ pub use unit::{
 /// - For multi-threaded targets, it checks an atomic flag every `N` increments. If the flag is set, it returns `true`.
 ///   The flag should be set by another thread that wants to park the VM.
 pub struct EarlyYieldCheck {
+    #[cfg(feature = "gc_policy_experiments")]
+    gc_pressure: Option<::std::sync::Arc<::std::sync::atomic::AtomicBool>>,
     counter: u64,
     interval: u64,
     /// Only used in non-WASM targets, since WASM currently doesn't support threads.
@@ -203,10 +205,25 @@ pub struct EarlyYieldCheck {
 pub const EARLY_YIELD_INTERVAL: u64 = 1 << 25;
 
 impl EarlyYieldCheck {
+    #[cfg(feature = "gc_policy_experiments")]
+    #[must_use]
+    pub fn with_gc_pressure(
+        mut self,
+        pressure: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
+        interval: u64,
+    ) -> Self {
+        assert!(interval > 0);
+        self.gc_pressure = Some(pressure);
+        self.interval = interval;
+        self.counter = interval;
+        self
+    }
     #[cfg(target_arch = "wasm32")]
     #[expect(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
+            #[cfg(feature = "gc_policy_experiments")]
+            gc_pressure: None,
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
         }
@@ -214,6 +231,8 @@ impl EarlyYieldCheck {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
         Self {
+            #[cfg(feature = "gc_policy_experiments")]
+            gc_pressure: None,
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
             park_requested,
@@ -230,6 +249,8 @@ impl EarlyYieldCheck {
             "early-yield interval must be greater than zero"
         );
         Self {
+            #[cfg(feature = "gc_policy_experiments")]
+            gc_pressure: None,
             counter: interval,
             interval,
             park_requested,
@@ -250,9 +271,23 @@ impl EarlyYieldCheck {
             return false;
         }
         self.counter = self.interval;
+        #[cfg(feature = "gc_policy_experiments")]
+        if self
+            .gc_pressure
+            .as_ref()
+            .is_some_and(|p| p.load(::std::sync::atomic::Ordering::Relaxed))
+        {
+            return true;
+        }
 
         #[cfg(target_arch = "wasm32")]
         {
+            // Experimental shorter polling must preserve cooperative yielding
+            // even when this VM has not itself spent the allocation budget.
+            #[cfg(feature = "gc_policy_experiments")]
+            if self.gc_pressure.is_some() {
+                return true;
+            }
             self.counter > (1 << 16)
         }
         #[cfg(not(target_arch = "wasm32"))]
