@@ -63,6 +63,11 @@ def main():
         row['recorded_phase_totals_ms'] = dict(sums)
         row['recorded_max_pause_ms'] = max((c['profile']['pause_ms'] for c in profiled), default=None)
         row['recorded_max_park_wait_ms'] = max((c['profile']['park_wait_ms'] for c in profiled), default=None)
+        row['recorded_pauses_over_ms'] = {
+            str(limit): sum(c['profile']['pause_ms'] > limit for c in profiled)
+            for limit in [5, 20, 100]
+        }
+        row['recorded_copied_objects'] = sum(c.get('copied_objects', 0) for c in cycles)
         row['actual_new_objects_in_recorded_cycles'] = sum(c['profile']['actual_new_objects'] for c in profiled)
         row['reserved_gen0_slots_in_recorded_cycles'] = sum(c['profile']['before_generations'][0] for c in profiled)
         (root / row['cycles_file'].replace('.cycles.json', '.trace.json')).write_text(
@@ -75,7 +80,8 @@ def main():
              f'{len(rows)} successful runs, {manifest["repeats"]} repetitions per case and binary. '
              'Each pair ran adjacent in randomized order; pairs were also shuffled. '
              'Reported changes are medians of paired ratios, not ratios of unrelated medians.', '',
-             'Baseline and candidate are invoked with the same workload, warmup and requested policy settings. '
+             'Baseline and candidate use the same workload and warmup. Policy overrides: '
+             + json.dumps(manifest.get('policy_overrides', {}), sort_keys=True) + '. '
              + manifest.get('change', 'The candidate optimizes the unhandled-spawn-error scan.') +
              ' Binary hashes and experiment settings are recorded in the manifest.', '',
              '| Case | Baseline s | Candidate s | Speedup (paired range) | Candidate peak slots MiB | Candidate longest recorded pause ms |',
@@ -90,10 +96,34 @@ def main():
         lines.append(f'| {case} | {med("baseline", "elapsed_seconds"):.3f} | '
                      f'{med("candidate", "elapsed_seconds"):.3f} | {statistics.median(ratios):.2f}× '
                      f'({min(ratios):.2f}–{max(ratios):.2f}) | {slots} | {pause} |')
+    lines += ['', '## Pause frequency and caller latency', '',
+              'Medians across runs. Pause counts cover harness-requested collections in the timed window; '
+              'validation and warmup GC are excluded. Counts over 5/20/100 ms are nested, not disjoint. '
+              'Caller p99 can miss an infrequent long pause, so maxima are reported too. '
+              'A shared budget floor is not necessarily equal peak memory: live-scaled policies can grant more headroom.', '',
+              '| Case | Variant / policy | Minor / full | GC wall % | Pauses >5 / >20 / >100 ms | Max pause ms | Call p99 / max ms | Peak slots MiB |',
+              '|---|---|---:|---:|---:|---:|---:|---:|']
+    for case, pairs in sorted(by_case.items()):
+        for variant in ['baseline', 'candidate']:
+            runs = [p[variant] for p in pairs]
+            if case == 'concurrent':
+                continue
+            med = lambda key: statistics.median(r[key] for r in runs)
+            counts = ' / '.join(f'{statistics.median(r["recorded_pauses_over_ms"][str(n)] for r in runs):g}'
+                                for n in [5, 20, 100])
+            pause = med('recorded_max_pause_ms') if all(r['recorded_max_pause_ms'] is not None for r in runs) else None
+            pause_text = f'{pause:.1f}' if pause is not None else '-'
+            if pause is None and any(r['minor_count'] + r['major_count'] > 0 for r in runs):
+                counts = '-'
+            gc_percent = max(0.0, statistics.median(r['gc_ms_total'] / (r['elapsed_seconds'] * 10) for r in runs))
+            lines.append(f'| {case} | {variant} / {runs[0]["policy"]} | '
+                         f'{med("minor_count"):g} / {med("major_count"):g} | {gc_percent:.1f} | {counts} | '
+                         f'{pause_text} | {med("call_ms_p99"):.2f} / {med("call_ms_max"):.1f} | '
+                         f'{med("peak_slot_mib"):.1f} |')
     lines += ['', '## Where collection time went', '',
               'Medians of per-run totals for explicitly requested, measured collections. '
-              'The concurrent case can also trigger automatic collections; these are emitted by '
-              'the engine tracing target but are not included in this harness’s returned-statistics files.', '',
+              'Automatic collections are not included in returned-statistics profiles. New single-threaded '
+              'runs also record `measured_cycle_reasons` to audit coverage; concurrent runs do not use that audit.', '',
               '| Case | Binary | Trace/copy ms | Error/finalizer scans ms | Pointer fixup ms | Reclaim ms | Wait to park ms |',
               '|---|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):
@@ -106,11 +136,12 @@ def main():
             lines.append(f'| {case} | {variant} | ' + ' | '.join(f'{v:.1f}' for v in values) + ' |')
     lines += ['', '## Reading these measurements', '',
               '- Time and memory must be compared together. `large_live_fixed` and `large_live_scaled` use identical '
-              'workloads; the latter grants max(32 MiB, surviving slot bytes) between full collections. '
+              'workloads; full_live grants max(configured floor, surviving slot bytes) between full collections. '
               'This is a policy experiment, not a change to engine defaults.',
               '- Slots include reservation slack. `actual_new_objects_in_recorded_cycles` excludes unused slots; '
               'the original `collected_count` means reclaimed slots and must not be interpreted as dead-object count.',
-              '- The `payload` case passes 64 KiB strings and retains 256 results. Payload bytes, compiler memory, '
+              '- The `payload` case passes 64 KiB strings and retains 256 results; `payload_sparse` uses 4 MiB '
+              'strings and retains four. Payload bytes, compiler memory, '
               'allocator retention and scratch copies are not interchangeable with slot counts. RSS samples are in the raw results; '
               'they are sampled every 32 calls, include startup/compilation, and can miss brief peaks.',
               '- The long-call case allocates roughly 64 MiB of slots within each call. A 32 MiB threshold checked '

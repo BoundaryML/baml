@@ -18,6 +18,53 @@ use bex_heap::CollectionLevel;
 use sys_native::SysOpsExt;
 
 const MIB: usize = 1024 * 1024;
+
+// Audit all cycles on this single-threaded executor, including cycles the
+// engine starts itself. Phase profiles below still come from returned stats.
+#[cfg(feature = "gc_profiling")]
+mod cycle_audit {
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    pub(super) struct Cycles(Arc<Mutex<Vec<String>>>);
+
+    impl Cycles {
+        pub(super) fn take(&self) -> Vec<String> {
+            std::mem::take(&mut *self.0.lock().unwrap())
+        }
+    }
+
+    #[derive(Default)]
+    struct Reason(String);
+
+    impl tracing::field::Visit for Reason {
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            if field.name() == "reason" {
+                value.clone_into(&mut self.0);
+            }
+        }
+        fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+    }
+
+    impl tracing::Subscriber for Cycles {
+        fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
+            metadata.is_event() && metadata.target() == "bex_gc"
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut reason = Reason::default();
+            event.record(&mut reason);
+            assert!(!reason.0.is_empty(), "GC event must carry a reason");
+            self.0.lock().unwrap().push(reason.0);
+        }
+    }
+}
 const SOURCE: &str = r#"
 class BenchNode { value int }
 function Identity(value: int) -> int { value }
@@ -60,21 +107,35 @@ struct Policy {
     name: String,
     budget: usize,
     major_goal: usize,
+    floor: usize,
+    major_floor: usize,
 }
 
 impl Policy {
     fn new(name: String, initial_old_bytes: usize) -> Self {
-        let budget = match name.as_str() {
+        let default_budget = match name.as_str() {
             "current" => usize::MAX,
             "fixed8" => 8 * MIB,
             "fixed32" | "adaptive" | "full32" | "full_live" => 32 * MIB,
             "fixed128" => 128 * MIB,
             _ => panic!("unknown policy: {name}"),
         };
+        let floor = setting("GC_BUDGET_MIB", default_budget / MIB)
+            .checked_mul(MIB)
+            .expect("GC_BUDGET_MIB overflows bytes");
+        assert!(floor > 0, "GC_BUDGET_MIB must be positive");
+        // Preserve historical policies unless this experiment overrides headroom.
+        let major_floor = if std::env::var_os("GC_BUDGET_MIB").is_some() {
+            floor
+        } else {
+            32 * MIB
+        };
         Self {
             name,
-            budget,
-            major_goal: initial_old_bytes + initial_old_bytes.max(32 * MIB),
+            budget: floor,
+            major_goal: initial_old_bytes.saturating_add(initial_old_bytes.max(major_floor)),
+            floor,
+            major_floor,
         }
     }
 
@@ -99,9 +160,9 @@ impl Policy {
         older_after: usize,
     ) {
         if level == CollectionLevel::Major {
-            self.major_goal = older_after + older_after.max(32 * MIB);
+            self.major_goal = older_after.saturating_add(older_after.max(self.major_floor));
             if self.name == "full_live" {
-                self.budget = older_after.max(32 * MIB);
+                self.budget = older_after.max(self.floor);
             }
         } else if self.name == "adaptive" && nursery_before > 0 {
             // Deliberately experimental, easy-to-change survival policy.
@@ -184,6 +245,10 @@ fn percentile(values: &[f64], fraction: f64) -> f64 {
 #[test]
 #[ignore = "manual performance experiment, not a CI assertion"]
 fn compare_gc_policy() {
+    #[cfg(feature = "gc_profiling")]
+    let cycle_audit = cycle_audit::Cycles::default();
+    #[cfg(feature = "gc_profiling")]
+    let _subscriber = tracing::subscriber::set_default(cycle_audit.clone());
     let policy_name = std::env::var("GC_POLICY").unwrap_or_else(|_| "fixed32".into());
     let workload = std::env::var("GC_WORKLOAD").unwrap_or_else(|_| "tiny".into());
     let program = baml_db::testing::compile_source(SOURCE);
@@ -233,6 +298,8 @@ fn compare_gc_policy() {
         let mut peak_rss = initial_rss;
         let mut peak_slots = engine.heap_stats().runtime_objects;
         let mut snapshots = vec![];
+        #[cfg(feature = "gc_profiling")]
+        cycle_audit.take();
         let start = Instant::now();
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
@@ -284,6 +351,13 @@ fn compare_gc_policy() {
         let elapsed = start.elapsed().as_secs_f64();
         let end_slots = engine.heap_stats().runtime_objects;
         let end_rss = rss_bytes();
+        #[cfg(feature = "gc_profiling")]
+        let measured_cycle_reasons = Some(cycle_audit.take());
+        #[cfg(not(feature = "gc_profiling"))]
+        let measured_cycle_reasons: Option<Vec<String>> = None;
+        if let Some(reasons) = &measured_cycle_reasons {
+            assert_eq!(reasons.iter().filter(|r| r.as_str() == "explicit").count(), cycles.len());
+        }
         let idle_observation = if workload == "burst_idle" {
             kept.clear();
             let before = engine.heap_stats().runtime_objects;
@@ -315,7 +389,8 @@ fn compare_gc_policy() {
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
         }
         println!("GC_POLICY_RESULT {}", serde_json::json!({
-            "policy":policy.name, "workload":workload, "calls":calls, "n":n, "retain":retain, "warmup":warmup, "slot_bytes":slot_size,
+            "policy":policy.name, "budget_floor_bytes":policy.floor,
+            "final_budget_bytes":policy.budget, "workload":workload, "calls":calls, "n":n, "retain":retain, "warmup":warmup, "slot_bytes":slot_size,
             "elapsed_seconds":elapsed, "calls_per_second":calls as f64/elapsed,
             "gc_ms_total":gc_ms.iter().sum::<f64>(), "gc_ms_p50":percentile(&gc_ms,0.5),
             "gc_ms_p95":percentile(&gc_ms,0.95), "gc_ms_max":percentile(&gc_ms,1.0),
@@ -329,6 +404,7 @@ fn compare_gc_policy() {
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
+            "measured_cycle_reasons":measured_cycle_reasons,
             "cycle_coverage":"harness-requested collections only; automatic cycles require engine tracing",
         }));
         kept.clear();

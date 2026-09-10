@@ -24,11 +24,18 @@ def main():
                         help='Explicitly allow binaries without build.py provenance')
     parser.add_argument('--allow-unprofiled', action='store_true', help='Timing-only feature-off comparison')
     parser.add_argument('--timeout', type=float, default=300)
+    parser.add_argument('--baseline-policy', help='Override baseline policy (same workload)')
+    parser.add_argument('--candidate-policy', help='Override candidate policy (same workload)')
+    parser.add_argument('--budget-mib', type=int, help='Shared experimental headroom floor')
+    parser.add_argument('--cache-n', type=int, help='Override permanent cache object count')
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[2]
     out = args.output.resolve()
     if args.repeats < 1 or args.timeout <= 0:
         parser.error('repeats and timeout must be positive')
+    if any(value is not None and value <= 0 for value in [args.budget_mib, args.cache_n]):
+        parser.error('budget-mib and cache-n must be positive')
+    policies = {name: getattr(args, f'{name}_policy') for name in ['baseline', 'candidate']}
     variants = {name: path.resolve() for name, path in
                 [('baseline', args.baseline), ('candidate', args.candidate)]}
     provenance = {}
@@ -58,6 +65,8 @@ def main():
         ('continuous_100k', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=100000, GC_WARMUP=512)),
         ('cache', 'full_live', dict(GC_WORKLOAD='cache', GC_CALLS=1024, GC_N=4096, GC_CACHE_N=262144)),
         ('burst_idle', 'full32', dict(GC_WORKLOAD='burst_idle', GC_CALLS=512, GC_N=2048, GC_IDLE_MS=1000)),
+        ('payload_sparse', 'full_live', dict(GC_WORKLOAD='payload', GC_CALLS=128,
+                                           GC_N=4194304, GC_RETAIN=4, GC_WARMUP=4)),
     ]
     if args.extended or args.case:
         cases += extended
@@ -66,11 +75,22 @@ def main():
         if unknown:
             parser.error(f'Unknown cases: {sorted(unknown)}')
         cases = [c for c in cases if c[0] in args.case]
+    if (any(policies.values()) or args.budget_mib is not None) and any(c[0] == 'concurrent' for c in cases):
+        parser.error('Concurrent periodic GC does not use policy/budget overrides; select other cases')
+    if args.cache_n is not None and not any(c[0] == 'cache' for c in cases):
+        parser.error('cache-n requires the cache case')
+    for case, _, settings in cases:
+        if args.budget_mib is not None:
+            settings['GC_BUDGET_MIB'] = args.budget_mib
+        if case == 'cache' and args.cache_n is not None:
+            settings['GC_CACHE_N'] = args.cache_n
     out.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(__file__, out / 'runner.py')
     for name in provenance:
         shutil.copy2(variants[name].parent / 'build-manifest.json', out / f'{name}-build.json')
     manifest = dict(
         runner_git_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=workspace, text=True).strip(),
+        runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         platform=platform.platform(), libc=platform.libc_ver(),
         allocator_environment={k: os.environ[k] for k in
                                ['GLIBC_TUNABLES', 'MALLOC_CONF', 'MALLOC_ARENA_MAX',
@@ -81,6 +101,7 @@ def main():
         seed=4202, repeats=args.repeats, cases=cases, change=args.change,
         build_provenance={name: f'{name}-build.json' if name in provenance else None for name in variants},
         allow_unprofiled=args.allow_unprofiled,
+        policy_overrides=policies,
     )
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Keep baseline/candidate adjacent, randomize their order inside each pair,
@@ -98,7 +119,8 @@ def main():
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})
-                env.update(GC_POLICY=policy, GC_TRACE=str(out / f'{name}.cycles.json'))
+                requested_policy = policies[variant] or policy
+                env.update(GC_POLICY=requested_policy, GC_TRACE=str(out / f'{name}.cycles.json'))
                 try:
                     run = subprocess.run([str(variants[variant]), '--ignored', '--nocapture', '--exact', test],
                                          cwd=workspace, env=env, text=True, capture_output=True, timeout=args.timeout)
@@ -115,6 +137,11 @@ def main():
                 if len(lines) != 1:
                     raise RuntimeError(f'{name}: missing/ambiguous result')
                 result = json.loads(lines[0])
+                if case != 'concurrent':
+                    if result['policy'] != requested_policy:
+                        raise RuntimeError(f'{name}: policy override was not applied')
+                    if args.budget_mib is not None and result.get('budget_floor_bytes') != args.budget_mib * 1048576:
+                        raise RuntimeError(f'{name}: budget override unsupported or not applied')
                 cycles = json.loads((out / f'{name}.cycles.json').read_text())
                 for cycle in cycles:
                     if cycle['profile'] is None and not args.allow_unprofiled:
