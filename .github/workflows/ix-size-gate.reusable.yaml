@@ -71,8 +71,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          # Read-only: canary size-gate jobs write matching hosted-runner keys.
+          # ix toolchain differences can miss; its seed disk supplies downloads.
           save-if: false
 
       - name: "Load .envrc with direnv"
@@ -162,8 +162,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          # Read-only: canary size-gate jobs write matching hosted-runner keys.
+          # ix toolchain differences can miss; its seed disk supplies downloads.
           save-if: false
 
       - name: "Load .envrc with direnv"
@@ -242,10 +242,8 @@ jobs:
           merge-multiple: true
           path: reports
 
-      # Build cargo-size-gate from source. We share the linux size-gate
-      # job's rust-cache (same shared-key, same runner OS), so this is a
-      # near-instant cache hit in the common case — no upload/download of
-      # the binary required.
+      # Rebuild cargo-size-gate from the checked-out source. rust-cache only
+      # restores Cargo downloads; compilation uses the ix seed and R2 sccache.
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
@@ -264,8 +262,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # The linux size-gate job already populated this cache; we just
-          # consume it here.
+          # The hosted canary linux measurement job is the cache writer;
+          # neither ix job writes, and different toolchains can miss this key.
           save-if: false
 
       - name: "Load .envrc with direnv"

@@ -1,4 +1,8 @@
-# Size-gate jobs share cargo tests' R2 sccache and read-only rust-cache entries.
+# R2 sccache caches compilation; rust-cache caches only Cargo downloads.
+# Measurement jobs write their own rust-cache entries on canary: cargo tests'
+# different CARGO_PROFILE_* settings produce different environment hashes even
+# with the same shared-key, and the macOS cargo-test writer is disabled.
+# PRs and the report job only restore. See ../size-gate-cache.md for the audit.
 # .envrc configures sccache, with secretless fork PRs falling back to local cache.
 name: Size Gate (Reusable)
 
@@ -55,9 +59,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+          # Populate the exact environment key consumed by size-gate jobs.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
 
       - name: "Load .envrc with direnv"
         run: |
@@ -141,9 +144,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "macos-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+          # Populate the exact environment key consumed by size-gate jobs.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
 
       - name: "Load .envrc with direnv"
         run: |
@@ -234,9 +236,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "windows-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+          # Populate the exact environment key consumed by size-gate jobs.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
 
       - name: "Load .envrc with direnv"
         run: |
@@ -337,9 +338,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+          # Populate the exact environment key consumed by size-gate jobs.
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
 
       - name: "Load .envrc with direnv"
         run: |
@@ -415,10 +415,9 @@ jobs:
           merge-multiple: true
           path: reports
 
-      # Build cargo-size-gate from source. We share the linux size-gate
-      # job's rust-cache (same shared-key, same runner OS), so this is a
-      # near-instant cache hit in the common case — no upload/download of
-      # the binary required.
+      # Rebuild cargo-size-gate from the checked-out source. rust-cache shares
+      # Cargo downloads with the linux measurement job; R2 sccache reuses
+      # cacheable compilation, but the executable still needs linking.
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
@@ -437,8 +436,7 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # The linux size-gate job already populated this cache; we just
-          # consume it here.
+          # The canary linux measurement job populates this environment key.
           save-if: false
 
       - name: "Load .envrc with direnv"
