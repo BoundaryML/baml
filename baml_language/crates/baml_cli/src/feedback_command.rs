@@ -12,8 +12,8 @@
 // backfill job; the merge *is* the backfill.
 //
 // Every report is also recorded in `<BAML_HOME>/feedback.json`, which is
-// what `status`/`list`/`view` read: the embedded PostHog key is write-only,
-// so past reports cannot be queried back from the server. Records start as
+// read by `status`/`list`/`view`, with a separate bounded Supabase resolution
+// cache for linked issues and published fixes. Delivery records start as
 // `open` and flip to `anonymous`/`reported` once delivered, so an offline
 // send is saved locally and synced on a later run instead of failing.
 
@@ -219,6 +219,39 @@ impl FeedbackInner {
             sync_open_reports(&mut store);
         }
 
+        if store.enabled
+            && matches!(
+                self.action,
+                Some(FeedbackAction::Status)
+                    | Some(FeedbackAction::List { .. })
+                    | Some(FeedbackAction::View { .. })
+            )
+        {
+            let _ = crate::feedback_resolution::refresh(
+                &store
+                    .reports
+                    .iter()
+                    .filter(|r| r.status != ReportStatus::Open)
+                    .map(|r| r.event_uuid)
+                    .collect::<Vec<_>>(),
+                true,
+                false,
+                baml_version::CANONICAL_VERSION,
+            );
+        }
+        let cached = crate::feedback_resolution::load();
+        for report in &mut store.reports {
+            report.issues = cached
+                .reports
+                .get(&report.event_uuid)
+                .cloned()
+                .unwrap_or_default();
+            report.resolution = crate::feedback_resolution::resolution(
+                &report.issues,
+                baml_version::CANONICAL_VERSION,
+            )
+            .into();
+        }
         match &self.action {
             Some(FeedbackAction::Status) => return run_status(&store),
             Some(FeedbackAction::List {
@@ -548,6 +581,11 @@ struct FeedbackRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     status: ReportStatus,
+    /// Resolution is a cache overlay, independent of delivery/anonymity.
+    #[serde(default, skip_deserializing)]
+    issues: Vec<crate::feedback_resolution::IssueResolution>,
+    #[serde(default, skip_deserializing)]
+    resolution: String,
     /// The user explicitly asked for anonymity (`--anonymous`). A deferred
     /// delivery must honor it even if a login exists by sync time.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -555,6 +593,10 @@ struct FeedbackRecord {
     /// The verified email the report was (or will be) attributed to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     email: Option<String>,
+    /// The toolchain the report was sent from: what the bug fails on.
+    /// Absent on records written before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cli_version: Option<String>,
     /// Attachments. Content is kept while `open` (a deferred delivery must
     /// ship it) and dropped once delivered, leaving only the
     /// name/mime/size metadata for `view`.
@@ -627,6 +669,8 @@ impl FeedbackRecord {
                 .and_then(Value::as_str)
                 .map(str::to_string),
             status: ReportStatus::Open,
+            issues: Vec::new(),
+            resolution: "triaging".into(),
             forced_anonymous,
             email: if identified {
                 email.map(str::to_string)
@@ -634,6 +678,7 @@ impl FeedbackRecord {
                 None
             },
             files,
+            cli_version: Some(baml_version::CANONICAL_VERSION.to_string()),
             created_at: auth::now_unix(),
         }
     }
@@ -766,7 +811,13 @@ fn run_status(store: &FeedbackStore) -> Result<crate::ExitCode> {
     } else {
         println!("Reports:");
         for r in &store.reports {
-            println!("  [{}] {}: {}", r.status, r.id, r.title);
+            println!(
+                "  [{}; {}] {}: {}",
+                r.status,
+                resolution_text(r),
+                r.id,
+                r.title
+            );
         }
     }
     Ok(crate::ExitCode::Success)
@@ -795,7 +846,14 @@ fn run_list(
         return Ok(crate::ExitCode::Success);
     }
     for r in matching {
-        println!("{}\t{}\t{}\t{}", r.id, r.status, r.created_at, r.title);
+        println!(
+            "{}\t{}\t{}\t{}\t{}",
+            r.id,
+            r.status,
+            r.created_at,
+            r.title,
+            resolution_text(r)
+        );
     }
     Ok(crate::ExitCode::Success)
 }
@@ -823,6 +881,7 @@ fn run_view(store: &FeedbackStore, id: &str, json: bool) -> Result<crate::ExitCo
         println!("Files:       {}", listed.join(", "));
     }
     println!("Status:      {}", r.status);
+    println!("Resolution:  {}", resolution_text(r));
     if let Some(email) = &r.email {
         println!("Email:       {email}");
     }
@@ -1056,4 +1115,44 @@ mod tests {
         assert!(err.contains("unknown feedback field"), "{err}");
         assert!(err.contains("issue"), "{err}");
     }
+}
+
+fn resolution_text(report: &FeedbackRecord) -> String {
+    let details = report
+        .issues
+        .iter()
+        .map(|i| match (&i.fixed_in, &report.cli_version) {
+            (Some(v), Some(reported)) => {
+                format!("{} fails on {reported}, fixed in {v}", i.issue_id)
+            }
+            (Some(v), None) => format!("{} fixed in {}", i.issue_id, v),
+            (None, _) => format!("{} {}", i.issue_id, i.state),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if details.is_empty() {
+        report.resolution.clone()
+    } else {
+        format!("{}: {}", report.resolution, details)
+    }
+}
+
+pub(crate) fn poll_resolutions() {
+    use std::io::IsTerminal as _;
+    if !std::io::stderr().is_terminal() || !std::io::stdout().is_terminal() {
+        return;
+    }
+    let Ok(store) = FeedbackStore::load() else {
+        return;
+    };
+    if !store.enabled {
+        return;
+    }
+    let ids = store
+        .reports
+        .iter()
+        .filter(|r| r.status != ReportStatus::Open)
+        .map(|r| r.event_uuid)
+        .collect::<Vec<_>>();
+    let _ = crate::feedback_resolution::refresh(&ids, false, true, baml_version::CANONICAL_VERSION);
 }

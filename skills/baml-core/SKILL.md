@@ -362,3 +362,9 @@ Keep the report ID and check `baml feedback status`, `baml feedback list` or
 `baml feedback view <id>` before filing the same problem again. Include only
 relevant files; never attach credentials, private configuration or unrelated
 logs. A report being received does not mean it has been reproduced or fixed.
+
+If a supported CLI reports a verified fixing version, inspect `baml feedback
+status` and use `baml toolchain update` when the user wants the update. Re-run
+the original repro after upgrading. A merge or a generated draft PR is not
+proof that the fix is in the installed toolchain. Offline checks use cached
+status and must not be presented as a fresh server response.
