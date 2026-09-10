@@ -47,6 +47,7 @@ jobs:
         run: python3 tools/atb2/deploy/test_launch_runtime.py
       - name: Verify sessions and push scans
         run: |
+          python3 tools/atb2/deploy/test_releases.py
           python3 tools/atb2/deploy/test_sessions.py
           python3 tools/atb2/deploy/test_push_scan.py
       - name: Verify builder cannot read the runtime login

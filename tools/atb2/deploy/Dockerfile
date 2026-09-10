@@ -59,6 +59,7 @@ COPY baml.toml ./
 COPY baml_src ./baml_src
 COPY deploy/cache-cli.py deploy/cli-cache-service.py deploy/build-version.py /usr/local/lib/atb2/
 COPY deploy/sessions.py deploy/session_home.py /usr/local/lib/atb2/
+COPY deploy/reconcile-releases.py /usr/local/lib/atb2/
 COPY deploy/traces.py /usr/local/lib/atb2/
 RUN mkdir -p /usr/local/lib/atb2/traced-bin \
     && printf '#!/bin/sh\nexec /usr/bin/python3 -I /usr/local/lib/atb2/traces.py "$@"\n' > /usr/local/lib/atb2/traced-bin/claude \
