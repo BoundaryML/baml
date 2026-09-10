@@ -6350,7 +6350,6 @@ dependencies = [
  "bridge_ctypes",
  "indexmap",
  "prost",
- "sdk_test_codegen",
 ]
 
 [[package]]

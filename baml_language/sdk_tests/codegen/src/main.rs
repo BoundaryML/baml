@@ -12,10 +12,26 @@ use std::{
     process::ExitCode,
 };
 
+use sdk_test_codegen::CodegenCtx;
+
+/// A generator's codegen entry point.
+type RunAll = fn(&CodegenCtx);
+
+/// The generators this binary drives, and their entry points.
+///
+/// A generator joins this table when its `build.rs` is deleted and its
+/// `setup.sh` starts invoking us instead; until then it is still driven by
+/// cargo and naming it here would run its codegen twice.
+const GENERATORS: &[(&str, RunAll)] = &[("csharp", sdk_test_codegen::csharp::run_all)];
+
 const USAGE: &str = "\
 usage: sdk_test_codegen <command>
 
 commands:
+  <generator>...
+      Generate every fixture for each named generator, installing the result
+      into `sdk_tests/crates/<generator>/`. Run from that crate's setup.sh.
+
   emit-bytecode --fixture <name> --out <path>
       Compile `sdk_tests/fixtures/<name>` and write its encoded program to
       <path>, which must be absolute. Feeds the C# and Ruby bridge ABI probes.
@@ -39,8 +55,35 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{USAGE}");
             Ok(())
         }
-        Some(other) => Err(format!("unknown command `{other}`\n\n{USAGE}")),
+        Some(_) => generate(args),
     }
+}
+
+/// Run each named generator in turn. Resolving every name before running any
+/// of them keeps a typo from leaving the tree half-generated.
+fn generate(names: &[String]) -> Result<(), String> {
+    let selected = names
+        .iter()
+        .map(|name| {
+            GENERATORS
+                .iter()
+                .find(|(generator, _)| generator == name)
+                .ok_or_else(|| {
+                    let known: Vec<&str> =
+                        GENERATORS.iter().map(|(generator, _)| *generator).collect();
+                    format!(
+                        "unknown command or generator `{name}` (generators: {})\n\n{USAGE}",
+                        known.join(", ")
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for (generator, run_all) in selected {
+        let ctx = CodegenCtx::new(&sdk_tests_root(), generator);
+        run_all(&ctx);
+    }
+    Ok(())
 }
 
 /// Compile one fixture and write its encoded program to `--out`.
@@ -76,16 +119,16 @@ fn emit_bytecode(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    let loaded = sdk_test_codegen::load_fixture(&fixtures_root(), fixture);
+    let loaded = sdk_test_codegen::load_fixture(&sdk_tests_root().join("fixtures"), fixture);
     fs::write(&out, loaded.baml_bytecode)
         .map_err(|error| format!("failed to write bytecode to {}: {error}", out.display()))
 }
 
-/// `<workspace>/sdk_tests/fixtures`, resolved from the compile-time manifest
-/// directory so the binary behaves the same from any working directory.
-fn fixtures_root() -> PathBuf {
+/// `<workspace>/sdk_tests`, resolved from the compile-time manifest directory
+/// so the binary behaves the same from any working directory.
+fn sdk_tests_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap_or_else(|| unreachable!("the codegen crate is not inside sdk_tests"))
-        .join("fixtures")
+        .to_path_buf()
 }

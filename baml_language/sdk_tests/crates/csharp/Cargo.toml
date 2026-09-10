@@ -11,8 +11,6 @@ bridge_ctypes = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 
-[build-dependencies]
-sdk_test_codegen = { path = "../../codegen" }
 
 [package.metadata.ci]
 wasm_support = false

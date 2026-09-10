@@ -49,6 +49,48 @@ pub mod swift;
 pub mod typescript;
 pub mod typescript_web;
 
+/// Where one generator's codegen reads from and writes to.
+///
+/// The driver builds this once and hands it to a generator, so generators
+/// never read `CARGO_MANIFEST_DIR` themselves: inside a build script that
+/// meant the *generator crate's* directory, and inside the driver it would
+/// mean the driver's own.
+pub struct CodegenCtx {
+    /// `<workspace>/sdk_tests/fixtures` — the generator-agnostic corpus.
+    /// C# is the exception: its fixtures live in-crate under [`Self::crate_dir`].
+    pub fixtures_root: PathBuf,
+    /// `<workspace>/sdk_tests/crates/<generator>`, the root of everything this
+    /// generator installs.
+    pub crate_dir: PathBuf,
+}
+
+impl CodegenCtx {
+    /// Derive both roots from `sdk_tests_root`, checking that they exist.
+    ///
+    /// Every path a generator writes hangs off `crate_dir`, so a root that
+    /// silently resolved wrong would install a whole generated tree in the
+    /// wrong place rather than fail.
+    pub fn new(sdk_tests_root: &Path, generator: &str) -> Self {
+        let fixtures_root = sdk_tests_root.join("fixtures");
+        let crate_dir = sdk_tests_root.join("crates").join(generator);
+        assert!(
+            fixtures_root.is_dir(),
+            "no fixtures corpus at {} — is {} an sdk_tests root?",
+            fixtures_root.display(),
+            sdk_tests_root.display()
+        );
+        assert!(
+            crate_dir.is_dir(),
+            "no `{generator}` generator crate at {}",
+            crate_dir.display()
+        );
+        Self {
+            fixtures_root,
+            crate_dir,
+        }
+    }
+}
+
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.
 #[allow(clippy::print_stdout)]
