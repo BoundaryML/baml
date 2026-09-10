@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(size_of::<ContextKey>(), 32);
         assert_eq!(size_of::<ContextTuple>(), 76);
         assert_eq!(size_of::<RootProfiler>(), 40);
-        assert_eq!(size_of::<crate::prof::backend::ProfilerSession>(), 8);
+        assert_eq!(size_of::<crate::prof::backend::ProfilerSession>(), 24);
     }
 
     #[test]

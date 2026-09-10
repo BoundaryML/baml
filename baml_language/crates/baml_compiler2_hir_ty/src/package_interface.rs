@@ -354,6 +354,9 @@ pub struct ExportedFunction<N: Head = DeclName> {
     pub generic_params: Vec<ParamTy>,
     pub generic_param_bounds: Vec<Vec<baml_type::Interface<N>>>,
     pub builtin_kind: Option<BuiltinKind>,
+    /// Self-inclusive constant defaults for compiler-owned calls; empty for ordinary functions.
+    /// `None` means no materializable constant, including nonconstant defaults.
+    pub builtin_defaults: Vec<Option<crate::callable::BuiltinDefault>>,
     pub target: ExternalCallTarget<N>,
     pub linkability: ExternalLinkability,
 }
@@ -375,6 +378,7 @@ impl<N: Head> ExportedFunction<N> {
             generic_params: self.generic_params.clone(),
             generic_param_bounds: try_map_bounds(&self.generic_param_bounds, f)?,
             builtin_kind: self.builtin_kind,
+            builtin_defaults: self.builtin_defaults.clone(),
             target: self.target.try_map_heads(f)?,
             linkability: self.linkability,
         })
@@ -490,6 +494,7 @@ pub(crate) fn resolved_exported_function(
             target: function.target.clone(),
             linkability: function.linkability,
             builtin_kind: function.builtin_kind,
+            builtin_defaults: function.builtin_defaults.clone(),
             takes_self,
             owner_generic_params,
             owner_generic_param_bounds,
@@ -889,6 +894,22 @@ fn exported_function<'db>(
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };
+    let builtin_defaults = if builtin_kind.is_some() {
+        let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+        defaults
+            .params
+            .iter()
+            .map(|default| {
+                default.as_ref().and_then(|default| {
+                    crate::callable::BuiltinDefault::from_expr(
+                        &defaults.defaults.exprs.exprs[default.expr.expr()],
+                    )
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let own_generic_params =
         sig.generic_params[enclosing_param_count.min(sig.generic_params.len())..].to_vec();
     let all_bounds = crate::lower::function_generic_bounds(db, func_loc);
@@ -900,6 +921,7 @@ fn exported_function<'db>(
         generic_param_bounds: plain_bounds(&own_generic_params, &all_bounds),
         generic_params: own_generic_params,
         builtin_kind,
+        builtin_defaults,
         target: external_target(db, func_loc, &sig.generic_params),
         linkability: if builtin_kind.is_some() {
             ExternalLinkability::ReservedBuiltin

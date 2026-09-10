@@ -31,6 +31,6 @@ pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
-    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmErrorCaptureEvent,
-    VmEventSourceLocation, VmExecState, convert_program,
+    VmCallInputCapture, VmCallInputCaptureHook, VmCallScopeCapture, VmCallScopeCaptureHook,
+    VmCaptureMask, VmErrorCaptureEvent, VmEventSourceLocation, VmExecState, convert_program,
 };

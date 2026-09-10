@@ -64,6 +64,75 @@ fn load_profile(store_root: &std::path::Path, runtime_id: BoundaryId) -> Executi
 }
 
 #[tokio::test]
+async fn history_only_engine_close_releases_session() {
+    let _guard = PROFILER_TEST_LOCK.lock().await;
+    let temp = tempfile::TempDir::new().unwrap();
+    let (session, diagnostic) =
+        ProfilerSession::from_config_with_log_history(profiler_config(temp.path(), false));
+    assert!(diagnostic.is_none(), "{diagnostic:?}");
+    assert!(!session.is_on());
+    assert!(session.is_log_history_enabled());
+    let weak = Arc::downgrade(&session);
+    let engine = Arc::new(
+        BexEngine::new_with_profiler_session(
+            compile_for_engine(r#"function main() -> void { log.info("history"); }"#),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            session,
+        )
+        .unwrap(),
+    );
+    engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    drop(engine);
+    assert!(bex_events::prof::drain_logs(Duration::from_secs(5)));
+    for _ in 0..100 {
+        if weak.upgrade().is_none() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("history-only engine retained its session after close");
+}
+
+#[tokio::test]
+async fn off_session_without_subscriber_stays_unallocated() {
+    let _guard = PROFILER_TEST_LOCK.lock().await;
+    let temp = tempfile::TempDir::new().unwrap();
+    let store_root = temp.path().join("never-created");
+    let (session, diagnostic) = ProfilerSession::from_config(profiler_config(&store_root, false));
+    assert!(diagnostic.is_none());
+    let engine = Arc::new(
+        BexEngine::new_with_profiler_session(
+            compile_for_engine(r#"function main() -> void { log.info("ignored"); }"#),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            session.clone(),
+        )
+        .unwrap(),
+    );
+    engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert!(!session.is_collecting_logs());
+    assert!(session.memory().is_none());
+    assert!(!store_root.exists());
+}
+
+#[tokio::test]
 async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
     let _guard = PROFILER_TEST_LOCK.lock().await;
     let temp = tempfile::TempDir::new().unwrap();
@@ -73,10 +142,6 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
     std::fs::write(&sentinel, b"unchanged").unwrap();
     let before = std::fs::metadata(&sentinel).unwrap();
 
-    // §11: an off session never starts the consumer thread. Other tests in
-    // this binary may already have started it, so pin "unchanged by this
-    // run" rather than "never started in this process".
-    let consumer_started_before = bex_events::prof::consumer_thread_started();
     let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
         disk: DiskBudget {
             max_project_bytes: 1,
@@ -96,7 +161,10 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
             let capture_id = boundary.id().capture(inputs = true, output = true, error = true)
             let captured = helper(1, $id = capture_id)
             let failed = fail() catch (e) { _ => 0 };
-            let future = spawn { helper(captured + failed) };
+            let future = spawn {
+                log.info("spawned off-mode log")
+                helper(captured + failed)
+            };
             let _ = await future;
             boundary.id.current()
         }
@@ -107,7 +175,7 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
             compile_for_engine(source),
             Arc::new(sys_native::SysOps::native()),
             Vec::new(),
-            session,
+            session.clone(),
         )
         .unwrap(),
     );
@@ -128,7 +196,17 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
         result,
         BexExternalValue::String(boundary_id.to_wire_string().into())
     );
-    assert_eq!(logger.drain_encoded_logs().logs.len(), 1);
+    assert!(bex_events::prof::flush_and_join(Duration::from_secs(5)));
+    let report = logger.drain_encoded_logs();
+    assert!(report.failures.is_empty());
+    assert_eq!(report.logs.len(), 2);
+    assert_eq!(report.logs[0].boundary_id, boundary_id);
+    assert_eq!(report.logs[1].boundary_id, boundary_id);
+    assert_ne!(report.logs[0].call.thread_id, report.logs[1].call.thread_id);
+    assert!(!session.is_on());
+    assert!(session.is_collecting_logs());
+    assert!(session.boundary_registry().is_none());
+    assert!(logger.drain_encoded_logs().logs.is_empty());
 
     let after = std::fs::metadata(&sentinel).unwrap();
     assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
@@ -139,11 +217,103 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
         .map(|entry| entry.unwrap().file_name())
         .collect::<Vec<_>>();
     assert_eq!(entries, [std::ffi::OsString::from("sentinel")]);
-    assert_eq!(
-        bex_events::prof::consumer_thread_started(),
-        consumer_started_before,
-        "an off session must not start the profiling consumer thread"
+    assert!(bex_events::prof::consumer_thread_started());
+}
+
+// Ring ownership, persisted call attribution, and CAS identity are not visible
+// to native BAML assertions.
+#[tokio::test]
+async fn logs_flow_through_the_ring_without_a_legacy_logger() {
+    assert_logs_flow_through_the_ring(TraceLogger::disabled()).await;
+}
+
+#[tokio::test]
+async fn profiling_and_subscription_deliver_the_same_logs_exactly_once() {
+    assert_logs_flow_through_the_ring(TraceLogger::bounded(32)).await;
+}
+
+async fn assert_logs_flow_through_the_ring(logger: TraceLogger) {
+    let _guard = PROFILER_TEST_LOCK.lock().await;
+    let temp = tempfile::TempDir::new().unwrap();
+    let store_root = temp.path().join(".baml/profiles-v1");
+    let session = new_session(&store_root);
+    let engine = Arc::new(
+        BexEngine::new_with_profiler_session(
+            compile_for_engine(
+                r#"
+                function child(data: int[]) -> void { log.info(data) }
+                function main() -> void {
+                    let data = [1];
+                    log.info(data);
+                    data[0] = 2;
+                    child(data);
+                    log.info(data);
+                    let pending = spawn { log.info(data); };
+                    let _ = await pending;
+                }
+            "#,
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            session,
+        )
+        .unwrap(),
     );
+    let boundary_id = BoundaryId::from_bytes([0xB7; 16]);
+    engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_boundary_id(boundary_id)
+                .with_logger(logger.clone())
+                .build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert!(bex_events::prof::flush_and_join(Duration::from_secs(5)));
+    let profile = load_profile(&store_root, boundary_id);
+    assert_eq!(profile.logs.len(), 4);
+    let delivered = logger.drain_encoded_logs();
+    assert!(delivered.failures.is_empty());
+    if logger.is_enabled() {
+        assert_eq!(delivered.logs.len(), profile.logs.len());
+        for (delivered, persisted) in delivered.logs.iter().zip(&profile.logs) {
+            assert_eq!(&delivered.event, persisted);
+        }
+    } else {
+        assert!(delivered.logs.is_empty());
+    }
+    assert!(logger.drain_encoded_logs().logs.is_empty());
+    let logs = &profile.logs;
+    assert_eq!(logs[0].call_ref, logs[2].call_ref);
+    assert_ne!(logs[0].call_ref, logs[1].call_ref);
+    assert_eq!(logs[0].level.as_deref(), Some("info"));
+    let cid = |state| match state {
+        ValueState::Available { cid, .. } => cid,
+        other @ ValueState::Lost(_) => panic!("log value unavailable: {other:?}"),
+    };
+    assert_ne!(cid(logs[0].data), cid(logs[1].data));
+    assert_eq!(cid(logs[1].data), cid(logs[2].data));
+    assert_eq!(cid(logs[0].context), cid(logs[2].context));
+    let root_thread = logs[0].call_ref.unwrap().thread_id;
+    let spawned = logs
+        .iter()
+        .find(|log| log.call_ref.unwrap().thread_id != root_thread)
+        .expect("spawned log carries its own logical thread");
+    assert_eq!(cid(spawned.data), cid(logs[2].data));
+    let reader = bex_events::prof::backend::StreamReader::open(&store_root, profile.summary.stream)
+        .unwrap()
+        .execution(profile.summary.id)
+        .unwrap();
+    for log in logs {
+        assert_eq!(reader.read_value(cid(log.data)).unwrap().cid, cid(log.data));
+        assert_eq!(
+            reader.read_value(cid(log.context)).unwrap().cid,
+            cid(log.context)
+        );
+    }
 }
 
 #[tokio::test]

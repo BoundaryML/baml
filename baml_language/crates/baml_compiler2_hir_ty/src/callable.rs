@@ -59,6 +59,23 @@ pub enum ExternalLinkability {
     ReservedBuiltin,
 }
 
+/// Constant defaults that compiler-owned calls can materialize without a callee body.
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum BuiltinDefault {
+    Null,
+    Literal(baml_base::Literal),
+}
+
+impl BuiltinDefault {
+    pub fn from_expr(expr: &baml_compiler2_ast::ast::Expr) -> Option<Self> {
+        match expr {
+            baml_compiler2_ast::ast::Expr::Null => Some(Self::Null),
+            baml_compiler2_ast::ast::Expr::Literal(literal) => Some(Self::Literal(literal.clone())),
+            _ => None,
+        }
+    }
+}
+
 /// Owned call-site facts for a source-less dependency callable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalCallable {
@@ -67,6 +84,7 @@ pub struct ExternalCallable {
     /// Preserved so source-less consumers can lower compiler intrinsics and
     /// await/sys-op call shapes through the same road as source functions.
     pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
+    pub builtin_defaults: Vec<Option<BuiltinDefault>>,
     pub takes_self: bool,
     pub owner_generic_params: Vec<baml_type::ParamTy>,
     pub owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,

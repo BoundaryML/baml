@@ -4,7 +4,7 @@
 //! Arrow types and nullability, key/identity scope, and resident-versus-
 //! virtual status. Physical sources stay provider-private trusted
 //! mappings. `catalog::v1()` is frozen by the goldens below; additive
-//! changes (new nullable column, new view) stay v1, everything else is a
+//! changes (new nullable column, new relation or view) stay v1, everything else is a
 //! `v2` relation.
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -19,7 +19,7 @@ pub const CATALOG_V1: &str = "v1";
 /// hydrated on demand and never resident.
 pub const VALUE_META_KEY: &str = "baml.virtual";
 pub const VALUE_META_VALUE: &str = "value";
-/// Field-metadata key naming the captured role (`input`/`output`/`error`).
+/// Field-metadata key naming the captured role (`input`/`output`/`error`/`context`/`data`).
 pub const VALUE_ROLE_KEY: &str = "baml.role";
 
 /// Who sees a relation, view, or column (§4.1).
@@ -44,6 +44,8 @@ pub enum Grain {
     RetainedCall,
     /// One captured error.
     Error,
+    /// One captured log event, including unnamed events.
+    Log,
     /// One function within one program.
     ProgramFunction,
     /// One health metric within one execution (long format).
@@ -359,6 +361,7 @@ pub fn v1() -> Catalog {
             threads_v1(),
             call_path_stats_v1(),
             calls_v1(),
+            logs_v1(),
             errors_v1(),
             function_definitions_v1(),
             health_v1(),
@@ -845,6 +848,64 @@ fn calls_v1() -> RelationDef {
                 DataType::Utf8,
                 "Why the terminal error link is unavailable (TerminalErrorRef::Lost).",
             ),
+            nullable(
+                "distinct_id",
+                DataType::Utf8,
+                "Effective captured scope identity.",
+            ),
+            value(
+                "context",
+                "context",
+                "Effective captured scope context; missing scope is unavailable.",
+            ),
+        ],
+    }
+}
+
+fn logs_v1() -> RelationDef {
+    RelationDef {
+        name: "logs_v1",
+        alias: "logs",
+        secondary_alias: None,
+        grain: Grain::Log,
+        provisional: false,
+        visibility: Visibility::Public,
+        doc: "One row per captured log event, named or unnamed, independent of retained calls.",
+        columns: vec![
+            key("execution_id", DataType::Utf8, "The root thread's id."),
+            key(
+                "log_id",
+                DataType::UInt64,
+                "Zero-based capture ordinal within the bound execution snapshot.",
+            ),
+            nullable(
+                "timestamp",
+                ts(),
+                "Event wall-clock time; null if outside the timestamp range.",
+            ),
+            col(
+                "timestamp_ms",
+                DataType::UInt64,
+                "Event wall-clock milliseconds since Unix epoch.",
+            ),
+            nullable(
+                "call_id",
+                DataType::Utf8,
+                "Attributed call, whether or not its span was retained.",
+            ),
+            nullable("level", DataType::Utf8, "Captured log level."),
+            nullable(
+                "event_name",
+                DataType::Utf8,
+                "Event name; null for unnamed logs.",
+            ),
+            nullable(
+                "distinct_id",
+                DataType::Utf8,
+                "Effective captured scope identity.",
+            ),
+            value("context", "context", "Effective captured scope context."),
+            value("data", "data", "Captured BAML log payload."),
         ],
     }
 }
@@ -1133,6 +1194,7 @@ mod tests {
                 "threads_v1",
                 "call_path_stats_v1",
                 "calls_v1",
+                "logs_v1",
                 "errors_v1",
                 "function_definitions_v1",
                 "health_v1",
@@ -1154,6 +1216,9 @@ mod tests {
         assert_eq!(calls.key_columns(), vec!["execution_id", "call_id"]);
         let errors = catalog.relation("errors").unwrap();
         assert_eq!(errors.key_columns(), vec!["execution_id", "error_id"]);
+        let logs = catalog.relation("logs").unwrap();
+        assert_eq!(logs.name, "logs_v1");
+        assert_eq!(logs.key_columns(), vec!["execution_id", "log_id"]);
         let functions = catalog.relation("function_definitions").unwrap();
         assert_eq!(functions.key_columns(), vec!["program_id", "function_id"]);
         let health = catalog.relation("health").unwrap();
@@ -1165,7 +1230,12 @@ mod tests {
         let catalog = v1();
         let calls = catalog.relation("calls_v1").unwrap();
         let schema = calls.schema();
-        for (name, role) in [("args", "input"), ("output", "output"), ("error", "error")] {
+        for (name, role) in [
+            ("args", "input"),
+            ("output", "output"),
+            ("error", "error"),
+            ("context", "context"),
+        ] {
             let field = schema.field_with_name(name).unwrap();
             assert_eq!(field.data_type(), &DataType::Binary);
             assert!(field.is_nullable());
@@ -1178,13 +1248,13 @@ mod tests {
                 Some(role),
             );
         }
-        // Exactly the three roles are virtual; everything else is resident.
+        // Captured values and effective scope context are virtual.
         let virtuals = calls
             .columns
             .iter()
             .filter(|c| c.value_role.is_some())
             .count();
-        assert_eq!(virtuals, 3);
+        assert_eq!(virtuals, 4);
         // errors_v1 carries exactly one virtual column.
         let errors = catalog.relation("errors_v1").unwrap();
         let virtuals: Vec<&str> = errors
@@ -1369,6 +1439,23 @@ mod tests {
                 "error:Binary?:virtual",
                 "error_id:Utf8?",
                 "error_lost_reason:Utf8?",
+                "distinct_id:Utf8?",
+                "context:Binary?:virtual",
+            ]
+        );
+        assert_eq!(
+            render("logs_v1"),
+            [
+                "execution_id:Utf8",
+                "log_id:UInt64",
+                "timestamp:Timestamp(Nanosecond, Some(\"UTC\"))?",
+                "timestamp_ms:UInt64",
+                "call_id:Utf8?",
+                "level:Utf8?",
+                "event_name:Utf8?",
+                "distinct_id:Utf8?",
+                "context:Binary?:virtual",
+                "data:Binary?:virtual",
             ]
         );
         assert_eq!(

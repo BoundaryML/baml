@@ -42,7 +42,6 @@ pub(crate) mod wake;
 pub mod backend {
     pub use bex_prof_store::prof::backend::*;
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn register_engine_session(
         engine_id: crate::ids::EngineId,
         session: &std::sync::Arc<ProfilerSession>,
@@ -54,12 +53,15 @@ pub mod backend {
 }
 
 /// Install the leaf crate's transport hooks (idempotent; first install wins).
-#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+#[cfg(not(baml_loom))]
 pub(crate) fn install_transport_hooks_once() {
     use bex_prof_store::prof::backend::hooks::{TransportHooks, install_transport_hooks};
     install_transport_hooks(TransportHooks {
         wake_consumer: || registry::global_ctx().wake().force_wake(),
-        wake_for_backend_terminal: consumer::wake_for_backend_terminal,
+        wake_for_backend_terminal: || {
+            #[cfg(not(target_arch = "wasm32"))]
+            consumer::wake_for_backend_terminal();
+        },
         configure_transport: registry::configure_global_transport,
     });
 }
@@ -69,7 +71,7 @@ mod concurrency_tests;
 
 pub use config::ProfConfig;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{consumer_thread_started, engine_closed, flush_and_join};
+pub use consumer::{consumer_thread_started, drain_logs, engine_closed, flush_and_join};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
@@ -80,9 +82,37 @@ pub use ring::{Ring, RingHandle};
 // background thread to flush.
 #[cfg(target_arch = "wasm32")]
 pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
+    while drain_cooperatively() {}
     true
 }
 
-/// WASM has no native consumer, so engine close has nothing to release.
 #[cfg(target_arch = "wasm32")]
-pub fn engine_closed(_engine_id: u64) {}
+pub fn drain_logs(timeout: std::time::Duration) -> bool {
+    flush_and_join(timeout)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn engine_closed(engine_id: u64) {
+    while drain_cooperatively() {}
+    backend::unregister_engine_session(crate::ids::EngineId(engine_id));
+}
+
+/// One bounded sweep on the host thread. Invoke only outside a VM heap permit.
+#[cfg(all(target_arch = "wasm32", not(baml_loom)))]
+#[allow(unsafe_code)]
+pub fn drain_cooperatively() -> bool {
+    static CONSUMER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Ok(_consumer) = CONSUMER.try_lock() else {
+        return false;
+    };
+    // The guard serializes host drains and rejects recursive sink callbacks.
+    unsafe {
+        registry::global_registry().sweep(&mut |ring, bytes| {
+            backend::consume_engine_bytes(
+                crate::ids::ProcessEuid::current(),
+                crate::ids::EngineId(ring.engine_id()),
+                bytes,
+            );
+        })
+    }
+}

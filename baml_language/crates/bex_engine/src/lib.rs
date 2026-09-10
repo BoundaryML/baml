@@ -93,9 +93,11 @@ use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 #[cfg(target_arch = "wasm32")]
 pub use bex_events::ids::configure_workerd_runtime;
-use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
+use bex_events::prof::backend::{
+    ExecutionEndStatus, ProfilerSession, RootProfiler, ValueLossReason,
+};
 #[cfg(not(target_arch = "wasm32"))]
-use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
+use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueRole};
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
     ids::{
@@ -174,13 +176,14 @@ impl Drop for ParkRequestGuard {
     }
 }
 
-use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::BexThread,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use crate::{trace_heap::TraceHeap, trace_value_encode::encode_trace_snapshot_body_bounded};
+use crate::{
+    logger::TraceLogger, trace_heap::TraceHeap,
+    trace_value_encode::encode_trace_snapshot_body_bounded,
+};
 
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
@@ -595,6 +598,77 @@ impl CallValueCaptureContext {
             #[cfg(not(target_arch = "wasm32"))]
             backend: self.backend.clone(),
         })
+    }
+
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::unused_self))]
+    fn scope_capture_hook(&self) -> Arc<dyn bex_vm::VmCallScopeCaptureHook> {
+        Arc::new(EngineCallScopeCaptureHook {
+            #[cfg(not(target_arch = "wasm32"))]
+            backend: self.backend.clone(),
+        })
+    }
+}
+
+struct EngineCallScopeCaptureHook {
+    #[cfg(not(target_arch = "wasm32"))]
+    backend: BackendValueCaptureContext,
+}
+
+impl bex_vm::VmCallScopeCaptureHook for EngineCallScopeCaptureHook {
+    fn capture_call_scope(&self, capture: bex_vm::VmCallScopeCapture<'_>) {
+        #[cfg(target_arch = "wasm32")]
+        let _ = capture;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let session = &self.backend.session;
+            let Some(ring) = capture.ring else {
+                session.record_capture_transport_loss(self.backend.boundary);
+                return;
+            };
+            let Ok(mut reservation) = session.reserve_value_work(capture.manual) else {
+                session.record_capture_transport_loss(self.backend.boundary);
+                return;
+            };
+            let Ok(distinct_id) = capture
+                .scope
+                .distinct_id
+                .as_deref()
+                .map(|id| TraceHeap::copy_string_bounded(id, &mut reservation))
+                .transpose()
+            else {
+                session.record_capture_transport_loss(self.backend.boundary);
+                return;
+            };
+            let context = session
+                .single_value_bytes()
+                .ok_or(ValueLossReason::StoreUnavailable)
+                .and_then(|limit| {
+                    TraceHeap::copy_scope_context_bounded(capture.scope, &mut reservation).and_then(
+                        |snapshot| {
+                            encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, limit)
+                        },
+                    )
+                });
+            session.publish_call_scope(
+                self.backend.boundary,
+                bex_events::prof::backend::EncodedCallScope {
+                    call_ref: capture.call.call_ref(),
+                    distinct_id,
+                    context,
+                },
+                reservation,
+                |payload_id| {
+                    let record = bex_events::prof::record::RawRecord::CallScope { payload_id };
+                    // This synchronous hook retains the cached ring's producer affinity.
+                    #[expect(unsafe_code, reason = "synchronous VM scope capture hook")]
+                    unsafe {
+                        ring.push_with(record.encoded_len(), |bytes| {
+                            record.encode_to(bytes);
+                        })
+                    }
+                },
+            );
+        }
     }
 }
 
@@ -1125,7 +1199,7 @@ pub struct BexEngine {
     /// winning conditional commit calls [`BexEngine::activate_profiling`];
     /// a superseded candidate therefore drops without registering or
     /// emitting an `engine_closed` notification.
-    prof_activated: AtomicBool,
+    prof_activated: std::sync::OnceLock<()>,
 }
 
 impl Drop for BexEngine {
@@ -1158,7 +1232,7 @@ impl Drop for BexEngine {
                 "dropping engine without a complete unhandled-spawn-error drain"
             );
         }
-        if self.profiler_session.is_on() && self.prof_activated.load(Ordering::Acquire) {
+        if self.prof_activated.get().is_some() {
             bex_events::prof::engine_closed(self.engine_id.0);
         }
     }
@@ -1270,17 +1344,13 @@ fn epoch_ms() -> u64 {
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
-fn truncate_preview(mut value: String, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value;
+fn truncate_preview(value: &str, max_chars: usize) -> String {
+    let mut chars = value.chars();
+    let mut preview = chars.by_ref().take(max_chars).collect::<String>();
+    if chars.next().is_some() {
+        preview.push_str("...");
     }
-    let cut = value
-        .char_indices()
-        .nth(max_chars)
-        .map_or(value.len(), |(idx, _)| idx);
-    value.truncate(cut);
-    value.push_str("...");
-    value
+    preview
 }
 
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
@@ -2368,33 +2438,31 @@ impl BexEngine {
             error_class_ptrs,
             panic_class_ptrs,
             profiler_session,
-            prof_activated: AtomicBool::new(false),
+            prof_activated: std::sync::OnceLock::new(),
         })
     }
 
-    /// Activate this engine's profiling lifecycle by registering the engine
-    /// with the direct consumer. Idempotent; a no-op when the `BAML_PROFILE`
-    /// master switch is off.
+    /// Register an active profiling or memory-only log session with the consumer.
+    /// Must run outside a VM heap permit.
     pub fn activate_profiling(&self) {
         self.shutdown_required.store(true, Ordering::Release);
-        if !self.profiler_session.is_on() {
+        if !self.profiler_session.is_on() && !self.profiler_session.is_collecting_logs() {
             return;
         }
-        if self
-            .prof_activated
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-        {
+        self.prof_activated.get_or_init(|| {
             bex_events::prof::backend::register_engine_session(
                 self.engine_id,
                 &self.profiler_session,
             );
+            // Activation runs before acquiring a VM heap permit. Initialize the
+            // transport and consumer here, never from a payload publication.
+            let _ = bex_events::prof::ring_for_engine(self.engine_id.0);
             // Streams spec §7.2: the one deliberate synchronous publication —
             // the engine's durable function/file tables — then the
             // `EngineStarted` index record, both before any root of this
             // engine can be admitted.
             #[cfg(not(target_arch = "wasm32"))]
-            {
+            if self.profiler_session.is_log_history_enabled() {
                 let function_table_cid = encode_engine_function_table(&self.program_metadata)
                     .ok()
                     .and_then(|bytes| self.profiler_session.publish_function_table(&bytes));
@@ -2412,7 +2480,7 @@ impl BexEngine {
                         .map(|source| hex_bytes(&source.0)),
                 );
             }
-        }
+        });
     }
 
     #[must_use]
@@ -2485,9 +2553,14 @@ impl BexEngine {
     /// pushed (`prof_ring_for_push`), so the counter reflects records lost,
     /// not resumes taken.
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
-        vm.prof_ring = if self.profiler_session.is_on() && !vm.prof_suppressed {
+        vm.log_ring = if self.profiler_session.is_collecting_logs() {
             bex_events::prof::ring_for_engine(self.engine_id.0)
                 .map(bex_events::prof::RingHandle::ring)
+        } else {
+            None
+        };
+        vm.prof_ring = if self.profiler_session.is_on() && !vm.prof_suppressed {
+            vm.log_ring
         } else {
             None
         };
@@ -3556,6 +3629,9 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        if logger.is_enabled() && self.profiler_session.enable_log_collection() {
+            self.activate_profiling();
+        }
         // Register this host call so `cancel_function_call(host_call_id)` can
         // target it. The RAII guard removes the entry on drop (including
         // panic unwind). Insertion and guard construction are atomic, so a
@@ -4089,6 +4165,26 @@ impl BexEngine {
         if thread.vm.root_profiler.is_active() {
             thread.vm.prof_enable_await_accumulator();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let backend_value_capture = thread
+            .vm
+            .prof_boundary_handle
+            .filter(|_| thread.vm.root_profiler.is_active())
+            .map(|boundary| BackendValueCaptureContext {
+                session: Arc::clone(&self.profiler_session),
+                boundary,
+            });
+        #[cfg(not(target_arch = "wasm32"))]
+        let call_capture = backend_value_capture
+            .clone()
+            .map(|backend| CallValueCaptureContext { backend });
+        #[cfg(target_arch = "wasm32")]
+        let call_capture: Option<CallValueCaptureContext> = None;
+        thread.vm.set_call_scope_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::scope_capture_hook),
+        );
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
         self.prof_refresh_vm_ring(&mut thread.vm);
@@ -4126,15 +4222,6 @@ impl BexEngine {
             call_id: BexCallId(thread.vm.current_call_id()),
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let backend_value_capture =
-            thread
-                .vm
-                .prof_boundary_handle
-                .map(|boundary| BackendValueCaptureContext {
-                    session: Arc::clone(&self.profiler_session),
-                    boundary,
-                });
-        #[cfg(not(target_arch = "wasm32"))]
         let root_capture = backend_value_capture
             .clone()
             .map(|backend| RootValueCaptureContext {
@@ -4147,10 +4234,6 @@ impl BexEngine {
             boundary_id: boundary.boundary_id,
             logger: logger.clone(),
         });
-        #[cfg(not(target_arch = "wasm32"))]
-        let call_capture = backend_value_capture.map(|backend| CallValueCaptureContext { backend });
-        #[cfg(target_arch = "wasm32")]
-        let call_capture: Option<CallValueCaptureContext> = None;
         thread.vm.set_call_input_capture_hook(
             call_capture
                 .as_ref()
@@ -4312,6 +4395,9 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        if logger.is_enabled() && self.profiler_session.enable_log_collection() {
+            self.activate_profiling();
+        }
         let (_call_guard, cancel) =
             ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
         if cancel.is_cancelled() {
@@ -5297,92 +5383,164 @@ impl BexEngine {
         data: Value,
         source_location: Option<VmEventSourceLocation>,
     ) {
-        let Some(capture) = capture else {
+        use bex_events::prof::backend::{EncodedLog, LogDelivery, LogEvent, ValueState};
+
+        let session = &self.profiler_session;
+        if capture.is_none()
+            && thread.vm.prof_boundary_handle.is_none()
+            && !session.is_log_history_enabled()
+        {
             return;
-        };
+        }
         let call = bex_events::run::TraceCallKey {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
         };
-        capture
-            .logger
-            .capture_with(capture.boundary_id, call, |trace_heap| {
-                let (level, body) = Self::extract_baml_log_payload(data);
-                let metadata = TraceLogMetadata {
-                    level,
-                    source: Self::source_location_from_event(source_location),
-                    timestamp_ms: epoch_ms(),
-                    message_preview: Self::log_message_preview(body),
-                };
-                let snapshot =
-                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), body);
-                (metadata, snapshot)
+        let delivery =
+            capture.and_then(|capture| capture.logger.try_reserve(capture.boundary_id, call));
+        if delivery.is_none()
+            && thread.vm.prof_boundary_handle.is_none()
+            && !session.is_log_history_enabled()
+        {
+            return;
+        }
+        let Ok(mut reservation) = session.reserve_log_work() else {
+            if let Some(handle) = thread.vm.prof_boundary_handle {
+                session.record_capture_transport_loss(handle);
+            }
+            return;
+        };
+        let Some(limit) = session.single_log_bytes() else {
+            return;
+        };
+        let timestamp_ms = epoch_ms();
+        let Ok((level, body, event_name)) = Self::extract_baml_log_payload(data, &mut reservation)
+        else {
+            if let Some(handle) = thread.vm.prof_boundary_handle {
+                session.record_capture_transport_loss(handle);
+            }
+            return;
+        };
+        let scope = thread.vm.scope_context();
+        let Ok(distinct_id) = scope
+            .distinct_id
+            .as_deref()
+            .map(|id| TraceHeap::copy_string_bounded(id, &mut reservation))
+            .transpose()
+        else {
+            if let Some(handle) = thread.vm.prof_boundary_handle {
+                session.record_capture_transport_loss(handle);
+            }
+            return;
+        };
+        let message_preview = Self::log_message_preview(body, &mut reservation);
+        let encoded_context = TraceHeap::copy_scope_context_bounded(scope, &mut reservation)
+            .and_then(|snapshot| {
+                encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, limit)
             });
+        let encoded_data =
+            TraceHeap::copy_value_bounded(&self.heap, thread.proof(), body, &mut reservation)
+                .and_then(|snapshot| {
+                    encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, limit)
+                });
+        let mut event = LogEvent {
+            call_ref: Some(bex_events::ids::CallRef {
+                process_euid: self.process_euid,
+                engine_id: self.engine_id,
+                thread_id: BexThreadId(thread.vm.prof_thread_id),
+                call_id: BexCallId(thread.vm.current_call_id()),
+            }),
+            timestamp_ms,
+            level,
+            message_preview,
+            source_column: source_location.as_ref().map(|source| source.column),
+            source: source_location.map(|source| bex_events::prof::record::CallSiteSourceSpan {
+                file_id: source.file_id,
+                line: source.line,
+                start_offset: source.start_offset,
+                end_offset: source.end_offset,
+            }),
+            event_name,
+            distinct_id,
+            context: ValueState::Lost(ValueLossReason::StoreUnavailable),
+            data: ValueState::Lost(ValueLossReason::StoreUnavailable),
+        };
+        let data = encoded_data
+            .map_err(|reason| event.data = ValueState::Lost(reason))
+            .ok();
+        let context = encoded_context
+            .map_err(|reason| event.context = ValueState::Lost(reason))
+            .ok();
+        thread.vm.prof_publish_log(
+            session,
+            EncodedLog {
+                event,
+                data,
+                context,
+            },
+            reservation,
+            delivery.map(|delivery| Box::new(delivery) as Box<dyn LogDelivery>),
+        );
     }
 
-    fn extract_baml_log_payload(data: Value) -> (Option<String>, Value) {
+    fn extract_baml_log_payload(
+        data: Value,
+        reservation: &mut bex_events::prof::backend::Reservation,
+    ) -> Result<(Option<String>, Value, Option<String>), ValueLossReason> {
         let Some(ptr) = data.as_object_ptr() else {
-            return (None, data);
+            return Ok((None, data, None));
         };
         let Object::Map(map) = (unsafe { ptr.get() }) else {
-            return (None, data);
+            return Ok((None, data, None));
         };
         let mut level = None;
         let mut body = None;
+        let mut event_name = None;
         for (key, value) in map.to_index_map() {
             match key.to_string().as_str() {
-                "level" => {
+                field @ ("level" | "event_name") => {
                     if let Some(ptr) = value.as_object_ptr()
                         && let Object::String(level_value) = unsafe { ptr.get() }
                     {
-                        level = Some(level_value.to_string());
+                        let value =
+                            TraceHeap::copy_string_bounded(level_value.as_str(), reservation)?;
+                        if field == "level" {
+                            level = Some(value);
+                        } else {
+                            event_name = Some(value);
+                        }
                     }
                 }
                 "data" => body = Some(value),
                 _ => {}
             }
         }
-        (level, body.unwrap_or(data))
+        Ok((level, body.unwrap_or(data), event_name))
     }
 
-    fn source_location_from_event(
-        source_location: Option<VmEventSourceLocation>,
-    ) -> Option<bex_events::run::SourceLocation> {
-        let VmEventSourceLocation {
-            file_id,
-            line,
-            column,
-            start_offset,
-            end_offset,
-        } = source_location?;
-        Some(bex_events::run::SourceLocation {
-            file_path: None,
-            file_id: Some(u64::from(file_id)),
-            line,
-            column,
-            end_line: None,
-            end_column: None,
-            start_offset: Some(start_offset),
-            end_offset: Some(end_offset),
-        })
-    }
-
-    fn log_message_preview(value: Value) -> Option<String> {
+    fn log_message_preview(
+        value: Value,
+        reservation: &mut bex_events::prof::backend::Reservation,
+    ) -> Option<String> {
+        reservation.try_grow(160 * 4 + 3).ok()?;
         let preview = match value.kind() {
             ValueKind::Null => "null".to_string(),
             ValueKind::Bool(value) => value.to_string(),
             ValueKind::Int(value) => value.to_string(),
             ValueKind::OmittedArg => "<omitted argument>".to_string(),
             ValueKind::Object(ptr) => match unsafe { ptr.get() } {
-                Object::String(value) => value.to_string(),
-                Object::Bigint(value) => value.to_string(),
+                Object::String(value) => return Some(truncate_preview(value, 160)),
+                Object::Bigint(value) => {
+                    reservation.try_grow(value.bits().saturating_add(2)).ok()?;
+                    value.to_string()
+                }
                 Object::Float(value) => value.to_string(),
                 _ => return None,
             },
         };
-        Some(truncate_preview(preview, 160))
+        Some(truncate_preview(&preview, 160))
     }
 
     /// Route an unhandled VM throw value through the embedder's terminal
@@ -5674,6 +5832,7 @@ impl BexEngine {
         boundary_lease: Option<ThreadBoundaryLeaseGuard>,
         call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
+        scope_context: Arc<bex_events::prof::backend::ScopeContext>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -5691,6 +5850,7 @@ impl BexEngine {
             boundary_lease,
             call_capture,
             log_capture,
+            scope_context,
         ))
     }
 
@@ -5719,6 +5879,7 @@ impl BexEngine {
         boundary_lease: Option<ThreadBoundaryLeaseGuard>,
         call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
+        scope_context: Arc<bex_events::prof::backend::ScopeContext>,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
@@ -5777,10 +5938,16 @@ impl BexEngine {
             child_vm.prof_enable_await_accumulator();
         }
         child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        child_vm.set_inherited_scope_context(scope_context);
         child_vm.set_call_input_capture_hook(
             call_capture
                 .as_ref()
                 .map(CallValueCaptureContext::input_capture_hook),
+        );
+        child_vm.set_call_scope_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::scope_capture_hook),
         );
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
@@ -6532,6 +6699,7 @@ impl BexEngine {
                     future: unscheduled,
                     source_span: spawn_source_span,
                 } => {
+                    let scope_context = Arc::clone(thread.vm.scope_context());
                     // BEP-034: pull the closure + name off the
                     // `UnscheduledFuture` heap object and hand them to
                     // `spawn_thread`, which allocates the future and
@@ -6668,6 +6836,7 @@ impl BexEngine {
                                 child_boundary_lease,
                                 call_capture.clone(),
                                 log_capture.clone(),
+                                scope_context,
                             )
                             .await?;
                         future_ptr

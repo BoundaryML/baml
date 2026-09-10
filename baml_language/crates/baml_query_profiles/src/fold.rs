@@ -123,6 +123,7 @@ fn approx_bytes(profile: &ExecutionProfile) -> u64 {
         + profile.spans.len()
         + profile.threads.len()
         + profile.errors.len()
+        + profile.logs.len()
         + profile.overflow.len();
     (entries as u64).saturating_mul(APPROX_ENTRY_BYTES).max(1)
 }

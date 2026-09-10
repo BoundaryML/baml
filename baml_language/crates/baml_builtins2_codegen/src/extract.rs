@@ -382,6 +382,7 @@ fn extract_from_class(
                 .iter()
                 .map(|p| Param {
                     name: p.name.as_str().to_string(),
+                    default_empty_map: has_empty_map_default(method, p),
                     ty: p
                         .type_expr
                         .as_ref()
@@ -524,6 +525,7 @@ fn extract_from_free_function(
         .iter()
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            default_empty_map: has_empty_map_default(func_def, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -680,6 +682,7 @@ fn extract_from_implements_for(
             .skip(1) // skip `self`
             .map(|p| Param {
                 name: p.name.as_str().to_string(),
+                default_empty_map: has_empty_map_default(method, p),
                 ty: p
                     .type_expr
                     .as_ref()
@@ -864,6 +867,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
         .skip(1) // skip `self`
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            default_empty_map: has_empty_map_default(func, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -871,6 +875,15 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
                 .unwrap_or(BamlType::Named("unknown".to_string())),
         })
         .collect()
+}
+
+fn has_empty_map_default(func: &FunctionDef, param: &baml_compiler2_ast::ast::Param) -> bool {
+    param.default.is_some_and(|id| {
+        matches!(
+            func.defaults.expr(id),
+            baml_compiler2_ast::ast::Expr::Map { entries } if entries.is_empty()
+        )
+    })
 }
 
 /// Convert a `TypeExpr` from the AST to a `BamlType`.

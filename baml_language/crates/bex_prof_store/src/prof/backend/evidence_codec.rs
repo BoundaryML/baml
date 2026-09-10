@@ -1,7 +1,7 @@
 //! Version-1 exact-evidence segment payload codec.
 
 use super::{
-    CodecVersion, ContextRef, EdgeKind, ErrorCapture, ErrorCodecError, RoleMask,
+    CodecVersion, ContextRef, EdgeKind, ErrorCapture, ErrorCodecError, LogEvent, RoleMask,
     RuntimeIdAnnotation, SelectionReasons, SpanEnd, SpanRuntimeId, SpanStart, TerminalErrorRef,
     ThreadEnd, ThreadStart, ThreadStartKind, ValueCid, ValueLossReason, ValueOccurrence, ValueRole,
     ValueState, decode_error_capture, decode_terminal_error_ref, encode_error_capture,
@@ -27,10 +27,37 @@ pub enum EvidenceFact {
     TerminalErrorRef(TerminalErrorRef),
     ThreadStart(ThreadStart),
     ThreadEnd(ThreadEnd),
+    LogEvent(LogEvent),
+    CallScope(super::CallScope),
+}
+
+impl EvidenceFact {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn heap_bytes(&self) -> u64 {
+        match self {
+            Self::LogEvent(log) => [
+                &log.level,
+                &log.event_name,
+                &log.distinct_id,
+                &log.message_preview,
+            ]
+            .into_iter()
+            .flatten()
+            .fold(0u64, |bytes, text| {
+                bytes.saturating_add(text.capacity() as u64)
+            }),
+            Self::ThreadStart(start) => start.name.capacity() as u64,
+            Self::CallScope(scope) => scope
+                .distinct_id
+                .as_ref()
+                .map_or(0, |id| id.capacity() as u64),
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct EncodedEvidenceBatch {
+pub struct EncodedEvidenceBatch {
     pub record_count: u64,
     pub payload: Vec<u8>,
 }
@@ -45,10 +72,11 @@ pub enum EvidenceCodecError {
     CountOverflow,
     RecordCountMismatch,
     TrailingBytes,
+    InvalidUtf8,
 }
 
 #[must_use]
-pub(crate) fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBatch {
+pub fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBatch {
     let mut payload = Vec::with_capacity(facts.len().saturating_mul(160).saturating_add(8));
     payload.extend_from_slice(&u64::try_from(facts.len()).unwrap_or(u64::MAX).to_be_bytes());
     for fact in facts {
@@ -63,7 +91,7 @@ pub(crate) fn encode_evidence_facts(facts: &[EvidenceFact]) -> EncodedEvidenceBa
     }
 }
 
-pub(crate) fn decode_evidence_payload(
+pub fn decode_evidence_payload(
     payload: &[u8],
     record_count: u64,
 ) -> Result<Vec<EvidenceFact>, EvidenceCodecError> {
@@ -99,6 +127,14 @@ fn encode_fact(fact: &EvidenceFact) -> (u8, Vec<u8>) {
         EvidenceFact::TerminalErrorRef(terminal) => (5, encode_terminal_error_ref(terminal)),
         EvidenceFact::ThreadStart(start) => (6, encode_thread_start(start)),
         EvidenceFact::ThreadEnd(end) => (7, encode_thread_end(*end)),
+        EvidenceFact::LogEvent(log) => (8, encode_log_event(log)),
+        EvidenceFact::CallScope(scope) => {
+            let mut body = Vec::new();
+            encode_call_ref(&mut body, scope.call_ref);
+            encode_optional_string(&mut body, scope.distinct_id.as_deref());
+            encode_value_state(&mut body, scope.context);
+            (9, body)
+        }
     }
 }
 
@@ -116,6 +152,84 @@ fn decode_fact(tag: u8, body: &[u8]) -> Result<EvidenceFact, EvidenceCodecError>
             .map_err(map_error_codec),
         6 => decode_thread_start(body).map(EvidenceFact::ThreadStart),
         7 => decode_thread_end(body).map(EvidenceFact::ThreadEnd),
+        8 => decode_log_event(body).map(EvidenceFact::LogEvent),
+        9 => {
+            let mut cursor = Cursor::new(body);
+            let scope = super::CallScope {
+                call_ref: decode_call_ref(&mut cursor)?,
+                distinct_id: decode_optional_string(&mut cursor)?,
+                context: decode_value_state(&mut cursor)?,
+            };
+            cursor.finish()?;
+            Ok(EvidenceFact::CallScope(scope))
+        }
+        _ => Err(EvidenceCodecError::InvalidTag),
+    }
+}
+
+fn encode_log_event(log: &LogEvent) -> Vec<u8> {
+    let mut body = Vec::new();
+    encode_optional_call_ref(&mut body, log.call_ref);
+    body.extend_from_slice(&log.timestamp_ms.to_be_bytes());
+    encode_optional_string(&mut body, log.level.as_deref());
+    encode_call_site(&mut body, log.source);
+    match log.source_column {
+        None => body.push(0),
+        Some(column) => {
+            body.push(1);
+            body.extend_from_slice(&column.to_be_bytes());
+        }
+    }
+    encode_optional_string(&mut body, log.message_preview.as_deref());
+    encode_optional_string(&mut body, log.event_name.as_deref());
+    encode_optional_string(&mut body, log.distinct_id.as_deref());
+    encode_value_state(&mut body, log.context);
+    encode_value_state(&mut body, log.data);
+    body
+}
+
+fn decode_log_event(bytes: &[u8]) -> Result<LogEvent, EvidenceCodecError> {
+    let mut cursor = Cursor::new(bytes);
+    let log = LogEvent {
+        call_ref: decode_optional_call_ref(&mut cursor)?,
+        timestamp_ms: cursor.u64()?,
+        level: decode_optional_string(&mut cursor)?,
+        source: decode_call_site(&mut cursor)?,
+        source_column: match cursor.u8()? {
+            0 => None,
+            1 => Some(cursor.u32()?),
+            _ => return Err(EvidenceCodecError::InvalidTag),
+        },
+        message_preview: decode_optional_string(&mut cursor)?,
+        event_name: decode_optional_string(&mut cursor)?,
+        distinct_id: decode_optional_string(&mut cursor)?,
+        context: decode_value_state(&mut cursor)?,
+        data: decode_value_state(&mut cursor)?,
+    };
+    cursor.finish()?;
+    Ok(log)
+}
+
+fn encode_optional_string(output: &mut Vec<u8>, value: Option<&str>) {
+    match value {
+        None => output.push(0),
+        Some(value) => {
+            output.push(1);
+            output.extend_from_slice(&(value.len() as u64).to_be_bytes());
+            output.extend_from_slice(value.as_bytes());
+        }
+    }
+}
+
+fn decode_optional_string(cursor: &mut Cursor<'_>) -> Result<Option<String>, EvidenceCodecError> {
+    match cursor.u8()? {
+        0 => Ok(None),
+        1 => {
+            let length = cursor.usize_count()?;
+            let value = std::str::from_utf8(cursor.take(length)?)
+                .map_err(|_| EvidenceCodecError::InvalidUtf8)?;
+            Ok(Some(value.to_owned()))
+        }
         _ => Err(EvidenceCodecError::InvalidTag),
     }
 }
@@ -776,5 +890,138 @@ mod tests {
             "9464a212e3c41a28b0e7ba4e16330855b373fbcb9c367fd0b479eba0daaa2559"
         );
         assert_eq!(encoded.record_count, 9);
+    }
+
+    #[test]
+    fn call_scope_roundtrip_truncation_and_golden() {
+        for distinct_id in [None, Some(String::new()), Some("user-1".to_owned())] {
+            for context in [
+                ValueState::Lost(ValueLossReason::EncodeFailed),
+                ValueState::Available {
+                    cid: ValueCid([3; 32]),
+                    codec: CodecVersion(1),
+                    encoded_bytes: 2,
+                },
+            ] {
+                let fact = EvidenceFact::CallScope(super::super::CallScope {
+                    call_ref: call(1),
+                    distinct_id: distinct_id.clone(),
+                    context,
+                });
+                let encoded = encode_evidence_facts(std::slice::from_ref(&fact));
+                assert_eq!(encoded.payload[8], 9);
+                assert_eq!(decode_evidence_payload(&encoded.payload, 1), Ok(vec![fact]));
+                for cut in 0..encoded.payload.len() {
+                    assert_eq!(
+                        decode_evidence_payload(&encoded.payload[..cut], 1),
+                        Err(EvidenceCodecError::Truncated),
+                    );
+                }
+            }
+        }
+        let (_, body) = encode_fact(&EvidenceFact::CallScope(super::super::CallScope {
+            call_ref: call(1),
+            distinct_id: None,
+            context: ValueState::Lost(ValueLossReason::EncodeFailed),
+        }));
+        assert_eq!(
+            hex::encode(body),
+            "01010101010101010101010101010101000000000000000200000000000000030000000000000004000105"
+        );
+    }
+
+    fn log_fixture() -> LogEvent {
+        LogEvent {
+            call_ref: Some(call(1)),
+            timestamp_ms: 1234,
+            level: Some("info".to_owned()),
+            source: Some(CallSiteSourceSpan {
+                file_id: 2,
+                start_offset: 3,
+                end_offset: 4,
+                line: 5,
+            }),
+            event_name: Some("signup".to_owned()),
+            source_column: Some(6),
+            message_preview: Some("Signed up".to_owned()),
+            distinct_id: Some("user-7".to_owned()),
+            context: ValueState::Available {
+                cid: ValueCid([6; 32]),
+                codec: CodecVersion(1),
+                encoded_bytes: 7,
+            },
+            data: ValueState::Available {
+                cid: ValueCid([8; 32]),
+                codec: CodecVersion(1),
+                encoded_bytes: 9,
+            },
+        }
+    }
+
+    #[test]
+    fn logs_round_trip_alongside_call_evidence() {
+        let mut facts = fixture();
+        facts.push(EvidenceFact::LogEvent(log_fixture()));
+        facts.push(EvidenceFact::LogEvent(LogEvent {
+            call_ref: None,
+            level: None,
+            source: None,
+            event_name: None,
+            source_column: None,
+            message_preview: None,
+            distinct_id: None,
+            context: ValueState::Lost(ValueLossReason::CasWriteFailed),
+            data: ValueState::Lost(ValueLossReason::ValueTooLarge),
+            ..log_fixture()
+        }));
+        facts.push(EvidenceFact::LogEvent(LogEvent {
+            event_name: Some(String::new()),
+            distinct_id: Some("\u{e9}".to_owned()),
+            ..log_fixture()
+        }));
+        let encoded = encode_evidence_facts(&facts);
+        assert_eq!(
+            decode_evidence_payload(&encoded.payload, encoded.record_count),
+            Ok(facts)
+        );
+    }
+
+    #[test]
+    fn log_codec_rejects_truncation_and_trailing_bytes() {
+        let body = encode_log_event(&log_fixture());
+        for cut in 0..body.len() {
+            assert_eq!(
+                decode_log_event(&body[..cut]),
+                Err(EvidenceCodecError::Truncated),
+                "cut at {cut}"
+            );
+        }
+        let mut trailing = body;
+        trailing.push(0);
+        assert_eq!(
+            decode_log_event(&trailing),
+            Err(EvidenceCodecError::TrailingBytes)
+        );
+    }
+
+    #[test]
+    fn log_strings_reject_invalid_tags_lengths_and_utf8() {
+        assert_eq!(
+            decode_optional_string(&mut Cursor::new(&[2])),
+            Err(EvidenceCodecError::InvalidTag)
+        );
+        let mut invalid = vec![1];
+        invalid.extend_from_slice(&1u64.to_be_bytes());
+        invalid.push(0xff);
+        assert_eq!(
+            decode_optional_string(&mut Cursor::new(&invalid)),
+            Err(EvidenceCodecError::InvalidUtf8)
+        );
+        let mut oversized = vec![1];
+        oversized.extend_from_slice(&u64::MAX.to_be_bytes());
+        assert!(matches!(
+            decode_optional_string(&mut Cursor::new(&oversized)),
+            Err(EvidenceCodecError::Truncated | EvidenceCodecError::CountOverflow)
+        ));
     }
 }

@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function scope_context.$init_test_ns_scope_context_scope_context(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.scope_context"
+    load_const "scope context accepts primitive metadata and chained capture"
+    make_closure .<lambda($init_test_ns_scope_context_scope_context, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scope_context"
+    load_const "scope context keeps local ids single use"
+    make_closure .<lambda($init_test_ns_scope_context_scope_context, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scope_context"
+    load_const "scope context cannot edit a consumed id"
+    make_closure .<lambda($init_test_ns_scope_context_scope_context, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.scope_context"
+    load_const "scope context works on dynamic and immediate calls"
+    make_closure .<lambda($init_test_ns_scope_context_scope_context, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function scope_context.leaf() -> int {
+    load_const 7
+    return
+}

@@ -69,6 +69,14 @@ pub enum ValueState {
     Lost(ValueLossReason),
 }
 
+/// Effective call-entry attribution, independent of retained ancestors.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallScope {
+    pub call_ref: CallRef,
+    pub distinct_id: Option<String>,
+    pub context: ValueState,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ErrorCaptureId {
     pub thread_ref: ThreadRef,
@@ -201,6 +209,22 @@ pub struct ValueOccurrence {
     pub context_ref: ContextRef,
     pub role: ValueRole,
     pub state: ValueState,
+}
+
+/// A captured log with self-contained scope attribution. Value bodies use the
+/// same CAS and loss representation as captured call inputs and outputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogEvent {
+    pub call_ref: Option<CallRef>,
+    pub timestamp_ms: u64,
+    pub level: Option<String>,
+    pub source: Option<crate::prof::record::CallSiteSourceSpan>,
+    pub source_column: Option<u32>,
+    pub message_preview: Option<String>,
+    pub event_name: Option<String>,
+    pub distinct_id: Option<String>,
+    pub context: ValueState,
+    pub data: ValueState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

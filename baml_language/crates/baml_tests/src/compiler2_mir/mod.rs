@@ -17,6 +17,79 @@ use crate::engine::TestDbExt;
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
 
+#[test]
+fn precompiled_log_defaults_match_source_defaults() {
+    fn mounted_log_db(interfaces: &std::collections::BTreeMap<String, Vec<u8>>) -> ProjectDatabase {
+        let mut db = ProjectDatabase::new();
+        db.ensure_precompiled_stdlib(interfaces);
+        db.add_source_root(baml_db::SourceRootSpec::new(
+            ".",
+            baml_base::SourceRootKind::Workspace,
+        ))
+        .unwrap();
+        db
+    }
+
+    let source_db = make_db();
+    let mut interfaces = source_db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&source_db) == baml_base::SourceRootKind::Stdlib)
+        .map(|root| {
+            (
+                root.self_name(&source_db).as_ref().unwrap().to_string(),
+                borsh::to_vec(&export_interface(&source_db, root)).unwrap(),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut interface = export_interface(
+        &source_db,
+        baml_compiler2_hir::package::spelling(&source_db)
+            .root(&Name::new("log"))
+            .unwrap(),
+    );
+    let source = r#"
+function probe() -> void {
+    log.info(11)
+    log.debug(22, event_name = null)
+    log.warn(event_name = "checkout", data = 33)
+    log.error(data = 44, event_name = "$baml_log")
+}
+"#;
+    let mut source_db = source_db;
+    let source_file = source_db.file("test.baml", source);
+    assert_no_diagnostic_errors(&source_db);
+    let expected = render_mir(&source_db, source_file);
+    assert!(!expected.contains("omitted"), "{expected}");
+
+    let mut mounted_db = mounted_log_db(&interfaces);
+    let mounted_file = mounted_db.file("test.baml", source);
+    assert_no_diagnostic_errors(&mounted_db);
+    assert_eq!(render_mir(&mounted_db, mounted_file), expected);
+
+    interface
+        .functions
+        .get_mut(&Vec::<Name>::new())
+        .expect("log root")
+        .get_mut(&Name::new("info"))
+        .expect("log.info")
+        .builtin_defaults[1] = Some(baml_compiler2_hir_ty::callable::BuiltinDefault::Literal(
+        baml_base::Literal::String("from-export".to_owned()),
+    ));
+    interfaces.insert("log".to_owned(), borsh::to_vec(&interface).unwrap());
+    let mut mounted_db = mounted_log_db(&interfaces);
+    let mounted_file = mounted_db.file("test.baml", source);
+    let explicit_source =
+        source.replace("log.info(11)", "log.info(11, event_name = \"from-export\")");
+    let mut explicit_db = make_db();
+    let explicit_file = explicit_db.file("test.baml", &explicit_source);
+    assert_no_diagnostic_errors(&explicit_db);
+    assert_eq!(
+        render_mir(&mounted_db, mounted_file),
+        render_mir(&explicit_db, explicit_file)
+    );
+}
+
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("."));

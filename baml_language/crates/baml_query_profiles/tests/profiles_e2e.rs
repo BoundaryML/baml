@@ -46,9 +46,113 @@ fn config(root: &Path, euid: ProcessEuid) -> ProfilerConfig {
 /// the intent.
 static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+mod codec_fixture {
+    use prost::Message;
+
+    #[derive(Clone, PartialEq, Message)]
+    pub(super) struct Value {
+        #[prost(oneof = "Kind", tags = "3, 4, 7, 11, 12")]
+        pub kind: Option<Kind>,
+    }
+
+    #[derive(Clone, PartialEq, prost::Oneof)]
+    pub(super) enum Kind {
+        #[prost(string, tag = "3")]
+        String(String),
+        #[prost(int64, tag = "4")]
+        Int(i64),
+        #[prost(message, tag = "7")]
+        Class(Class),
+        #[prost(message, tag = "11")]
+        List(List),
+        #[prost(message, tag = "12")]
+        Map(Map),
+    }
+
+    #[derive(Clone, PartialEq, Message)]
+    pub(super) struct Entry {
+        #[prost(string, tag = "1")]
+        key: String,
+        #[prost(message, optional, tag = "2")]
+        value: Option<Value>,
+    }
+
+    #[derive(Clone, PartialEq, Message)]
+    pub(super) struct Map {
+        #[prost(message, repeated, tag = "3")]
+        entries: Vec<Entry>,
+    }
+
+    #[derive(Clone, PartialEq, Message)]
+    pub(super) struct Class {
+        #[prost(string, tag = "1")]
+        name: String,
+        #[prost(message, repeated, tag = "2")]
+        fields: Vec<Entry>,
+    }
+
+    #[derive(Clone, PartialEq, Message)]
+    pub(super) struct List {
+        #[prost(message, repeated, tag = "2")]
+        items: Vec<Value>,
+    }
+
+    fn value(kind: Kind) -> Value {
+        Value { kind: Some(kind) }
+    }
+
+    fn entry(key: &str, kind: Kind) -> Entry {
+        Entry {
+            key: key.into(),
+            value: Some(value(kind)),
+        }
+    }
+
+    pub(super) fn context() -> Vec<u8> {
+        value(Kind::Map(Map {
+            entries: vec![
+                entry("org_id", Kind::String("acme".into())),
+                entry("attempt", Kind::Int(3)),
+            ],
+        }))
+        .encode_to_vec()
+    }
+
+    pub(super) fn empty_context() -> Vec<u8> {
+        value(Kind::Map(Map { entries: vec![] })).encode_to_vec()
+    }
+
+    pub(super) fn data() -> Vec<u8> {
+        value(Kind::Map(Map {
+            entries: vec![entry(
+                "result",
+                Kind::Class(Class {
+                    name: "Result".into(),
+                    fields: vec![entry(
+                        "scores",
+                        Kind::List(List {
+                            items: vec![value(Kind::Int(7)), value(Kind::Int(9))],
+                        }),
+                    )],
+                }),
+            )],
+        }))
+        .encode_to_vec()
+    }
+}
+
 /// Writes one completed execution (root thread, one selected root call)
 /// into a fresh store and returns its root.
 fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
+    write_store_with(root, euid, engine, |_, _, _, _| {})
+}
+
+fn write_store_with(
+    root: &Path,
+    euid: ProcessEuid,
+    engine: u64,
+    evidence: impl FnOnce(&ProfilerSession, backend::ExecutionHandle, ThreadRef, &dyn Fn(RawRecord<'_>)),
+) -> ThreadRef {
     let _guard = STORE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -93,6 +197,12 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
         call_site: None,
         ts_ticks: 20,
     });
+    evidence(
+        &session,
+        admission.completion.lease().handle(),
+        thread_ref,
+        &emit,
+    );
     emit(RawRecord::EndFunction {
         status: FunctionEndStatus::Ok,
         thread_id: thread_ref.thread_id,
@@ -267,4 +377,216 @@ async fn value_handles_resolve_from_the_cas() {
         resolved[0],
         Resolved::Unavailable(baml_query::outcome::UnavailableReason::NotCaptured)
     ));
+}
+
+#[tokio::test]
+async fn logs_and_call_scope_use_native_values_without_parent_joins() {
+    use backend::{EncodedCallScope, EncodedLog, LogEvent, ValueLossReason, ValueState};
+    use bex_prof_store::ids::CallRef;
+
+    let temp = tempfile::TempDir::new().unwrap();
+    let root = temp.path().join("profiles");
+    let lost = ValueState::Lost(ValueLossReason::CopyFailed);
+    let execution = write_store_with(
+        &root,
+        ProcessEuid([0xD1; 16]),
+        31,
+        |session, handle, thread, emit| {
+            let call = CallRef {
+                process_euid: thread.process_euid,
+                engine_id: thread.engine_id,
+                thread_id: thread.thread_id,
+                call_id: BexCallId(6),
+            };
+            let mut payload_id = None;
+            assert!(session.publish_call_scope(
+                handle,
+                EncodedCallScope {
+                    call_ref: call,
+                    distinct_id: Some("customer-1".into()),
+                    context: Ok(codec_fixture::context()),
+                },
+                session.reserve_log_work().unwrap(),
+                |id| {
+                    payload_id = Some(id);
+                    true
+                },
+            ));
+            emit(RawRecord::CallScope {
+                payload_id: payload_id.unwrap(),
+            });
+
+            for ordinal in 0..4 {
+                let mut payload_id = None;
+                assert!(session.publish_log(
+                    handle,
+                    EncodedLog {
+                        event: LogEvent {
+                            call_ref: if ordinal == 1 {
+                                None
+                            } else {
+                                Some(CallRef {
+                                    call_id: BexCallId(99),
+                                    ..call
+                                })
+                            },
+                            timestamp_ms: if ordinal == 3 {
+                                u64::MAX
+                            } else {
+                                1_700_000_000_000 + ordinal
+                            },
+                            level: Some("info".into()),
+                            source: None,
+                            source_column: None,
+                            message_preview: None,
+                            event_name: (ordinal != 1).then(|| "checkout".into()),
+                            distinct_id: (ordinal < 2).then(|| "customer-1".into()),
+                            context: lost,
+                            data: lost,
+                        },
+                        context: match ordinal {
+                            0 | 1 => Some(codec_fixture::context()),
+                            2 => Some(codec_fixture::empty_context()),
+                            _ => None,
+                        },
+                        data: (ordinal != 3).then(codec_fixture::data),
+                    },
+                    session.reserve_log_work().unwrap(),
+                    |id| {
+                        payload_id = Some(id);
+                        true
+                    },
+                ));
+                emit(RawRecord::Log {
+                    payload_id: payload_id.unwrap(),
+                });
+            }
+        },
+    );
+    let session = baml_query_profiles::profiles_session(&root).await.unwrap();
+    for (sql, expected) in [
+        ("SELECT COUNT(*) FROM logs", "4"),
+        (
+            "SELECT COUNT(*) FROM logs_v1 WHERE distinct_id = 'customer-1'",
+            "2",
+        ),
+        (
+            "SELECT COUNT(*) FROM logs WHERE event_name = 'checkout'",
+            "3",
+        ),
+        ("SELECT COUNT(*) FROM logs WHERE event_name IS NULL", "1"),
+        (
+            "SELECT COUNT(*) FROM calls WHERE distinct_id = 'customer-1' AND context['org_id'] = 'acme' AND context['attempt'] >= 3",
+            "1",
+        ),
+        (
+            "SELECT COUNT(*) FROM logs WHERE context['org_id'] = 'acme' AND context['attempt'] > 2",
+            "2",
+        ),
+        (
+            "SELECT COUNT(*) FROM logs WHERE data['result']['scores'][0] = 7 AND data['result']['scores'][1] = 9",
+            "3",
+        ),
+        ("SELECT COUNT(*) FROM logs WHERE call_id IS NULL", "1"),
+        (
+            "SELECT COUNT(*) FROM logs l LEFT JOIN calls c ON l.execution_id = c.execution_id AND l.call_id = c.call_id WHERE c.call_id IS NULL",
+            "4",
+        ),
+        ("SELECT COUNT(*) FROM logs WHERE timestamp IS NULL", "1"),
+        (
+            "SELECT COUNT(*) FROM (SELECT execution_id, log_id FROM logs GROUP BY execution_id, log_id)",
+            "4",
+        ),
+        (
+            "SELECT COUNT(*) FROM logs WHERE distinct_id = 'customer-1' GROUP BY distinct_id",
+            "2",
+        ),
+        (
+            "SELECT COUNT(*) FROM logs WHERE execution_id = 'not-this-execution'",
+            "0",
+        ),
+    ] {
+        let (rows, _) = one_column(&session, sql).await;
+        assert_eq!(rows, vec![Some(expected.into())], "{sql}");
+    }
+    let execution_id = bex_prof_store::ids::ExecutionId(execution).encode();
+    let (rows, _) = one_column(
+        &session,
+        &format!("SELECT COUNT(*) FROM logs WHERE execution_id = '{execution_id}'"),
+    )
+    .await;
+    assert_eq!(rows, vec![Some("4".into())]);
+
+    let (_, outcome) = one_column(&session, "SELECT data FROM logs WHERE log_id = 3").await;
+    assert_ne!(outcome.result_state, baml_query::ResultState::Complete);
+    let (_, outcome) = one_column(&session, "SELECT context FROM logs WHERE log_id = 2").await;
+    assert_eq!(
+        outcome.result_state,
+        baml_query::ResultState::Complete,
+        "{outcome:?}"
+    );
+    let (_, outcome) = one_column(&session, "SELECT context FROM logs WHERE log_id = 3").await;
+    assert_ne!(outcome.result_state, baml_query::ResultState::Complete);
+
+    let other = temp.path().join("other");
+    write_store(&other, ProcessEuid([0xD2; 16]), 32);
+    let other_session = baml_query_profiles::profiles_session(&other).await.unwrap();
+    let (rows, _) = one_column(&other_session, "SELECT COUNT(*) FROM logs").await;
+    assert_eq!(rows, vec![Some("0".into())]);
+    let (rows, _) = one_column(&other_session, "SELECT distinct_id FROM calls").await;
+    assert_eq!(rows, vec![None]);
+    let (_, outcome) = one_column(&other_session, "SELECT context FROM calls").await;
+    assert_ne!(outcome.result_state, baml_query::ResultState::Complete);
+
+    let scopes = temp.path().join("scope-states");
+    for (engine, context) in [
+        (33, Ok(codec_fixture::empty_context())),
+        (34, Err(ValueLossReason::CopyFailed)),
+    ] {
+        let execution = write_store_with(
+            &scopes,
+            ProcessEuid([u8::try_from(engine).unwrap(); 16]),
+            engine,
+            |session, handle, thread, emit| {
+                let mut payload_id = None;
+                assert!(session.publish_call_scope(
+                    handle,
+                    EncodedCallScope {
+                        call_ref: CallRef {
+                            process_euid: thread.process_euid,
+                            engine_id: thread.engine_id,
+                            thread_id: thread.thread_id,
+                            call_id: BexCallId(6),
+                        },
+                        distinct_id: None,
+                        context,
+                    },
+                    session.reserve_log_work().unwrap(),
+                    |id| {
+                        payload_id = Some(id);
+                        true
+                    },
+                ));
+                emit(RawRecord::CallScope {
+                    payload_id: payload_id.unwrap(),
+                });
+            },
+        );
+        let session = baml_query_profiles::profiles_session(&scopes)
+            .await
+            .unwrap();
+        let execution_id = bex_prof_store::ids::ExecutionId(execution).encode();
+        let (rows, outcome) = one_column(&session, &format!(
+            "SELECT context FROM calls WHERE distinct_id IS NULL AND execution_id = '{execution_id}'"
+        )).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            outcome.result_state,
+            if engine == 33 {
+                baml_query::ResultState::Complete
+            } else {
+                baml_query::ResultState::Incomplete
+            },
+        );
+    }
 }

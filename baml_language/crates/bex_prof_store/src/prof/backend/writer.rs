@@ -873,6 +873,146 @@ mod tests {
         );
     }
 
+    #[test]
+    fn logs_and_call_values_share_data_segments_and_cas_objects() {
+        use super::super::{
+            CodecVersion, ContextKey, ContextRef, LogEvent, PublishCasResult, ValueOccurrence,
+            ValueRole, ValueState,
+        };
+        use crate::ids::{BexCallId, CallRef};
+
+        let mut harness = harness(61);
+        let root = thread(harness.stream, 3);
+        install_runtime(&mut harness, 0, root);
+        // The leaf store treats encoded BAML values as opaque bytes.
+        let body = b"shared encoded value";
+        let (cid, result) = harness
+            .writer
+            .store
+            .publish_cas_object(CodecVersion(1), body);
+        assert!(matches!(result, PublishCasResult::Published));
+        let (reused, result) = harness
+            .writer
+            .store
+            .publish_cas_object(CodecVersion(1), body);
+        assert_eq!(reused, cid);
+        assert!(matches!(result, PublishCasResult::Reused));
+        let state = ValueState::Available {
+            cid,
+            codec: CodecVersion(1),
+            encoded_bytes: body.len() as u64,
+        };
+        let call_ref = CallRef {
+            process_euid: root.process_euid,
+            engine_id: root.engine_id,
+            thread_id: root.thread_id,
+            call_id: BexCallId(1),
+        };
+        let facts = vec![
+            EvidenceFact::ValueOccurrence(ValueOccurrence {
+                call_ref,
+                context_ref: ContextRef::Normal(ContextKey([2; 32])),
+                role: ValueRole::Input,
+                state,
+            }),
+            EvidenceFact::LogEvent(LogEvent {
+                call_ref: Some(call_ref),
+                timestamp_ms: 1234,
+                level: Some("info".to_owned()),
+                source: None,
+                event_name: Some("signup".to_owned()),
+                source_column: None,
+                message_preview: None,
+                distinct_id: Some("user-7".to_owned()),
+                context: state,
+                data: state,
+            }),
+        ];
+        harness.writer.hand_off(
+            handle(0),
+            root,
+            None,
+            facts.clone(),
+            None,
+            EvidenceBatchStats::default(),
+            Vec::new(),
+            Instant::now(),
+        );
+        publish(&mut harness, true);
+        let bytes =
+            std::fs::read(segment_path(&harness.root, harness.stream, Plane::Data, 1)).unwrap();
+        let decoded = decode_data_segment(&bytes, harness.stream.0).unwrap();
+        assert_eq!(decoded.groups.len(), 1);
+        assert_eq!(decoded.groups[0].decode_evidence().unwrap(), facts);
+    }
+
+    #[test]
+    fn execution_reader_keeps_logs_without_retained_call_spans() {
+        use super::super::{LogEvent, StreamReader, ValueLossReason, ValueState};
+        use crate::ids::{BexCallId, CallRef, ExecutionId};
+
+        let mut harness = harness(62);
+        let root = thread(harness.stream, 3);
+        install_runtime(&mut harness, 0, root);
+        harness.writer.enqueue_admitted(
+            vec![MetaRecord::RootStarted {
+                root,
+                started_ns: 1,
+                runtime_id: BoundaryId::from_bytes([7; 16]),
+            }],
+            Instant::now(),
+        );
+        let log = LogEvent {
+            call_ref: Some(CallRef {
+                process_euid: root.process_euid,
+                engine_id: root.engine_id,
+                thread_id: root.thread_id,
+                call_id: BexCallId(1),
+            }),
+            timestamp_ms: 1234,
+            level: Some("info".to_owned()),
+            source: None,
+            event_name: None,
+            source_column: None,
+            message_preview: None,
+            distinct_id: Some("user-7".to_owned()),
+            context: ValueState::Lost(ValueLossReason::CasWriteFailed),
+            data: ValueState::Lost(ValueLossReason::ValueTooLarge),
+        };
+        let unassociated_log = LogEvent {
+            call_ref: None,
+            timestamp_ms: 1235,
+            ..log.clone()
+        };
+        let logs = vec![log, unassociated_log];
+        harness.writer.hand_off(
+            handle(0),
+            root,
+            None,
+            logs.iter().cloned().map(EvidenceFact::LogEvent).collect(),
+            None,
+            EvidenceBatchStats::default(),
+            Vec::new(),
+            Instant::now(),
+        );
+        harness.writer.enqueue_root_ended(
+            root,
+            2000,
+            ExecutionEndStatus::Succeeded,
+            ExecutionHealthSnapshot::default(),
+            Instant::now(),
+        );
+        publish(&mut harness, true);
+        let profile = StreamReader::open(&harness.root, harness.stream)
+            .unwrap()
+            .execution(ExecutionId(root))
+            .unwrap()
+            .load()
+            .unwrap();
+        assert_eq!(profile.logs, logs);
+        assert!(profile.spans.is_empty());
+    }
+
     /// A `RootEnded` enqueued while its group is pending is not in the next
     /// meta-pre; it lands in meta-post with the final range (pin a
     /// 3-data-segment execution: first=1, last=3, count=3).
