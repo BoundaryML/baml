@@ -1,14 +1,4 @@
 {
-  "name": "app-feedback",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit"
-  },
   "dependencies": {
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
@@ -31,8 +21,18 @@
     "eslint-config-next": "15.5.25",
     "typescript": "^5"
   },
+  "name": "app-feedback",
   "overrides": {
-    "postcss": "8.5.28",
-    "nanoid": "3.3.18"
-  }
+    "nanoid": "3.3.18",
+    "postcss": "8.5.28"
+  },
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "version": "0.1.0"
 }

@@ -11,15 +11,15 @@
 // Without them the pages render the mock dataset, so the UI can be built
 // and previewed with nothing provisioned; the header says which it is.
 
-import { ISSUES, findIssue } from "./mock-data";
-import type { Comment, HandleOutcome, Issue } from "./types";
+import { findIssue, ISSUES } from './mock-data';
+import type { Comment, HandleOutcome, Issue } from './types';
 
-const URL = process.env.FEEDBACK_SUPABASE_URL?.replace(/\/$/, "");
+const URL = process.env.FEEDBACK_SUPABASE_URL?.replace(/\/$/, '');
 const KEY = process.env.FEEDBACK_SUPABASE_ANON_KEY;
 
-export type DataSource = "supabase" | "mock";
+export type DataSource = 'supabase' | 'mock';
 
-export const dataSource: DataSource = URL && KEY ? "supabase" : "mock";
+export const dataSource: DataSource = URL && KEY ? 'supabase' : 'mock';
 
 /** Seconds a page result is cached before PostgREST is asked again. */
 export const REVALIDATE_S = 30;
@@ -28,22 +28,30 @@ export const REVALIDATE_S = 30;
 const TIMEOUT_MS = 10_000;
 
 async function rest<T>(path: string): Promise<T> {
-  if (!URL || !KEY) throw new Error("supabase is not configured");
+  if (!URL || !KEY) throw new Error('supabase is not configured');
   let res: Response;
   try {
     res = await fetch(`${URL}/rest/v1/${path}`, {
-      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: "application/json" },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${KEY}`,
+        apikey: KEY,
+      },
       next: { revalidate: REVALIDATE_S },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    if (err instanceof Error && err.name === "TimeoutError") {
-      throw new Error(`supabase: no answer within ${TIMEOUT_MS / 1000}s for ${path}`);
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new Error(
+        `supabase: no answer within ${TIMEOUT_MS / 1000}s for ${path}`,
+      );
     }
     throw err;
   }
   if (!res.ok) {
-    throw new Error(`supabase: ${res.status} for ${path}: ${(await res.text()).slice(0, 200)}`);
+    throw new Error(
+      `supabase: ${res.status} for ${path}: ${(await res.text()).slice(0, 200)}`,
+    );
   }
   return (await res.json()) as T;
 }
@@ -54,76 +62,85 @@ interface IssueRow {
   title: string;
   description: string;
   shepherd: string | null;
-  subsystem: Issue["subsystem"];
-  repros: Issue["repros"];
+  subsystem: Issue['subsystem'];
+  repros: Issue['repros'];
   version: string;
   feedback_ids: string[];
-  status: Issue["status"];
+  status: Issue['status'];
   comments: Array<{ author: string; body: string; at?: string }>;
   resolution_plan: string | null;
-  difficulty: Issue["difficulty"];
+  difficulty: Issue['difficulty'];
   design_doc: string | null;
-  dataset: "live" | "eval";
+  dataset: 'live' | 'eval';
   created_at: string;
   updated_at: string;
-  outcome: (Partial<HandleOutcome> & { id?: number; mode?: string; created_at?: string }) | null;
+  outcome:
+    | (Partial<HandleOutcome> & {
+        id?: number;
+        mode?: string;
+        created_at?: string;
+      })
+    | null;
 }
 
 function outcomeOf(row: IssueRow): HandleOutcome | null {
   const o = row.outcome;
   if (!o || !o.kind) return null;
   return {
-    kind: o.kind,
     branch: o.branch ?? null,
+    design_doc: o.design_doc ?? null,
+    gate: o.gate ?? null,
+    kind: o.kind,
     pr: o.pr ?? null,
-    turns: o.turns ?? 0,
+    reason: o.reason ?? null,
     seconds: o.seconds ?? 0,
     timed_out: o.timed_out ?? false,
-    gate: o.gate ?? null,
-    design_doc: o.design_doc ?? null,
-    reason: o.reason ?? null,
+    turns: o.turns ?? 0,
   };
 }
 
 function issueOf(row: IssueRow): Issue {
   const comments: Comment[] = (row.comments ?? []).map((c) => ({
+    at: c.at ?? row.updated_at,
     author: c.author,
     body: c.body,
-    at: c.at ?? row.updated_at,
   }));
   return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    shepherd: row.shepherd,
-    subsystem: row.subsystem,
-    repros: row.repros ?? [],
-    version: row.version,
-    feedback_ids: row.feedback_ids ?? [],
-    status: row.status,
     comments,
-    resolution_plan: row.resolution_plan,
-    difficulty: row.difficulty,
-    design_doc: row.design_doc,
-    outcome: outcomeOf(row),
-    dataset: row.dataset ?? "live",
     created_at: row.created_at,
+    dataset: row.dataset ?? 'live',
+    description: row.description,
+    design_doc: row.design_doc,
+    difficulty: row.difficulty,
+    feedback_ids: row.feedback_ids ?? [],
+    id: row.id,
+    outcome: outcomeOf(row),
+    repros: row.repros ?? [],
+    resolution_plan: row.resolution_plan,
+    shepherd: row.shepherd,
+    status: row.status,
+    subsystem: row.subsystem,
+    title: row.title,
     updated_at: row.updated_at,
+    version: row.version,
   };
 }
 
-const COLUMNS = "select=*";
+const COLUMNS = 'select=*';
 
 /** Every issue, most recently updated first. */
 export async function loadIssues(): Promise<Issue[]> {
-  if (dataSource === "mock") return ISSUES.map((i) => ({ ...i, dataset: i.dataset ?? "live" }));
-  const rows = await rest<IssueRow[]>(`issues_with_outcome?${COLUMNS}&order=updated_at.desc`);
+  if (dataSource === 'mock')
+    return ISSUES.map((i) => ({ ...i, dataset: i.dataset ?? 'live' }));
+  const rows = await rest<IssueRow[]>(
+    `issues_with_outcome?${COLUMNS}&order=updated_at.desc`,
+  );
   return rows.map(issueOf);
 }
 
 /** One issue by id, or undefined. */
 export async function loadIssue(id: string): Promise<Issue | undefined> {
-  if (dataSource === "mock") return findIssue(id);
+  if (dataSource === 'mock') return findIssue(id);
   const rows = await rest<IssueRow[]>(
     `issues_with_outcome?${COLUMNS}&id=eq.${encodeURIComponent(id)}&limit=1`,
   );
@@ -139,17 +156,23 @@ export interface IssueEvent {
   created_at: string;
 }
 
-export async function loadIssueEvents(id: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
-  if (dataSource === "mock") return [];
+export async function loadIssueEvents(
+  id: string,
+  dataset: 'live' | 'eval' = 'live',
+): Promise<IssueEvent[]> {
+  if (dataSource === 'mock') return [];
   return rest<IssueEvent[]>(
     `events?select=id,kind,payload,slack_ts,created_at&issue_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id`,
   );
 }
 
 /** Public lifecycle metadata; private plans are read only on authorized proposal pages. */
-export async function loadPrEvents(number: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
-  if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error("Invalid PR number");
-  if (dataSource === "mock") return [];
+export async function loadPrEvents(
+  number: string,
+  dataset: 'live' | 'eval' = 'live',
+): Promise<IssueEvent[]> {
+  if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error('Invalid PR number');
+  if (dataSource === 'mock') return [];
   const pr = `https://github.com/BoundaryML/baml/pull/${number}`;
   return rest<IssueEvent[]>(
     `events?select=id,kind,payload,slack_ts,created_at&payload->>pr=eq.${encodeURIComponent(pr)}&dataset=eq.${dataset}&order=created_at,id`,

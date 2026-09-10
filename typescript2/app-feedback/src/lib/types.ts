@@ -2,32 +2,32 @@
 // (HandleOutcome). Keep in sync when the BAML models change.
 
 export type Subsystem =
-  | "Syntax"
-  | "Compiler"
-  | "Runtime"
-  | "StdLibrary"
-  | "Tooling"
-  | "Unknown";
+  | 'Syntax'
+  | 'Compiler'
+  | 'Runtime'
+  | 'StdLibrary'
+  | 'Tooling'
+  | 'Unknown';
 
-export type Difficulty = "Trivial" | "Easy" | "Medium" | "Hard";
+export type Difficulty = 'Trivial' | 'Easy' | 'Medium' | 'Hard';
 
 export type IssueStatus =
-  | { state: "open" }
-  | { state: "awaiting_approval" }
-  | { state: "approved"; by: string }
-  | { state: "in_progress"; pr: string | null }
-  | { state: "rejected"; reason: string }
-  | { state: "deferred"; reason: string; workaround: string | null }
-  | { state: "merged"; pr: string }
-  | { state: "shipped"; version: string; date: string };
+  | { state: 'open' }
+  | { state: 'awaiting_approval' }
+  | { state: 'approved'; by: string }
+  | { state: 'in_progress'; pr: string | null }
+  | { state: 'rejected'; reason: string }
+  | { state: 'deferred'; reason: string; workaround: string | null }
+  | { state: 'merged'; pr: string }
+  | { state: 'shipped'; version: string; date: string };
 
-export type StatusState = IssueStatus["state"];
+export type StatusState = IssueStatus['state'];
 
 export type Expectation =
-  | { check: "should_compile" }
-  | { check: "should_not_compile"; diagnostic_contains: string | null }
-  | { check: "should_evaluate_to"; expected: unknown }
-  | { check: "requires_inspection"; instructions: string };
+  | { check: 'should_compile' }
+  | { check: 'should_not_compile'; diagnostic_contains: string | null }
+  | { check: 'should_evaluate_to'; expected: unknown }
+  | { check: 'requires_inspection'; instructions: string };
 
 export interface Repro {
   files: Record<string, string>;
@@ -57,7 +57,7 @@ export interface GateResult {
 
 /** ~/.atb2/runs/<branch>/outcome.json, as handle_issue writes it. */
 export interface HandleOutcome {
-  kind: "fixed" | "hard" | "gate_failed" | "agent_stopped";
+  kind: 'fixed' | 'hard' | 'gate_failed' | 'agent_stopped';
   branch: string | null;
   pr: string | null;
   turns: number;
@@ -67,7 +67,7 @@ export interface HandleOutcome {
   design_doc: string | null;
   reason: string | null;
   /** Which pass the run was in when it stopped (mock-only). */
-  running?: "design" | "fix" | "gate" | "pr";
+  running?: 'design' | 'fix' | 'gate' | 'pr';
 }
 
 export interface Issue {
@@ -92,4 +92,4 @@ export interface Issue {
   updated_at: string;
 }
 
-export type Dataset = "live" | "eval";
+export type Dataset = 'live' | 'eval';
