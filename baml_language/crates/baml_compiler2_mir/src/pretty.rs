@@ -675,7 +675,6 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
         t::FUNCTION => "FUNCTION",
         t::FUTURE => "FUTURE",
         t::TYPE => "TYPE",
-        t::COLLECTOR => "COLLECTOR",
         t::UINT8ARRAY => "UINT8ARRAY",
         t::BIGINT => "BIGINT",
         other => return std::borrow::Cow::Owned(other.to_string()),

@@ -16,7 +16,6 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtMediaPdf => "pdf",
         BamlHandleType::AdtMediaGeneric => "media",
         BamlHandleType::AdtPromptAst => "prompt_ast",
-        BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
         BamlHandleType::AdtFunctionSpec => "function_spec",

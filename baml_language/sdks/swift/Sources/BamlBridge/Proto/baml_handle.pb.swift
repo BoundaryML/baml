@@ -28,7 +28,6 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 /// Stdlib symbols with special host-side decoding rules today:
 ///   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
-///   - baml.llm.Collector                     -> ADT_COLLECTOR
 ///   - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///   - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
 ///   - runtime-created nominal values         -> ADT_RUNTIME_VALUE
@@ -60,7 +59,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   case adtMediaPdf // = 9
   case adtMediaGeneric // = 10
   case adtPromptAst // = 11
-  case adtCollector // = 12
   case adtType // = 13
   case adtTaggedHeapHandle // = 14
 
@@ -105,7 +103,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case 9: self = .adtMediaPdf
     case 10: self = .adtMediaGeneric
     case 11: self = .adtPromptAst
-    case 12: self = .adtCollector
     case 13: self = .adtType
     case 14: self = .adtTaggedHeapHandle
     case 15: self = .hostValueCallable
@@ -128,7 +125,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case .adtMediaPdf: return 9
     case .adtMediaGeneric: return 10
     case .adtPromptAst: return 11
-    case .adtCollector: return 12
     case .adtType: return 13
     case .adtTaggedHeapHandle: return 14
     case .hostValueCallable: return 15
@@ -151,7 +147,6 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     .adtMediaPdf,
     .adtMediaGeneric,
     .adtPromptAst,
-    .adtCollector,
     .adtType,
     .adtTaggedHeapHandle,
     .hostValueCallable,
@@ -181,7 +176,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlHandle: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{1}ADT_COLLECTOR\0\u{1}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{2}\u{2}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

@@ -49,7 +49,6 @@ pub enum BamlCffiHandleType {
     MediaPdf = 9,
     MediaGeneric = 10,
     PromptAst = 11,
-    Collector = 12,
     Type = 13,
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
@@ -445,7 +444,6 @@ mod tests {
                 BamlHandleType::AdtMediaGeneric,
             ),
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
-            (BamlCffiHandleType::Collector, BamlHandleType::AdtCollector),
             (BamlCffiHandleType::Type, BamlHandleType::AdtType),
             (
                 BamlCffiHandleType::TaggedHeapHandle,

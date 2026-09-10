@@ -20,7 +20,6 @@ const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.ADT_MEDIA_PDF]: 'pdf',
   [BamlHandleType.ADT_MEDIA_GENERIC]: 'media',
   [BamlHandleType.ADT_PROMPT_AST]: 'prompt_ast',
-  [BamlHandleType.ADT_COLLECTOR]: 'collector',
   [BamlHandleType.ADT_TYPE]: 'type',
 };
 

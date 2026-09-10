@@ -45,8 +45,6 @@ pub enum BamlHandleType {
     AdtMediaPdf = 9,
     AdtMediaGeneric = 10,
     AdtPromptAst = 11,
-    /// Reserved legacy collector tag; no current runtime value produces it.
-    AdtCollector = 12,
     AdtType = 13,
     AdtTaggedHeapHandle = 14,
     /// Host-owned callable referenced via per-bridge HostValueRegistry.
@@ -87,7 +85,6 @@ impl BamlHandleType {
             Self::AdtMediaPdf => "ADT_MEDIA_PDF",
             Self::AdtMediaGeneric => "ADT_MEDIA_GENERIC",
             Self::AdtPromptAst => "ADT_PROMPT_AST",
-            Self::AdtCollector => "ADT_COLLECTOR",
             Self::AdtType => "ADT_TYPE",
             Self::AdtTaggedHeapHandle => "ADT_TAGGED_HEAP_HANDLE",
             Self::HostValueCallable => "HOST_VALUE_CALLABLE",
@@ -109,7 +106,6 @@ impl BamlHandleType {
             "ADT_MEDIA_PDF" => Some(Self::AdtMediaPdf),
             "ADT_MEDIA_GENERIC" => Some(Self::AdtMediaGeneric),
             "ADT_PROMPT_AST" => Some(Self::AdtPromptAst),
-            "ADT_COLLECTOR" => Some(Self::AdtCollector),
             "ADT_TYPE" => Some(Self::AdtType),
             "ADT_TAGGED_HEAP_HANDLE" => Some(Self::AdtTaggedHeapHandle),
             "HOST_VALUE_CALLABLE" => Some(Self::HostValueCallable),
