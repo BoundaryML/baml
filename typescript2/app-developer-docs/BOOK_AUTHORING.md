@@ -183,20 +183,18 @@ Initial integration repairs:
   call's result. This is supported by the existing `spawn_semantics` tests and
   the engine's global reporting path.
 
-### The all_complete regression
+### Settled outcomes
 
-On `0.18.1-nightly.20260901.a`, the new failure-path test reproduced an early
-handler while a later input was still pending. A second input's error could
-also surface as an unhandled spawn error. The implementation used a throwing
-`map` callback, which stopped iteration at the first error. This contradicted
-its documented wait-for-every-input contract; the prose was not changed to
-teach the bug.
+The stdlib change is reviewed separately in PR #4816, below the book PR.
+`all_settled` replaces `all_complete`: it waits for every input and returns
+`Success<T>`, `Failure<E>`, or `Panicked` for each input, in input order.
+`Panicked` preserves the panic and its error context, including cancellation.
+Cancelling the collector stops the wait rather than becoming an input outcome.
 
-The scoped standard-library fix awaits every input, collects errors, and then
-rethrows the first error in input order. The tests fail on the audited nightly
-and pass with the compiler built from this branch. They also check success
-ordering, later-error observation, and the distinction from `all`, which
-cancels remaining inputs.
+The chapter's behavioral checks cover mixed success/failure outcomes and
+preservation of every typed error. The stdlib's native tests additionally cover
+panics, input cancellation, collector cancellation, empty inputs, duplicate
+inputs, and successful values that happen to be error objects.
 
 ### Runtime and rendering evidence
 

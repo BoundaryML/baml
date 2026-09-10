@@ -117,7 +117,7 @@ After you understand the individual futures, `baml.future.all` is a shorter way 
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-47"]} />
 
-`baml.future.all` returns the strings in input order: first path, then second path. Completion order can differ. If one read fails, `all` cancels the remaining futures and rethrows the observed error. For behavior that waits for every future after an error, use `baml.future.all_complete`.
+`baml.future.all` returns the strings in input order: first path, then second path. Completion order can differ. If one read fails, `all` cancels the remaining futures and rethrows the observed error. To wait for every input and inspect each outcome, use `baml.future.all_settled`. It returns `Success<T>`, `Failure<E>`, or `Panicked` for each input, in input order. `Panicked` includes input cancellation.
 
 ## Try concurrent work in the browser
 
@@ -248,7 +248,7 @@ If a task body throws, its future records the error. The error reaches the paren
 
 Creating `lookup_future` doesn't throw `LookupFailed` in the parent. `await lookup_future` rethrows it.
 
-For several futures, `baml.future.all` preserves input order, not completion order. If one input fails, it cancels the remaining inputs and rethrows the observed error. `baml.future.all_complete` lets every input settle before it returns or throws.
+For several futures, `baml.future.all` preserves input order, not completion order. If one input fails, it cancels the remaining inputs and rethrows the observed error. `baml.future.all_settled` collects a `Success<T>`, `Failure<E>`, or `Panicked` outcome for every input. An input failure or panic does not cancel the other inputs. Cancelling the collector itself stops the wait.
 
 ### Cancellation and task lifetimes
 

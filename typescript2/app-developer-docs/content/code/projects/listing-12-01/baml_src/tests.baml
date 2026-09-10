@@ -23,7 +23,7 @@ function completed_or_failed(value: int) -> int throws LookupFailed {
     value
 }
 
-test "all_complete observes later tasks before rethrowing the first input error" {
+test "all_settled preserves failures and waits for later successes" {
     let group = baml.spawn.TaskGroup.new(0);
     let failed = spawn { completed_or_failed(-1) };
     let later = spawn with baml.spawn.options(group = group) { completed_or_failed(2) };
@@ -31,29 +31,32 @@ test "all_complete observes later tasks before rethrowing the first input error"
         baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
         group.set_limit(1);
     };
-    // Always release the parked input, even if an assertion exposes a regression.
     defer { group.set_limit(1); }
-    let result = (await baml.future.all_complete([failed, later])) catch (e) {
-        LookupFailed => {
-            assert.equal(e.key, "-1");
-            assert.equal(later.is_settled(), true);
-            assert.equal(later.is_cancelled(), false);
-            [await later]
-        },
-    };
-    assert.equal(result, [2]);
+    let outcomes = await baml.future.all_settled([failed, later]);
+    assert.equal(later.is_settled(), true);
+    assert.equal(later.is_cancelled(), false);
+    let values = outcomes.map((outcome) -> {
+        match (outcome) {
+            let success: baml.future.Success<int> => success.value.to_string(),
+            let failure: baml.future.Failure<LookupFailed> => failure.error.key,
+            let panic: baml.future.Panicked => baml.sys.panic("unexpected panic"),
+        }
+    });
+    assert.equal(values, ["-1", "2"]);
     await release;
 }
 
-test "all_complete returns values in input order and consumes later errors" {
-    assert.equal(await baml.future.all_complete([spawn { 3 }, spawn { 1 }]), [3, 1]);
+test "all_settled returns every typed error in input order" {
     let failed = spawn { completed_or_failed(-1) };
     let second = spawn { completed_or_failed(-2) };
-    let message = {
-        await baml.future.all_complete([failed, second]);
-        "unexpected success"
-    } catch (e) { LookupFailed => e.key };
-    assert.equal(message, "-1");
+    let outcomes = await baml.future.all_settled([failed, second]);
+    let errors = outcomes.map((outcome) -> {
+        match (outcome) {
+            let failure: baml.future.Failure<LookupFailed> => failure.error.key,
+            _ => baml.sys.panic("expected failure"),
+        }
+    });
+    assert.equal(errors, ["-1", "-2"]);
     assert.equal(second.is_settled(), true);
 }
 
