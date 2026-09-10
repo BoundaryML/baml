@@ -20,6 +20,46 @@ function interfaces.$init_test_ns_interfaces_b_1180(registry: testing.TestCollec
     return
 }
 
+function interfaces.$init_test_ns_interfaces_b_1470(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_direct_and_captured_interface_receivers"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_field_chains"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_bound_method"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_field_assignment"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_generic_interface"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces"
@@ -1348,6 +1388,21 @@ function interfaces.<(user.interfaces.B1180Person as user.interfaces.B1180Named)
     return
 }
 
+function interfaces.<(user.interfaces.B1470Adder as user.interfaces.B1470Shift)>.shift(self: interfaces.B1470Adder, n: int) -> int {
+    load_var2 2 1
+    load_field .offset
+    add_int
+    return
+}
+
+function interfaces.<(user.interfaces.B1470Adder as user.interfaces.B1470Transform<int>)>.transform(self: interfaces.B1470Adder, value: int) -> int {
+    load_var self
+    load_field .offset
+    load_var value
+    add_int
+    return
+}
+
 function interfaces.<(user.interfaces.BgfbPair as user.interfaces.BgfbEquatable)>.eq(self: interfaces.BgfbPair, other: interfaces.BgfbPair) -> bool {
     load_var self
     load_field .a
@@ -2563,6 +2618,69 @@ function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> 
     load_const "nobody"
 
   L2:
+    return
+}
+
+function interfaces.b1470_bounded(value: #0) -> int[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int
+    load_type never
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_type #0
+    load_var value
+    make_closure .<lambda(b1470_bounded, 0)>, captures=1, ntypeargs=1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_generic(value: interfaces.B1470Transform<#0>, items: #0[]) -> #0[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #0
+    load_type never
+    load_var items
+    load_type #0
+    load_var value
+    make_closure .<lambda(b1470_generic, 0)>, captures=1, ntypeargs=1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_mapped(value: interfaces.B1470Shift, items: int[]) -> int[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int
+    load_type never
+    load_var2 2 1
+    make_closure .<lambda(b1470_mapped, 0)>, 1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_nested(value: interfaces.B1470Shift) -> int[][] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int[]
+    load_type never
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_var value
+    make_closure .<lambda(b1470_nested, 0)>, 1
+    call baml.Array.map
     return
 }
 

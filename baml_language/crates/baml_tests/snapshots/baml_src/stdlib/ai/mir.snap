@@ -6836,7 +6836,7 @@ fn .<lambda(Connection._request, 0)>() -> int | float | string | bool | null | b
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: string | baml.iter.Done // next
     let _2: unknown // e
-    let _3: (baml.sys.ReadPipeLines) -> string | baml.iter.Done throws baml.errors.Io
+    let _3: baml.sys.ReadPipeLines
     let _4: ai.errors.NetworkFailure
     let _5: string
     let _6: string
@@ -6923,7 +6923,7 @@ fn .<lambda(Connection._request, 0)>() -> int | float | string | bool | null | b
 
     bb5: {
         _3 = copy capture[0].2;
-        _1 = call const fn baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(copy _3) -> [bb11, unwind: bb6];
+        _1 = virtual_call next as baml.iter.Iterator<Error = baml.errors.Io, Item = string>(copy _3) -> [bb11, unwind: bb6];
     }
 
     bb6: {
