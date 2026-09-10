@@ -193,7 +193,16 @@ def dispatch(store, session, turn, existing):
         text,_,_=agent(session,'Classify this Slack request as chat, feedback, babysit, or clarify. Return only JSON {"kind":"..."}. A bug report is feedback; questions are chat. If unsure choose clarify. Request:\n'+turn['prompt'],tools='')
         try:kind=json.loads(text)['kind']
         except (ValueError,KeyError,TypeError):kind='clarify'
-    if kind=='babysit':return 'PR monitoring is not enabled in the issue MVP yet.'
+    if kind=='babysit':
+        match=re.search(r'https://github\.com/BoundaryML/baml/pull/([1-9][0-9]{0,9})(?=[\s>|/.,!?)]|$)',turn['prompt'])
+        if not match:return 'Please include the BoundaryML/baml PR URL you want me to babysit.'
+        pr='https://github.com/BoundaryML/baml/pull/'+match[1]
+        store.send('babysit_requests',{'on_conflict':'slack_event_id'},
+            {'pr':pr,'channel':turn['channel'],'thread_ts':turn['thread_ts'],'requested_by':turn['requested_by'],
+             'slack_event_id':turn['slack_event_id'],'kind':'babysit','dataset':store.dataset},
+             'POST','resolution=ignore-duplicates,return=representation')
+        store.update_session(session,{'prs':list(dict.fromkeys(session.get('prs',[])+[pr]))})
+        return 'Queued this PR for the shared babysitter. Fixes run automatically; merging stays manual.'
     if kind=='feedback':
         row=turn.get('feedback')
         if not isinstance(row,dict) or not row.get('id'):return 'Please describe the BAML issue you want to report.'

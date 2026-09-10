@@ -35,10 +35,10 @@ class PipelineReport {
     skipped: string[],
 }
 
-//#run_pipeline(mode: HandleMode = HandleMode.Live, stages: string = "ingest,triage,verify,handle") -> PipelineReport
+//#run_pipeline(mode: HandleMode = HandleMode.Live, stages: string = "ingest,triage,verify,handle,merge") -> PipelineReport
 function run_pipeline(
     mode: HandleMode = HandleMode.Live,
-    stages: string = "ingest,triage,verify,handle",
+    stages: string = "ingest,triage,verify,handle,merge",
     github_ingress: bool = true,
 ) -> PipelineReport {
     let want = stages.split(",").map((s: string) -> string {
@@ -134,6 +134,26 @@ function run_pipeline(
             };
         }
     };
+    //# merge: in-progress issues with a PR -> merge_issue
+    if (want.includes("merge")) {
+        let in_progress = if (db_configured()) {
+            load_issues_in("in_progress")
+        } else {
+            handled
+        };
+        for (let issue in in_progress) {
+            match (merge_one(issue)) {
+                null => report.skipped.push(issue.id + ": no PR to watch"),
+                let r: MergeResult => {
+                    if (r.kind == "merged") {
+                        report.merged += 1;
+                    } else {
+                        report.skipped.push(issue.id + ": merge_issue ended " + r.kind);
+                    };
+                },
+            };
+        }
+    };
     log.info(
         {
             "ingested": report.ingested,
@@ -201,6 +221,7 @@ function pipeline_loop(
 /// pipeline loop in the foreground, one machine and one volume between them.
 //#runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
 function runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
+    spawn { merge_issue_loop(mode = mode) };
     if (mode == HandleMode.Live) {
         spawn { agent_turn_loop() };
         spawn { github_intake_loop() };
@@ -576,6 +597,11 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
                 save_issue(after);
             };
             tell_outcome(after, out, mode);
+            // handle_issue has returned and released its sandbox; the saved draft
+            // can now enter the shared automatic CI/CodeRabbit worker immediately.
+            if (mode == HandleMode.Live && out.kind == "fixed" && out.pr != null) {
+                request_merge(out.pr ?? "", thread = issue_thread(issue.id));
+            };
             out
         },
     }
