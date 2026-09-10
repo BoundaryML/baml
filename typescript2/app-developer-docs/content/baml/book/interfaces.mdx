@@ -1,0 +1,187 @@
+---
+title: Interfaces
+description: Chapter 11 · Define shared contracts that new types can implement.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - label: "11. Interfaces"
+---
+
+Use an interface when a function should accept new types without knowing every type in advance. In this example, `notify` accepts a webhook from another package without adding a new branch.
+
+The examples return strings and don't contact external services. You should be familiar with classes, unions, `match`, arrays, and lambdas.
+
+For `throws` and error effects, see [Handle errors](/baml/book/errors). Each replacement below is a separate checked stage; the advanced examples are independent unless they explicitly reuse an earlier contract.
+
+## Send notifications with a closed union
+
+Start with an application that supports only email and Slack. A union lets `notify` handle the complete set with an exhaustive `match`:
+
+<BamlProject id="listing-11-05" file="baml_src/main.baml" regions={["excerpt-19"]} />
+
+This design is useful when the application owns every route. Adding a member to `Notifier` makes the exhaustive `match` fail until `notify` handles the new case.
+
+If other packages need to add routes, the central union becomes a coordination point. `notify` doesn't need the complete list; it needs one operation, `send`.
+
+## Replace the union with an interface
+
+Replace the union with the smallest contract that `notify` needs:
+
+<BamlProject id="listing-11-02" file="baml_src/main.baml" regions={["excerpt-20"]} />
+
+`Notifier` defines the method available to callers. Each `implements Notifier` block opts a class into that contract and supplies its behavior. Matching method names alone don't make a class a `Notifier`, and an implementation that omits `send` doesn't compile.
+
+The interface method states its error effect with `throws never`. An error effect is the set of errors that can leave a call; `never` means the set is empty. If you're familiar with `Result<T, E>`, `string throws SendError` is similar to an operation that produces a `string` or a `SendError`, while `string throws never` has no error case. Implementations can omit the clause when BAML infers an effect that satisfies the interface.
+
+`notify` now calls the interface method directly. The concrete value still selects the email or Slack implementation at runtime.
+
+## Add a webhook outside its class
+
+Suppose another package defines `WebhookNotifier`. Implement the local `Notifier` interface without editing the foreign class. The class declaration below represents that package’s source; keep it locally when running this example as a single project:
+
+<BamlProject id="listing-11-07" file="baml_src/main.baml" regions={["excerpt-21"]} />
+
+`implements Notifier for WebhookNotifier` adds a method-only capability outside the class body. The application can do this because it owns `Notifier`; `notify` doesn't change.
+
+For an outside implementation, either the interface or the receiver type must be local. BAML also allows only one implementation for an interface and receiver pair. These coherence rules prevent dependencies from defining competing behavior for the same call.
+
+## Process different notifier types together
+
+Use `Notifier[]` to store the three implementations and call `send` for each value:
+
+<BamlProject id="listing-11-07" file="baml_src/main.baml" regions={["excerpt-22"]} />
+
+The function returns:
+
+```text
+["email to dev@example.com: Build passed", "slack to #deploys: Build passed", "webhook to https://example.com/hooks/deploy: Build passed"]
+```
+
+Inside the lambda, `notifier` exposes the `Notifier` contract, not route-specific fields such as `address` or `url`. Each call still uses the implementation for the concrete value.
+
+## Expose a common destination field
+
+Interfaces can require fields. Map `destination` to the field that each class already stores. Add the following `implements Destination` blocks inside the earlier email and Slack classes, retaining their `implements Notifier` blocks. The excerpt shows only the fields and the new mappings:
+
+<BamlProject id="listing-11-08" file="baml_src/main.baml" regions={["excerpt-23"]} />
+
+`destination as address` exposes `EmailNotifier.address` through the interface name `destination`; the Slack mapping does the same for `room`. The interface doesn't add storage or rename the concrete fields.
+
+Field mappings stay inside a class because they describe its representation. A foreign class can receive a method-only interface from outside, but another package can't reinterpret that class's fields without its owner participating.
+
+## Union and interface ownership
+
+Choose the type based on who should own the next change:
+
+| Requirement | Use |
+| --- | --- |
+| The consumer owns every possible type and must handle each one. | A union with an exhaustive `match`. |
+| Adding a type should make existing consumers reconsider it. | A union. |
+| Type owners opt into behavior that consumers already understand. | An interface. |
+| New implementations should work with existing consumers unchanged. | An interface. |
+
+The original union correctly modeled a closed email-and-Slack application. The interface became useful when webhook support could arrive from another package.
+
+## Interfaces instead of class inheritance
+
+BAML doesn't support class inheritance. Email, Slack, and webhook notifiers share one operation, but they don't share construction, stored state, or an identity as one family. An interface expresses that relationship without requiring a common base class.
+
+Class inheritance also makes one ancestry chain the main path for reusing behavior. In a deep hierarchy, understanding a method call can require tracing several overrides and `super` calls. A method can look local while its behavior depends on distant ancestors.
+
+Multiple inheritance adds diamond and method-resolution questions. When two parents provide the same method, the language needs rules for which implementation wins and how a shared ancestor participates. Those rules add another lookup model for readers, compilers, and tools.
+
+BAML keeps contracts separate from representation, following the same general approach as Rust traits. Classes opt into interfaces explicitly. Default methods reuse behavior through a contract, and same-named methods from different interfaces require an explicit choice. There is no inherited state or hidden override chain.
+
+## Advanced and reference
+
+The notification example needs only a method contract, interface values, an outside implementation, and a field mapping. The following sections cover interfaces for reusable library behavior and generic APIs.
+
+### Add default behavior from a required interface
+
+Use `requires` when a default method depends on another interface. This independent example replaces the earlier `Destination`, `Notifier`, and `EmailNotifier` definitions. It gives every `Notifier` a `preview` method that can read `Destination.destination`:
+
+<BamlProject id="listing-11-09" file="baml_src/main.baml" regions={["excerpt-24", "excerpt-25", "excerpt-26", "excerpt-27"]} />
+
+`EmailNotifier` implements both contracts. It supplies `send`; `Notifier` supplies `preview`. The function returns `"dev@example.com => email: Build passed"`.
+
+### Preserve a concrete type with a generic bound
+
+The next example reuses `Notifier` and `EmailNotifier` from the notification example. Use an interface type when callers need only the common contract. Use a generic bound when the return type must preserve the concrete input type:
+
+<BamlProject id="listing-11-01" file="baml_src/main.baml" regions={["excerpt-28", "excerpt-29", "excerpt-30"]} />
+
+`erase_notifier_type` returns only the `Notifier` view, so `address` isn't available through `erased`. `T extends Notifier` keeps the concrete type, and BAML infers `T` from the argument.
+
+### Implement an interface for arrays
+
+The following implementation gives every array a `batch_size` method:
+
+<BamlProject id="listing-11-03" file="baml_src/main.baml" regions={["excerpt-31", "excerpt-32", "excerpt-33"]} />
+
+`T[]` matches an array with any element type, so `batch_sizes` returns `[3, 2]`.
+
+The next example reuses the method-only `Notifier` and `EmailNotifier` from the notification example. Add a bound when the implementation needs behavior from each element. This implementation gives `send_all` only to arrays whose elements implement `Notifier`:
+
+<BamlProject id="listing-11-03" file="baml_src/main.baml" regions={["excerpt-34", "excerpt-35", "excerpt-36"]} />
+
+The bound makes `send` available inside the implementation. `EmailNotifier[]` receives `send_all`; `int[]` doesn't.
+
+### Select between same-named methods
+
+When two interfaces provide the same method name, select the intended contract with `as<Interface>`:
+
+<BamlProject id="listing-11-04" file="baml_src/main.baml" regions={["excerpt-37"]} />
+
+An unqualified `notifier.label()` is ambiguous. The `as<Interface>` expression selects a contract; it doesn't convert the value.
+
+### Customize standard conversions
+
+Every value has structural `to_string()` and `to_json()` behavior. Implement the standard interfaces to customize those operations:
+
+<BamlProject id="listing-11-01" file="baml_src/main.baml" regions={["excerpt-38", "excerpt-39"]} />
+
+The function returns `["queued via email", "{\"route\": \"email\", \"status\": \"queued\"}"]`.
+
+BAML doesn't use ad hoc magic names such as `__str__`, `toString`, or `toJSON`. Define `to_string` inside `baml.ToString` and `to_json` inside `baml.ToJson`.
+
+### Define an associated error type
+
+An associated type lets one interface implementation choose a related type once. This local `PriorityComparison` interface lets each implementation choose its comparison error. `DeliveryPriority` declares that comparison can't fail:
+
+<BamlProject id="listing-11-01" file="baml_src/main.baml" regions={["excerpt-40"]} />
+
+`Self` is `DeliveryPriority` in this implementation. `CompareError = never` is the error type used by `compare`; callers don't provide it when sorting. `sort_by` accepts a comparator returning `baml.ops.Ordering`; `cmp(0)` converts the negative, zero, or positive comparison result to that ordering. For a natural, infallible ordering, the standard interface is `baml.ops.Compare`.
+
+### Interface membership and coherence
+
+**Explicit membership.** Matching fields and methods don't confer interface membership. This checked failure has the right field but never implements `Destination`:
+
+<BamlProject id="no-listing-11-04-structural-conformance" file="baml_src/main.baml" regions={["excerpt-41"]} />
+
+**Local ownership.** An outside implementation is rejected when the current package owns neither the interface nor the receiver:
+
+<BamlProject id="no-listing-11-06-orphan-rule" file="baml_src/main.baml" regions={["excerpt-42"]} />
+
+**Single implementation.** BAML rejects overlapping implementations for the same interface and receiver:
+
+<BamlProject id="no-listing-11-07-overlapping-implementations" file="baml_src/main.baml" regions={["excerpt-43"]} />
+
+Together, explicit membership, local ownership, and overlap checking keep method selection stable when packages are combined.
+
+### Diagnostic reference
+
+The main examples describe failures by cause. These are the codes emitted by the checked failure projects:
+
+| Situation | Diagnostic |
+| --- | --- |
+| Interface method omits an explicit `throws` clause. | `E0170` |
+| An implementation omits a required method. | `E0113` |
+| A `PriorityComparison` implementation omits `CompareError`. | `E0001` |
+| A matching shape is passed without interface membership. | `E0001` |
+| `to_string` or `to_json` is declared outside its standard interface implementation. | `E0140` or `E0142` |
+| Neither side of an outside implementation is local. | `E0139` |
+| Two implementations overlap for one interface and receiver. | `E0132` |
+| A same-named interface method is called without disambiguation. | `E0121` |
+| A bounded blanket method is called on a receiver that doesn't satisfy the bound. | `E0007` |

@@ -1,0 +1,267 @@
+---
+title: Run work concurrently
+description: Chapter 12 · Start independent work, await results, and manage task lifetimes.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - label: "12. Run work concurrently"
+---
+
+BAML is designed to feel familiar to TypeScript developers, but concurrency is one place where it deliberately takes a different path. In TypeScript, an asynchronous API returns a `Promise`, making asynchrony part of the function's type and the APIs that callers use.
+
+BAML keeps functions colorless. The same function can be called directly when the caller should wait or placed in `spawn` when it should run concurrently. Libraries don't need separate synchronous and asynchronous forms, and making one call concurrent doesn't require async signatures throughout the functions that lead to it.
+
+In that respect, BAML works more like Go. Unlike Go's `go` statement, however, `spawn` returns a future that you can await.
+
+This page compares how BAML, TypeScript, and Go start the same external operation concurrently. It then shows how to wait for results, inspect concurrent work, and limit or cancel it. [Concurrency model and task lifecycle](#concurrency-model-and-task-lifecycle) covers future types, errors, ordering, cancellation, and parent-child behavior.
+
+The examples assume familiarity with functions, arrays, lambdas, and [error handling](/baml/book/errors). Each named function adds to the same project. The browser example supplies `simulate_read` and `main`; the later one-line excerpt reuses its variables. File-reading examples require the native CLI or an SDK with filesystem access.
+
+## Compare direct and concurrent calls
+
+The following examples read two files and start the first read concurrently while the second read runs. Notice whether concurrency changes the called function, the enclosing signature, or the way the caller retrieves the result.
+
+### BAML
+
+This BAML function reads both documents directly. The second call starts after the first call returns:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-44"]} />
+
+To overlap the reads, place only the first call in `spawn`. The `baml.fs.read` function and the enclosing return type stay the same:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-45"]} />
+
+`spawn` starts the first read and returns a future, which is a handle to work in progress. The function reads the second document while the first read is running, then `await first_future` returns the first document.
+
+The names make the value change visible: `first_future` remains a future, and `first` is the string produced by that future. `await` returns a new value; it doesn't rebind `first_future`.
+
+### TypeScript
+
+Node provides separate synchronous and promise-based file APIs. Changing the direct version to run concurrently changes both the called API and the enclosing function's return type:
+
+```typescript
+import { readFileSync } from "node:fs"
+import { readFile } from "node:fs/promises"
+
+function readTwoDocumentsLinear(firstPath: string, secondPath: string): string[] {
+  const first = readFileSync(firstPath, "utf8")
+  const second = readFileSync(secondPath, "utf8")
+  return [first, second]
+}
+
+async function readOneDocumentConcurrently(
+  firstPath: string,
+  secondPath: string,
+): Promise<string[]> {
+  const firstPromise = readFile(firstPath, "utf8")
+  const second = await readFile(secondPath, "utf8")
+  const first = await firstPromise
+  return [first, second]
+}
+```
+
+The concurrent function is `async`, returns `Promise<string[]>`, and uses `readFile` instead of `readFileSync`.
+
+### Go
+
+Go uses the same ordinary file-reading function in both versions. To retrieve a value from a goroutine, the concurrent version adds a channel:
+
+```go
+package documents
+
+import "os"
+
+func readDocument(path string) string {
+    contents, err := os.ReadFile(path)
+    if err != nil {
+        panic(err)
+    }
+    return string(contents)
+}
+
+func readTwoDocumentsLinear(firstPath, secondPath string) []string {
+    first := readDocument(firstPath)
+    second := readDocument(secondPath)
+    return []string{first, second}
+}
+
+func readOneDocumentConcurrently(firstPath, secondPath string) []string {
+    firstResult := make(chan string, 1)
+    go func() {
+        firstResult <- readDocument(firstPath)
+    }()
+
+    second := readDocument(secondPath)
+    first := <-firstResult
+    return []string{first, second}
+}
+```
+
+The `readDocument` function stays ordinary. The caller creates `firstResult` because Go's `go` statement starts a goroutine but doesn't return the goroutine's result.
+
+The three examples perform the same operation, but place complexity in different locations. TypeScript represents asynchrony in a `Promise` return type and, in this example, provides separate synchronous and asynchronous APIs. Go keeps the function ordinary but uses a channel to return a goroutine's value. BAML keeps the function ordinary and makes `spawn` return a future directly.
+
+## Start both calls before waiting
+
+To start both file reads together, spawn both calls before awaiting either future:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-46"]} />
+
+Both reads are already running when the first `await` executes. Awaiting `first_future` first doesn't make the reads sequential; it only chooses which result the parent reads first.
+
+## Wait for several results together
+
+After you understand the individual futures, `baml.future.all` is a shorter way to await the same set of results:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-47"]} />
+
+`baml.future.all` returns the strings in input order: first path, then second path. Completion order can differ. If one read fails, `all` cancels the remaining futures and rethrows the observed error. To wait for every input and inspect each outcome, use `baml.future.all_settled`. It returns `Success<T>`, `Failure<E>`, or `Panicked` for each input, in input order. `Panicked` includes input cancellation.
+
+## Try concurrent work in the browser
+
+The browser playground doesn't expose a host filesystem. The following complete example simulates two file reads with random delays, so you can run it in the browser:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-48"]} />
+
+Each run gives the two tasks different delays. The result remains `["contents of notes.md", "contents of outline.md"]` because the code constructs the array in that order, regardless of which task finishes first.
+
+The browser can run the example, but it doesn't store local execution telemetry. Use the VS Code extension or CLI to inspect the two tasks as separate lanes.
+
+## Inspect concurrent work
+
+Add a string after `spawn` to give a thread a useful diagnostic name. The browser example names each task with its path and simulated delay:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-49"]} />
+
+The name doesn't change scheduling, values, or errors. It appears in execution telemetry and makes overlapping work easier to identify.
+
+To inspect the example in VS Code:
+
+1. Run `main` from the BAML extension.
+2. Open the execution details.
+3. Select **Telemetry** to see the two named tasks on overlapping lanes.
+
+To inspect recent named threads from the CLI, run the example and query the local profile store:
+
+```shell
+baml run main
+baml query "
+SELECT name, end_status, started_at, ended_at
+FROM threads
+WHERE name IS NOT NULL
+ORDER BY started_at DESC
+LIMIT 10"
+```
+
+The query filters out unnamed runtime work and shows the most recent user-named threads.
+
+## Read a list concurrently
+
+`map` calls its callback sequentially. This function therefore waits for each read before starting the next one:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-50"]} />
+
+To overlap the reads, make the callback return a future, then await all the futures after `map` finishes:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-51"]} />
+
+The important change is inside `map`: `spawn` returns immediately, so `map` can start every read before the function reaches `baml.future.all`.
+
+## Limit active work
+
+Starting many file operations at once can saturate storage or exhaust file descriptors. Put the spawned work in a `TaskGroup` to cap the number of active group members:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-52"]} />
+
+Every `spawn` still returns a future immediately. When the group reaches `limit` active members, later members wait in the group's FIFO queue. The group name is diagnostic metadata; passing `group` in `baml.spawn.options` is what adds a task to the group.
+
+## Cancel work you no longer need
+
+Call `cancel()` when a pending result is no longer useful, then handle `baml.panics.Cancelled` where you await it:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-53"]} />
+
+If `cancel()` returns `false`, the future was already settled. A successful future still returns its value at `await`; it does not enter the cancellation handler. In the handler, `requested == false` means the future was already cancelled.
+
+For the precise cancellation and parent-child rules, continue to [Cancellation and task lifetimes](#cancellation-and-task-lifetimes).
+
+## Concurrency model and task lifecycle
+
+The main pattern is short: spawn independent work, keep its future, and await the future when you need the result. The following sections describe the model behind that pattern.
+
+### Logical threads and runtime workers
+
+`spawn` creates a logical BAML thread, not a dedicated operating-system thread. Native runtimes can execute independent BAML threads on different workers, including CPU-bound work. In browser WebAssembly, BAML threads share one browser thread and interleave instead of receiving multicore CPU parallelism.
+
+Like a Go goroutine, a BAML thread is a lightweight task rather than a dedicated operating-system thread. Unlike Go's `go` statement, BAML's `spawn` expression returns a future that you can await.
+
+### Why BAML has no async functions
+
+In TypeScript, an asynchronous API returns `Promise<T>`. A function that awaits it must also return a promise, and that change can propagate through the call graph. Libraries that support both direct and asynchronous use can expose separate APIs, as Node does with `readFileSync` and promise-based `readFile`.
+
+BAML keeps concurrency at the call site. A function has one implementation and one ordinary signature. Call it directly when the caller should wait, or place it in `spawn` when it should run concurrently. Making one operation concurrent remains a local refactor.
+
+### Future values and error effects
+
+A spawn expression has the type `baml.future.Future<T, E>`:
+
+- `T` is the type of the task body's final value.
+- `E` is its error effect: the set of errors that can leave the task body.
+
+An effect is a possibility tracked by the compiler. `baml.fs.read` returns a `string` and can throw `baml.errors.Io` or `baml.errors.ParseError`. Spawning that call therefore produces a future whose value type is `string` and whose error effect includes those errors.
+
+Rust's `Result<T, E>` provides a concrete comparison. A `Result` value contains either a successful `T` or an error `E`. A BAML future represents work that will eventually return `T` or throw `E`; `await` returns the `T` or rethrows the `E` through BAML's error channel.
+
+BAML normally infers both parameters. Write an explicit future type only when an API or explanation needs it. In an explicit type or `throws` clause, `_` asks the compiler to infer that part:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-54"]} />
+
+Here, `throws EmptyPathList | _` promises that `EmptyPathList` is part of the function's error contract while letting the compiler add errors from the file and future operations. `Future<string, _>` fixes the result type and infers the future's error effect.
+
+### Task bodies and returned futures
+
+The parts of a spawn statement have distinct roles:
+
+```text
+let notes_future = spawn "read notes.md" { baml.fs.read(notes_path) };
+    └─────┬────┘   └─┬─┘ └──────┬──────┘   └─────────────┬─────────────┘
+    returned Future  starts  diagnostic name             task body
+
+let notes = await notes_future;
+    └─┬──┘   └─┬─┘ └─────┬────┘
+    string    waits     Future
+```
+
+A spawn body can contain several statements. Its statements remain sequential, and the body's final expression becomes the future's result:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-55"]} />
+
+This example runs the two reads sequentially inside one child thread. Use separate spawns when the reads should overlap. Use a multiline body when an entire sequential workflow should run independently of its parent.
+
+### Errors and result ordering
+
+If a task body throws, its future records the error. The error reaches the parent at `await`, so attach `catch` to the await expression:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-56"]} />
+
+Creating `lookup_future` doesn't throw `LookupFailed` in the parent. `await lookup_future` rethrows it.
+
+For several futures, `baml.future.all` preserves input order, not completion order. If one input fails, it cancels the remaining inputs and rethrows the observed error. `baml.future.all_settled` collects a `Success<T>`, `Failure<E>`, or `Panicked` outcome for every input. An input failure or panic does not cancel the other inputs. Cancelling the collector itself stops the wait.
+
+### Cancellation and task lifetimes
+
+`Future.cancel()` settles a pending future as cancelled and signals its running thread to stop. The task doesn't need explicit cancellation checks. Cancellation can interrupt long-running BAML loops at runtime scheduling checkpoints.
+
+Spawned threads are children of their parent by default. If the parent fails or is cancelled, its running children are cancelled too. This relationship keeps concurrent work within the operation that started it.
+
+`baml.spawn.options(detach = true)` opts a child out of cancellation caused by its parent. It doesn't make the task immune to an explicit `cancel()`, and the root doesn't wait for detached work to finish. Unhandled errors from detached work are reported globally; they do not replace the root call’s result. Use detachment only for work whose cancellation policy must be independent of its immediate parent.
+
+### Dynamic task-group limits
+
+Call `set_limit` to change how many members a task group can admit:
+
+<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-57"]} />
+
+Raising the limit admits more queued tasks. Lowering it prevents new admissions until the active count is below the new limit. Futures created before the change remain valid.
