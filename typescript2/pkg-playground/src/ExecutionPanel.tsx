@@ -56,7 +56,7 @@ import { setGatewayEnabled } from './gateway';
 import { GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { cn } from './lib/utils';
-import { projectLabels } from './project-label';
+import { projectLabels, toProjectEntry } from './project-label';
 import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
 import { ResultDisplay } from './ResultDisplay';
 import { RunOutputTerminal } from './RunOutputTerminal';
@@ -1112,7 +1112,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (!n) break;
           switch (n.type) {
             case 'listProjects': {
-              const entries = n.projects ?? [];
+              const entries = (n.projects ?? []).map(toProjectEntry);
               const paths = entries.map((entry) => entry.path);
               setProjectRoots(paths);
               setProjectNames(

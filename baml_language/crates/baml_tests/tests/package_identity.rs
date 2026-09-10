@@ -17,6 +17,57 @@ use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
 
+/// MIR reads a wire name from the package reading it, never by searching the
+/// database for something spelled that way.
+///
+/// The wire spells "my own package" the same way for every package, and an
+/// unnamed package spells as the default, so a reverse lookup keyed on the
+/// spelling answers with whichever unnamed root was created first. With two
+/// unnamed projects in one database that is silently the wrong one, and the
+/// head MIR gets back belongs to the other project.
+#[test]
+fn mir_reads_a_local_wire_name_as_the_package_being_lowered() {
+    let (mut db, first) = workspace_db();
+    let second = db
+        .add_source_root(SourceRootSpec::new(
+            "/package-identity-second",
+            SourceRootKind::Workspace,
+        ))
+        .expect("a second unnamed workspace root is a valid root");
+
+    let table = spelling(&db);
+    assert_eq!(
+        table.of(first),
+        table.of(second),
+        "two unnamed packages spell the same"
+    );
+    assert_eq!(
+        table.root(table.of(second)),
+        Some(first),
+        "the spelling alone cannot tell them apart: it answers with the first"
+    );
+
+    // The crossing MIR lowers through, built for each package in turn.
+    let aliases = baml_type::ResolvedAliases::default();
+    let crossing = |viewpoint| baml_compiler2_mir::RuntimeLowering {
+        aliases: &aliases,
+        spelling: table,
+        db: &db,
+        viewpoint,
+    };
+    let point = baml_type::TypeName::local(Name::new("Point"));
+    assert_eq!(
+        crossing(second).decl(&point).map(|decl| decl.root()),
+        Some(second),
+        "the second package reads its own `Point`, not the first's"
+    );
+    assert_eq!(
+        crossing(first).decl(&point).map(|decl| decl.root()),
+        Some(first),
+        "and the first still reads its own"
+    );
+}
+
 /// A database with the stdlib and an unnamed workspace root.
 fn workspace_db() -> (ProjectDatabase, SourceRoot) {
     let mut db = ProjectDatabase::new();

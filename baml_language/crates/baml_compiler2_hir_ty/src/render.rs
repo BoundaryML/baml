@@ -171,9 +171,11 @@ impl TyRenderStrategy<DeclName> for SourceSpelling<'_, '_> {
         match self.viewpoint.source_path(qtn) {
             Ok(path) => path,
             Err(Unspellable(decl)) => {
-                if self.unspellable.take().is_none() {
-                    self.unspellable.set(Some(decl));
-                }
+                // Record the first one and keep it. `take` would empty the
+                // cell on every later head, so an even number of unspellable
+                // heads left it `None` and the render reported success.
+                let recorded = self.unspellable.take();
+                self.unspellable.set(recorded.or(Some(decl)));
                 self.viewpoint.path(qtn)
             }
         }

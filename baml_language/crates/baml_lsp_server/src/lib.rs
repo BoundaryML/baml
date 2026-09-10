@@ -968,19 +968,27 @@ mod tests {
             run_store.clone(),
         ));
         let platform = PlaygroundPlatform::new(broadcast_tx, run_store, env_state, io_state);
-        let sys_ops = Arc::new(platform.for_root(Path::new("/sysops-test")));
+        // A fixed working directory must be absolute, and a leading slash is
+        // not absolute on Windows, where an absolute path carries a prefix.
+        // The directory is never read or written here; only its shape matters.
+        let project = if cfg!(windows) {
+            PathBuf::from(r"C:\sysops-test")
+        } else {
+            PathBuf::from("/sysops-test")
+        };
+        let sys_ops = Arc::new(platform.for_root(&project));
 
         let mut db = baml_db::ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let root = db
             .add_source_root(baml_db::SourceRootSpec::new(
-                PathBuf::from("/sysops-test"),
+                project.clone(),
                 baml_db::SourceRootKind::Workspace,
             ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         db.add_or_update_file_in(
             root,
-            std::path::Path::new("/sysops-test/main.baml"),
+            &project.join("main.baml"),
             "function stamp() -> bool throws never {\n    \
              let start = baml.time.Instant.now();\n    \
              start.elapsed().to_milliseconds() >= 0n\n}\n",

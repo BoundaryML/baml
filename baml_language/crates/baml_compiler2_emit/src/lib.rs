@@ -74,6 +74,8 @@ fn runtime_lowering<'a>(
     RuntimeLowering {
         aliases: &caches[&root],
         spelling: spelling(db),
+        db,
+        viewpoint: root,
     }
 }
 
@@ -6660,6 +6662,8 @@ mod tests {
         let cache = RuntimeLowering {
             aliases: &aliases,
             spelling: baml_compiler2_hir::package::spelling(&db),
+            db: &db,
+            viewpoint: file_package(&db, file).root,
         };
 
         let metadata = compute_function_metadata(&db, func_loc, &parameter_defaults, &cache);
@@ -6691,6 +6695,8 @@ mod tests {
         let cache = RuntimeLowering {
             aliases: &aliases,
             spelling: baml_compiler2_hir::package::spelling(&db),
+            db: &db,
+            viewpoint: file_package(&db, file).root,
         };
         build_interface_def(
             &db,

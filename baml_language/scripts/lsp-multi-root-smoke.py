@@ -57,11 +57,16 @@ class Server:
             argv += ["--workspace", str(root)]
         self.log = log
         self._log_file = log.open("wb")
+        # Unbuffered on this side, so `select` on the pipe is the whole truth
+        # about whether a message is waiting. A buffered reader would hold a
+        # decoded message the kernel no longer has, and `settle` would call
+        # that quiet and move on before reading it.
         self.proc = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self._log_file,
+            bufsize=0,
         )
         # Every publication seen so far, newest last, keyed by URI.
         self.published: dict[str, list[list[dict]]] = {}
@@ -89,13 +94,26 @@ class Server:
                 break
             name, _, value = line.decode().partition(":")
             headers[name.strip().lower()] = value.strip()
-        message = json.loads(self.proc.stdout.read(int(headers["content-length"])))
+        message = json.loads(self._read_exactly(int(headers["content-length"])))
         if message.get("method") == "textDocument/publishDiagnostics":
             params = message["params"]
             self.published.setdefault(params["uri"], []).append(params["diagnostics"])
         elif "id" in message and "method" not in message:
             self.answered.add(message["id"])
         return message
+
+    def _read_exactly(self, count: int) -> bytes:
+        """Exactly `count` bytes. An unbuffered read returns what is there."""
+        assert self.proc.stdout is not None
+        chunks: list[bytes] = []
+        remaining = count
+        while remaining > 0:
+            chunk = self.proc.stdout.read(remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
 
     def pump_until(self, done, timeout: float) -> bool:
         """Read messages until `done()` holds. False if the timeout wins."""

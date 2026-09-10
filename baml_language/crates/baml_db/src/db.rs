@@ -469,7 +469,21 @@ impl ProjectDatabase {
                 })
                 .collect();
             let root = match self.roots_by_path.get(&path) {
-                Some(&root) => root,
+                // Reuse only matches the provenance the root already has.
+                // Switching one would need the root's interface bytes and file
+                // set rebuilt, and the reuse path does neither: it would keep
+                // a source-backed root and silently discard the interface it
+                // was just handed. No caller does this today; fail loudly if
+                // one starts.
+                Some(&root) => {
+                    assert_eq!(
+                        root.interface(self).is_some(),
+                        matches!(provenance(package.name), StdlibProvenance::Interface { .. }),
+                        "the stdlib root for `{}` is already installed with the other provenance",
+                        package.name
+                    );
+                    root
+                }
                 None => {
                     let mut spec = SourceRootSpec::new(path, SourceRootKind::Stdlib)
                         .named(Name::new(package.name))
@@ -1126,11 +1140,16 @@ impl ProjectDatabase {
         // recoverable `LoweringError`. The diagnostics themselves are reported
         // through the normal check path. (CLI commands gate before calling
         // `generate_project_bytecode` directly; this protects the in-process /
-        // runtime-eval callers that go through `get_bytecode`.) The error filter
-        // matches `testing::assert_no_diagnostic_errors` — errors in the
-        // root's own files only.
+        // runtime-eval callers that go through `get_bytecode`.) The filter is
+        // the emitted WORLD's files, not the root's own: emit lowers the root
+        // plus its dependency closure, and an error left in a dependency
+        // reaches the runtime conversion, which has no error case and panics.
+        // Gating on the root alone would let exactly that through.
         let user_file_ids: std::collections::HashSet<FileId> =
-            root.files(self).iter().map(|f| f.file_id(self)).collect();
+            baml_compiler2_hir::package::world_files(self, root)
+                .iter()
+                .map(|f| f.file_id(self))
+                .collect();
         let error_count = crate::check::collect_compiler2_diagnostics(self)
             .iter()
             .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
@@ -1648,8 +1667,12 @@ mod tests {
             .expect("stdlib root");
         let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
         // The prelude already reaches `baml`; a declared edge may not reuse
-        // a stdlib name, nor a source-level qualifier.
-        for name in ["baml", "root", "env"] {
+        // a stdlib name, nor a source-level qualifier. `user` is refused for
+        // a reason that is not a language rule and will not last: the wire
+        // still reads that spelling as the artifact's own package, so an edge
+        // carrying it would fuse a dependency's declarations into the
+        // emitting package. See the constant naming that condition.
+        for name in ["baml", "root", "env", "user"] {
             assert_eq!(
                 db.add_dependency(
                     workspace,

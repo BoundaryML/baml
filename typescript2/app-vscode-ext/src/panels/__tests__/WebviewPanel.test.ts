@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/style/useFilenamingConvention: a test file is named for the file it tests */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A port is part of a panel's identity: its port mapping and the WS URL

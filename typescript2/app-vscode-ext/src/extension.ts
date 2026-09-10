@@ -36,6 +36,8 @@ import { WebviewPanel } from './panels/WebviewPanel';
 // window instead of one arbitrary project.
 
 let client: LanguageClient | undefined;
+/** The restart in flight, so a second request queues instead of racing. */
+let restarting: Promise<void> | undefined;
 let stdlibDocuments: StdlibDocuments;
 let stdlibConnection: vscode.Disposable | undefined;
 let clientStartFailed = false;
@@ -371,8 +373,13 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
 
   created.onNotification(
     'baml/listProjects',
-    (params: { projects: ProjectEntry[] }) => {
-      knownProjects = params.projects ?? [];
+    (params: { projects: (ProjectEntry | string)[] }) => {
+      // A server older than this extension lists bare paths. That skew is the
+      // designed arrangement, not an edge case: the wrapper exists so a
+      // project can pin an older toolchain than the editor is running.
+      knownProjects = (params.projects ?? []).map((project) =>
+        typeof project === 'string' ? { path: project } : project,
+      );
       refreshTooltip();
     },
   );
@@ -403,15 +410,32 @@ async function startClient(): Promise<void> {
  * working directory are re-resolved, so a changed `baml.cliPath` or a
  * reordered workspace takes effect. `LanguageClient.restart()` would reuse
  * the options it was created with.
+ *
+ * Restarts queue behind one another. Two at once would each stop the client
+ * they saw and then each create a replacement, and the one that finished
+ * first would be left running with nothing referencing it: a live server that
+ * never stops, not even on deactivate, still handling notifications into
+ * shared state.
  */
-async function restartClient(context: vscode.ExtensionContext): Promise<void> {
-  const current = client;
-  client = undefined;
-  if (current && current.state !== State.Stopped) {
-    await current.stop();
-  }
-  client = createClient(context);
-  await startClient();
+function restartClient(context: vscode.ExtensionContext): Promise<void> {
+  const queued = (restarting ?? Promise.resolve())
+    // A failed restart must not poison the ones behind it.
+    .catch(() => undefined)
+    .then(async () => {
+      const current = client;
+      client = undefined;
+      if (current && current.state !== State.Stopped) {
+        await current.stop();
+      }
+      client = createClient(context);
+      await startClient();
+    });
+  restarting = queued;
+  return queued.finally(() => {
+    if (restarting === queued) {
+      restarting = undefined;
+    }
+  });
 }
 
 function validateServerCompatibility(client: LanguageClient) {

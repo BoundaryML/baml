@@ -13,7 +13,9 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::{Name, SourceRootKind};
+use baml_base::SourceRootKind;
+#[cfg(not(target_arch = "wasm32"))]
+use baml_base::Name;
 
 use crate::{
     mutation::RootSpec,
@@ -56,8 +58,8 @@ pub trait ProjectFs: Send + Sync {
 
 /// The `Workspace` root spec for a project that declares no name: one
 /// discovered by a `baml_src/` marker alone, or minted for a document that
-/// lies outside every project. A project with a manifest is named by
-/// [`declared_package_name`].
+/// lies outside every project. A project with a manifest is named by the name
+/// its manifest declares, which discovery reads.
 pub fn workspace_root_spec(path: PathBuf) -> RootSpec {
     RootSpec {
         path,

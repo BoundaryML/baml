@@ -116,6 +116,11 @@ impl AddGeneratorArgs {
         let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
         baml_db::manifest::package_name(&manifest, &toml_path)?;
+        // Every other manifest reader rejects these, so accepting them here
+        // would write a generator into a file that the next build refuses to
+        // load, reporting a failure that names neither this command nor the
+        // table it choked on.
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
 
         let mut generator = Generator::from(self.output_type);
         match (self.output_type, self.sdk_import_path.as_deref()) {

@@ -152,7 +152,7 @@ export interface ProjectUpdate {
 }
 
 export type PlaygroundNotification =
-  | { type: 'listProjects'; projects: ProjectEntry[] }
+  | { type: 'listProjects'; projects: (ProjectEntry | string)[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | {
       type: 'openPlayground';

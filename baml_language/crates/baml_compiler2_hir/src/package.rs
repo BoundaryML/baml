@@ -270,10 +270,25 @@ impl Spelling {
                     slot.insert(root);
                 }
                 indexmap::map::Entry::Occupied(slot) => {
-                    collisions.push(SpellingCollision::SharedName {
-                        name: slot.key().clone(),
-                        roots: vec![*slot.get(), root],
-                    });
+                    // One entry per name, holding every root that claims it,
+                    // the way `spelling` builds them. Pushing a fresh pair per
+                    // clash would report three colliding roots as two separate
+                    // pairs, and the same table would describe itself
+                    // differently depending on which constructor built it.
+                    let name = slot.key().clone();
+                    let first = *slot.get();
+                    match collisions.iter_mut().find_map(|collision| match collision {
+                        SpellingCollision::SharedName { name: seen, roots } if *seen == name => {
+                            Some(roots)
+                        }
+                        SpellingCollision::SharedName { .. } | SpellingCollision::ManyNames { .. } => None,
+                    }) {
+                        Some(roots) => roots.push(root),
+                        None => collisions.push(SpellingCollision::SharedName {
+                            name,
+                            roots: vec![first, root],
+                        }),
+                    }
                 }
             }
         }

@@ -101,19 +101,23 @@ pub(crate) fn external_class_for_type(
     fuel: u32,
 ) -> Option<(DeclName, Vec<Ty>)> {
     let lang = facts.lang();
-    let baml = lang.get(baml_base::LangPackage::Baml)?;
+    // The language root is looked up per builtin arm, not once up front: only
+    // a BUILTIN receiver needs it to name its class, while a class receiver
+    // already carries its own head. Demanding it eagerly made every class
+    // receiver unresolvable in a database with no standard library installed,
+    // which is a state this database supports.
     let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        (
+        Some((
             DeclName::in_root(
-                baml,
+                lang.get(baml_base::LangPackage::Baml)?,
                 namespace.iter().map(Name::new).collect(),
                 Name::new(name),
             ),
             args,
-        )
+        ))
     };
-    Some(match receiver.kind() {
-        InferTy::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
+    match receiver.kind() {
+        InferTy::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
         InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
         InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
         InferTy::Future(value, error, _) => {
@@ -135,14 +139,14 @@ pub(crate) fn external_class_for_type(
             builtin(&[], "Bool", Vec::new())
         }
         InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        InferTy::Type { .. } => (
+        InferTy::Type { .. } => Some((
             DeclName::in_root(
                 lang.get(baml_base::LangPackage::Reflect)?,
                 Vec::new(),
                 Name::new("Type"),
             ),
             Vec::new(),
-        ),
+        )),
         InferTy::Media(kind, _) => {
             let class = match kind {
                 MediaKind::Image => "Image",
@@ -161,8 +165,8 @@ pub(crate) fn external_class_for_type(
                 fuel.checked_sub(1)?,
             );
         }
-        _ => return None,
-    })
+        _ => None,
+    }
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic

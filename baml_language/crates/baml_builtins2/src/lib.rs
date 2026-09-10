@@ -300,21 +300,67 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
 
 /// Every name a dependency edge may not use, in stable first-appearance
 /// order: the builtin packages (their names are language-fixed edges every
-/// package already has) and the two source-level qualifiers `root` (the
-/// package's own root namespace) and `env` (environment variables).
+/// package already has), the two source-level qualifiers `root` (the
+/// package's own root namespace) and `env` (environment variables), and, for
+/// now, [`RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY`].
 ///
 /// This is the single source of truth shared by the compiler's edge
 /// validation and runtime reflection's mount-alias check, so both reject
-/// exactly the same names. The unnamed-package display default `user` is
-/// deliberately absent: it has no semantics, and a clash with it is caught as
-/// an ordinary spelling collision, not by reservation.
+/// exactly the same names.
 pub fn reserved_edge_names() -> &'static [&'static str] {
     static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
     NAMES.get_or_init(|| {
         let mut names = stdlib_package_names().to_vec();
-        names.extend(["root", "env"]);
+        names.extend(["root", "env", RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY]);
         names
     })
+}
+
+/// `user`, reserved as an edge name ONLY to paper over a runtime limitation,
+/// and to be released the moment that limitation is gone.
+///
+/// The name has no semantics in the language: it is the display default for a
+/// package that declares no name, and nothing may branch on it. The runtime is
+/// the problem. The wire still carries a package's identity as its *spelling*,
+/// and the codec that reads a spelling back maps the literal string `user`
+/// onto "this artifact's own package". So an edge named `user` would encode a
+/// dependency's declarations as the emitting package's own, fusing two
+/// identities into one. Nothing catches it: the spelling really is unique
+/// within that world, so it is not a collision, and the fusion only shows up
+/// later as a type from the wrong package.
+///
+/// Reserving the name makes that unrepresentable in the meantime. The moment
+/// the wire addresses a package by identity rather than by name, this
+/// reservation is dead weight and both it and the codec's `user` carve-out
+/// must go. The test below fails loudly if the carve-out disappears first.
+pub const RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY: &str = "user";
+
+#[cfg(test)]
+mod reserved_edge_name_tests {
+    use super::*;
+
+    /// The `user` reservation exists ONLY because the wire codec still maps
+    /// that spelling onto the artifact's own package. When the codec stops
+    /// doing that, this test fails, and the right response is to delete the
+    /// reservation rather than to update the test: it is not a language rule
+    /// and must not outlive its cause.
+    #[test]
+    fn user_is_reserved_only_while_the_wire_codec_claims_that_spelling() {
+        assert!(
+            reserved_edge_names().contains(&RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY),
+            "the edge name is unreserved while the wire codec still claims the spelling"
+        );
+        assert_eq!(
+            baml_type::Package::from_name(baml_type::Name::new(
+                RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY
+            )),
+            baml_type::Package::Local,
+            "the wire codec no longer fuses this spelling into the artifact's own \
+             package, so the reservation is dead weight: delete \
+             RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY and drop it from \
+             reserved_edge_names"
+        );
+    }
 }
 
 mod adt;

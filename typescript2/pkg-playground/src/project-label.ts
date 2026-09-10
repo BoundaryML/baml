@@ -46,30 +46,98 @@ export function projectLabel(path: string, name?: string): string {
 }
 
 /**
+ * One project as any server version sends it.
+ *
+ * A server older than this client lists projects as bare paths, which is a
+ * live case rather than a hypothetical: the toolchain wrapper exists to pin an
+ * older toolchain per project, so a newer client talking to an older server is
+ * the designed arrangement.
+ */
+export function toProjectEntry(project: ProjectEntry | string): ProjectEntry {
+  return typeof project === 'string' ? { path: project } : project;
+}
+
+/** A path's non-empty components, with either separator. */
+function segments(path: string): string[] {
+  return path
+    .replace(/[/\\]+$/, '')
+    .split(/[/\\]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Progressively more specific labels for one project: the short label, then
+ * the same with one more ancestor directory prefixed, and so on up the path.
+ */
+function labelCandidates(project: ProjectEntry): string[] {
+  const parts = segments(project.path);
+  const base = projectLabel(project.path, project.name);
+  // Trailing components the base already speaks for, so an ancestor is not
+  // repeated: the directory, or the directory and a `baml_src` below it.
+  const consumed = !project.name && parts.at(-1) === 'baml_src' ? 2 : 1;
+  const ancestors = parts.slice(0, Math.max(0, parts.length - consumed));
+  const candidates = [base];
+  for (let depth = 1; depth <= ancestors.length; depth++) {
+    candidates.push(
+      [...ancestors.slice(ancestors.length - depth), base].join('/'),
+    );
+  }
+  return candidates;
+}
+
+/**
  * Labels for a whole list, disambiguated so no two tabs read the same.
  *
- * Two checkouts of one project, or two projects whose directories happen to
- * agree, would otherwise be indistinguishable; a repeated label keeps its
- * parent directory as a prefix. The full path is still the tooltip.
+ * Projects whose short labels collide keep taking one more ancestor directory
+ * until the whole group reads differently. One ancestor is not enough on its
+ * own: two checkouts of the same repository agree for as many components as
+ * they share, and stopping at the first would leave both tabs identical. When
+ * a group's paths are exhausted the full path is the label, since nothing
+ * shorter can tell them apart.
  */
 export function projectLabels(projects: ProjectEntry[]): Map<string, string> {
-  const labels = new Map<string, string>();
-  const counts = new Map<string, number>();
+  const groups = new Map<string, ProjectEntry[]>();
   for (const project of projects) {
     const label = projectLabel(project.path, project.name);
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+    const group = groups.get(label);
+    if (group) {
+      group.push(project);
+    } else {
+      groups.set(label, [project]);
+    }
   }
-  for (const project of projects) {
-    const label = projectLabel(project.path, project.name);
-    if ((counts.get(label) ?? 0) < 2) {
-      labels.set(project.path, label);
+
+  const labels = new Map<string, string>();
+  for (const group of groups.values()) {
+    const first = group[0];
+    if (group.length === 1 && first) {
+      labels.set(first.path, projectLabel(first.path, first.name));
       continue;
     }
-    const trimmed = project.path.replace(/[/\\]+$/, '');
-    const parent = basename(
-      trimmed.slice(0, trimmed.length - basename(trimmed).length),
+    const candidates = group.map(labelCandidates);
+    const deepest = Math.max(...candidates.map((one) => one.length - 1));
+    let depth = 0;
+    for (let next = 1; next <= deepest; next++) {
+      const distinct = new Set(
+        candidates.map((one) => one[Math.min(next, one.length - 1)]),
+      );
+      depth = next;
+      if (distinct.size === candidates.length) {
+        break;
+      }
+    }
+    const distinct = new Set(
+      candidates.map((one) => one[Math.min(depth, one.length - 1)]),
     );
-    labels.set(project.path, parent ? `${parent}/${label}` : label);
+    group.forEach((project, index) => {
+      const own = candidates[index];
+      labels.set(
+        project.path,
+        distinct.size === candidates.length && own
+          ? (own[Math.min(depth, own.length - 1)] ?? project.path)
+          : project.path,
+      );
+    });
   }
   return labels;
 }

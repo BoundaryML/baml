@@ -279,9 +279,15 @@ fn qualified_name<'db>(
     let mut parts: Vec<&str> = Vec::new();
     let spelled;
     if pkg.root != viewer {
-        spelled = baml_compiler2_hir::package::spelling(db)
-            .of(pkg.root)
-            .clone();
+        // The viewer's own edge name for the package, not its canonical
+        // spelling: a dependency reached under an alias is named in source by
+        // that alias, and a diagnostic that says otherwise names something the
+        // reader cannot find in their own file.
+        let viewpoint = crate::render::Viewpoint::user_facing(db, viewer);
+        spelled = match viewpoint.package_prefix(pkg.root) {
+            Some(prefix) => Name::new(prefix),
+            None => baml_compiler2_hir::package::spelling(db).of(pkg.root).clone(),
+        };
         parts.push(spelled.as_str());
     }
     parts.extend(pkg.namespace_path.iter().map(Name::as_str));

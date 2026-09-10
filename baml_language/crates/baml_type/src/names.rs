@@ -72,9 +72,29 @@ impl Package {
 // Order/sort by the package *name* string, preserving the pre-enum `Ord`
 // (where `pkg` was a `Name`) so `QualifiedTypeName`'s derived ordering — and
 // any sorted output keyed on it — is unchanged.
+//
+// The variant breaks a tie, which happens for exactly one pair: `Local` and a
+// dependency spelled with the default self-name. Comparing those two as equal
+// would contradict the derived `Eq`, which says they are different packages,
+// and an `Ord` that disagrees with `Eq` silently corrupts every sorted
+// container keyed on it. No other pair ties, so no existing order moves.
 impl Ord for Package {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_name().as_str().cmp(other.as_name().as_str())
+        self.as_name()
+            .as_str()
+            .cmp(other.as_name().as_str())
+            .then_with(|| self.variant_rank().cmp(&other.variant_rank()))
+    }
+}
+
+impl Package {
+    /// Tiebreaker for two packages that spell the same. Never observable on
+    /// its own: the spelling always dominates.
+    fn variant_rank(&self) -> u8 {
+        match self {
+            Package::Local => 0,
+            Package::Dep(_) => 1,
+        }
     }
 }
 

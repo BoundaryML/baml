@@ -45,6 +45,34 @@ describe('projectLabels', () => {
     expect(labels.get('/work/beta/service')).toBe('beta/service');
   });
 
+  it('keeps extending until the labels differ', () => {
+    // One ancestor is not enough: both share `team`.
+    const labels = projectLabels([
+      { path: '/one/team/service' },
+      { path: '/two/team/service' },
+    ]);
+    expect(labels.get('/one/team/service')).toBe('one/team/service');
+    expect(labels.get('/two/team/service')).toBe('two/team/service');
+    expect(new Set([...labels.values()]).size).toBe(2);
+  });
+
+  it('falls back to the full path when the paths cannot separate them', () => {
+    const labels = projectLabels([
+      { name: 'svc', path: '/same/service' },
+      { name: 'svc', path: '/same/service' },
+    ]);
+    expect([...labels.values()]).toEqual(['/same/service']);
+  });
+
+  it('looks past baml_src when disambiguating', () => {
+    const labels = projectLabels([
+      { path: '/one/app/baml_src' },
+      { path: '/two/app/baml_src' },
+    ]);
+    expect(labels.get('/one/app/baml_src')).toBe('one/app');
+    expect(labels.get('/two/app/baml_src')).toBe('two/app');
+  });
+
   it('disambiguates by directory even when a declared name repeats', () => {
     const labels = projectLabels([
       { name: 'svc', path: '/work/alpha/service' },

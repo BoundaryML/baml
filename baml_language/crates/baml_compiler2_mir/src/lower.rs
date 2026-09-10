@@ -634,6 +634,12 @@ fn lower_tir_template(
 pub struct RuntimeLowering<'a> {
     pub aliases: &'a ResolvedAliases,
     pub spelling: &'a Spelling,
+    pub db: &'a dyn crate::Db,
+    /// The package being lowered. A wire name is only meaningful relative to
+    /// the package reading it: the wire spells "my own package" the same way
+    /// for every package, so reading one without a viewpoint cannot say whose
+    /// it is.
+    pub viewpoint: baml_base::SourceRoot,
 }
 
 impl RuntimeLowering<'_> {
@@ -649,15 +655,17 @@ impl RuntimeLowering<'_> {
         self.spelling.wire(decl)
     }
 
-    /// The compile-time head a wire name denotes in this program, if the
-    /// program has a package spelled that way.
+    /// The compile-time head a wire name denotes as the package being
+    /// lowered reads it, if that package can reach it at all.
+    ///
+    /// Resolved from the viewpoint, never by a database-wide search for
+    /// something spelled that way. An unnamed package spells as the default,
+    /// which the wire folds into "this artifact's own package", so a
+    /// name-keyed reverse lookup answers with whichever unnamed package was
+    /// created first. With two unnamed projects open that is silently the
+    /// wrong one, and the type it hands back belongs to another program.
     pub fn decl(&self, name: &TypeName) -> Option<DeclName> {
-        let root = self.spelling.root(name.package())?;
-        Some(DeclName::in_root(
-            root,
-            name.namespace().clone(),
-            name.name().clone(),
-        ))
+        self.spelling.resolve(self.db, self.viewpoint, name)
     }
 }
 
@@ -1708,6 +1716,8 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
     let runtime = RuntimeLowering {
         aliases: &resolved_aliases,
         spelling: spelling(db),
+        db,
+        viewpoint: pkg_id,
     };
 
     let mut class_fields = ClassFieldIndices::default();
@@ -1920,6 +1930,9 @@ struct LoweringContext<'db> {
     resolved_aliases: &'db ResolvedAliases,
     /// How every root is spelled on the wire this program is emitted to.
     spelling: &'db Spelling,
+    /// The package whose body is being lowered, and so the viewpoint every
+    /// wire name is read from.
+    package: baml_base::SourceRoot,
 
     /// All method names declared by in-scope interfaces — see
     /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
@@ -1997,6 +2010,8 @@ impl<'db> LoweringContext<'db> {
         RuntimeLowering {
             aliases: self.resolved_aliases,
             spelling: self.spelling,
+            db: self.db,
+            viewpoint: self.package,
         }
     }
 
@@ -2581,6 +2596,7 @@ impl<'db> LoweringContext<'db> {
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
             spelling: spelling(db),
+            package: pkg_id,
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -2659,6 +2675,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             resolved_aliases: &pkg_data.resolved_aliases,
             spelling: spelling(db),
+            package: pkg_id,
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
