@@ -560,7 +560,7 @@ class BedrockPrompt {
 /// (internal) One content block -> its Converse `ContentBlock`, or null when it lowers to
 /// nothing. Converse takes every media kind in a conversation message; a tool
 /// result carries `text`, `image`, `document` and `video` but has no audio
-/// member, so audio in a result degrades into a trailing user turn
+/// member, so audio in a result degrades into a user turn after the run of results
 /// (`_lower_journal`); system content is text only (`_prompt_system`).
 ///
 ///   position    | text   | image  | pdf    | audio   | video
@@ -822,29 +822,16 @@ function _lower_journal(
                 null
             },
             let completed: ai.events.ToolCompleted => {
-                // A toolResult carries text, image, document and video inline.
-                let split = ai.wire.tool_result_blocks(journal, completed, ["image", "pdf", "video"]);
+                // A toolResult carries text, image, document and video inline;
+                // `ai.wire.degrade_tool_media` has already moved audio out of
+                // the result and behind the run of results it belongs to.
                 _push_tool_result(
                     pending,
                     completed.id,
-                    _lower_blocks(split.inline, preview = preview),
+                    _lower_blocks(completed.content, preview = preview),
                     false,
                     with_status,
                 );
-                // Degrade: the media the result cannot carry follows it as a
-                // user turn; `_merge_adjacent_roles` folds it into the same
-                // wire message after the toolResult blocks.
-                if (split.trailing.length() > 0) {
-                    pending.push(
-                        PendingMessage {
-                            message: Message {
-                                role: "user",
-                                content: _lower_blocks(split.trailing, preview = preview),
-                            },
-                            tool_results: false,
-                        },
-                    );
-                }
                 null
             },
             let failed: ai.events.ToolFailed => {
@@ -1014,7 +1001,10 @@ function converse_request(
     }
     let messages = prompt.messages;
     let journal_messages = _lower_journal(
-        ai.wire.sanitize_for_client(input.journal, client.id()),
+        ai.wire.degrade_tool_media(
+            ai.wire.sanitize_for_client(input.journal, client.id()),
+            ["image", "pdf", "video"],
+        ),
         _supports_tool_result_status(client.model),
         preview = preview,
     );

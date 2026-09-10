@@ -457,6 +457,27 @@ function media_journal(client_id: string, media: image | audio | video | pdf) ->
     }
 }
 
+/// Two results for one assistant turn where the media-only result comes
+/// FIRST: a Degrade must still keep both results contiguous and attach the
+/// media after the second one, and the media-only result must not lower to an
+/// empty tool result.
+function parallel_media_journal(client_id: string, media: image | audio | video | pdf) -> ai.Journal {
+    let args: map<string, unknown> = {};
+    ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "call_media", name: "capture", args: args },
+                    ai.content.ToolUse { id: "call_text", name: "lookup", args: args },
+                ],
+                client_id: client_id,
+            },
+            ai.events.ToolCompleted.of("call_media", [media]),
+            ai.events.ToolCompleted.new("call_text", "sunny in SF"),
+        ],
+    }
+}
+
 /// The one-line note a Degrade moves media behind.
 function degrade_note(tool: string) -> string {
     "attached from the result of tool `" + tool + "`"

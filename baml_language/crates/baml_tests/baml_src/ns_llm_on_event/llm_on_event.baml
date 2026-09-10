@@ -111,6 +111,51 @@ test "content_block_projections" {
     assert.equal(content_block_projections(), `look: [image] ok|3|0|hi|{"k":1}|[image]|1`)
 }
 
+// `ai.wire.degrade_tool_media` is the Degrade every text-only-result client
+// lowers through: the media a result cannot carry leaves it and follows the
+// whole run of results as one user turn, the results stay contiguous, and a
+// media-only result keeps a placeholder instead of becoming empty. A kind the
+// client carries stays where it was.
+function degraded_journal_shape(carries: string[]) -> string {
+    let j = root.llm_mock.parallel_media_journal("x", root.llm_mock.media_mp3());
+    let labels: string[] = [];
+    for (let e in ai.wire.degrade_tool_media(j, carries).entries()) {
+        match (e) {
+            let a: ai.events.AssistantMessage => {
+                labels.push("assistant");
+                null
+            },
+            let c: ai.events.ToolCompleted => {
+                labels.push(`tool:${c.id}:${c.text()}:${c.content.length()}`);
+                null
+            },
+            let u: ai.events.UserMessage => {
+                labels.push(`user:${u.text()}:${u.content.length()}`);
+                null
+            },
+            _ => {
+                labels.push("other");
+                null
+            },
+        };
+    }
+    labels.join("|")
+}
+
+test "degrade_tool_media_attaches_after_the_run_of_results" {
+    assert.equal(
+        degraded_journal_shape([]),
+        `assistant|tool:call_media:[audio]:1|tool:call_text:sunny in SF:1|user:${root.llm_mock.degrade_note("capture")}[audio]:2`,
+    )
+}
+
+test "degrade_tool_media_keeps_carried_media_in_place" {
+    assert.equal(
+        degraded_journal_shape(["audio"]),
+        `assistant|tool:call_media:[audio]:1|tool:call_text:sunny in SF:1`,
+    )
+}
+
 // The Claude Code CLI folds the journal into one text prompt: every turn
 // renders through `text()`, media as a readable placeholder, in order.
 function claude_code_transcript_with_media() -> string {

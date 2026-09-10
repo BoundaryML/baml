@@ -1830,6 +1830,45 @@ test "chat_journal_image_degrades" {
     )
 }
 
+// messages: [system, user, assistant(tool_calls), tool(placeholder), tool,
+// user(note + audio)]: the two `tool` replies stay contiguous and the media
+// the first one could not carry follows the second.
+function chat_journal_parallel_results_stay_contiguous() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let spec = ChatEcho@spec("and tomorrow?");
+            let input = ai.ModelTurnInput {
+                prompt: spec.prompt_template,
+                journal: root.llm_mock.parallel_media_journal("openai-chat/gpt-4o-mini", root.llm_mock.media_mp3()),
+                toolbox: ai.tools.Toolbox.new([ai.tools.tool(chat_get_weather)]),
+                output_type: spec.output_type(),
+            };
+            let _ = cl.invoke(input);
+            let body = mock.last_request().json();
+            [
+                baml.json.path<string>(body, ".messages[3].role"),
+                baml.json.path<string>(body, ".messages[3].tool_call_id"),
+                baml.json.path<string>(body, ".messages[3].content"),
+                baml.json.path<string>(body, ".messages[4].role"),
+                baml.json.path<string>(body, ".messages[4].tool_call_id"),
+                baml.json.path<string>(body, ".messages[5].role"),
+                baml.json.path<string>(body, ".messages[5].content[0].text"),
+                baml.json.path<string>(body, ".messages[5].content[1].type"),
+                baml.json.path_or<string>(body, ".messages[6].role", "absent"),
+            ].join("|")
+        },
+    )
+}
+
+test "chat_journal_parallel_results_stay_contiguous" {
+    assert.equal(
+        chat_journal_parallel_results_stay_contiguous(),
+        `tool|call_media|[audio]|tool|call_text|user|${root.llm_mock.degrade_note("capture")}|input_audio|absent`,
+    )
+}
+
 function chat_journal_video_rejected() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],

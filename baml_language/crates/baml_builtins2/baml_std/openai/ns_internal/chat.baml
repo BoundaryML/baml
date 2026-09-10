@@ -616,7 +616,7 @@ function _chat_media_part(
 /// (internal) One content block -> one typed content part. Chat completions imposes no
 /// role restriction on media, so every position accepts what the endpoint
 /// has a part for — except a `tool` message, whose content is text only, so
-/// media in a tool result degrades into a trailing user turn
+/// media in a tool result degrades into a user turn after the run of results
 /// (`chat_lower_journal`). There is no video part at all (`_chat_media_part`).
 ///
 ///   position    | text   | image   | pdf     | audio   | video
@@ -833,26 +833,16 @@ function chat_lower_journal(
                 null
             },
             let completed: ai.events.ToolCompleted => {
-                // A `tool` message is text only: every media kind degrades.
-                let split = ai.wire.tool_result_blocks(j, completed, []);
+                // A `tool` message is text only: `ai.wire.degrade_tool_media`
+                // has already moved every media block out of the result.
                 out.push(
                     ChatMessage {
                         role: "tool",
-                        content: _chat_content(_chat_lower_blocks(split.inline, compat, preview = preview), true),
+                        content: _chat_content(_chat_lower_blocks(completed.content, compat, preview = preview), true),
                         tool_calls: null,
                         tool_call_id: completed.id,
                     },
                 );
-                if (split.trailing.length() > 0) {
-                    out.push(
-                        ChatMessage {
-                            role: "user",
-                            content: _chat_content(_chat_lower_blocks(split.trailing, compat, preview = preview), true),
-                            tool_calls: null,
-                            tool_call_id: null,
-                        },
-                    );
-                }
                 null
             },
             let failed: ai.events.ToolFailed => {
@@ -1083,7 +1073,10 @@ function chat_build_request(
 ) -> ChatRequest {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let messages = chat_lower_prompt(prompt, compat, preview = preview);
-    let journal = ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params));
+    let journal = ai.wire.degrade_tool_media(
+        ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params)),
+        [],
+    );
     for (let message in chat_lower_journal(journal, compat, preview = preview)) {
         messages.push(message);
     }

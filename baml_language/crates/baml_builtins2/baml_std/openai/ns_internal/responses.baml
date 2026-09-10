@@ -358,7 +358,7 @@ function _media_role_error(kind: string, role: string) -> ai.errors.Failure {
 /// An image in a system message is kept for compatibility: the legacy lowering
 /// accepted image parts in the system message a role-less prompt produced.
 /// `function_call_output.output` takes text, image and file parts but no
-/// audio, so audio in a tool result degrades into a trailing user turn
+/// audio, so audio in a tool result degrades into a user turn after the run of results
 /// (`lower_journal`). There is no video input part at all.
 function _lower_block(
     block: ai.content.ContentBlock,
@@ -633,25 +633,16 @@ function lower_journal(
             },
             let c: ai.events.ToolCompleted => {
                 // `function_call_output.output` carries text, image and file
-                // parts inline; audio degrades into the user turn below.
-                let split = ai.wire.tool_result_blocks(j, c, ["image", "pdf", "video"]);
+                // parts inline; `ai.wire.degrade_tool_media` has already moved
+                // audio out of the result and behind the run of results.
                 items.push(
                     OaFunctionCallOutputItem {
                         type: "function_call_output",
                         call_id: c.id,
-                        output: _tool_output(_lower_blocks(split.inline, "tool_result", preview = preview)),
+                        output: _tool_output(_lower_blocks(c.content, "tool_result", preview = preview)),
                     },
                 );
                 metadata.push(none);
-                if (split.trailing.length() > 0) {
-                    items.push(
-                        OaMessageItem {
-                            role: "user",
-                            content: _lower_blocks(split.trailing, "user", preview = preview),
-                        },
-                    );
-                    metadata.push(none);
-                }
                 null
             },
             let f: ai.events.ToolFailed => {
@@ -792,7 +783,10 @@ function _request(
     let items = lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
-    let journal = ai.wire.sanitize_for_client(input.journal, c.id());
+    let journal = ai.wire.degrade_tool_media(
+        ai.wire.sanitize_for_client(input.journal, c.id()),
+        ["image", "pdf", "video"],
+    );
     let metadata = prompt_metadata(prompt);
     for (let item in lower_journal(journal, metadata, preview = preview)) {
         items.push(item);

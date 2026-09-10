@@ -417,9 +417,10 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 // kind and declares, beside it, what it does with each kind at each position:
 //
 //   Accept   lower natively at that position;
-//   Degrade  keep the text in place and move the media into a trailing `user`
-//            turn (`tool_result_blocks` below) — lowering stays pure, the
-//            journal keeps the original event;
+//   Degrade  keep the text in place and move the media into one `user` turn
+//            after the run of tool results it came from (`degrade_tool_media`
+//            below) — lowering stays pure, the journal keeps the original
+//            event;
 //   Reject   a typed client error before any request is sent.
 
 /// A rendered prompt message's parts as content blocks: a `string` part is
@@ -459,49 +460,72 @@ function tool_name(j: root.Journal, id: string) -> string? {
     null
 }
 
-/// One tool result, split for a client that carries only some media kinds
-/// inside a tool result. `inline` is what stays in the result: every `Text`
-/// block plus the media whose `kind()` is in `carries`. `trailing` is the
-/// Degrade: a one-line note naming the tool, then the media the result could
-/// not carry, in order — or empty when nothing was moved. The client lowers
-/// `trailing` as a `user` turn right after the result.
-class ToolResultBlocks {
-    inline: root.content.ContentBlock[],
-    trailing: root.content.ContentBlock[],
-}
-
-function tool_result_blocks(
-    j: root.Journal,
-    completed: root.events.ToolCompleted,
-    carries: string[],
-) -> ToolResultBlocks {
-    let inline: root.content.ContentBlock[] = [];
-    let moved: root.content.ContentBlock[] = [];
-    for (let block in completed.content) {
-        match (block) {
-            let text: root.content.Text => {
-                inline.push(text);
+/// Degrade, as a journal rewrite. A client that carries only some media
+/// kinds inside a tool result (`carries`, by `kind()`) lowers the copy of `j`
+/// this returns: every other media block has left its result and, behind a
+/// one-line note naming the tool, forms ONE `user` turn after the LAST result
+/// of the same assistant turn. The results of one turn stay contiguous (Chat
+/// Completions, Converse and Responses all reject a `user` message between
+/// two of them), `Text` stays where it was, and a result left with no text
+/// keeps the `[audio]`-style placeholder so no client sends an empty result.
+/// Lowering stays pure: the caller's journal is untouched and the trace still
+/// shows the original events.
+function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal {
+    let out: root.events.Event[] = [];
+    // moved out of the current run of tool results, each behind its note
+    let attached: root.content.ContentBlock[] = [];
+    for (let event in j.entries()) {
+        match (event) {
+            let completed: root.events.ToolCompleted => {
+                let inline: root.content.ContentBlock[] = [];
+                let moved: root.content.ContentBlock[] = [];
+                for (let block in completed.content) {
+                    match (block) {
+                        let text: root.content.Text => {
+                            inline.push(text);
+                            null
+                        },
+                        let media: root.content.Media => {
+                            if (carries.includes(media.kind())) {
+                                inline.push(media);
+                            } else {
+                                moved.push(media);
+                            }
+                            null
+                        },
+                    };
+                }
+                if (moved.length() > 0) {
+                    if (inline.length() == 0) {
+                        inline.push(root.content.Text { text: root.content.text(moved) });
+                    }
+                    let tool = tool_name(j, completed.id) ?? completed.id;
+                    attached.push(root.content.Text { text: "attached from the result of tool `" + tool + "`" });
+                    for (let block in moved) {
+                        attached.push(block);
+                    }
+                }
+                out.push(root.events.ToolCompleted { id: completed.id, content: inline });
                 null
             },
-            let media: root.content.Media => {
-                if (carries.includes(media.kind())) {
-                    inline.push(media);
-                } else {
-                    moved.push(media);
+            let failed: root.events.ToolFailed => {
+                out.push(failed);
+                null
+            },
+            _ => {
+                if (attached.length() > 0) {
+                    out.push(root.events.UserMessage { content: attached, metadata: {} });
+                    attached = [];
                 }
+                out.push(event);
                 null
             },
         };
     }
-    let trailing: root.content.ContentBlock[] = [];
-    if (moved.length() > 0) {
-        let tool = tool_name(j, completed.id) ?? completed.id;
-        trailing.push(root.content.Text { text: "attached from the result of tool `" + tool + "`" });
-        for (let block in moved) {
-            trailing.push(block);
-        }
+    if (attached.length() > 0) {
+        out.push(root.events.UserMessage { content: attached, metadata: {} });
     }
-    ToolResultBlocks { inline: inline, trailing: trailing }
+    root.Journal { log: out }
 }
 
 /// Make one run's journal safe to replay to `client_id`, and return the
