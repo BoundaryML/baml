@@ -1,5 +1,4 @@
 import { IssueList } from "@/components/issues/issue-list";
-import { StatTiles } from "@/components/issues/stat-tiles";
 import { dataSource, loadIssues, REVALIDATE_S } from "@/lib/db";
 
 // On demand, never prerendered at build: the data source is decided by the
@@ -23,7 +22,6 @@ export default async function Home() {
             : "Mock data: set FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_ANON_KEY to read the store."}
         </p>
       </div>
-      <StatTiles issues={issues} />
       <IssueList issues={issues} />
     </main>
   );

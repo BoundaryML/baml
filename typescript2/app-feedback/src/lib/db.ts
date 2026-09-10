@@ -1,4 +1,4 @@
-// The data source: the atb2 store in Supabase (tools/atb2/db/schema.sql),
+// The data source: the atb2 store in Supabase,
 // read through PostgREST with the anon key, which sees issues, runs and
 // events but never a reporter's identity (feedback only via feedback_public).
 //
@@ -11,6 +11,7 @@
 // Without them the pages render the mock dataset, so the UI can be built
 // and previewed with nothing provisioned; the header says which it is.
 
+import { validProposalId } from "./proposals";
 import { ISSUES, findIssue } from "./mock-data";
 import type { Comment, HandleOutcome, Issue } from "./types";
 
@@ -114,18 +115,21 @@ function issueOf(row: IssueRow): Issue {
 
 const COLUMNS = "select=*";
 
-/** Every issue, most recently updated first. */
+/** Visible issues, most recently updated first. Cancelled rows remain in the store. */
 export async function loadIssues(): Promise<Issue[]> {
-  if (dataSource === "mock") return ISSUES.map((i) => ({ ...i, dataset: i.dataset ?? "live" }));
-  const rows = await rest<IssueRow[]>(`issues_with_outcome?${COLUMNS}&order=updated_at.desc`);
+  if (dataSource === "mock") return ISSUES.filter((i) => i.status.state !== "cancelled").map((i) => ({ ...i, dataset: i.dataset ?? "live" }));
+  const rows = await rest<IssueRow[]>(`issues_with_outcome?${COLUMNS}&status->>state=neq.cancelled&order=updated_at.desc`);
   return rows.map(issueOf);
 }
 
 /** One issue by id, or undefined. */
 export async function loadIssue(id: string): Promise<Issue | undefined> {
-  if (dataSource === "mock") return findIssue(id);
+  if (dataSource === "mock") {
+    const issue = findIssue(id);
+    return issue?.status.state === "cancelled" ? undefined : issue;
+  }
   const rows = await rest<IssueRow[]>(
-    `issues_with_outcome?${COLUMNS}&id=eq.${encodeURIComponent(id)}&limit=1`,
+    `issues_with_outcome?${COLUMNS}&status->>state=neq.cancelled&id=eq.${encodeURIComponent(id)}&limit=1`,
   );
   return rows[0] ? issueOf(rows[0]) : undefined;
 }
@@ -139,9 +143,34 @@ export interface IssueEvent {
   created_at: string;
 }
 
-export async function loadIssueEvents(id: string): Promise<IssueEvent[]> {
+export async function loadIssueEvents(id: string, dataset: "live" | "eval" = "live", feedbackIds: string[] = []): Promise<IssueEvent[]> {
+  if (dataSource === "mock") return [];
+  const ids = feedbackIds.filter(id => /^[A-Za-z0-9_-]+$/.test(id)).slice(0, 100);
+  const [issueEvents, feedbackEvents, receipts] = await Promise.all([
+    rest<IssueEvent[]>(`events?select=id,kind,payload,slack_ts,created_at&issue_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id`),
+    ids.length ? rest<IssueEvent[]>(`events?select=id,kind,payload,slack_ts,created_at&feedback_id=in.(${ids.join(",")})&dataset=eq.${dataset}&order=created_at,id`) : [],
+    ids.length ? rest<Array<{id:string;received_at:string;source:string}>>(`feedback_public?select=id,received_at,source&id=in.(${ids.join(",")})`) : [],
+  ]);
+  const ingested: IssueEvent[] = receipts.map((receipt,i) => ({id:-(i+1),kind:"ingested",created_at:receipt.received_at,slack_ts:null,payload:{source:receipt.source,summary:`Report ${receipt.id} received.`}}));
+  return [...new Map([...issueEvents, ...feedbackEvents].filter(event => !ingested.length || event.kind !== "ingested").map(event => [event.id, event])).values(), ...ingested]
+    .sort((a,b) => a.created_at.localeCompare(b.created_at) || a.id-b.id);
+}
+
+/** Public lifecycle and proposed-fix summaries; raw diagnostics stay private. */
+export async function loadPrEvents(number: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
+  if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error("Invalid PR number");
+  if (dataSource === "mock") return [];
+  const pr = `https://github.com/BoundaryML/baml/pull/${number}`;
+  return rest<IssueEvent[]>(
+    `events?select=id,kind,payload,slack_ts,created_at&payload->>pr=eq.${encodeURIComponent(pr)}&dataset=eq.${dataset}&order=created_at,id`,
+  );
+}
+
+/** Only the deliberately public summary and lifecycle, never the private proposal table. */
+export async function loadProposalEvents(id: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
+  if (!validProposalId(id)) throw new Error("Invalid proposal ID");
   if (dataSource === "mock") return [];
   return rest<IssueEvent[]>(
-    `events?select=id,kind,payload,slack_ts,created_at&issue_id=eq.${encodeURIComponent(id)}&order=created_at`,
+    `events?select=id,kind,payload,slack_ts,created_at&payload->>proposal_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id&limit=100`,
   );
 }
