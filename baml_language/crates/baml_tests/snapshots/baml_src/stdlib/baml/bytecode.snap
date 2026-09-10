@@ -2626,18 +2626,18 @@ function baml.future.all(futures: baml.future.Future<#0, #1>[]) -> baml.future.F
     return
 }
 
-function baml.future.all_complete(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
+function baml.future.all_settled(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<(baml.future.Success<#0> | baml.future.Failure<#1> | baml.future.Panicked)[], never> {
     load_var ?1
     make_cell
     store_var ?1
     load_type #0
     load_type #1
     load_var futures
-    make_closure .<lambda(all_complete, 0)>, captures=1, ntypeargs=2
+    make_closure .<lambda(all_settled, 0)>, captures=1, ntypeargs=2
     load_const null
     load_const null
-    load_type #0[]
-    load_type #1
+    load_type (baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>)[]
+    load_type never
     spawn
     store_var _3
     load_var _3
