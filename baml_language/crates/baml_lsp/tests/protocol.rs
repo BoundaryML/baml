@@ -1070,7 +1070,9 @@ fn request_gating_and_unsupported_methods() {
         .unwrap_err();
     assert!(matches!(error, LspError::RequestFailed(_)), "{error:?}");
 
-    let error = h.request(s, "textDocument/rename", json!({})).unwrap_err();
+    let error = h
+        .request(s, "textDocument/documentHighlight", json!({}))
+        .unwrap_err();
     assert!(
         matches!(error, LspError::RequestNotSupported(_)),
         "{error:?}"
@@ -1457,6 +1459,124 @@ fn a_typed_underscore_re_asks_for_the_stdlibs_internals() {
     assert!(
         asked.iter().any(|label| label == "_tz_offset_at"),
         "a typed `_` reaches them, got {asked:?}"
+    );
+}
+
+/// F2 over the wire: the capability, the prepare step, the edit, and the
+/// refusal a reader is meant to read.
+#[test]
+fn rename_edits_every_reference_and_refuses_what_it_cannot_cover() {
+    const SOURCE: &str = r#"enum Status {
+    Active
+}
+
+function pick(s: Status) -> Status throws never {
+    s
+}
+"#;
+
+    let mut harness = feature_harness();
+    let uri = harness.uri("rename.baml");
+    harness.open(SessionKey(1), &uri, 1, SOURCE);
+    harness.settle();
+
+    let capabilities = baml_lsp::dispatch::server_capabilities(
+        baml_lsp::position_codec::PositionEncoding::UTF16,
+        false,
+    );
+    let Some(lsp_types::OneOf::Right(rename)) = capabilities.rename_provider else {
+        unreachable!("rename is advertised with options, not a bare bool");
+    };
+    assert_eq!(
+        rename.prepare_provider,
+        Some(true),
+        "prepareProvider is what greys F2 out on a refused position"
+    );
+
+    // `prepareRename` on the enum's name returns just that token.
+    let prepared = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(SOURCE, "Status {")),
+        )
+        .expect("an enum is renameable");
+    assert_eq!(prepared["placeholder"], "Status");
+    assert_eq!(prepared["range"]["start"]["line"], 0);
+    assert_eq!(prepared["range"]["start"]["character"], 5);
+    assert_eq!(prepared["range"]["end"]["character"], 11);
+
+    // The edit covers the declaration and both annotations.
+    let edit = harness
+        .request(
+            SessionKey(1),
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "position": position_params(&uri, pos_of(SOURCE, "Status {"))["position"],
+                "newName": "State",
+            }),
+        )
+        .expect("rename succeeds");
+    let edits = edit["changes"][uri.as_str()]
+        .as_array()
+        .expect("edits for the one file");
+    assert_eq!(
+        edits.len(),
+        3,
+        "declaration and both annotations: {edits:#?}"
+    );
+    for one in edits {
+        assert_eq!(one["newText"], "State");
+    }
+
+    // A variant's references are known to be incomplete, so the server
+    // refuses rather than half-applying — and says why.
+    let error = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(SOURCE, "Active")),
+        )
+        .expect_err("an enum variant is refused");
+    let message = error.to_response_error().message;
+    assert!(
+        message.contains("an enum variant") && message.contains("every reference"),
+        "the reader is told what is wrong: {message:?}"
+    );
+}
+
+/// Stdlib sources are served as read-only editor documents, so F2 inside one
+/// is a position a reader can actually reach — and must be refused, because
+/// the declaration is not theirs to rewrite. The refusal names the symbol, so
+/// it can only pass by resolving the right one.
+#[test]
+fn rename_refuses_inside_a_read_only_stdlib_document() {
+    let mut harness = feature_harness();
+    let db_path = std::path::PathBuf::from("<builtin>/baml/ns_time/timezone.baml");
+    let text = harness
+        .state
+        .file_text(&db_path)
+        .unwrap_or_else(|| unreachable!("the stdlib is loaded before any session"));
+    let uri = baml_lsp::paths::uri_for_db_path(harness.state.roots(), &db_path)
+        .unwrap_or_else(|| unreachable!("a `<builtin>/` path maps to a stdlib URI"));
+    assert_eq!(uri.scheme(), "baml-stdlib");
+
+    // A stdlib document may be opened; the overlay is refused elsewhere.
+    harness.open(SessionKey(1), &uri, 1, &text);
+    harness.settle();
+
+    let error = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(&text, "TimeZoneOffset {")),
+        )
+        .expect_err("the standard library is read-only");
+    let message = error.to_response_error().message;
+    assert!(
+        message.contains("TimeZoneOffset") && message.contains("read-only"),
+        "the reader is told whose declaration it is: {message:?}"
     );
 }
 

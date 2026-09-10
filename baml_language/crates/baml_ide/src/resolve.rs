@@ -31,7 +31,7 @@ use crate::syntax;
 /// A resolved source location: the target file and the byte range of the
 /// name token (not the full item body). The LSP layer converts `file` to a
 /// URI and `range` to an LSP `Range`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Location {
     pub file: SourceFile,
     pub range: TextRange,
@@ -1489,15 +1489,20 @@ pub fn target_definition<'db>(
                     let local = index.scope_bindings[binding.scope.index() as usize]
                         .bindings
                         .get(idx as usize)?;
-                    Some(Location {
-                        file,
-                        range: local.name_range,
-                    })
+                    // `LocalBinding::name_range` is the whole pattern (`x: T`,
+                    // and for a `let` the keyword too); a definition is the
+                    // NAME. Synthesized binds have no name token, and nothing
+                    // in source can address one, so the pattern span is only
+                    // ever reached for spans no cursor lands on.
+                    let range = baml_compiler2_ppir::function_body_source_map(db, func)
+                        .and_then(|source_map| source_map.bind_name_span(local.bind_pattern))
+                        .unwrap_or(local.name_range);
+                    Some(Location { file, range })
                 }
                 BindingKind::Parameter(idx) => {
                     let sig_map =
                         baml_compiler2_hir::signature::function_signature_source_map(db, func);
-                    let range = sig_map.param_spans.get(idx).copied()?;
+                    let range = sig_map.param_name_spans.get(idx).copied()?;
                     Some(Location { file, range })
                 }
             }

@@ -979,6 +979,7 @@ pub fn function_signature_source_map<'db>(
 
     baml_compiler2_hir::signature::SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()

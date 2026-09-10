@@ -34,6 +34,7 @@ pub mod line_index;
 pub mod listing;
 pub mod outline;
 pub mod param_schema;
+pub mod rename;
 pub mod render;
 pub mod resolve;
 pub mod search;
@@ -70,6 +71,7 @@ pub use listing::{
 };
 pub use outline::{OutlineItem, file_outline};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
+pub use rename::{RenameError, prepare_rename, rename};
 pub use resolve::{Location, SymbolTarget, symbol_at, target_definition};
 pub use search::{SearchHit, SymbolInfo, search_ranked, search_symbols};
 pub use symbol_pool::build_symbol_pool;

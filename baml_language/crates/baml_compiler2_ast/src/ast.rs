@@ -621,6 +621,14 @@ pub struct AstSourceMap {
     pub expr_spans: Arena<TextRange>,
     pub stmt_spans: Arena<TextRange>,
     pub pattern_spans: Arena<TextRange>,
+    /// The NAME token of each `Pattern::Bind`, as distinct from
+    /// [`Self::pattern_spans`], which covers the whole pattern (`x: T`, and
+    /// for a `let` the keyword too). A rename replaces an identifier and
+    /// nothing else, and go-to-definition should land on the name rather
+    /// than highlight the binding, so the two spans cannot be the same
+    /// entry. Absent for binds the compiler synthesizes, which have no name
+    /// token to point at.
+    pub bind_name_spans: HashMap<PatId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
@@ -657,6 +665,7 @@ impl AstSourceMap {
             expr_spans: Arena::new(),
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
+            bind_name_spans: HashMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
@@ -750,6 +759,11 @@ impl AstSourceMap {
     }
 
     /// Look up the source span of a pattern by its `PatId`.
+    /// The name token of a `Pattern::Bind`, when it was written in source.
+    pub fn bind_name_span(&self, id: PatId) -> Option<TextRange> {
+        self.bind_name_spans.get(&id).copied()
+    }
+
     pub fn pattern_span(&self, id: PatId) -> TextRange {
         Self::span_at(&self.pattern_spans, id)
     }

@@ -2845,6 +2845,7 @@ impl LoweringContext {
                 });
         }
 
+        let name_span = name_token.as_ref().map(rowan::SyntaxToken::text_range);
         let name = name_token.map(|t| Name::new(t.text()));
 
         // The parser folds `: <pattern>` into BINDING_PATTERN as a
@@ -2858,7 +2859,11 @@ impl LoweringContext {
             Some(name) => Pattern::Bind { name, subpat },
             None => Pattern::Wildcard,
         };
-        self.alloc_pattern(pat, node.span_range())
+        let id = self.alloc_pattern(pat, node.span_range());
+        if let Some(span) = name_span {
+            self.source_map.bind_name_spans.insert(id, span);
+        }
+        id
     }
 
     /// Walk a pattern and emit `VoidInNonReturnPosition` for any `Pattern::Type`

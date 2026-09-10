@@ -73,6 +73,13 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
+        // `prepare_provider` is what lets the editor grey F2 out on a
+        // position this server refuses, instead of failing after the reader
+        // has typed a new name.
+        rename_provider: Some(lsp_types::OneOf::Right(lsp_types::RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
+        })),
         document_symbol_provider: Some(lsp_types::OneOf::Left(true)),
         workspace_symbol_provider: Some(lsp_types::OneOf::Left(true)),
         semantic_tokens_provider: Some(
@@ -505,6 +512,71 @@ pub(super) fn references(
         .filter_map(|target| super::proto::location(snap, target))
         .collect();
     Ok((!locations.is_empty()).then_some(locations))
+}
+
+/// `textDocument/prepareRename`.
+///
+/// A refusal is `RequestFailed`, which the client shows to the reader — so [`baml_ide::RenameError`]'s
+/// message is the whole explanation they get, and says what is wrong rather
+/// than that something is.
+pub(super) fn prepare_rename(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::TextDocumentPositionParams,
+) -> Result<Option<lsp_types::PrepareRenameResponse>, LspError> {
+    let lsp_types::TextDocumentPositionParams {
+        text_document,
+        position,
+    } = params;
+    let (file, offset) = file_offset(snap, &text_document, position)?;
+    let db = snap.db();
+    let target = baml_ide::prepare_rename(db, file, offset)
+        .map_err(|error| LspError::RequestFailed(error.to_string()))?;
+    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+    Ok(Some(
+        lsp_types::PrepareRenameResponse::RangeWithPlaceholder {
+            range: codec.byte_range_to_lsp(target.range),
+            placeholder: file.text(db)[target.range].to_string(),
+        },
+    ))
+}
+
+/// `textDocument/rename`.
+///
+/// The edit is all-or-nothing: `baml_ide::rename` either returns every span
+/// or refuses, so a client never applies a rename that covers part of the
+/// program. A span whose file has no URI (which no workspace file has) would
+/// silently shrink the edit, so that is a refusal too.
+pub(super) fn rename(
+    snap: &crate::snapshot::Snapshot,
+    params: lsp_types::RenameParams,
+) -> Result<Option<lsp_types::WorkspaceEdit>, LspError> {
+    let position = params.text_document_position;
+    let (file, offset) = file_offset(snap, &position.text_document, position.position)?;
+    let db = snap.db();
+    let spans = baml_ide::rename(db, file, offset, &params.new_name)
+        .map_err(|error| LspError::RequestFailed(error.to_string()))?;
+
+    let mut changes: std::collections::HashMap<lsp_types::Url, Vec<lsp_types::TextEdit>> =
+        std::collections::HashMap::new();
+    for span in spans {
+        let location = super::proto::location(snap, span).ok_or_else(|| {
+            LspError::RequestFailed(format!(
+                "`{}` is referenced from a file with no URI; no edit was made",
+                params.new_name
+            ))
+        })?;
+        changes
+            .entry(location.uri)
+            .or_default()
+            .push(lsp_types::TextEdit {
+                range: location.range,
+                new_text: params.new_name.clone(),
+            });
+    }
+    Ok(Some(lsp_types::WorkspaceEdit {
+        changes: Some(changes),
+        ..lsp_types::WorkspaceEdit::default()
+    }))
 }
 
 pub(super) fn document_symbol(
