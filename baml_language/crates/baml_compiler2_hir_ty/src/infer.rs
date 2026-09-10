@@ -38,6 +38,9 @@ use baml_compiler2_hir::{
         PathResolution,
     },
 };
+/// Re-exported for the sibling modules that ask whether a parameter is a
+/// block-scoped binding; the bit itself is defined with `ParamTy`.
+pub(crate) use baml_type::SCOPED_PARAM_BIT;
 use baml_type::{
     Freshness, Int63, Literal, TyAttr,
     interned::{ClosedTy, InferInterface, InferTy, Ty},
@@ -943,7 +946,9 @@ enum PendingDiag<'db> {
     /// E0097: an `unknown`-containing contract without an escaping `unknown`.
     ImpreciseUnknownThrows {
         at: ExprId,
-        inferred_types: Vec<String>,
+        /// What the function actually throws, as ONE type; `None` when it
+        /// throws nothing.
+        inferred: Option<baml_type::Ty>,
         /// Some inferred member is a scoped thrown type's relaxation: the
         /// clause is required (removing it is E0171), only its spelling is
         /// wrong.
@@ -1659,8 +1664,6 @@ struct InferenceContext<'db> {
     /// lowering context remains immutable; body-owned type lowering forks it
     /// with these rigid parameters.
     scoped_type_bindings: Vec<ScopedTypeBinding<Ty>>,
-    /// Stable hash of the body owner, combined with `StmtId` for scoped rigid
-    /// parameter identity.
     /// Full owner identity for the Session top-level-let value tier. Keeping
     /// this lets a malformed self-reference fail closed instead of recursively
     /// asking Salsa for the inference result currently being built.
@@ -1755,6 +1758,12 @@ struct InferenceContext<'db> {
     /// a pattern walk or a bound replay): each waits for the block that
     /// binds its parameter to close and is reported at that block's tail.
     anchorless_escapes: Vec<(baml_type::ParamTy, Ty)>,
+    /// Classes an escape refusal filled with `Error` after reporting. A
+    /// later "cannot infer" report about one of them would be a cascade of
+    /// the refusal, so it is suppressed - keyed on the refusal itself rather
+    /// than on "the class holds an `Error`", which any other road could also
+    /// produce without having said anything.
+    refused_escape_vars: rustc_hash::FxHashSet<baml_type::interned::InferVar>,
     /// The function whose body this run infers, when the owner IS a
     /// function - the resolver for owner-scoped receivers (`default`
     /// inside an `implements` block, like `self`).
@@ -1864,6 +1873,7 @@ impl<'db> InferenceContext<'db> {
             obligations: Vec::new(),
             obligation_anchor: None,
             anchorless_escapes: Vec::new(),
+            refused_escape_vars: rustc_hash::FxHashSet::default(),
             body_owner: None,
             defaults_owner: false,
             chain_nullable: Vec::new(),
@@ -3214,13 +3224,18 @@ impl<'db> InferenceContext<'db> {
         if self.scoped_type_bindings.len() == checkpoint {
             return block_ty;
         }
-        let outer_universe =
-            u32::try_from(checkpoint).unwrap_or_else(|_| unreachable!("block depth fits in u32"));
+        let outer_universe = u32::try_from(checkpoint)
+            .unwrap_or_else(|_| unreachable!("a body's open scoped bindings fit in u32"));
         let at = tail.unwrap_or(block);
         let closing: Vec<baml_type::ParamTy> = self.scoped_type_bindings[checkpoint..]
             .iter()
             .map(|binding| binding.parameter.clone())
             .collect();
+        self.generalize_closing_scope(outer_universe, &closing, at);
+        // After the leak check, not before: the check itself relates types and
+        // may refuse one on a road with no anchor, and this block's tail is the
+        // last place such a refusal can be reported against the binding it
+        // names.
         for (param, value) in std::mem::take(&mut self.anchorless_escapes) {
             if closing.contains(&param) {
                 self.report_scoped_type_escape(at, &param, &value, ScopedTypeEscapeKind::Inferred);
@@ -3228,7 +3243,6 @@ impl<'db> InferenceContext<'db> {
                 self.anchorless_escapes.push((param, value));
             }
         }
-        self.generalize_closing_scope(outer_universe, &closing, at);
         self.scoped_type_bindings.truncate(checkpoint);
         self.table.close_scopes_to(outer_universe);
         let narrowed: Vec<(BindingId, Ty)> = self
@@ -3248,6 +3262,15 @@ impl<'db> InferenceContext<'db> {
         match expected {
             // Nobody reads the value, so its slot takes the top type: no
             // reader can observe the binding through it.
+            //
+            // The top type rather than `void`, which would be a claim: the
+            // block DID produce a value of some type, and MIR still lowers the
+            // expression that made it. `unknown` says "something, and nobody
+            // is looking", which is what a discarded position means; `void`
+            // would say the expression yields nothing and put every later
+            // reader of this slot's type at odds with the code. Nothing is
+            // erased by it either - the interior tables keep the rigid type,
+            // and this fills only the discarded slot.
             Expectation::Discarded => Ty::intern(InferTy::Unknown {
                 attr: TyAttr::default(),
             }),
@@ -3375,7 +3398,7 @@ impl<'db> InferenceContext<'db> {
                 &value,
                 ScopedTypeEscapeKind::Inferred,
             );
-            self.table.solve(var, Ty::error());
+            self.refuse_with_error_fill(var);
         }
     }
 
@@ -3412,6 +3435,14 @@ impl<'db> InferenceContext<'db> {
             }
         });
         escaped
+    }
+
+    /// Fills a class an escape refusal just reported on, and records that the
+    /// report happened: a later "cannot infer" about the same class would be a
+    /// cascade of this one.
+    fn refuse_with_error_fill(&mut self, var: baml_type::interned::InferVar) {
+        self.refused_escape_vars.insert(var);
+        self.table.solve(var, Ty::error());
     }
 
     fn report_scoped_type_escape(
@@ -3466,7 +3497,29 @@ impl<'db> InferenceContext<'db> {
             {
                 continue;
             }
-            self.report_scoped_type_escape(at, &param, &contribution, ScopedTypeEscapeKind::Thrown);
+            self.report_scoped_type_escape(
+                at,
+                &param,
+                &contribution,
+                ScopedTypeEscapeKind::Thrown { relaxation: None },
+            );
+            // Only the members that NAME the binding are unpublishable. A
+            // `throw` of `string | T` still tells the caller a `string` can
+            // come out, and dropping the whole contribution would lose that
+            // fact from an inferred clause and from a `catch`'s arm set, where
+            // a missing fact changes arm reachability rather than just wording.
+            let members = match self.table.resolve_completely(&contribution).kind() {
+                InferTy::Union(members, _) => members.to_vec(),
+                _ => continue,
+            };
+            let publishable: Vec<Ty> = members
+                .into_iter()
+                .filter(|member| self.escaping_scoped_param(member).is_none())
+                .collect();
+            if !publishable.is_empty() {
+                let publishable = self.union_of(&publishable);
+                kept.push((at, publishable));
+            }
         }
         kept
     }
@@ -4293,7 +4346,7 @@ impl<'db> InferenceContext<'db> {
                     self.report_scoped_type_escape(at, &param, &right, ScopedTypeEscapeKind::Value);
                 }
                 if let InferTy::InferVar { var, .. } = left.kind() {
-                    self.table.solve(*var, Ty::error());
+                    self.refuse_with_error_fill(*var);
                 }
                 false
             }
@@ -4324,7 +4377,7 @@ impl<'db> InferenceContext<'db> {
             // it closes rather than filling `Error` in silence.
             None => self.anchorless_escapes.push((param, ty.clone())),
         }
-        self.table.solve(var, Ty::error());
+        self.refuse_with_error_fill(var);
         true
     }
 
@@ -5940,7 +5993,7 @@ impl<'db> InferenceContext<'db> {
                 let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
                     .name
                     .clone();
-                let instantiation = self.instantiation_args_with_bounds(
+                let instantiation = self.instantiation_args_at(
                     call,
                     &signature.generic_params,
                     Some(&callee_name),
@@ -5958,7 +6011,7 @@ impl<'db> InferenceContext<'db> {
                     .external
                     .clone()
                     .expect("mounted free function carries an external descriptor");
-                let instantiation = self.instantiation_args_with_bounds(
+                let instantiation = self.instantiation_args_at(
                     call,
                     &function.generic_params,
                     Some(&function.name),
@@ -6350,7 +6403,7 @@ impl<'db> InferenceContext<'db> {
                 } else {
                     crate::lower::TypePosition::Existential
                 };
-                instantiation.extend(self.instantiation_args_with_bounds(
+                instantiation.extend(self.instantiation_args_at(
                     call,
                     &own_params,
                     Some(&method_name),
@@ -6383,7 +6436,7 @@ impl<'db> InferenceContext<'db> {
                     .expect("mounted method carries an external descriptor");
                 let own_offset = candidate.class_args.len();
                 let mut instantiation = candidate.class_args;
-                instantiation.extend(self.instantiation_args_with_bounds(
+                instantiation.extend(self.instantiation_args_at(
                     call,
                     &function.generic_params,
                     Some(&function.name),
@@ -6506,7 +6559,7 @@ impl<'db> InferenceContext<'db> {
                             .name
                             .clone();
                     let mut instantiation = prefix;
-                    instantiation.extend(self.instantiation_args_with_bounds(
+                    instantiation.extend(self.instantiation_args_at(
                         call,
                         &own_params,
                         Some(&method_name),
@@ -6523,7 +6576,7 @@ impl<'db> InferenceContext<'db> {
                         .expect("mounted interface method has an external descriptor");
                     let own_offset = prefix.len();
                     let mut instantiation = prefix;
-                    instantiation.extend(self.instantiation_args_with_bounds(
+                    instantiation.extend(self.instantiation_args_at(
                         call,
                         &function.generic_params,
                         Some(&function.name),
@@ -7109,9 +7162,7 @@ impl<'db> InferenceContext<'db> {
         position: crate::lower::TypePosition,
     ) -> Vec<Ty> {
         match own {
-            OwnArgs::Call(call) => {
-                self.instantiation_args_with_bounds(call, params, Some(callee), position)
-            }
+            OwnArgs::Call(call) => self.instantiation_args_at(call, params, Some(callee), position),
             OwnArgs::Fresh => params
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
@@ -7568,7 +7619,7 @@ impl<'db> InferenceContext<'db> {
                 .collect();
             let (instantiation, own_offset) = match (own, pinned) {
                 (OwnArgs::Call(call), Some(owner_args)) => {
-                    let own_args = self.instantiation_args_with_bounds(
+                    let own_args = self.instantiation_args_at(
                         call,
                         &external.generic_params,
                         Some(member),
@@ -7580,7 +7631,7 @@ impl<'db> InferenceContext<'db> {
                     (instantiation, own_offset)
                 }
                 (OwnArgs::Call(call), None) => {
-                    let instantiation = self.instantiation_args_with_bounds(
+                    let instantiation = self.instantiation_args_at(
                         call,
                         &frame,
                         Some(member),
@@ -8541,13 +8592,14 @@ impl<'db> InferenceContext<'db> {
     /// The instantiation vector for a generic item at a use site: explicit
     /// turbofish args (with `_` holes as fresh vars) where written, fresh
     /// variables everywhere else.
+    /// [`Self::instantiation_args_at`] at the ordinary type position.
     fn instantiation_args(
         &mut self,
         site: ExprId,
         generic_params: &[baml_type::ParamTy],
         callee: Option<&baml_type::Name>,
     ) -> Vec<Ty> {
-        self.instantiation_args_with_bounds(
+        self.instantiation_args_at(
             site,
             generic_params,
             callee,
@@ -8555,11 +8607,11 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
-    /// The call-site instantiation road with the callee's declared bounds and
-    /// the one context-sensitive type position supplied explicitly. Written
-    /// slots align only with user-writable params; synthetic effect params
-    /// always receive fresh effect variables.
-    fn instantiation_args_with_bounds(
+    /// The call-site instantiation road, with the one context-sensitive type
+    /// position supplied explicitly. Written slots align only with
+    /// user-writable params; synthetic effect params always receive fresh
+    /// effect variables.
+    fn instantiation_args_at(
         &mut self,
         site: ExprId,
         generic_params: &[baml_type::ParamTy],
@@ -10835,6 +10887,11 @@ impl<'db> InferenceContext<'db> {
                 );
             }
         }
+        debug_assert!(
+            self.anchorless_escapes.is_empty(),
+            "every refused escape is reported: at its block's tail when the \
+             binding closes, and at the body root for one refused after that"
+        );
         let unresolved_infer_diagnostics = self.take_unresolved_infer_diagnostics();
         let throws = match self.declared_throws.clone() {
             // A closed clause IS the surface (declared wins, rule 1),
@@ -10944,16 +11001,17 @@ impl<'db> InferenceContext<'db> {
                 if !throws_unknown {
                     // Report what the clause SHOULD say: a scoped
                     // contribution by its relaxation, everything else as is.
-                    let inferred_types = effective
-                        .iter()
-                        .filter(|fact| !mentions_scoped_param(fact))
-                        .chain(relaxed.iter())
-                        .map(baml_type::Ty::render_user_facing)
-                        .collect();
+                    let inferred = throws_clause_union(
+                        effective
+                            .iter()
+                            .filter(|fact| !mentions_scoped_param(fact))
+                            .chain(relaxed.iter())
+                            .cloned(),
+                    );
                     self.pending_diags
                         .push(PendingDiag::ImpreciseUnknownThrows {
                             at: root,
-                            inferred_types,
+                            inferred,
                             needs_declaration: !relaxed.is_empty(),
                         });
                 } else {
@@ -11427,14 +11485,25 @@ impl<'db> InferenceContext<'db> {
                         name,
                         value,
                         kind,
-                    } => (
-                        TirTypeError::ScopedTypeEscapesBlock {
-                            name,
-                            value: self.plain_finalized(&value),
-                            kind,
-                        },
-                        at,
-                    ),
+                    } => {
+                        let value = self.plain_finalized(&value);
+                        // The thrown type is final here, so this is where the
+                        // remedy the label names can be computed rather than
+                        // described.
+                        let kind = match kind {
+                            ScopedTypeEscapeKind::Thrown { .. } => ScopedTypeEscapeKind::Thrown {
+                                relaxation: Some(nearest_scoped_relaxation(
+                                    &value,
+                                    RelaxationVariance::Covariant,
+                                )),
+                            },
+                            other => other,
+                        };
+                        (
+                            TirTypeError::ScopedTypeEscapesBlock { name, value, kind },
+                            at,
+                        )
+                    }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
@@ -11682,11 +11751,11 @@ impl<'db> InferenceContext<'db> {
                         if !self.finalize_ty(&var).has_error() {
                             continue;
                         }
-                        // A slot SOLVED to `Error` was refused by a road that
-                        // reported (a scoped escape); only a slot still open at
-                        // finalize is "cannot infer".
+                        // A slot an escape refusal filled already carries that
+                        // report; only a slot nothing spoke for is "cannot
+                        // infer".
                         if let InferTy::InferVar { var: slot, .. } = var.kind()
-                            && self.table.is_solved(*slot)
+                            && self.refused_escape_vars.contains(slot)
                         {
                             continue;
                         }
@@ -11741,12 +11810,12 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::ImpreciseUnknownThrows {
                         at,
-                        inferred_types,
+                        inferred,
                         needs_declaration,
                     } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ImpreciseUnknownThrows {
-                                inferred_types,
+                                inferred,
                                 needs_declaration,
                             },
                             severity: DiagnosticSeverity::Error,
@@ -11956,14 +12025,11 @@ impl<'db> InferenceContext<'db> {
                             });
                             continue;
                         }
-                        let extra_types: Vec<String> =
-                            crate::throw_facts::flatten_declared_ty_to_facts(&extra.to_plain())
-                                .into_iter()
-                                .map(|fact| fact.render_user_facing())
-                                .collect();
-                        if extra_types.is_empty() {
+                        let Some(extra_union) = throws_clause_union(
+                            crate::throw_facts::flatten_declared_ty_to_facts(&extra.to_plain()),
+                        ) else {
                             continue;
-                        }
+                        };
                         // The error-CHANNEL pin (B-1082): a surviving
                         // violation also records on the mismatch channel
                         // at the thrown value. This runs AFTER the
@@ -11976,7 +12042,7 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ThrowsContractViolation {
                                 declared: declared.to_plain(),
-                                extra_types,
+                                extra: extra_union,
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
@@ -12586,7 +12652,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 None => self.anchorless_escapes.push((param, solution)),
             }
-            self.table.solve(var, Ty::error());
+            self.refuse_with_error_fill(var);
             return true;
         }
         self.table.solve(var, solution);
@@ -12934,7 +13000,13 @@ fn skolemize_infer(ty: &Ty) -> Ty {
     if let InferTy::InferVar { var, attr } = ty.kind() {
         return Ty::intern(InferTy::TypeVar(
             baml_type::ParamTy::new(
-                u32::MAX - var.index(),
+                // Counted DOWN from the top of the declared space, below
+                // `SCOPED_PARAM_BIT`: a skolem is neither a declared frame
+                // position nor a block-scoped binding, and letting it carry
+                // the scoped bit would make `ParamTy::is_scoped` - and so the
+                // escape checks and the relaxation - answer for a placeholder
+                // no block ever bound.
+                (SCOPED_PARAM_BIT - 1) - var.index(),
                 baml_type::Name::new(format!("?{}", var.index())),
             ),
             attr.clone(),
@@ -13088,7 +13160,32 @@ fn external_target_path(target: &crate::callable::ExternalCallTarget) -> baml_ty
     baml_type::Name::new(path)
 }
 
-pub(crate) use baml_type::SCOPED_PARAM_BIT;
+/// The one type a `throws` clause must name to cover `facts`, in the order
+/// given, or `None` when nothing is thrown.
+///
+/// A message quotes this SINGLE type rather than joining the members'
+/// renderings, because a joined union does not read back as the type it was
+/// built from: a bare function type in a non-first member has its arrow
+/// swallowed by the member before it, so `string | () -> unknown throws never`
+/// parses as `string | unknown`. Rendering one union lets the renderer
+/// parenthesize what needs it - which matters most where the message asks the
+/// author to WRITE what it prints.
+fn throws_clause_union(facts: impl IntoIterator<Item = baml_type::Ty>) -> Option<baml_type::Ty> {
+    let mut members: Vec<baml_type::Ty> = Vec::new();
+    for fact in facts {
+        if !members.contains(&fact) {
+            members.push(fact);
+        }
+    }
+    match members.len() {
+        0 => None,
+        1 => members.pop(),
+        _ => Some(baml_type::Ty::Union(
+            members.into(),
+            baml_type::TyAttr::default(),
+        )),
+    }
+}
 
 /// Whether a finalized (plain) type names a block-scoped parameter.
 fn mentions_scoped_param(ty: &baml_type::Ty) -> bool {
@@ -13224,7 +13321,7 @@ fn scoped_params_in(ty: &Ty, visit: &mut impl FnMut(&baml_type::ParamTy)) {
         return;
     }
     if let InferTy::TypeVar(param, _) = ty.kind()
-        && param.index() & SCOPED_PARAM_BIT != 0
+        && param.is_scoped()
     {
         visit(param);
     }

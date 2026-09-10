@@ -341,7 +341,12 @@ pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
     /// Bind an exact runtime type value into this bytecode frame's type slot.
-    BindType(usize),
+    ///
+    /// The slot is a frame type-argument index, the same space
+    /// `TyTemplate::TypeArgRef` reads, so it carries that space's width: emit
+    /// compares the two directly, and a lossy conversion there would decide a
+    /// soundness question (whether a template read is clobbered) by accident.
+    BindType(u32),
 }
 
 /// The kind of a MIR statement.
@@ -920,12 +925,12 @@ pub enum Rvalue<'db> {
         /// The interface method's name.
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
-        /// appended to the resolved impl frame by the VM. Operands rather
-        /// than templates so a scoped runtime type argument (`m<T>(…)` under
-        /// `type T = unreflect(t)`)
-        /// flows like any other — a written static argument is materialized
-        /// by the producer as a `LoadType` temp. The VM pops each as an
-        /// `Object::Type` either way.
+        /// appended to the resolved impl frame by the VM. Every argument is
+        /// a template today - a scoped `type T = …` slot included - so these
+        /// could be templates; they stay operands because the producer
+        /// materializes each as a `LoadType` temp anyway and the VM pops an
+        /// `Object::Type` either way, which keeps one stack discipline for
+        /// the whole call shape.
         type_args: Vec<Operand<'db>>,
     },
 

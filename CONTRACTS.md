@@ -9,8 +9,7 @@
 > nothing is deferred to a runtime gate, and nothing typed by `T` leaves its
 > block (E0171). See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type
 > bindings". Rows marked done below describe the superseded behavior as it
-> was verified at the time.
-
+> was verified at the time, and so do the two sections named below.
 
 This document freezes the compiler-core contracts for the BEP-066 port after
 the TIR-to-`hir_ty` cutover. `TYPE_SYSTEM.md` and the current `hir_ty` behavior
@@ -40,7 +39,7 @@ that code exists.
 | [x] | B-03 | 4 | Only the special `Session.eval` result slot defaults an uninferable generic to `unknown`; ordinary slots keep current errors. |
 | [x] | B-04 | 3, 4 | Mounted owner/function generics and bounds instantiate normally, synthetic effect parameters do not affect user arity, and bound receivers seed owner substitutions. |
 | [x] | B-05 | 2, 4 | Written type arguments retain ordered static/runtime provenance; runtime operands use a bound-or-`unknown` occurrence type and never become solver variables. |
-| [x] | B-06 | 4 | A bare value in a generic slot reports the targeted “requires `unreflect`” diagnostic. |
+| [x] | B-06 | 4 | A bare value in a generic slot reports the targeted diagnostic. (Superseded wording: it now names the binding — “`x` is a value, not a type; bind its runtime type first with `type T = unreflect(x);`”.) |
 | [x] | B-07 | 4 | Every runtime operand is inferred and checked below primitive `type`, with normal error/pending cascade suppression. |
 | [x] | B-08 | 4 | Only checks that depend on a runtime slot are deferred; operands are still inferred and unrelated static bounds remain enforced. |
 | [x] | B-09 | 4, 7 | Exact `reflect.Package.get_function<F>` extraction uses its special type position and MIR consumes the solved plan without re-lowering syntax. |
@@ -62,6 +61,15 @@ that code exists.
 | [x] | N-03 | 1 | Exactly the sealed builtin reflection-kind classes subtype primitive `type`; user classes cannot opt in. |
 
 ## Runtime type-slot contract
+
+> **Superseded (2026-09).** Every type named in this section is gone:
+> `BodyTypeArgRef` (a written type argument is now just a `BodyTypeRefId`),
+> `CallTypeArgPlan::Runtime` and its `occurrence_ty` (the plan is a struct of
+> `ty` + `emission_ty`), `CallPlan::deferred_checks`, and `RuntimeCheck`. There
+> are no runtime gates or call flags: a runtime type reaches a type position
+> only as a `type T = unreflect(e);` binding's rigid frame parameter, and every
+> use of `T` is checked statically. See `baml_language/TYPE_SYSTEM.md`,
+> "Scoped runtime type bindings".
 
 The canonical syntax bridge is an ordered slot enum in
 `baml_compiler2_hir::body_type_refs`:
@@ -159,6 +167,15 @@ package-interface bytes. Compatibility is per compiler build; it is not an
 external persistence or wire-format promise.
 
 ## Scoped generic-overlay contract
+
+> **Superseded (2026-09)** in three ways, and the last is a reversal:
+> `ScopedTypeBinding` carries a `source: ScopedTypeSource` (`Runtime(ExprId)`
+> or `Static(Ty)`) rather than an `operand` plus an `occurrence_ty`; the
+> parameter's identity is its binding statement's index in the body, with no
+> owner component; and a binding is NOT erased at block exit. Nothing typed by
+> `T` may be observable outside the block at all - the block's value leaves
+> only through a ground type that does not mention `T`, and anything else is
+> E0171. See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type bindings".
 
 `LowerCtx` continues to own the immutable declaration frame. Dynamic runtime
 type bindings are owned by the body-local `InferenceContext` as an ordered

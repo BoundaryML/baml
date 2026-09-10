@@ -1271,6 +1271,14 @@ impl LoweringContext {
 
     /// Lower an associated binding written in this body, collecting its
     /// lowering diagnostics with the body's.
+    ///
+    /// This is the item-level helper, which lowers the binding's right-hand
+    /// side WITHOUT hoisting a union's trailing attributes to the union node.
+    /// The body used to keep its own copy that hoisted, justified only by the
+    /// `unreflect` carriers it had to allocate - and those no longer exist, so
+    /// a body-written `Iface<Item = A | B @attr>` now attaches `@attr` to `B`
+    /// exactly as the same text in a declaration always has: one road, one
+    /// answer.
     fn lower_body_associated_type_binding(
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
@@ -5457,25 +5465,35 @@ impl LoweringContext {
                     Some(marker) => {
                         TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker))
                     }
-                    None => match type_expr
-                        .syntax()
-                        .descendants()
-                        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
-                    {
+                    None => {
                         // `unreflect(…)` somewhere inside a static right-hand
                         // side: the generic gate's "bind it first" advice would
-                        // point at the statement it is already in.
-                        Some(nested) => {
-                            self.diags
-                                .push(LoweringDiagnostic::UnreflectNestedInTypeBinding {
-                                    span: nested.text_range(),
-                                });
-                            TypeBindingValue::Static(
-                                TypeExprKind::Error { attrs: Vec::new() }.at(nested.text_range()),
-                            )
+                        // point at the statement it is already in. Every
+                        // occurrence is reported, not just the first: the whole
+                        // right-hand side becomes the error type, so a second
+                        // marker would otherwise never be mentioned at all.
+                        let nested: Vec<SyntaxNode> = type_expr
+                            .syntax()
+                            .descendants()
+                            .filter(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+                            .collect();
+                        match nested.split_first() {
+                            Some((first, rest)) => {
+                                for marker in std::iter::once(first).chain(rest) {
+                                    self.diags.push(
+                                        LoweringDiagnostic::UnreflectNestedInTypeBinding {
+                                            span: marker.text_range(),
+                                        },
+                                    );
+                                }
+                                TypeBindingValue::Static(
+                                    TypeExprKind::Error { attrs: Vec::new() }
+                                        .at(first.text_range()),
+                                )
+                            }
+                            None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
                         }
-                        None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
-                    },
+                    }
                 }
             }
             None => TypeBindingValue::Static(

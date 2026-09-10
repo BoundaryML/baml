@@ -174,6 +174,10 @@ impl<'db> AnalysisResult<'db> {
         // Step 5: Conservative jump threading (truly empty goto-only blocks).
         let initial_redirect_targets = build_redirect_targets(body);
 
+        // The type-slot resource model only bites in a body that rebinds a
+        // slot; computing the set once keeps every other body on the old path.
+        let rebound_slots = rebound_type_slots(body);
+
         // Step 6: First classification pass.
         let (mut classifications, mut copy_sources) = classify_locals(
             body,
@@ -182,6 +186,7 @@ impl<'db> AnalysisResult<'db> {
             &dominators,
             &predecessors,
             &initial_redirect_targets,
+            &rebound_slots,
             opt,
         );
 
@@ -208,6 +213,7 @@ impl<'db> AnalysisResult<'db> {
                 &dominators,
                 &predecessors,
                 &redirect_targets,
+                &rebound_slots,
                 opt,
             );
             classifications = reclassified;
@@ -885,9 +891,8 @@ fn assert_rebound_slots_dominate_their_reads(body: &MirFunctionBody<'_>) {
                 op: IntrinsicOp::BindType(slot),
                 ..
             } = &stmt.kind
-                && let Ok(slot) = u32::try_from(*slot)
             {
-                writers.entry(slot).or_default().push((block.id, idx));
+                writers.entry(*slot).or_default().push((block.id, idx));
             }
         }
     }
@@ -1211,6 +1216,10 @@ fn collect_uses_in_terminator<'db>(
 /// Classify each local as Virtual, Real, `PhiLike`, `CopyOf`, or Dead.
 ///
 /// Returns both the classifications and the `copy_sources` map for copy propagation.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the classification pass reads the whole analysis context by reference"
+)]
 fn classify_locals(
     body: &MirFunctionBody<'_>,
     arity: usize,
@@ -1218,6 +1227,7 @@ fn classify_locals(
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
+    rebound_slots: &HashSet<u32>,
     opt: OptLevel,
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let mut classifications = HashMap::new();
@@ -1282,12 +1292,28 @@ fn classify_locals(
             && is_call_result_aggregate_operand(local, du, body, def_use)
         {
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::AggregateOperand);
-            if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
+            if can_be_virtual(
+                du,
+                dominators,
+                body,
+                arity,
+                def_use,
+                predecessors,
+                rebound_slots,
+            ) {
                 LocalClassification::Virtual
             } else {
                 LocalClassification::Real
             }
-        } else if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
+        } else if can_be_virtual(
+            du,
+            dominators,
+            body,
+            arity,
+            def_use,
+            predecessors,
+            rebound_slots,
+        ) {
             if opt == OptLevel::Zero && is_user_local {
                 LocalClassification::Real
             } else {
@@ -1706,6 +1732,7 @@ fn can_be_virtual(
     arity: usize,
     def_use: &HashMap<Local, LocalDefUse>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    rebound_slots: &HashSet<u32>,
 ) -> bool {
     // Must have exactly one definition
     let Some(def) = &du.def else {
@@ -1817,7 +1844,8 @@ fn can_be_virtual(
         // the rvalue (including transitive same-block deps) has multiple
         // definitions, it may be modified on some path between def and use, so
         // we refuse to virtualize.
-        let reads = collect_transitive_reads(&def.rvalue, def_use, def.block, def_idx);
+        let reads =
+            collect_transitive_reads(&def.rvalue, def_use, def.block, def_idx, rebound_slots);
 
         for read_local in &reads.locals {
             if let Some(read_du) = def_use.get(read_local) {
@@ -2009,7 +2037,7 @@ fn type_slot_rebound_between(
             matches!(
                 &stmt.kind,
                 StatementKind::Intrinsic { op: IntrinsicOp::BindType(slot), .. }
-                    if u32::try_from(*slot).is_ok_and(|slot| slots.contains(&slot))
+                    if slots.contains(slot)
             )
         })
     })
@@ -2087,7 +2115,7 @@ fn has_side_effects_between<'db>(
     // Collect transitive reads - if this rvalue reads from local X which is defined
     // as reading from local Y, we need to track both X and Y.
     // Only follow definitions that happen BEFORE start (the current statement).
-    let rvalue_reads = collect_transitive_reads(rvalue, def_use, block_id, start);
+    let rvalue_reads = collect_transitive_reads(rvalue, def_use, block_id, start, &HashSet::new());
 
     for stmt_idx in start..end {
         let stmt = &block.statements[stmt_idx];
@@ -2105,7 +2133,30 @@ fn has_side_effects_between<'db>(
 struct RvalueReads {
     locals: HashSet<Local>,
     /// Frame type-arg slots (`TypeArgRef` leaves) of every carried template.
+    /// Left empty in a body that rebinds no slot: a template read is only a
+    /// hazard next to a `BindType`, and a generic body full of `T[]`
+    /// annotations would otherwise pay a full template walk per candidate for
+    /// an answer that cannot matter.
     type_slots: HashSet<u32>,
+}
+
+/// Every frame type-arg slot this body rebinds. Empty for all but a body with
+/// a `type T = …` binding, which is what gates the type-slot resource model
+/// out of every other body.
+fn rebound_type_slots(body: &MirFunctionBody<'_>) -> HashSet<u32> {
+    let mut slots = HashSet::new();
+    for block in &body.blocks {
+        for stmt in &block.statements {
+            if let StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                ..
+            } = &stmt.kind
+            {
+                slots.insert(*slot);
+            }
+        }
+    }
+    slots
 }
 
 /// Collect everything an rvalue reads from, transitively.
@@ -2122,15 +2173,21 @@ fn collect_transitive_reads(
     def_use: &HashMap<Local, LocalDefUse>,
     def_block: BlockId,
     def_stmt_idx: usize,
+    rebound_slots: &HashSet<u32>,
 ) -> RvalueReads {
     let mut reads = RvalueReads::default();
     let mut worklist: Vec<Local> = Vec::new();
+    let read_slot = |slot: u32, reads: &mut RvalueReads| {
+        if rebound_slots.contains(&slot) {
+            reads.type_slots.insert(slot);
+        }
+    };
 
     // First, collect direct reads
     walk_rvalue_locals(rvalue, &mut |local| worklist.push(local));
-    walk_rvalue_type_slots(rvalue, &mut |slot| {
-        reads.type_slots.insert(slot);
-    });
+    if !rebound_slots.is_empty() {
+        walk_rvalue_type_slots(rvalue, &mut |slot| read_slot(slot, &mut reads));
+    }
 
     // Then, transitively expand
     while let Some(local) = worklist.pop() {
@@ -2139,14 +2196,24 @@ fn collect_transitive_reads(
             // Only follow if the definition is in the same block AND before the current statement
             if let Some(du) = def_use.get(&local) {
                 if let Some(def) = &du.def {
-                    // Only follow if definition is earlier in the same block
-                    // This ensures we don't include dependencies on values computed later
                     if let StatementRef::Statement(idx) = def.statement_ref {
+                        // A type slot is position-independent, so it is taken
+                        // from ANY definition this rvalue reaches: re-evaluating
+                        // the rvalue re-evaluates that definition too, wherever
+                        // it sits, and its slot reads become ours. Two virtual
+                        // rvalues chained across three blocks would otherwise be
+                        // checked only pairwise, leaving the outer hop unaware
+                        // of the inner one's slots.
+                        if !rebound_slots.is_empty() {
+                            walk_rvalue_type_slots(&def.rvalue, &mut |slot| {
+                                read_slot(slot, &mut reads);
+                            });
+                        }
+                        // LOCALS keep the same-block restriction: following one
+                        // computed later would claim a dependency this rvalue
+                        // does not have.
                         if def.block == def_block && idx < def_stmt_idx {
                             walk_rvalue_locals(&def.rvalue, &mut |local| worklist.push(local));
-                            walk_rvalue_type_slots(&def.rvalue, &mut |slot| {
-                                reads.type_slots.insert(slot);
-                            });
                         }
                     }
                 }
@@ -2938,7 +3005,7 @@ mod tests {
     }
 
     /// `type T = …` on frame slot `slot`; the operand is immaterial here.
-    fn bind_type(slot: usize) -> Statement<'static> {
+    fn bind_type(slot: u32) -> Statement<'static> {
         Statement {
             kind: StatementKind::Intrinsic {
                 op: IntrinsicOp::BindType(slot),

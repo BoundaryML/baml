@@ -34,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_binding_forms.baml:46:22]
  46 │     type T = Wrapper<unreflect(t)>
     ·                      ──────┬─────
-    ·                            ╰── a `type` binding lifts one runtime type as its whole right-hand side; bind this one first with its own `type U = unreflect(…);`, then write `U` here
+    ·                            ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
     ╰────
 
   [hir] E0168
@@ -43,5 +43,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_binding_forms.baml:47:15]
  47 │     type U = (unreflect(t))
     ·               ──────┬─────
-    ·                     ╰── a `type` binding lifts one runtime type as its whole right-hand side; bind this one first with its own `type U = unreflect(…);`, then write `U` here
+    ·                     ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:54:24]
+ 54 │     type T = unreflect(t)
+    ·                        ┬
+    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `reflect.Type | null`
     ╰────

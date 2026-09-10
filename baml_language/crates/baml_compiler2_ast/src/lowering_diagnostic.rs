@@ -595,7 +595,7 @@ impl LoweringDiagnostic {
                             file_id,
                             range: *span,
                         },
-                        "a `type` binding lifts one runtime type as its whole right-hand side; bind this one first with its own `type U = unreflect(…);`, then write `U` here",
+                        "a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here",
                     )
                     .with_phase(DiagnosticPhase::Hir);
             }

@@ -1930,8 +1930,10 @@ struct LoweringContext<'db> {
     // enclosing top-level function's (and class's) params, never a lambda's.
     lambda_generic_params: Vec<ParamTy>,
 
-    /// Lexical `type T = …` parameters currently visible.
-    runtime_type_binding_params: Vec<ParamTy>,
+    /// The lexical `type T = …` parameters currently visible, innermost last.
+    /// Pushed at the binding statement and truncated at the closing brace, so
+    /// the frame layout this builds mirrors what inference had in scope.
+    scoped_type_binding_params: Vec<ParamTy>,
 
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
@@ -2506,7 +2508,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
-            runtime_type_binding_params: Vec::new(),
+            scoped_type_binding_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
@@ -2592,7 +2594,7 @@ impl<'db> LoweringContext<'db> {
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
-            runtime_type_binding_params: Vec::new(),
+            scoped_type_binding_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
@@ -5636,7 +5638,7 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) {
         let saved_locals = self.locals.clone();
-        let type_binding_scope_start = self.runtime_type_binding_params.len();
+        let type_binding_scope_start = self.scoped_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
 
         // BEP-042 Stage 2: a defer must also run when an exception propagates
@@ -5822,7 +5824,7 @@ impl<'db> LoweringContext<'db> {
 
         self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
-        self.runtime_type_binding_params
+        self.scoped_type_binding_params
             .truncate(type_binding_scope_start);
         self.restore_locals_after_scope(saved_locals);
     }
@@ -10160,7 +10162,7 @@ impl<'db> LoweringContext<'db> {
             .map(|fl| baml_compiler2_hir_ty::lower::function_generic_frame(self.db, fl))
             .unwrap_or_default();
         params.extend(self.lambda_generic_params.iter().cloned());
-        params.extend(self.runtime_type_binding_params.iter().cloned());
+        params.extend(self.scoped_type_binding_params.iter().cloned());
         params
     }
 
@@ -10229,7 +10231,7 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or_else(|| unreachable!("a scoped type parameter has a frame slot"));
         self.builder.push_statement(
             StatementKind::Intrinsic {
-                op: IntrinsicOp::BindType(slot as usize),
+                op: IntrinsicOp::BindType(slot),
                 args: vec![value],
             },
             self.builder.current_source_span,
@@ -12271,7 +12273,7 @@ impl LoweringContext<'_> {
                 // source's template may itself name earlier scoped bindings,
                 // and the layout must already contain this one for `T` to be
                 // addressable right after the statement.
-                self.runtime_type_binding_params
+                self.scoped_type_binding_params
                     .push(binding.parameter.clone());
                 self.emit_scoped_type_binding(&binding);
             }

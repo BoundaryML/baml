@@ -609,7 +609,6 @@ fn collect_default_stmt_forward_references(
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn later_params() -> FxHashSet<Name> {

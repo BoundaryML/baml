@@ -1515,10 +1515,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 match op {
                     IntrinsicOp::BindType(slot) => {
                         let [value] = args.as_slice() else {
-                            panic!("BindType expects exactly one operand")
+                            unreachable!("`BindType` carries exactly one operand")
                         };
                         self.emit_operand_pull(value);
-                        self.emit(Instruction::BindType(*slot));
+                        self.emit(Instruction::BindType(*slot as usize));
                     }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
@@ -1941,8 +1941,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         {
             // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
             // TYPE in the receiver's slot: `Self`, then the method-level type
-            // args (already `Object::Type` OPERANDS — a written static arg is
-            // a `LoadType` temp, a runtime `unreflect` arg any expression),
+            // args (already `Object::Type` OPERANDS — every one of them a
+            // `LoadType` temp, a scoped `type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
             let self_const =
@@ -2348,7 +2348,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                let ntypeargs = u16::try_from(*ntypeargs).expect("ntypeargs fits in u16");
+                let ntypeargs = u16::try_from(*ntypeargs)
+                    .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
                 let call_span = self.current_debug_span;
                 let callee_item = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -2430,8 +2431,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
                 }
                 let nargs = args.len() - ntypeargs;
-                let nargs = u16::try_from(nargs).expect("nargs fits in u16");
-                let ntypeargs = u16::try_from(*ntypeargs).expect("ntypeargs fits in u16");
+                let nargs = u16::try_from(nargs)
+                    .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
+                let ntypeargs = u16::try_from(*ntypeargs)
+                    .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
                 let instruction = if runtime_id.is_some() {
                     Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
                 } else {

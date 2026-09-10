@@ -47,3 +47,10 @@ function nested_in_a_static_right_hand_side(t: reflect.Type) -> int {
     type U = (unreflect(t))
     1
 }
+
+// The operand contract is a `reflect.Type | reflect.TypeView` (or a builder's
+// pending type); a nullable one is not narrowed yet.
+function nullable_operand(t: reflect.Type?) -> int {
+    type T = unreflect(t)
+    1
+}

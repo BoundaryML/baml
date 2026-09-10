@@ -1062,6 +1062,82 @@ mod tests {
         assert!(interface_origins.class_transform_expands(0, &chain, 1));
     }
 
+    /// [`visit_template`] and [`walk_template`] are separate traversals - one
+    /// immutable and total, one mutable and prunable - and only a doc comment
+    /// claims they agree about where children live. A slot walk that missed an
+    /// arm would silently under-report the frame slots a template reads, which
+    /// is what emit's virtualization leans on, so the claim is enforced: both
+    /// must reach the same nodes of a template carrying every child-bearing
+    /// variant.
+    #[test]
+    fn both_template_traversals_reach_the_same_children() {
+        let name = TypeName::local(crate::Name::new("Holder"));
+        let iface = TyTemplateInterface {
+            name: TypeName::local(crate::Name::new("Shown")),
+            generics: Box::new([TyTemplate::TypeArgRef(0)]),
+            associated_types: Box::new([(crate::Name::new("Item"), TyTemplate::TypeArgRef(1))]),
+        };
+        let every_shape = TyTemplate::class(
+            name.clone(),
+            Box::new([
+                TyTemplate::List(Box::new(TyTemplate::TypeArgRef(2)), TyAttr::default()),
+                TyTemplate::Map {
+                    key: Box::new(TyTemplate::TypeArgRef(3)),
+                    value: Box::new(TyTemplate::TypeArgRef(4)),
+                    attr: TyAttr::default(),
+                },
+                TyTemplate::Union(
+                    Box::new([TyTemplate::TypeArgRef(5), TyTemplate::TypeArgRef(6)]),
+                    TyAttr::default(),
+                ),
+                TyTemplate::interface(
+                    TypeName::local(crate::Name::new("Shown")),
+                    Box::new([TyTemplate::TypeArgRef(7)]),
+                    Box::new([(crate::Name::new("Item"), TyTemplate::TypeArgRef(8))]),
+                ),
+                TyTemplate::Function {
+                    params: Box::new([crate::TyTemplateFunctionParamTy {
+                        name: Some(crate::Name::new("a")),
+                        ty: TyTemplate::TypeArgRef(9),
+                        mode: crate::FunctionParamMode::Required,
+                    }]),
+                    ret: Box::new(TyTemplate::TypeArgRef(10)),
+                    throws: Box::new(TyTemplate::TypeArgRef(11)),
+                    attr: TyAttr::default(),
+                },
+                TyTemplate::Future(
+                    Box::new(TyTemplate::TypeArgRef(12)),
+                    Box::new(TyTemplate::TypeArgRef(13)),
+                    TyAttr::default(),
+                ),
+                TyTemplate::AssociatedTypeProjection {
+                    base: Box::new(TyTemplate::TypeArgRef(14)),
+                    interface: Box::new(iface),
+                    member: crate::Name::new("Item"),
+                    attr: TyAttr::default(),
+                },
+            ]),
+        );
+
+        let mut visited = 0usize;
+        visit_template(&every_shape, &mut |_| visited += 1);
+        let mut walked = 0usize;
+        walk_template(&mut every_shape.clone(), false, &mut |_, _| {
+            walked += 1;
+            true
+        });
+        assert_eq!(
+            visited, walked,
+            "the two traversals disagree about a template's children"
+        );
+
+        // And the slot walk built on the immutable one sees every leaf.
+        let mut slots = Vec::new();
+        every_shape.for_each_type_arg_ref(&mut |slot| slots.push(slot));
+        slots.sort_unstable();
+        assert_eq!(slots, (0..=14).collect::<Vec<u32>>());
+    }
+
     #[test]
     fn concrete_template_substitutes_to_itself() {
         let tmpl = TyTemplate::from(RealizedTy::int());

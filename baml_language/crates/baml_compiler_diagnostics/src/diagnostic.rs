@@ -397,8 +397,9 @@ pub enum DiagnosticId {
     /// An ordinary inference variable remained unresolved at writeback (E0155).
     TypeMustBeKnown,
     /// A value typed by a body-scoped `type T = …` binding would be
-    /// observable outside the block that binds `T`: the block's value, or a
-    /// thrown type an inferred `throws` clause would publish.
+    /// observable outside the block that binds `T`: the block's value, a
+    /// thrown type a published clause would carry, or a type still being
+    /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
 }
 

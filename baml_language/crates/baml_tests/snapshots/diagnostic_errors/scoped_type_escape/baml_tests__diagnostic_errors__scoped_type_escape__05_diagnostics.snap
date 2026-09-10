@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:26:9]
  26 │         as_t<T>(1)
     ·         ─────┬────
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:34:5]
  34 │     as_t<T>(1)
     ·     ─────┬────
@@ -22,34 +22,34 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:40:5]
  40 │     risky<T>(as_t<T>("x"), false)
     ·     ────┬───
-    ·         ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+    ·         ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:47:9]
  47 │         risky<T>(as_t<T>("x"), false)
     ·         ────┬───
-    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:56:9]
  56 │         risky<T>(as_t<T>("x"), true)
     ·         ────┬───
-    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:69:17]
  69 │         xs.push(as_t<T>(1))
     ·                 ─────┬────
@@ -58,11 +58,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:81:11]
  81 │     throw a
     ·           ┬
-    ·           ╰── this throws `T[]`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+    ·           ╰── this throws `T[]`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0097
@@ -105,7 +105,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0097
 
-  × `throws unknown` is imprecise: this function throws `string | () -> unknown throws never`; write `throws string | () -> unknown throws never`
+  × `throws unknown` is imprecise: this function throws `string | (() -> unknown throws never)`; write `throws string | (() -> unknown throws never)`
      ╭─[scoped_type_escape.baml:104:74]
  104 │ ╭─▶ function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
  105 │ │       type T = unreflect(t)
@@ -116,7 +116,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:115:16]
  115 │         return as_t<T>("x")
      ·                ──────┬─────
@@ -125,7 +125,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:123:12]
  123 │     return as_t<T>(1)
      ·            ─────┬────
@@ -134,7 +134,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:136:9]
  136 │         ident(as_t<T>(42))
      ·         ─────────┬────────
@@ -143,7 +143,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:151:9]
  151 │         [ident(as_t<T>(42))]
      ·         ──────────┬─────────
@@ -152,7 +152,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:162:13]
  162 │     ys.push(as_t<T>(1))
      ·             ─────┬────
@@ -169,7 +169,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:182:23]
  182 │         ys.push(ident(as_t<T>(1)))
      ·                       ─────┬────
@@ -178,16 +178,24 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:193:23]
  193 │         ys.push(ident(as_t<T>(1)))
      ·                       ─────┬────
      ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
      ╰────
 
+  [type] E0002
+
+  × cannot infer type parameter `T`
+     ╭─[scoped_type_escape.baml:205:17]
+ 205 │         xs.push(Cell { value: ident(as_t<T>(1)) })
+     ·                 ─────────────────────────────────
+     ╰────
+
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:205:37]
  205 │         xs.push(Cell { value: ident(as_t<T>(1)) })
      ·                                     ─────┬────
@@ -196,7 +204,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:215:23]
  215 │         ys.push(ident(as_t<T>(1)))
      ·                       ─────┬────
@@ -205,11 +213,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:227:11]
  227 │     throw as_t<T>(1)
      ·           ─────┬────
-     ·                ╰── this throws `T`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+     ·                ╰── this throws `T`, which would be published past the block; catch it inside the block, or declare `throws unknown`
      ╰────
 
   [type] E0097
@@ -227,7 +235,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0171
 
-  × scoped runtime type `T` cannot leave the block that binds it
+  × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:242:82]
  242 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
  243 │ │       let f = () -> int throws string | _ {

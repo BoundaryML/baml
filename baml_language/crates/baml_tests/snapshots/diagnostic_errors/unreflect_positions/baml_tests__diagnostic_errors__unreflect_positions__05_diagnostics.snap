@@ -80,7 +80,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unreflect_positions.baml:35:27]
  35 │     type Nested = Wrapper<unreflect(t)>
     ·                           ──────┬─────
-    ·                                 ╰── a `type` binding lifts one runtime type as its whole right-hand side; bind this one first with its own `type U = unreflect(…);`, then write `U` here
+    ·                                 ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
     ╰────
 
   [hir] E0168

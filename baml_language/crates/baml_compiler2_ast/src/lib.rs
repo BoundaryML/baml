@@ -459,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn type_binding_lowers_the_whole_marker_as_its_runtime_operand() {
+    fn type_binding_lowers_its_marker_to_a_runtime_operand() {
         let function = first_function(parse_and_lower(
             "function main(t: reflect.Type) -> reflect.Type { type T = unreflect(t); return reflect.Type.of<T>() }",
         ));

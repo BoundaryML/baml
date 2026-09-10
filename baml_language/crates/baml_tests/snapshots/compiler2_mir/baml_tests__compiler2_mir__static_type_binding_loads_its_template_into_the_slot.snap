@@ -33,7 +33,7 @@ fn user.f(value: unknown) -> bool {
 
     bb0: {
         _2 = load_type(Wrapper<string>);
-        bind_type(0, [Copy(Local(Local(2)))]);
+        bind_type(0, copy _2);
         _10 = load_type(#0);
         _9 = call const fn user.erase<copy _10>() -> [bb1];
     }

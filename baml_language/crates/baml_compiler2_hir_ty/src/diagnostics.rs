@@ -26,14 +26,21 @@ use text_size::TextRange;
 
 /// How a value typed by a block-scoped `type T = …` binding would leave its
 /// block (E0171); the two roads have different remedies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopedTypeEscapeKind {
     /// The block's value: it leaves only through a type that does not
     /// mention `T`, such as `unknown`.
     Value,
     /// A thrown type an inferred `throws` clause or an enclosing `catch`
-    /// would publish: catch it inside the block instead.
-    Thrown,
+    /// would publish: catch it inside the block, or name its relaxation in
+    /// a declared clause.
+    Thrown {
+        /// The closest type free of the binding that a declared clause may
+        /// name for the thrown type - what the remedy should actually say.
+        /// Computed when the diagnostic is materialized, where the thrown
+        /// type is final; `None` on a report that has not reached there.
+        relaxation: Option<Ty>,
+    },
     /// A type still being inferred would become the escaping type: an outer
     /// binding's element type, or a block value whose inference variable
     /// the block leaves undecided. The remedy is an annotation on the
@@ -392,7 +399,9 @@ pub enum TirTypeError {
     /// Inferred escaping throws are not covered by the declared throws contract.
     ThrowsContractViolation {
         declared: Ty,
-        extra_types: Vec<String>,
+        /// What the body may throw beyond the clause, as ONE type so the
+        /// renderer parenthesizes what needs it.
+        extra: Ty,
     },
     /// Inferred escaping throws are explainable through a single callback path.
     CallbackThrowsContractViolation {
@@ -405,7 +414,10 @@ pub enum TirTypeError {
     /// An `unknown`-containing throws contract without an escaping value typed
     /// `unknown`.
     ImpreciseUnknownThrows {
-        inferred_types: Vec<String>,
+        /// What the function actually throws, as ONE type so the renderer
+        /// parenthesizes what needs it - this message asks the author to
+        /// write what it prints. `None` when it throws nothing.
+        inferred: Option<Ty>,
         /// The clause must stay (a member is a scoped thrown type's
         /// relaxation); only its spelling is wrong.
         needs_declaration: bool,
@@ -1488,15 +1500,12 @@ impl fmt::Display for TirTypeError {
                 f,
                 "invalid catch binding type `{type_name}`; use a concrete type instead"
             ),
-            TirTypeError::ThrowsContractViolation {
-                declared,
-                extra_types,
-            } => {
+            TirTypeError::ThrowsContractViolation { declared, extra } => {
                 write!(
                     f,
                     "declared throws is `{}`, but this function may also throw `{}`",
                     declared.render_user_facing(),
-                    extra_types.join(" | ")
+                    extra.render_user_facing()
                 )
             }
             TirTypeError::CallbackThrowsContractViolation {
@@ -1530,28 +1539,28 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::ImpreciseUnknownThrows {
-                inferred_types,
+                inferred,
                 needs_declaration,
-            } => {
-                if *needs_declaration {
-                    let inferred = inferred_types.join(" | ");
-                    write!(
-                        f,
-                        "`throws unknown` is imprecise: this function throws `{inferred}`; write `throws {inferred}`"
-                    )
-                } else if inferred_types.is_empty() {
-                    write!(
-                        f,
-                        "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
-                    )
-                } else {
-                    let inferred = inferred_types.join(" | ");
-                    write!(
-                        f,
-                        "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
-                    )
+            } => match inferred {
+                None => write!(
+                    f,
+                    "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
+                ),
+                Some(inferred) => {
+                    let inferred = inferred.render_user_facing();
+                    if *needs_declaration {
+                        write!(
+                            f,
+                            "`throws unknown` is imprecise: this function throws `{inferred}`; write `throws {inferred}`"
+                        )
+                    } else {
+                        write!(
+                            f,
+                            "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
+                        )
+                    }
                 }
-            }
+            },
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")
             }

@@ -29,7 +29,7 @@ fn user.f(t: reflect.Type, value: unknown) -> bool {
     let _8: bool
 
     bb0: {
-        bind_type(0, [Copy(Local(Local(1)))]);
+        bind_type(0, copy _1);
         _3 = copy _2;
         _3 = narrow_bind copy _3 as TypeArgRef(0) -> [bb2, bb1];
     }

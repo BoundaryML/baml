@@ -1027,9 +1027,14 @@ pub(crate) fn runtime_compiler() -> Arc<dyn RuntimeCompiler> {
     Arc::new(ProjectRuntimeCompiler)
 }
 
+/// `session` marks a submission compile, whose generated names are the only
+/// ones worth demangling: a package compile has no generator prefixes, and
+/// rewriting its diagnostics could only corrupt a user's own identifier that
+/// happens to look like one.
 fn owned_diagnostic(
     db: &ProjectDatabase,
     diagnostic: &baml_compiler_diagnostics::Diagnostic,
+    session: bool,
 ) -> RuntimeCompileDiagnostic {
     let span = diagnostic.primary_span().and_then(|span| {
         db.file_id_to_path(span.file_id)
@@ -1041,7 +1046,11 @@ fn owned_diagnostic(
     });
     RuntimeCompileDiagnostic {
         code: diagnostic.code().to_string(),
-        message: demangle_session_names(&diagnostic.message_with_primary_label()),
+        message: if session {
+            demangle_session_names(&diagnostic.message_with_primary_label())
+        } else {
+            diagnostic.message_with_primary_label().into_owned()
+        },
         severity: match diagnostic.severity {
             Severity::Error => RuntimeDiagnosticSeverity::Error,
             Severity::Warning => RuntimeDiagnosticSeverity::Warning,
@@ -1660,10 +1669,11 @@ fn lower_session_submission(
     // declarations so a replayed step still finds it.
     let erase_helper = format!("__baml_erase_{sequence}");
     if !erase_steps.is_empty() {
-        let _ = writeln!(
+        writeln!(
             declaration_source,
             "function {erase_helper}(v: unknown) -> unknown throws never {{ v }}"
-        );
+        )
+        .expect("writing to String is infallible");
     }
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
@@ -2284,14 +2294,22 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
 
         let mut diagnostics: Vec<_> = collect_diagnostics(&db)
             .iter()
-            .map(|diagnostic| owned_diagnostic(&db, diagnostic))
+            .map(|diagnostic| owned_diagnostic(&db, diagnostic, session_request.is_some()))
             .collect();
         // A step whose value is typed by a session binding cannot leave its
         // block as written; only the compiler knows which steps those are, so
         // the first compile finds them (E0171 at the step) and one re-lower
         // publishes them as `unknown`. Every other diagnostic stands.
+        //
+        // ONE round is enough because erasing a step only ever REMOVES the
+        // report that selected it: the step's block gains a ground `unknown`
+        // context, and nothing else about the submission changes. A step
+        // selected by an E0171 that erasure cannot fix (a thrown type, or an
+        // inference variable decided as the binding) costs one extra compile
+        // and then reports exactly as it did - bounded, and it cannot select a
+        // step twice because the erased source is what the second compile sees.
         if let (Some(request), Some(lowered), Some(compile)) =
-            (&session_request, &mut lowered_session, session.as_mut())
+            (&session_request, &lowered_session, session.as_mut())
         {
             let erase = steps_publishing_a_binding(&diagnostics, &request.submission_name, lowered);
             if !erase.is_empty() {
@@ -2300,12 +2318,11 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                     runtime_source_virtual_path(&request.submission_name),
                     &relowered.source,
                 );
-                compile.artifact.clone_from(&relowered.artifact);
-                compile.result_global.clone_from(&relowered.result_global);
-                *lowered = relowered;
+                compile.artifact = relowered.artifact;
+                compile.result_global = relowered.result_global;
                 diagnostics = collect_diagnostics(&db)
                     .iter()
-                    .map(|diagnostic| owned_diagnostic(&db, diagnostic))
+                    .map(|diagnostic| owned_diagnostic(&db, diagnostic, session_request.is_some()))
                     .collect();
             }
         }

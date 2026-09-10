@@ -261,6 +261,71 @@ test "values and effects leave a block only through binding-free types" {
     assert.equal(discarded_by_a_wildcard(int_t), 2)
 }
 
+// Spec rules that nothing else in the corpus pins. Each behaves as
+// `TYPE_SYSTEM.md` says; these keep that from changing silently.
+function binding_in_a_parameter_default(
+    n: int = { type D = unreflect(reflect.Type.of<int>()); 4 },
+) -> int throws never {
+    n
+}
+
+function the_same_name_bound_twice(t: reflect.Type, u: reflect.Type) -> reflect.Type throws never {
+    type T = unreflect(t)
+    type T = unreflect(u)
+    reflect.Type.of<T>()
+}
+
+// The shape the emit fix exists for: a closure built under one binding is
+// called after a sibling block rebound the same frame slot.
+function closure_outlives_a_sibling_rebinding(a: reflect.Type, b: reflect.Type) -> reflect.Type throws never {
+    let f: () -> reflect.Type throws never = {
+        type T = unreflect(a)
+        () -> { reflect.Type.of<T>() }
+    }
+    {
+        type U = unreflect(b)
+        let _ = reflect.Type.of<U>()
+    }
+    f()
+}
+
+// A union relaxes its members and simplifies, so `T | int` relaxes to
+// `unknown` and a declared `throws unknown` is precise for it.
+function throws_a_union_naming_the_binding(t: reflect.Type) -> int throws unknown {
+    type T = unreflect(t)
+    let v: T | int = as_t<T>(1)
+    throw v
+}
+
+test "spec rules with no other pin" {
+    let int_t = reflect.Type.of<int>()
+    let string_t = reflect.Type.of<string>()
+    assert.equal(binding_in_a_parameter_default(), 4)
+    assert.is_true(the_same_name_bound_twice(int_t, string_t) == string_t)
+    assert.is_true(closure_outlives_a_sibling_rebinding(int_t, string_t) == int_t)
+    let thrown = throws_a_union_naming_the_binding(int_t) catch (e) { _ => e }
+    assert.is_true(reflect.Type.of_value(thrown) == int_t)
+}
+
+// E0097 prints the clause it wants the author to write, so that clause has to
+// read back as the type it was built from. The nearest relaxation of a thrown
+// `() -> T` is a function type, and a function type only survives a union when
+// the union parenthesizes it - this is the printed clause, pasted back.
+function advised_clause_applied(t: reflect.Type) -> int throws string | (() -> unknown throws never) {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1)
+    throw () -> { ident<T>(v) }
+}
+
+test "the clause E0097 prints compiles and keeps the thrown value" {
+    let thrown = advised_clause_applied(reflect.Type.of<int>()) catch (e) { _ => e }
+    let called = match (thrown) {
+        let f: () -> unknown throws never => f(),
+        _ => null,
+    }
+    assert.is_true(reflect.Type.of_value(called) == reflect.Type.of<int>())
+}
+
 // A PARTIAL clause (`throws X | _`) is judged by the names it WROTE, exactly
 // as a closed clause is: a name that already admits the thrown type publishes
 // it, so the binding never reaches the surface and the inferred remainder is

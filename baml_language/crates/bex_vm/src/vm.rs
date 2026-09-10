@@ -1970,9 +1970,13 @@ impl BexVm {
             return Ok(TakenTypeArgs::default());
         }
         // Every type-operand position's contract is
-        // `reflect.Type | reflect.TypeView`; a kind view converts at this
-        // boundary to the `type` value it wraps, so everything downstream
-        // sees `Object::Type` only.
+        // `reflect.Type | reflect.TypeView`; a kind view converts to the
+        // `type` value it wraps, so everything downstream sees `Object::Type`
+        // only. This is the same conversion `type_operand_value` applies (and
+        // is idempotent with it): normalizing the slots up front is what lets
+        // the all-static scan below read them without a fallible call, and
+        // what keeps a view from reaching the fast path's `Object::Type`
+        // assumption.
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
             if let Some(ty_value) =

@@ -107,12 +107,12 @@ impl VarPolicy {
         }
     }
 
-    /// The class policy after a var-var union. `Value` is the identity;
-    /// a lambda parameter absorbed into a container/hole class takes that
-    /// class's policy (its behavior set is a strict superset - real case:
-    /// `let xs = []; xs.push(x)` inside a lambda unions the element slot
-    /// with the parameter). An
-    /// effect class joining any specialized class is not constructible
+    /// The class policy after a var-var union. `Value` is the identity; a
+    /// lambda parameter absorbed into a container class takes that class's
+    /// policy (its behavior set is a strict superset - real case:
+    /// `let xs = []; xs.push(x)` inside a lambda unions the element slot with
+    /// the parameter). An effect class joining any specialized class is not
+    /// constructible
     /// under the current minting discipline (effects only ever unify with
     /// throws slots, which are ground, effect vars, or plain hole vars);
     /// debug-assert and keep the effect policy - a throws channel cannot
@@ -238,6 +238,10 @@ pub struct VarBounds {
 pub struct Snapshot {
     vars: ut::Snapshot<ut::InPlace<VarKey>>,
     bounds: FxHashMap<u32, VarBounds>,
+    /// The scope depth the snapshot was taken at. Not restored - a probe is
+    /// expected to open and close scopes symmetrically, and the rollback
+    /// asserts it did.
+    universe: u32,
 }
 
 #[derive(Default)]
@@ -289,20 +293,35 @@ impl InferenceTable {
     ///
     /// Depths are reused: two sibling blocks each binding one parameter both
     /// open universe `n + 1`. That is sound because a universe only ever
-    /// compares against the depth a parameter was bound at, every variable
-    /// a block leaves open is demoted or decided when it closes (the leak
-    /// check in `finish_scoped_type_bindings`), and a closed parameter stays
-    /// registered, so a sibling's variable can never take it.
+    /// compares against the depth a parameter is registered at, and closing a
+    /// scope retires its parameters to a depth no variable can reach (see
+    /// [`InferenceTable::close_scopes_to`]) - so a sibling that reuses the
+    /// depth cannot take the earlier block's parameter even though the two
+    /// blocks opened the same number.
     pub fn bind_scoped_param(&mut self, param: &ParamTy) {
         self.universe += 1;
-        self.scoped_params.insert(param.index(), self.universe);
+        let previous = self.scoped_params.insert(param.index(), self.universe);
+        debug_assert!(
+            previous.is_none(),
+            "a statement binds its parameter once, so a depth is never overwritten"
+        );
     }
 
-    /// Closes every scope deeper than `depth`, the enclosing block's count
-    /// of open bindings. The closed parameters stay registered at their
-    /// depth, so a later mention still counts as escaping.
+    /// Closes every scope deeper than `depth`, the enclosing block's count of
+    /// open bindings.
+    ///
+    /// A closed parameter is RETIRED rather than left at its old depth: it
+    /// keeps a registration, so a later mention still counts as escaping, but
+    /// at a depth deeper than any variable can be minted at, so the ordinary
+    /// check refuses it for every variable - including one in a sibling block
+    /// that reuses the depth this one just gave up.
     pub fn close_scopes_to(&mut self, depth: u32) {
         debug_assert!(depth <= self.universe, "scopes close innermost first");
+        for registered in self.scoped_params.values_mut() {
+            if *registered > depth {
+                *registered = u32::MAX;
+            }
+        }
         self.universe = depth;
     }
 
@@ -361,7 +380,7 @@ impl InferenceTable {
                 return;
             }
             if let InferTy::TypeVar(param, _) = ty.kind()
-                && param.index() & super::SCOPED_PARAM_BIT != 0
+                && param.is_scoped()
                 && scoped_params
                     .get(&param.index())
                     .is_none_or(|depth| *depth > universe)
@@ -562,11 +581,18 @@ impl InferenceTable {
     pub fn snapshot(&mut self) -> Snapshot {
         Snapshot {
             vars: self.vars.snapshot(),
+            universe: self.universe,
             bounds: self.bounds.clone(),
         }
     }
 
     pub fn rollback_to(&mut self, snapshot: Snapshot) {
+        debug_assert_eq!(
+            self.universe, snapshot.universe,
+            "a probe must leave the scope depth it found: nothing it relates \
+             can outlive it, so an unbalanced scope would strand variables at \
+             a depth no block will close"
+        );
         self.vars.rollback_to(snapshot.vars);
         self.bounds = snapshot.bounds;
     }
@@ -1406,11 +1432,13 @@ mod tests {
     fn a_deposit_generalizes_the_variables_it_carries_to_the_receiving_class() {
         let mut table = InferenceTable::new();
         let outer = table.new_var();
+        let outer_union = table.new_var();
         let param = ParamTy::new(
             super::super::SCOPED_PARAM_BIT | 3,
             baml_type::Name::new("T"),
         );
         let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+
         table.bind_scoped_param(&param);
         let inner = table.new_var();
         let carried = table.new_var();
@@ -1418,9 +1446,10 @@ mod tests {
         // Minted inside the binding's scope: both may take the parameter.
         assert_eq!(table.escaping_scoped_param(inner, &scoped), None);
         assert_eq!(table.escaping_scoped_param(carried, &scoped), None);
+
         // Depositing `inner[]` into the outer class makes `inner` observable
-        // from outside, and through its own bound so is `carried`: neither
-        // may take the parameter any more (rustc's generalizer).
+        // from outside, and through its own bound so is `carried`: neither may
+        // take the parameter any more (rustc's generalizer).
         table.add_lower_bound(outer, Ty::list(Ty::infer_var(inner)), None);
         assert_eq!(
             table.escaping_scoped_param(inner, &scoped),
@@ -1430,35 +1459,45 @@ mod tests {
             table.escaping_scoped_param(carried, &scoped),
             Some(param.clone())
         );
-        // A solution generalizes the same way, and so does a var-var union
-        // with a class that already carries bounds.
-        let solved_into = table.new_var();
+
+        // A SOLUTION carries its variables out the same way a bound does.
         let via_solution = table.new_var();
-        table.close_scopes_to(0);
-        let later = table.new_var();
         assert_eq!(table.escaping_scoped_param(via_solution, &scoped), None);
-        table.solve(later, Ty::list(Ty::infer_var(via_solution)));
+        table.solve(outer, Ty::list(Ty::infer_var(via_solution)));
         assert_eq!(
             table.escaping_scoped_param(via_solution, &scoped),
             Some(param.clone())
         );
-        let bound_of_solved_into = {
-            table.bind_scoped_param(&param);
-            let deep = table.new_var();
-            table.add_upper_bound(solved_into, Ty::infer_var(deep), None);
-            table.close_scopes_to(0);
-            deep
-        };
-        assert_eq!(
-            table.escaping_scoped_param(bound_of_solved_into, &scoped),
-            None
-        );
-        let outermost = table.new_var();
+
+        // So does a var-var union, which takes the shallower depth: the merged
+        // class's own bounds are generalized with it.
+        let holder = table.new_var();
+        let deep = table.new_var();
+        table.add_upper_bound(holder, Ty::infer_var(deep), None);
+        assert_eq!(table.escaping_scoped_param(deep, &scoped), None);
         table
-            .unify(&Ty::infer_var(outermost), &Ty::infer_var(solved_into))
+            .unify(&Ty::infer_var(outer_union), &Ty::infer_var(holder))
             .unwrap();
         assert_eq!(
-            table.escaping_scoped_param(bound_of_solved_into, &scoped),
+            table.escaping_scoped_param(deep, &scoped),
+            Some(param.clone())
+        );
+
+        // Closing the scope RETIRES the parameter: a variable minted after it,
+        // at the very depth a sibling block reuses, still cannot take it.
+        table.close_scopes_to(0);
+        let sibling_depth = table.new_var();
+        table.bind_scoped_param(&ParamTy::new(
+            super::super::SCOPED_PARAM_BIT | 4,
+            baml_type::Name::new("U"),
+        ));
+        let in_sibling_block = table.new_var();
+        assert_eq!(
+            table.escaping_scoped_param(sibling_depth, &scoped),
+            Some(param.clone())
+        );
+        assert_eq!(
+            table.escaping_scoped_param(in_sibling_block, &scoped),
             Some(param)
         );
     }

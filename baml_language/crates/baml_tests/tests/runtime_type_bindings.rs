@@ -313,7 +313,7 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
 }
 
 /// The ticket's Agent repro: `ai.Agent<Out>.run` is `implements Runner<Out>`, so
-/// it took the same hole — a payload `baml.sap.parse<unreflect(t)>` handled fine
+/// it took the same hole — a payload `baml.sap.parse<T>` handled fine
 /// came back as `ai.errors.ParseFailed` through the runner.
 #[tokio::test]
 async fn agent_run_parses_a_reflected_output_type() {

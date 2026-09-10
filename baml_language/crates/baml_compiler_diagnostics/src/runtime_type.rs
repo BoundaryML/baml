@@ -156,10 +156,14 @@ pub fn runtime_type_must_be_named() -> Diagnostic {
 /// time, so a `T`-typed value that outlived the block could break the
 /// invariants of whatever it landed in. A value leaves a block only through
 /// a type that does not mention `T` (such as `unknown`).
+///
+/// "scoped type" rather than "scoped runtime type": the rule is the same for
+/// a static right-hand side (`type S = Wrapper<int>`), which binds no runtime
+/// value at all.
 pub fn scoped_type_escapes_block(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::ScopedTypeEscapesBlock,
-        format!("scoped runtime type `{name}` cannot leave the block that binds it"),
+        format!("scoped type `{name}` cannot leave the block that binds it"),
     )
 }
 
@@ -289,7 +293,7 @@ mod tests {
             (
                 scoped_type_escapes_block("Out"),
                 "E0171",
-                "scoped runtime type `Out` cannot leave the block that binds it",
+                "scoped type `Out` cannot leave the block that binds it",
             ),
             (
                 duplicate_member(DuplicateMemberKind::Field, "Collision", "wire"),

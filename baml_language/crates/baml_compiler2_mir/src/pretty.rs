@@ -181,7 +181,14 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
-                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
+                IntrinsicOp::BindType(slot) => {
+                    write!(f, "bind_type({slot}")?;
+                    for arg in args {
+                        write!(f, ", ")?;
+                        write_operand(f, arg)?;
+                    }
+                    return write!(f, ");");
+                }
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {

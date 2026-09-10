@@ -121,9 +121,12 @@ pub(crate) struct CallPlan {
     pub(crate) side_channels: CallSideChannels,
 }
 
+/// One written generic slot as MIR consumes it. Only the WRITTEN shape
+/// survives the conversion: inference's solved `ty` decides the call's
+/// instantiation before MIR runs, and lowering emits from `emission_ty`
+/// alone.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CallTypeArgPlan {
-    pub(crate) ty: Tir2Ty,
     pub(crate) emission_ty: Tir2Ty,
 }
 
@@ -379,7 +382,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     .slots
                     .iter()
                     .map(|slot| CallTypeArgPlan {
-                        ty: slot.ty.clone(),
                         emission_ty: slot.emission_ty.clone(),
                     })
                     .collect(),

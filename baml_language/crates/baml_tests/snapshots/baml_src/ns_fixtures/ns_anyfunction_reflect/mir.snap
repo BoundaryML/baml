@@ -691,7 +691,7 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
 
     bb2: {
         _4 = copy _1;
-        bind_type(0, [Copy(Local(Local(4)))]);
+        bind_type(0, copy _4);
         _7 = load_type(#0);
         _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _7>(const "sample") -> [bb3];
     }

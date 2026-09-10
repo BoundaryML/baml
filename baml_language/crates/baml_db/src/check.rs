@@ -1566,9 +1566,17 @@ fn new_tir_diagnostic(
             ScopedTypeEscapeKind::Value => format!(
                 "this has type `{value}`; a value leaves the block only through a type that does not mention `{name}`, such as `unknown`"
             ),
-            ScopedTypeEscapeKind::Thrown => format!(
-                "this throws `{value}`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation"
-            ),
+            // The remedy names the clause to write, not the rule that
+            // derives it: the author is being asked to type something.
+            ScopedTypeEscapeKind::Thrown { relaxation } => match relaxation {
+                Some(relaxation) => format!(
+                    "this throws `{value}`, which would be published past the block; catch it inside the block, or declare `throws {}`",
+                    relaxation.render_user_facing()
+                ),
+                None => format!(
+                    "this throws `{value}`, which would be published past the block; catch it inside the block, or declare a `throws` clause that does not mention `{name}`"
+                ),
+            },
             ScopedTypeEscapeKind::Inferred => format!(
                 "the type inferred here would be `{value}`; give the binding it flows into a type that does not mention `{name}`, such as `unknown`"
             ),
@@ -1775,14 +1783,11 @@ fn source_aware_tir_type_error_message(
                 ty(other_type)
             )
         }
-        TirTypeError::ThrowsContractViolation {
-            declared,
-            extra_types,
-        } => {
+        TirTypeError::ThrowsContractViolation { declared, extra } => {
             format!(
                 "declared throws is `{}`, but this function may also throw `{}`",
                 ty(declared),
-                extra_types.join(" | ")
+                ty(extra)
             )
         }
         TirTypeError::CallbackThrowsContractViolation {

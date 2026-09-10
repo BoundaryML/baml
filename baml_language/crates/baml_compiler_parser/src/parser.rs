@@ -8649,7 +8649,7 @@ testset "dynamic" {
     }
 
     #[test]
-    fn top_level_runtime_type_atom_parses_for_checker_diagnostics() {
+    fn top_level_runtime_type_atom_parses_for_the_lowering_gate() {
         let source = "type T = unreflect(reflect.Type.of<string>())\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
