@@ -62,6 +62,8 @@ mod accessor;
 pub(crate) mod card_table;
 mod chunked_vec;
 mod gc;
+#[cfg(feature = "gc_profiling")]
+mod gc_profile;
 mod heap;
 mod heap_debugger;
 mod heap_guard;
@@ -72,6 +74,8 @@ pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle};
 pub use bex_vm_types::PermitProof;
 pub use gc::{CollectionLevel, GcStats};
+#[cfg(feature = "gc_profiling")]
+pub use gc_profile::{GcHeapSnapshot, GcProfile};
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats, UnhandledSpawnError};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
