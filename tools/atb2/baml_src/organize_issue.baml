@@ -51,13 +51,17 @@ function shepherd_for(subsystem: Subsystem) -> string {
 
 /// Route an issue to the shepherd of its subsystem. Idempotent: an issue
 /// that already has a shepherd keeps it.
-function organize_issue(issue: Issue) -> Issue {
+function organize_issue(issue: Issue, mapping: string? = null) -> Issue {
     //# keep an existing shepherd
     if (issue.shepherd != null) {
         return issue;
     };
     //# route by subsystem to the most active owner
-    let shepherd = shepherd_for(issue.subsystem);
+    let config = mapping ?? baml.env.get("ATB2_SHEPHERDS") ?? "";
+    let candidates = shepherds_for(issue.subsystem).filter((login: string) -> bool {
+        config.trim().length() == 0 || shepherd_id_in(login, config) != null
+    });
+    let shepherd = candidates.at(0) ?? baml.sys.panic("no mapped shepherd for " + issue.subsystem.to_string());
     log.info({ "issue": issue.id, "subsystem": issue.subsystem.to_string(), "shepherd": shepherd });
     Issue {
         id: issue.id,
@@ -73,6 +77,8 @@ function organize_issue(issue: Issue) -> Issue {
         resolution_plan: issue.resolution_plan,
         difficulty: issue.difficulty,
         design_doc: issue.design_doc,
+        slack_ts: issue.slack_ts,
+        slack_channel: issue.slack_channel,
     }
 }
 
@@ -92,12 +98,20 @@ function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
         resolution_plan: null,
         difficulty: null,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 
 // Checks the deterministic matcher: every subsystem routes to the first of
 // its owners, and organize_issue only ever touches `shepherd`.
 testset "organize_issue" {
+    test "new issues prefer an owner who can be mentioned in Slack" {
+        let issue = organize_issue(issue_in(Subsystem.Tooling, null), mapping = "codeshaunted:U123,hellovai:U456");
+        assert.equal(issue.shepherd, "codeshaunted");
+        assert.contains(issue_created_text(issue, mapping = "codeshaunted:U123"), "<@U123>");
+    }
+
     for (
         let s in [
             Subsystem.Syntax,

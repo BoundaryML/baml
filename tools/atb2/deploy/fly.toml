@@ -43,7 +43,7 @@ primary_region = "sjc"
   INFISICAL_ENV = "prod"
 
 [processes]
-  runner = "runner_loop(every_s=300)"
+  runner = "main_ingress(every_s=300)"
 
 # a panic ends the process; Fly restarts it and the loops resume from the store
 [[restart]]

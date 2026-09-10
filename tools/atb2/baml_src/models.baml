@@ -85,6 +85,8 @@ enum Difficulty {
 // sketch calls for (reason / workaround / pr / version+date).
 class Open {
     state: "open",
+    /// New automatic work only; absent on the historical approval backlog.
+    automatic_fix: bool?,
 }
 
 class InProgress {
@@ -96,6 +98,12 @@ class InProgress {
 class Rejected {
     state: "rejected",
     reason: string,
+}
+
+class Cancelled {
+    state: "cancelled",
+    reason: string,
+    by: string,
 }
 
 class Deferred {
@@ -115,7 +123,24 @@ class Shipped {
     date: string,
 }
 
-type IssueStatus = Open | InProgress | Rejected | Deferred | Merged | Shipped;
+class AwaitingApproval {
+    state: "awaiting_approval",
+}
+
+class Approved {
+    state: "approved",
+    by: string,
+}
+
+type IssueStatus = AwaitingApproval
+    | Approved
+    | Open
+    | InProgress
+    | Rejected
+    | Cancelled
+    | Deferred
+    | Merged
+    | Shipped;
 
 class Issue {
     id: string,
@@ -139,4 +164,7 @@ class Issue {
     /// Hard issues only: suggested fix + design doc for the shepherd to hand
     /// to their own agent. Null until handle_issue runs the Hard path.
     design_doc: string?,
+    /// The bot message to react to, bound to its Slack channel.
+    slack_ts: string?,
+    slack_channel: string?,
 }
