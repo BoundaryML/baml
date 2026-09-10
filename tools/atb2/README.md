@@ -52,6 +52,7 @@ PostHog trio; `dev` does not). `run_tests.sh` and any live run go through
 | `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_KEY` | store, evals | service key; the tables below exist in the project |
 | `ATB2_SLACK_BOT_TOKEN`, `ATB2_SLACK_CHANNEL` | notifications | `chat:write`; one thread per issue; fall back to the old bot's `ATB_SLACK_BOT_TOKEN`, `ATB_SLACK_FIX_CHANNEL` |
 | `ATB2_SLACK_INTAKE_CHANNEL` | Slack intake | `channels:history`; unset = no Slack intake |
+| `ATB2_SLACK_SIGNING_SECRET` | `/slack/events` | verifies Slack's request signature; falls back to the old app's `ATB_SLACK_SIGNING_SECRET` |
 | `ATB2_POSTHOG_API_KEY`, `ATB2_POSTHOG_PROJECT_ID`, `ATB2_POSTHOG_HOST` | PostHog intake | fall back to `ATB_POSTHOG_*`; personal key with `events:read`; host defaults to `https://us.posthog.com` |
 | `ATB2_UI_URL` | notifications | links issues to `typescript2/app-feedback` |
 | `ATB2_REVIEWERS`, `ATB2_POLL_S`, `ATB2_MAX_WAIT_S` | merge_issue | see `merge_issue.baml`; fork PRs are refused |
@@ -171,8 +172,12 @@ fresh controller-owned metadata and use a fixed repository and exact branch leas
 ## Slack intake and issue approval
 
 The runner serves signed Slack events at `/slack/events` and health at `/health`
-on port 8080. Subscribe to `app_mention` and `reaction_added`, with
-`chat:write`, `app_mentions:read`, and `reactions:read`.
+on port 8080. Requests are verified against `ATB2_SLACK_SIGNING_SECRET`
+(falling back to the old app's `ATB_SLACK_SIGNING_SECRET`), from Infisical
+like the rest of the Wiring table. Subscribe to `app_mention` and
+`reaction_added`, with `chat:write`, `app_mentions:read`, and `reactions:read`;
+polling intake through `ATB2_SLACK_INTAKE_CHANNEL` reads
+`conversations.history`, which also needs `channels:history`.
 Set `ATB2_SHEPHERDS` to a comma-separated GitHub-login:Slack-user-ID map.
 New issues announce their shepherd and wait for approval before implementation.
 

@@ -287,45 +287,94 @@ function origin_of(fb: Feedback) -> json {
     }
 }
 
-/// Includes durable Slack events and reports ingested in earlier runs. Scan
-/// past no_issue rows so they cannot starve newer reports at the head of a page.
-function untriaged_feedback() -> Feedback[] {
+/// Includes durable Slack events and reports ingested in earlier runs. Rows
+/// closed as no_issue keep issue_ids = {} forever, so the scan starts at the
+/// persisted "no_issue_scan" cursor (every earlier untriaged row is known
+/// closed) and reads at most max_pages pages per run. The cursor advances
+/// only across the leading run of closed rows, so a report that still needs
+/// triage is never skipped; clearing the cursor row restores the full scan.
+function untriaged_feedback(max_pages: int = 10) -> Feedback[] {
     let pending: Feedback[] = [];
+    let after = get_cursor("no_issue_scan");
+    let frontier: string? = null;
     let offset = 0;
-    while (pending.length() < 50) {
-        let rows = select(
-            "feedback",
-            "select=*&issue_ids=eq.%7B%7D&dataset="
-                + eq(dataset())
-                + "&order=received_at,id&limit=100&offset="
-                + offset.to_string(),
-        );
+    let pages = 0;
+    while (pages < max_pages) {
+        let rows = select("feedback", untriaged_query(after, offset));
+        pages += 1;
         for (let row in rows) {
             let id = baml.json.path_or<string>(row, ".id", "");
-            if (
-                select(
-                    "events",
-                    "select=id&feedback_id="
-                        + eq(id)
-                        + "&kind=eq.no_issue&dataset="
-                        + eq(dataset())
-                        + "&limit=1",
-                )
-                    .length()
-                    == 0
-            ) {
+            let closed = select(
+                "events",
+                "select=id&feedback_id="
+                    + eq(id)
+                    + "&kind=eq.no_issue&dataset="
+                    + eq(dataset())
+                    + "&limit=1",
+            )
+                .length()
+                > 0;
+            frontier = scan_frontier(
+                frontier,
+                pending.length(),
+                closed,
+                baml.json.path_or<string>(row, ".received_at", ""),
+            );
+            if (!closed) {
                 pending.push(feedback_from_row(row));
                 if (pending.length() >= 50) {
+                    save_scan_cursor(frontier);
                     return pending;
                 };
             };
         }
         if (rows.length() < 100) {
+            save_scan_cursor(frontier);
             return pending;
         };
         offset += 100;
     }
+    save_scan_cursor(frontier);
     pending
+}
+
+/// The feedback page at `offset`: untriaged rows (issue_ids = {}) of this
+/// dataset, oldest first, starting at the scan cursor when one is set.
+/// gte re-reads rows sharing the cursor timestamp, so a boundary tie is
+/// re-checked rather than skipped.
+function untriaged_query(after: string?, offset: int) -> string {
+    "select=*&issue_ids=eq.%7B%7D&dataset="
+        + eq(dataset())
+        + match (after) {
+            null => "",
+            let a: string => "&received_at=gte." + url_encode(a),
+        }
+        + "&order=received_at,id&limit=100&offset="
+        + offset.to_string()
+}
+
+/// Where the next scan may start. Moves to this row's received_at only while
+/// no pending report has been found yet and this row is closed; a row still
+/// awaiting triage freezes the frontier for the rest of the scan.
+function scan_frontier(
+    frontier: string?,
+    pending_count: int,
+    closed: bool,
+    received_at: string,
+) -> string? {
+    if (closed && pending_count == 0 && received_at.length() > 0) {
+        received_at
+    } else {
+        frontier
+    }
+}
+
+/// Persist where the next scan starts; null means nothing new was learned.
+function save_scan_cursor(frontier: string?) -> null {
+    match (frontier) {
+        null => null,
+        let f: string => set_cursor("no_issue_scan", f),
+    }
 }
 
 // ==================== triage ====================
@@ -480,6 +529,39 @@ testset "pipeline" {
             let r = run_pipeline(mode = HandleMode.DryRun, stages = "merge");
             assert.equal(r.merged, 0);
             assert.equal(r.ingested, 0);
+        };
+    }
+
+    test "the scan cursor never advances past a pending report" {
+        // a leading closed row advances the frontier
+        assert.equal(scan_frontier(null, 0, true, "t1") ?? "", "t1");
+        // a row that still needs triage does not
+        assert.equal(scan_frontier(null, 0, false, "t1") ?? "", "");
+        // closed rows after a pending one leave the frontier where it was
+        assert.equal(scan_frontier("t1", 1, true, "t2") ?? "", "t1");
+        // a row with no received_at cannot become the cursor
+        assert.equal(scan_frontier("t1", 0, true, "") ?? "", "t1");
+    }
+
+    test "the scan query starts at the cursor, oldest first" {
+        assert.equal(
+            untriaged_query(null, 0),
+            "select=*&issue_ids=eq.%7B%7D&dataset="
+                + eq(dataset())
+                + "&order=received_at,id&limit=100&offset=0",
+        );
+        assert.equal(
+            untriaged_query("2026-09-08T19:41:45+00:00", 100),
+            "select=*&issue_ids=eq.%7B%7D&dataset="
+                + eq(dataset())
+                + "&received_at=gte.2026-09-08T19%3A41%3A45%2B00%3A00"
+                + "&order=received_at,id&limit=100&offset=100",
+        );
+    }
+
+    test "the page cap ends a scan before any store request" {
+        if (!db_configured()) {
+            assert.equal(untriaged_feedback(max_pages = 0).length(), 0);
         };
     }
 }
