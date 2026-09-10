@@ -127,3 +127,13 @@ root. Linux namespace tests require the runner image; a local skip is not a pass
 Security checks run before every controller push: secret scan, sensitive paths,
 special/binary files, DDL, conflict markers, piped installers and action pinning.
 CI on the PR is the build/test gate; an unmerged draft is an initial suggestion.
+
+
+### Published feedback resolutions
+
+The controller reconciles merged issue PRs against published stable releases. It
+checks the actual merge SHA and release ancestry, then records the first verified
+containing version. A PR merge alone never triggers an upgrade recommendation.
+The companion CLI layer uses the bounded `feedback_resolutions` RPC described in
+the release milestone PR. Apply that SQL in Supabase before enabling the client.
+Nightly repro verification remains distinct from stable release indexing.
