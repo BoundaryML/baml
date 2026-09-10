@@ -65,6 +65,11 @@ jobs:
             --entrypoint bash atb2-runner:ci -c '
               mkdir -p /data/home /data/worktrees /data/agent-cache /data/repo
               chown -R 1000:1000 /data
+              mkdir -p /data/cli-cache
+              chown root:root /data/cli-cache
+              chmod 755 /data/cli-cache
+              printf %s "cached fixture" > /data/cli-cache/test-readonly
+              chmod 444 /data/cli-cache/test-readonly
               exec setpriv --reuid=1000 --regid=1000 --clear-groups --no-new-privs --bounding-set=-all python3 /tests/test_sandbox.py'
 
   # On canary only: deploy. A manual run from any other ref is refused, so

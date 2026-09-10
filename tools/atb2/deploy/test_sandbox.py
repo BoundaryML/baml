@@ -189,12 +189,9 @@ print('isolated')'''
 
     def test_shared_cli_is_readable_but_not_writable_from_sandbox(self):
         cache = Path('/data/cli-cache')
-        cache.mkdir(exist_ok=True)
-        cache.chmod(0o755)
         fixture = cache / 'test-readonly'
-        fixture.write_text('cached fixture')
-        fixture.chmod(0o444)
-        self.addCleanup(fixture.unlink)
+        self.assertEqual(cache.stat().st_uid, 0, 'the root container setup must publish the cache fixture')
+        self.assertEqual(fixture.read_text(), 'cached fixture')
         code = """from pathlib import Path
 p = Path('/data/cli-cache/test-readonly')
 assert p.read_text() == 'cached fixture'
