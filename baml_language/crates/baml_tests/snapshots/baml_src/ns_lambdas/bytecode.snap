@@ -265,6 +265,53 @@ function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) 
     return
 }
 
+function lambdas.$init_test_ns_lambdas_signature_holes(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_return_hole_matches_omitted_and_explicit"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_nested_return_hole"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_parameter_and_return_from_context"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_throws_hole"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_hole_preserves_enclosing_generic_frame"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "lambda_explicit_unknown_is_not_an_unsolved_hole"
+    make_closure .<lambda($init_test_ns_lambdas_signature_holes, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function lambdas.lambda_contextual_call(cb: (int) -> int throws int | string) -> int {
     load_const 1
     load_var cb
@@ -941,5 +988,23 @@ function lambdas.lambdas_shared_cell_mutation_counter() -> int {
 function lambdas.lambdas_zero_param_lambda() -> int {
     make_closure .<lambda(lambdas_zero_param_lambda, 0)>, 0
     call_indirect
+    return
+}
+
+function lambdas.signature_holes_generic(value: #0) -> string {
+    load_type #0
+    make_closure .<lambda(signature_holes_generic, 0)>, captures=0, ntypeargs=1
+    store_var identity
+    load_var2 1 2
+    call_indirect
+    load_var value
+    call assert.equal
+    pop 1
+    load_var identity
+    call reflect.signature
+    load_field .returns
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     return
 }

@@ -80,11 +80,11 @@ jobs:
         working-directory: baml_language
         run: |
           # Log the helper's stats, then measure only the nested release builds.
-          # Use the credential-mapping wrapper if an ix seed supplied a fresh
-          # helper and no compiler invocation has started the server yet.
+          # Use the credential-mapping wrapper so server startup also works
+          # when the helper was already fresh and no compiler ran.
           "$RUSTC_WRAPPER" --show-stats
           "$RUSTC_WRAPPER" --zero-stats
-          # ix seeds may contain old timing reports; upload only this measurement.
+          # Upload only timing reports from this measurement.
           rm -rf target/cargo-timings
 
       - name: "Run size-gate check"
@@ -182,11 +182,11 @@ jobs:
         working-directory: baml_language
         run: |
           # Log the helper's stats, then measure only the nested release builds.
-          # Use the credential-mapping wrapper if an ix seed supplied a fresh
-          # helper and no compiler invocation has started the server yet.
+          # Use the credential-mapping wrapper so server startup also works
+          # when the helper was already fresh and no compiler ran.
           "$RUSTC_WRAPPER" --show-stats
           "$RUSTC_WRAPPER" --zero-stats
-          # ix seeds may contain old timing reports; upload only this measurement.
+          # Upload only timing reports from this measurement.
           rm -rf target/cargo-timings
 
       - name: "Run size-gate check"
@@ -306,11 +306,11 @@ jobs:
         working-directory: baml_language
         run: |
           # Log the helper's stats, then measure only the nested release builds.
-          # Use the credential-mapping wrapper if an ix seed supplied a fresh
-          # helper and no compiler invocation has started the server yet.
+          # Use the credential-mapping wrapper so server startup also works
+          # when the helper was already fresh and no compiler ran.
           "$RUSTC_WRAPPER" --show-stats
           "$RUSTC_WRAPPER" --zero-stats
-          # ix seeds may contain old timing reports; upload only this measurement.
+          # Upload only timing reports from this measurement.
           rm -rf target/cargo-timings
 
       - name: "Run size-gate check"
@@ -410,11 +410,11 @@ jobs:
         working-directory: baml_language
         run: |
           # Log the helper's stats, then measure only the nested release builds.
-          # Use the credential-mapping wrapper if an ix seed supplied a fresh
-          # helper and no compiler invocation has started the server yet.
+          # Use the credential-mapping wrapper so server startup also works
+          # when the helper was already fresh and no compiler ran.
           "$RUSTC_WRAPPER" --show-stats
           "$RUSTC_WRAPPER" --zero-stats
-          # ix seeds may contain old timing reports; upload only this measurement.
+          # Upload only timing reports from this measurement.
           rm -rf target/cargo-timings
 
       - name: "Run size-gate check"
