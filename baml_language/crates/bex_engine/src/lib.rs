@@ -6199,7 +6199,7 @@ impl BexEngine {
                         self.capture_root_value(&thread, capture, value);
                     }
 
-                    let (return_value, _event_result) = if !copy_objects {
+                    let return_value = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
                             // SAFETY: the active thread holds the heap permit
                             // through `thread.proof()`.
@@ -6213,19 +6213,15 @@ impl BexEngine {
                             // (e.g. Union wrapping) is preserved; the bare
                             // unboxing fast-path stripped that.
                             if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                let external = self.convert_vm_value_to_external_with_type(
+                                self.convert_vm_value_to_external_with_type(
                                     value,
                                     &return_type,
                                     &thread.vm,
                                     thread.proof(),
-                                )?;
-                                (external.clone(), external)
+                                )?
                             } else {
                                 let handle = self.heap.create_handle(ptr);
-                                (
-                                    BexExternalValue::Handle(handle),
-                                    self.vm_value_to_owned(thread.proof(), value),
-                                )
+                                BexExternalValue::Handle(handle)
                             }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
@@ -6234,11 +6230,10 @@ impl BexEngine {
                                 &thread.vm,
                                 thread.proof(),
                             )?;
-                            let external = crate::conversion::coerce_return_to_declared_type(
+                            crate::conversion::coerce_return_to_declared_type(
                                 external,
                                 &return_type,
-                            )?;
-                            (external.clone(), external)
+                            )?
                         }
                     } else {
                         let external = self.convert_vm_value_to_external_with_type(
@@ -6247,11 +6242,7 @@ impl BexEngine {
                             &thread.vm,
                             thread.proof(),
                         )?;
-                        let external = crate::conversion::coerce_return_to_declared_type(
-                            external,
-                            &return_type,
-                        )?;
-                        (external.clone(), external)
+                        crate::conversion::coerce_return_to_declared_type(external, &return_type)?
                     };
 
                     return Ok(ThreadOutcome::RootValue(return_value));
