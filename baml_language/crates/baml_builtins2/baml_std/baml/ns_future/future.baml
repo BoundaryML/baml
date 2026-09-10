@@ -67,44 +67,64 @@ class Future<T, E> {
     }
 }
 
-/// BEP-034 combinators over a homogeneous array of futures (all sharing value
-/// type `T` and error type `E`). The inputs are already running, so awaiting
-/// them — even in a loop — runs them concurrently; the combinator just decides
-/// how to combine the results. Each returns a new `Future`, so they compose.
+// BEP-034 combinators over a homogeneous array of futures (all sharing value
+// type `T` and error type `E`). The inputs are already running, so awaiting
+// them — even in a loop — runs them concurrently; the combinator just decides
+// how to combine the results. Each returns a new `Future`, so they compose.
 
-/// Await every future and return their values in input order. Like `all`, but
-/// the losers KEEP RUNNING on a failure (they are not cancelled). Throws the
-/// first error encountered in input order.
-function all_complete<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
+/// A task returned a value.
+class Success<T> {
+    value: T,
+}
+
+/// A task threw a typed error.
+class Failure<E> {
+    error: E,
+}
+
+/// A task panicked, including cancellation (`baml.panics.Cancelled`).
+class Panicked {
+    panic: baml.panics.Panic,
+    context: baml.errors.Context,
+}
+
+/// Wait for every input and return one outcome per input, in input order.
+/// Typed errors become `Failure`; panics, including input cancellation, become
+/// `Panicked`. No input is cancelled because another input failed or panicked.
+/// An empty input returns an empty array.
+///
+/// Cancelling the collector stops the wait; it is not an input outcome. Inputs
+/// remain governed by their own cancellation tokens and task groups.
+function all_settled<T, E>(
+    futures: baml.future.Future<T, E>[],
+) -> baml.future.Future<(baml.future.Success<T> | baml.future.Failure<E> | baml.future.Panicked)[], never> {
     spawn {
-        let values: T[] = [];
-        let errors: E[] = [];
+        let outcomes: (baml.future.Success<T> | baml.future.Failure<E> | baml.future.Panicked)[] = [];
         for (let f in futures) {
-            // Observe every input, including failures after the first one. A
-            // throwing map callback would return before later inputs settle.
-            {
-                values.push(await f);
-            } catch (e) {
-                let e => {
-                    errors.push(e);
+            let value = (await f) catch_all_panics (e, context) {
+                let panic: baml.panics.Panic => {
+                    outcomes.push(baml.future.Panicked { panic: panic, context: context });
+                    continue;
+                },
+                let error => {
+                    let failure: baml.future.Failure<E> = baml.future.Failure { error: error };
+                    outcomes.push(failure);
+                    continue;
                 },
             };
+            let success: baml.future.Success<T> = baml.future.Success { value: value };
+            outcomes.push(success);
         }
-        if (errors.length() > 0) {
-            throw errors[0];
-        }
-        values
+        outcomes
     }
 }
 
-/// Await every future and return their values in input order, like
-/// `all_complete`, but on the FIRST failure the remaining futures are
-/// cancelled before the error is re-thrown (JS `Promise.all`). Use
-/// `all_complete` instead when losers have side effects that must finish.
+/// Await every future and return their values in input order. On the first
+/// observed typed error, cancel the remaining futures and rethrow that error.
+/// Use `all_settled` to let every input settle and inspect each outcome.
 ///
-/// Note: failures are observed in input order (not strictly first-to-fail in
-/// wall-clock time); the value contract — every value, or one error — is the
-/// same either way.
+/// Failures are observed in input order, not strictly first-to-fail in
+/// wall-clock time. Panics propagate normally.
 function all<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
     spawn {
         futures.map((f) -> {

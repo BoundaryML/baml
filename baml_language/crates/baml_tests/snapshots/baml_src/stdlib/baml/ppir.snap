@@ -833,17 +833,37 @@ class baml.future.AllFailed {
 class baml.future.AllFailed$stream {
   errors: E[]
 }
+class baml.future.Failure {
+  error: E
+}
+class baml.future.Failure$stream {
+  error: E | null
+}
 class baml.future.Future {
 }
 class baml.future.Future$stream {
+}
+class baml.future.Panicked {
+  panic: baml.panics.Panic
+  context: baml.errors.Context
+}
+class baml.future.Panicked$stream {
+  panic: baml.panics.Panic$stream | null
+  context: baml.errors.Context$stream | null
+}
+class baml.future.Success {
+  value: T
+}
+class baml.future.Success$stream {
+  value: T | null
 }
 enum baml.future.State {Pending, Ready, Error, Cancelled}
 function baml.future.__await_any(futures: baml.future.Future<T, E>[]) -> int  [builtin]
 function baml.future.all(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
   {  } spawn { () -> { {  } futures.map((f) -> { {  } await f catch (e) { e => { futures.map((g) -> { {  } g.cancel() }); let j = 0; while j Lt futures.length() { let g = futures[j]; if (g.is_error()) { await g catch (drained) { drained => null } }; j = j Add 1 }; throw e } } }) } }
 }
-function baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
-  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f }) } }
+function baml.future.all_settled(futures: baml.future.Future<T, E>[]) -> baml.future.Future<baml.future.Success<T> | baml.future.Failure<E> | baml.future.Panicked[], never>  [expr] {
+  {  } spawn { () -> { { let outcomes: baml.future.Success<T> | baml.future.Failure<E> | baml.future.Panicked[] = []; for f in futures { let value = await f catch_all_panics (e) { panic: baml.panics.Panic => { outcomes.push(baml.future.Panicked { panic: panic, context: context }); continue }, error => { let failure: baml.future.Failure<E> = baml.future.Failure { error: error }; outcomes.push(failure); continue } }; let success: baml.future.Success<T> = baml.future.Success { value: value }; outcomes.push(success) } } outcomes } }
 }
 function baml.future.any(futures: baml.future.Future<T, Err>[]) -> baml.future.Future<T, baml.future.AllFailed<Err>>  [expr] {
   {  } spawn { () -> { { let winners: T[] = []; let remaining = futures; while remaining.length() Gt 0 { let i = baml.future.__await_any(remaining); let f = remaining[i]; if (f.is_result()) { winners.push(await f catch (e) { e => { let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: [e] }; throw failure } }); break }; if (f.is_error()) { await f catch (e) { e => null } }; remaining = remaining.slice(0, i).concat(remaining.slice(i Add 1, remaining.length())) }; if (winners.length() Eq 0) { let errors: Err[] = []; let j = 0; while j Lt futures.length() { let g = futures[j]; if (g.is_error()) { await g catch (e) { e => { errors.push(e) } null } }; j = j Add 1 }; let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors }; throw failure }; futures.map((g) -> { {  } g.cancel() }) } winners[0] } }
@@ -862,7 +882,7 @@ function baml.future.with_timeout(limit: baml.time.Duration, body: () -> T throw
 }
 
 --- captures ---
-lambda () in all_complete: captures [futures]
+lambda () in all_settled: captures [futures]
 lambda () in all: captures [futures]
 lambda (f) in ?: captures [futures]
 lambda () in race: captures [futures]

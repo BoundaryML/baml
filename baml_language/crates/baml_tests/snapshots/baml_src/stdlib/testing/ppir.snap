@@ -174,7 +174,7 @@ function testing._run_all_pooled(self: ?, pool: testing._TestPool) -> TestSetRep
   {  } root._run_testset(root._testset_children(self, pool), null, pool)
 }
 function testing._run_children_parallel(children: TestSetChild[], pool: testing._TestPool) -> TestSetReport  [expr] {
-  { let futures: baml.future.Future<_NamedChildReport, never>[] = []; for child in children {  } if (child.is_container) {  } futures.push(spawn { () -> { {  } _NamedChildReport { name: child.name, report: child.run() } } }) else { pool.acquire() } futures.push(spawn { () -> { { let named = _NamedChildReport { name: child.name, report: child.run() }; pool.release() } named } }); let named_results = await baml.future.all_complete(futures) } root._aggregate_reports(named_results)
+  { let futures: baml.future.Future<_NamedChildReport, never>[] = []; for child in children {  } if (child.is_container) {  } futures.push(spawn { () -> { {  } _NamedChildReport { name: child.name, report: child.run() } } }) else { pool.acquire() } futures.push(spawn { () -> { { let named = _NamedChildReport { name: child.name, report: child.run() }; pool.release() } named } }); let named_results = await baml.future.all(futures) } root._aggregate_reports(named_results)
 }
 function testing._run_selected(self: ?, names: string[]) -> TestSetReport  [expr] {
   {  } self._run_selected_pooled(names, root._test_pool(0))

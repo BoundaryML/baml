@@ -3641,16 +3641,16 @@ fn baml.future.Future.is_error = builtin(vm)
 
 fn baml.future.Future.state = builtin(vm)
 
-fn baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
+fn baml.future.all_settled(futures: baml.future.Future<T, E>[]) -> baml.future.Future<(baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[], never> {
     // Locals:
-    let _0: baml.future.Future<T[], E> // _0 // return
+    let _0: baml.future.Future<(baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[], never> // _0 // return
     let _1: baml.future.Future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: baml.future.Future<T[], E>
+    let _3: baml.future.Future<(baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[], never>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
-        _3 = spawn<#0[], #1> copy _2 name=const null -> bb1;
+        _3 = spawn<(baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>)[], never> copy _2 name=const null -> bb1;
     }
 
     bb1: {
@@ -3664,40 +3664,159 @@ fn baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.
 }
 
 // lambda[0]
-fn .<lambda(all_complete, 0)>() -> T[] {
+fn .<lambda(all_settled, 0)>() -> (baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[] {
     // Locals:
-    let _0: T[] // _0 // return
-    let _1: (baml.future.Future<T, E>) -> T throws E
-    let _2: reflect.Type
-    let _3: reflect.Type
-    let _4: reflect.Type
+    let _0: (baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[] // _0 // return
+    let _1: (baml.future.Failure<E> | baml.future.Panicked | baml.future.Success<T>)[] // outcomes
+    let _2: baml.future.Future<T, E>[]
+    let _3: baml.iter.Iterator<Error = never, Item = baml.future.Future<T, E>>
+    let _4: unknown
+    let _5: bool
+    let _6: baml.future.Future<T, E>
+    let _7: baml.future.Future<T, E> // f
+    let _8: T // value
+    let _9: unknown // e
+    let _10: unknown
+    let _11: null
+    let _12: unknown
+    let _13: baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow // panic
+    let _14: int
+    let _15: baml.future.Panicked
+    let _16: baml.panics.AllocFailure | baml.panics.AssertionFailed | baml.panics.Cancelled | baml.panics.DivisionByZero | baml.panics.Exit | baml.panics.HostContractViolation | baml.panics.HostUnavailable | baml.panics.IndexOutOfBounds | baml.panics.IntegerOverflow | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.StackOverflow | baml.panics.Unreachable | baml.panics.UserPanic
+    let _17: baml.errors.Context
+    let _18: reflect.Type
+    let _19: E // error
+    let _20: baml.future.Failure<E> // failure
+    let _21: E
+    let _22: int
+    let _23: baml.future.Failure<E>
+    let _24: reflect.Type
+    let _25: baml.future.Success<T> // success
+    let _26: T
+    let _27: int
+    let _28: baml.future.Success<T>
+    let _29: reflect.Type
 
     bb0: {
-        _1 = make_closure lambda[0]<2 type_args>();
-        _2 = load_type(#0);
-        _3 = load_type(#1);
-        _4 = load_type(baml.future.Future<#0, #1>);
-        _0 = call const fn baml.Array.map<copy _4, copy _2, copy _3>(copy capture[0], copy _1) -> [bb1];
+        _1 = []: baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>[];
+        _2 = copy capture[0];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.future.Future<#0, #1>>(copy _2) -> [bb19];
     }
 
     bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: baml.future.Future<T, E>) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.future.Future<T, E> // f // param
-    let _2: null
-
-    bb0: {
-        _2 = copy _1;
-        _0 = await _2 -> [bb1];
+        _12 = copy _9;
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "DivisionByZero" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb2];
     }
 
-    bb1: {
+    bb2: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "IndexOutOfBounds" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb3];
+    }
+
+    bb3: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "InvalidFieldAccess" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb4];
+    }
+
+    bb4: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "MapKeyNotFound" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb5];
+    }
+
+    bb5: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "StackOverflow" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb6];
+    }
+
+    bb6: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "AssertionFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb7];
+    }
+
+    bb7: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "Unreachable" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb8];
+    }
+
+    bb8: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "Cancelled" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb9];
+    }
+
+    bb9: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "UserPanic" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb10];
+    }
+
+    bb10: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "Exit" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb11];
+    }
+
+    bb11: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "AllocFailure" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb12];
+    }
+
+    bb12: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "HostUnavailable" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb13];
+    }
+
+    bb13: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "NegativeBitShift" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb14];
+    }
+
+    bb14: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "SdkPanic" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb15];
+    }
+
+    bb15: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "HostContractViolation" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb16];
+    }
+
+    bb16: {
+        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "IntegerOverflow" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb17];
+    }
+
+    bb17: {
+        _19 = copy _9;
+        _21 = copy _19;
+        _20 = baml.future.Failure<#1> { copy _21 };
+        _23 = copy _20;
+        _24 = load_type(baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>);
+        _22 = call const fn baml.Array.push<copy _24>(copy _1, copy _23) -> [bb19];
+    }
+
+    bb18: {
+        _13 = copy _12;
+        _16 = copy _13;
+        _17 = copy _10;
+        _15 = baml.future.Panicked { copy _16, copy _17 };
+        _18 = load_type(baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>);
+        _14 = call const fn baml.Array.push<copy _18>(copy _1, copy _15) -> [bb19];
+    }
+
+    bb19: {
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.future.Future<#0, #1>>(copy _3) -> [bb20];
+    }
+
+    bb20: {
+        _5 = is_type(copy _4, baml.iter.Done);
+        branch copy _5 -> [bb23, bb21];
+    }
+
+    bb21: {
+        _6 = copy _4;
+        fresh_cell(_7);
+        _7 = copy _6;
+        _11 = copy _7;
+        _8 = await _11 -> [bb22, unwind: bb1];
+    }
+
+    bb22: {
+        _26 = copy _8;
+        _25 = baml.future.Success<#0> { copy _26 };
+        _28 = copy _25;
+        _29 = load_type(baml.future.Failure<#1> | baml.future.Panicked | baml.future.Success<#0>);
+        _27 = call const fn baml.Array.push<copy _29>(copy _1, copy _28) -> [bb19];
+    }
+
+    bb23: {
+        _0 = copy _1;
+        goto -> bb24;
+    }
+
+    bb24: {
         return;
     }
 }
