@@ -4,7 +4,7 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   },
-  "main": "src/stdlib-documents.ts",
+  "main": "src/index.ts",
   "name": "@b/pkg-lsp",
   "private": true,
   "scripts": {
@@ -12,6 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "type": "module",
-  "types": "src/stdlib-documents.ts",
+  "types": "src/index.ts",
   "version": "0.1.0"
 }

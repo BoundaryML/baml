@@ -82,6 +82,11 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
                     token_types: baml_ide::TOKEN_TYPES
                         .iter()
                         .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
+                        .chain(
+                            crate::rainbow::PALETTE.iter().map(|color| {
+                                lsp_types::SemanticTokenType::from(color.token.clone())
+                            }),
+                        )
                         .collect(),
                     token_modifiers: baml_ide::TOKEN_MODIFIERS
                         .iter()
@@ -143,6 +148,8 @@ pub fn initialize_result(encoding: PositionEncoding, open_panel: bool) -> Initia
 #[serde(rename_all = "camelCase")]
 struct InitializationOptions {
     #[serde(default)]
+    rust_function_rainbow: bool,
+    #[serde(default)]
     baml_client: BamlClientOptions,
 }
 
@@ -198,6 +205,7 @@ pub(super) fn initialize(
     if let Some(options) = params.initialization_options {
         match serde_json::from_value::<InitializationOptions>(options) {
             Ok(options) => {
+                state.session_mut(session)?.rainbow.enabled = options.rust_function_rainbow;
                 if let Some(stdlib_dir) = options.baml_client.stdlib_dir {
                     state.set_stdlib_dir(Some(stdlib_dir));
                 }
@@ -213,6 +221,13 @@ pub(super) fn initialize(
         "session initialized"
     );
     let session_state = state.session_mut(session)?;
+    session_state.rainbow.refresh = params
+        .capabilities
+        .workspace
+        .as_ref()
+        .and_then(|workspace| workspace.semantic_tokens.as_ref())
+        .and_then(|tokens| tokens.refresh_support)
+        .unwrap_or(false);
     session_state.encoding = Some(encoding);
     session_state.snippet_support = snippet_support;
     session_state.workspace_folders = workspace_folders;
@@ -565,26 +580,49 @@ pub(super) fn workspace_symbol(
 fn encode_semantic_tokens(
     tokens: &[baml_ide::SemanticToken],
     codec: &PositionCodec<'_>,
+    rainbow_phase: Option<usize>,
 ) -> Vec<lsp_types::SemanticToken> {
     let mut out = Vec::with_capacity(tokens.len());
     let (mut prev_line, mut prev_start) = (0u32, 0u32);
     for token in tokens {
         for segment in codec.token_segments(token.range) {
-            let delta_line = segment.line - prev_line;
-            let delta_start = if delta_line == 0 {
-                segment.start_character - prev_start
-            } else {
-                segment.start_character
-            };
-            out.push(lsp_types::SemanticToken {
-                delta_line,
-                delta_start,
-                length: segment.length,
-                token_type: token.token_type.legend_index(),
-                token_modifiers_bitset: token.modifiers.bits(),
-            });
-            prev_line = segment.line;
-            prev_start = segment.start_character;
+            let magic = token.token_type.is_rust_sigil() && rainbow_phase.is_some();
+            let count = if magic { segment.length } else { 1 };
+            for character in 0..count {
+                let start = segment.start_character + character;
+                let delta_line = segment.line - prev_line;
+                let delta_start = if delta_line == 0 {
+                    start - prev_start
+                } else {
+                    start
+                };
+                out.push(lsp_types::SemanticToken {
+                    delta_line,
+                    delta_start,
+                    length: if magic { 1 } else { segment.length },
+                    token_type: if magic {
+                        crate::rainbow::token_type(
+                            character,
+                            segment.length,
+                            rainbow_phase.unwrap_or(0),
+                        )
+                    } else {
+                        match token.token_type {
+                            baml_ide::SemanticTokenType::RustFunction => {
+                                baml_ide::SemanticTokenType::Macro
+                            }
+                            baml_ide::SemanticTokenType::RustType => {
+                                baml_ide::SemanticTokenType::Type
+                            }
+                            other => other,
+                        }
+                        .legend_index()
+                    },
+                    token_modifiers_bitset: token.modifiers.bits(),
+                });
+                prev_line = segment.line;
+                prev_start = start;
+            }
         }
     }
     out
@@ -602,17 +640,22 @@ fn full_tokens_with_commit(
         return Err(LspError::FileNotFound(path));
     };
     let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
-    let encoded = encode_semantic_tokens(baml_ide::semantic_tokens(db, file), &codec);
-    let result_id = snap.revision();
+    let ide_tokens = baml_ide::semantic_tokens(db, file);
+    let phase = snap.cx().rainbow.phase(&path);
+    let encoded = encode_semantic_tokens(ide_tokens, &codec, phase);
+    let result_id = format!("{}-{}", snap.revision().0, phase.unwrap_or(0));
     let tokens = Arc::new(encoded);
     Ok((
         lsp_types::SemanticTokens {
-            result_id: Some(result_id.0.to_string()),
+            result_id: Some(result_id.clone()),
             data: tokens.as_ref().clone(),
         },
         crate::state::BaselineCommit {
             path,
-            baseline: crate::state::TokenBaseline { result_id, tokens },
+            baseline: Some(crate::state::TokenBaseline { result_id, tokens }),
+            has_rust_sigil: ide_tokens
+                .iter()
+                .any(|token| token.token_type.is_rust_sigil()),
         },
     ))
 }
@@ -649,7 +692,7 @@ pub(super) fn semantic_tokens_delta(
         .cx()
         .token_baselines
         .get(&commit.path)
-        .filter(|baseline| baseline.result_id.0.to_string() == previous_result_id);
+        .filter(|baseline| baseline.result_id == previous_result_id);
     let Some(baseline) = baseline else {
         return (
             Ok(Some(lsp_types::SemanticTokensFullDeltaResult::Tokens(
@@ -660,7 +703,7 @@ pub(super) fn semantic_tokens_delta(
     };
 
     let previous = baseline.tokens.as_slice();
-    let current = commit.baseline.tokens.as_slice();
+    let current = tokens.data.as_slice();
     let prefix = previous
         .iter()
         .zip(current)
@@ -697,23 +740,36 @@ pub(super) fn semantic_tokens_delta(
 pub(super) fn semantic_tokens_range(
     snap: &crate::snapshot::Snapshot,
     params: lsp_types::SemanticTokensRangeParams,
-) -> Result<Option<lsp_types::SemanticTokensRangeResult>, LspError> {
-    let (text_document, range) = (params.text_document, params.range);
-    let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
-    let db = snap.db();
-    let Some(file) = db.get_file(&path) else {
-        return Err(LspError::FileNotFound(path));
-    };
-    let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
-    let start = codec.position_to_offset(range.start)?;
-    let end = codec.position_to_offset(range.end)?;
-    let tokens = baml_ide::semantic_tokens_in_range(db, file, u32::from(start), u32::from(end));
-    Ok(Some(lsp_types::SemanticTokensRangeResult::Tokens(
-        lsp_types::SemanticTokens {
-            result_id: None,
-            data: encode_semantic_tokens(&tokens, &codec),
-        },
-    )))
+) -> CommitOutcome<Option<lsp_types::SemanticTokensRangeResult>> {
+    let result = (|| {
+        let (text_document, range) = (params.text_document, params.range);
+        let path = crate::paths::canonical_document_path(snap.roots(), &text_document.uri)?;
+        let db = snap.db();
+        let Some(file) = db.get_file(&path) else {
+            return Err(LspError::FileNotFound(path));
+        };
+        let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
+        let start = codec.position_to_offset(range.start)?;
+        let end = codec.position_to_offset(range.end)?;
+        let tokens = baml_ide::semantic_tokens_in_range(db, file, u32::from(start), u32::from(end));
+        Ok((
+            Some(lsp_types::SemanticTokensRangeResult::Tokens(
+                lsp_types::SemanticTokens {
+                    result_id: None,
+                    data: encode_semantic_tokens(&tokens, &codec, snap.cx().rainbow.phase(&path)),
+                },
+            )),
+            crate::state::BaselineCommit {
+                path,
+                baseline: None,
+                has_rust_sigil: tokens.iter().any(|token| token.token_type.is_rust_sigil()),
+            },
+        ))
+    })();
+    match result {
+        Ok((tokens, commit)) => (Ok(tokens), Some(commit)),
+        Err(error) => (Err(error), None),
+    }
 }
 
 pub(super) fn inlay_hint(
@@ -966,4 +1022,58 @@ pub(super) fn stdlib_source(
     Ok(StdlibSourceResult {
         content: file.text(snap.db()).clone(),
     })
+}
+
+#[cfg(test)]
+mod rainbow_encoding_tests {
+    use baml_ide::{SemanticToken, SemanticTokenType};
+    use text_size::TextRange;
+
+    use super::*;
+
+    #[test]
+    fn rainbow_preserves_positions_and_changes_only_colors() {
+        let source = "// unicode: \u{1f308}\n$rust_type $rust_function $rust_io_function";
+        let tokens: Vec<_> = [
+            ("$rust_type", SemanticTokenType::RustType),
+            ("$rust_function", SemanticTokenType::RustFunction),
+            ("$rust_io_function", SemanticTokenType::RustFunction),
+        ]
+        .into_iter()
+        .map(|(text, token_type)| {
+            let start = u32::try_from(source.find(text).unwrap()).unwrap();
+            SemanticToken {
+                range: TextRange::new(
+                    start.into(),
+                    (start + u32::try_from(text.len()).unwrap()).into(),
+                ),
+                token_type,
+                modifiers: baml_ide::ModifierSet::default(),
+            }
+        })
+        .collect();
+        for encoding in [PositionEncoding::UTF8, PositionEncoding::UTF16] {
+            let codec = PositionCodec::new(source, encoding);
+            let stable = encode_semantic_tokens(&tokens, &codec, Some(0));
+            let next =
+                encode_semantic_tokens(&tokens, &codec, Some(crate::rainbow::PALETTE.len() - 1));
+            assert_eq!(stable.len(), 10 + 14 + 17);
+            for (before, after) in stable.iter().zip(&next) {
+                assert_eq!(before.length, 1);
+                assert_ne!(before.token_type, after.token_type);
+                assert_eq!(before.delta_line, after.delta_line);
+                assert_eq!(before.delta_start, after.delta_start);
+            }
+            let fallback = encode_semantic_tokens(&tokens, &codec, None);
+            assert_eq!(fallback.len(), 3);
+            assert_eq!(
+                fallback[0].token_type,
+                SemanticTokenType::Type.legend_index()
+            );
+            assert_eq!(
+                fallback[1].token_type,
+                SemanticTokenType::Macro.legend_index()
+            );
+        }
+    }
 }

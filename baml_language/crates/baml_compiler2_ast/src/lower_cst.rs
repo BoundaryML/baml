@@ -547,7 +547,7 @@ fn lower_function(
 ///
 /// The expected CST structure is:
 /// `EXPR_FUNCTION_BODY { BLOCK_EXPR { L_BRACE PATH_EXPR { WORD("$rust_function") } R_BRACE } }`
-fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
+pub fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
     use baml_compiler_syntax::SyntaxKind;
 
     // Collect all non-trivia tokens from the body

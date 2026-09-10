@@ -35,6 +35,7 @@ pub struct RequestCx {
     /// negotiation, matching the LSP default).
     pub encoding: PositionEncoding,
     pub snippet_support: bool,
+    pub(crate) rainbow: crate::rainbow::RainbowView,
     /// The session's semantic-token baselines at mint time (immutable view;
     /// the owner replaces the map on store). Delta requests diff against
     /// this on the pool.
@@ -46,6 +47,7 @@ impl Default for RequestCx {
         Self {
             encoding: PositionEncoding::UTF16,
             snippet_support: false,
+            rainbow: crate::rainbow::RainbowView::default(),
             token_baselines: Arc::new(std::collections::HashMap::new()),
         }
     }

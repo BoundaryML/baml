@@ -47,6 +47,40 @@ mod tests {
     }
 
     #[test]
+    fn qualified_builtin_type_resolves_in_annotations() {
+        for annotation in [
+            "function Inspect(file: baml.fs.Fi<[CURSOR]le) -> int { 0 }",
+            "function Inspect() -> baml.fs.Fi<[CURSOR]le { null }",
+            "class Handles { files: baml.fs.Fi<[CURSOR]le[], }",
+        ] {
+            let source = format!("class File {{ local: int, }}\n{annotation}");
+            let test = CursorTest::new(&source);
+            let loc = test.goto_definition().expect("qualified File definition");
+            assert!(
+                loc.file
+                    .path(&test.db)
+                    .to_string_lossy()
+                    .ends_with("baml/ns_fs/fs.baml"),
+                "wrong target: {}",
+                loc.file.path(&test.db).display()
+            );
+            assert_eq!(
+                &loc.file.text(&test.db)
+                    [usize::from(loc.range.start())..usize::from(loc.range.end())],
+                "File"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_qualified_type_does_not_resolve_to_an_unrelated_bare_type() {
+        let test = CursorTest::new(
+            "class File {}\nfunction Inspect(file: missing.fs.Fi<[CURSOR]le) -> int { 0 }",
+        );
+        assert!(test.goto_definition().is_none());
+    }
+
+    #[test]
     fn test_goto_def_parameter() {
         let test = CursorTest::new(
             r#"

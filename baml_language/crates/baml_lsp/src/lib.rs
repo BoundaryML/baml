@@ -31,6 +31,7 @@ pub mod executor;
 pub mod mutation;
 pub mod paths;
 pub mod position_codec;
+mod rainbow;
 pub mod roots;
 pub mod snapshot;
 pub mod state;

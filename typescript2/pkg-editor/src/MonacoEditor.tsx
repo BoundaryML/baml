@@ -20,6 +20,9 @@
  */
 
 import {
+  rainbowInitializationOptions,
+  rainbowTokenColors,
+  rainbowTokenTypes,
   STDLIB_SOURCE_METHOD,
   StdlibDocuments,
   type StdlibSourceResult,
@@ -568,6 +571,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
                     id: 'baml',
                   },
                 ],
+                semanticTokenTypes: rainbowTokenTypes,
                 themes: [
                   {
                     id: 'monospace-dark',
@@ -672,6 +676,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
             'editor.semanticTokenColorCustomizations': {
               rules: {
                 'namespace:baml': '#808080CC',
+                ...rainbowTokenColors,
               },
             },
             'editor.tabSize': 2,
@@ -1166,6 +1171,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
         const lcWrapper = new LanguageClientWrapper({
           clientOptions: {
             documentSelector: ['baml'],
+            initializationOptions: rainbowInitializationOptions,
           },
           connection: conn.lcConnection,
           languageId: 'baml',

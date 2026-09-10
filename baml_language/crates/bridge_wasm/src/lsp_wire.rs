@@ -97,19 +97,22 @@ impl From<lsp_server::ResponseError> for LspResponseError {
     }
 }
 
-/// The host's outbound half: one JS callback for notifications, one for
-/// responses. There is no request callback — this server never issues
-/// client-bound requests (the native host's equivalent plumbing was dead
-/// too), so a `lsp_make_request` the host supplies is simply unused.
+/// The host's outbound LSP callbacks.
 pub(crate) struct WasmClientSender {
     send_notification: SendWrapper<Function>,
+    make_request: SendWrapper<Function>,
     send_response: SendWrapper<Function>,
 }
 
 impl WasmClientSender {
-    pub(crate) fn new(send_notification: Function, send_response: Function) -> Self {
+    pub(crate) fn new(
+        send_notification: Function,
+        send_response: Function,
+        make_request: Function,
+    ) -> Self {
         Self {
             send_notification: SendWrapper::new(send_notification),
+            make_request: SendWrapper::new(make_request),
             send_response: SendWrapper::new(send_response),
         }
     }
@@ -145,6 +148,17 @@ impl WasmClientSender {
 }
 
 impl baml_lsp::ClientSender for WasmClientSender {
+    fn send_request(&self, request: lsp_server::Request) -> Result<(), LspError> {
+        let payload = to_json_jsvalue(&request, "LSP request")?;
+        self.make_request
+            .inner()
+            .call1(&JsValue::NULL, &payload)
+            .map(|_| ())
+            .map_err(|error| {
+                LspError::Internal(format!("failed to deliver an LSP request: {error:?}"))
+            })
+    }
+
     fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<(), LspError> {
         let notification = LspNotification {
             method: method.to_owned(),

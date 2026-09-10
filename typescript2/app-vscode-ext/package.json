@@ -65,6 +65,30 @@
       },
       "editor.semanticTokenColorCustomizations": {
         "rules": {
+          "bamlRainbow0:baml": "#f25c5c",
+          "bamlRainbow1:baml": "#f2825c",
+          "bamlRainbow2:baml": "#f2a75c",
+          "bamlRainbow3:baml": "#f2cd5c",
+          "bamlRainbow4:baml": "#f2f25c",
+          "bamlRainbow5:baml": "#cdf25c",
+          "bamlRainbow6:baml": "#a7f25c",
+          "bamlRainbow7:baml": "#82f25c",
+          "bamlRainbow8:baml": "#5cf25c",
+          "bamlRainbow9:baml": "#5cf282",
+          "bamlRainbow10:baml": "#5cf2a7",
+          "bamlRainbow11:baml": "#5cf2cd",
+          "bamlRainbow12:baml": "#5cf2f2",
+          "bamlRainbow13:baml": "#5ccdf2",
+          "bamlRainbow14:baml": "#5ca7f2",
+          "bamlRainbow15:baml": "#5c82f2",
+          "bamlRainbow16:baml": "#5c5cf2",
+          "bamlRainbow17:baml": "#825cf2",
+          "bamlRainbow18:baml": "#a75cf2",
+          "bamlRainbow19:baml": "#cd5cf2",
+          "bamlRainbow20:baml": "#f25cf2",
+          "bamlRainbow21:baml": "#f25ccd",
+          "bamlRainbow22:baml": "#f25ca7",
+          "bamlRainbow23:baml": "#f25c82",
           "namespace:baml": "#808080CC"
         }
       }
@@ -91,6 +115,128 @@
           "light": "./baml-lamb-light.svg"
         },
         "id": "baml"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow0",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow1",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow2",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow3",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow4",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow5",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow6",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow7",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow8",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow9",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow10",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow11",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow12",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow13",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow14",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow15",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow16",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow17",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow18",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow19",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow20",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow21",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow22",
+        "superType": "macro"
+      },
+      {
+        "description": "Native Rust sigil rainbow color.",
+        "id": "bamlRainbow23",
+        "superType": "macro"
       }
     ]
   },
@@ -120,9 +266,10 @@
     "build": "pnpm run typecheck && tsup",
     "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
     "dev": "tsup --watch --sourcemap",
-    "prebuild": "pnpm run sync:grammar",
-    "predev": "pnpm run sync:grammar",
+    "prebuild": "pnpm run sync:grammar && pnpm run sync:rainbow",
+    "predev": "pnpm run sync:grammar && pnpm run sync:rainbow",
     "sync:grammar": "pnpm --filter @b/pkg-grammar build",
+    "sync:rainbow": "node ../pkg-lsp/sync-rainbow.mjs",
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -27,6 +27,14 @@ struct RecordingSender {
 }
 
 impl ClientSender for RecordingSender {
+    fn send_request(&self, request: lsp_server::Request) -> Result<(), LspError> {
+        self.sent
+            .lock()
+            .unwrap()
+            .push((request.method, request.params));
+        Ok(())
+    }
+
     fn send_notification(&self, method: &str, params: Value) -> Result<(), LspError> {
         self.sent.lock().unwrap().push((method.to_owned(), params));
         Ok(())
@@ -1838,4 +1846,89 @@ fn a_propagated_panic_retries_diagnostics_but_a_real_panic_does_not() {
         "a real panic waits for the next edit rather than re-running the \
          query that panicked"
     );
+}
+
+#[test]
+fn rainbow_range_starts_once_and_finishes_with_a_final_refresh() {
+    let mut h = Harness::new();
+    let session = SessionKey(1);
+    let sender = Arc::new(RecordingSender::default());
+    h.senders.insert(session, Arc::clone(&sender));
+    h.state.open_session(session, sender);
+    h.request(
+        session,
+        "initialize",
+        json!({
+            "capabilities": { "workspace": { "semanticTokens": { "refreshSupport": true } } },
+            "initializationOptions": { "rustFunctionRainbow": true },
+        }),
+    )
+    .unwrap();
+    h.notify(session, "initialized", json!({})).unwrap();
+    let uri = Url::parse("baml-stdlib:/baml/ns_fs/fs.baml").unwrap();
+    let source = h
+        .request(session, "baml/stdlibSource", json!({ "uri": uri }))
+        .unwrap();
+    let content = source["content"].as_str().unwrap();
+    let codec = baml_lsp::position_codec::PositionCodec::new(
+        content,
+        baml_lsp::position_codec::PositionEncoding::UTF16,
+    );
+    let params = json!({
+        "textDocument": { "uri": uri },
+        "range": { "start": { "line": 0, "character": 0 }, "end": codec.offset_to_position(u32::try_from(content.len()).unwrap()) },
+    });
+    h.request(session, "textDocument/semanticTokens/range", params.clone())
+        .unwrap();
+    assert!(h.state.next_deadline().is_some());
+    let full = h
+        .request(
+            session,
+            "textDocument/semanticTokens/full",
+            json!({ "textDocument": { "uri": uri } }),
+        )
+        .unwrap();
+    let tokens = full["data"].as_array().unwrap();
+    assert!(
+        tokens
+            .as_chunks::<5>()
+            .0
+            .iter()
+            .any(|token| token[3].as_u64().unwrap() >= baml_ide::TOKEN_TYPES.len() as u64)
+    );
+    assert!(h.state.next_deadline().is_some());
+    h.state.on_tick(Instant::now() + Duration::from_secs(2));
+    assert!(
+        h.sender(session)
+            .methods()
+            .contains(&"workspace/semanticTokens/refresh".to_owned())
+    );
+    assert!(h.state.next_deadline().is_none());
+    let settled = h
+        .request(
+            session,
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri }, "previousResultId": full["resultId"],
+            }),
+        )
+        .unwrap();
+    let mut replayed = tokens.clone();
+    for edit in settled["edits"].as_array().unwrap().iter().rev() {
+        let start = usize::try_from(edit["start"].as_u64().unwrap()).unwrap();
+        let end = start + usize::try_from(edit["deleteCount"].as_u64().unwrap()).unwrap();
+        replayed.splice(start..end, edit["data"].as_array().unwrap().clone());
+    }
+    let current = h
+        .request(
+            session,
+            "textDocument/semanticTokens/full",
+            json!({ "textDocument": { "uri": uri } }),
+        )
+        .unwrap();
+    assert_eq!(Value::Array(replayed), current["data"]);
+    h.close(session, &uri);
+    h.request(session, "textDocument/semanticTokens/range", params)
+        .unwrap();
+    assert!(h.state.next_deadline().is_none());
 }

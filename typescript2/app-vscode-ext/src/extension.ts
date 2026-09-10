@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  rainbowInitializationOptions,
   STDLIB_SCHEME,
   STDLIB_SOURCE_METHOD,
   StdlibDocuments,
@@ -215,6 +216,7 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
       { language: 'baml', scheme: STDLIB_SCHEME },
     ],
     initializationOptions: {
+      ...rainbowInitializationOptions,
       bamlClient: {
         capabilities: [
           'openPlayground.v1',

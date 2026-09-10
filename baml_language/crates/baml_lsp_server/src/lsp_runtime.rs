@@ -80,12 +80,14 @@ fn session_key(session_id: SessionId) -> SessionKey {
 /// browser takeover or transport close.
 pub struct RevocableSessionSender {
     sink: Mutex<Option<Sink>>,
+    requests: Option<(SessionId, Weak<LspRuntime>)>,
 }
 
 impl RevocableSessionSender {
     fn new(sink: Sink) -> Self {
         Self {
             sink: Mutex::new(Some(sink)),
+            requests: None,
         }
     }
 
@@ -116,6 +118,18 @@ impl RevocableSessionSender {
 }
 
 impl ClientSender for RevocableSessionSender {
+    fn send_request(&self, request: lsp_server::Request) -> Result<(), LspError> {
+        let (session, runtime) = self.requests.as_ref().ok_or(LspError::ClientClosed)?;
+        let runtime = runtime.upgrade().ok_or(LspError::ClientClosed)?;
+        let id = request.id.clone();
+        runtime.register_server_request(*session, id.clone(), Box::new(|_| {}));
+        if let Err(error) = self.send(lsp_server::Message::Request(request)) {
+            runtime.server_requests.lock().remove(&(*session, id));
+            return Err(error);
+        }
+        Ok(())
+    }
+
     fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<(), LspError> {
         self.send(lsp_server::Message::Notification(
             lsp_server::Notification::new(method.to_owned(), params),
@@ -161,11 +175,7 @@ pub struct LspRuntime {
     endpoints: Mutex<HashMap<SessionId, Endpoint>>,
     document_overlays: Mutex<HashMap<(SessionId, PathBuf), lsp_types::TextDocumentItem>>,
     pending_responses: Mutex<VecDeque<PendingResponse>>,
-    /// Correlation seam for server-initiated requests (workspace/
-    /// configuration and friends). This server currently never issues such
-    /// requests, so no dispatch path populates the map today; it exists so
-    /// client→server responses have a real route instead of being admitted
-    /// and then silently lost. Uncorrelated responses are logged and dropped.
+    /// Correlates client responses with server-initiated requests.
     server_requests: Mutex<HashMap<(SessionId, lsp_server::RequestId), ServerRequestResponder>>,
     delivery_gate: Mutex<()>,
     wake_tx: Sender<()>,
@@ -237,7 +247,9 @@ impl LspRuntime {
             // restored instead of being erased by the synthetic didClose.
             self.finish_termination(takeover);
         }
-        let outbound = Arc::new(RevocableSessionSender::new(sink.clone()));
+        let mut outbound = RevocableSessionSender::new(sink.clone());
+        outbound.requests = Some((opened.session_id, self.weak_self.clone()));
+        let outbound = Arc::new(outbound);
         self.endpoints.lock().insert(
             opened.session_id,
             Endpoint {
@@ -344,8 +356,6 @@ impl LspRuntime {
     /// Registers interest in the client's response to a server-initiated
     /// request. Call this *before* writing the request to the session sink;
     /// the responder runs on the owner thread when the response arrives.
-    /// (Correlation seam for a server that starts issuing
-    /// `workspace/configuration`-style requests — currently unused.)
     pub fn register_server_request(
         &self,
         session_id: SessionId,
@@ -1411,6 +1421,49 @@ mod tests {
     /// Defect containment: client responses to server-initiated requests
     /// route through the correlation seam instead of being admitted and then
     /// silently dropped.
+    #[test]
+    fn refresh_requests_register_and_release_their_response() {
+        let (runtime, mut state) = runtime_without_worker();
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let opened = runtime.open_session(
+            TransportKind::Stdio,
+            capturing_sink(Arc::clone(&messages)),
+            Arc::new(|| {}),
+            None,
+        );
+        initialize(&runtime, opened.session_id);
+        runtime.drain(&mut state);
+        let sender = runtime.endpoints.lock()[&opened.session_id]
+            .outbound
+            .clone();
+        let id = RequestId::from("rainbow-test".to_owned());
+        sender
+            .send_request(lsp_server::Request::new(
+                id.clone(),
+                "workspace/semanticTokens/refresh".to_owned(),
+                (),
+            ))
+            .unwrap();
+        assert!(
+            runtime
+                .server_requests
+                .lock()
+                .contains_key(&(opened.session_id, id.clone()))
+        );
+        assert!(
+            messages
+                .lock()
+                .iter()
+                .any(|message| matches!(message, Message::Request(request) if request.id == id))
+        );
+        runtime.submit(
+            opened.session_id,
+            Message::Response(lsp_server::Response::new_ok(id, ())),
+        );
+        runtime.drain(&mut state);
+        assert!(runtime.server_requests.lock().is_empty());
+    }
+
     #[test]
     fn client_response_routes_through_the_server_request_seam() {
         let (runtime, mut state) = runtime_without_worker();
