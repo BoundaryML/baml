@@ -2,7 +2,7 @@
 //! boundary.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fmt::Write as _,
     path::{Path, PathBuf},
     sync::Arc,
@@ -16,10 +16,10 @@ use baml_compiler2_emit::emit_units_with_stdlib;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
-    package::PackageId,
 };
-use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_db::{ProjectDatabase, SourceRootSpec, collect_diagnostics};
+use baml_compiler2_hir_ty::package_interface::{PackageInterface, export_interface};
+use baml_db::{Dependency, ProjectDatabase, SourceRootSpec, collect_diagnostics};
+use baml_type::TypeName;
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
@@ -104,7 +104,7 @@ impl StubViewpoint<'_> {
             || self.aliases.contains(name.package())
     }
 
-    fn hides_interface(&self, interface: &baml_type::Interface) -> bool {
+    fn hides_interface(&self, interface: &baml_type::Interface<TypeName>) -> bool {
         !self.spellable_package(&interface.name)
             || interface.generics.iter().any(|ty| self.hides_type(ty))
             || interface
@@ -118,7 +118,7 @@ impl StubViewpoint<'_> {
     /// source-spellable containers, function types, or interface constraints,
     /// so this inspects the complete type rather than only its outer nominal
     /// reference.
-    fn hides_type(&self, ty: &baml_type::Ty) -> bool {
+    fn hides_type(&self, ty: &baml_type::Ty<TypeName>) -> bool {
         use baml_type::Ty;
 
         match ty {
@@ -172,9 +172,83 @@ impl StubViewpoint<'_> {
     }
 }
 
+/// The packages a mount's interface names besides itself and the stdlib —
+/// the sibling mounts it must reach, under the aliases it spells them by.
+fn mount_references(own_aliases: &[Name], blob: &[u8]) -> Result<Vec<Name>, String> {
+    let interface = baml_artifact::decode::<PackageInterface<TypeName>>(
+        baml_artifact::ArtifactKind::PackageInterface,
+        blob,
+    )
+    .map_err(|error| format!("invalid package interface: {error}"))?;
+    let mut names: Vec<Name> = Vec::new();
+    interface
+        .try_map_heads::<_, std::convert::Infallible>(&mut |name| {
+            if !name.is_local()
+                && !own_aliases.contains(name.package())
+                && !baml_builtins2::stdlib_package_names().contains(&name.package().as_str())
+                && !names.contains(name.package())
+            {
+                names.push(name.package().clone());
+            }
+            Ok(name.clone())
+        })
+        .unwrap_or_else(|never| match never {});
+    Ok(names)
+}
+
+/// One link-only stub of a mount: its namespace path, item name, and source.
+type MountStub = (Vec<Name>, Name, String);
+
+/// A mount ready to become a root: every alias it is reached under (the
+/// first names the root), its interface blob as exported, and its stubs.
+type EnrichedMount = (Vec<Name>, Vec<u8>, Vec<MountStub>);
+
+/// Mount creation order: every mount after the mounts its interface names
+/// (Kahn's algorithm over the alias references, alias order among the
+/// ready). `Err(alias)` names a mount inside a reference cycle.
+fn mount_order(mounts: &[EnrichedMount]) -> Result<Vec<usize>, Name> {
+    let index_of = |name: &Name| {
+        mounts
+            .iter()
+            .position(|(aliases, _, _)| aliases.contains(name))
+    };
+    let references: Vec<Vec<usize>> = mounts
+        .iter()
+        .map(|(aliases, blob, _)| {
+            mount_references(aliases, blob)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(index_of)
+                .collect()
+        })
+        .collect();
+    let mut placed = vec![false; mounts.len()];
+    let mut order = Vec::with_capacity(mounts.len());
+    while order.len() < mounts.len() {
+        let next =
+            (0..mounts.len()).find(|&i| !placed[i] && references[i].iter().all(|&dep| placed[dep]));
+        match next {
+            Some(i) => {
+                placed[i] = true;
+                order.push(i);
+            }
+            None => {
+                let stuck = (0..mounts.len()).find(|&i| !placed[i]).unwrap_or(0);
+                return Err(mounts[stuck].0[0].clone());
+            }
+        }
+    }
+    Ok(order)
+}
+
+/// Prepare one package object for mounting under `own_aliases` (every alias
+/// the request gives it), among a request whose mounts are spelled by
+/// `all_aliases`: the interface blob as the producer exported it — its own
+/// declarations `Local`, resolved to the mount root by the importer — plus
+/// link-only source stubs for the consumer's emit.
 fn enrich_runtime_mount(
-    alias: &str,
-    aliases: &[Name],
+    own_aliases: &[Name],
+    all_aliases: &[Name],
     mut package: RuntimePackageMount,
 ) -> Result<EnrichedRuntimeMount, RuntimeCompileDiagnostic> {
     use baml_compiler2_hir_ty::{
@@ -193,64 +267,12 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
-    fn relocated_name(
-        name: &baml_type::QualifiedTypeName,
-        alias: &Name,
-    ) -> baml_type::QualifiedTypeName {
-        if name.is_local() {
-            baml_type::QualifiedTypeName::new(
-                alias.clone(),
-                name.namespace().clone(),
-                name.name().clone(),
-            )
-        } else {
-            name.clone()
-        }
-    }
-
-    fn relocate_ty(ty: &mut baml_type::Ty, alias: &Name) {
-        *ty = ty.map_heads(&mut |name| relocated_name(name, alias));
-    }
-
-    fn relocate_interface(interface: &mut baml_type::Interface, alias: &Name) {
-        *interface = interface.map_heads(&mut |name| relocated_name(name, alias));
-    }
-
-    fn relocate_bounds(bounds: &mut [Vec<baml_type::Interface>], alias: &Name) {
-        for interface in bounds.iter_mut().flatten() {
-            relocate_interface(interface, alias);
-        }
-    }
-
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
         };
         for line in docstring.lines() {
             writeln!(source, "{indent}/// {line}").expect("writing to String is infallible");
-        }
-    }
-
-    fn relocate_function(function: &mut ExportedFunction, alias: &Name) {
-        for param in &mut function.params {
-            *param = param.map_heads(&mut |name| relocated_name(name, alias));
-        }
-        relocate_ty(&mut function.return_type, alias);
-        relocate_ty(&mut function.callable_throws, alias);
-        relocate_bounds(&mut function.generic_param_bounds, alias);
-
-        match &mut function.target {
-            ExternalCallTarget::Free { package, .. }
-            | ExternalCallTarget::Method { package, .. } => {
-                *package = alias.clone();
-            }
-            ExternalCallTarget::Interface { interface, .. } => {
-                *interface = baml_type::QualifiedTypeName::new(
-                    alias.clone(),
-                    interface.namespace().clone(),
-                    interface.name().clone(),
-                );
-            }
         }
     }
 
@@ -261,14 +283,14 @@ fn enrich_runtime_mount(
     /// spelling as a source stub is invalid (`$init`) or would redeclare the
     /// authored function (`Extract@spec` is postfix syntax, not a declaration
     /// identifier).
-    fn stubbable(function: &ExportedFunction) -> bool {
+    fn stubbable(function: &ExportedFunction<TypeName>) -> bool {
         use baml_compiler2_hir_ty::callable::ExternalLinkability;
 
         matches!(function.linkability, ExternalLinkability::Linkable)
             && source_identifier(&function.name)
     }
 
-    fn stub_type(ty: &baml_type::Ty, viewpoint: &StubViewpoint<'_>) -> String {
+    fn stub_type(ty: &baml_type::Ty<TypeName>, viewpoint: &StubViewpoint<'_>) -> String {
         // Hide a type only when its source spelling would name a package this
         // compile world cannot resolve and so produce diagnostics in a
         // phantom `runtime_mount_*` file.
@@ -283,7 +305,7 @@ fn enrich_runtime_mount(
     /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
     /// this world cannot name is dropped rather than widened).
     fn stub_generics(
-        function: &ExportedFunction,
+        function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
         spell_bounds: bool,
     ) -> String {
@@ -336,9 +358,9 @@ fn enrich_runtime_mount(
     /// identity the emitter slots and the may-throw ABI bit: parameters are
     /// `unknown`, and named error types retain the dependency package's
     /// nominal identity in the mounted interface without necessarily being
-    /// source-spellable from this synthetic alias package.
+    /// source-spellable from this mounted package.
     fn free_function_stub(
-        function: &ExportedFunction,
+        function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
     ) -> Option<(Vec<Name>, Name, String)> {
         if !stubbable(function) {
@@ -346,12 +368,10 @@ fn enrich_runtime_mount(
         }
         let name = function.name.clone();
         let namespace = match &function.target {
-            ExternalCallTarget::Free { namespace, .. } => namespace.clone(),
-            ExternalCallTarget::Method {
-                namespace, class, ..
-            } => {
-                let mut namespace = namespace.clone();
-                namespace.push(class.clone());
+            ExternalCallTarget::Free { function } => function.namespace().clone(),
+            ExternalCallTarget::Method { class, .. } => {
+                let mut namespace = class.namespace().clone();
+                namespace.push(class.name().clone());
                 namespace
             }
             ExternalCallTarget::Interface { interface, .. } => {
@@ -415,7 +435,7 @@ fn enrich_runtime_mount(
     /// for conformance against it, and a call on a mounted value is typed by
     /// it.
     fn method_stub(
-        function: &ExportedFunction,
+        function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
         kind: MethodStubKind,
     ) -> Option<String> {
@@ -469,7 +489,7 @@ fn enrich_runtime_mount(
         ))
     }
 
-    let mut interface = baml_artifact::decode::<PackageInterface>(
+    let mut interface = baml_artifact::decode::<PackageInterface<TypeName>>(
         baml_artifact::ArtifactKind::PackageInterface,
         &package.interface_blob,
     )
@@ -479,53 +499,30 @@ fn enrich_runtime_mount(
         severity: RuntimeDiagnosticSeverity::Error,
         span: None,
     })?;
-    // A package object may be mounted under any source-visible alias. Its
-    // exported call targets retain the package's original identity in the
-    // persisted interface, so relocate those symbolic link names to the alias.
-    // Runtime linking resolves the alias back to the live dependency object.
-    let alias = Name::new(alias);
-    let viewpoint = StubViewpoint { aliases };
+    let alias = own_aliases
+        .first()
+        .cloned()
+        .unwrap_or_else(|| unreachable!("a mounted package is reached under at least one alias"));
+    let viewpoint = StubViewpoint {
+        aliases: all_aliases,
+    };
     let mut stubs = Vec::new();
-    for throw_set in interface
-        .throw_sets
-        .direct
-        .values_mut()
-        .chain(interface.throw_sets.transitive.values_mut())
-    {
-        *throw_set = std::mem::take(throw_set)
-            .into_iter()
-            .map(|mut ty| {
-                relocate_ty(&mut ty, &alias);
-                ty
-            })
-            .collect();
-    }
     for function in interface
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
     {
-        relocate_function(function, &alias);
         stubs.extend(free_function_stub(function, &viewpoint));
     }
     for (export_namespace, exported_types) in &mut interface.types {
         for (export_name, exported) in exported_types {
             match exported {
                 ExportedType::Class {
-                    qtn,
                     fields,
                     methods,
                     generic_params,
-                    generic_param_bounds,
+                    ..
                 } => {
-                    *qtn = relocated_name(qtn, &alias);
-                    for (_, ty, _) in fields.iter_mut() {
-                        relocate_ty(ty, &alias);
-                    }
-                    relocate_bounds(generic_param_bounds, &alias);
-                    for function in methods.iter_mut() {
-                        relocate_function(function, &alias);
-                    }
                     // The emitter needs a concrete class object in the mounted
                     // package's discarded source units so a consumer literal
                     // decomposes to an external object reference. At runtime
@@ -589,42 +586,14 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
-                    param_bounds,
-                    requires,
                     associated_types,
                     fields,
                     required_methods,
                     default_methods,
                     ..
                 } => {
-                    relocate_bounds(param_bounds, &alias);
-                    for interface in requires {
-                        relocate_interface(interface, &alias);
-                    }
-                    for associated in associated_types.iter_mut() {
-                        if let Some(bound) = &mut associated.bound {
-                            relocate_interface(bound, &alias);
-                        }
-                        if let Some(default) = &mut associated.default {
-                            relocate_ty(default, &alias);
-                        }
-                    }
-                    for (_, ty, _) in fields.iter_mut() {
-                        relocate_ty(ty, &alias);
-                    }
-                    for function in required_methods
-                        .iter_mut()
-                        .chain(default_methods.iter_mut())
-                    {
-                        relocate_function(function, &alias);
-                    }
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
-                    *qtn = baml_type::QualifiedTypeName::new(
-                        alias.clone(),
-                        namespace.clone(),
-                        name.clone(),
-                    );
                     let generics = generic_params
                         .iter()
                         .map(ToString::to_string)
@@ -674,8 +643,7 @@ fn enrich_runtime_mount(
                     source.push_str("}\n");
                     stubs.push((namespace, name, source));
                 }
-                ExportedType::Enum { qtn, variants } => {
-                    *qtn = relocated_name(qtn, &alias);
+                ExportedType::Enum { variants, .. } => {
                     if source_identifier(export_name)
                         && export_namespace.iter().all(source_identifier)
                         && variants.iter().all(source_identifier)
@@ -689,40 +657,19 @@ fn enrich_runtime_mount(
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
                     }
                 }
-                ExportedType::TypeAlias { qtn, resolved } => {
-                    *qtn = relocated_name(qtn, &alias);
-                    relocate_ty(resolved, &alias);
-                }
+                ExportedType::TypeAlias { .. } => {}
             }
         }
     }
-    for implementation in &mut interface.impls {
-        relocate_interface(&mut implementation.interface, &alias);
-        relocate_ty(&mut implementation.for_ty_pattern, &alias);
-        relocate_bounds(&mut implementation.param_bounds, &alias);
-        for (_, ty) in &mut implementation.associated_types {
-            relocate_ty(ty, &alias);
-        }
-        if let ExportedImplOrigin::InBodyClass { class_qtn } = &mut implementation.origin {
-            *class_qtn = relocated_name(class_qtn, &alias);
-        }
-        // Implementation methods are reached by interface dispatch, which the
-        // consumer lowers as a virtual call on the receiver's runtime class:
-        // no source stub is needed, and a free stub under `ns_<Interface>/`
-        // would shadow the interface's own stub.
-        for function in &mut implementation.methods {
-            relocate_function(function, &alias);
-        }
-    }
-    // Mounted runtime declarations are spelled `alias.<item name>` in this
-    // compile world: the mount surface is the only channel that names them
-    // here. Each reached declaration gets one row under its item name, and the
-    // row's qtn — the nominal identity every reference lowers to — is that
-    // spelling. Two mounts reaching the same declaration agree on the row; two
-    // distinct declarations sharing an item name are a fail-closed error (the
-    // live tag, carried for exactly this check, tells them apart).
+    // A runtime-created declaration reached through a mount is an item of the
+    // mounted package: `Local` on this mount's wire, resolved by the importer
+    // to the mount root, so every alias of the mount names one declaration.
+    // Each reached declaration gets one row under its item name; two mounts
+    // reaching the same declaration agree on the row, and two distinct
+    // declarations sharing an item name are a fail-closed error (the live
+    // tag, carried for exactly this check, tells them apart).
     let mut minted_tags: IndexMap<Name, baml_type::typetag::TypeTag> = IndexMap::new();
-    let mut minted_rows: IndexMap<Name, ExportedType> = IndexMap::new();
+    let mut minted_rows: IndexMap<Name, ExportedType<TypeName>> = IndexMap::new();
     let mut minted_docs: IndexMap<Name, MountedDeclarationDocs> = IndexMap::new();
     let duplicate_minted = |name: &Name| RuntimeCompileDiagnostic {
         code: "E0011".to_string(),
@@ -751,11 +698,7 @@ fn enrich_runtime_mount(
             minted_rows.insert(
                 class.name.clone(),
                 ExportedType::Class {
-                    qtn: baml_type::QualifiedTypeName::new(
-                        alias.clone(),
-                        Vec::new(),
-                        class.name.clone(),
-                    ),
+                    qtn: baml_type::QualifiedTypeName::local(class.name.clone()),
                     fields: class
                         .fields
                         .iter()
@@ -799,11 +742,7 @@ fn enrich_runtime_mount(
             minted_rows.insert(
                 enm.name.clone(),
                 ExportedType::Enum {
-                    qtn: baml_type::QualifiedTypeName::new(
-                        alias.clone(),
-                        Vec::new(),
-                        enm.name.clone(),
-                    ),
+                    qtn: baml_type::QualifiedTypeName::local(enm.name.clone()),
                     variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
                 },
             );
@@ -893,11 +832,7 @@ fn enrich_runtime_mount(
                 minted_rows.get(qtn.name()).cloned()
             }
             _ => Some(ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::new(
-                    alias.clone(),
-                    Vec::new(),
-                    mount.export_name.clone(),
-                ),
+                qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
                 resolved: root_ty.clone(),
             }),
         }
@@ -1427,7 +1362,9 @@ fn rewrite_identifiers(
 struct LoweredSession {
     source: String,
     artifact: RuntimeSessionCompileArtifact,
-    result_global: String,
+    /// The binding holding the submission's result (the artifact's result
+    /// step commits it to a global under the same name).
+    result_name: String,
 }
 
 /// Everything a compile carries *because* it is a session.
@@ -1437,16 +1374,21 @@ struct LoweredSession {
 /// state in between for a reader to invent an answer for.
 struct SessionCompile {
     artifact: RuntimeSessionCompileArtifact,
-    /// The global holding the submission's result, checked against `expected`.
-    result_global: String,
+    /// The binding holding the submission's result, checked against
+    /// `expected`: how the compiler, which names the workspace's items
+    /// unqualified, looks the result up.
+    result_name: String,
     /// The contract from `eval<T>`; unknown when the eval is uncontracted.
     expected: bex_vm_types::SessionContract,
     lease: bex_vm_types::SessionEvalLease,
 }
 
-fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
-    let package_id = PackageId::new(db, Name::new("user"));
-    let package_items = baml_compiler2_hir::package::package_items(db, package_id);
+fn let_initializer_type(
+    db: &ProjectDatabase,
+    package: baml_base::SourceRoot,
+    name: &str,
+) -> Option<baml_type::Ty> {
+    let package_items = baml_compiler2_hir::package::package_items(db, package);
     let Definition::Let(let_loc) = package_items.lookup_value(&[], &Name::new(name))? else {
         return None;
     };
@@ -1621,6 +1563,7 @@ fn lower_session_submission(
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
     let mut result_step = None;
+    let mut result_name: Option<String> = None;
 
     for (index, element) in elements.iter().enumerate() {
         let (node, wrapped_range, has_semicolon, is_statement) = match element {
@@ -1798,6 +1741,7 @@ fn lower_session_submission(
             index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
         if returns_value {
             result_step = Some(steps.len());
+            result_name = Some(generated_name.clone());
         }
         let kind = binding
             .clone()
@@ -1828,6 +1772,7 @@ fn lower_session_submission(
         let step_source = format!("let {generated_name} = null\n");
         generated.push_str(&step_source);
         result_step = Some(steps.len());
+        result_name = Some(generated_name.clone());
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
             commit_global: None,
@@ -1835,7 +1780,7 @@ fn lower_session_submission(
         });
     }
     let result_step = result_step.expect("session lowering always has a result");
-    let result_global = steps[result_step].global.clone();
+    let result_name = result_name.expect("session lowering always has a result");
     Ok(LoweredSession {
         source: generated,
         artifact: RuntimeSessionCompileArtifact {
@@ -1846,7 +1791,7 @@ fn lower_session_submission(
             result_step: Some(result_step),
             initializers: Vec::new(),
         },
-        result_global,
+        result_name,
     })
 }
 
@@ -2078,7 +2023,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                     files,
                     Some(SessionCompile {
                         artifact: lowered.artifact,
-                        result_global: lowered.result_global,
+                        result_name: lowered.result_name,
                         expected: session.expected,
                         lease: session.lease,
                     }),
@@ -2095,74 +2040,114 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         })?;
         // This local is the transience guarantee: no handle to `db` occurs in
         // either return type, and all retained values below are deep-owned.
-        // The stdlib arrives as precompiled interface blobs below (never as
-        // source), so no `Stdlib` roots are materialized.
+        // The stdlib arrives as precompiled interface blobs (never as source):
+        // its roots are served from those interfaces and hold no files.
         let mut db = ProjectDatabase::new();
+        db.ensure_precompiled_stdlib(&stdlib.interfaces);
         let workspace = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(RUNTIME_VIRTUAL_ROOT),
-                package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         let aliases: Vec<Name> = packages
             .keys()
             .map(|name| Name::new(name.as_str()))
             .collect();
-        let enriched = packages
-            .into_iter()
-            .map(|(name, package)| {
-                enrich_runtime_mount(&name, &aliases, package)
-                    .map(|(blob, stubs)| (name, blob, stubs))
+        // One mount per package OBJECT: two aliases naming the same object are
+        // two edges to one root, and the first alias names it.
+        let mut grouped: IndexMap<
+            bex_vm_types::RuntimePackageIdentity,
+            (Vec<Name>, RuntimePackageMount),
+        > = IndexMap::new();
+        for (alias, package) in packages {
+            grouped
+                .entry(package.identity)
+                .or_insert_with(|| (Vec::new(), package))
+                .0
+                .push(Name::new(alias.as_str()));
+        }
+        let enriched = grouped
+            .into_values()
+            .map(|(own_aliases, package)| {
+                enrich_runtime_mount(&own_aliases, &aliases, package)
+                    .map(|(blob, stubs)| (own_aliases, blob, stubs))
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(|diagnostic| vec![diagnostic])?;
-        let mounted = enriched
-            .iter()
-            .map(|(name, blob, _)| (name.clone(), blob.clone()))
-            .collect::<BTreeMap<_, _>>();
-        let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
-        db.set_mounted_packages(mounted).map_err(|message| {
+        // One root per mount, served from its interface (the semantic
+        // authority), reached from the consumer under the alias it chose.
+        // Emit needs concrete pool/global slots while producing the consumer's
+        // relocatable units, so the root also holds link-only native stubs;
+        // those units are discarded below so the final artifact keeps the
+        // dependency references unresolved for the runtime linker. The root
+        // is `Dynamic` (runtime-loaded), so it sorts after every statically
+        // compiled root.
+        let mount_error = |alias: &Name, error: &dyn std::fmt::Display| {
             vec![RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message,
+                code: "E_RUNTIME_MOUNT".to_string(),
+                message: format!("cannot mount package `{alias}`: {error}"),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
             }]
-        })?;
-        db.set_precompiled_stdlib_packages(stdlib.interfaces);
-        debug_assert!(
-            precompiled_stdlib_names.iter().all(|name| {
-                baml_compiler2_hir::package::is_precompiled_package(&db, &Name::new(name))
-            }),
-            "set_mounted_packages must run before set_precompiled_stdlib_packages"
-        );
-        // Emit needs concrete pool/global slots while producing the consumer's
-        // relocatable units. Materialize link-only native stubs in the mounted
-        // package; the mounted interface remains the semantic authority, and
-        // the stub units are discarded below so the final artifact keeps the
-        // dependency references unresolved for the runtime linker.
-        for (mount_index, (alias, _, stubs)) in enriched.iter().enumerate() {
-            if baml_compiler2_hir::package::is_reserved_package_name(alias) || stubs.is_empty() {
-                continue;
+        };
+        // A mount reaches the sibling mounts its interface names (the edges its
+        // producer compiled against, recovered from the artifact the way
+        // rustc metadata lists its crate dependencies), so mounts are created
+        // in dependency order and a mount that names an unmounted package is
+        // refused when its interface is read.
+        let mut mount_roots: IndexMap<&str, baml_base::SourceRoot> = IndexMap::new();
+        // A package a mount's interface names that this world has not mounted
+        // (a runtime-minted type's package, spelled under the alias its
+        // producer used) is foreign: it becomes an empty named root, so its
+        // declarations are opaque here — no definition, identity by type tag
+        // at run time — rather than the mount being refused. Stubs still hide
+        // them (`StubViewpoint`), so no phantom-file diagnostic names one.
+        let mut foreign_roots: IndexMap<Name, baml_base::SourceRoot> = IndexMap::new();
+        for mount_index in mount_order(&enriched)
+            .map_err(|alias| mount_error(&alias, &"mounts reference each other in a cycle"))?
+        {
+            let (own_aliases, blob, stubs) = &enriched[mount_index];
+            let alias = &own_aliases[0];
+            let mut edges: Vec<Dependency> = Vec::new();
+            for name in
+                mount_references(own_aliases, blob).map_err(|error| mount_error(alias, &error))?
+            {
+                let root = match mount_roots.get(name.as_str()) {
+                    Some(&root) => root,
+                    None => match foreign_roots.get(&name) {
+                        Some(&root) => root,
+                        None => {
+                            let root = db
+                                .add_source_root(
+                                    SourceRootSpec::new(
+                                        format!("{BUILTIN_VIRTUAL_ROOT}/foreign/{name}"),
+                                        baml_base::SourceRootKind::Dynamic,
+                                    )
+                                    .named(name.clone()),
+                                )
+                                .map_err(|error| mount_error(alias, &error))?;
+                            foreign_roots.insert(name.clone(), root);
+                            root
+                        }
+                    },
+                };
+                edges.push(Dependency { name, root });
             }
-            // Stub units live in a `Dynamic` root for the mount's package
-            // (its virtual `<builtin>/<alias>` prefix): runtime-loaded, so it
-            // sorts after every statically compiled root.
-            let stub_root = db
-                .add_source_root(SourceRootSpec {
-                    path: PathBuf::from(format!("{BUILTIN_VIRTUAL_ROOT}/{alias}")),
-                    package: Name::new(alias),
-                    kind: baml_base::SourceRootKind::Dynamic,
-                })
-                .map_err(|error| {
-                    vec![RuntimeCompileDiagnostic {
-                        code: "E_RUNTIME_MOUNT".to_string(),
-                        message: format!("cannot mount package `{alias}`: {error}"),
-                        severity: RuntimeDiagnosticSeverity::Error,
-                        span: None,
-                    }]
-                })?;
+            let mount_root = db
+                .add_source_root(
+                    SourceRootSpec::new(
+                        format!("{BUILTIN_VIRTUAL_ROOT}/{alias}"),
+                        baml_base::SourceRootKind::Dynamic,
+                    )
+                    .named(alias.clone())
+                    .depending_on(edges)
+                    .served_from(blob.clone()),
+                )
+                .map_err(|error| mount_error(alias, &error))?;
+            for own in own_aliases {
+                mount_roots.insert(own.as_str(), mount_root);
+            }
             let stub_files: Vec<(PathBuf, &str)> = stubs
                 .iter()
                 .enumerate()
@@ -2174,11 +2159,21 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 })
                 .collect();
             db.add_or_update_files_in(
-                stub_root,
+                mount_root,
                 stub_files
                     .iter()
                     .map(|(path, source)| (path.as_path(), *source)),
             );
+            for own in own_aliases {
+                db.add_dependency(
+                    workspace,
+                    Dependency {
+                        name: own.clone(),
+                        root: mount_root,
+                    },
+                )
+                .map_err(|error| mount_error(own, &error))?;
+            }
         }
         for (path, source) in files {
             // Runtime input names are package-relative. Mounting them beneath
@@ -2187,7 +2182,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             // prefix in diagnostics.
             let path = runtime_source_virtual_path(&path);
             if session.is_some() {
-                db.add_session_file(path, &source);
+                db.add_session_file_in(workspace, path, &source);
             } else {
                 db.add_or_update_file_in(workspace, &path, &source);
             }
@@ -2211,11 +2206,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             )
         {
             let file = session.artifact.submission_name.as_str();
-            let result_name = session
-                .result_global
-                .strip_prefix("user.")
-                .unwrap_or(session.result_global.as_str());
-            let Some(actual) = let_initializer_type(&db, result_name) else {
+            let result_name = session.result_name.as_str();
+            let Some(actual) = let_initializer_type(&db, workspace, result_name) else {
                 return Err(vec![RuntimeCompileDiagnostic {
                     code: "E_RUNTIME_SESSION".to_string(),
                     message: format!(
@@ -2248,24 +2240,50 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         .to_string(),
                 )]);
             };
-            let expected = baml_type::Ty::from(expected);
+            // The contract arrives spelled for the wire; read it from the
+            // submission's package, whose edges decide what it can name.
+            let spelling = baml_compiler2_hir::package::spelling(&db);
+            let expected = match baml_type::Ty::<TypeName>::from(expected).try_map_heads(
+                &mut |name| {
+                    spelling
+                        .resolve(&db, workspace, name)
+                        .ok_or_else(|| name.clone())
+                },
+            ) {
+                Ok(expected) => expected,
+                Err(unreachable_name) => {
+                    return Err(vec![runtime_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        file,
+                        0,
+                        0,
+                        format!(
+                            "`eval` contract names `{unreachable_name}`, whose package this submission cannot reach"
+                        ),
+                    )]);
+                }
+            };
             let context = baml_compiler2_hir_ty::facts::Facts::new(&db);
             if !baml_type::normalize::is_subtype(&actual, &expected, &context) {
+                let viewpoint =
+                    baml_compiler2_hir_ty::render::Viewpoint::user_facing(&db, workspace);
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::TypeMismatch,
                     file,
                     0,
                     0,
                     format!(
-                        "submission result has type `{actual}`, which is not a subtype of requested contract `{expected}`"
+                        "submission result has type `{}`, which is not a subtype of requested contract `{}`",
+                        actual.render_with(&viewpoint),
+                        expected.render_with(&viewpoint),
                     ),
                 )]);
             }
         }
 
-        let interface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+        let interface = export_interface(&db, workspace);
         let interface_blob =
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
                 .map_err(|error| {
                     vec![RuntimeCompileDiagnostic {
                         code: "E_RUNTIME_INTERFACE".to_string(),
@@ -2276,6 +2294,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 })?;
         let emitted = emit_units_with_stdlib(
             &db,
+            workspace,
             crate::precompiled_stdlib_config::OPT_LEVEL,
             &stdlib.program,
         )
@@ -2392,11 +2411,10 @@ mod tests {
     fn runtime_virtual_paths_derive_packages_and_namespaces() {
         let mut db = ProjectDatabase::new();
         let workspace = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(RUNTIME_VIRTUAL_ROOT),
-                package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_base::SourceRootKind::Workspace,
-            })
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
             .unwrap();
 
         let source = db.add_or_update_file_in(
@@ -2405,7 +2423,7 @@ mod tests {
             "",
         );
         let source_package = file_package(&db, source);
-        assert_eq!(source_package.package.as_str(), "user");
+        assert_eq!(source_package.root, workspace);
         assert_eq!(
             source_package
                 .namespace_path
@@ -2416,11 +2434,13 @@ mod tests {
         );
 
         let mount_root = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from(format!("{BUILTIN_VIRTUAL_ROOT}/app")),
-                package: Name::new("app"),
-                kind: baml_base::SourceRootKind::Dynamic,
-            })
+            .add_source_root(
+                SourceRootSpec::new(
+                    format!("{BUILTIN_VIRTUAL_ROOT}/app"),
+                    baml_base::SourceRootKind::Dynamic,
+                )
+                .named(Name::new("app")),
+            )
             .unwrap();
         let mount = db.add_or_update_file_in(
             mount_root,
@@ -2428,7 +2448,7 @@ mod tests {
             "",
         );
         let mount_package = file_package(&db, mount);
-        assert_eq!(mount_package.package.as_str(), "app");
+        assert_eq!(mount_package.root, mount_root);
         assert_eq!(
             mount_package
                 .namespace_path
@@ -2462,7 +2482,7 @@ mod tests {
     fn host_and_describable_stubs(
         fields: Vec<(
             Name,
-            baml_type::Ty,
+            baml_type::Ty<TypeName>,
             baml_compiler2_hir_ty::package_interface::ExportedFieldAttrs,
         )>,
     ) -> Vec<(Vec<Name>, Name, String)> {
@@ -2479,7 +2499,9 @@ mod tests {
             baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Describable"));
         let self_param = ParamTy::new(0, Name::new("Self"));
         let self_ty = Ty::TypeVar(self_param.clone(), TyAttr::default());
-        let function = |name: &str, params: Vec<FunctionParamTy>, target: ExternalCallTarget| {
+        let function = |name: &str,
+                        params: Vec<FunctionParamTy<TypeName>>,
+                        target: ExternalCallTarget<TypeName>| {
             ExportedFunction {
                 name: Name::new(name),
                 params,
@@ -2515,9 +2537,7 @@ mod tests {
                             FunctionParamTy::optional(Some(Name::new("punct")), Ty::string()),
                         ],
                         ExternalCallTarget::Method {
-                            package: app.clone(),
-                            namespace: Vec::new(),
-                            class: Name::new("Host"),
+                            class: TypeName::new(app.clone(), Vec::new(), Name::new("Host")),
                             name: Name::new("greet"),
                         },
                     ),
@@ -2528,9 +2548,7 @@ mod tests {
                             Ty::string(),
                         )],
                         ExternalCallTarget::Method {
-                            package: app,
-                            namespace: Vec::new(),
-                            class: Name::new("Host"),
+                            class: TypeName::new(app, Vec::new(), Name::new("Host")),
                             name: Name::new("make"),
                         },
                     ),
@@ -2579,10 +2597,11 @@ mod tests {
             baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
                 .expect("package interface encodes");
         let package = RuntimePackageMount {
+            identity: bex_vm_types::RuntimePackageIdentity::synthetic(1),
             interface_blob,
             types: Vec::new(),
         };
-        let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
+        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
             .expect("runtime mount enriches");
         stubs
     }
@@ -2665,7 +2684,7 @@ mod tests {
 
     #[test]
     fn runtime_mount_stubs_preserve_declaration_and_variant_docstrings() {
-        let interface = PackageInterface {
+        let interface = PackageInterface::<TypeName> {
             types: IndexMap::new(),
             functions: IndexMap::new(),
             throw_sets: FunctionThrowSets::default(),
@@ -2682,6 +2701,7 @@ mod tests {
         let enum_qtn =
             baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), enum_name.clone());
         let package = RuntimePackageMount {
+            identity: bex_vm_types::RuntimePackageIdentity::synthetic(1),
             interface_blob,
             types: vec![
                 bex_vm_types::RuntimeTypeMount {
@@ -2727,7 +2747,7 @@ mod tests {
             ],
         };
 
-        let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
+        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
             .expect("runtime mount enriches");
         let sources = stubs
             .into_iter()

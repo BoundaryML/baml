@@ -104,12 +104,12 @@ function tagged(t: string) -> Inner { Inner { tag: t } }
 
 fn honest_bytes(opt: OptLevel) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
-    db.workspace(Path::new("."));
+    let package = db.workspace(Path::new("."));
     for (path, content) in FILES {
         db.file(*path, content);
     }
     testing::assert_no_diagnostic_errors(&db);
-    let program = generate_project_bytecode_with_opt(&db, opt).expect("honest compile");
+    let program = generate_project_bytecode_with_opt(&db, package, opt).expect("honest compile");
     borsh::to_vec(&program).expect("serialize honest program")
 }
 

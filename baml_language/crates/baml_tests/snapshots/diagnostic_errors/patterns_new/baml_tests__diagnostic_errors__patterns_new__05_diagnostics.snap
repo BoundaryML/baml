@@ -125,7 +125,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Color3; missing: user.Color3.Red
+  × non-exhaustive match on type Color3; missing: Color3.Red
      ╭─[patterns_new.baml:171:5]
  171 │ ╭─▶     match (c) {
  172 │ │           Color3.Green => 1,
@@ -135,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Direction4; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
+  × non-exhaustive match on type Direction4; missing: Direction4.East, Direction4.South, Direction4.West
      ╭─[patterns_new.baml:187:5]
  187 │ ╭─▶     match (d) {
  188 │ │           Direction4.North => 1
@@ -144,8 +144,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type ExcessiveEnum; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth,
-  │ user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
+  × non-exhaustive match on type ExcessiveEnum; missing: ExcessiveEnum.Second, ExcessiveEnum.Third, ExcessiveEnum.Fourth, ExcessiveEnum.Fifth, ExcessiveEnum.Sixth, ExcessiveEnum.Seventh,
+  │ ExcessiveEnum.Eighth, ExcessiveEnum.Ninth, ExcessiveEnum.Tenth, ExcessiveEnum.Eleventh, ExcessiveEnum.Twelfth
      ╭─[patterns_new.baml:209:5]
  209 │ ╭─▶     match (e) {
  210 │ │           ExcessiveEnum.First => 1

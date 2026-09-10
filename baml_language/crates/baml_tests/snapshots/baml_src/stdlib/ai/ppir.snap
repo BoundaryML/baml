@@ -200,8 +200,8 @@ function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Req
 function ai.clients.render(self: ?, input: root.ModelTurnInput) -> baml.http.Request  [expr] {
   {  } match (self.members.at(0)) { c: root.Client => c.render(input), null => { throw root.errors.InvalidRequest { provider: "fallback", status_code: null, detail: "Fallback needs at...", raw_body: null } } } catch_all (e) { _ => throw root.errors.normalize(e) }
 }
-function ai.clients.resolve(selector: ai.clients.Selector) -> root.Client  [expr] {
-  {  } match (selector) { shorthand: string => root.internal._from_shorthand(shorthand), named: baml.env.Ref => {  } if let value: string = named.get() {  } root.internal._from_shorthand(value) else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }, existing: root.Client => existing }
+function ai.clients.resolve(selector: ai.clients.Selector, providers: (string, string) -> root.Client?, prefixes: string[]) -> root.Client  [expr] {
+  {  } match (selector) { shorthand: string => root.internal._from_shorthand(shorthand, providers, prefixes), named: baml.env.Ref => {  } if let value: string = named.get() {  } root.internal._from_shorthand(value, providers, prefixes) else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }, existing: root.Client => existing }
 }
 
 --- captures ---
@@ -250,7 +250,7 @@ function ai.content.kind(self: ?) -> string  [expr] {
   {  } match (self.media) { image: baml.media.Image => "image", audio: baml.media.Audio => "audio", video: baml.media.Video => "video", pdf: baml.media.Pdf => "pdf" }
 }
 function ai.content.new(value: image | audio | video | pdf, provider_id: string? = null, revised_prompt: string? = null) -> ai.content.Media  [expr] {
-  { let envelope = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let part: root.MediaPart = baml.json.from_json(envelope) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } } } ai.content.Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+  {  } ai.content.Media { media: value, provider_id: provider_id, revised_prompt: revised_prompt }
 }
 
 --- <builtin>/ai/ns_errors/errors.baml ---
@@ -541,11 +541,8 @@ function ai.internal._gcp_project_id(credentials_json: string?) -> string?  [bui
 function ai.internal._gcp_quota_project_id(credentials_json: string?) -> string?  [builtin]
 
 --- <builtin>/ai/ns_internal/clients.baml ---
-function ai.internal._from_shorthand(shorthand: string) -> root.Client  [expr] {
-  { let separator = shorthand.index_of("/") } if let index: int = separator { let prefix = shorthand.slice(0, index); let model = shorthand.slice(index Add 1, shorthand.length()); let selected: root.Client? = match (prefix) { "openai" => openai.ResponsesClient.new(model = model), "openai-chat" => openai.ChatClient.new(model = model), "openai-images" => openai.ImageClient.new(model = model), "azure" => openai.AzureClient.new(model = model), "ollama" => openai.OllamaClient.new(model = model), "openrouter" => openai.OpenRouterClient.new(model = model), "anthropic" => anthropic.Client.new(model = model), "google" => google.GeminiClient.new(model = model), "vertex" => google.VertexClient.new(model = model), "bedrock" => aws.BedrockClient.new(model = model), "ai-gateway-images" => vercel.AiGatewayImageClient.new(model = model), "claude-code" => claude_code.ClaudeCodeClient.new(model = model), _ => null } } if let built: root.Client = selected {  } built else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } } else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }
-}
-function ai.internal._shorthand_prefixes() -> string  [expr] {
-  {  } ["openai", "openai-chat", "openai-images", "azure", "ollama", "openrouter", "anthropic", "google", "vertex", "bedrock", "ai-gateway-images", "claude-code"].join(", ")
+function ai.internal._from_shorthand(shorthand: string, providers: (string, string) -> root.Client?, prefixes: string[]) -> root.Client  [expr] {
+  { let separator = shorthand.index_of("/") } if let index: int = separator { let prefix = shorthand.slice(0, index); let model = shorthand.slice(index Add 1, shorthand.length()) } if let built: root.Client = providers(prefix, model) {  } built else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } } else { throw root.errors.InvalidRequest { provider: "ai.clients", status_code: null, detail: `...`, raw_body: null } }
 }
 
 --- <builtin>/ai/ns_internal/helpers.baml ---

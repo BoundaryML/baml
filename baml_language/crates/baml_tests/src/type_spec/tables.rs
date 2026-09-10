@@ -4,7 +4,10 @@
 //! corpus-scale check is the differential MIR gate; these pin the
 //! per-road recording semantics the gate builds on.
 
-use baml_compiler2_hir_ty::infer::{CallTypeArgPlan, MemberResolution, RuntimeCheck, infer_body};
+use baml_compiler2_hir_ty::{
+    infer::{CallTypeArgPlan, MemberResolution, RuntimeCheck, infer_body},
+    render::Viewpoint,
+};
 
 use crate::engine::TestDbExt;
 
@@ -210,7 +213,7 @@ function mr_chain(p: Person) -> string throws never {
                 .segments
                 .iter()
                 .map(|segment| {
-                    let ty = segment.ty.render_canonical();
+                    let ty = segment.ty.render_with(&Viewpoint::canonical(&db));
                     match &segment.resolution {
                         Some(resolution) => format!("{ty}/{}", kind(resolution)),
                         None => ty,
@@ -267,7 +270,7 @@ function cp_use() -> int throws never {
             let type_args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.render_canonical())
+                .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                 .collect();
             let bindings: Vec<String> = plan
                 .bindings
@@ -344,12 +347,12 @@ function rt_owner_use() -> RtBox<int> throws never {
             assert!(matches!(
                 plan.slots.as_slice(),
                 [CallTypeArgPlan::Static { ty, .. }]
-                    if ty.render_canonical() == "int"
+                    if ty.render_with(&Viewpoint::canonical(&db)) == "int"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.render_canonical())
+                    .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                     .collect::<Vec<_>>(),
                 vec!["int"]
             );
@@ -401,18 +404,18 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
             assert!(matches!(
                 &plan.slots[0],
                 CallTypeArgPlan::Runtime { occurrence_ty, parameter, .. }
-                    if occurrence_ty.render_canonical() == "user.RtAnchor"
+                    if occurrence_ty.render_with(&Viewpoint::canonical(&db)) == "user.RtAnchor"
                         && parameter.name().as_str() == "A"
             ));
             assert!(matches!(
                 &plan.slots[1],
                 CallTypeArgPlan::Static { ty, .. }
-                    if ty.render_canonical() == "user.RtGood"
+                    if ty.render_with(&Viewpoint::canonical(&db)) == "user.RtGood"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.render_canonical())
+                    .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                     .collect::<Vec<_>>(),
                 vec!["user.RtAnchor", "user.RtGood"]
             );
@@ -492,7 +495,9 @@ function sc_companion() -> baml.Map<string, int> throws never {
             if snippet.starts_with("pkg.get_function") {
                 extraction_throws = plan.slots.first().and_then(|slot| match slot {
                     CallTypeArgPlan::Static { ty, .. } => match ty {
-                        baml_type::Ty::Function { throws, .. } => Some(throws.render_canonical()),
+                        baml_type::Ty::Function { throws, .. } => {
+                            Some(throws.render_with(&Viewpoint::canonical(&db)))
+                        }
                         _ => None,
                     },
                     CallTypeArgPlan::Runtime { .. } => None,
@@ -502,7 +507,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
                 session_args = Some(
                     plan.type_args
                         .iter()
-                        .map(|ty| ty.render_canonical())
+                        .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                         .collect::<Vec<_>>(),
                 );
             }
@@ -530,17 +535,17 @@ function sc_companion() -> baml.Map<string, int> throws never {
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::CannotConstructReflectionKind { class_name }
-            if class_name.render_user_facing() == "reflect.class.Type"
+            if Viewpoint::canonical(&db).path(class_name) == "reflect.class.Type"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::CannotConstructBuiltinCompanion { class_name, companion }
-            if class_name.render_user_facing() == "baml.Map" && companion.builtin == "map"
+            if Viewpoint::canonical(&db).path(class_name) == "baml.Map" && companion.builtin == "map"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::TypeMismatch { expected, got }
-            if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
+            if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.Type | reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
     )));
     assert_eq!(extraction_throws.as_deref(), Some("unknown"));
     assert_eq!(session_args, Some(vec!["unknown".to_string()]));
@@ -621,15 +626,15 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
+                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.Type | reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
             )
         });
         saw_static_shape_error |= result.diagnostics.iter().any(|diag| {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "ShapeT[]"
-                        && got.render_canonical() == "42"
+                    if expected.render_with(&Viewpoint::canonical(&db)) == "ShapeT[]"
+                        && got.render_with(&Viewpoint::canonical(&db)) == "42"
             )
         });
 
@@ -662,7 +667,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_outer = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if ty.render_canonical() == "user.ScopeT"
+                    [ty] if ty.render_with(&Viewpoint::canonical(&db)) == "user.ScopeT"
                 ));
             }
         }
@@ -680,7 +685,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         binding_blocks.sort_by_key(|(len, _)| *len);
         if let Some((_, ty)) = binding_blocks.first() {
             saw_erased_block = true;
-            assert_eq!(ty.render_canonical(), "unknown");
+            assert_eq!(ty.render_with(&Viewpoint::canonical(&db)), "unknown");
         }
 
         let mut lambda_binding_blocks: Vec<_> = result
@@ -699,7 +704,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             assert!(matches!(
                 &**ty,
                 baml_type::Ty::Function { ret, .. }
-                    if ret.render_canonical() == "unknown"
+                    if ret.render_with(&Viewpoint::canonical(&db)) == "unknown"
             ));
         }
     }
@@ -776,7 +781,8 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_hir::body::BodyOwnerId::Let(_) => "<let>",
         };
         if owner_name == "pat_catch" {
-            saw_catch_effect = result.throws.render_canonical() == "user.ScopeEffect";
+            saw_catch_effect =
+                result.throws.render_with(&Viewpoint::canonical(&db)) == "user.ScopeEffect";
         }
         non_exhaustive += result
             .diagnostics
@@ -792,7 +798,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
+                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.Type | reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
             )
         });
         let inferred_body = baml_compiler2_ppir::body(&db, owner);
@@ -804,7 +810,10 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             ) {
                 pattern_types += 1;
                 assert!(
-                    matches!(ty.render_canonical().as_str(), "int" | "1"),
+                    matches!(
+                        ty.render_with(&Viewpoint::canonical(&db)).as_str(),
+                        "int" | "1"
+                    ),
                     "runtime pattern did not preserve its scrutinee type: {ty:?}"
                 );
             }
@@ -812,14 +821,16 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         for (&expr, ty) in &result.type_of_expr {
             let snippet = &source[source_map.expr_span(expr)];
             if snippet == "x is unreflect(scope_effect_type())" {
-                saw_direct_effect |= result.throws.render_canonical() == "user.ScopeEffect";
+                saw_direct_effect |=
+                    result.throws.render_with(&Viewpoint::canonical(&db)) == "user.ScopeEffect";
             }
             if snippet.starts_with("(x: int) ->") {
                 saw_lambda_effect |= matches!(
                     ty,
                     baml_type::Ty::Function { throws, .. }
-                        if throws.render_canonical() == "user.ScopeEffect"
-                ) && result.throws.render_canonical() == "never";
+                        if throws.render_with(&Viewpoint::canonical(&db)) == "user.ScopeEffect"
+                ) && result.throws.render_with(&Viewpoint::canonical(&db))
+                    == "never";
             }
         }
     }
@@ -835,7 +846,10 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         .expect("pat_default function");
     let default_owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(default_function);
     let default_result = infer_body(&db, default_owner);
-    let saw_default_effect = default_result.throws.render_canonical() == "user.ScopeEffect";
+    let saw_default_effect = default_result
+        .throws
+        .render_with(&Viewpoint::canonical(&db))
+        == "user.ScopeEffect";
     let default_body = baml_compiler2_ppir::body(&db, default_owner);
     let default_body = default_body.expr_body().expect("default expression body");
     for (pat, ty) in &default_result.type_of_pat {
@@ -844,7 +858,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_ast::Pattern::Unreflect(_)
         ) {
             pattern_types += 1;
-            assert_eq!(ty.render_canonical(), "1");
+            assert_eq!(ty.render_with(&Viewpoint::canonical(&db)), "1");
         }
     }
     assert_eq!(non_exhaustive, 1, "runtime patterns do not prove coverage");
@@ -951,7 +965,7 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
             let ty = result
                 .type_of_expr
                 .get(&expr)
-                .map(|ty| ty.render_canonical())
+                .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                 .unwrap_or_else(|| "<missing>".into());
             let mismatch = if result.type_mismatches.contains_key(&expr) {
                 " MISMATCH"
@@ -1006,7 +1020,7 @@ function de_probe() -> bool throws never {
             let args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.render_canonical())
+                .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                 .collect();
             plans.push(format!(
                 "{} -> {args:?}",
@@ -1054,7 +1068,7 @@ function ir_probe() -> int {
             plans.push(
                 plan.type_args[plan.own_offset..]
                     .iter()
-                    .map(|ty| ty.render_canonical())
+                    .map(|ty| ty.render_with(&Viewpoint::canonical(&db)))
                     .collect::<Vec<_>>(),
             );
         }
@@ -1156,7 +1170,7 @@ function pa_probe() -> int {
             if snippet.starts_with("let arr")
                 && let Some(ty) = result.type_of_pat.get(&pat_id)
             {
-                renders.push(ty.render_canonical());
+                renders.push(ty.render_with(&Viewpoint::canonical(&db)));
             }
         }
     }

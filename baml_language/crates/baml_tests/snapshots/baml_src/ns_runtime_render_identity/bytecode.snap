@@ -139,7 +139,24 @@ function runtime_render_identity.Render@spec() -> ai.FunctionSpec<#0> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.runtime_render_identity.IdentityClient
+    load_type #0
+    make_closure .<lambda(Render@spec, 1)>, captures=0, ntypeargs=1
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "Render"
@@ -262,7 +279,25 @@ function runtime_render_identity.RenderPair@spec() -> ai.FunctionSpec<runtime_re
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.runtime_render_identity.IdentityClient
+    load_type #0
+    load_type #1
+    make_closure .<lambda(RenderPair@spec, 1)>, captures=0, ntypeargs=2
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "RenderPair"

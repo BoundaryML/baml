@@ -1,5 +1,12 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { ExecutionPanel, WebSocketRuntimePort, type SourceNavigationTarget } from '@b/pkg-playground';
+/** biome-ignore-all lint/style/useFilenamingConvention: the root component and its file are named together */
+
+import {
+  ExecutionPanel,
+  type SourceNavigationTarget,
+  toProjectEntry,
+  WebSocketRuntimePort,
+} from '@b/pkg-playground';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
 // Monaco workbench is heavy (monaco-vscode-api) and only needed when the user
 // opens the editor view; lazy-load it so the plain playground (and the VS Code
@@ -46,9 +53,10 @@ interface OpenInBrowserMessage {
 
 function getVsCodeApi() {
   if (vscodeApi !== undefined) return vscodeApi;
-  vscodeApi = typeof window.acquireVsCodeApi === 'function'
-    ? window.acquireVsCodeApi()
-    : null;
+  vscodeApi =
+    typeof window.acquireVsCodeApi === 'function'
+      ? window.acquireVsCodeApi()
+      : null;
   return vscodeApi;
 }
 
@@ -63,8 +71,12 @@ const App: React.FC = () => {
   // commands…". Keeping it mounted means init happens exactly once.
   const [editorEverOpened, setEditorEverOpened] = useState(false);
   const portRef = useRef<WebSocketRuntimePort | null>(null);
-  const pendingCursorPositionRef = useRef<CursorPositionMessage['position'] | null>(null);
-  const pendingOpenTargetRef = useRef<OpenPlaygroundMessage['target'] | null>(null);
+  const pendingCursorPositionRef = useRef<
+    CursorPositionMessage['position'] | null
+  >(null);
+  const pendingOpenTargetRef = useRef<OpenPlaygroundMessage['target'] | null>(
+    null,
+  );
   const inVsCode = getVsCodeApi() !== null;
   // The Monaco editor view is offered only when running standalone in a browser;
   // inside VS Code the user already has a full editor.
@@ -79,14 +91,20 @@ const App: React.FC = () => {
       pendingOpenTargetRef.current = null;
       setActiveProject(target.project);
       port.dispatchLocalMessage({
-        type: 'playgroundNotification',
         notification: {
-          type: 'openPlayground',
           project: target.project,
-          ...(target.functionName !== undefined ? { functionName: target.functionName } : {}),
-          ...(target.testName !== undefined ? { testName: target.testName } : {}),
-          ...(target.testsetName !== undefined ? { testsetName: target.testsetName } : {}),
+          type: 'openPlayground',
+          ...(target.functionName !== undefined
+            ? { functionName: target.functionName }
+            : {}),
+          ...(target.testName !== undefined
+            ? { testName: target.testName }
+            : {}),
+          ...(target.testsetName !== undefined
+            ? { testsetName: target.testsetName }
+            : {}),
         },
+        type: 'playgroundNotification',
       });
     }
 
@@ -94,10 +112,10 @@ const App: React.FC = () => {
       const position = pendingCursorPositionRef.current;
       pendingCursorPositionRef.current = null;
       port.postMessage({
-        type: 'cursorPosition',
+        column: position.column,
         file: position.file,
         line: position.line,
-        column: position.column,
+        type: 'cursorPosition',
       });
     }
   }, [port]);
@@ -108,7 +126,8 @@ const App: React.FC = () => {
     // standalone / iframe / dev scenarios.
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl =
-      window.__PLAYGROUND_WS_URL ?? `${scheme}://${window.location.host}/api/ws`;
+      window.__PLAYGROUND_WS_URL ??
+      `${scheme}://${window.location.host}/api/ws`;
     const runtimePort = new WebSocketRuntimePort(wsUrl);
     setPort(runtimePort);
     return () => runtimePort.dispose();
@@ -125,7 +144,9 @@ const App: React.FC = () => {
         setActiveProject(n.project);
       } else if (n.type === 'listProjects' && n.projects.length > 0) {
         // Only adopt the first discovered project if we don't have one yet.
-        setActiveProject((prev) => prev ?? n.projects[0]);
+        // A project is identified by its root path everywhere in this
+        // protocol; the entry's name is for display.
+        setActiveProject((prev) => prev ?? toProjectEntry(n.projects[0]).path);
       }
     });
     // The port buffers incoming messages and replays them only to the FIRST
@@ -138,17 +159,19 @@ const App: React.FC = () => {
   }, [port]);
 
   useEffect(() => {
-    const forwardCursorPosition = (position: CursorPositionMessage['position']) => {
+    const forwardCursorPosition = (
+      position: CursorPositionMessage['position'],
+    ) => {
       const currentPort = portRef.current;
       if (!currentPort) {
         pendingCursorPositionRef.current = position;
         return;
       }
       currentPort.postMessage({
-        type: 'cursorPosition',
+        column: position.column,
         file: position.file,
         line: position.line,
-        column: position.column,
+        type: 'cursorPosition',
       });
     };
 
@@ -160,14 +183,20 @@ const App: React.FC = () => {
         return;
       }
       currentPort.dispatchLocalMessage({
-        type: 'playgroundNotification',
         notification: {
-          type: 'openPlayground',
           project: target.project,
-          ...(target.functionName !== undefined ? { functionName: target.functionName } : {}),
-          ...(target.testName !== undefined ? { testName: target.testName } : {}),
-          ...(target.testsetName !== undefined ? { testsetName: target.testsetName } : {}),
+          type: 'openPlayground',
+          ...(target.functionName !== undefined
+            ? { functionName: target.functionName }
+            : {}),
+          ...(target.testName !== undefined
+            ? { testName: target.testName }
+            : {}),
+          ...(target.testsetName !== undefined
+            ? { testsetName: target.testsetName }
+            : {}),
         },
+        type: 'playgroundNotification',
       });
     };
 
@@ -181,7 +210,9 @@ const App: React.FC = () => {
     }
 
     const onMessage = (event: MessageEvent<unknown>) => {
-      const message = event.data as Partial<CursorPositionMessage | OpenPlaygroundMessage> | undefined;
+      const message = event.data as
+        | Partial<CursorPositionMessage | OpenPlaygroundMessage>
+        | undefined;
       if (message?.type === 'cursorPosition' && message.position) {
         forwardCursorPosition(message.position);
       } else if (message?.type === 'openPlayground' && message.target) {
@@ -227,16 +258,21 @@ const App: React.FC = () => {
                   : 'All changes saved to disk.'
               }
             >
-              <span className={'inline-block h-2 w-2 rounded-full ' + (editorHasUnsaved ? 'bg-black/80' : 'bg-white/90')} />
+              <span
+                className={
+                  'inline-block h-2 w-2 rounded-full ' +
+                  (editorHasUnsaved ? 'bg-black/80' : 'bg-white/90')
+                }
+              />
               {editorHasUnsaved ? 'Unsaved — ⌘S to save' : 'All saved'}
             </span>
           )}
           {canShowEditor && (
             <>
               <button
-                type="button"
-                onClick={() => setShowEditor((v) => !v)}
+                className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!showEditor && activeProject === null}
+                onClick={() => setShowEditor((v) => !v)}
                 title={
                   activeProject === null
                     ? 'Waiting for a BAML project to load…'
@@ -244,7 +280,7 @@ const App: React.FC = () => {
                       ? 'Hide the code editor'
                       : 'Open the code editor alongside the playground'
                 }
-                className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
               >
                 {showEditor ? 'Playground only' : 'Open editor'}
               </button>
@@ -252,7 +288,7 @@ const App: React.FC = () => {
           )}
           {inVsCode && (
             <button
-              type="button"
+              className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted"
               onClick={() => {
                 const message: OpenInBrowserMessage = {
                   type: 'openInBrowser',
@@ -260,7 +296,7 @@ const App: React.FC = () => {
                 };
                 getVsCodeApi()?.postMessage(message);
               }}
-              className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted"
+              type="button"
             >
               Open in browser
             </button>
@@ -273,7 +309,10 @@ const App: React.FC = () => {
         mounted (hidden via CSS) so monaco-vscode-api is never re-initialized.
       */}
       {editorEverOpened && (
-        <div className="min-h-0 flex-1" style={{ display: editorActive ? 'flex' : 'none' }}>
+        <div
+          className="min-h-0 flex-1"
+          style={{ display: editorActive ? 'flex' : 'none' }}
+        >
           <Suspense
             fallback={
               <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
@@ -281,16 +320,19 @@ const App: React.FC = () => {
               </div>
             }
           >
-            <RemoteEditorView project={activeProject!} onUnsavedChange={setEditorHasUnsaved} />
+            <RemoteEditorView
+              onUnsavedChange={setEditorHasUnsaved}
+              project={activeProject!}
+            />
           </Suspense>
         </div>
       )}
       {!editorActive && (
         <ExecutionPanel
-          port={port}
           onNavigateToSource={(source: SourceNavigationTarget) => {
-            getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });
+            getVsCodeApi()?.postMessage({ source, type: 'navigateToSource' });
           }}
+          port={port}
         />
       )}
     </div>

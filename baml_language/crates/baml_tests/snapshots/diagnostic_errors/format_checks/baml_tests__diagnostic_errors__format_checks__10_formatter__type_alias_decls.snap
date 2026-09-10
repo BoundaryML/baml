@@ -285,14 +285,16 @@ type TriviaFnType = ( // 2 open paren trailing
     // 3 param leading
     x: int, // 7 type trailing
     // 8 close paren leading
-) -> string throws never; // 17 error type trailing
+) -> string throws // 15 throws trailing
+    // 16 error type leading
+    never; // 17 error type trailing
 
 // ===== Trivia in function type (block comments) =====
 type TriviaFnTypeBlock = /* 1 open paren leading */( /* 2 open paren trailing */
     /* 3 param leading */
     x: int, /* 7 type trailing */
     /* 8 close paren leading */
-) -> string throws never; /* 17 error type trailing */
+) -> string throws /* 15 throws trailing */ /* 16 error type leading */ never; /* 17 error type trailing */
 
 // ===== Trivia in wrapping function type with many params (line comments) =====
 type TriviaLongFnType = ( // 1 trailing
@@ -302,7 +304,9 @@ type TriviaLongFnType = ( // 1 trailing
     second_parameter: (int | string)[], // 13 trailing
     // 14 leading
     third_parameter: map<string, bool>, // 18 trailing
-) -> string throws never; // 27 trailing
+) -> string throws // 25 trailing
+    // 26 leading
+    never; // 27 trailing
 
 // ===== Trivia in optional type (line comments) =====
 type TriviaOptional = int?; // 3 question mark trailing

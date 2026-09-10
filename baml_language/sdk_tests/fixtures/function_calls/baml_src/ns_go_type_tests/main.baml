@@ -71,7 +71,7 @@ function get_reflected_alias() -> reflect.Type {
 }
 
 function reflected_generic_class() -> reflect.Type {
-  reflect.Type.of<user.generic_tests.GenericBox<int>>()
+  reflect.Type.of<root.generic_tests.GenericBox<int>>()
 }
 
 function round_trip_optional_type(value: reflect.Type?) -> reflect.Type? {

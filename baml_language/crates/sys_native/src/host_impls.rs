@@ -310,7 +310,7 @@ mod tests {
     // -------------------------------------------------------------------------
     #[tokio::test]
     async fn wrong_type_returns_type_error() {
-        let ops = NativeSysOps;
+        let ops = NativeSysOps::default();
         let heap = make_heap();
         let ctx = SysOpContext::empty();
         // Pass a String instead of a HostValue.

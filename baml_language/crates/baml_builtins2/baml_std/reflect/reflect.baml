@@ -46,8 +46,8 @@ class Diagnostic {
 
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
-  /// The `type` value this view wraps, restoring the unnarrowed type.
-  function as_type(self) -> reflect.Type throws never
+    /// The `type` value this view wraps, restoring the unnarrowed type.
+    function as_type(self) -> reflect.Type throws never;
 }
 
 /// The closed set of reflection views for a runtime `type` value.
@@ -69,10 +69,10 @@ type TypeKind = reflect.class.Type
 /// the held function through `reflect.call_any`; read its signature with
 /// `reflect.signature`.
 interface AnyFunction {
-  /// The held function's return type. `unknown` accepts any return.
-  type Returns = unknown
-  /// The held function's error type. `unknown` accepts any throws clause.
-  type Throws = unknown
+    /// The held function's return type. `unknown` accepts any return.
+    type Returns = unknown;
+    /// The held function's error type. `unknown` accepts any throws clause.
+    type Throws = unknown;
 }
 
 /// A read-only reflected view implemented automatically by class values.
@@ -82,92 +82,89 @@ interface AnyFunction {
 /// runtime-minted classes. Of the sealed reflection-kind views, only
 /// `reflect.class.Type` implements it.
 interface AnyClass {
-  /// Read a field as `T`. A missing field returns `null`; use `has_field` to
-  /// distinguish that case from a present field whose value is null.
-  function get<T>(self, name: string) -> T? throws reflect.errors.TypeMismatch {
-    if (!self.has_field(name)) {
-      return null
-    }
-    // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
-    // because an optional-chained call does not thread `T` to the callee.
-    let field: reflect.class.Field = self.get_field(name) else {
-      return null
-    }
-    field.value<T>()
-  }
-
-  /// Return a value-bound field handle, or `null` when no such field exists.
-  function get_field(self, name: string) -> reflect.class.Field? throws never {
-    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-      return null
-    }
-    for (let field in class_type.fields()) {
-      if (field.name == name) {
-        return reflect.class.Field {
-          name: field.name,
-          type: field.type,
-          meta: field.meta,
-          _owner: self,
+    /// Read a field as `T`. A missing field returns `null`; use `has_field` to
+    /// distinguish that case from a present field whose value is null.
+    function get<T>(self, name: string) -> T? throws reflect.errors.TypeMismatch {
+        if (!self.has_field(name)) {
+            return null;
         }
-      }
+        // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
+        // because an optional-chained call does not thread `T` to the callee.
+        let field: reflect.class.Field = self.get_field(name) else {
+            return null;
+        };
+        field.value<T>()
     }
-    null
-  }
 
-  /// Whether this value's runtime class declares a field called `name`.
-  /// `false` when the runtime type is not a class.
-  function has_field(self, name: string) -> bool throws never {
-    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-      return false
+    /// Return a value-bound field handle, or `null` when no such field exists.
+    function get_field(self, name: string) -> reflect.class.Field? throws never {
+        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+            return null;
+        };
+        for (let field in class_type.fields()) {
+            if (field.name == name) {
+                return reflect.class.Field {
+                    name: field.name,
+                    type: field.type,
+                    meta: field.meta,
+                    _owner: self,
+                };
+            }
+        }
+        null
     }
-    for (let field in class_type.fields()) {
-      if (field.name == name) {
-        return true
-      }
-    }
-    false
-  }
 
-  /// Reflected fields bound to this value for `Field.value<T>()`.
-  function list_fields(self) -> reflect.class.Field[] throws never {
-    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-      return []
+    /// Whether this value's runtime class declares a field called `name`.
+    /// `false` when the runtime type is not a class.
+    function has_field(self, name: string) -> bool throws never {
+        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+            return false;
+        };
+        for (let field in class_type.fields()) {
+            if (field.name == name) {
+                return true;
+            }
+        }
+        false
     }
-    let fields: reflect.class.Field[] = []
-    for (let field in class_type.fields()) {
-      fields.push(reflect.class.Field {
-        name: field.name,
-        type: field.type,
-        meta: field.meta,
-        _owner: self,
-      })
+
+    /// Reflected fields bound to this value for `Field.value<T>()`.
+    function list_fields(self) -> reflect.class.Field[] throws never {
+        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+            return [];
+        };
+        let fields: reflect.class.Field[] = [];
+        for (let field in class_type.fields()) {
+            fields.push(
+                reflect.class.Field {
+                    name: field.name,
+                    type: field.type,
+                    meta: field.meta,
+                    _owner: self,
+                },
+            )
+        }
+        fields
     }
-    fields
-  }
 
-  /// The rendered name of this value's concrete runtime type.
-  function name(self) -> string throws never {
-    reflect.Type.of_value(self).to_string()
-  }
-
-  /// This value's concrete runtime type.
-  function type(self) -> reflect.Type throws never {
-    reflect.Type.of_value(self)
-  }
-
-  /// The class declaration's schema metadata, or empty metadata when the
-  /// runtime type is not a class.
-  function attributes(self) -> reflect.Meta throws never {
-    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-      return reflect.Meta {
-        alias: null,
-        description: null,
-        docstring: null,
-        other: {},
-      }
+    /// The rendered name of this value's concrete runtime type.
+    function name(self) -> string throws never {
+        reflect.Type.of_value(self).to_string()
     }
-    class_type.meta()
-  }
+
+    /// This value's concrete runtime type.
+    function type(self) -> reflect.Type throws never {
+        reflect.Type.of_value(self)
+    }
+
+    /// The class declaration's schema metadata, or empty metadata when the
+    /// runtime type is not a class.
+    function attributes(self) -> reflect.Meta throws never {
+        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+            return reflect.Meta { alias: null, description: null, docstring: null, other: {} };
+        };
+        class_type.meta()
+    }
 }
 
 implement<T> AnyClass for T {}

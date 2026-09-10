@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+/** biome-ignore-all lint/style/useFilenamingConvention: a test file is named for the component it tests */
+
 import {
   ExecutionPanel,
   type ProjectUpdate,
@@ -7,6 +7,14 @@ import {
   type WorkerInMessage,
   type WorkerOutMessage,
 } from '@b/pkg-playground';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   HTMLElement.prototype.scrollTo ??= vi.fn();
@@ -16,9 +24,9 @@ const PREPARING_TEXT = 'Preparing current build…';
 
 function projectUpdate(overrides: Partial<ProjectUpdate> = {}): ProjectUpdate {
   return {
-    isBexCurrent: true,
-    functions: [{ name: 'ReadNote', kind: 'expr', origin: 'userDefined' }],
     diagnostics: [],
+    functions: [{ kind: 'expr', name: 'ReadNote', origin: 'userDefined' }],
+    isBexCurrent: true,
     ...overrides,
   };
 }
@@ -26,12 +34,12 @@ function projectUpdate(overrides: Partial<ProjectUpdate> = {}): ProjectUpdate {
 function announceProject(port: FakeRuntimePort, update: ProjectUpdate): void {
   act(() => {
     port.emit({
+      notification: { projects: [{ path: 'project' }], type: 'listProjects' },
       type: 'playgroundNotification',
-      notification: { type: 'listProjects', projects: ['project'] },
     });
     port.emit({
+      notification: { project: 'project', type: 'updateProject', update },
       type: 'playgroundNotification',
-      notification: { type: 'updateProject', project: 'project', update },
     });
   });
 }
@@ -50,7 +58,9 @@ describe('ExecutionPanel run gating (fail-closed server)', () => {
     await selectReadNote();
 
     // The previous function listing stays visible…
-    expect(screen.getByRole('button', { name: 'ReadNote' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'ReadNote' }),
+    ).toBeInTheDocument();
     // …but runtime-derived controls are gated behind the preparing state.
     expect(await screen.findByText(PREPARING_TEXT)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
@@ -76,7 +86,9 @@ describe('ExecutionPanel run gating (fail-closed server)', () => {
 
     const startRun = await waitFor(() => {
       const msg = port.sent.find(
-        (candidate): candidate is Extract<WorkerInMessage, { type: 'startRun' }> =>
+        (
+          candidate,
+        ): candidate is Extract<WorkerInMessage, { type: 'startRun' }> =>
           candidate.type === 'startRun',
       );
       expect(msg).toBeDefined();
@@ -86,10 +98,10 @@ describe('ExecutionPanel run gating (fail-closed server)', () => {
     // The fail-closed server refuses the run while a rebuild is pending.
     act(() => {
       port.emit({
-        type: 'commandError',
-        requestId: startRun.requestId,
         code: 'projectNotReady',
         message: 'Cannot start run: rebuild pending',
+        requestId: startRun.requestId,
+        type: 'commandError',
       });
     });
 
@@ -106,7 +118,9 @@ describe('ExecutionPanel run gating (fail-closed server)', () => {
     });
 
     // …and Run works again.
-    const sentBefore = port.sent.filter((msg) => msg.type === 'startRun').length;
+    const sentBefore = port.sent.filter(
+      (msg) => msg.type === 'startRun',
+    ).length;
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => {
       expect(
@@ -122,8 +136,8 @@ describe('ExecutionPanel run gating (fail-closed server)', () => {
     announceProject(
       port,
       projectUpdate({
+        diagnostics: [{ message: 'missing }', severity: 'error' }],
         isBexCurrent: false,
-        diagnostics: [{ severity: 'error', message: 'missing }' }],
       }),
     );
     await selectReadNote();

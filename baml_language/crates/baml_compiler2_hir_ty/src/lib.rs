@@ -39,4 +39,7 @@ pub mod lower;
 pub mod method_resolution;
 pub mod ops;
 pub mod package_interface;
+pub mod render;
+#[cfg(test)]
+pub(crate) mod test_heads;
 pub mod throw_facts;

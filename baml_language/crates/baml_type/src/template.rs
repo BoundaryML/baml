@@ -887,44 +887,56 @@ mod tests {
     /// resolution and realization, not projection reduction, so every query fails
     /// safe (no aliases, memberships, bounds, or reducible projections).
     struct NoCtx;
-    impl TypeContext for NoCtx {
+    impl TypeContext<TypeName> for NoCtx {
         /// A name-based context represents a declaration by its own name, so this
         /// is the identity — no resolution step, and never `None`.
-        fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
-            Some(qtn.clone())
+        fn well_known(&self, head: crate::normalize::WellKnownHead) -> Option<TypeName> {
+            Some(<TypeName as crate::normalize::SpelledHead>::well_known(
+                head,
+            ))
         }
 
-        fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty> {
+        fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty<TypeName>> {
             None
         }
-        fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
+        fn implements_interface(&self, _: &Ty<TypeName>, _: &Interface<TypeName>) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface<TypeName>> {
             Vec::new()
         }
-        fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
+        fn interface_requires(&self, _: &Interface<TypeName>, _: &Interface<TypeName>) -> bool {
             false
         }
         fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
             None
         }
-        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+        fn associated_type_bound(
+            &self,
+            _: &Interface<TypeName>,
+            _: Name,
+        ) -> Vec<Interface<TypeName>> {
             Vec::new()
         }
-        fn project(&self, _: &Ty, _: &Interface, _: &Name, _fuel: u32) -> ProjectionStep {
+        fn project(
+            &self,
+            _: &Ty<TypeName>,
+            _: &Interface<TypeName>,
+            _: &Name,
+            _fuel: u32,
+        ) -> ProjectionStep<TypeName> {
             ProjectionStep::Opaque
         }
     }
 
-    /// Build a `RealizedTy` frame argument from a `RuntimeTy` constructor.
-    fn r(ty: RuntimeTy) -> RealizedTy {
+    /// Build a `RealizedTy<TypeName>` frame argument from a `RuntimeTy<TypeName>` constructor.
+    fn r(ty: RuntimeTy<TypeName>) -> RealizedTy<TypeName> {
         RealizedTy::try_from(ty).expect("test arg is realized")
     }
 
-    /// Materialize against a frame, upcasting the realized result to `RuntimeTy`
-    /// so it can be compared with `RuntimeTy`'s ergonomic constructors.
-    fn sub(tmpl: &TyTemplate, args: &[RealizedTy]) -> RuntimeTy {
+    /// Materialize against a frame, upcasting the realized result to `RuntimeTy<TypeName>`
+    /// so it can be compared with `RuntimeTy<TypeName>`'s ergonomic constructors.
+    fn sub(tmpl: &TyTemplate<TypeName>, args: &[RealizedTy<TypeName>]) -> RuntimeTy<TypeName> {
         RuntimeTy::from(
             tmpl.substitute(args, &NoCtx)
                 .expect("substitution realizes"),
@@ -1026,11 +1038,11 @@ mod tests {
     }
 
     /// `(#0 as Cyclic).member` — a projection whose base is a realized frame ref.
-    fn cyclic_projection(member: crate::Name) -> TyTemplate {
+    fn cyclic_projection(member: crate::Name) -> TyTemplate<TypeName> {
         TyTemplate::AssociatedTypeProjection {
             base: Box::new(TyTemplate::TypeArgRef(0)),
             interface: Box::new(TyTemplateInterface {
-                name: crate::TypeName::local(crate::Name::new("Cyclic")),
+                name: TypeName::local(crate::Name::new("Cyclic")),
                 generics: Box::new([]),
                 associated_types: Box::new([]),
             }),
@@ -1043,32 +1055,44 @@ mod tests {
     /// again — a cyclic associated-type binding. Without the fuel backstop this
     /// recurses forever; with it, the chain exhausts its budget and fails.
     struct CyclicCtx;
-    impl TypeContext for CyclicCtx {
+    impl TypeContext<TypeName> for CyclicCtx {
         /// A name-based context represents a declaration by its own name, so this
         /// is the identity — no resolution step, and never `None`.
-        fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
-            Some(qtn.clone())
+        fn well_known(&self, head: crate::normalize::WellKnownHead) -> Option<TypeName> {
+            Some(<TypeName as crate::normalize::SpelledHead>::well_known(
+                head,
+            ))
         }
 
-        fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty> {
+        fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty<TypeName>> {
             None
         }
-        fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
+        fn implements_interface(&self, _: &Ty<TypeName>, _: &Interface<TypeName>) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface<TypeName>> {
             Vec::new()
         }
-        fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
+        fn interface_requires(&self, _: &Interface<TypeName>, _: &Interface<TypeName>) -> bool {
             false
         }
         fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
             None
         }
-        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+        fn associated_type_bound(
+            &self,
+            _: &Interface<TypeName>,
+            _: Name,
+        ) -> Vec<Interface<TypeName>> {
             Vec::new()
         }
-        fn project(&self, _: &Ty, _: &Interface, member: &Name, fuel: u32) -> ProjectionStep {
+        fn project(
+            &self,
+            _: &Ty<TypeName>,
+            _: &Interface<TypeName>,
+            member: &Name,
+            fuel: u32,
+        ) -> ProjectionStep<TypeName> {
             // The binding for `member` is the same projection, so realizing it
             // re-enters `project`. The threaded `fuel` bounds the cycle; an
             // exhausted budget surfaces as a substitution error (→ `Opaque`).
@@ -1109,13 +1133,13 @@ mod tests {
 
     #[test]
     fn concrete_array_is_fully_concrete() {
-        let tmpl: TyTemplate = TyTemplate::list(TyTemplate::from(RealizedTy::int()));
+        let tmpl: TyTemplate<TypeName> = TyTemplate::list(TyTemplate::from(RealizedTy::int()));
         assert!(tmpl.is_fully_concrete());
     }
 
     #[test]
     fn union_of_concrete_is_fully_concrete() {
-        let tmpl: TyTemplate = TyTemplate::union([
+        let tmpl: TyTemplate<TypeName> = TyTemplate::union([
             TyTemplate::from(RealizedTy::int()),
             TyTemplate::from(RealizedTy::string()),
         ]);
@@ -1128,7 +1152,7 @@ mod tests {
 
     #[test]
     fn union_containing_type_arg_ref_not_concrete() {
-        let tmpl: TyTemplate = TyTemplate::union([
+        let tmpl: TyTemplate<TypeName> = TyTemplate::union([
             TyTemplate::from(RealizedTy::int()),
             TyTemplate::TypeArgRef(0),
         ]);
@@ -1138,14 +1162,14 @@ mod tests {
     #[test]
     fn class_with_type_arg_ref_substitution() {
         let tmpl = TyTemplate::class(
-            crate::TypeName::local(crate::Name::new("Container")),
+            TypeName::local(crate::Name::new("Container")),
             Box::new([TyTemplate::TypeArgRef(0)]),
         );
         let user = RuntimeTy::user_class("User");
         assert_eq!(
             sub(&tmpl, &[r(user.clone())]),
             RuntimeTy::class_with_args(
-                crate::TypeName::local(crate::Name::new("Container")),
+                TypeName::local(crate::Name::new("Container")),
                 Box::new([user])
             )
         );
@@ -1154,15 +1178,12 @@ mod tests {
 
     #[test]
     fn class_no_args_is_fully_concrete() {
-        let tmpl = TyTemplate::class(
-            crate::TypeName::local(crate::Name::new("User")),
-            Box::new([]),
-        );
+        let tmpl = TyTemplate::class(TypeName::local(crate::Name::new("User")), Box::new([]));
         assert!(tmpl.is_fully_concrete());
         assert_eq!(
             sub(&tmpl, &[]),
             RuntimeTy::Class(
-                crate::TypeName::local(crate::Name::new("User")),
+                TypeName::local(crate::Name::new("User")),
                 Box::new([]),
                 crate::TyAttr::default()
             )

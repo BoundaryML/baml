@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // device for the type it names, so it denotes the very same implementor.
 
 interface Flagged {
-    function flag(self) -> string throws never
+    function flag(self) -> string throws never;
 }
 
 class Ok {

@@ -6,8 +6,7 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
+use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
@@ -20,22 +19,35 @@ const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/comp
 
 #[test]
 fn precompiled_log_defaults_match_source_defaults() {
-    fn mounted_log_db(bytes: Vec<u8>) -> ProjectDatabase {
-        let mut db = make_db();
-        let log_root = db
-            .source_roots()
-            .into_iter()
-            .find(|root| root.package(&db).as_str() == "log")
-            .expect("log source root");
-        db.remove_source_root(log_root);
-        db.set_precompiled_stdlib_packages([("log".to_owned(), bytes)].into());
+    fn mounted_log_db(interfaces: &std::collections::BTreeMap<String, Vec<u8>>) -> ProjectDatabase {
+        let mut db = ProjectDatabase::new();
+        db.ensure_precompiled_stdlib(interfaces);
+        db.add_source_root(baml_db::SourceRootSpec::new(
+            ".",
+            baml_base::SourceRootKind::Workspace,
+        ))
+        .unwrap();
         db
     }
 
     let source_db = make_db();
-    let mut interface =
-        package_interface(&source_db, PackageId::new(&source_db, Name::new("log"))).clone();
-    let bytes = borsh::to_vec(&interface).expect("serialize log interface");
+    let mut interfaces = source_db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&source_db) == baml_base::SourceRootKind::Stdlib)
+        .map(|root| {
+            (
+                root.self_name(&source_db).as_ref().unwrap().to_string(),
+                borsh::to_vec(&export_interface(&source_db, root)).unwrap(),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut interface = export_interface(
+        &source_db,
+        baml_compiler2_hir::package::spelling(&source_db)
+            .root(&Name::new("log"))
+            .unwrap(),
+    );
     let source = r#"
 function probe() -> void {
     log.info(11)
@@ -50,7 +62,7 @@ function probe() -> void {
     let expected = render_mir(&source_db, source_file);
     assert!(!expected.contains("omitted"), "{expected}");
 
-    let mut mounted_db = mounted_log_db(bytes);
+    let mut mounted_db = mounted_log_db(&interfaces);
     let mounted_file = mounted_db.file("test.baml", source);
     assert_no_diagnostic_errors(&mounted_db);
     assert_eq!(render_mir(&mounted_db, mounted_file), expected);
@@ -64,7 +76,8 @@ function probe() -> void {
         .builtin_defaults[1] = Some(baml_compiler2_hir_ty::callable::BuiltinDefault::Literal(
         baml_base::Literal::String("from-export".to_owned()),
     ));
-    let mut mounted_db = mounted_log_db(borsh::to_vec(&interface).unwrap());
+    interfaces.insert("log".to_owned(), borsh::to_vec(&interface).unwrap());
+    let mut mounted_db = mounted_log_db(&interfaces);
     let mounted_file = mounted_db.file("test.baml", source);
     let explicit_source =
         source.replace("log.info(11)", "log.info(11, event_name = \"from-export\")");
@@ -152,11 +165,12 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
-    )
-    .clone();
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
+            .unwrap(),
+    );
     let exported = interface
         .functions
         .values_mut()
@@ -168,15 +182,10 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
     exported.linkability = ExternalLinkability::Linkable;
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -230,11 +239,12 @@ function forged_type_of<T>() -> reflect.Type {
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
-    )
-    .clone();
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
+            .unwrap(),
+    );
     let mut configured = 0;
     for exported in interface
         .functions
@@ -243,14 +253,14 @@ function forged_type_of<T>() -> reflect.Type {
     {
         let target = match exported.name.as_str() {
             "forged_log" => ExternalCallTarget::Free {
-                package: Name::new("log"),
-                namespace: Vec::new(),
-                name: Name::new("info"),
+                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
             },
             "forged_type_of" => ExternalCallTarget::Free {
-                package: Name::new("reflect"),
-                namespace: vec![Name::new("Type")],
-                name: Name::new("of"),
+                function: baml_type::TypeName::new(
+                    Name::new("reflect"),
+                    vec![Name::new("Type")],
+                    Name::new("of"),
+                ),
             },
             _ => continue,
         };
@@ -264,15 +274,10 @@ function forged_type_of<T>() -> reflect.Type {
     );
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -883,16 +888,17 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "function accept<T>(value: T) -> T { value }",
     );
     baml_db::testing::assert_no_diagnostic_errors(&library);
-    let interface = baml_compiler2_hir_ty::package_interface::package_interface(
+    let interface = baml_compiler2_hir_ty::package_interface::export_interface(
         &library,
-        baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
+        baml_compiler2_hir::package::spelling(&library)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize mounted interface");
 
     let mut db = make_db();
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     let file = db.file(
         "test.baml",
         r#"

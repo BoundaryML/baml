@@ -36,7 +36,7 @@
 //!
 //! - `ResolvedName::Unknown` or cursor not on a WORD token — returns `None`.
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler_syntax::{SyntaxKind, SyntaxToken};
 use baml_compiler2_hir::{contributions::Definition, loc::FunctionLoc};
 use baml_compiler2_hir_ty::package_interface::ExportedFunction;
@@ -398,6 +398,9 @@ pub fn type_at(
 ) -> Option<TypeInfo> {
     // ── Step 1: find the token at the cursor ─────────────────────────────────
     let token = crate::syntax::find_token_at_offset(db, file, offset)?;
+    // The reader is wherever the cursor is: paths in the answer are spelled
+    // from the file's package.
+    let viewer = baml_compiler2_hir::file_package::file_package(db, file).root;
 
     if let Some(info) = literal_type_info(&token) {
         return Some(info);
@@ -420,9 +423,11 @@ pub fn type_at(
     // templates hover their driver function.
     if let Some(position) = crate::resolve::template_position_at(db, file, offset) {
         return match position {
-            crate::resolve::TemplatePosition::Driver(func) => {
-                Some(type_info_for_definition(db, Definition::Function(func)))
-            }
+            crate::resolve::TemplatePosition::Driver(func) => Some(type_info_for_definition(
+                db,
+                viewer,
+                Definition::Function(func),
+            )),
             crate::resolve::TemplatePosition::DefaultText => Some(TypeInfo::Documentation {
                 label: "template string".to_string(),
                 detail: "Backtick template literal (BEP-049). `${…}` holes interpolate \
@@ -442,7 +447,7 @@ form stringifies each value and produces a `string`."
     // and navigation provably agree on `+`/`<`/`[` too.
     if token.kind() != SyntaxKind::WORD {
         let target = crate::resolve::symbol_at(db, file, offset)?;
-        return target_type_info(db, target);
+        return target_type_info(db, viewer, target);
     }
 
     let name_text = token.text();
@@ -461,7 +466,7 @@ form stringifies each value and produces a `string`."
     let Some(target) = crate::resolve::symbol_at(db, file, offset) else {
         return template_frame_param_info(db, file, offset, &name);
     };
-    target_type_info(db, target)
+    target_type_info(db, viewer, target)
 }
 
 /// Build `TypeInfo` for a resolved [`SymbolTarget`]. Every arm reads
@@ -469,12 +474,13 @@ form stringifies each value and produces a `string`."
 /// no span-equality matching, no name heuristics.
 fn target_type_info(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
     target: crate::resolve::SymbolTarget<'_>,
 ) -> Option<TypeInfo> {
     use crate::resolve::SymbolTarget;
 
     match target {
-        SymbolTarget::Item(def) => Some(type_info_for_definition(db, def)),
+        SymbolTarget::Item(def) => Some(type_info_for_definition(db, viewer, def)),
         SymbolTarget::Local {
             func,
             func_scope,
@@ -498,7 +504,7 @@ fn target_type_info(
                 name: field.name.as_str().to_string(),
                 ty,
                 is_let: false,
-                owner: Some(render::display_owner_ty(&self_ty)),
+                owner: Some(render::display_owner_ty(db, &self_ty)),
             })
         }
         SymbolTarget::Variant {
@@ -516,7 +522,7 @@ fn target_type_info(
             );
             Some(TypeInfo::Symbol {
                 declaration: format!("{}: {}", variant.name.as_str(), enum_data.name.as_str()),
-                owner: Some(qtn.to_string()),
+                owner: Some(render::canonical_path(db, &qtn)),
                 docstring: variant.docstring.clone(),
             })
         }
@@ -546,7 +552,7 @@ fn target_type_info(
                     iface.file(db),
                     hover_sig_style(),
                 ),
-                owner: Some(qtn.to_string()),
+                owner: Some(render::canonical_path(db, &qtn)),
                 docstring: method.docstring.clone(),
             })
         }
@@ -561,7 +567,7 @@ fn target_type_info(
             );
             Some(TypeInfo::Symbol {
                 declaration,
-                owner: Some(qtn.to_string()),
+                owner: Some(render::canonical_path(db, &qtn)),
                 docstring: None,
             })
         }
@@ -577,7 +583,7 @@ fn target_type_info(
                 name: field.name.as_str().to_string(),
                 ty: render::display_type_ref(&iface_data.type_refs, field.type_ref),
                 is_let: false,
-                owner: Some(qtn.to_string()),
+                owner: Some(render::canonical_path(db, &qtn)),
             })
         }
     }
@@ -814,7 +820,9 @@ fn keyword_type_info(keyword: &str) -> Option<TypeInfo> {
 /// names.
 fn owning_path(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> String {
     let pkg = baml_compiler2_hir::file_package::file_package(db, file);
-    let mut path = pkg.package.as_str().to_string();
+    let mut path = baml_compiler2_hir::package::spelling(db)
+        .of(pkg.root)
+        .to_string();
     for segment in &pkg.namespace_path {
         path.push('.');
         path.push_str(segment.as_str());
@@ -839,19 +847,22 @@ fn method_owner_path(
     match item_data::method_owner(db, func)? {
         MethodOwner::Class(class) => {
             let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class);
-            Some(render::display_owner_ty(&self_ty))
+            Some(render::display_owner_ty(db, &self_ty))
         }
         MethodOwner::Interface(iface) => {
             let name = &item_data::interface_data(db, iface).name;
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(db, Definition::Interface(iface), name);
-            Some(qtn.to_string())
+            Some(render::canonical_path(db, &qtn))
         }
         MethodOwner::Impl(block) => {
             // `impl_facts` is `None` when the block's header does not resolve
             // to an interface — honest absence beats a wrong owner.
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
-            Some(render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
+            Some(render::display_owner_ty(
+                db,
+                &facts.for_ty_pattern.to_plain(),
+            ))
         }
     }
 }
@@ -930,7 +941,9 @@ fn generic_type_parameter_info_at(
                 Some(item_data::MethodOwner::Impl(block)) => {
                     let subject = baml_compiler2_hir_ty::impls::impl_facts(db, block)
                         .resolved()
-                        .map(|facts| render::display_owner_ty(&facts.for_ty_pattern.to_plain()));
+                        .map(|facts| {
+                            render::display_owner_ty(db, &facts.for_ty_pattern.to_plain())
+                        });
                     match subject {
                         Some(subject) => format!("method {}.{}", subject, data.name.as_str()),
                         None => format!("function {}", data.name.as_str()),
@@ -963,7 +976,7 @@ fn generic_type_parameter_info_at(
                     |facts| {
                         format!(
                             "implements for {}",
-                            render::display_owner_ty(&facts.for_ty_pattern.to_plain())
+                            render::display_owner_ty(db, &facts.for_ty_pattern.to_plain())
                         )
                     },
                 );
@@ -1037,13 +1050,18 @@ fn generic_type_parameter_info_at(
 
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
-/// Build `TypeInfo` for a top-level item definition.
-pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> TypeInfo {
+/// Build `TypeInfo` for a top-level item definition. `viewer` is the package
+/// the reader is in: the addressable paths in the result are spelled from it.
+pub fn type_info_for_definition(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: SourceRoot,
+    def: Definition<'_>,
+) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
             let file = func_loc.file(db);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let pkg_id = pkg_info.root;
             let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
             let data = item_data::function_data(db, func_loc);
 
@@ -1133,7 +1151,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 .collect();
 
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &class_data.name);
-            let canonical_fqn = qtn.render_addressable();
+            let canonical_fqn = render::addressable_path(db, viewer, &qtn);
             let methods = class_method_sigs(db, class_loc);
 
             let generic_params =
@@ -1201,7 +1219,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
                 default_methods,
                 docstring: iface.docstring.clone(),
                 owner: Some(owning_path(db, iface_loc.file(db))),
-                canonical_fqn: qtn.render_addressable(),
+                canonical_fqn: render::addressable_path(db, viewer, &qtn),
             }
         }
 
@@ -1575,7 +1593,7 @@ pub(crate) fn collect_class_methods_impl(
     // which lowers class methods 1:1 with `class_data.methods` (same order,
     // including auto-derived entries), so positional indices line up.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = pkg_info.root;
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
     let exported = iface
         .lookup_type(&pkg_info.namespace_path, &class_data.name)
@@ -1640,7 +1658,7 @@ pub(crate) fn class_impl_methods<'db>(
 )> {
     let file = class_loc.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
 
     let mut out = Vec::new();

@@ -151,6 +151,24 @@ function env_ref_desugar.EnvRefBadClientFn@spec() -> ai.FunctionSpec<string> {
     call ai.tools.Toolbox.new
     store_var _3
     call user.env_ref_desugar.EnvRefBadSelector
+    store_var _6
+    load_type never
+    load_var _6
+    make_closure .<lambda(EnvRefBadClientFn@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "EnvRefBadClientFn"
@@ -299,7 +317,23 @@ function env_ref_desugar.EnvRefDesugarFn@spec() -> ai.FunctionSpec<string> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.env_ref_desugar.EnvRefDesugarClient
+    make_closure .<lambda(EnvRefDesugarFn@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "EnvRefDesugarFn"
@@ -424,6 +458,24 @@ function env_ref_desugar.EnvRefDynClientFn@spec() -> ai.FunctionSpec<string> {
     call ai.tools.Toolbox.new
     store_var _3
     call user.env_ref_desugar.EnvRefDynSelector
+    store_var _6
+    load_type never
+    load_var _6
+    make_closure .<lambda(EnvRefDynClientFn@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "EnvRefDynClientFn"

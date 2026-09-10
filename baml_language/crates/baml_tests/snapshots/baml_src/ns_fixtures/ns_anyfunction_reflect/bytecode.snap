@@ -84,7 +84,24 @@ function fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.fixtures.anyfunction_reflect.RuntimeEnumClient
+    load_type #0
+    make_closure .<lambda(RuntimeClassify@spec, 1)>, captures=0, ntypeargs=1
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "RuntimeClassify"

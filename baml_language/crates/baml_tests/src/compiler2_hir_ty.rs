@@ -9,8 +9,8 @@ mod tests {
 
     use crate::engine::TestDbExt;
 
-    fn render(ty: &baml_type::Ty) -> String {
-        ty.render_canonical()
+    fn render(db: &ProjectDatabase, ty: &baml_type::Ty) -> String {
+        ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db))
     }
 
     fn signature_of(
@@ -30,8 +30,8 @@ mod tests {
         function_signature(db, function).clone()
     }
 
-    fn param_renders(signature: &FunctionSignature) -> Vec<String> {
-        signature.params.iter().map(|p| render(&p.ty)).collect()
+    fn param_renders(db: &ProjectDatabase, signature: &FunctionSignature) -> Vec<String> {
+        signature.params.iter().map(|p| render(db, &p.ty)).collect()
     }
 
     #[test]
@@ -60,7 +60,7 @@ function f(
         );
         let signature = signature_of(&db, file, "f");
         assert_eq!(
-            param_renders(&signature),
+            param_renders(&db, &signature),
             [
                 "int",
                 "user.Box<int>",
@@ -73,8 +73,8 @@ function f(
                 "user.Box<!error>",
             ]
         );
-        assert_eq!(render(&signature.ret), "string");
-        assert_eq!(render(&signature.throws), "never");
+        assert_eq!(render(&db, &signature.ret), "string");
+        assert_eq!(render(&db, &signature.throws), "never");
     }
 
     #[test]
@@ -99,7 +99,7 @@ function f(
         );
         let signature = signature_of(&db, file, "f");
         assert_eq!(
-            param_renders(&signature),
+            param_renders(&db, &signature),
             [
                 // An existential denotes one complete instantiation: the
                 // unpinned, defaultless `Out` is diagnosed (E0191-analog)
@@ -132,15 +132,15 @@ function pair<T>(x: T, y: T[]) -> T throws never {
 "#,
         );
         let pair = signature_of(&db, file, "pair");
-        assert_eq!(param_renders(&pair), ["T", "T[]"]);
-        assert_eq!(render(&pair.ret), "T");
+        assert_eq!(param_renders(&db, &pair), ["T", "T[]"]);
+        assert_eq!(render(&db, &pair.ret), "T");
 
         // Method frames prepend the class generics: T = 0, U = 1. The
         // `self` receiver is the owner class applied to its own params
         // (S11 `class_self_ty`).
         let method = signature_of(&db, file, "m");
-        assert_eq!(param_renders(&method), ["user.Holder<T>", "T", "U"]);
-        assert_eq!(render(&method.ret), "T");
+        assert_eq!(param_renders(&db, &method), ["user.Holder<T>", "T", "U"]);
+        assert_eq!(render(&db, &method.ret), "T");
         assert_eq!(
             method
                 .generic_params
@@ -168,7 +168,7 @@ function f(
         );
         let signature = signature_of(&db, file, "f");
         assert_eq!(
-            param_renders(&signature),
+            param_renders(&db, &signature),
             ["user.util.Helper", "baml.future.Future<int, never>"]
         );
 
@@ -178,7 +178,7 @@ function f(
             "function g(h: Helper) -> int throws never { 1 }",
         );
         let inside = signature_of(&db, util_file, "g");
-        assert_eq!(param_renders(&inside), ["user.util.Helper"]);
+        assert_eq!(param_renders(&db, &inside), ["user.util.Helper"]);
     }
 
     #[test]
@@ -206,7 +206,7 @@ type Loop = Loop[]
             .expect("Pair exists");
         let fields: Vec<(String, String)> = class_field_types(&db, class)
             .iter()
-            .map(|(name, ty)| (name.to_string(), render(ty)))
+            .map(|(name, ty)| (name.to_string(), render(&db, ty)))
             .collect();
         assert_eq!(
             fields,
@@ -229,6 +229,6 @@ type Loop = Loop[]
                     == "Loop"
             })
             .expect("alias exists");
-        assert_eq!(render(&type_alias_value(&db, alias)), "user.Loop[]");
+        assert_eq!(render(&db, &type_alias_value(&db, alias)), "user.Loop[]");
     }
 }

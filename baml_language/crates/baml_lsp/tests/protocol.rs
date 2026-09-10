@@ -467,6 +467,310 @@ fn subdirectory_open_merges_into_the_discovered_project() {
     assert_eq!(last.version, Some(2));
 }
 
+/// Two workspace folders are two projects in one server: each is its own
+/// root with its own diagnostics, and a declaration in one never reaches
+/// the other — the same class name in both is two types.
+#[test]
+fn two_workspace_folders_are_two_roots() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(
+        a.join("baml_src/point.baml"),
+        "class Point {\n    x int\n}\nfunction use_a(p: Point) -> int {\n    p.x\n}\n",
+    );
+    h.fs.write(
+        b.join("baml_src/point.baml"),
+        "class Point {\n    y string\n}\nfunction use_b(p: Point) -> string {\n    p.y\n}\n",
+    );
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+
+    let mut roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    roots.sort();
+    assert_eq!(roots, vec![a.clone(), b.clone()], "one root per folder");
+
+    // Each project checks clean against its own `Point`: were the two
+    // roots one world, `Point` would be declared twice.
+    let a_uri = Url::from_file_path(a.join("baml_src/point.baml")).unwrap();
+    let b_uri = Url::from_file_path(b.join("baml_src/point.baml")).unwrap();
+    for uri in [&a_uri, &b_uri] {
+        let last = h.sender(s).publications_for(uri).last().cloned().unwrap();
+        assert!(last.diagnostics.is_empty(), "{uri}: {last:?}");
+    }
+
+    // Hover in `b` resolves `b`'s `Point`, never `a`'s.
+    let b_source =
+        "class Point {\n    y string\n}\nfunction use_b(p: Point) -> string {\n    p.y\n}\n";
+    h.open(s, &b_uri, 1, b_source);
+    let response = h
+        .request(
+            s,
+            "textDocument/hover",
+            position_params(&b_uri, pos_of(b_source, "Point) -> string")),
+        )
+        .expect("hover succeeds");
+    let markdown = response["contents"]["value"].as_str().expect("markdown");
+    assert!(markdown.contains("y: string"), "b's Point: {markdown}");
+    assert!(!markdown.contains("x: int"), "not a's Point: {markdown}");
+
+    // An error in `a` is published for `a` alone; `b` is untouched.
+    let bad_uri = Url::from_file_path(a.join("baml_src/bad.baml")).unwrap();
+    h.open(s, &bad_uri, 1, BAD_SOURCE);
+    h.settle();
+    assert!(has_error(
+        h.sender(s).publications_for(&bad_uri).last().unwrap()
+    ));
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(b_last.diagnostics.is_empty(), "b stays clean: {b_last:?}");
+}
+
+/// A folder added after `initialize` is discovered and served like the
+/// first: there is no one-workspace slot to lose.
+#[test]
+fn a_folder_added_later_is_discovered_not_refused() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), "class A {\n    x int\n}\n");
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        std::slice::from_ref(&a),
+    );
+    h.settle();
+    assert_eq!(h.state.roots().workspace_roots().count(), 1);
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+            "removed": [],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+
+    let mut roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    roots.sort();
+    assert_eq!(
+        roots,
+        vec![a, b.clone()],
+        "the second folder is a second root"
+    );
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    assert!(
+        has_error(h.sender(s).publications_for(&b_uri).last().unwrap()),
+        "the second project's diagnostics are published"
+    );
+}
+
+/// A folder withdrawn after `initialize` takes its projects with it: the
+/// root is removed and its markers cleared in every editor. Projects under
+/// the folders that remain are untouched.
+#[test]
+fn a_folder_removed_later_drops_its_roots() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), BAD_SOURCE);
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    assert!(has_error(
+        h.sender(s).publications_for(&b_uri).last().unwrap()
+    ));
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+
+    let roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(roots, vec![a], "the withdrawn folder's project is gone");
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        b_last.diagnostics.is_empty(),
+        "its markers are cleared: {b_last:?}"
+    );
+    assert!(
+        has_error(h.sender(s).publications_for(&a_uri).last().unwrap()),
+        "the remaining project still stands"
+    );
+}
+
+/// An open document keeps its project served after its folder is
+/// withdrawn; closing the document lets the project go — the rule that
+/// removes a provisional root with its last document, applied to a
+/// discovered one.
+#[test]
+fn an_open_document_keeps_a_withdrawn_folders_project_until_it_closes() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), "class A {\n    x int\n}\n");
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    h.open(s, &b_uri, 1, BAD_SOURCE);
+    h.settle();
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+    let roots = |h: &Harness| -> Vec<PathBuf> {
+        let mut roots: Vec<PathBuf> = h
+            .state
+            .roots()
+            .workspace_roots()
+            .map(|entry| entry.path.clone())
+            .collect();
+        roots.sort();
+        roots
+    };
+    assert_eq!(
+        roots(&h),
+        vec![a.clone(), b],
+        "the open document keeps its project"
+    );
+    assert!(
+        has_error(h.sender(s).publications_for(&b_uri).last().unwrap()),
+        "and it is still checked"
+    );
+
+    h.close(s, &b_uri);
+    h.settle();
+    assert_eq!(roots(&h), vec![a], "closing it releases the project");
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        b_last.diagnostics.is_empty(),
+        "its markers are cleared: {b_last:?}"
+    );
+}
+
+/// A folder the host itself announces (`baml lsp --workspace`, the root
+/// `baml playground` starts on) is discovered before any client connects,
+/// its standing diagnostics reach the session that initializes later, and a
+/// client withdrawing the same folder does not take the host's project
+/// with it.
+#[test]
+fn a_host_folder_is_discovered_without_a_session_and_outlives_a_withdrawal() {
+    let mut h = Harness::new();
+    let a = h.ws.join("a");
+    h.fs.add_project(&a);
+    h.fs.write(a.join("baml_src/a.baml"), BAD_SOURCE);
+    h.state.add_host_folder(&a);
+    h.settle();
+    let roots = |h: &Harness| -> Vec<PathBuf> {
+        h.state
+            .roots()
+            .workspace_roots()
+            .map(|entry| entry.path.clone())
+            .collect()
+    };
+    assert_eq!(
+        roots(&h),
+        vec![a.clone()],
+        "discovered with no session open"
+    );
+
+    let s = SessionKey(1);
+    h.init_session_with_folders(s, &[], std::slice::from_ref(&a));
+    h.settle();
+    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
+    assert!(
+        has_error(h.sender(s).publications_for(&a_uri).last().unwrap()),
+        "the late session receives the standing error"
+    );
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&a).unwrap(), "name": "a" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+    assert_eq!(
+        roots(&h),
+        vec![a],
+        "the host's folder still covers the project"
+    );
+    assert!(has_error(
+        h.sender(s).publications_for(&a_uri).last().unwrap()
+    ));
+}
+
 /// A watched-files event touches exactly its URIs: three reads, no walk.
 #[test]
 fn watched_files_reload_exactly_the_named_paths() {
@@ -1694,13 +1998,12 @@ fn a_late_session_receives_standing_diagnostics_in_full() {
     );
 }
 
-/// A scratch document outside every project mints a provisional root that
-/// holds the single-workspace slot; the real project's discovery is refused
-/// while it lives. Closing the scratch document frees the slot, and the
-/// owner re-runs discovery so the real project loads without further client
-/// action.
+/// A scratch document outside every project mints a provisional root, and
+/// the real project announced afterwards is discovered and served beside
+/// it: there is no one-workspace slot to hold. Closing the scratch document
+/// removes only its own root.
 #[test]
-fn closing_a_detached_document_frees_the_workspace_slot() {
+fn a_detached_document_and_a_discovered_project_are_served_together() {
     let mut h = Harness::new();
     h.fs.add_project(&h.ws);
     h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
@@ -1718,13 +2021,10 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(
-        roots,
-        vec![scratch.clone()],
-        "the scratch dir holds the slot"
-    );
+    assert_eq!(roots, vec![scratch.clone()], "the scratch dir is a root");
+    assert!(h.state.is_provisional_root(&scratch));
 
-    // The client announces the real workspace folder; the guard refuses it.
+    // The client announces the real workspace folder: discovered at once.
     h.notify(
         s,
         "workspace/didChangeWorkspaceFolders",
@@ -1737,16 +2037,29 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
     )
     .unwrap();
     h.settle();
-    let roots: Vec<PathBuf> = h
+    let mut roots: Vec<PathBuf> = h
         .state
         .roots()
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(roots, vec![scratch], "the slot is still held");
+    roots.sort();
+    let mut expected = vec![scratch.clone(), h.ws.clone()];
+    expected.sort();
+    assert_eq!(roots, expected, "both roots are served");
+    let main_uri = h.uri("main.baml");
+    let last = h
+        .sender(s)
+        .publications_for(&main_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        last.diagnostics.is_empty(),
+        "the project checks clean: {last:?}"
+    );
 
-    // Closing the scratch document removes its provisional root; the freed
-    // slot triggers rediscovery of the announced folder.
+    // Closing the scratch document removes its provisional root and nothing else.
     h.close(s, &scratch_uri);
     h.settle();
     let roots: Vec<PathBuf> = h
@@ -1755,7 +2068,8 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(roots, vec![h.ws.clone()], "the real project loaded");
+    assert_eq!(roots, vec![h.ws.clone()], "only the project remains");
+    assert!(!h.state.is_provisional_root(&scratch));
 }
 
 /// A diagnostics pass unwound by `PropagatedPanic` retries; one unwound by

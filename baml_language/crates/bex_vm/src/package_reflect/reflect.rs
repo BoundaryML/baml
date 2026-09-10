@@ -204,8 +204,11 @@ impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
     /// Resolution is the VM's: a head is a pointer into the one heap this
     /// package lives on, so scoping the *facts* to a package does not change
     /// how a name becomes a head.
-    fn head_lookup(&self, qtn: &baml_type::QualifiedTypeName) -> Option<bex_vm_types::TypeHead> {
-        TypeContext::head_lookup(self.vm, qtn)
+    fn well_known(
+        &self,
+        head: baml_type::normalize::WellKnownHead,
+    ) -> Option<bex_vm_types::TypeHead> {
+        TypeContext::well_known(self.vm, head)
     }
 
     fn alias_def(&self, head: &bex_vm_types::TypeHead) -> Option<Ty> {
@@ -772,7 +775,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let mut dependencies = IndexMap::<String, HeapPtr>::new();
         for (alias, value) in packages {
             // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
+            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),
@@ -2283,7 +2286,7 @@ impl BamlClassSession for PackageReflectImpl {
         let mut dependencies = IndexMap::new();
         for (alias, value) in packages {
             // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
+            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),

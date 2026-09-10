@@ -88,7 +88,7 @@ class Table {
 function table_from_json(j: baml.json.json) -> Table throws baml.json.DecodeError {
     match (j) {
         map<string, baml.json.json> => {
-            let items: map<string, Item> = map {  };
+            let items: map<string, Item> = map {};
             for (let key in j.keys()) {
                 items[key]
                     = match (j[key]) {

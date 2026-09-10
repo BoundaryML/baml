@@ -224,107 +224,115 @@ fn ai.Journal.append_all(self: ai.Journal, events: (ai.events.AssistantMessage |
     }
 }
 
-fn ai.clients.resolve(selector: string | baml.env.Ref | ai.Client) -> ai.Client {
+fn ai.clients.resolve(selector: string | baml.env.Ref | ai.Client, providers: (string, string) -> null | ai.Client throws never, prefixes: string[]) -> ai.Client {
     // Locals:
     let _0: ai.Client // _0 // return
     let _1: string | baml.env.Ref | ai.Client // selector // param
-    let _2: string | baml.env.Ref | ai.Client
-    let _3: string // shorthand
-    let _4: string
-    let _5: string | baml.env.Ref | ai.Client
-    let _6: baml.env.Ref // named
-    let _7: string | null
-    let _8: string | null
-    let _9: string // value
-    let _10: string
-    let _11: ai.errors.InvalidRequest
-    let _12: string
+    let _2: (string, string) -> null | ai.Client throws never // providers // param
+    let _3: string[] // prefixes // param
+    let _4: string | baml.env.Ref | ai.Client
+    let _5: string // shorthand
+    let _6: string
+    let _7: reflect.Type
+    let _8: string | baml.env.Ref | ai.Client
+    let _9: baml.env.Ref // named
+    let _10: string | null
+    let _11: string | null
+    let _12: string // value
     let _13: string
-    let _14: string
-    let _15: string
+    let _14: reflect.Type
+    let _15: ai.errors.InvalidRequest
     let _16: string
     let _17: string
     let _18: string
     let _19: string
-    let _20: reflect.Type
+    let _20: string
     let _21: string
     let _22: string
-    let _23: reflect.Type
-    let _24: string
+    let _23: string
+    let _24: reflect.Type
     let _25: string
-    let _26: reflect.Type
-    let _27: ai.Client // existing
-    let _28: string
+    let _26: string
+    let _27: reflect.Type
+    let _28: reflect.Type
+    let _29: string
+    let _30: string
+    let _31: reflect.Type
+    let _32: ai.Client // existing
+    let _33: string
 
     bb0: {
-        _2 = copy _1;
-        _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb1];
     }
 
     bb1: {
-        _5 = copy _1;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+        _8 = copy _1;
+        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["env"], name: "Ref" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
     }
 
     bb2: {
-        _27 = copy _1;
-        _0 = copy _27;
+        _32 = copy _1;
+        _0 = copy _32;
         goto -> bb12;
     }
 
     bb3: {
-        _6 = copy _5;
-        _7 = call const fn baml.env.Ref.get(copy _6) -> [bb4];
+        _9 = copy _8;
+        _10 = call const fn baml.env.Ref.get(copy _9) -> [bb4];
     }
 
     bb4: {
-        _8 = copy _7;
-        _8 = narrow_bind copy _8 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb5];
+        _11 = copy _10;
+        _11 = narrow_bind copy _11 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb5];
     }
 
     bb5: {
-        _19 = copy _6.0;
-        _20 = load_type(string);
-        _28 = const "client selector env.";
-        _18 = call const fn baml.String.from<copy _20>(copy _19) -> [bb6];
+        _23 = copy _9.0;
+        _24 = load_type(string);
+        _33 = const "client selector env.";
+        _22 = call const fn baml.String.from<copy _24>(copy _23) -> [bb6];
     }
 
     bb6: {
-        _17 = copy _28 + copy _18;
-        _16 = copy _17 + const " is not set: point it at a \"provider/model\" string (valid prefixes are ";
-        _22 = call const fn ai.internal._shorthand_prefixes() -> [bb7];
+        _21 = copy _33 + copy _22;
+        _20 = copy _21 + const " is not set: point it at a \"provider/model\" string (valid prefixes are ";
+        _27 = load_type(string);
+        _26 = call const fn baml.Array.join<copy _27>(copy _3, const ", ") -> [bb7];
     }
 
     bb7: {
-        _23 = load_type(string);
-        _21 = call const fn baml.String.from<copy _23>(copy _22) -> [bb8];
+        _28 = load_type(string);
+        _25 = call const fn baml.String.from<copy _28>(copy _26) -> [bb8];
     }
 
     bb8: {
-        _15 = copy _16 + copy _21;
-        _14 = copy _15 + const "), or give the client: position a value with a fallback — env.";
-        _25 = copy _6.0;
-        _26 = load_type(string);
-        _24 = call const fn baml.String.from<copy _26>(copy _25) -> [bb9];
+        _19 = copy _20 + copy _25;
+        _18 = copy _19 + const "), or give the client: position a value with a fallback — env.";
+        _30 = copy _9.0;
+        _31 = load_type(string);
+        _29 = call const fn baml.String.from<copy _31>(copy _30) -> [bb9];
     }
 
     bb9: {
-        _13 = copy _14 + copy _24;
-        _12 = copy _13 + const ".get() ?? \"openai/gpt-4o-mini\"";
-        _11 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _12, const null };
-        throw copy _11;
+        _17 = copy _18 + copy _29;
+        _16 = copy _17 + const ".get() ?? \"openai/gpt-4o-mini\"";
+        _15 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _16, const null };
+        throw copy _15;
     }
 
     bb10: {
-        _9 = copy _8;
-        _10 = copy _9;
-        _0 = call const fn ai.internal._from_shorthand(copy _10) -> [bb12];
+        _12 = copy _11;
+        _13 = copy _12;
+        _14 = load_type(unknown);
+        _0 = call const fn ai.internal._from_shorthand<copy _14>(copy _13, copy _2, copy _3) -> [bb12];
     }
 
     bb11: {
-        _3 = copy _2;
-        _4 = copy _3;
-        _0 = call const fn ai.internal._from_shorthand(copy _4) -> [bb12];
+        _5 = copy _4;
+        _6 = copy _5;
+        _7 = load_type(unknown);
+        _0 = call const fn ai.internal._from_shorthand<copy _7>(copy _6, copy _2, copy _3) -> [bb12];
     }
 
     bb12: {
@@ -2641,25 +2649,25 @@ fn ai.content.Media.kind(self: ai.content.Media) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.content.Media // self // param
-    let _2: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _3: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _4: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _5: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _2: image | audio | video | pdf
+    let _3: image | audio | video | pdf
+    let _4: image | audio | video | pdf
+    let _5: image | audio | video | pdf
 
     bb0: {
         _2 = copy _1.0;
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb1];
+        _3 = narrow_bind copy _3 as Media(Image, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb1];
     }
 
     bb1: {
         _4 = copy _2;
-        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb2];
+        _4 = narrow_bind copy _4 as Media(Audio, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb2];
     }
 
     bb2: {
         _5 = copy _2;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
+        _5 = narrow_bind copy _5 as Media(Video, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
     }
 
     bb3: {
@@ -2695,27 +2703,6 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     let _3: string | null // revised_prompt // param
     let _4: bool
     let _5: bool
-    let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // envelope
-    let _7: unknown // e
-    let _8: baml.errors.InvalidArgument
-    let _9: string
-    let _10: string
-    let _11: string
-    let _12: reflect.Type
-    let _13: reflect.Type
-    let _14: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // part
-    let _15: unknown // e
-    let _16: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _17: reflect.Type
-    let _18: baml.errors.InvalidArgument
-    let _19: string
-    let _20: string
-    let _21: string
-    let _22: reflect.Type
-    let _23: reflect.Type
-    let _24: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _25: string
-    let _26: string
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -2738,65 +2725,12 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb4: {
-        _6 = call const fn baml.json.to_json(copy _1) -> [bb5, unwind: bb8];
+        _0 = ai.content.Media { copy _1, copy _2, copy _3 };
+        goto -> bb5;
     }
 
     bb5: {
-        _16 = copy _6;
-        _17 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
-        _14 = call const fn baml.json.from_json<copy _17>(copy _16) -> [bb6, unwind: bb12];
-    }
-
-    bb6: {
-        _24 = copy _14;
-        _0 = ai.content.Media { copy _24, copy _2, copy _3 };
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
-    }
-
-    bb8: {
-        throw_if_panic copy _7 -> bb9;
-    }
-
-    bb9: {
-        _12 = load_type(baml.json.SerializationError);
-        _11 = call const fn baml.String.from<copy _12>(copy _7) -> [bb10];
-    }
-
-    bb10: {
-        _13 = load_type(string);
-        _25 = const "media output could not be encoded: ";
-        _10 = call const fn baml.String.from<copy _13>(copy _11) -> [bb11];
-    }
-
-    bb11: {
-        _9 = copy _25 + copy _10;
-        _8 = baml.errors.InvalidArgument { copy _9 };
-        throw copy _8;
-    }
-
-    bb12: {
-        throw_if_panic copy _15 -> bb13;
-    }
-
-    bb13: {
-        _22 = load_type(baml.json.DecodeError);
-        _21 = call const fn baml.String.from<copy _22>(copy _15) -> [bb14];
-    }
-
-    bb14: {
-        _23 = load_type(string);
-        _26 = const "media output could not be decoded: ";
-        _20 = call const fn baml.String.from<copy _23>(copy _21) -> [bb15];
-    }
-
-    bb15: {
-        _19 = copy _26 + copy _20;
-        _18 = baml.errors.InvalidArgument { copy _19 };
-        throw copy _18;
     }
 }
 
@@ -3317,320 +3251,168 @@ fn ai.internal._aws_sign_request = builtin(io)
 
 fn ai.internal._aws_resolve_region = builtin(io)
 
-fn ai.internal._shorthand_prefixes() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string[]
-    let _2: reflect.Type
-
-    bb0: {
-        _1 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
-        _2 = load_type(string);
-        _0 = call const fn baml.Array.join<copy _2>(copy _1, const ", ") -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
+fn ai.internal._from_shorthand(shorthand: string, providers: (string, string) -> null | ai.Client throws never, prefixes: string[]) -> ai.Client {
     // Locals:
     let _0: ai.Client // _0 // return
     let _1: string // shorthand // param
-    let _2: int | null // separator
-    let _3: int | null
-    let _4: int // index
-    let _5: string // prefix
-    let _6: int
-    let _7: string // model
+    let _2: (string, string) -> null | ai.Client throws never // providers // param
+    let _3: string[] // prefixes // param
+    let _4: int | null // separator
+    let _5: int | null
+    let _6: int // index
+    let _7: string // prefix
     let _8: int
-    let _9: int
+    let _9: string // model
     let _10: int
-    let _11: null | ai.Client // selected
-    let _12: bool
-    let _13: string
-    let _14: bool
+    let _11: int
+    let _12: int
+    let _13: null | ai.Client
+    let _14: string
     let _15: string
-    let _16: bool
-    let _17: string
-    let _18: bool
+    let _16: null | ai.Client
+    let _17: ai.Client // built
+    let _18: ai.errors.InvalidRequest
     let _19: string
-    let _20: bool
+    let _20: string
     let _21: string
-    let _22: bool
+    let _22: string
     let _23: string
-    let _24: bool
+    let _24: string
     let _25: string
-    let _26: bool
+    let _26: string
     let _27: string
-    let _28: bool
-    let _29: string
-    let _30: bool
-    let _31: string
-    let _32: bool
+    let _28: string
+    let _29: reflect.Type
+    let _30: string
+    let _31: reflect.Type
+    let _32: string
     let _33: string
-    let _34: bool
-    let _35: string
-    let _36: null | ai.Client
-    let _37: ai.Client // built
-    let _38: ai.errors.InvalidRequest
-    let _39: string
+    let _34: reflect.Type
+    let _35: reflect.Type
+    let _36: string
+    let _37: string
+    let _38: reflect.Type
+    let _39: ai.errors.InvalidRequest
     let _40: string
     let _41: string
     let _42: string
     let _43: string
-    let _44: string
+    let _44: reflect.Type
     let _45: string
     let _46: string
-    let _47: string
-    let _48: string
-    let _49: reflect.Type
+    let _47: reflect.Type
+    let _48: reflect.Type
+    let _49: string
     let _50: string
-    let _51: reflect.Type
-    let _52: string
-    let _53: string
-    let _54: reflect.Type
-    let _55: string
-    let _56: string
-    let _57: reflect.Type
-    let _58: ai.errors.InvalidRequest
-    let _59: string
-    let _60: string
-    let _61: string
-    let _62: string
-    let _63: reflect.Type
-    let _64: string
-    let _65: string
-    let _66: reflect.Type
-    let _67: string
-    let _68: string
 
     bb0: {
-        _2 = call const fn baml.String.index_of(copy _1, const "/") -> [bb1];
+        _4 = call const fn baml.String.index_of(copy _1, const "/") -> [bb1];
     }
 
     bb1: {
-        _3 = copy _2;
-        _3 = narrow_bind copy _3 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb2];
+        _5 = copy _4;
+        _5 = narrow_bind copy _5 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb2];
     }
 
     bb2: {
-        _63 = load_type(string);
-        _68 = const "client \"";
-        _62 = call const fn baml.String.from<copy _63>(copy _1) -> [bb3];
+        _44 = load_type(string);
+        _50 = const "client \"";
+        _43 = call const fn baml.String.from<copy _44>(copy _1) -> [bb3];
     }
 
     bb3: {
-        _61 = copy _68 + copy _62;
-        _60 = copy _61 + const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are ";
-        _65 = call const fn ai.internal._shorthand_prefixes() -> [bb4];
+        _42 = copy _50 + copy _43;
+        _41 = copy _42 + const "\" is not a \"provider/model\" string (no \"/\"); valid prefixes are ";
+        _47 = load_type(string);
+        _46 = call const fn baml.Array.join<copy _47>(copy _3, const ", ") -> [bb4];
     }
 
     bb4: {
-        _66 = load_type(string);
-        _64 = call const fn baml.String.from<copy _66>(copy _65) -> [bb5];
+        _48 = load_type(string);
+        _45 = call const fn baml.String.from<copy _48>(copy _46) -> [bb5];
     }
 
     bb5: {
-        _59 = copy _60 + copy _64;
-        _58 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _59, const null };
-        throw copy _58;
+        _40 = copy _41 + copy _45;
+        _39 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _40, const null };
+        throw copy _39;
     }
 
     bb6: {
-        _4 = copy _3;
-        _6 = copy _4;
-        _5 = call const fn baml.String.slice(copy _1, const 0_i64, copy _6) -> [bb7];
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = call const fn baml.String.slice(copy _1, const 0_i64, copy _8) -> [bb7];
     }
 
     bb7: {
-        _9 = copy _4;
-        _8 = copy _9 + const 1_i64;
-        _10 = call const fn baml.String.length(copy _1) -> [bb8];
+        _11 = copy _6;
+        _10 = copy _11 + const 1_i64;
+        _12 = call const fn baml.String.length(copy _1) -> [bb8];
     }
 
     bb8: {
-        _7 = call const fn baml.String.slice(copy _1, copy _8, copy _10) -> [bb9];
+        _9 = call const fn baml.String.slice(copy _1, copy _10, copy _12) -> [bb9];
     }
 
     bb9: {
-        _12 = is_type(copy _5, "openai");
-        branch copy _12 -> [bb33, bb10];
+        _14 = copy _7;
+        _15 = copy _9;
+        _13 = call copy _2(copy _14, copy _15) -> [bb10];
     }
 
     bb10: {
-        _14 = is_type(copy _5, "openai-chat");
-        branch copy _14 -> [bb32, bb11];
+        _16 = copy _13;
+        _16 = narrow_bind copy _16 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb11];
     }
 
     bb11: {
-        _16 = is_type(copy _5, "openai-images");
-        branch copy _16 -> [bb31, bb12];
+        _28 = copy _7;
+        _29 = load_type(string);
+        _49 = const "no builtin provider for prefix \"";
+        _27 = call const fn baml.String.from<copy _29>(copy _28) -> [bb12];
     }
 
     bb12: {
-        _18 = is_type(copy _5, "azure");
-        branch copy _18 -> [bb30, bb13];
+        _26 = copy _49 + copy _27;
+        _25 = copy _26 + const "\" in client \"";
+        _31 = load_type(string);
+        _30 = call const fn baml.String.from<copy _31>(copy _1) -> [bb13];
     }
 
     bb13: {
-        _20 = is_type(copy _5, "ollama");
-        branch copy _20 -> [bb29, bb14];
+        _24 = copy _25 + copy _30;
+        _23 = copy _24 + const "\"; valid prefixes are ";
+        _34 = load_type(string);
+        _33 = call const fn baml.Array.join<copy _34>(copy _3, const ", ") -> [bb14];
     }
 
     bb14: {
-        _22 = is_type(copy _5, "openrouter");
-        branch copy _22 -> [bb28, bb15];
+        _35 = load_type(string);
+        _32 = call const fn baml.String.from<copy _35>(copy _33) -> [bb15];
     }
 
     bb15: {
-        _24 = is_type(copy _5, "anthropic");
-        branch copy _24 -> [bb27, bb16];
+        _22 = copy _23 + copy _32;
+        _21 = copy _22 + const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \"";
+        _37 = copy _9;
+        _38 = load_type(string);
+        _36 = call const fn baml.String.from<copy _38>(copy _37) -> [bb16];
     }
 
     bb16: {
-        _26 = is_type(copy _5, "google");
-        branch copy _26 -> [bb26, bb17];
+        _20 = copy _21 + copy _36;
+        _19 = copy _20 + const "\"))";
+        _18 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _19, const null };
+        throw copy _18;
     }
 
     bb17: {
-        _28 = is_type(copy _5, "vertex");
-        branch copy _28 -> [bb25, bb18];
+        _17 = copy _16;
+        _0 = copy _17;
+        goto -> bb18;
     }
 
     bb18: {
-        _30 = is_type(copy _5, "bedrock");
-        branch copy _30 -> [bb24, bb19];
-    }
-
-    bb19: {
-        _32 = is_type(copy _5, "ai-gateway-images");
-        branch copy _32 -> [bb23, bb20];
-    }
-
-    bb20: {
-        _34 = is_type(copy _5, "claude-code");
-        branch copy _34 -> [bb22, bb21];
-    }
-
-    bb21: {
-        _11 = const null;
-        goto -> bb34;
-    }
-
-    bb22: {
-        _35 = copy _7;
-        _11 = call const fn claude_code.ClaudeCodeClient.new(copy _35, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb23: {
-        _33 = copy _7;
-        _11 = call const fn vercel.AiGatewayImageClient.new(copy _33, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb24: {
-        _31 = copy _7;
-        _11 = call const fn aws.BedrockClient.new(copy _31, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb25: {
-        _29 = copy _7;
-        _11 = call const fn google.VertexClient.new(copy _29, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb26: {
-        _27 = copy _7;
-        _11 = call const fn google.GeminiClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb27: {
-        _25 = copy _7;
-        _11 = call const fn anthropic.Client.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb28: {
-        _23 = copy _7;
-        _11 = call const fn openai.OpenRouterClient.new(copy _23, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb29: {
-        _21 = copy _7;
-        _11 = call const fn openai.OllamaClient.new(copy _21, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb30: {
-        _19 = copy _7;
-        _11 = call const fn openai.AzureClient.new(copy _19, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb31: {
-        _17 = copy _7;
-        _11 = call const fn openai.ImageClient.new(copy _17, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb32: {
-        _15 = copy _7;
-        _11 = call const fn openai.ChatClient.new(copy _15, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb33: {
-        _13 = copy _7;
-        _11 = call const fn openai.ResponsesClient.new(copy _13, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
-    }
-
-    bb34: {
-        _36 = copy _11;
-        _36 = narrow_bind copy _36 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb41, bb35];
-    }
-
-    bb35: {
-        _48 = copy _5;
-        _49 = load_type(string);
-        _67 = const "no builtin provider for prefix \"";
-        _47 = call const fn baml.String.from<copy _49>(copy _48) -> [bb36];
-    }
-
-    bb36: {
-        _46 = copy _67 + copy _47;
-        _45 = copy _46 + const "\" in client \"";
-        _51 = load_type(string);
-        _50 = call const fn baml.String.from<copy _51>(copy _1) -> [bb37];
-    }
-
-    bb37: {
-        _44 = copy _45 + copy _50;
-        _43 = copy _44 + const "\"; valid prefixes are ";
-        _53 = call const fn ai.internal._shorthand_prefixes() -> [bb38];
-    }
-
-    bb38: {
-        _54 = load_type(string);
-        _52 = call const fn baml.String.from<copy _54>(copy _53) -> [bb39];
-    }
-
-    bb39: {
-        _42 = copy _43 + copy _52;
-        _41 = copy _42 + const " (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = \"";
-        _56 = copy _7;
-        _57 = load_type(string);
-        _55 = call const fn baml.String.from<copy _57>(copy _56) -> [bb40];
-    }
-
-    bb40: {
-        _40 = copy _41 + copy _55;
-        _39 = copy _40 + const "\"))";
-        _38 = ai.errors.InvalidRequest { const "ai.clients", const null, copy _39, const null };
-        throw copy _38;
-    }
-
-    bb41: {
-        _37 = copy _36;
-        _0 = copy _37;
-        goto -> bb42;
-    }
-
-    bb42: {
         return;
     }
 }
@@ -4538,7 +4320,7 @@ fn ai.internal._media_envelope(m: ai.content.Media) -> int | float | string | bo
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: ai.content.Media // m // param
     let _2: unknown // e
-    let _3: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _3: image | audio | video | pdf
     let _4: baml.errors.UnknownError
     let _5: baml.json.SerializationError
     let _6: string[]
@@ -6980,7 +6762,7 @@ fn .<lambda(Connection._request, 0)>() -> int | float | string | bool | null | b
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: string | baml.iter.Done // next
     let _2: unknown // e
-    let _3: (baml.sys.ReadPipeLines) -> string | baml.iter.Done throws baml.errors.Io
+    let _3: baml.sys.ReadPipeLines
     let _4: ai.errors.NetworkFailure
     let _5: string
     let _6: string
@@ -7067,7 +6849,7 @@ fn .<lambda(Connection._request, 0)>() -> int | float | string | bool | null | b
 
     bb5: {
         _3 = copy capture[0].2;
-        _1 = call const fn baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(copy _3) -> [bb11, unwind: bb6];
+        _1 = virtual_call next as baml.iter.Iterator<Error = baml.errors.Io, Item = string>(copy _3) -> [bb11, unwind: bb6];
     }
 
     bb6: {
@@ -10290,13 +10072,13 @@ fn ai.wire.render_output_format(t: reflect.Type) -> string {
     }
 }
 
-fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video, fetch_url: bool) -> ai.wire.ResolvedMedia {
+fn ai.wire.resolve_media(media: image | audio | video | pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
     // Locals:
     let _0: ai.wire.ResolvedMedia // _0 // return
-    let _1: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // media // param
+    let _1: image | audio | video | pdf // media // param
     let _2: bool // fetch_url // param
-    let _3: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _4: baml.media.Image // image
+    let _3: image | audio | video | pdf
+    let _4: image // image
     let _5: string // source
     let _6: string
     let _7: string | null
@@ -10308,8 +10090,8 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
     let _13: string
     let _14: string | null
     let _15: string
-    let _16: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _17: baml.media.Audio // audio
+    let _16: image | audio | video | pdf
+    let _17: audio // audio
     let _18: string // source
     let _19: string
     let _20: string | null
@@ -10321,8 +10103,8 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
     let _26: string
     let _27: string | null
     let _28: string
-    let _29: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _30: baml.media.Video // video
+    let _29: image | audio | video | pdf
+    let _30: video // video
     let _31: string // source
     let _32: string
     let _33: string | null
@@ -10334,7 +10116,7 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
     let _39: string
     let _40: string | null
     let _41: string
-    let _42: baml.media.Pdf // pdf
+    let _42: pdf // pdf
     let _43: string // source
     let _44: string
     let _45: string | null
@@ -10349,17 +10131,17 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
 
     bb0: {
         _3 = copy _1;
-        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb36, bb1];
+        _3 = narrow_bind copy _3 as Media(Image, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb36, bb1];
     }
 
     bb1: {
         _16 = copy _1;
-        _16 = narrow_bind copy _16 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb2];
+        _16 = narrow_bind copy _16 as Media(Audio, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb2];
     }
 
     bb2: {
         _29 = copy _1;
-        _29 = narrow_bind copy _29 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb3];
+        _29 = narrow_bind copy _29 as Media(Video, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb3];
     }
 
     bb3: {
@@ -10563,12 +10345,12 @@ fn ai.wire.resolve_media(media: baml.media.Audio | baml.media.Image | baml.media
     }
 }
 
-fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video) -> ai.wire.ResolvedMedia {
+fn ai.wire.resolve_media_preview(media: image | audio | video | pdf) -> ai.wire.ResolvedMedia {
     // Locals:
     let _0: ai.wire.ResolvedMedia // _0 // return
-    let _1: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // media // param
-    let _2: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _3: baml.media.Image // image
+    let _1: image | audio | video | pdf // media // param
+    let _2: image | audio | video | pdf
+    let _3: image // image
     let _4: string // source
     let _5: string
     let _6: string | null
@@ -10580,8 +10362,8 @@ fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | ba
     let _12: string
     let _13: string | null
     let _14: string
-    let _15: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _16: baml.media.Audio // audio
+    let _15: image | audio | video | pdf
+    let _16: audio // audio
     let _17: string // source
     let _18: string
     let _19: string | null
@@ -10593,8 +10375,8 @@ fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | ba
     let _25: string
     let _26: string | null
     let _27: string
-    let _28: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _29: baml.media.Video // video
+    let _28: image | audio | video | pdf
+    let _29: video // video
     let _30: string // source
     let _31: string
     let _32: string | null
@@ -10606,7 +10388,7 @@ fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | ba
     let _38: string
     let _39: string | null
     let _40: string
-    let _41: baml.media.Pdf // pdf
+    let _41: pdf // pdf
     let _42: string // source
     let _43: string
     let _44: string | null
@@ -10621,17 +10403,17 @@ fn ai.wire.resolve_media_preview(media: baml.media.Audio | baml.media.Image | ba
 
     bb0: {
         _2 = copy _1;
-        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb36, bb1];
+        _2 = narrow_bind copy _2 as Media(Image, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb36, bb1];
     }
 
     bb1: {
         _15 = copy _1;
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb2];
+        _15 = narrow_bind copy _15 as Media(Audio, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb2];
     }
 
     bb2: {
         _28 = copy _1;
-        _28 = narrow_bind copy _28 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb3];
+        _28 = narrow_bind copy _28 as Media(Video, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb3];
     }
 
     bb3: {
@@ -13526,11 +13308,11 @@ fn ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
     }
 }
 
-fn ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[] {
+fn ai.ModelTurn.media(self: ai.ModelTurn) -> (image | audio | video | pdf)[] {
     // Locals:
-    let _0: (baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[] // _0 // return
+    let _0: (image | audio | video | pdf)[] // _0 // return
     let _1: ai.ModelTurn // self // param
-    let _2: (baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[] // out
+    let _2: (image | audio | video | pdf)[] // out
     let _3: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
     let _4: baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     let _5: unknown
@@ -13540,11 +13322,11 @@ fn ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Audio | baml.media.Imag
     let _9: ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse
     let _10: ai.content.Media // m
     let _11: int
-    let _12: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _12: image | audio | video | pdf
     let _13: reflect.Type
 
     bb0: {
-        _2 = []: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf[];
+        _2 = []: image | audio | video | pdf[];
         _3 = copy _1.0;
         _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>(copy _3) -> [bb1];
     }
@@ -13569,7 +13351,7 @@ fn ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Audio | baml.media.Imag
     bb4: {
         _10 = copy _9;
         _12 = copy _10.0;
-        _13 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
+        _13 = load_type(image | audio | video | pdf);
         _11 = call const fn baml.Array.push<copy _13>(copy _2, copy _12) -> [bb1];
     }
 

@@ -345,6 +345,7 @@ impl TestArgs {
             let (reuse_plan, stdlib_interface_hit) =
                 (warmth.reuse_plan, warmth.stdlib_interface_hit);
             let db = &session.db;
+            let package = session.package;
             let cache = &session.cache;
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -354,7 +355,8 @@ impl TestArgs {
             // carry the fresh per-file blobs into the manifest); without one,
             // run the honest full check. The merged set is byte-identical.
             let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
-                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+                let incremental =
+                    ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
                 (baml_db::collect_diagnostics(db), None)
@@ -378,6 +380,7 @@ impl TestArgs {
             // 3. Compile + engine + runtime
             let compiled = crate::bytecode_cache::compile_program_artifacts(
                 db,
+                package,
                 cache.as_ref(),
                 reuse_plan.as_ref(),
             )
@@ -387,12 +390,11 @@ impl TestArgs {
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
                 ctx.verify_and_store(
-                    db,
+                    &session,
                     &compiled,
                     fresh,
                     reuse_plan.as_ref(),
                     stdlib_interface_hit,
-                    || session.honest_db(),
                 )?;
             }
             // Warm-run evidence: with the stdlib interface seeded this is 0 (the
@@ -616,7 +618,7 @@ impl TestArgs {
         project_root: &std::path::Path,
     ) -> Result<TestInvocation> {
         let manifest = manifest_text
-            .map(crate::manifest::parse)
+            .map(baml_db::manifest::parse)
             .transpose()
             .with_context(|| {
                 format!(

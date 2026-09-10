@@ -113,9 +113,14 @@ impl AddGeneratorArgs {
 
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("failed to read {}", toml_path.display()))?;
-        let manifest = crate::manifest::parse(&content)
+        let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-        crate::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::package_name(&manifest, &toml_path)?;
+        // Every other manifest reader rejects these, so accepting them here
+        // would write a generator into a file that the next build refuses to
+        // load, reporting a failure that names neither this command nor the
+        // table it choked on.
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
 
         let mut generator = Generator::from(self.output_type);
         match (self.output_type, self.sdk_import_path.as_deref()) {
@@ -170,7 +175,7 @@ fn add_output_type_parser() -> impl TypedValueParser<Value = OutputType> {
 }
 
 fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(String, String)> {
-    let manifest = crate::manifest::parse(content).context("invalid baml.toml")?;
+    let manifest = baml_db::manifest::parse(content).context("invalid baml.toml")?;
     let name = (1..)
         .map(|index| format!("client{index}"))
         .find(|name| !manifest.generator.contains_key(name))
@@ -256,7 +261,7 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
         // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
         // the root too so Windows short paths and `\\?\` paths can be relativized.
         let from = from
@@ -268,7 +273,7 @@ impl GenerateArgs {
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
-        let source_files = db.workspace_files();
+        let source_files = package.files(&db).clone();
         let diagnostics = baml_db::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
@@ -341,7 +346,7 @@ impl GenerateArgs {
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
-            .get_bytecode()
+            .get_bytecode(package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
@@ -630,7 +635,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let Ok(content) = std::fs::read_to_string(root.join("baml.toml")) else {
         return (generators, diags);
     };
-    let Ok(manifest) = crate::manifest::parse(&content) else {
+    let Ok(manifest) = baml_db::manifest::parse(&content) else {
         return (generators, diags);
     };
 
@@ -1004,7 +1009,7 @@ mod tests {
 
         assert_eq!(name, "client2");
         assert!(updated.contains("# keep this comment"));
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client2"].get_ref();
         assert_eq!(
             added.output_type.as_ref().unwrap().get_ref(),
@@ -1025,7 +1030,7 @@ mod tests {
             add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
 
         assert_eq!(name, "client1");
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client1"].get_ref();
         assert_eq!(added.output_type.as_ref().unwrap().get_ref(), "go");
         assert_eq!(
@@ -1057,7 +1062,7 @@ mod tests {
 
         assert!(matches!(result, crate::ExitCode::Success));
         let updated = fs::read_to_string(directory.path().join("baml.toml")).unwrap();
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         assert_eq!(
             manifest.generator["client1"]
                 .get_ref()

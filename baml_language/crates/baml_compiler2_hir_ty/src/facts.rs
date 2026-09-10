@@ -9,11 +9,11 @@
 //! all LIVE since I1/I2/I5, backed by the impl registry and the scope's
 //! param env.
 
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_hir::{contributions::Definition, package::lang_roots};
 use baml_type::{
-    Interface, Name, ParamTy, QualifiedTypeName, Ty,
+    DeclName, Interface, Name, ParamTy, Ty,
     interned::InferInterface,
-    normalize::{ProjectionStep, TypeContext},
+    normalize::{ProjectionStep, TypeContext, WellKnownHead, well_known_decl},
 };
 
 pub struct Facts<'db> {
@@ -24,8 +24,8 @@ pub struct Facts<'db> {
     /// Canonicalization asks for the same recursive alias and enum facts many
     /// times inside one body. Cache the owned plain rows at the oracle boundary
     /// instead of repeatedly materializing them from interned compiler data.
-    alias_defs: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Ty>>>,
-    enum_variants: std::cell::RefCell<rustc_hash::FxHashMap<QualifiedTypeName, Option<Vec<Name>>>>,
+    alias_defs: std::cell::RefCell<rustc_hash::FxHashMap<DeclName, Option<Ty>>>,
+    enum_variants: std::cell::RefCell<rustc_hash::FxHashMap<DeclName, Option<Vec<Name>>>>,
 }
 
 impl<'db> Facts<'db> {
@@ -56,27 +56,30 @@ impl<'db> Facts<'db> {
         &self.bounds
     }
 
+    /// Where the language packages are installed.
+    pub fn lang(&self) -> baml_base::LangRoots {
+        lang_roots(self.db)
+    }
+
     /// Resolves a qualified name back to its definition through the owning
     /// package's canonical (ppir) items.
-    pub fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {
+    pub fn definition_of(&self, name: &DeclName) -> Option<Definition<'db>> {
         definition_of(self.db, name)
     }
 }
 
-fn definition_of<'db>(
+/// The source definition a qualified type name points at, if its package is
+/// served from source and declares the item.
+pub(crate) fn definition_of<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    name: &QualifiedTypeName,
+    name: &DeclName,
 ) -> Option<Definition<'db>> {
-    let package = PackageId::new(db, name.package().clone());
-    baml_compiler2_ppir::package_items(db, package).lookup_type(name.namespace(), name.name())
+    baml_compiler2_ppir::package_items(db, name.root()).lookup_type(name.namespace(), name.name())
 }
 
 /// Resolves an alias without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
-pub(crate) fn uncached_alias_def(
-    db: &dyn baml_compiler2_ppir::Db,
-    name: &QualifiedTypeName,
-) -> Option<Ty> {
+pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_ppir::Db, name: &DeclName) -> Option<Ty> {
     if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
         return Some(crate::lower::type_alias_value(db, alias));
     }
@@ -92,7 +95,7 @@ pub(crate) fn uncached_alias_def(
 /// fact-poor contexts use this directly; repeated scans use a cached context.
 pub(crate) fn uncached_enum_variants(
     db: &dyn baml_compiler2_ppir::Db,
-    name: &QualifiedTypeName,
+    name: &DeclName,
 ) -> Option<Vec<Name>> {
     if let Some(Definition::Enum(enum_loc)) = definition_of(db, name) {
         return Some(
@@ -112,13 +115,11 @@ pub(crate) fn uncached_enum_variants(
 }
 
 impl TypeContext for Facts<'_> {
-    /// A name-based context represents a declaration by its own name, so this
-    /// is the identity — no resolution step, and never `None`.
-    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
-        Some(qtn.clone())
+    fn well_known(&self, head: WellKnownHead) -> Option<DeclName> {
+        well_known_decl(lang_roots(self.db), head)
     }
 
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+    fn alias_def(&self, name: &DeclName) -> Option<Ty> {
         if let Some(cached) = self.alias_defs.borrow().get(name) {
             return cached.clone();
         }
@@ -129,7 +130,7 @@ impl TypeContext for Facts<'_> {
         resolved
     }
 
-    fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, name: &DeclName) -> Option<Vec<Name>> {
         if let Some(cached) = self.enum_variants.borrow().get(name) {
             return cached.clone();
         }

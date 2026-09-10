@@ -3,10 +3,12 @@ name: oncall
 on:
   pull_request:
     paths:
+      - '.github/workflows/oncall.yml'
       - 'tools/bctl'
       - 'tools/bctl_src/**'
   schedule:
-    - cron: '0 17 * * 5'
+    - cron: '0 8 * * 5'
+      timezone: America/Los_Angeles
   workflow_dispatch:
     inputs:
       action:
@@ -69,7 +71,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
       - name: Validate schedule
         run: ./tools/bctl oncall check
-      - name: Post weekly handoff
+      - name: Post weekly handoff and release reminder
         run: ./tools/bctl oncall notify --post-to-slack
 
   fill-schedule:
@@ -117,7 +119,7 @@ jobs:
           [ "${{ needs.notify.result }}" = "failure" ] && failed+=("notify")
           [ "${{ needs.fill-schedule.result }}" = "failure" ] && failed+=("fill-schedule")
           echo "jobs=${failed[*]}" >> "$GITHUB_OUTPUT"
-      - name: Post failure to #oncall
+      - name: Post failure to general
         run: |
           ./tools/bctl oncall notify-failure \
             --jobs "${{ steps.failed.outputs.jobs }}" \

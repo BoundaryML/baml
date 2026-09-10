@@ -66,7 +66,8 @@ execution from BAML itself remains out of scope.
 - Evidence tags 0-7 and their golden encodings are unchanged. Readers must
   understand new log/scope tags 8-9.
 - Exported builtin constant defaults are carried in compiled interfaces.
-  Artifact ABI is now 4; older compiled packages need rebuilding.
+  Artifact ABI is now 5, following canary's ABI 4 changes; older compiled
+  packages need rebuilding.
 - Engine registration retains pending payload ownership through final drain.
   Consumer startup precedes heap acquisition; log publication uses the cached
   per-resume ring and cannot initialize transport under a heap permit.

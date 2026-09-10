@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: throw_context.Errors
+    ╭─[throw_context.baml:37:45]
+ 37 │ ╭─▶ function throwAlias() -> void throws Errors {
+ 38 │ │       throw [];
+ 39 │ ╰─▶ }
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+    ╭─[throw_context.baml:41:60]
+ 41 │ ╭─▶ function throwBranch(n: int) -> void throws int[] | string {
+ 42 │ │       throw if (n == 0) { [] } else { [n] };
+ 43 │ ╰─▶ }
+    ╰────

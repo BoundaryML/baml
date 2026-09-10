@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
+    DeclName, Name, ParamTy, TyAttr,
     interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
@@ -92,144 +92,50 @@ pub fn lookup_method<'db>(
     })
 }
 
-/// Source-less counterpart of [`receiver_class`]. It maps structural builtin
-/// types to the same canonical class names, but leaves the declaration lookup
-/// to the precompiled `PackageInterface` row.
+/// The member owner of `receiver`: its class declaration's name and the
+/// generic arguments the receiver pins. Nominal classes own themselves; the
+/// structural builtins (`int`, `T[]`, `image`, …) map through the compiler
+/// alias registry to their carrier declaration, literals deferring to their
+/// base primitive's class. Aliases are transparent: expand through the
+/// oracle (fuel-bounded like every alias walk) and resolve on the expansion.
+///
+/// Source-backed and precompiled packages resolve the same owner; only the
+/// declaration lookup differs ([`receiver_class`] vs the `PackageInterface`
+/// row).
 pub(crate) fn external_class_for_type(
     facts: &Facts<'_>,
     receiver: &Ty,
     fuel: u32,
-) -> Option<(TypeName, Vec<Ty>)> {
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        (
-            TypeName::new(
-                Name::new("baml"),
-                namespace.iter().map(Name::new).collect(),
-                Name::new(name),
-            ),
-            args,
-        )
-    };
-    Some(match receiver.kind() {
-        InferTy::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
-        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        InferTy::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        InferTy::Type { .. } => (
-            TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type")),
-            Vec::new(),
-        ),
-        InferTy::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
+) -> Option<(DeclName, Vec<Ty>)> {
+    match receiver.kind() {
+        InferTy::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
         InferTy::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
-            return external_class_for_type(
-                facts,
-                &Ty::from_plain(&expanded),
-                fuel.checked_sub(1)?,
-            );
+            external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
-        _ => return None,
-    })
+        // The language root is looked up here, for a BUILTIN receiver, and
+        // not once up front: only a builtin needs it to name its carrier,
+        // while a class receiver already carries its own head. Demanding it
+        // eagerly made every class receiver unresolvable in a database with
+        // no standard library installed, which is a state this database
+        // supports.
+        _ => {
+            let (definition, args) = baml_type::compiler_aliases::member_owner(receiver)?;
+            Some((definition.decl_name(facts.lang())?, args))
+        }
+    }
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic
-/// arguments the receiver pins. This table IS the language's builtin-class
-/// correspondence (TIR: `resolve_builtin_member` call sites), one row per
-/// structural kind; literals defer to their base primitive's class.
+/// arguments the receiver pins (TIR: `resolve_builtin_member` call sites).
 pub(crate) fn receiver_class<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(ClassLoc<'db>, Vec<Ty>)> {
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        let qtn = TypeName::new(
-            Name::new("baml"),
-            namespace.iter().map(Name::new).collect(),
-            Name::new(name),
-        );
-        match facts.definition_of(&qtn) {
-            Some(Definition::Class(class)) => Some((class, args)),
-            _ => None,
-        }
-    };
-    match receiver.kind() {
-        InferTy::Class(qtn, args, _) => match facts.definition_of(qtn) {
-            Some(Definition::Class(class)) => Some((class, args.to_vec())),
-            _ => None,
-        },
-        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        InferTy::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        InferTy::Type { .. } => {
-            let qtn = TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type"));
-            match facts.definition_of(&qtn) {
-                Some(Definition::Class(class)) => Some((class, Vec::new())),
-                _ => None,
-            }
-        }
-        InferTy::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                // Generic media (`media`, any subtype) has no single class.
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
-        // Aliases are transparent: expand through the oracle (fuel-bounded
-        // like every alias walk) and resolve on the expansion.
-        InferTy::TypeAlias(qtn, _) => {
-            let expanded = facts.alias_def(qtn)?;
-            let fuel = fuel.checked_sub(1)?;
-            receiver_class(facts, &Ty::from_plain(&expanded), fuel)
-        }
+    let (name, args) = external_class_for_type(facts, receiver, fuel)?;
+    match facts.definition_of(&name) {
+        Some(Definition::Class(class)) => Some((class, args)),
         _ => None,
     }
 }
@@ -299,7 +205,7 @@ pub enum MemberDeclarer<'db> {
     ExternalMethod(std::sync::Arc<crate::callable::ExternalCallable>),
     /// A virtual field declared by a mounted interface.
     ExternalVirtualField {
-        interface: baml_type::QualifiedTypeName,
+        interface: baml_type::DeclName,
         realized: InferInterface,
         field_index: u32,
     },
@@ -404,6 +310,7 @@ pub(crate) fn member_roots<'db>(
 /// impls-for-receiver step (pinned pending).
 pub fn lookup_interface_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
@@ -411,7 +318,7 @@ pub fn lookup_interface_member<'db>(
     let Some((roots, existential)) = member_roots(db, facts, receiver) else {
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
-        return lookup_impl_member(db, facts, receiver, name);
+        return lookup_impl_member(db, viewer, facts, receiver, name);
     };
     let mut declarers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
     let push = |declarers: &mut Vec<(InferInterface, InterfaceMember<'db>)>,
@@ -534,11 +441,12 @@ pub(crate) fn declared_method_self_restriction<'db>(
 /// (E0121, TIR's rule).
 pub fn concrete_member_ambiguity<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
 ) -> Option<(Vec<InferInterface>, bool)> {
-    match lookup_impl_member(db, facts, receiver, name) {
+    match lookup_impl_member(db, viewer, facts, receiver, name) {
         InterfaceMemberLookup::Ambiguous { sources, is_field } => Some((sources, is_field)),
         _ => None,
     }
@@ -558,6 +466,7 @@ pub fn concrete_member_ambiguity<'db>(
 /// interface signature either way.
 fn lookup_impl_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
@@ -593,13 +502,14 @@ fn lookup_impl_member<'db>(
             .map(|param| ParamTy::new(param.index(), Name::new(format!("$probe${}", param.name()))))
             .collect();
         let probe = crate::lower::class_ty(
+            facts.lang(),
             crate::lower::class_qualified_name(db, class),
             frame
                 .iter()
                 .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
                 .collect(),
         );
-        let lookup = lookup_impl_member(db, facts, &probe, name);
+        let lookup = lookup_impl_member(db, viewer, facts, &probe, name);
         return substitute_lookup_class_args(lookup, &frame, args);
     }
     // A literal receiver resolves against its base primitive's impls, the
@@ -617,7 +527,7 @@ fn lookup_impl_member<'db>(
         _ => receiver,
     };
     let mut providers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
-    for resolved in impls_for_receiver(db, receiver) {
+    for resolved in impls_for_receiver(db, viewer, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
             continue;
         }
@@ -906,12 +816,13 @@ fn assoc_bound_roots<'db>(
 /// this check.
 fn impls_for_receiver<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     receiver: &Ty,
 ) -> Vec<crate::impls::ResolvedImpl<'db>> {
     let Ok(closed) = baml_type::interned::ClosedTy::try_from(receiver) else {
         return Vec::new();
     };
-    crate::impls::impls_for_type(db, &closed.to_plain())
+    crate::impls::impls_for_type(db, viewer, &closed.to_plain())
 }
 
 /// A matched impl's generic params realized through the match, in
@@ -1309,6 +1220,7 @@ pub enum MemberSource {
 /// source position can name one.
 pub fn member_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &baml_type::interned::ClosedTy,
 ) -> Vec<MemberCandidate<'db>> {
@@ -1380,7 +1292,7 @@ pub fn member_candidates<'db>(
             // Total: the receiver arrived closed, so enumeration needs no
             // disposition here (contrast `impls_for_receiver`, whose
             // inference-side callers can still be open).
-            for resolved in crate::impls::impls_for_type(db, &receiver.to_plain()) {
+            for resolved in crate::impls::impls_for_type(db, viewer, &receiver.to_plain()) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }
@@ -1437,12 +1349,14 @@ pub fn type_member_candidates<'db>(
             // `(C as I).member` with the qualifier inferred, so the methods of
             // the interfaces C's impls provide belong to the type's member
             // surface (fields do not — see above). Enumerated in an empty
-            // param env: a declaration's members do not depend on where the
-            // reader stands, and an impl whose bounds an empty env cannot
-            // discharge is one a bare qualifier cannot reach either.
+            // param env and from the declaring package's viewpoint: a
+            // declaration's members do not depend on where the reader
+            // stands, and an impl whose bounds an empty env cannot discharge
+            // is one a bare qualifier cannot reach either.
             let facts = Facts::new(db);
             let self_ty = crate::lower::class_self_ty(db, class);
-            for resolved in crate::impls::impls_for_type(db, &self_ty) {
+            let declaring = baml_compiler2_hir::file_package::file_package(db, class.file(db)).root;
+            for resolved in crate::impls::impls_for_type(db, declaring, &self_ty) {
                 if !env_discharges_rigid_bounds(db, &facts, &resolved) {
                     continue;
                 }
@@ -1679,10 +1593,10 @@ fn exported_signature_breaks_one_self(
 
 fn external_interface_callable(
     db: &dyn baml_compiler2_ppir::Db,
-    interface: &baml_type::QualifiedTypeName,
+    interface: &baml_type::DeclName,
     name: &Name,
 ) -> Option<std::sync::Arc<crate::callable::ExternalCallable>> {
-    let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
+    let package = interface.root();
     let row = crate::package_interface::package_interface(db, package)
         .lookup_type(interface.namespace(), interface.name())?;
     let crate::package_interface::ExportedType::Interface {
@@ -1725,7 +1639,7 @@ pub(crate) fn interface_instantiation(
     if data.generic_params.len() != target.generics.len() {
         debug_assert!(
             false,
-            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
             data.generic_params.len(),
@@ -1843,6 +1757,7 @@ pub enum UnionMemberLookup<'db> {
 
 pub fn lookup_union_member<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     union_ty: &Ty,
     members: &[Ty],
@@ -1850,7 +1765,7 @@ pub fn lookup_union_member<'db>(
 ) -> UnionMemberLookup<'db> {
     let mut shared: Option<Vec<InferInterface>> = None;
     for arm in members {
-        let arm_ifaces = union_arm_interfaces(db, facts, arm, 4);
+        let arm_ifaces = union_arm_interfaces(db, viewer, facts, arm, 4);
         shared = Some(match shared {
             None => arm_ifaces,
             Some(mut current) => {
@@ -1903,6 +1818,7 @@ pub fn lookup_union_member<'db>(
 /// contributes its matched impls' realized interfaces.
 fn union_arm_interfaces<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     arm: &Ty,
     fuel: u32,
@@ -1938,7 +1854,7 @@ fn union_arm_interfaces<'db>(
         }
         _ => {
             let mut out = Vec::new();
-            for resolved in impls_for_receiver(db, arm) {
+            for resolved in impls_for_receiver(db, viewer, arm) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }
