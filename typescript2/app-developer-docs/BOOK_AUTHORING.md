@@ -10,14 +10,83 @@ The book uses this app's authored MDX pipeline. There is no separate mdBook buil
 2. Add `app/baml/book/<slug>/page.tsx`, using `AuthoredPage` and `authoredMetadata`.
 3. Add the chapter to the Book branch in `lib/navigation.ts`, in reading order.
    This drives sidebar entries, authored search, and previous/next links. Those
-   links traverse published pages, including the unnumbered orientation pages.
+   links traverse published pages.
 4. Update the book landing page and `expectedAuthoredRoutes` in
    `tests/authored-content.test.ts`. Link only to published routes; mention
-   future prerequisites by concept without creating empty pages.
+   future prerequisites by concept without creating empty pages. The landing
+   page lists the agreed outline; replace a plain chapter title with its link
+   when the chapter is published.
 5. Put executable BAML in `content/code/standalone` or `content/code/projects`.
    Use `BamlSnippet` or `BamlProject`; do not duplicate executable BAML in MDX
    fences. Keep each incremental stage's dependency/replacement relationship
    explicit in the prose.
+
+## Language comparisons
+
+Use the shared `LanguageTabs` component for language comparisons. It includes
+each language's logo, accessible labels, and keyboard navigation automatically.
+Give each language one `<div>` panel, in the same order as `languages`:
+
+```mdx
+<LanguageTabs languages={["TypeScript", "Effect.ts", "Rust"]}>
+  <div>TypeScript examples and explanations</div>
+  <div>Effect.ts examples and explanations</div>
+  <div>Rust examples and explanations</div>
+</LanguageTabs>
+```
+
+Keep related examples together in a panel. For comparisons introducing BAML,
+show BAML separately after the language tabs. Put panel labels in
+`<p className="language-tabs-heading">` so hidden panels do not add duplicate
+entries to the page's table of contents.
+
+After comparison examples, use compact “New concepts introduced” tables with
+“Word” and “What it means” columns. Define error-handling vocabulary when it first
+appears within each language, and only list additions in later examples. If a call
+introduces no new concepts, say so in one sentence. Use the same treatment for
+BAML and the comparison languages; avoid Good/Trade-off ratings. Follow Google's
+[developer documentation style guide](https://developers.google.com/style/tone).
+State the behavior directly; avoid slogans. Keep definitions short and detailed
+mechanics in the sections that teach them.
+
+For error-handling comparisons, show an unhandled call before adding recovery.
+Include idiomatic propagation, such as Rust's `?` and Effect's `yield*`.
+
+Use annotated SVGs for these comparisons. Wrap a host-language fence in
+`CodeExample` with a stable `annotation` ID. For canonical BAML excerpts, add the
+same prop to `BamlProject`. The examples on the errors page show both forms.
+
+Add exact text targets and concise labels to `lib/snippets/annotation-specs.ts`.
+The annotation kinds are `success`, `syntax`, and `recovery`; marks can be an
+`underbrace`, `circle`, or `bracket`. Use a one-based `occurrence` for repeated
+text. Keep labels close to the relevant code and use only the annotations needed
+to explain the example. Callers should perform an operation on the successful
+value; a function that only forwards a result does not need Rust's `?` or an
+Effect generator.
+
+Run `pnpm docs:annotations:generate` after editing source code, annotation targets,
+labels, or the renderer. The generator reads the MDX fences and canonical BAML
+regions, applies the shared syntax grammar, and writes both image themes to
+`public/book/annotations`. It embeds the licensed Geist fonts so annotation
+positions remain stable across browsers.
+
+`pnpm docs:authored:validate` regenerates the images in memory and compares them
+with the checked-in assets. Source changes also invalidate the image at page
+render time. Stale images fail these checks until regenerated. Readers can toggle
+between the annotated image and syntax-highlighted code. Both views copy the
+original code, without annotation text.
+
+The logo catalog is `lib/content/language-tabs.ts`. Add a local logo and a catalog
+entry before introducing another language; unregistered labels fail rendering
+rather than displaying a tab without its logo. Monochrome logos adapt to dark
+mode. Keep the visible language name alongside its decorative logo.
+
+TypeScript and Rust assets are reused from `app-website/public/logos`.
+Effect's logomark comes from the official Effect website repository:
+`Effect-TS/website`, commit `bf4625446a02894046b6937a317dde2cde115fe7`,
+`apps/web/public/assets/effect-logo/logo-symbol/effect-logomark-black.svg`.
+
+## Canonical code excerpts
 
 A project excerpt uses the complete project as its compilation unit:
 
@@ -84,8 +153,14 @@ includes these ordinary static routes. No separate publishing step is needed.
   `ch12-concurrency`. These were imported with their existing tests and failure
   expectations. The outline determines chapter numbering, not publication order.
 
-The explanations, examples, and section order are preserved except for these
-integration/correctness changes:
+Interfaces and Concurrency retain the accepted section order and explanations,
+with the integration/correctness changes listed below. The Errors opening has
+since been revised into language tabs with separate definition, propagation, and
+recovery examples, annotated images, and vocabulary tables. Its callers format
+successful values as `Tool: search`; the remainder retains the accepted prose
+apart from a source-location explanation.
+
+Initial integration repairs:
 
 - Added metadata, breadcrumbs, prerequisite links, and explicit stage/dependency
   notes; mapped code to canonical project excerpts and Notion tables to MDX.

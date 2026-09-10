@@ -11,7 +11,6 @@ class BadToolInput {
 }
 // docs:end excerpt-15
 
-
 function check_tool_name(tool: string) -> string {
     if (tool == "") {
         throw BadToolInput { tool, message: "tool name is empty" };
@@ -24,7 +23,7 @@ function check_tool_name(tool: string) -> string {
 
 // docs:start excerpt-02
 function display_tool_name(tool: string) -> string throws never {
-    check_tool_name(tool) catch (e) {
+    `Tool: ${check_tool_name(tool)}` catch (e) {
         BadToolInput => e.message,
     }
 }
@@ -235,3 +234,9 @@ function catch_all_panics_with_context(tool: string) -> int {
 function main() -> string[] {
     [run_step("search"), run_step(""), run_step("search")]
 }
+
+// docs:start excerpt-propagation
+function checked_tool_name(tool: string) -> string {
+    `Tool: ${check_tool_name(tool)}`
+}
+// docs:end excerpt-propagation

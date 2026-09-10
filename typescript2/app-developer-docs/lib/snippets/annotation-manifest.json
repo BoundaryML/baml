@@ -1,0 +1,74 @@
+{
+  "baml-define": {
+    "description": "Compiler tracks this error: throw BadToolInput. Return the value: tool",
+    "height": 506,
+    "sourceHash": "e809720a1388a8ce1b2fd2bb4d2d80c7831a864cdf77f8f0532a453dda69ab26",
+    "width": 890
+  },
+  "baml-propagate": {
+    "description": "Use the returned value: `Tool: ${check_tool_name(tool)}`",
+    "height": 207,
+    "sourceHash": "d928178281140ad1af83d93f1bc11e931a172f25b1188d779200e894e56c0888",
+    "width": 710
+  },
+  "baml-recover": {
+    "description": "Check that no error escapes: throws never. Same successful expression: `Tool: ${check_tool_name(tool)}`. Return a fallback: catch (e) {\n        BadToolInput => e.message,\n    }",
+    "height": 357,
+    "sourceHash": "84a22277fb406b38e59e5be94a565e5140bbfbab98a4daebd52070e064838c6e",
+    "width": 1063
+  },
+  "effect-define": {
+    "description": "Return type includes errors: Effect.Effect<string, BadToolInput, never>. Wrap the successful value: Effect.succeed",
+    "height": 602,
+    "sourceHash": "4f0e1e7157edda2f83e04bec337c3e8c00d7862b80eebde6c468d2e1f44edc0b",
+    "width": 998
+  },
+  "effect-propagate": {
+    "description": "Run these steps in an Effect: Effect.gen(function* () {. Read the value; propagate errors: yield*. Use the returned value: `Tool: ${name}`",
+    "height": 453,
+    "sourceHash": "bd6178cdb40b37777425d7005312c9c7b85a19155840d22c296b5483ac7c0f9d",
+    "width": 662
+  },
+  "effect-recover": {
+    "description": "No typed errors remain: never. Same successful expression: `Tool: ${name}`. Return a fallback: .pipe(\n    Effect.catchAll((error) => Effect.succeed(error.message)),\n  )",
+    "height": 517,
+    "sourceHash": "574743f1970067c506c307aed0412642b8ce7020b5e8fd26a75d1cd3201bcc9a",
+    "width": 1074
+  },
+  "rust-define": {
+    "description": "Return type includes errors: Result<String, BadToolInput>. Wrap the successful value: Ok(. Successful value: tool.to_string()",
+    "height": 669,
+    "sourceHash": "062955517881d7eb07ec62459342c9dd8c20e44b76dfc63e99347ad49b237f72",
+    "width": 955
+  },
+  "rust-propagate": {
+    "description": "Wrap the successful value: Ok(. Call the function: check_tool_name(tool). Propagate the error: ?",
+    "height": 277,
+    "sourceHash": "cec24fa52ec0282f86a4c201e865e560703a33d94316957ee66f6457fce335ae",
+    "width": 892
+  },
+  "rust-recover": {
+    "description": "Use the returned value: format!(\"Tool: {}\", tool). Return a fallback: Err(error) => error.message,",
+    "height": 346,
+    "sourceHash": "5e7a6e48b96d6243ed75afbc2909c59ebc85cbc6d2967fabda257a7175cc78ef",
+    "width": 726
+  },
+  "typescript-define": {
+    "description": "Thrown errors aren’t recorded: ): string. Return the value: return tool",
+    "height": 634,
+    "sourceHash": "178fb727b781892d5d483d9404ce007fc46457ec677dfd171acc5232fb2bb60e",
+    "width": 870
+  },
+  "typescript-propagate": {
+    "description": "Use the returned value: `Tool: ${checkToolName(tool)}`",
+    "height": 207,
+    "sourceHash": "18dab0f8d5b7bb06c31bd639afd73f7efc44a313ba549ea7ac4f1ddfd5de6737",
+    "width": 662
+  },
+  "typescript-recover": {
+    "description": "Wrap the call in try: try {\n    return `Tool: ${checkToolName(tool)}`. Same successful expression: `Tool: ${checkToolName(tool)}`. Check the error in catch: } catch (error: unknown) {\n    if (error instanceof BadToolInput) {\n      return error.message\n    }\n    throw error\n  }",
+    "height": 509,
+    "sourceHash": "18ee321561f40b76d65862d5571cdbb201b61fe4a87f6dc8e817b2c6b4da27d9",
+    "width": 870
+  }
+}

@@ -1,114 +1,123 @@
 'use client';
 
+import { Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-import {
-  documentationNavigation,
-  flattenDocumentationLinks,
-  primaryNavigation,
-} from '@/lib/navigation';
-
-function MobileLink({
-  href,
-  label,
-  onNavigate,
-}: {
-  href: string;
-  label: string;
-  onNavigate: () => void;
-}) {
-  const pathname = usePathname();
-  const active =
-    href === '/'
-      ? pathname === '/'
-      : pathname === href || pathname.startsWith(`${href}/`);
-
-  return (
-    <Link
-      aria-current={active ? 'page' : undefined}
-      className="docs-focus-ring flex items-center gap-2 rounded-sm text-2xl font-medium text-foreground data-[active=true]:underline data-[active=true]:underline-offset-4"
-      data-active={active}
-      href={href}
-      onClick={onNavigate}
-    >
-      {label}
-    </Link>
-  );
-}
+import { DocsNavigationTree } from '@/components/docs-sidebar';
+import { documentationNavigation, primaryNavigation } from '@/lib/navigation';
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const pathname = usePathname();
+  const dialogId = useId();
+  const titleId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!open) {
+      dialog.close();
+      return;
+    }
+
+    dialog.showModal();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => {
+      if (desktop.matches) setOpen(false);
+    };
+    desktop.addEventListener('change', closeOnDesktop);
+    closeOnDesktop();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      desktop.removeEventListener('change', closeOnDesktop);
+    };
+  }, [open]);
+
+  const close = () => setOpen(false);
 
   return (
     <>
       <button
+        aria-controls={dialogId}
         aria-expanded={open}
-        aria-label="Toggle menu"
-        className="docs-focus-ring extend-touch-target mr-4 inline-flex h-8 touch-manipulation items-center justify-start gap-2.5 rounded-sm p-0 text-foreground hover:bg-transparent lg:hidden"
-        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="dialog"
+        aria-label="Open navigation"
+        className="docs-focus-ring mr-4 inline-flex h-9 items-center gap-2 rounded-md text-sm font-medium text-foreground lg:hidden"
+        onClick={() => setOpen(true)}
         type="button"
       >
-        <span className="relative flex h-8 w-4 items-center justify-center">
-          <span aria-hidden="true" className="relative size-4">
-            <span
-              className={`absolute left-0 block h-0.5 w-4 bg-foreground transition-all duration-100 ${
-                open ? 'top-[0.4rem] -rotate-45' : 'top-1'
-              }`}
-            />
-            <span
-              className={`absolute left-0 block h-0.5 w-4 bg-foreground transition-all duration-100 ${
-                open ? 'top-[0.4rem] rotate-45' : 'top-2.5'
-              }`}
-            />
-          </span>
-        </span>
-        <span className="flex h-8 items-center text-lg leading-none font-medium">
-          Menu
-        </span>
+        <Menu aria-hidden="true" className="size-4" />
+        Menu
       </button>
-      {open ? (
-        <div className="fixed inset-x-0 top-[var(--header-height)] z-40 h-[calc(100svh-var(--header-height))] overflow-y-auto border-none bg-background/90 p-0 shadow-none backdrop-blur lg:hidden">
-          <nav
-            aria-label="Mobile navigation"
-            className="flex flex-col gap-12 px-6 py-6"
-          >
-            <section className="flex flex-col gap-4">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                Menu
-              </h2>
-              <div className="flex flex-col gap-3">
-                {primaryNavigation.map((item) => (
-                  <MobileLink
+      <dialog
+        aria-labelledby={titleId}
+        className="mobile-nav-dialog"
+        id={dialogId}
+        onClose={close}
+        ref={dialogRef}
+      >
+        <button
+          aria-label="Close navigation backdrop"
+          className="mobile-nav-backdrop"
+          onClick={close}
+          tabIndex={-1}
+          type="button"
+        />
+        <div className="mobile-nav-panel">
+          <div className="mobile-nav-header">
+            <h2 id={titleId}>Documentation</h2>
+            <button
+              aria-label="Close navigation"
+              className="docs-focus-ring mobile-nav-close"
+              onClick={close}
+              type="button"
+            >
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+          <nav aria-label="Mobile navigation" className="mobile-nav-content">
+            <div className="mobile-nav-primary">
+              {primaryNavigation.map((item) => {
+                const active =
+                  item.href === '/'
+                    ? pathname === '/'
+                    : pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`);
+                return (
+                  <Link
+                    aria-current={active ? 'location' : undefined}
+                    className="docs-focus-ring"
+                    data-active={active}
                     href={item.href}
                     key={item.href}
-                    label={item.label}
-                    onNavigate={() => setOpen(false)}
-                  />
-                ))}
-              </div>
-            </section>
+                    onClick={close}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
             {documentationNavigation.map((group) => (
-              <section className="flex flex-col gap-4" key={group.label}>
-                <h2 className="text-sm font-medium text-muted-foreground">
-                  {group.label === 'BAML' ? 'Sections' : group.label}
-                </h2>
-                <div className="flex flex-col gap-3">
-                  {flattenDocumentationLinks(group.links).map((item) => (
-                    <MobileLink
-                      href={item.href}
-                      key={item.href}
-                      label={item.label}
-                      onNavigate={() => setOpen(false)}
-                    />
-                  ))}
-                </div>
+              <section className="mobile-nav-section" key={group.label}>
+                <h3>
+                  {group.label === 'BAML' ? 'BAML documentation' : group.label}
+                </h3>
+                <DocsNavigationTree
+                  links={group.links}
+                  onNavigate={close}
+                  storageId={`mobile:${group.label}`}
+                  variant="mobile"
+                />
               </section>
             ))}
           </nav>
         </div>
-      ) : null}
+      </dialog>
     </>
   );
 }

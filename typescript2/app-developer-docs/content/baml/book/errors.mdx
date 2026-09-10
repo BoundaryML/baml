@@ -13,13 +13,17 @@ BAML makes a big bet on error handling: errors are ordinary values, and the comp
 
 You can see the difference in two places: how you write a function that can fail, and how you call it.
 
-The BAML excerpts through error context add to one project. The lambda example repeats `BadToolInput` for context; keep the existing declaration when adding it. The final checked failure is a separate project.
+## Error handling across languages
 
-## Write a function that can fail
+Each example checks a tool name: a valid name is returned as a string, and an empty name produces a `BadToolInput` value. The caller formats a valid name as `Tool: search`. The recovery example returns the error’s message when validation fails. Choose a language to see both sides of the pattern.
 
-Each example in this section checks a tool name. A valid name is returned as a string. An empty name produces a `BadToolInput` value.
+<LanguageTabs languages={["TypeScript", "Effect.ts", "Rust"]}>
 
-### TypeScript
+<div>
+
+<p className="language-tabs-heading">Write a function that can fail</p>
+
+<CodeExample language="typescript" annotation="typescript-define">
 
 ```typescript
 class BadToolInput extends Error {
@@ -39,7 +43,72 @@ function checkToolName(tool: string): string {
 }
 ```
 
-### Effect.ts
+</CodeExample>
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `Error` | Base class for an exception. |
+| `throw` | Stop the function and send an exception to the caller. |
+
+</div>
+
+<p className="language-tabs-heading">Call without handling the error</p>
+
+<CodeExample language="typescript" annotation="typescript-propagate">
+
+```typescript
+function displayToolName(tool: string): string {
+  return `Tool: ${checkToolName(tool)}`
+}
+```
+
+</CodeExample>
+
+<p className="new-concepts-empty">No new error-handling concepts. Exceptions propagate through the call.</p>
+
+<p className="language-tabs-heading">Handle the error</p>
+
+<CodeExample language="typescript" annotation="typescript-recover">
+
+```typescript
+function displayToolName(tool: string): string {
+  try {
+    return `Tool: ${checkToolName(tool)}`
+  } catch (error: unknown) {
+    if (error instanceof BadToolInput) {
+      return error.message
+    }
+    throw error
+  }
+}
+```
+
+</CodeExample>
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `try` | Enclose code whose exceptions you want to handle. |
+| `catch` | Receive an exception thrown inside `try`. |
+| `unknown` | Require a type check before using the caught value. |
+| `instanceof` | Check whether the caught value is a `BadToolInput`. |
+
+</div>
+
+</div>
+
+<div>
+
+<p className="language-tabs-heading">Write a function that can fail</p>
+
+<CodeExample language="typescript" annotation="effect-define">
 
 ```typescript
 import { Data, Effect } from "effect"
@@ -58,7 +127,89 @@ function checkToolName(
 }
 ```
 
-### Rust
+</CodeExample>
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `Data.TaggedError` | Define an error class with a named tag. |
+| `Effect<A, E, R>` | A computation’s success type, error type, and required services, in that order. |
+| `Effect.fail` | Create a computation that fails with an error. |
+| `Effect.succeed` | Create a computation that succeeds with a value. |
+| `never` | In the requirements position: no required services. |
+
+</div>
+
+<p className="language-tabs-heading">Call without handling the error</p>
+
+<CodeExample language="typescript" annotation="effect-propagate">
+
+```typescript
+function displayToolName(
+  tool: string,
+): Effect.Effect<string, BadToolInput, never> {
+  return Effect.gen(function* () {
+    const name = yield* checkToolName(tool)
+    return `Tool: ${name}`
+  })
+}
+```
+
+</CodeExample>
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `Effect.gen` | Build an Effect computation from a generator. |
+| `function*` | Declare a JavaScript generator function. |
+| `yield*` | Read an Effect’s successful value, or propagate its failure. |
+
+</div>
+
+<p className="language-tabs-heading">Handle the error</p>
+
+<CodeExample language="typescript" annotation="effect-recover">
+
+```typescript
+function displayToolName(
+  tool: string,
+): Effect.Effect<string, never, never> {
+  return Effect.gen(function* () {
+    const name = yield* checkToolName(tool)
+    return `Tool: ${name}`
+  }).pipe(
+    Effect.catchAll((error) => Effect.succeed(error.message)),
+  )
+}
+```
+
+</CodeExample>
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `.pipe` | Pass the computation through operators, in order. |
+| `Effect.catchAll` | Handle expected errors with a fallback computation. |
+| `never` in the error position | No expected errors remain in the computation’s type. |
+
+</div>
+
+</div>
+
+<div>
+
+<p className="language-tabs-heading">Write a function that can fail</p>
+
+<CodeExample language="rust" annotation="rust-define">
 
 ```rust
 #[derive(Debug)]
@@ -78,59 +229,134 @@ fn check_tool_name(tool: &str) -> Result<String, BadToolInput> {
 }
 ```
 
-### BAML
+</CodeExample>
 
-<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-01"]} />
+<div className="new-concepts">
 
-Notice the return types. TypeScript writes `string`, but the possible error isn't part of the function type. Effect.ts returns `Effect<string, BadToolInput, never>`, and Rust returns `Result<String, BadToolInput>`. BAML writes the successful return type, `string`; the compiler infers that the function also `throws BadToolInput`.
+<p className="new-concepts-title">New concepts introduced</p>
 
-## Call a function that can fail
+| Word | What it means |
+| --- | --- |
+| `Result<T, E>` | A return value that contains either success or an error. |
+| `Ok(value)` | The successful variant of a `Result`. |
+| `Err(error)` | The error variant of a `Result`. |
 
-Each caller handles `BadToolInput` by returning its message.
+</div>
 
-### TypeScript
+<p className="language-tabs-heading">Call without handling the error</p>
 
-```typescript
-function displayToolName(tool: string): string {
-  try {
-    return checkToolName(tool)
-  } catch (error: unknown) {
-    if (error instanceof BadToolInput) {
-      return error.message
-    }
-    throw error
-  }
+<CodeExample language="rust" annotation="rust-propagate">
+
+```rust
+fn display_tool_name(tool: &str) -> Result<String, BadToolInput> {
+    Ok(format!("Tool: {}", check_tool_name(tool)?))
 }
 ```
 
-### Effect.ts
+</CodeExample>
 
-```typescript
-function displayToolName(
-  tool: string,
-): Effect.Effect<string, never, never> {
-  return checkToolName(tool).pipe(
-    Effect.catchAll((error) => Effect.succeed(error.message)),
-  )
-}
-```
+<div className="new-concepts">
 
-### Rust
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `?` | Extract success or return the error; requires a compatible return type. |
+
+</div>
+
+<p className="language-tabs-heading">Handle the error</p>
+
+<CodeExample language="rust" annotation="rust-recover">
 
 ```rust
 fn display_tool_name(tool: &str) -> String {
     match check_tool_name(tool) {
-        Ok(tool) => tool,
+        Ok(tool) => format!("Tool: {}", tool),
         Err(error) => error.message,
     }
 }
 ```
 
-### BAML
+</CodeExample>
 
-<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-02"]} />
+<div className="new-concepts">
 
-At the call site, TypeScript uses a `try` block and narrows an `unknown` error. Effect.ts transforms the wrapped computation, and Rust matches on the returned `Result`. In BAML, `catch` attaches to the expression that can fail, and the compiler narrows the error value in each arm.
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `match` | Select a branch by variant; all variants must be covered. |
+
+</div>
+
+</div>
+
+</LanguageTabs>
+
+## In BAML
+
+The BAML excerpts through error context add to one project. The lambda example repeats `BadToolInput` for context; keep the existing declaration when adding it. The final checked failure is a separate project.
+
+### Write a function that can fail
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-01"]} annotation="baml-define" />
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| `throw` | Stop the function and send an error value to the caller. |
+| Inferred `throws` | The compiler tracks errors from the body and its calls. |
+
+</div>
+
+### Call a function that can fail
+
+Call `check_tool_name` without a handler:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-propagation"]} annotation="baml-propagate" />
+
+<p className="new-concepts-empty">No new error-handling concepts. Errors propagate through the call.</p>
+
+### Handle the error
+
+Append `catch` to return the error’s message instead:
+
+<BamlProject id="listing-08-01" file="baml_src/main.baml" regions={["excerpt-02"]} annotation="baml-recover" />
+
+<div className="new-concepts">
+
+<p className="new-concepts-title">New concepts introduced</p>
+
+| Word | What it means |
+| --- | --- |
+| Postfix `catch` | Handle errors from the preceding expression. |
+| `throws never` | Ask the compiler to reject any error that could escape. |
+
+</div>
+
+## Compare the patterns
+
+### Compare the signatures
+
+| Language | Written return type | Where the error is tracked |
+| --- | --- | --- |
+| TypeScript | `string` | Not part of the function type |
+| Effect.ts | `Effect<string, BadToolInput, never>` | In the `Effect` type |
+| Rust | `Result<String, BadToolInput>` | In the `Result` type |
+| BAML | `string` | In the inferred `throws BadToolInput` effect |
+
+### Compare the callers
+
+| Language | Handling construct | Return type after recovery |
+| --- | --- | --- |
+| TypeScript | `try` / `catch` with `instanceof` | `string`; other errors are rethrown |
+| Effect.ts | `Effect.catchAll` | `Effect<string, never, never>` |
+| Rust | `match` on `Ok` / `Err` | `String` |
+| BAML | Expression-level `catch` | `string`, with `throws never` checked |
 
 Rust's `Result<T, E>` and Effect.ts's typed error channel shaped this model. BAML keeps the successful return value unwrapped and represents possible failures as an inferred error effect.
 

@@ -12,8 +12,6 @@ const expectedAuthoredRoutes = [
   '/baml/book',
   '/baml/book/concurrency',
   '/baml/book/errors',
-  '/baml/book/foundations',
-  '/baml/book/foundations/functions',
   '/baml/book/interfaces',
   '/baml/bridges',
   '/baml/bridges/typescript',

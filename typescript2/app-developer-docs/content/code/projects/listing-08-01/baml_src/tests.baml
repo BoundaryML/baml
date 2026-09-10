@@ -38,3 +38,12 @@ test "creating a lambda has no effect and calling it propagates its effect" {
     assert.equal(failed, "score is negative");
     assert.equal(apply_validator((score: int) -> int { score + 1 }, 4), 5);
 }
+
+test "ordinary calls return success and propagate typed errors" {
+    assert.equal(checked_tool_name("search"), "Tool: search");
+    assert.equal(display_tool_name("search"), "Tool: search");
+    let message = checked_tool_name("") catch (e) {
+        BadToolInput => e.message,
+    };
+    assert.equal(message, "tool name is empty");
+}

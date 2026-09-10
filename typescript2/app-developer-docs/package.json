@@ -34,7 +34,8 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "docs:authored:validate": "tsx --test tests/authored-content.test.ts",
+    "docs:annotations:generate": "tsx scripts/generate-code-annotations.ts",
+    "docs:authored:validate": "tsx --test tests/authored-content.test.ts tests/code-annotations.test.ts",
     "docs:book:validate": "tsx scripts/validate-book-behavior.ts",
     "docs:contracts:sample": "tsx scripts/generate-contract-samples.ts",
     "docs:db:backfill": "tsx scripts/backfill-document-store.ts",
