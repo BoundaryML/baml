@@ -7888,7 +7888,9 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     throw
 
   L0:
-    load_const null /* unknown class: map */
+    load_type string
+    load_type baml.toml.Item
+    alloc_map 0
     store_var items
     load_type string
     load_type baml.json.json

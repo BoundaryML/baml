@@ -311,7 +311,11 @@ pub fn reserved_edge_names() -> &'static [&'static str] {
     static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
     NAMES.get_or_init(|| {
         let mut names = stdlib_package_names().to_vec();
-        names.extend(["root", "env", RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY]);
+        names.extend([
+            "root",
+            "env",
+            RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY,
+        ]);
         names
     })
 }

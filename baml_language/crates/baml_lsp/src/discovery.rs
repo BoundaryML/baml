@@ -13,9 +13,9 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::SourceRootKind;
 #[cfg(not(target_arch = "wasm32"))]
 use baml_base::Name;
+use baml_base::SourceRootKind;
 
 use crate::{
     mutation::RootSpec,

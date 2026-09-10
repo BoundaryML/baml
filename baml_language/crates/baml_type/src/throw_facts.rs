@@ -14,7 +14,7 @@
 //! input, and the cache manifest serializes it (hence the borsh derives).
 //!
 //! Generic over the head like the types it holds: the solver works at the
-//! compile-time head ([`DeclName`](crate::DeclName), the default), the cache
+//! compile-time head ([`DeclName`], the default), the cache
 //! manifest persists the wire head (`FunctionThrowFacts<TypeName>`), and the
 //! seed boundary re-spells between them through the file's root.
 

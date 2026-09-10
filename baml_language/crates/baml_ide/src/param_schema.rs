@@ -13,9 +13,8 @@
 //! while editing.
 //!
 //! Table keys and type `name`s are the canonical dotted FQN the engine
-//! registers and emits (`user.shapes.Foo` — [`QualifiedTypeName::render_dotted`]
-//! with `user_facing = false`), so a `$baml: { type: name }` marker built from
-//! a schema round-trips through the args wire protocol unchanged.
+//! registers and emits (`user.shapes.Foo`), so a `$baml: { type: name }`
+//! marker built from a schema round-trips through the args wire protocol unchanged.
 
 use std::collections::BTreeMap;
 

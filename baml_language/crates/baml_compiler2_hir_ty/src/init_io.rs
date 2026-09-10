@@ -286,7 +286,9 @@ fn qualified_name<'db>(
         let viewpoint = crate::render::Viewpoint::user_facing(db, viewer);
         spelled = match viewpoint.package_prefix(pkg.root) {
             Some(prefix) => Name::new(prefix),
-            None => baml_compiler2_hir::package::spelling(db).of(pkg.root).clone(),
+            None => baml_compiler2_hir::package::spelling(db)
+                .of(pkg.root)
+                .clone(),
         };
         parts.push(spelled.as_str());
     }

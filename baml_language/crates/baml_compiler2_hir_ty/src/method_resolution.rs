@@ -159,11 +159,7 @@ pub(crate) fn external_class_for_type(
         }
         InferTy::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
-            return external_class_for_type(
-                facts,
-                &Ty::from_plain(&expanded),
-                fuel.checked_sub(1)?,
-            );
+            external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
         _ => None,
     }

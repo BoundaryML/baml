@@ -140,7 +140,7 @@ pub fn collect_alias_bodies(
 /// [`collect_block_attrs`] / [`collect_alias_bodies`]). `ppir_expansion_items`
 /// is a per-file query, so computing these inline made expansion `O(files²)`:
 /// each of N files re-lowered all N files. Wrapping them in a single
-/// root-table-keyed [`salsa::tracked`] query ([`project_expansion_maps`])
+/// root-table-keyed [`salsa::tracked`] query ([`expansion_maps_within`])
 /// computes them once and shares the result across every file's expansion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProjectExpansionMaps {

@@ -677,6 +677,12 @@ struct ReturnFrame {
     candidates: Vec<Ty>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct ThrowsChannel {
+    expected: Option<Ty>,
+    contributions: Vec<(ExprId, Ty)>,
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback. Short-lived and
@@ -1496,6 +1502,9 @@ fn infer_body_impl<'db>(
         plain_bounds,
         stable_body_owner_identity(db, owner),
     );
+    if !declared_throws_open {
+        ctx.throws_channels[0].expected.clone_from(&declared_throws);
+    }
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
     ctx.body_owner_id = Some(owner);
@@ -1714,7 +1723,7 @@ struct InferenceContext<'db> {
     /// The effect-channel stack: contributions from `throw` sites and
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
-    throws_channels: Vec<Vec<(ExprId, Ty)>>,
+    throws_channels: Vec<ThrowsChannel>,
     /// S17 pending diagnostics: anchored on arena ids, interned payloads;
     /// finalized into `InferenceResult::diagnostics` (plain types) at
     /// finish - r-a's `InferenceDiagnostic` discipline.
@@ -1887,7 +1896,7 @@ impl<'db> InferenceContext<'db> {
                 .collect(),
             declared_throws: None,
             declared_throws_open: false,
-            throws_channels: vec![Vec::new()],
+            throws_channels: vec![ThrowsChannel::default()],
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
             infer_var_origins: FxHashMap::default(),
@@ -2248,7 +2257,7 @@ impl<'db> InferenceContext<'db> {
             }
             return ty;
         }
-        let ty = self.infer_expr(body, expr, &Expectation::has_type(expected.clone()));
+        let ty = self.infer_expr_with_hint(body, expr, Some(expected));
         let saved_anchor = self.obligation_anchor.replace(expr);
         let fits = self.sub(&ty, expected);
         self.obligation_anchor = saved_anchor;
@@ -2269,6 +2278,25 @@ impl<'db> InferenceContext<'db> {
             self.record_checked_function_adapter(expr, &ty, expected);
         }
         ty
+    }
+
+    /// Supply value context without checking the outer relation. Return values
+    /// use `check_expr`; thrown values need effect diagnostics and panic filtering
+    /// instead, but share the same contextual inference.
+    fn infer_expr_with_hint(&mut self, body: &ExprBody, expr: ExprId, expected: Option<&Ty>) -> Ty {
+        let expectation = expected
+            .cloned()
+            .map_or(Expectation::None, Expectation::has_type);
+        self.infer_expr(body, expr, &expectation)
+    }
+
+    fn infer_throw(&mut self, body: &ExprBody, value: ExprId) {
+        let expected = self
+            .throws_channels
+            .last()
+            .and_then(|channel| channel.expected.clone());
+        let thrown = self.infer_expr_with_hint(body, value, expected.as_ref());
+        self.record_throw(value, &thrown);
     }
 
     fn infer_return(
@@ -2873,7 +2901,7 @@ impl<'db> InferenceContext<'db> {
                     // Entering it here would key every lookup into a
                     // namespace nothing was registered under.
                     self.template_params.push(frame);
-                    self.throws_channels.push(Vec::new());
+                    self.throws_channels.push(ThrowsChannel::default());
                     let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
                     self.infer_expr(body, *flatten, &Expectation::None);
                     self.diverges = saved_diverges;
@@ -2992,8 +3020,7 @@ impl<'db> InferenceContext<'db> {
                 Ty::never()
             }
             Expr::Throw { value } => {
-                let thrown = self.infer_expr(body, *value, &Expectation::None);
-                self.record_throw(*value, &thrown);
+                self.infer_throw(body, *value);
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
@@ -3002,53 +3029,12 @@ impl<'db> InferenceContext<'db> {
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
                 type_name,
-                type_args,
                 fields,
                 spreads,
+                ..
             } => {
                 self.validate_runtime_type_arg_operands(body, expr);
-                // `map { .. }` is a map literal in constructor clothing
-                // (identifier keys are string keys), never a class named
-                // `map` - same routing guard as the parser's object form.
-                if type_args.is_empty()
-                    && spreads.is_empty()
-                    && matches!(type_name.0.as_slice(), [seg] if seg.as_str() == "map")
-                {
-                    if let Some((key_ty, value_ty)) = self.expected_map_entry(expected) {
-                        for field in fields {
-                            self.check_expr(body, field.value, &value_ty);
-                        }
-                        Ty::intern(InferTy::Map {
-                            key: key_ty,
-                            value: value_ty,
-                            attr: TyAttr::default(),
-                        })
-                    } else if fields.is_empty() {
-                        self.untyped_empty_container_ty(expr, |value| {
-                            Ty::intern(InferTy::Map {
-                                key: Ty::string(),
-                                value,
-                                attr: TyAttr::default(),
-                            })
-                        })
-                    } else {
-                        let values: Vec<Ty> = fields
-                            .iter()
-                            .map(|field| {
-                                let value_ty =
-                                    self.infer_expr(body, field.value, &Expectation::None);
-                                self.widen_fresh(&value_ty)
-                            })
-                            .collect();
-                        Ty::intern(InferTy::Map {
-                            key: Ty::string(),
-                            value: self.union_of(&values),
-                            attr: TyAttr::default(),
-                        })
-                    }
-                } else {
-                    self.infer_object(body, expr, type_name, fields, spreads)
-                }
+                self.infer_object(body, expr, type_name, fields, spreads)
             }
             Expr::MemberAccess { base, member } => {
                 if self.check_runtime_id_member(body, expr, *base, member) {
@@ -3155,8 +3141,7 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
             }
             Stmt::Throw { value } => {
-                let thrown = self.infer_expr(body, *value, &Expectation::None);
-                self.record_throw(*value, &thrown);
+                self.infer_throw(body, *value);
                 self.diverges = Diverges::Always;
             }
             // Loop-local terminators: the path past them is dead; the loop
@@ -3413,7 +3398,11 @@ impl<'db> InferenceContext<'db> {
             // existing at the closing brace, which reaches lowering with no
             // type argument to bind it to.
             for channel in &mut self.throws_channels {
-                for (_, contribution) in channel.iter_mut() {
+                if let Some(expected) = &mut channel.expected {
+                    *expected =
+                        replace_rigid_param(expected, &binding.parameter, &binding.occurrence_ty);
+                }
+                for (_, contribution) in &mut channel.contributions {
                     *contribution = replace_rigid_param(
                         contribution,
                         &binding.parameter,
@@ -8429,7 +8418,26 @@ impl<'db> InferenceContext<'db> {
         // The lambda's OWN effect channel: contributions inside the body
         // belong to the lambda, not the enclosing function - defining a
         // throwing lambda throws nothing; calling it does.
-        self.throws_channels.push(Vec::new());
+        // Only a closed contextual effect supplies value context. An open
+        // effect is inferred from the body, not imposed on it.
+        let contextual_throws = if written_throws.is_none() {
+            expected_fn
+                .as_ref()
+                .map(|(_, _, throws)| self.structurally_resolve(throws))
+                .filter(|throws| {
+                    !throws.has_infer()
+                        && !throws.has_error()
+                        && !throws.has_typevar()
+                        && !matches!(throws.kind(), InferTy::Unknown { .. })
+                })
+        } else {
+            None
+        };
+        let written_throws = written_throws.or(contextual_throws);
+        self.throws_channels.push(ThrowsChannel {
+            expected: written_throws.clone().filter(|ty| !ty.has_infer()),
+            contributions: Vec::new(),
+        });
         let ret_ty = match def.body {
             Some(lambda_body) => {
                 let saved_scope = self.current_scope;
@@ -8475,26 +8483,11 @@ impl<'db> InferenceContext<'db> {
             }
             None => ret_expectation.unwrap_or_else(Ty::error),
         };
-        let channel = self.throws_channels.pop().expect("pushed above");
-        // An OMITTED clause in a GROUND typed context inherits the
-        // context's throws as its contract (TIR's rule: the lambda adopts
-        // the expected surface, and its body checks against it - the
-        // "local violation" road). Effect-param and open contexts skip:
-        // there the channel BINDS the context instead.
-        let contextual_throws = if written_throws.is_none() {
-            expected_fn
-                .as_ref()
-                .map(|(_, _, throws)| self.structurally_resolve(throws))
-                .filter(|throws| {
-                    !throws.has_infer()
-                        && !throws.has_error()
-                        && !throws.has_typevar()
-                        && !matches!(throws.kind(), InferTy::Unknown { .. })
-                })
-        } else {
-            None
-        };
-        let written_throws = written_throws.or(contextual_throws);
+        let channel = self
+            .throws_channels
+            .pop()
+            .expect("pushed above")
+            .contributions;
         // A WRITTEN closed clause is the lambda's contract: its body's
         // contributions check against it exactly as a function's do
         // (open contributions judge at finalize).
@@ -10808,9 +10801,14 @@ impl<'db> InferenceContext<'db> {
         expected: &Expectation,
     ) -> Ty {
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
-        self.throws_channels.push(Vec::new());
+        // Caught values need not satisfy the enclosing callable's contract.
+        self.throws_channels.push(ThrowsChannel::default());
         let base_ty = self.infer_expr(body, base, &branch_expectation);
-        let channel = self.throws_channels.pop().expect("pushed above");
+        let channel = self
+            .throws_channels
+            .pop()
+            .expect("pushed above")
+            .contributions;
         // catch discharges a SET of throw FACTS, never a value of a
         // union type (match scrutinizes values; catch removes facts):
         // each contribution finalizes and top-level unions split into
@@ -11176,6 +11174,7 @@ impl<'db> InferenceContext<'db> {
         self.throws_channels
             .last_mut()
             .expect("channel stack never empty")
+            .contributions
             .push((at, contribution));
     }
 
@@ -11466,7 +11465,7 @@ impl<'db> InferenceContext<'db> {
             // named part joining the union (spec rule 3 - callers see
             // declared + inferred).
             declared => {
-                let contributions = self.throws_channels[0].clone();
+                let contributions = self.throws_channels[0].contributions.clone();
                 let mut resolved: Vec<Ty> = contributions
                     .iter()
                     .map(|(_, ty)| self.finalize_ty(ty).into_ty())
@@ -11509,6 +11508,7 @@ impl<'db> InferenceContext<'db> {
             let declared_facts =
                 crate::package_interface::flatten_ty_to_facts(&declared_for_coverage);
             let effective: std::collections::BTreeSet<baml_type::Ty> = self.throws_channels[0]
+                .contributions
                 .clone()
                 .iter()
                 .flat_map(|(_, ty)| {

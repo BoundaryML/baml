@@ -281,7 +281,8 @@ impl Spelling {
                         SpellingCollision::SharedName { name: seen, roots } if *seen == name => {
                             Some(roots)
                         }
-                        SpellingCollision::SharedName { .. } | SpellingCollision::ManyNames { .. } => None,
+                        SpellingCollision::SharedName { .. }
+                        | SpellingCollision::ManyNames { .. } => None,
                     }) {
                         Some(roots) => roots.push(root),
                         None => collisions.push(SpellingCollision::SharedName {

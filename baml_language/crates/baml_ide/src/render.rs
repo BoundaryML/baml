@@ -119,7 +119,7 @@ fn canonical_path_in(spelling: &Spelling, qtn: &DeclName) -> String {
         .join(".")
 }
 
-/// [`canonical_path_in`] over the database's spelling.
+/// `canonical_path_in` over the database's spelling.
 pub fn canonical_path(db: &dyn baml_compiler2_ppir::Db, qtn: &DeclName) -> String {
     canonical_path_in(spelling(db), qtn)
 }
