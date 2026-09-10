@@ -219,6 +219,7 @@ function baml._random_in_range(draw: int, lower: int, upper: int) -> int  [built
 function baml.abs(self: ?) -> int  [builtin]
 function baml.count_ones(self: ?) -> int  [builtin]
 function baml.count_zeros(self: ?) -> int  [builtin]
+function baml.div_euclid(self: ?, other: int) -> int  [builtin]
 function baml.ilog(self: ?, base: int) -> int  [builtin]
 function baml.isqrt(self: ?) -> int  [builtin]
 function baml.leading_ones(self: ?) -> int  [builtin]
@@ -234,6 +235,7 @@ function baml.pow(self: ?, exp: int) -> int  [builtin]
 function baml.random(lower: int, upper: int, rng: root.random.Rng = root.random.SystemRandom.get()) -> int  [expr] {
   { if (lower Ge upper) { throw root.errors.InvalidArgument { message: `...` } }; let r = int._random_in_range(rng.random_int(), lower, upper); while r Eq upper { r = int._random_in_range(rng.random_int(), lower, upper) } } r
 }
+function baml.rem_euclid(self: ?, other: int) -> int  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
 

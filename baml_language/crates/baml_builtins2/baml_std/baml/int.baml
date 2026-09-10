@@ -125,6 +125,71 @@ class Int {
         $rust_function
     }
 
+    /// Returns the unique `q` satisfying
+    /// `self == q * other + self.rem_euclid(other)` with the remainder never
+    /// negative — the quotient paired with `rem_euclid`.
+    ///
+    /// This equals floor division (rounding toward negative infinity) when
+    /// `other` is positive, but rounds toward *positive* infinity instead
+    /// when `other` is negative: `(7).div_euclid(-3)` is `-2`, not `-3`
+    /// (`floor(7 / -3)`).
+    ///
+    /// This differs from `/`, which truncates toward zero. `/` and
+    /// `div_euclid` agree whenever `self` is non-negative or divides `other`
+    /// evenly; they differ by exactly one only when `self` is negative and
+    /// `other` doesn't divide it evenly — the case where truncation and
+    /// flooring round to different integers.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.DivisionByZero` if `other` is zero.
+    /// - `baml.panics.IntegerOverflow` for `int.min_value().div_euclid(-1)`,
+    ///   whose mathematical result `2^62` is one past `int.max_value()` — the
+    ///   same single case `int.min_value() / -1` already panics on.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (7).div_euclid(3)     // 2   (same as 7 / 3)
+    /// (-7).div_euclid(3)    // -3  (7 / 3 truncates to -2)
+    /// (7).div_euclid(-3)    // -2
+    /// (-7).div_euclid(-3)   // 3   (-7 / -3 truncates to 2)
+    /// ```
+    //baml:fallible
+    function div_euclid(self, other: int) -> int throws never {
+        $rust_function
+    }
+
+    /// Returns the remainder of dividing `self` by `other`, always in
+    /// `[0, |other|)` regardless of either operand's sign. Paired with
+    /// `div_euclid`; see that method for the identity they satisfy together.
+    ///
+    /// This differs from `%`, which takes the sign of the dividend and can be
+    /// negative: `(-7) % 3` is `-1`, but `(-7).rem_euclid(3)` is `2`. Use
+    /// `rem_euclid` for anything that treats the result as an index or an
+    /// offset into a cycle, where a negative remainder is a bug.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.DivisionByZero` if `other` is zero. Never overflows
+    ///   otherwise: the result satisfies `0 <= r < |other|`, and `|other|`
+    ///   is at most `2^62`, so `r` always fits in `int` — even
+    ///   `int.min_value().rem_euclid(-1)`, which is `0` because dividing by
+    ///   `1` or `-1` always leaves remainder `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (7).rem_euclid(3)     // 1
+    /// (-7).rem_euclid(3)    // 2   ((-7) % 3 is -1; this is never negative)
+    /// (7).rem_euclid(-3)    // 1
+    /// (-7).rem_euclid(-3)   // 2
+    /// ```
+    //baml:fallible
+    function rem_euclid(self, other: int) -> int throws never {
+        $rust_function
+    }
+
     // ─── Bit operations ───────────────────────────────────────────────────────
     //
     // All bit operations interpret `int` as a 64-bit two's-complement value:

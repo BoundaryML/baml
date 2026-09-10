@@ -131,6 +131,45 @@ impl BamlClassInt for PackageBamlImpl {
         })))
     }
 
+    fn div_euclid(int: i64, other: i64) -> Result<i64, VmRustFnError> {
+        if other == 0 {
+            return Err(VmPanic::DivisionByZero {
+                left: Value::int(int),
+                right: Value::int(other),
+            }
+            .into());
+        }
+        // `Value::INT_MIN` is `-2^62`, not `i64::MIN` (`-2^63`), so
+        // `Value::INT_MIN.div_euclid(-1)` fits comfortably in `i64` — the
+        // underlying primitive does not panic here. The guard exists because
+        // its result, `2^62`, is one past `Value::INT_MAX` and therefore not
+        // representable as a BAML `int` — the same i63 reason `abs()`'s
+        // guard above exists, not an i64-level overflow. Matches plain `/`'s
+        // existing `INT_MIN / -1` panic for the same underlying reason.
+        if int == Value::INT_MIN && other == -1 {
+            return Err(VmPanic::IntegerOverflow {
+                message: format!("{int}.div_euclid({other}) overflows int"),
+            }
+            .into());
+        }
+        Ok(int.div_euclid(other))
+    }
+
+    fn rem_euclid(int: i64, other: i64) -> Result<i64, VmRustFnError> {
+        if other == 0 {
+            return Err(VmPanic::DivisionByZero {
+                left: Value::int(int),
+                right: Value::int(other),
+            }
+            .into());
+        }
+        // Never overflows once the zero-divisor case is out of the way: the
+        // result satisfies 0 <= r < |other|, and |other| <= 2^62, so r always
+        // fits i63 — including `Value::INT_MIN.rem_euclid(-1)` (`0`, since
+        // dividing by ±1 always leaves remainder 0).
+        Ok(int.rem_euclid(other))
+    }
+
     // ── Bit operations ────────────────────────────────────────────────────────
 
     fn leading_zeros(int: i64) -> i64 {
