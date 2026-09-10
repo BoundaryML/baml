@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+type user.InvalidAssociatedBinding = unknown
+type user.InvalidAssociatedBinding$stream = unknown
+type user.InvalidImage = unknown
+type user.InvalidImage$stream = unknown
+type user.InvalidJson = unknown
+type user.InvalidJson$stream = unknown
+type user.InvalidMap = unknown
+type user.InvalidMap$stream = unknown
+type user.InvalidString = unknown
+type user.InvalidString$stream = unknown

@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    DeclName, Literal, MediaKind, Name, ParamTy, TyAttr,
+    DeclName, Name, ParamTy, TyAttr,
     interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
@@ -92,155 +92,50 @@ pub fn lookup_method<'db>(
     })
 }
 
-/// Source-less counterpart of [`receiver_class`]. It maps structural builtin
-/// types to the same canonical class names, but leaves the declaration lookup
-/// to the precompiled `PackageInterface` row.
+/// The member owner of `receiver`: its class declaration's name and the
+/// generic arguments the receiver pins. Nominal classes own themselves; the
+/// structural builtins (`int`, `T[]`, `image`, …) map through the compiler
+/// alias registry to their carrier declaration, literals deferring to their
+/// base primitive's class. Aliases are transparent: expand through the
+/// oracle (fuel-bounded like every alias walk) and resolve on the expansion.
+///
+/// Source-backed and precompiled packages resolve the same owner; only the
+/// declaration lookup differs ([`receiver_class`] vs the `PackageInterface`
+/// row).
 pub(crate) fn external_class_for_type(
     facts: &Facts<'_>,
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(DeclName, Vec<Ty>)> {
-    let lang = facts.lang();
-    // The language root is looked up per builtin arm, not once up front: only
-    // a BUILTIN receiver needs it to name its class, while a class receiver
-    // already carries its own head. Demanding it eagerly made every class
-    // receiver unresolvable in a database with no standard library installed,
-    // which is a state this database supports.
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        Some((
-            DeclName::in_root(
-                lang.get(baml_base::LangPackage::Baml)?,
-                namespace.iter().map(Name::new).collect(),
-                Name::new(name),
-            ),
-            args,
-        ))
-    };
     match receiver.kind() {
         InferTy::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
-        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        InferTy::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        InferTy::Type { .. } => Some((
-            DeclName::in_root(
-                lang.get(baml_base::LangPackage::Reflect)?,
-                Vec::new(),
-                Name::new("Type"),
-            ),
-            Vec::new(),
-        )),
-        InferTy::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
         InferTy::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
             external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
-        _ => None,
+        // The language root is looked up here, for a BUILTIN receiver, and
+        // not once up front: only a builtin needs it to name its carrier,
+        // while a class receiver already carries its own head. Demanding it
+        // eagerly made every class receiver unresolvable in a database with
+        // no standard library installed, which is a state this database
+        // supports.
+        _ => {
+            let (definition, args) = baml_type::compiler_aliases::member_owner(receiver)?;
+            Some((definition.decl_name(facts.lang())?, args))
+        }
     }
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic
-/// arguments the receiver pins. This table IS the language's builtin-class
-/// correspondence (TIR: `resolve_builtin_member` call sites), one row per
-/// structural kind; literals defer to their base primitive's class.
+/// arguments the receiver pins (TIR: `resolve_builtin_member` call sites).
 pub(crate) fn receiver_class<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     fuel: u32,
 ) -> Option<(ClassLoc<'db>, Vec<Ty>)> {
-    let lang = facts.lang();
-    let builtin = |namespace: &[&str], name: &str, args: Vec<Ty>| {
-        let qtn = DeclName::in_root(
-            lang.get(baml_base::LangPackage::Baml)?,
-            namespace.iter().map(Name::new).collect(),
-            Name::new(name),
-        );
-        match facts.definition_of(&qtn) {
-            Some(Definition::Class(class)) => Some((class, args)),
-            _ => None,
-        }
-    };
-    match receiver.kind() {
-        InferTy::Class(qtn, args, _) => match facts.definition_of(qtn) {
-            Some(Definition::Class(class)) => Some((class, args.to_vec())),
-            _ => None,
-        },
-        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        InferTy::Future(value, error, _) => {
-            builtin(&["future"], "Future", vec![value.clone(), error.clone()])
-        }
-        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
-            builtin(&[], "String", Vec::new())
-        }
-        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
-            builtin(&[], "Int", Vec::new())
-        }
-        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
-            builtin(&[], "Bigint", Vec::new())
-        }
-        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
-            builtin(&[], "Float", Vec::new())
-        }
-        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
-            builtin(&[], "Bool", Vec::new())
-        }
-        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        InferTy::Type { .. } => {
-            let qtn = DeclName::in_root(
-                lang.get(baml_base::LangPackage::Reflect)?,
-                Vec::new(),
-                Name::new("Type"),
-            );
-            match facts.definition_of(&qtn) {
-                Some(Definition::Class(class)) => Some((class, Vec::new())),
-                _ => None,
-            }
-        }
-        InferTy::Media(kind, _) => {
-            let class = match kind {
-                MediaKind::Image => "Image",
-                MediaKind::Audio => "Audio",
-                MediaKind::Video => "Video",
-                MediaKind::Pdf => "Pdf",
-                // Generic media (`media`, any subtype) has no single class.
-                MediaKind::Generic => return None,
-            };
-            builtin(&["media"], class, Vec::new())
-        }
-        // Aliases are transparent: expand through the oracle (fuel-bounded
-        // like every alias walk) and resolve on the expansion.
-        InferTy::TypeAlias(qtn, _) => {
-            let expanded = facts.alias_def(qtn)?;
-            let fuel = fuel.checked_sub(1)?;
-            receiver_class(facts, &Ty::from_plain(&expanded), fuel)
-        }
+    let (name, args) = external_class_for_type(facts, receiver, fuel)?;
+    match facts.definition_of(&name) {
+        Some(Definition::Class(class)) => Some((class, args)),
         _ => None,
     }
 }

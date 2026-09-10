@@ -396,6 +396,11 @@ pub enum DiagnosticId {
     ReflectSpecializationFailed,
     /// An ordinary inference variable remained unresolved at writeback (E0155).
     TypeMustBeKnown,
+    /// A builtin type spelling was written with type arguments or
+    /// associated-type bindings it does not take (`image<string>`,
+    /// `map<string>`), diagnosed at AST lowering before the arguments could
+    /// be silently erased.
+    InvalidBuiltinTypeArguments,
 }
 
 impl DiagnosticId {
@@ -607,6 +612,7 @@ impl DiagnosticId {
             DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::TypeMustBeKnown => "E0155",
+            DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
         }
     }
 }

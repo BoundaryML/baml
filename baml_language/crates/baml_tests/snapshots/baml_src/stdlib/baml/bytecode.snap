@@ -4759,10 +4759,10 @@ function baml.json.to_string(value: unknown) -> string {
     return
 }
 
-function baml.media.Audio.base64(self: baml.media.Audio) -> string {
+function baml.media.Audio.base64(self: audio) -> string {
 }
 
-function baml.media.Audio.file(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.file(self: audio) -> string | null {
 }
 
 function baml.media.Audio.from_base64(base64: string, mime_type: string | null) -> audio {
@@ -4774,16 +4774,16 @@ function baml.media.Audio.from_file(file: string, mime_type: string | null) -> a
 function baml.media.Audio.from_url(url: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.mime_type(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.mime_type(self: audio) -> string | null {
 }
 
-function baml.media.Audio.url(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.url(self: audio) -> string | null {
 }
 
-function baml.media.Image.base64(self: baml.media.Image) -> string {
+function baml.media.Image.base64(self: image) -> string {
 }
 
-function baml.media.Image.file(self: baml.media.Image) -> string | null {
+function baml.media.Image.file(self: image) -> string | null {
 }
 
 function baml.media.Image.from_base64(base64: string, mime_type: string | null) -> image {
@@ -4795,16 +4795,16 @@ function baml.media.Image.from_file(file: string, mime_type: string | null) -> i
 function baml.media.Image.from_url(url: string, mime_type: string | null) -> image {
 }
 
-function baml.media.Image.mime_type(self: baml.media.Image) -> string | null {
+function baml.media.Image.mime_type(self: image) -> string | null {
 }
 
-function baml.media.Image.url(self: baml.media.Image) -> string | null {
+function baml.media.Image.url(self: image) -> string | null {
 }
 
-function baml.media.Pdf.base64(self: baml.media.Pdf) -> string {
+function baml.media.Pdf.base64(self: pdf) -> string {
 }
 
-function baml.media.Pdf.file(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.file(self: pdf) -> string | null {
 }
 
 function baml.media.Pdf.from_base64(base64: string, mime_type: string | null) -> pdf {
@@ -4816,16 +4816,16 @@ function baml.media.Pdf.from_file(file: string, mime_type: string | null) -> pdf
 function baml.media.Pdf.from_url(url: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.mime_type(self: pdf) -> string | null {
 }
 
-function baml.media.Pdf.url(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.url(self: pdf) -> string | null {
 }
 
-function baml.media.Video.base64(self: baml.media.Video) -> string {
+function baml.media.Video.base64(self: video) -> string {
 }
 
-function baml.media.Video.file(self: baml.media.Video) -> string | null {
+function baml.media.Video.file(self: video) -> string | null {
 }
 
 function baml.media.Video.from_base64(base64: string, mime_type: string | null) -> video {
@@ -4837,10 +4837,10 @@ function baml.media.Video.from_file(file: string, mime_type: string | null) -> v
 function baml.media.Video.from_url(url: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
+function baml.media.Video.mime_type(self: video) -> string | null {
 }
 
-function baml.media.Video.url(self: baml.media.Video) -> string | null {
+function baml.media.Video.url(self: video) -> string | null {
 }
 
 function baml.net.<(baml.net.TcpStream as baml.io.Read)>.read(self: baml.net.TcpStream, limit: int) -> uint8array | null {

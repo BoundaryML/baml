@@ -314,17 +314,6 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
             .iter()
             .filter_map(|b| lower_associated_type_binding(b, diags))
             .collect();
-        if name == "map" && args.len() == 2 {
-            let key = lower_type_expr_inner(&args[0], false, diags);
-            let value = lower_type_expr_inner(&args[1], false, diags);
-            return TypeExprKind::Map {
-                key: Box::new(key),
-                value: Box::new(value),
-                attrs: vec![],
-            }
-            .at(span);
-        }
-
         // Named type (primitive or user-defined), preserving generic args
         let generic_args: Vec<TypeExpr> = args
             .iter()
@@ -335,6 +324,7 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
             generic_args,
             associated_type_bindings,
             span,
+            diags,
         );
     }
 
@@ -456,19 +446,6 @@ fn lower_union_member_base(
             })
             .unwrap_or_default();
 
-        if name == "map" {
-            if type_arg_exprs.len() == 2 {
-                let key = lower_type_expr_inner(&type_arg_exprs[0], false, diags);
-                let value = lower_type_expr_inner(&type_arg_exprs[1], false, diags);
-                return TypeExprKind::Map {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                    attrs: vec![],
-                }
-                .at(span);
-            }
-        }
-
         let generic_args: Vec<TypeExpr> = type_arg_exprs
             .iter()
             .map(|arg| lower_type_expr_inner(arg, false, diags))
@@ -490,6 +467,7 @@ fn lower_union_member_base(
                 generic_args,
                 associated_type_bindings,
                 span,
+                diags,
             ),
         };
     }
@@ -499,8 +477,8 @@ fn lower_union_member_base(
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.
 ///
-/// Generic args are preserved on `Path` types (e.g., `Stream<T>`). For primitive
-/// types, generic args are silently dropped (primitives can't be generic).
+/// User-defined paths preserve their arguments. Compiler aliases check their
+/// declared arity before lowering, so invalid arguments cannot disappear.
 pub(crate) fn lower_associated_type_binding(
     binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -518,63 +496,84 @@ pub(crate) fn lower_associated_type_binding(
 
 fn lower_from_type_name_with_generic_args(
     name: &str,
-    generic_args: Vec<TypeExpr>,
+    mut generic_args: Vec<TypeExpr>,
     associated_type_bindings: Vec<AssociatedTypeBinding>,
     span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> TypeExpr {
-    let kind = match name {
-        "int" => TypeExprKind::Int { attrs: vec![] },
-        "bigint" => TypeExprKind::Bigint { attrs: vec![] },
-        "float" => TypeExprKind::Float { attrs: vec![] },
-        "string" => TypeExprKind::String { attrs: vec![] },
-        "bool" => TypeExprKind::Bool { attrs: vec![] },
-        "null" => TypeExprKind::Null { attrs: vec![] },
-        "never" => TypeExprKind::Never { attrs: vec![] },
-        "void" => TypeExprKind::Void { attrs: vec![] },
-        "unknown" => TypeExprKind::Unknown { attrs: vec![] },
-        // The wildcard `_` is an inference hole, not a named type. Any stray
-        // generic args on it (`_<...>`, nonsensical) are dropped.
-        "_" => TypeExprKind::Infer { attrs: vec![] },
-        // `reflect.Type` is the source spelling of the runtime metatype. Keep
-        // the dedicated AST node so the VM representation remains a compiler
-        // primitive rather than an ordinary class instance.
-        "reflect.Type" => TypeExprKind::Type { attrs: vec![] },
-        "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
-        "image" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Image,
-            attrs: vec![],
-        },
-        "audio" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Audio,
-            attrs: vec![],
-        },
-        "video" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Video,
-            attrs: vec![],
-        },
-        "pdf" => TypeExprKind::Media {
-            kind: baml_base::MediaKind::Pdf,
-            attrs: vec![],
-        },
-        "uint8array" => TypeExprKind::Uint8Array { attrs: vec![] },
-        "json" => TypeExprKind::Path {
-            segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
-            generic_args: vec![],
-            associated_type_bindings: vec![],
-            attrs: vec![],
-        },
-        _ => {
-            let segments: Vec<Name> = if name.contains('.') {
-                name.split('.').map(Name::new).collect()
-            } else {
-                vec![Name::new(name)]
-            };
-            TypeExprKind::Path {
-                segments,
-                generic_args,
-                associated_type_bindings,
-                attrs: vec![],
+    use baml_type::{
+        PrimitiveType as P,
+        compiler_aliases::{self, AliasTarget},
+    };
+    let path = |generic_args, associated_type_bindings| TypeExprKind::Path {
+        segments: name.split('.').map(Name::new).collect(),
+        generic_args,
+        associated_type_bindings,
+        attrs: vec![],
+    };
+    let kind = if let Some(alias) = compiler_aliases::by_spelling(name) {
+        if generic_args.len() != alias.arity || !associated_type_bindings.is_empty() {
+            diags.push(LoweringDiagnostic::InvalidBuiltinTypeArguments {
+                name: name.to_owned(),
+                expected: alias.arity,
+                got: generic_args.len(),
+                associated_bindings: associated_type_bindings.len(),
+                span,
+            });
+            // The syntax parsed successfully. Recover without a second,
+            // misleading "could not parse type expression" diagnostic.
+            return TypeExprKind::Unknown { attrs: vec![] }.at(span);
+        }
+        match alias.target {
+            AliasTarget::Primitive(primitive) => match primitive {
+                P::Int => TypeExprKind::Int { attrs: vec![] },
+                P::Bigint => TypeExprKind::Bigint { attrs: vec![] },
+                P::Float => TypeExprKind::Float { attrs: vec![] },
+                P::String => TypeExprKind::String { attrs: vec![] },
+                P::Bool => TypeExprKind::Bool { attrs: vec![] },
+                P::Null => TypeExprKind::Null { attrs: vec![] },
+                P::Uint8Array => TypeExprKind::Uint8Array { attrs: vec![] },
+                P::Image | P::Audio | P::Video | P::Pdf => TypeExprKind::Media {
+                    kind: match primitive {
+                        P::Image => baml_base::MediaKind::Image,
+                        P::Audio => baml_base::MediaKind::Audio,
+                        P::Video => baml_base::MediaKind::Video,
+                        P::Pdf => baml_base::MediaKind::Pdf,
+                        _ => unreachable!("media primitive"),
+                    },
+                    attrs: vec![],
+                },
+            },
+            AliasTarget::Never => TypeExprKind::Never { attrs: vec![] },
+            AliasTarget::Void => TypeExprKind::Void { attrs: vec![] },
+            AliasTarget::Unknown => TypeExprKind::Unknown { attrs: vec![] },
+            AliasTarget::Type => TypeExprKind::Type { attrs: vec![] },
+            AliasTarget::Map => {
+                let value = generic_args.pop().expect("checked map arity");
+                let key = generic_args.pop().expect("checked map arity");
+                TypeExprKind::Map {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                    attrs: vec![],
+                }
             }
+            AliasTarget::Json => {
+                let definition = alias.definition.expect("json has an alias declaration");
+                TypeExprKind::Path {
+                    segments: definition.source_segments().map(Name::new).collect(),
+                    generic_args,
+                    associated_type_bindings,
+                    attrs: vec![],
+                }
+            }
+            AliasTarget::Future => path(generic_args, associated_type_bindings),
+            AliasTarget::List => unreachable!("arrays use postfix syntax"),
+        }
+    } else {
+        match name {
+            "_" => TypeExprKind::Infer { attrs: vec![] },
+            "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
+            _ => path(generic_args, associated_type_bindings),
         }
     };
     kind.at(span)

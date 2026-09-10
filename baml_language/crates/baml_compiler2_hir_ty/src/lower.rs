@@ -23,6 +23,7 @@
 //! bodies as inference roots), map-key validation and other diagnostics
 //! (S17).
 
+use baml_base::LangRoots;
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
@@ -33,6 +34,7 @@ use baml_compiler2_ppir::item_data::MethodOwner;
 use baml_type::{
     DeclName, Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy,
     TyAttr,
+    compiler_aliases::{self, AliasTarget},
     interned::{InferTy, Ty},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1663,109 +1665,44 @@ pub fn function_generic_frame<'db>(
     frame
 }
 
-/// The builtin class spellings that ARE structural types, so a class
-/// reference at them denotes the structural kind rather than a nominal
-/// `Class`: `baml.future.Future<V, E>` is the dedicated Future kind, and
-/// (B-1080) the builtin `baml.Array<T>` / `baml.Map<K, V>` class spellings
-/// lower to `List`/`Map`, making every algebra arm relate them for free
-/// instead of TIR's one-directional argument-path patch. Keyed on the builtin
-/// package specifically: a user-defined `class Array<T>` stays nominal.
+/// (B-1080) the builtin class spellings denote their structural types:
+/// `baml.Array<T>` / `baml.Map<K, V>` lower to `List`/`Map`, so every
+/// algebra arm relates them for free instead of TIR's one-directional
+/// argument-path patch, and the scalar and media carriers (`class baml.Int`,
+/// `class baml.media.Image`) denote `int` / `image` — a value of the carrier
+/// class IS the primitive at runtime (S11's receiver-class correspondence,
+/// applied in reverse), so the class spelling, `class_self_ty` inside the
+/// class's own methods and implements blocks included, must be the structural
+/// type or an in-class impl's for-target would be a nominal type no value
+/// ever inhabits.
 ///
-/// The ONE bridge decision, shared by the two vocabulary-specific
-/// constructors below ([`class_lowering_ty`], [`class_ty`]) so the name/arity
-/// predicate cannot drift between the lowering chain and the interned
-/// inference world.
-enum BuiltinStructural {
-    Future,
-    List,
-    Map,
-    /// A dedicated-variant scalar carrier (`class baml.Int` and friends),
-    /// which denotes its structural primitive rather than a nominal class.
-    Scalar(BuiltinScalar),
-}
-
-#[derive(Clone, Copy)]
-enum BuiltinScalar {
-    Int,
-    Bigint,
-    Float,
-    Bool,
-    String,
-    Uint8Array,
-    Null,
-}
-
-fn builtin_structural(
-    lang: baml_base::LangRoots,
-    qtn: &DeclName,
-    arity: usize,
-) -> Option<BuiltinStructural> {
-    if !lang.is(baml_base::LangPackage::Baml, qtn.root()) {
-        return None;
-    }
-    if qtn.namespace().len() == 1
-        && qtn.namespace()[0].as_str() == "future"
-        && qtn.name().as_str() == "Future"
-        && arity == 2
-    {
-        return Some(BuiltinStructural::Future);
-    }
-    if qtn.namespace().is_empty() {
-        if qtn.name().as_str() == "Array" && arity == 1 {
-            return Some(BuiltinStructural::List);
-        }
-        if qtn.name().as_str() == "Map" && arity == 2 {
-            return Some(BuiltinStructural::Map);
-        }
-        // The dedicated-variant scalar builtins bridge the same way: a value
-        // of `class baml.Int` IS an `int` at runtime (S11's receiver-class
-        // correspondence, applied in reverse), so the class spelling —
-        // `class_self_ty` inside the class's own methods and implements
-        // blocks included — denotes the structural type. Without this, an
-        // in-class impl's for-target would be a nominal type no runtime value
-        // ever inhabits. The carrier family is total: `class baml.Null`
-        // exists (empty — a doc anchor), and leaving it unbridged would let
-        // `baml.Null` denote a nominal class no value inhabits.
-        if arity == 0 {
-            let scalar = match qtn.name().as_str() {
-                "Int" => Some(BuiltinScalar::Int),
-                "Bigint" => Some(BuiltinScalar::Bigint),
-                "Float" => Some(BuiltinScalar::Float),
-                "Bool" => Some(BuiltinScalar::Bool),
-                "String" => Some(BuiltinScalar::String),
-                "Uint8Array" => Some(BuiltinScalar::Uint8Array),
-                "Null" => Some(BuiltinScalar::Null),
-                _ => None,
-            };
-            if let Some(scalar) = scalar {
-                return Some(BuiltinStructural::Scalar(scalar));
-            }
-        }
-    }
-    None
+/// The ONE bridge decision is the compiler alias registry
+/// ([`baml_type::compiler_aliases`]), keyed on the installed language root
+/// and the full definition path so a user-defined `class Array<T>` stays
+/// nominal. Shared by the two vocabulary-specific constructors below
+/// ([`class_lowering_ty`], [`class_ty`]) so the name/arity predicate cannot
+/// drift between the lowering chain and the interned inference world.
+fn builtin_structural(lang: LangRoots, qtn: &DeclName, arity: usize) -> Option<AliasTarget> {
+    compiler_aliases::by_definition(lang, qtn)?.class_carrier(arity)
 }
 
 /// The type a class reference denotes in the lowering vocabulary, builtin
 /// bridges (`builtin_structural`) applied. The single constructor for class
 /// types in the lowering chain, shared by annotation lowering and
 /// `class_self_ty`.
-pub fn class_lowering_ty(
-    lang: baml_base::LangRoots,
-    qtn: DeclName,
-    mut args: Vec<LoweringTy>,
-) -> LoweringTy {
+pub fn class_lowering_ty(lang: LangRoots, qtn: DeclName, mut args: Vec<LoweringTy>) -> LoweringTy {
     let attr = TyAttr::default;
     match builtin_structural(lang, &qtn, args.len()) {
-        Some(BuiltinStructural::Future) => {
+        Some(AliasTarget::Future) => {
             let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             LoweringTy::Future(Box::new(value_ty), Box::new(error_ty), attr())
         }
-        Some(BuiltinStructural::List) => {
+        Some(AliasTarget::List) => {
             let element = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             LoweringTy::List(Box::new(element), attr())
         }
-        Some(BuiltinStructural::Map) => {
+        Some(AliasTarget::Map) => {
             let value = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             let key = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             LoweringTy::Map {
@@ -1774,54 +1711,26 @@ pub fn class_lowering_ty(
                 attr: attr(),
             }
         }
-        Some(BuiltinStructural::Scalar(scalar)) => match scalar {
-            BuiltinScalar::Int => LoweringTy::Int { attr: attr() },
-            BuiltinScalar::Bigint => LoweringTy::Bigint { attr: attr() },
-            BuiltinScalar::Float => LoweringTy::Float { attr: attr() },
-            BuiltinScalar::Bool => LoweringTy::Bool { attr: attr() },
-            BuiltinScalar::String => LoweringTy::String { attr: attr() },
-            BuiltinScalar::Uint8Array => LoweringTy::Uint8Array { attr: attr() },
-            BuiltinScalar::Null => LoweringTy::Null { attr: attr() },
-        },
-        None => LoweringTy::Class(qtn, args.into(), attr()),
+        Some(AliasTarget::Primitive(primitive)) => {
+            LoweringTy::from(&baml_type::Ty::from_primitive(primitive, attr()))
+        }
+        Some(AliasTarget::Type) => LoweringTy::Type { attr: attr() },
+        // Json expands through the alias resolver; intrinsics have no class.
+        Some(AliasTarget::Json | AliasTarget::Void | AliasTarget::Never | AliasTarget::Unknown)
+        | None => LoweringTy::Class(qtn, args.into(), attr()),
     }
 }
 
 /// [`class_lowering_ty`]'s interned-vocabulary twin, for types minted inside
 /// inference (instantiated class heads, pattern heads): same bridge decision,
 /// handle children.
-pub fn class_ty(lang: baml_base::LangRoots, qtn: DeclName, mut args: Vec<Ty>) -> Ty {
-    let attr = TyAttr::default;
-    match builtin_structural(lang, &qtn, args.len()) {
-        Some(BuiltinStructural::Future) => {
-            let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            Ty::intern(InferTy::Future(value_ty, error_ty, attr()))
-        }
-        Some(BuiltinStructural::List) => {
-            let element = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            Ty::intern(InferTy::List(element, attr()))
-        }
-        Some(BuiltinStructural::Map) => {
-            let value = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            let key = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            Ty::intern(InferTy::Map {
-                key,
-                value,
-                attr: attr(),
-            })
-        }
-        Some(BuiltinStructural::Scalar(scalar)) => Ty::intern(match scalar {
-            BuiltinScalar::Int => InferTy::Int { attr: attr() },
-            BuiltinScalar::Bigint => InferTy::Bigint { attr: attr() },
-            BuiltinScalar::Float => InferTy::Float { attr: attr() },
-            BuiltinScalar::Bool => InferTy::Bool { attr: attr() },
-            BuiltinScalar::String => InferTy::String { attr: attr() },
-            BuiltinScalar::Uint8Array => InferTy::Uint8Array { attr: attr() },
-            BuiltinScalar::Null => InferTy::Null { attr: attr() },
-        }),
-        None => Ty::intern(InferTy::Class(qtn, args.into(), attr())),
+pub fn class_ty(lang: LangRoots, qtn: DeclName, args: Vec<Ty>) -> Ty {
+    if let Some(ty) =
+        compiler_aliases::by_definition(lang, &qtn).and_then(|alias| alias.lower_class(&args))
+    {
+        return ty;
     }
+    Ty::intern(InferTy::Class(qtn, args.into(), TyAttr::default()))
 }
 
 /// The qualified name a class definition contributes, from its file's
@@ -3407,4 +3316,68 @@ pub fn throws_clause_parts(ty: &LoweringTy) -> (baml_type::Ty, bool) {
         _ => baml_type::Ty::Union(named.into(), TyAttr::default()),
     };
     (named, open)
+}
+
+#[cfg(test)]
+mod compiler_alias_tests {
+    use super::*;
+    use crate::test_heads;
+
+    #[test]
+    fn compiler_aliases_do_not_create_nominal_media_classes() {
+        let lang = test_heads::lang();
+        for primitive in baml_type::PrimitiveType::ALL {
+            let alias = compiler_aliases::by_target(AliasTarget::Primitive(primitive));
+            let name = alias.definition.unwrap().decl_name(lang).unwrap();
+            let expected = baml_type::Ty::from_primitive(primitive, TyAttr::default());
+            assert_eq!(
+                class_ty(lang, name.clone(), vec![]),
+                Ty::from_plain(&expected)
+            );
+            assert_eq!(
+                class_lowering_ty(lang, name, vec![]),
+                LoweringTy::from(&expected)
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_aliases_preserve_user_defined_names() {
+        let lang = test_heads::lang();
+        for path in [
+            "user.String",
+            "user.Image",
+            "user.Array",
+            "baml.other.Image",
+        ] {
+            let wire = baml_type::TypeName::from_dotted_path(path);
+            let name = test_heads::new(
+                wire.package().clone(),
+                wire.namespace().clone(),
+                wire.name().clone(),
+            );
+            assert!(
+                matches!(class_ty(lang, name.clone(), vec![]).kind(), InferTy::Class(actual, _, _) if actual == &name)
+            );
+            assert!(
+                matches!(class_lowering_ty(lang, name.clone(), vec![]), LoweringTy::Class(actual, _, _) if actual == name)
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_aliases_stay_nominal_without_the_language_root() {
+        // A carrier spelled in a package that is not the installed `baml`
+        // root is an ordinary class: identity is the root, not the name.
+        let name =
+            compiler_aliases::by_target(AliasTarget::Primitive(baml_type::PrimitiveType::Image))
+                .definition
+                .unwrap()
+                .decl_name(test_heads::lang())
+                .unwrap();
+        assert!(matches!(
+            class_ty(LangRoots::default(), name.clone(), vec![]).kind(),
+            InferTy::Class(actual, _, _) if actual == &name
+        ));
+    }
 }

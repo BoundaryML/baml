@@ -8196,50 +8196,16 @@ impl<'db> InferenceContext<'db> {
     /// use. rust-analyzer expands aliases at lowering so every consumer sees
     /// the target; our lazy-alias design expands at the demand point.
     fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
-        let ty = match prefix {
-            [single] => match single.as_str() {
-                "int" => Ty::intern(InferTy::Int {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bigint" => Ty::intern(InferTy::Bigint {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "float" => Ty::intern(InferTy::Float {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "string" => Ty::intern(InferTy::String {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "bool" => Ty::intern(InferTy::Bool {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "uint8array" => Ty::intern(InferTy::Uint8Array {
-                    attr: baml_type::TyAttr::default(),
-                }),
-                "image" => Ty::intern(InferTy::Media(
-                    baml_type::MediaKind::Image,
-                    baml_type::TyAttr::default(),
-                )),
-                "audio" => Ty::intern(InferTy::Media(
-                    baml_type::MediaKind::Audio,
-                    baml_type::TyAttr::default(),
-                )),
-                "video" => Ty::intern(InferTy::Media(
-                    baml_type::MediaKind::Video,
-                    baml_type::TyAttr::default(),
-                )),
-                "pdf" => Ty::intern(InferTy::Media(
-                    baml_type::MediaKind::Pdf,
-                    baml_type::TyAttr::default(),
-                )),
-                _ => crate::impls::interned_ty(&crate::lower::reject_holes(
-                    &self.lower_scoped_type_path(prefix),
-                )),
-            },
-            _ => crate::impls::interned_ty(&crate::lower::reject_holes(
-                &self.lower_scoped_type_path(prefix),
-            )),
+        let builtin = match prefix {
+            [single] => baml_type::compiler_aliases::by_spelling(single.as_str())
+                .and_then(|alias| alias.lower_class(&[])),
+            _ => None,
         };
+        let ty = builtin.unwrap_or_else(|| {
+            crate::impls::interned_ty(&crate::lower::reject_holes(
+                &self.lower_scoped_type_path(prefix),
+            ))
+        });
         if ty.has_error() {
             return None;
         }
