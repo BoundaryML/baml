@@ -80,7 +80,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             response,
@@ -131,7 +131,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             response,
@@ -292,7 +292,7 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
         ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
         <sys_native::NativeSysOps as io::IoClassHttpSseStream>::next(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             sse_stream,
@@ -308,7 +308,7 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
         ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         <sys_native::NativeSysOps as io::IoClassHttpSseStream>::close(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             sse_stream,
@@ -351,7 +351,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         });
 
         let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::_send(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             request,
@@ -510,7 +510,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
     ) -> SysOpOutput<owned::http::SseStream> {
         // Delegate to native implementation — playground doesn't need SSE logging yet.
         <sys_native::NativeSysOps as io::IoNamespaceHttp>::_fetch_sse(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             request,

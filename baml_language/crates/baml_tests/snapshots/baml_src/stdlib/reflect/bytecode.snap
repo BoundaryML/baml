@@ -207,7 +207,9 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
 function reflect.AnyClass.name(self: reflect.AnyClass) -> string {
     load_var self
     call reflect.Type.of_value
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     return
 }
 

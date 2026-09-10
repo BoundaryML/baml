@@ -54,6 +54,16 @@ Literal types (here named due to currently all corresponding to literals) repres
 
 As an empty set, `never` can always be omitted from union types: `int | never` is equivalent to `int`. A function that returns `never` cannot return, and a function with `throws never` can never throw an error (though it can still panic).
 
+## Declarations, Packages, and Names
+
+A declaration (class, enum, interface) and a type are different things. A declaration is a type _head_: it may be polymorphic (a [type constructor](#generics-on-types-type-constructors) over its parameters) and is not itself a type. A nominal type is a head applied to realized type arguments, and is therefore monomorphic: `Box` is a declaration, `Box<int>` is a type. Two nominal types are the same type only if they have the same head applied to the same type arguments, and a head's identity _is_ its declaration. A declaration belongs to at most one package: a declaration created at run time through `reflect` may be anonymous, belonging to no package and reachable only by reference (its name, if it has one, is for display). A name is how source spells a head from somewhere; it is never the identity.
+
+A package has no intrinsic name. It may declare one (`[package].name`, or the fixed name of a standard-library package), but that is display metadata and the default a dependent spells it by, not its identity. Names live on dependency edges: a package reaches another under the name its own manifest gives that edge, so two packages may reach one package under different names, and a package can name only itself, the packages it lists, and the prelude (the implicitly available standard-library packages). Everything else is invisible to it. Today (09/2026) a user package declares no dependencies and reaches exactly the prelude.
+
+Source always references declarations fully namespaced as `<package>.<namespace*>.<item>` where `<package>` is the name of a dependency graph edge (including `root` which is always the edge to its own package, similar to Rust's `crate`). The only exception is when referencing local items within the same namespace, which may be referenced by their item name (`<item>`) alone.
+
+Every rendering of a type is from a viewpoint: the canonical rendering spells every package fully; the user-facing rendering elides the viewer's own package and writes `root.` for its other namespaces. Canonical order of union members and throw sets is deterministic within a program but is not a stable key across programs; nothing may persist it as an identity.
+
 ## Subtyping Rules
 
 Subtyping in BAML is subset-based, not inheritance-based.

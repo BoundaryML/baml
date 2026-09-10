@@ -10,7 +10,7 @@ class Kapow {
     n int
 }
 
-function risky() -> string throws user.Boom | user.Kapow {
+function risky() -> string throws root.Boom | root.Kapow {
     throw Boom { m: "x" }
 }
 

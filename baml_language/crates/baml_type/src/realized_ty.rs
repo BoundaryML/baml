@@ -110,21 +110,21 @@ mod tests {
         TypeName::local(Name::new(name))
     }
 
-    /// `Ty::from(RealizedTy::try_from(&ty)) == ty` for a set of deeply nested
+    /// `Ty::<TypeName>::from(RealizedTy::try_from(&ty)) == ty` for a set of deeply nested
     /// runtime types.
-    fn assert_round_trips(ty: Ty) {
+    fn assert_round_trips(ty: Ty<TypeName>) {
         let runtime = RealizedTy::try_from(&ty)
             .unwrap_or_else(|e| panic!("expected a runtime type, got {e}"));
-        assert_eq!(Ty::from(runtime), ty);
+        assert_eq!(Ty::<TypeName>::from(runtime), ty);
     }
 
     #[test]
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
-        let ty: Ty = Ty::List(
-            Box::new(Ty::Class(
+        let ty: Ty<TypeName> = Ty::<TypeName>::List(
+            Box::new(Ty::<TypeName>::Class(
                 qtn("Box"),
-                Box::new([Ty::Int { attr: def() }]),
+                Box::new([Ty::<TypeName>::Int { attr: def() }]),
                 def(),
             )),
             def(),
@@ -134,9 +134,12 @@ mod tests {
 
     #[test]
     fn round_trip_map() {
-        let ty: Ty = Ty::Map {
-            key: Box::new(Ty::String { attr: def() }),
-            value: Box::new(Ty::List(Box::new(Ty::Bool { attr: def() }), def())),
+        let ty: Ty<TypeName> = Ty::<TypeName>::Map {
+            key: Box::new(Ty::<TypeName>::String { attr: def() }),
+            value: Box::new(Ty::<TypeName>::List(
+                Box::new(Ty::<TypeName>::Bool { attr: def() }),
+                def(),
+            )),
             attr: def(),
         };
         assert_round_trips(ty);
@@ -144,11 +147,11 @@ mod tests {
 
     #[test]
     fn round_trip_union() {
-        let ty: Ty = Ty::Union(
+        let ty: Ty<TypeName> = Ty::<TypeName>::Union(
             Box::new([
-                Ty::Int { attr: def() },
-                Ty::String { attr: def() },
-                Ty::Null { attr: def() },
+                Ty::<TypeName>::Int { attr: def() },
+                Ty::<TypeName>::String { attr: def() },
+                Ty::<TypeName>::Null { attr: def() },
             ]),
             def(),
         );
@@ -157,16 +160,19 @@ mod tests {
 
     #[test]
     fn round_trip_function() {
-        let ty: Ty = Ty::Function {
+        let ty: Ty<TypeName> = Ty::<TypeName>::Function {
             params: Box::new([
-                crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
+                crate::FunctionParamTy::required(
+                    Some(Name::new("a")),
+                    Ty::<TypeName>::Int { attr: def() },
+                ),
                 crate::FunctionParamTy::optional(
                     Some(Name::new("b")),
-                    Ty::List(Box::new(Ty::Float { attr: def() }), def()),
+                    Ty::<TypeName>::List(Box::new(Ty::<TypeName>::Float { attr: def() }), def()),
                 ),
             ]),
-            ret: Box::new(Ty::Bool { attr: def() }),
-            throws: Box::new(Ty::Void { attr: def() }),
+            ret: Box::new(Ty::<TypeName>::Bool { attr: def() }),
+            throws: Box::new(Ty::<TypeName>::Void { attr: def() }),
             attr: def(),
         };
         assert_round_trips(ty);
@@ -174,10 +180,10 @@ mod tests {
 
     #[test]
     fn round_trip_interface_with_associated_bindings() {
-        let ty: Ty = Ty::Interface(
+        let ty: Ty<TypeName> = Ty::<TypeName>::Interface(
             qtn("Iterator"),
-            Box::new([Ty::Int { attr: def() }]),
-            Box::new([(Name::new("Item"), Ty::String { attr: def() })]),
+            Box::new([Ty::<TypeName>::Int { attr: def() }]),
+            Box::new([(Name::new("Item"), Ty::<TypeName>::String { attr: def() })]),
             def(),
         );
         assert_round_trips(ty);
@@ -187,9 +193,9 @@ mod tests {
     fn associated_type_projection_is_not_realized() {
         // `AssociatedTypeProjection` is a type variable (the `typevar` axis), so
         // it has no realized form — the conversion rejects it at the top level.
-        let ty: Ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::type_var("T")),
-            interface: Box::new(Interface {
+        let ty: Ty<TypeName> = Ty::<TypeName>::AssociatedTypeProjection {
+            base: Box::new(Ty::<TypeName>::type_var("T")),
+            interface: Box::new(Interface::<TypeName> {
                 name: qtn("Iterator"),
                 generics: Box::new([]),
                 associated_types: Box::new([]),
@@ -207,7 +213,10 @@ mod tests {
 
     #[test]
     fn nested_infer_in_list_blocks_conversion() {
-        let ty: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: def() }), def());
+        let ty: LoweringTy<TypeName> = LoweringTy::<TypeName>::List(
+            Box::new(LoweringTy::<TypeName>::Infer { attr: def() }),
+            def(),
+        );
         assert_eq!(
             RealizedTy::try_from(&ty),
             Err(NotRealizedTy { variant: "Infer" })
@@ -216,9 +225,9 @@ mod tests {
 
     #[test]
     fn nested_error_in_map_value_blocks_conversion() {
-        let ty: Ty = Ty::Map {
-            key: Box::new(Ty::String { attr: def() }),
-            value: Box::new(Ty::Error { attr: def() }),
+        let ty: Ty<TypeName> = Ty::<TypeName>::Map {
+            key: Box::new(Ty::<TypeName>::String { attr: def() }),
+            value: Box::new(Ty::<TypeName>::Error { attr: def() }),
             attr: def(),
         };
         assert_eq!(
@@ -229,8 +238,11 @@ mod tests {
 
     #[test]
     fn nested_error_in_union_blocks_conversion() {
-        let ty: Ty = Ty::Union(
-            Box::new([Ty::Int { attr: def() }, Ty::Error { attr: def() }]),
+        let ty: Ty<TypeName> = Ty::<TypeName>::Union(
+            Box::new([
+                Ty::<TypeName>::Int { attr: def() },
+                Ty::<TypeName>::Error { attr: def() },
+            ]),
             def(),
         );
         assert_eq!(
@@ -241,10 +253,10 @@ mod tests {
 
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
-        let ty: LoweringTy = LoweringTy::Function {
+        let ty: LoweringTy<TypeName> = LoweringTy::<TypeName>::Function {
             params: Box::new([]),
-            ret: Box::new(LoweringTy::Infer { attr: def() }),
-            throws: Box::new(LoweringTy::Void { attr: def() }),
+            ret: Box::new(LoweringTy::<TypeName>::Infer { attr: def() }),
+            throws: Box::new(LoweringTy::<TypeName>::Void { attr: def() }),
             attr: def(),
         };
         assert_eq!(

@@ -8,9 +8,8 @@
 use std::cell::OnceCell;
 
 use baml_base::{Name, Span, TyAttr};
-use baml_compiler2_hir::package::PackageId;
 use baml_type::{
-    ParamTy, Ty, TypeName,
+    DeclName, ParamTy, Ty,
     unify::{
         EnumVariants, Overlap, TypeBindings, chase_var, contains_bound_typevar, nf, substitute_ty,
         unify_into, var_under_union,
@@ -56,9 +55,9 @@ pub struct CoherenceViolation {
 /// `pkg_id` are reported; dependency-internal conflicts are attributed to the
 /// dependency when *its* coherence is checked, so nothing is double-reported.
 #[salsa::tracked(returns(ref))]
-pub fn package_coherence_diagnostics<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn package_coherence_diagnostics(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
 ) -> Vec<CoherenceViolation> {
     let mut own = package_impls_with_spans(db, pkg_id);
     // Sort by source position so the overlap attribution tracks a stable textual order
@@ -117,10 +116,10 @@ pub fn package_coherence_diagnostics<'db>(
 
 /// The impls of `pkg` the overlap check compares, each prepared once, drawn from
 /// the canonical `impl_data` substrate.
-fn package_impls_with_spans<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-) -> Vec<PreparedImpl<'db>> {
+fn package_impls_with_spans(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
+) -> Vec<PreparedImpl<'_>> {
     package_impl_locs(db, pkg_id)
         .iter()
         .filter_map(|&loc| {
@@ -146,7 +145,7 @@ struct PreparedImpl<'db> {
     span: Span,
     /// The implemented interface, or `None` when it did not resolve (such an
     /// impl conflicts with nothing).
-    interface: Option<TypeName>,
+    interface: Option<DeclName>,
     /// The block itself, so the subject gate can read the header's one
     /// validity decision instead of re-deriving it.
     loc: baml_compiler2_hir::loc::ImplLoc<'db>,
@@ -192,10 +191,10 @@ impl<'db> PreparedImpl<'db> {
 /// specialization to rescue them). Distinct interfaces never conflict.
 fn impls_conflict<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     a: &PreparedImpl<'db>,
     b: &PreparedImpl<'db>,
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &std::collections::HashMap<DeclName, Ty>,
 ) -> Overlap {
     let (Some(a_qtn), Some(b_qtn)) = (&a.interface, &b.interface) else {
         return Overlap::No;
@@ -227,12 +226,12 @@ fn impls_conflict<'db>(
 /// pinned ground witness provably violates make the pair disjoint.
 fn impls_overlap<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     a: &ImplData<'db>,
     b: &ImplData<'db>,
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &std::collections::HashMap<DeclName, Ty>,
 ) -> Overlap {
-    let enum_variants = |qtn: &TypeName| enum_variant_names(db, qtn);
+    let enum_variants = |qtn: &DeclName| enum_variant_names(db, qtn);
     let (a_for, a_args) = renamed_subject(a, 'a', &enum_variants);
     let (b_for, b_args) = renamed_subject(b, 'b', &enum_variants);
     if a_args.len() != b_args.len() {
@@ -244,15 +243,19 @@ fn impls_overlap<'db>(
     vars.extend((0..b.generic_params.len()).map(|i| renamed_var('b', i)));
 
     let mut bindings = TypeBindings::default();
+    let alias_ctx = baml_type::unify::AliasEquivCtx {
+        aliases,
+        lang: baml_compiler2_hir::package::lang_roots(db),
+    };
     // Unify the for-type and each interface arg. A provably-disjoint part
     // short-circuits the whole pair to disjoint; an undecidable part downgrades a
     // would-be overlap to `Unknown`.
-    let mut result = unify_into(&a_for, &b_for, &vars, aliases, &mut bindings);
+    let mut result = unify_into(&a_for, &b_for, &vars, &alias_ctx, &mut bindings);
     if result == Overlap::No {
         return Overlap::No;
     }
     for (x, y) in a_args.iter().zip(b_args.iter()) {
-        match unify_into(x, y, &vars, aliases, &mut bindings) {
+        match unify_into(x, y, &vars, &alias_ctx, &mut bindings) {
             Overlap::No => return Overlap::No,
             Overlap::Unknown => result = Overlap::Unknown,
             Overlap::Yes => {}
@@ -284,13 +287,13 @@ fn impls_overlap<'db>(
 )]
 fn bounds_hold_at_common_instance<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     rule: &ImplData<'db>,
     prefix: char,
     vars: &[ParamTy],
     bindings: &TypeBindings,
     subject: &[&Ty],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &std::collections::HashMap<DeclName, Ty>,
 ) -> bool {
     // Each of this impl's params, resolved to the ground type it takes at the
     // common instance (following the unifier's binding chains).

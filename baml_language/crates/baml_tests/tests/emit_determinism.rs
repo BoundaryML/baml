@@ -33,11 +33,11 @@ fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
 /// it to serialized bytecode.
 fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)]) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
-    db.workspace(root);
+    let package = db.workspace(root);
     for (path, content) in sources {
         db.file(path, content);
     }
-    let program = generate_project_bytecode(&db)
+    let program = generate_project_bytecode(&db, package)
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
     borsh::to_vec(&program).expect("borsh serialization failed")
 }
@@ -133,6 +133,13 @@ fn parallel_emit_is_byte_identical_to_serial() {
     }
 }
 
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
 fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(root);
@@ -164,8 +171,9 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
         let sources = read_project(&root);
         let full = compile_to_bytes(&root, &sources);
 
+        let db = build_db(&root, &sources);
         let spliced =
-            generate_project_bytecode_with_stdlib(&build_db(&root, &sources), OptLevel::Two, &base)
+            generate_project_bytecode_with_stdlib(&db, package(&db), OptLevel::Two, &base)
                 .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
         let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
 
@@ -246,9 +254,9 @@ function count(value: RuntimeValue) -> int throws never {
 
     let root = Path::new("<runtime>");
     let mut full_db = ProjectDatabase::new();
-    full_db.workspace(root);
+    let full_package = full_db.workspace(root);
     full_db.file(root.join("main.baml"), source);
-    let full_user_units = emit_units(&full_db, OptLevel::One)
+    let full_user_units = emit_units(&full_db, full_package, OptLevel::One)
         .expect("compile Package artifact from full stdlib sources")
         .into_iter()
         .filter(|unit| unit.package.as_str() == "user")

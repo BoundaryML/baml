@@ -66,7 +66,7 @@ pub use export::{PackageExport, export_package};
 pub use info::{FunctionParamInfo, MethodSig, TypeInfo, type_at, type_info_for_definition};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items,
-    non_workspace_package_names, resolve_builtin_type_target, resolve_target,
+    resolve_builtin_type_target, resolve_target,
 };
 pub use outline::{OutlineItem, file_outline};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};

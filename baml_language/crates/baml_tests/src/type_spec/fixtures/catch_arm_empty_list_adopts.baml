@@ -10,7 +10,7 @@ class Io {
     message string
 }
 
-function docs() -> int[] throws user.Io {
+function docs() -> int[] throws root.Io {
     throw Io { message: "x" }
 }
 

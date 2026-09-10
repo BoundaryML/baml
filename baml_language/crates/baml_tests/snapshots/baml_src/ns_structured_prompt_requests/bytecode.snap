@@ -371,7 +371,23 @@ function structured_prompt_requests.ChatMediaShape@spec(photo: image) -> ai.Func
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.structured_prompt_requests.UnroutableChat
+    make_closure .<lambda(ChatMediaShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "ChatMediaShape"
@@ -490,7 +506,23 @@ function structured_prompt_requests.ExplicitRolesShape@spec() -> ai.FunctionSpec
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(ExplicitRolesShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "ExplicitRolesShape"
@@ -605,7 +637,23 @@ function structured_prompt_requests.FirstShape@spec() -> ai.FunctionSpec<string>
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(FirstShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "FirstShape"
@@ -723,7 +771,24 @@ function structured_prompt_requests.GenericShape@spec() -> ai.FunctionSpec<struc
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    load_type #0
+    make_closure .<lambda(GenericShape@spec, 1)>, captures=0, ntypeargs=1
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "GenericShape"
@@ -892,7 +957,23 @@ function structured_prompt_requests.Greet@spec(name: string, suffix: string) -> 
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _8
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(Greet@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _10
     load_const "Greet"
@@ -1473,7 +1554,23 @@ function structured_prompt_requests.MediaShape@spec(photo: image) -> ai.Function
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.structured_prompt_requests.UnroutableResponses
+    make_closure .<lambda(MediaShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "MediaShape"
@@ -1592,7 +1689,23 @@ function structured_prompt_requests.PreludeShape@spec() -> ai.FunctionSpec<strin
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(PreludeShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "PreludeShape"
@@ -1985,7 +2098,23 @@ function structured_prompt_requests.RolelessImageShape@spec(photo: image) -> ai.
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(RolelessImageShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "RolelessImageShape"
@@ -2104,7 +2233,23 @@ function structured_prompt_requests.RolelessShape@spec() -> ai.FunctionSpec<stri
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(RolelessShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "RolelessShape"
@@ -2219,7 +2364,23 @@ function structured_prompt_requests.WhitespaceShape@spec() -> ai.FunctionSpec<st
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.structured_prompt_requests.PreviewResponses
+    make_closure .<lambda(WhitespaceShape@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "WhitespaceShape"

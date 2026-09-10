@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    Freshness, Interface, Name, NotRuntimeTy, QualifiedTypeName, RuntimeFunctionParamTy,
+    DeclName, Freshness, Head, Interface, Name, NotRuntimeTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, Ty, TyAttr, TypeName,
 };
 
@@ -233,17 +233,26 @@ impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RuntimeTy<N> {
 /// [`RuntimeTy`]: the alias targets to expand and the set of recursive aliases
 /// to keep opaque. Built per package by the compiler (see
 /// `baml_compiler2_mir::resolved_aliases_for_package`).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ResolvedAliases {
-    pub aliases: HashMap<QualifiedTypeName, Ty>,
-    pub recursive: HashSet<QualifiedTypeName>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedAliases<N: Head = DeclName> {
+    pub aliases: HashMap<N, Ty<N>>,
+    pub recursive: HashSet<N>,
 }
 
-impl ResolvedAliases {
+impl<N: Head> Default for ResolvedAliases<N> {
+    fn default() -> Self {
+        Self {
+            aliases: HashMap::new(),
+            recursive: HashSet::new(),
+        }
+    }
+}
+
+impl<N: Head> ResolvedAliases<N> {
     /// Build the environment from the collected alias targets, computing
     /// the recursive set (DFS cycle detection) here - the one constructor,
     /// so a caller cannot pair aliases with a stale recursive set.
-    pub fn from_aliases(aliases: HashMap<QualifiedTypeName, Ty>) -> ResolvedAliases {
+    pub fn from_aliases(aliases: HashMap<N, Ty<N>>) -> Self {
         let mut recursive = HashSet::new();
         for name in aliases.keys() {
             let mut visited = HashSet::new();
@@ -264,7 +273,7 @@ impl ResolvedAliases {
     /// compiler bug — so it panics loudly rather than silently producing a
     /// degraded type. Callers that genuinely tolerate failure use
     /// [`lower_to_runtime`] directly.
-    pub fn convert(&self, ty: &Ty) -> RuntimeTy {
+    pub fn convert(&self, ty: &Ty<N>) -> RuntimeTy<N> {
         lower_to_runtime(ty, self).unwrap_or_else(|e| {
             unreachable!("{e}: an error-recovery type reached runtime lowering")
         })
@@ -282,7 +291,10 @@ impl ResolvedAliases {
 /// unfilled `Infer` hole: those exist only during compilation, so a type-checked program can
 /// never contain one. Reaching this boundary with one is a compiler bug — we
 /// surface it instead of erasing it to a degraded runtime type.
-pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy, NotRuntimeTy> {
+pub fn lower_to_runtime<N: Head>(
+    ty: &Ty<N>,
+    resolved: &ResolvedAliases<N>,
+) -> Result<RuntimeTy<N>, NotRuntimeTy> {
     Ok(match ty {
         // Primitives — same-named runtime variant.
         Ty::Int { attr } => RuntimeTy::Int { attr: attr.clone() },
@@ -412,7 +424,10 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
 
 /// Lower each [`Ty`] in `tys`, short-circuiting on the first error-recovery
 /// sentinel encountered (at any nesting depth).
-fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Box<[RuntimeTy]>, NotRuntimeTy> {
+fn lower_vec<N: Head>(
+    tys: &[Ty<N>],
+    resolved: &ResolvedAliases<N>,
+) -> Result<Box<[RuntimeTy<N>]>, NotRuntimeTy> {
     tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
 }
 
@@ -420,10 +435,10 @@ fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Box<[RuntimeTy]>,
 /// projection) to its runtime form, lowering every generic argument and
 /// associated-type binding. Mirrors the `Ty::Interface` arm of
 /// [`lower_to_runtime`].
-fn lower_interface_to_runtime(
-    interface: &Interface,
-    resolved: &ResolvedAliases,
-) -> Result<RuntimeInterface, NotRuntimeTy> {
+fn lower_interface_to_runtime<N: Head>(
+    interface: &Interface<N>,
+    resolved: &ResolvedAliases<N>,
+) -> Result<RuntimeInterface<N>, NotRuntimeTy> {
     Ok(RuntimeInterface {
         name: interface.name.clone(),
         generics: lower_vec(&interface.generics, resolved)?,
@@ -435,11 +450,11 @@ fn lower_interface_to_runtime(
     })
 }
 
-fn has_cycle(
-    name: &QualifiedTypeName,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
+fn has_cycle<N: Head>(
+    name: &N,
+    aliases: &HashMap<N, Ty<N>>,
+    visited: &mut HashSet<N>,
+    stack: &mut HashSet<N>,
 ) -> bool {
     if stack.contains(name) {
         return true;
@@ -456,11 +471,11 @@ fn has_cycle(
     result
 }
 
-fn ty_has_cycle(
-    ty: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
+fn ty_has_cycle<N: Head>(
+    ty: &Ty<N>,
+    aliases: &HashMap<N, Ty<N>>,
+    visited: &mut HashSet<N>,
+    stack: &mut HashSet<N>,
 ) -> bool {
     match ty {
         Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
@@ -526,7 +541,7 @@ mod tests {
     #[test]
     fn head_free_constructors_build_at_any_head() {
         let at_default = RuntimeTy::optional(RuntimeTy::list(RuntimeTy::int()));
-        let _: RuntimeTy<QualifiedTypeName> = at_default.clone();
+        let _: RuntimeTy<TypeName> = at_default.clone();
 
         // The same structure at a head that is not a name at all.
         let interned: RuntimeTy<u32> =
@@ -548,7 +563,7 @@ mod tests {
 
     /// `Ty::from(RuntimeTy::try_from(&ty)) == ty` for a set of deeply nested
     /// runtime types.
-    fn assert_round_trips(ty: Ty) {
+    fn assert_round_trips(ty: Ty<TypeName>) {
         let runtime =
             RuntimeTy::try_from(&ty).unwrap_or_else(|e| panic!("expected a runtime type, got {e}"));
         assert_eq!(Ty::from(runtime), ty);
@@ -557,7 +572,7 @@ mod tests {
     #[test]
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
-        let ty: Ty = Ty::List(
+        let ty: Ty<TypeName> = Ty::List(
             Box::new(Ty::Class(
                 qtn("Box"),
                 Box::new([Ty::Int { attr: def() }]),
@@ -570,7 +585,7 @@ mod tests {
 
     #[test]
     fn round_trip_map() {
-        let ty: Ty = Ty::Map {
+        let ty: Ty<TypeName> = Ty::Map {
             key: Box::new(Ty::String { attr: def() }),
             value: Box::new(Ty::List(Box::new(Ty::Bool { attr: def() }), def())),
             attr: def(),
@@ -580,7 +595,7 @@ mod tests {
 
     #[test]
     fn round_trip_union() {
-        let ty: Ty = Ty::Union(
+        let ty: Ty<TypeName> = Ty::Union(
             Box::new([
                 Ty::Int { attr: def() },
                 Ty::String { attr: def() },
@@ -593,7 +608,7 @@ mod tests {
 
     #[test]
     fn round_trip_function() {
-        let ty: Ty = Ty::Function {
+        let ty: Ty<TypeName> = Ty::Function {
             params: Box::new([
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
@@ -610,7 +625,7 @@ mod tests {
 
     #[test]
     fn round_trip_interface_with_associated_bindings() {
-        let ty: Ty = Ty::Interface(
+        let ty: Ty<TypeName> = Ty::Interface(
             qtn("Iterator"),
             Box::new([Ty::Int { attr: def() }]),
             Box::new([(Name::new("Item"), Ty::String { attr: def() })]),
@@ -621,9 +636,9 @@ mod tests {
 
     #[test]
     fn round_trip_associated_type_projection() {
-        let ty: Ty = Ty::AssociatedTypeProjection {
+        let ty: Ty<TypeName> = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::type_var("T")),
-            interface: Box::new(Interface {
+            interface: Box::new(Interface::<TypeName> {
                 name: qtn("Iterator"),
                 generics: Box::new([]),
                 associated_types: Box::new([]),
@@ -636,7 +651,8 @@ mod tests {
 
     #[test]
     fn nested_infer_in_list_blocks_conversion() {
-        let ty: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: def() }), def());
+        let ty: LoweringTy<TypeName> =
+            LoweringTy::List(Box::new(LoweringTy::Infer { attr: def() }), def());
         assert_eq!(
             RuntimeTy::try_from(&ty),
             Err(NotRuntimeTy { variant: "Infer" })
@@ -645,7 +661,7 @@ mod tests {
 
     #[test]
     fn nested_error_in_map_value_blocks_conversion() {
-        let ty: Ty = Ty::Map {
+        let ty: Ty<TypeName> = Ty::Map {
             key: Box::new(Ty::String { attr: def() }),
             value: Box::new(Ty::Error { attr: def() }),
             attr: def(),
@@ -658,7 +674,7 @@ mod tests {
 
     #[test]
     fn nested_error_in_union_blocks_conversion() {
-        let ty: Ty = Ty::Union(
+        let ty: Ty<TypeName> = Ty::Union(
             Box::new([Ty::Int { attr: def() }, Ty::Error { attr: def() }]),
             def(),
         );
@@ -670,7 +686,7 @@ mod tests {
 
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
-        let ty: LoweringTy = LoweringTy::Function {
+        let ty: LoweringTy<TypeName> = LoweringTy::Function {
             params: Box::new([]),
             ret: Box::new(LoweringTy::Infer { attr: def() }),
             throws: Box::new(LoweringTy::Void { attr: def() }),

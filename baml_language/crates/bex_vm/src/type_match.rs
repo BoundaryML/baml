@@ -98,42 +98,55 @@ mod tests {
     /// that don't need program facts. Nominal facts (a class implementing an
     /// interface) are validated by the VM-backed e2e tests.
     struct EmptyCtx;
-    impl TypeContext for EmptyCtx {
-        /// A name-based context represents a declaration by its own name, so this
-        /// is the identity — no resolution step, and never `None`.
-        fn head_lookup(
+    impl TypeContext<QualifiedTypeName> for EmptyCtx {
+        /// A name-based context represents a declaration by its own name, so a
+        /// well-known declaration is its spelled name — no lookup, never `None`.
+        fn well_known(
             &self,
-            qtn: &baml_type::QualifiedTypeName,
-        ) -> Option<baml_type::QualifiedTypeName> {
-            Some(qtn.clone())
+            head: baml_type::normalize::WellKnownHead,
+        ) -> Option<QualifiedTypeName> {
+            use baml_type::normalize::SpelledHead as _;
+            Some(QualifiedTypeName::well_known(head))
         }
 
-        fn alias_def(&self, _: &QualifiedTypeName) -> Option<baml_type::Ty> {
+        fn alias_def(&self, _: &QualifiedTypeName) -> Option<baml_type::Ty<QualifiedTypeName>> {
             None
         }
-        fn implements_interface(&self, _: &baml_type::Ty, _: &Interface) -> bool {
+        fn implements_interface(
+            &self,
+            _: &baml_type::Ty<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
+        ) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface<QualifiedTypeName>> {
             Vec::new()
         }
-        fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
+        fn interface_requires(
+            &self,
+            _: &Interface<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
+        ) -> bool {
             false
         }
         fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
             None
         }
-        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+        fn associated_type_bound(
+            &self,
+            _: &Interface<QualifiedTypeName>,
+            _: Name,
+        ) -> Vec<Interface<QualifiedTypeName>> {
             // Context-free: no interface declarations, so no declared bounds.
             Vec::new()
         }
         fn project(
             &self,
-            _: &baml_type::Ty,
-            _: &Interface,
+            _: &baml_type::Ty<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
             _: &Name,
             _fuel: u32,
-        ) -> baml_type::normalize::ProjectionStep {
+        ) -> baml_type::normalize::ProjectionStep<QualifiedTypeName> {
             // Context-free: no impls to reduce through; projections stay opaque.
             baml_type::normalize::ProjectionStep::Opaque
         }

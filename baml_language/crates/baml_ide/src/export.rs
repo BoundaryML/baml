@@ -55,11 +55,11 @@ use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
     namespace::NamespaceId,
-    package::PackageId,
+    package::{Spelling, spelling},
 };
 use baml_compiler2_ppir::item_data;
 use baml_type::{
-    Interface as InterfaceBound, ParamTy, PrimitiveType, QualifiedTypeName, RuntimeTy, Ty,
+    DeclName, Interface as InterfaceBound, ParamTy, PrimitiveType, QualifiedTypeName, RuntimeTy, Ty,
 };
 use serde::Serialize;
 use text_size::TextRange;
@@ -118,7 +118,7 @@ fn container_qtn(name: &str) -> QualifiedTypeName {
 
 /// Extract a type's head constructor; `None` for un-headed types (unions,
 /// projections, sentinels), which no impl can attach to by head.
-fn ty_head(ty: &Ty) -> Option<TyHead> {
+fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
     match ty {
         Ty::Int { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Int))),
         Ty::Bigint { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bigint))),
@@ -141,15 +141,15 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
         // Companion classes (`baml.Int`, `baml.Array`, …) already carry the
         // canonical name, so nominal heads pass through unchanged.
         Ty::Class(qtn, _, _) | Ty::Interface(qtn, _, _, _) | Ty::Enum(qtn, _) => {
-            Some(TyHead::Nominal(qtn.clone()))
+            Some(TyHead::Nominal(spelling.wire(qtn)))
         }
-        Ty::EnumVariant(qtn, _, _) => Some(TyHead::Nominal(qtn.clone())),
+        Ty::EnumVariant(qtn, _, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
         Ty::List(_, _) => Some(TyHead::Nominal(container_qtn("Array"))),
         Ty::Map { .. } => Some(TyHead::Nominal(container_qtn("Map"))),
         Ty::Function { .. } => Some(TyHead::Function),
         Ty::Future(_, _, _) => Some(TyHead::Future),
         // Lossy by design: the alias head attaches without expansion.
-        Ty::TypeAlias(qtn, _) => Some(TyHead::Nominal(qtn.clone())),
+        Ty::TypeAlias(qtn, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
         Ty::TypeVar(_, _) => Some(TyHead::Blanket),
         Ty::Union(_, _) => None,
         Ty::AssociatedTypeProjection { .. } => None,
@@ -336,7 +336,7 @@ impl SymbolId {
         Some(Self {
             kind,
             owner: Owner::Path {
-                package: pkg.package.to_string(),
+                package: spelling(db).of(pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: name.to_string(),
             },
@@ -349,17 +349,18 @@ impl SymbolId {
     /// block ids, so the two can never disagree about what identifies an impl.
     fn impl_owner(db: &Db, imp: ImplLoc<'_>) -> Option<Owner> {
         let data = impl_facts(db, imp)?;
-        let mut interface = interface_qtn(db, data.interface).render_dotted(false);
+        let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
+        let mut interface = vp.path(&interface_qtn(db, data.interface));
         if !data.interface_args.is_empty() {
             let args: Vec<String> = data
                 .interface_args
                 .iter()
-                .map(Ty::render_canonical)
+                .map(|ty| ty.render_with(&vp))
                 .collect();
             interface = format!("{interface}<{}>", args.join(", "));
         }
         Some(Owner::Impl {
-            for_ty: data.for_ty_pattern.render_canonical(),
+            for_ty: data.for_ty_pattern.render_with(&vp),
             interface,
         })
     }
@@ -376,7 +377,7 @@ impl SymbolId {
         Self {
             kind,
             owner: Owner::Path {
-                package: pkg.package.to_string(),
+                package: spelling(db).of(pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: owner_name.to_string(),
             },
@@ -416,8 +417,8 @@ pub struct TyRef {
 }
 
 impl TyRef {
-    fn of(ty: &Ty) -> Self {
-        let head = match ty_head(ty) {
+    fn of(db: &Db, ty: &Ty) -> Self {
+        let head = match ty_head(spelling(db), ty) {
             Some(TyHead::Nominal(qtn)) => Some(
                 SymbolId {
                     kind: IdKind::Type,
@@ -433,7 +434,7 @@ impl TyRef {
             Some(TyHead::Function | TyHead::Future | TyHead::Blanket) | None => None,
         };
         Self {
-            display: ty.render_canonical(),
+            display: ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db)),
             head,
             // `RuntimeTy` excludes exactly the compiler-sentinel axis
             // (`Error`/`Unknown`/`Infer`) while keeping symbolic
@@ -452,15 +453,17 @@ pub struct GenericExport {
     pub bounds: Vec<String>,
 }
 
-fn generic_export(param: &ParamTy, bounds: &[InterfaceBound]) -> GenericExport {
+fn generic_export(db: &Db, param: &ParamTy, bounds: &[InterfaceBound]) -> GenericExport {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     GenericExport {
         name: param.as_str().to_string(),
         bounds: bounds
             .iter()
             .map(|b| {
-                let mut s = b.name.render_dotted(false);
+                let mut s = vp.path(&b.name);
                 if !b.generics.is_empty() {
-                    let args: Vec<String> = b.generics.iter().map(Ty::render_canonical).collect();
+                    let args: Vec<String> =
+                        b.generics.iter().map(|ty| ty.render_with(&vp)).collect();
                     let _ = write!(s, "<{}>", args.join(", "));
                 }
                 s
@@ -712,28 +715,28 @@ fn function_name(db: &Db, func: FunctionLoc<'_>) -> Name {
     item_data::function_data(db, func).name.clone()
 }
 
-fn interface_qtn(db: &Db, iface: InterfaceLoc<'_>) -> QualifiedTypeName {
+fn interface_qtn(db: &Db, iface: InterfaceLoc<'_>) -> DeclName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, iface.file(db));
-    QualifiedTypeName::new(
-        pkg.package,
+    DeclName::in_root(
+        pkg.root,
         pkg.namespace_path,
         item_data::interface_data(db, iface).name.clone(),
     )
 }
 
-fn class_qtn(db: &Db, class: ClassLoc<'_>) -> QualifiedTypeName {
+fn class_qtn(db: &Db, class: ClassLoc<'_>) -> DeclName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-    QualifiedTypeName::new(
-        pkg.package,
+    DeclName::in_root(
+        pkg.root,
         pkg.namespace_path,
         item_data::class_data(db, class).name.clone(),
     )
 }
 
-fn enum_qtn(db: &Db, enm: EnumLoc<'_>) -> QualifiedTypeName {
+fn enum_qtn(db: &Db, enm: EnumLoc<'_>) -> DeclName {
     let pkg = baml_compiler2_hir::file_package::file_package(db, enm.file(db));
-    QualifiedTypeName::new(
-        pkg.package,
+    DeclName::in_root(
+        pkg.root,
         pkg.namespace_path,
         item_data::enum_data(db, enm).name.clone(),
     )
@@ -875,7 +878,7 @@ fn plain_bounds(
 // ── Projection ───────────────────────────────────────────────────────────────
 
 /// Export one package's full surface.
-pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExport {
+pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> PackageExport {
     let impl_index = ImplIndex::build(db);
 
     // Namespaces root-first sorted by path; items types-then-values sorted
@@ -887,7 +890,7 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
 
     let mut items = Vec::new();
     for path in ns_paths {
-        let ns = NamespaceId::new(db, package.name(db), path.clone());
+        let ns = NamespaceId::new(db, package, path.clone());
         let ns_items = baml_compiler2_ppir::namespace_items(db, ns);
         let mut named: Vec<(&Name, Definition<'db>)> = ns_items
             .types
@@ -910,12 +913,11 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
     }
     items.sort_by(|a, b| a.id.cmp(&b.id));
 
-    let package_name = package.name(db);
     let mut impls: Vec<ImplExport> = impl_index
         .exports
         .into_iter()
         .filter(|(imp, _)| {
-            baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package == package_name
+            baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root == package
         })
         .map(|(_, export)| export)
         .collect();
@@ -923,7 +925,7 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
 
     PackageExport {
         format_version: FORMAT_VERSION,
-        package: package_name.to_string(),
+        package: spelling(db).of(package).to_string(),
         items,
         impls,
     }
@@ -956,7 +958,7 @@ impl<'db> ImplIndex<'db> {
             .iter()
             .filter(|(imp, _)| {
                 impl_facts(db, *imp)
-                    .and_then(|data| ty_head(&data.for_ty_pattern))
+                    .and_then(|data| ty_head(spelling(db), &data.for_ty_pattern))
                     .is_some_and(|impl_head| impl_attaches(&impl_head, head))
             })
             .map(|(_, export)| export.id.clone())
@@ -1038,7 +1040,7 @@ fn function_export(
         signature: SignatureExport {
             generics: function_generics(db, function)
                 .iter()
-                .map(|(param, bounds)| generic_export(param, bounds))
+                .map(|(param, bounds)| generic_export(db, param, bounds))
                 .collect(),
             params: sig
                 .params
@@ -1048,12 +1050,15 @@ fn function_export(
                         .name
                         .as_ref()
                         .map_or_else(|| "_".to_string(), ToString::to_string),
-                    ty: TyRef::of(&p.ty),
+                    ty: TyRef::of(db, &p.ty),
                     optional: matches!(p.mode, baml_type::FunctionParamMode::Optional),
                 })
                 .collect(),
-            returns: TyRef::of(&sig.return_type),
-            throws: TyRef::of(&baml_compiler2_hir_ty::callable::callable_throws(db, function).0),
+            returns: TyRef::of(db, &sig.return_type),
+            throws: TyRef::of(
+                db,
+                &baml_compiler2_hir_ty::callable::callable_throws(db, function).0,
+            ),
         },
         source: source_export(db, function.file(db), source_map.span),
     }
@@ -1067,7 +1072,10 @@ fn class_field_export(db: &Db, class: ClassLoc<'_>, index: usize) -> FieldExport
             .to_string(),
         name: field.name.to_string(),
         docstring: field.docstring.clone(),
-        ty: TyRef::of(&baml_compiler2_hir_ty::lower::resolve_class_fields(db, class)[index].1),
+        ty: TyRef::of(
+            db,
+            &baml_compiler2_hir_ty::lower::resolve_class_fields(db, class)[index].1,
+        ),
     }
 }
 
@@ -1080,6 +1088,7 @@ fn interface_field_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Fie
         name: field.name.to_string(),
         docstring: field.docstring.clone(),
         ty: TyRef::of(
+            db,
             &baml_compiler2_hir_ty::interfaces::resolve_interface_fields(db, iface).fields[index].1,
         ),
     }
@@ -1116,7 +1125,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
             generics: resolved
                 .generic_params
                 .iter()
-                .map(|(param, bounds)| generic_export(param, bounds))
+                .map(|(param, bounds)| generic_export(db, param, bounds))
                 .collect(),
             params: params
                 .iter()
@@ -1125,12 +1134,12 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
                         .name
                         .as_ref()
                         .map_or_else(|| "_".to_string(), ToString::to_string),
-                    ty: TyRef::of(&p.ty),
+                    ty: TyRef::of(db, &p.ty),
                     optional: matches!(p.mode, baml_type::FunctionParamMode::Optional),
                 })
                 .collect(),
-            returns: TyRef::of(returns),
-            throws: TyRef::of(throws),
+            returns: TyRef::of(db, returns),
+            throws: TyRef::of(db, throws),
         },
     }
 }
@@ -1138,9 +1147,11 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
 fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     let data = impl_facts(db, imp)?;
     let iface_qtn = interface_qtn(db, data.interface);
-    let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
+    let pkg = spelling(db)
+        .of(baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root)
+        .clone();
 
-    let for_ty = TyRef::of(&data.for_ty_pattern);
+    let for_ty = TyRef::of(db, &data.for_ty_pattern);
     // Destructured from the one renderer rather than rebuilt here, so a
     // block's id and the ids of the methods it contributes can never disagree
     // about what identifies it.
@@ -1172,23 +1183,27 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     Some(ImplExport {
         id,
         docstring: block_data.docstring.clone(),
-        interface: iface_qtn.render_dotted(false),
+        interface: crate::render::canonical_path(db, &iface_qtn),
         interface_id: SymbolId::of_definition(db, Definition::Interface(data.interface))
             .map(|id| id.to_string())
             .unwrap_or_default(),
-        interface_args: data.interface_args.iter().map(TyRef::of).collect(),
+        interface_args: data
+            .interface_args
+            .iter()
+            .map(|ty| TyRef::of(db, ty))
+            .collect(),
         for_ty,
         generics: data
             .generic_params
             .iter()
-            .map(|(param, bounds)| generic_export(param, bounds))
+            .map(|(param, bounds)| generic_export(db, param, bounds))
             .collect(),
         assoc_bindings: data
             .associated_types
             .iter()
             .map(|(name, ty)| AssocBindingExport {
                 name: name.to_string(),
-                ty: TyRef::of(ty),
+                ty: TyRef::of(db, ty),
             })
             .collect(),
         methods,
@@ -1226,13 +1241,16 @@ fn export_item<'db>(
             ItemDetail::Class {
                 generics: class_generics(db, class)
                     .iter()
-                    .map(|(param, bounds)| generic_export(param, bounds))
+                    .map(|(param, bounds)| generic_export(db, param, bounds))
                     .collect(),
                 fields: (0..data.fields.len())
                     .map(|index| class_field_export(db, class, index))
                     .collect(),
                 methods,
-                impls: impl_index.ids_for_class_head(db, &TyHead::Nominal(class_qtn(db, class))),
+                impls: impl_index.ids_for_class_head(
+                    db,
+                    &TyHead::Nominal(spelling(db).wire(&class_qtn(db, class))),
+                ),
             }
         }
         Definition::Enum(enm) => {
@@ -1254,7 +1272,10 @@ fn export_item<'db>(
                         docstring: variant.docstring.clone(),
                     })
                     .collect(),
-                impls: impl_index.ids_for_class_head(db, &TyHead::Nominal(enum_qtn(db, enm))),
+                impls: impl_index.ids_for_class_head(
+                    db,
+                    &TyHead::Nominal(spelling(db).wire(&enum_qtn(db, enm))),
+                ),
             }
         }
         Definition::Interface(iface) => {
@@ -1268,7 +1289,7 @@ fn export_item<'db>(
             ItemDetail::Interface {
                 generics: interface_generics(db, iface)
                     .iter()
-                    .map(|(param, bounds)| generic_export(param, bounds))
+                    .map(|(param, bounds)| generic_export(db, param, bounds))
                     .collect(),
                 fields: (0..data.fields.len())
                     .map(|index| interface_field_export(db, iface, index))
@@ -1292,7 +1313,7 @@ fn export_item<'db>(
                                 iface,
                                 assoc.name.clone(),
                             )
-                            .map(|(ty, _diags)| TyRef::of(&ty)),
+                            .map(|(ty, _diags)| TyRef::of(db, &ty)),
                     })
                     .collect(),
                 required_methods: (0..data.required_methods.len())
@@ -1303,7 +1324,10 @@ fn export_item<'db>(
             }
         }
         Definition::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(&baml_compiler2_hir_ty::lower::type_alias_value(db, alias)),
+            resolved: TyRef::of(
+                db,
+                &baml_compiler2_hir_ty::lower::type_alias_value(db, alias),
+            ),
         },
         Definition::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,
@@ -1340,8 +1364,10 @@ mod tests {
         db
     }
 
-    fn package<'db>(db: &'db ProjectDatabase, name: &str) -> PackageId<'db> {
-        PackageId::new(db, Name::new(name))
+    fn package(db: &ProjectDatabase, name: &str) -> baml_base::SourceRoot {
+        spelling(db)
+            .root(&Name::new(name))
+            .expect("package is installed")
     }
 
     /// The whole `assert` package, pretty-printed — small enough to review,
