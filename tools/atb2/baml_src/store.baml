@@ -37,7 +37,13 @@ function dataset() -> string {
 /// shape); the body is JSON text. Panics on transport or non-2xx, like
 /// supabase_get: a store that is configured but broken must not be
 /// silently skipped.
-function supabase_send(method: string, path: string, body: string, prefer: string) -> string {
+function supabase_send(
+    method: string,
+    path: string,
+    body: string,
+    prefer: string,
+    timeout_s: int = 30,
+) -> string {
     let base = baml.env.get("FEEDBACK_SUPABASE_URL") ?? "";
     if (!base.starts_with("https://")) {
         // the service key rides in two headers: never over plain http
@@ -56,7 +62,7 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
     };
     let res = baml.http.send(
         baml.http.Request { method: method, url: url, headers: headers, body: body },
-        timeout = baml.time.Duration.from_seconds(30),
+        timeout = baml.time.Duration.from_seconds(timeout_s),
     ) catch (e) {
         _ => {
             throw StoreError { message: method + " failed for " + url };
@@ -223,6 +229,8 @@ function issue_row(issue: Issue) -> json {
             let d: Difficulty => d.to_string(),
         },
         "design_doc": issue.design_doc,
+        "slack_ts": issue.slack_ts,
+        "slack_channel": issue.slack_channel,
         "dataset": dataset(),
     }
         .to_json()
@@ -245,6 +253,8 @@ function issue_from_row(row: json) -> Issue {
         resolution_plan: baml.json.path_or<string?>(row, ".resolution_plan", null),
         difficulty: difficulty_from(baml.json.path_or<string?>(row, ".difficulty", null)),
         design_doc: baml.json.path_or<string?>(row, ".design_doc", null),
+        slack_ts: baml.json.path_or<string?>(row, ".slack_ts", null),
+        slack_channel: baml.json.path_or<string?>(row, ".slack_channel", null),
     }
 }
 
@@ -317,6 +327,39 @@ function save_feedback(fb: Feedback, origin: json) -> null {
 }
 
 /// Reports already in the store, by id: what an intake must not re-add.
+/// The toolchains the linked reports said the bug fails on, oldest report
+/// first, deduplicated; empty without the store or when no report said.
+function reported_versions(issue: Issue) -> string[] {
+    let out: string[] = [];
+    if (!db_configured()) {
+        return out;
+    };
+    for (let id in issue.feedback_ids) {
+        let rows = select("feedback", "select=toolchain&id=" + eq(id) + "&dataset=" + eq(dataset()) + "&limit=1");
+        match (rows.at(0)) {
+            null => null,
+            let r: json => {
+                let v = (baml.json.path_or<string?>(r, ".toolchain", null) ?? "").trim();
+                if (v.length() > 0 && !out.includes(v)) {
+                    out.push(v);
+                };
+            },
+        };
+    }
+    out
+}
+
+/// "fails on A, B · fixed on C" (pure). Falls back to the issue's own
+/// last-seen-broken version when no report named one.
+function fails_fixed_text(reported: string[], last_broken: string, fixed: string) -> string {
+    let fails = if (reported.length() > 0) {
+        reported.join(", ")
+    } else {
+        last_broken
+    };
+    "fails on " + fails + " · fixed on " + fixed
+}
+
 function known_feedback_ids() -> string[] {
     if (!db_configured()) {
         return [];
@@ -329,7 +372,35 @@ function save_issue(issue: Issue) -> null {
         return null;
     };
     guard_dataset(issue.id);
-    upsert("issues", [issue_row(issue)].to_json());
+    let row = issue_row(issue);
+    if (dataset() == "eval") {
+        upsert("issues", [row].to_json());
+        return null;
+    };
+    let inserted = rows_of(
+        supabase_send(
+            "POST",
+            "issues?on_conflict=id",
+            baml.json.stringify([row]),
+            "resolution=ignore-duplicates,return=representation",
+        ),
+    );
+    if (inserted.length() == 0) {
+        // These collections can change while an agent holds an older snapshot.
+        // Their writers append explicitly; lifecycle saves must not replace them.
+        let fields = baml.json.from_json<map<string, json>>(row);
+        let patch: map<string, json> = {};
+        for (let key in fields.keys()) {
+            if (!["comments", "repros", "feedback_ids", "slack_ts", "slack_channel"].includes(key)) {
+                patch.set(key, fields.get(key) ?? baml.json.parse("null"));
+            };
+        }
+        update(
+            "issues",
+            "id=" + eq(issue.id) + "&dataset=" + eq(dataset()) + "&state=neq.cancelled",
+            patch.to_json(),
+        );
+    };
     null
 }
 

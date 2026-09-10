@@ -40,6 +40,7 @@ function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
         repros span; whether the resolution plan is concrete; whether a
         fix changes semantics others depend on.
 
+        Issue ID: ${issue.id}
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
 
@@ -81,6 +82,14 @@ function gauge_issue(issue: Issue) -> Issue {
             "unknowns": estimate.unknowns,
         },
     );
+    log_event(
+        "gauged",
+        issue.id,
+        null,
+        { "summary": estimate.rationale, "difficulty": estimate.difficulty.to_string() }.to_json(),
+        null,
+        null,
+    );
     //# record it on the issue
     with_difficulty(issue, estimate.difficulty)
 }
@@ -100,6 +109,8 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
         resolution_plan: issue.resolution_plan,
         difficulty: difficulty,
         design_doc: issue.design_doc,
+        slack_ts: issue.slack_ts,
+        slack_channel: issue.slack_channel,
     }
 }
 

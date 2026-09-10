@@ -70,92 +70,60 @@ anon role reads issues, runs, merge_rounds, events and the views; `feedback`
 and `cursors` are service role only, so reporter identities never leave it.
 The DDL is applied in the Supabase dashboard and is not in the repo.
 
-## Deploy
 
-`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`), one machine
-and one process, `runner_loop`, which serves `@bammy babysit <PR>` requests
-from the store in the background and runs `run_pipeline` every five minutes.
-One machine on purpose: a Fly volume attaches to one machine, and both loops
-share the cached clone and cargo target on it. A panic ends the process and
-Fly restarts it; every stage is idempotent against the store.
 
-At boot the entrypoint builds canary's `baml-cli` on the volume before any
-secret is loaded, in an explicit environment, and rebuilds whenever the
-canary revision changed (`ATB2_CANARY_REV` in `fly.toml` pins one). The image
-carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
-the cached canary clone, the cargo target and the run dirs, and the first
-boot builds canary's `baml-cli` there.
+## Current milestones and operation
 
-The image starts a root bootstrap that prepares volume permissions, then runs
-compiler builds as `builder` (UID 1001) with a private home and cache under
-`/data/bootstrap`. `/data/home` is mode 0700 and owned by `atb2` (UID 1000),
-so build scripts cannot read the persistent Claude login. The builder receives
-an allowlisted environment and no capabilities. Bootstrap copies the binary
-using unprivileged readers/writers, fetches Infisical secrets as root, then
-executes the privilege drop with a fresh, allowlisted environment. The machine
-token never reaches the runtime process. The runtime has its own
-Cargo cache under `/data/cargo`. Each user has a private Rustup installation
-seeded from the image, so canary's required toolchains and components can be
-installed independently. Shared tools and application files remain root-owned
-and are not writable by either user.
+See [MILESTONES.md](MILESTONES.md) for the workflow, quantitative goals, acceptance
+criteria and known rollout prerequisites. The old approval flow is retired.
 
-The allowed runtime variables are listed in `deploy/launch-runtime.py`.
-New runtime settings must be added there. Exported values are treated as
-literal strings, with shell parameter expansion disabled.
+This issue-MVP layer ingests GitHub issues, CLI/PostHog feedback and signed Slack
+mentions. It filters vague reports, verifies repros, deduplicates, organizes,
+creates small draft fixes or larger investigation plans, and notifies shepherds.
+PR monitoring is delivered by its own dependent stack. Shirts and scratch tasks
+are not part of these milestone stacks.
 
-Existing volumes keep their login and runtime state. The first boot after
-this change builds a fresh compiler in the isolated cache, even if the old
-runtime cache already contains one. This isolates startup builds; it does
-not isolate the runtime agent's Bash from the runtime user's files.
+### Runtime configuration
 
-Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
-cached executable's recorded revision matches that pin, startup skips the
-GitHub fetch and can proceed while GitHub is unavailable. Unpinned boots
-and missing or mismatched cached builds still require a successful fetch.
-The offline startup regression tests run with
-`python3 tools/atb2/deploy/test_entrypoint.py`.
+The existing app is `atb2-runner`, volume `atb2_data`. Build with
+`docker build -f tools/atb2/deploy/Dockerfile tools/atb2` from the repository root.
+Deployment uses `fly deploy tools/atb2 --config deploy/fly.toml`; never deploy an
+unreviewed layer just to test a PR description. Canary changes deploy through
+`.github/workflows/atb2-deploy.yml` when the app-scoped Fly token is configured.
 
-`.github/workflows/atb2-deploy.yml` redeploys it on every push to `canary`
-that touches `tools/atb2`; it holds one secret, `FLY_API_TOKEN`, and skips
-itself until that exists. The site (`typescript2/app-feedback`) deploys
-through the Vercel GitHub app once its project is linked.
+Infisical supplies `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_KEY`,
+`ATB2_GITHUB_TOKEN`, Slack bot/signing credentials, PostHog credentials,
+`ATB2_SHEPHERDS` (GitHub login:Slack member ID pairs), and `ATB2_UI_URL`.
+`ATB2_ISSUE_CC` optionally adds a Slack member mention. Use a member ID, not a DM
+channel ID. Issues go to the configured ATB channel. The default live channel is
+set in `deploy/fly.toml`. Subscribe the app to `app_mention` and `reaction_added`
+at `https://atb2-runner.fly.dev/slack/events` and invite it to that channel.
 
-The runner's secrets come from Infisical at start: the image carries the
-Infisical CLI and the root launcher captures `infisical export --format=json`
-from boundary-tools `prod` in memory, so the machine holds a single Fly secret,
-`INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
-restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
-already in that project. The agent's Claude Code CLI runs on its own login,
-made once on the machine (`fly ssh console -a atb2-runner`, then
-`runuser -u atb2 -- env HOME=/data/home claude`)
-and stored under `/data/home` on the runner's persistent volume. The Claude
-credential is not stored in Infisical or CI and is not passed by atb2.
+The root launcher obtains Infisical credentials and filters the runtime
+environment. The builder UID cannot read the persistent Claude login. Agents
+have isolated filesystems; the controller's trusted push path supplies GitHub
+credentials only while pushing. Agents cannot merge or push to canary/main/master.
+The CLI cache is shared and read-only in sandboxes; versions build on demand.
 
-By hand, from the repo root:
+### Data and website
 
-```sh
-fly apps create atb2-runner                                            # once (exists)
-fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
-fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
-fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
-```
+Apply the required SQL from the milestone PR descriptions in Supabase. No DDL
+belongs in this repository. The current schema and session/turn tables are needed
+before enabling intake; live and eval remain separated. Historical stopped runs
+are not silently restarted, and historical approval rows are retained as history.
 
-## Tests
+Only deploy the website to Vercel project `app-feedback`. Public pages use the
+Supabase anonymous key. GitHub sign-in and private transcript access additionally
+need `ATB2_GITHUB_CLIENT_ID`, `ATB2_GITHUB_CLIENT_SECRET`, `ATB2_UI_SESSION_SECRET`
+and `ATB2_UI_RUNNER_SECRET`, with that last secret shared with the runner.
+Do not assume a GitHub-linked Vercel project has canary as its production branch.
+Verify that configuration before claiming automatic production deployments.
 
-```sh
-tools/atb2/run_tests.sh wire       # store, slack, intake, pipeline: token-free
-tools/atb2/run_tests.sh pr         # handle_issue, merge_issue token-free, then the agent evals
-baml-cli test                      # everything token-free, no secrets needed
-```
+### Verification
 
-## Eval rows vs real rows
-
-Every pipeline table carries `dataset`: `live` for real reports and what the
-pipeline did with them, `eval` for anything written while `ATB2_DATASET=eval`,
-which `run_tests.sh` exports for every stage it runs. The pipeline's own loops
-(`load_issues_in`) only pick up rows of their own dataset, the UI badges eval
-rows, and `dataset=eq.live` in a dashboard filter hides them.
-
-The eval dataset itself (`eval/supabase`, tables `triage_issues` /
-`triage_feedback`) is separate: reference issues and synthetic reports,
-eval-only by construction.
+Use the canary compiler: `baml check`, `baml fmt`, `baml test` in this package.
+Run `python3 -m unittest discover -s tools/atb2/deploy -p 'test_*.py'` from the repo
+root. Linux namespace tests require the runner image; a local skip is not a pass.
+Security checks run before every controller push: secret scan, sensitive paths,
+special/binary files, DDL, conflict markers, piped installers and action pinning.
+CI on the PR is the build/test gate; an unmerged draft is an initial suggestion.
