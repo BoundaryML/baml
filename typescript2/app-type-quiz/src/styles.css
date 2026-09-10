@@ -1,0 +1,257 @@
+:root {
+  --ink: #e6e6e6;
+  --dim: #9aa0a6;
+  --paper: #14161a;
+  --panel: #1b1e24;
+  --edge: #2b3038;
+  --right: #7ee787;
+  --wrong: #ff7b72;
+  --accent: #79c0ff;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* A type named inside prose. Set apart from the sentence, but quieter than the
+   case listing above it, which is what the reader is meant to be studying. */
+.claims code,
+.compiler code {
+  padding: 0.05em 0.32em;
+  font-size: 0.87em;
+  white-space: pre-wrap;
+  background: #23272e;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+}
+
+.compiler code.code {
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: none;
+}
+
+.shell {
+  /* Wide enough for the formatter's own line width. It wraps at 100 columns,
+     so anything narrower hides the ends of the longer signatures behind a
+     scrollbar, and the program is the thing being read. */
+  max-width: 60rem;
+  padding: 2.5rem 1.25rem 4rem;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.blurb,
+.note {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+
+.note {
+  margin: 1rem 0 0;
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 22rem;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+select,
+input,
+textarea {
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+button.quiet {
+  color: var(--dim);
+}
+
+.progress {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+pre.case {
+  padding: 1rem 1.1rem;
+  margin: 0 0 1.1rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+pre.case code {
+  padding: 0;
+  /* A last resort for a line the formatter could not bring under its width:
+     wrapping is ugly, but less so than one that runs off the panel. */
+  white-space: pre-wrap;
+  background: none;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.ask {
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+.why {
+  max-width: none;
+  margin-bottom: 0.5rem;
+}
+
+.reveal .right {
+  font-weight: 600;
+  color: var(--right);
+}
+
+.reveal .wrong {
+  font-weight: 600;
+  color: var(--wrong);
+}
+
+.claims {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0;
+  margin: 0.9rem 0;
+  list-style: none;
+}
+
+.claims li {
+  padding-left: 0.8rem;
+  border-left: 2px solid var(--edge);
+}
+
+.claims .instance {
+  display: block;
+}
+
+.claims .rule {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+
+.compiler {
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.compiler p {
+  margin: 0 0 0.4rem;
+  color: var(--dim);
+}
+
+.compiler ul {
+  padding-left: 1.1rem;
+  margin: 0;
+}
+
+.compiler code {
+  color: var(--accent);
+}
+
+.score {
+  border-collapse: collapse;
+}
+
+.score th {
+  padding-right: 1.2rem;
+  font-weight: 400;
+  vertical-align: top;
+  color: var(--dim);
+  text-align: left;
+}
+
+.failure {
+  color: var(--wrong);
+}

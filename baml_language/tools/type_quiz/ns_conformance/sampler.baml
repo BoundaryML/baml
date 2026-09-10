@@ -117,6 +117,7 @@ function streams_are_distinct() -> bool throws never {
 function scored(score: float) -> root.engine.Scored throws never {
     root.engine.Scored {
         item: "synthetic",
+        seed: root.engine.seed_from(0),
         candidate: root.engine.Candidate {
             case: root.engine.Case {
                 files: root.engine.one_file("case.baml", ""),
@@ -416,7 +417,7 @@ function selected() -> root.engine.Turn[] throws never {
         root.engine.seed_from(2024),
         root.bank.default_weights(),
         120,
-        root.engine.Budget { per_step: 3, draws: 3, redraws: 2 },
+        root.bank.default_budget(),
     )
 }
 

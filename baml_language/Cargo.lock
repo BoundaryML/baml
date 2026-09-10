@@ -3291,6 +3291,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmt_wasm"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_fmt",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

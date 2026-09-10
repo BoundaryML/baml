@@ -36,3 +36,10 @@ function default_weights() -> root.engine.Weights throws never {
         },
     }
 }
+
+/// How much a session's turn may draw before it settles for the verdict it
+/// did not ask for. Two re-draws is enough that the fixed session never falls
+/// back; see the sampler suite.
+function default_budget() -> root.engine.Budget throws never {
+    root.engine.Budget { per_step: 3, draws: 3, redraws: 2 }
+}

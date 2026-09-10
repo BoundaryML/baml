@@ -1,0 +1,31 @@
+{
+  "name": "app-type-quiz",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "cd ../../baml_language && cargo run -q -p baml_cli -- generate --project tools/type_quiz --output-dir ../typescript2/app-type-quiz/src/baml_sdk",
+    "build:wasm": "wasm-pack build ../../baml_language/crates/fmt_wasm --target web --out-dir ../../../typescript2/app-type-quiz/wasm --out-name fmt_wasm --release",
+    "prepare:deps": "pnpm generate && pnpm build:wasm",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@b/pkg-grammar-hljs": "workspace:*",
+    "@boundaryml/baml-bridge-web": "link:../../baml_language/sdks/typescript/bridge_typescript_web",
+    "highlight.js": "^11.11.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.26",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "playwright": "^1.57.0"
+  }
+}

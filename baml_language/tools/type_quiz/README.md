@@ -13,6 +13,7 @@ compiler, so the quiz cannot drift from the language without CI noticing.
 | `ns_algebra` | tested material: the `Ty` model, rendering, relations, sites | the type system changes |
 | `ns_bank` | tested material: the rule table quoted from the spec, fact generators, items, naive models, features, weights, name pools | what or how we teach changes |
 | `ns_conformance` | the tripwire suites | — |
+| `main.baml` | the composition root: the only file that knows both the engine and the bank, and the only one that talks to a terminal | — |
 
 Two ledgers sit beside the code. `SPEC_GAPS.md` records principles the spec
 omits or under-specifies; a rule with no section to cite must cite an entry
@@ -54,6 +55,36 @@ type kind is a compile error rather than a silently-taken arm), and on a
 directory gone missing, which would otherwise let a check pass by scanning
 nothing. The engine owns nothing the compiler can answer: the only judgments
 about BAML come from `reflect.Package.compile`.
+
+## The quiz surface
+
+The quiz is asked and answered through the top-level functions in
+`main.baml`, which are what a generated SDK exports. There is no loop and no
+state between calls: a sitting is a pure function of its seed, so a question
+is worked out again whenever it is wanted.
+
+| Function | For |
+|---|---|
+| `sitting_length(seed, length)` | how many questions a sitting has |
+| `prompt_at(seed, length, index)` | the program to show, carrying no answer |
+| `answer_at(seed, length, index, verdict, reasoning, understanding?)` | mark an answer against the key and get the derivation back |
+| `compiler_report(seed, length, index)` | what the compiler itself says, to show once answered |
+| `sitting_json(mode, seed, exchanges)` | the sitting as the JSON a learner takes away |
+| `review(path)` | read a downloaded sitting back and re-check its cases |
+
+A prompt deliberately holds the program and where it came from, and neither
+the key nor the derivation. Because a case can be generated again from its
+item and seed, the answer never has to be in front of the learner to be
+available when they answer.
+
+`review` is the one function meant for a terminal: point it at a downloaded
+transcript and it reports how the sitting went and whether every case still
+behaves as it did when it was asked.
+
+```bash
+# from baml_language/tools/type_quiz, under mise
+baml run review -- --path ~/Downloads/full-142593372-0.json
+```
 
 ## Running
 
@@ -139,6 +170,14 @@ minimal single-file packages; none is fixed at the time of writing.
    into a fresh local first does not help; the same code with `top` a literal
    works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
    which `pick` in `ns_engine/sample.baml` uses.
+12. **An empty class in a union matches any JSON object, so its siblings
+   decode as it.** With `type M = Empty | Named`, `baml.json.to_string` writes
+   a `Named { model: "m" }` as `{"model":"m"}` and `from_string<M>` reads it
+   back as `Empty`, silently. Decoding takes the first member that fits and an
+   empty class fits everything, so listing it last happens to work, which makes
+   correctness depend on the order of a type alias. The transcript's
+   "who marked this" therefore carries an optional model id rather than the
+   union that would say it better.
 11. **String literals have no numeric or unicode escape.** `"\u{1F411}"` is
    nine characters and `"\x41"` is four: only `\\`, `\"`, `\n`, `\r` and `\t`
    are escapes, so a character outside them can only be written as itself. The

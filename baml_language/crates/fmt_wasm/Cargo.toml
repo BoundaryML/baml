@@ -1,0 +1,28 @@
+[package]
+name = "fmt_wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "The BAML formatter on its own, for a browser"
+
+[lib]
+crate-type = [ "cdylib", "rlib" ]
+doctest = false
+
+[dependencies]
+baml_fmt = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.ci]
+wasm_support = true
+
+[lints]
+workspace = true

@@ -10,13 +10,13 @@ fail() {
     status=1
 }
 
-# A check whose directory is missing would pass by scanning nothing, so a
-# rename or a move must fail the lint rather than quietly disable it.
-require_dirs() {
-    local dir
-    for dir in "$@"; do
-        if [ ! -d "$dir" ]; then
-            fail "no directory $dir; a check would otherwise pass by scanning nothing"
+# A path a check scans must exist. A renamed or moved one would otherwise let
+# the check pass by scanning nothing, disabling it without saying so.
+require_paths() {
+    local path
+    for path in "$@"; do
+        if [ ! -e "$path" ]; then
+            fail "no $path; a check would otherwise pass by scanning nothing"
             return 1
         fi
     done
@@ -33,7 +33,7 @@ require_dirs() {
 scan() {
     local description="$1" pattern="$2"
     shift 2
-    require_dirs "$@" || return 0
+    require_paths "$@" || return 0
 
     local matches grep_status offenders
     set +e
@@ -75,6 +75,6 @@ scan "ns_bank must not reference conformance" \
 # language model and its wildcards are error catch-alls; every catch arm in
 # the three layers below names the error it handles.
 scan "wildcard match arms are banned outside ns_engine" \
-    '(^|[^[:alnum:]_])_[[:space:]]*(if[^,]*)?=>' ns_algebra ns_bank ns_conformance
+    '(^|[^[:alnum:]_])_[[:space:]]*(if[^,]*)?=>' ns_algebra ns_bank ns_conformance main.baml
 
 exit $status

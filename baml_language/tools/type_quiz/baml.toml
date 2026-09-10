@@ -11,3 +11,11 @@ args = ["-x", "::live::"]
 
 [test.profiles.live]
 args = ["-i", "::live::"]
+
+# The quiz's user interface is a browser page, so the package is generated as
+# a web SDK. This section says what to generate; the app that consumes it says
+# where to put it, by passing `--output-dir`, so this package holds no path
+# into the front end.
+[generator.web]
+output_type = "typescript/web"
+naming_convention = "preserve-case"

@@ -57,9 +57,11 @@ function score(features: map<string, float>, weights: Weights) -> float? throws 
     )
 }
 
-/// A candidate with the item it came from and its score.
+/// A candidate with where it came from and its score. The item and seed are
+/// carried so a case can be generated again from a written-down sitting.
 class Scored {
     item: string,
+    seed: Seed,
     candidate: Candidate,
     score: float,
 }
@@ -96,7 +98,7 @@ function draw(item: Item, seed: Seed, weights: Weights, count: int) -> Scored[] 
             ?? return null;
         let value = score(candidate.features, weights)
             ?? return null;
-        Scored { item: id, candidate, score: value }
+        Scored { item: id, seed: s, candidate, score: value }
     })
 }
 
