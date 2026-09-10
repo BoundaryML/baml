@@ -11,13 +11,22 @@
 # Build context is tools/atb2 (the repo root's .dockerignore keeps everything
 # out): `docker build -f tools/atb2/deploy/Dockerfile tools/atb2`.
 
-FROM rust:1-bookworm
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS node
+FROM rust:1.98.0-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git jq openssh-client pkg-config libssl-dev \
-      python3 clang lld cmake util-linux \
+      python3 clang lld cmake util-linux bubblewrap \
     && rm -rf /var/lib/apt/lists/*
+
+# Immutable gate executables and the toolchain required by canary. Workspace
+# caches are private; they cannot install replacements into this trusted PATH.
+RUN rustup component add clippy rustfmt rust-analyzer \
+    && rustup target add wasm32-unknown-unknown \
+    && cargo install --locked --version 0.9.143 cargo-nextest \
+    && cargo install --locked --version 1.48.0 cargo-insta \
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 # gh
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -27,12 +36,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# node (Debian's package, no third-party install script), the Claude Code CLI
-# the agent runs as, and the Infisical CLI the entrypoint pulls secrets with.
-# Both from the npm registry, the Infisical one pinned.
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code @infisical/cli@0.43.128
+# Claude Code requires Node >=22. Copy a digest-pinned runtime, without an installer script.
+COPY --from=node --chown=root:root /usr/local/bin/node /usr/local/bin/node
+COPY --from=node --chown=root:root /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm install -g @anthropic-ai/claude-code@2.1.261 @infisical/cli@0.43.128
 
 RUN useradd -m -u 1000 -s /bin/bash atb2 \
     && useradd -m -u 1001 -s /bin/bash builder \
@@ -48,6 +57,13 @@ ENV ATB2_HOME=/data \
 WORKDIR /app
 COPY baml.toml ./
 COPY baml_src ./baml_src
+COPY deploy/cache-cli.py deploy/cli-cache-service.py deploy/build-version.py /usr/local/lib/atb2/
+COPY deploy/sessions.py deploy/session_home.py /usr/local/lib/atb2/
+COPY deploy/traces.py /usr/local/lib/atb2/
+RUN mkdir -p /usr/local/lib/atb2/traced-bin \
+    && printf '#!/bin/sh\nexec /usr/bin/python3 -I /usr/local/lib/atb2/traces.py "$@"\n' > /usr/local/lib/atb2/traced-bin/claude \
+    && chmod 755 /usr/local/lib/atb2/traced-bin/claude
+COPY deploy/sandbox.py deploy/push.py deploy/push-scan.py /usr/local/lib/atb2/
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint
 COPY deploy/build-cli.sh /usr/local/bin/atb2-build-cli
 COPY deploy/bootstrap.sh /usr/local/bin/atb2-bootstrap
