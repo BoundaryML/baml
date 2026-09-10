@@ -6383,7 +6383,7 @@ impl<'db> LoweringContext<'db> {
                             }
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6446,7 +6446,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6520,7 +6520,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6590,7 +6590,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6655,7 +6655,7 @@ impl<'db> LoweringContext<'db> {
             // `resolutions` above and returns before reaching here, so the
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
-                && let Some(recv_root_local) = self.local_for_path(expr_id, &segments[0])
+                && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let recv_seg_idx = if segments.len() == 2 {
@@ -6679,11 +6679,8 @@ impl<'db> LoweringContext<'db> {
                         .is_some_and(|decl| self.mir_interface_declares_method(&decl, &method_name))
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
-                    let recv_local = self.lower_path_receiver_to_local(
-                        expr_id,
-                        receiver_segments,
-                        recv_root_local,
-                    );
+                    let recv_local =
+                        self.lower_path_receiver_to_local(expr_id, receiver_segments, recv_root);
                     self.emit_virtual_bound_method(recv_local, &view, &method_name, &dest);
                     return;
                 }
@@ -8809,14 +8806,14 @@ impl<'db> LoweringContext<'db> {
         // BEP-044: intercept Path forms whose final segment is a method
         // call on an interface-typed receiver.
         //
-        //   `<local>.<method>()` (2 segments) — receiver inferred interface
-        //   `<local>.<field>.<method>()` (3+ segments) — field chain whose
+        //   `<value>.<method>()` (2 segments) - receiver inferred interface
+        //   `<value>.<field>.<method>()` (3+ segments) - field chain whose
         //   prefix is interface-typed
         if let AstExpr::Path(segments) = callee_expr {
             // Any path of length ≥ 2 may end in a method call whose
             // receiver is interface-typed. The receiver type is recorded
             // by TIR at the segment just before the method name (or, for
-            // a 2-segment path, is the root local's declared type).
+            // a 2-segment path, is the root binding's declared type).
             //
             // The segment just before the method name may be a real field
             // access (`r.a.b.c.d.e.speak()`) whose static type is an interface.
@@ -8832,9 +8829,7 @@ impl<'db> LoweringContext<'db> {
             // (expr, name) would have to prove the first load dominates the
             // second use, and these can land in different blocks.
             if segments.len() >= 2
-                && let Some(recv_root_local) = self
-                    .local_for_path(callee, &segments[0])
-                    .or_else(|| self.load_top_level_let_root(callee, &segments[0]))
+                && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
@@ -8917,11 +8912,8 @@ impl<'db> LoweringContext<'db> {
                         segments.len() - 1
                     };
                     let receiver_segments = &segments[..receiver_segments_end];
-                    let recv_local = self.lower_path_receiver_to_local(
-                        callee,
-                        receiver_segments,
-                        recv_root_local,
-                    );
+                    let recv_local =
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root);
                     // Every interface-mediated call dispatches open-world via a
                     // virtual call — same routing as the member-access dispatch
                     // site (`try_lower_interface_dispatch`); the VM resolves the
@@ -8954,11 +8946,8 @@ impl<'db> LoweringContext<'db> {
                     .and_then(Self::tir_union_members)
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
-                    let recv_local = self.lower_path_receiver_to_local(
-                        callee,
-                        receiver_segments,
-                        recv_root_local,
-                    );
+                    let recv_local =
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root);
                     if let Some((decl_tn, decl_args, decl_assoc)) =
                         self.union_virtual_dispatch_view(&members, &method_name)
                         && self.emit_virtual_call(
@@ -9207,15 +9196,7 @@ impl<'db> LoweringContext<'db> {
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
-                        // Simple local variable receiver (e.g. `self`), or a
-                        // Session's top-level `let`, which is a global rather
-                        // than a local and has to be loaded before it can be
-                        // dispatched on.
-                        self.place_for_path(callee, &receiver_segments[0])
-                            .or_else(|| {
-                                self.load_top_level_let_root(callee, &receiver_segments[0])
-                                    .map(Place::local)
-                            })
+                        self.path_receiver_root(callee, &receiver_segments[0])
                             .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
@@ -9255,11 +9236,7 @@ impl<'db> LoweringContext<'db> {
                     None => self.lower_to_operand(callee),
                 };
                 let receiver_op = self
-                    .place_for_path(callee, &segments[0])
-                    .or_else(|| {
-                        self.load_top_level_let_root(callee, &segments[0])
-                            .map(Place::local)
-                    })
+                    .path_receiver_root(callee, &segments[0])
                     .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
@@ -11795,19 +11772,21 @@ impl<'db> LoweringContext<'db> {
         );
     }
 
-    /// Lower the receiver of a method-call path (`receiver_segments` — the path
-    /// up to but excluding the method/qualifier) to a single local: a bare root
-    /// local is used directly; a field chain is materialized into a temp. Shared
-    /// by the interface- and union-receiver dispatch paths.
+    fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
+        self.place_for_path(expr_id, name).or_else(|| {
+            self.load_top_level_let_root(expr_id, name)
+                .map(Place::local)
+        })
+    }
+
+    /// Lower a receiver path, excluding its method or field, to a local.
+    /// Locals are reused; captures and field chains are materialized into temps.
     fn lower_path_receiver_to_local(
         &mut self,
         callee: AstExprId,
         receiver_segments: &[Name],
-        recv_root_local: Local,
+        recv_root: Place,
     ) -> Local {
-        if receiver_segments.len() <= 1 {
-            return recv_root_local;
-        }
         let recv_ty_idx = receiver_segments.len() - 1;
         let recv_ty = self
             .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
@@ -11816,6 +11795,9 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or_else(|| RuntimeTy::Unknown {
                 attr: TyAttr::default(),
             });
+        if receiver_segments.len() == 1 {
+            return self.operand_to_local(Operand::Copy(recv_root), recv_ty);
+        }
         let local = self.builder.temp(recv_ty);
         self.lower_multi_segment_path_as_field_chain(
             callee,
@@ -12111,11 +12093,11 @@ impl<'db> LoweringContext<'db> {
                 let view = self
                     .interface_receiver_for_path_prefix(target, prefix_idx, &field, &prefix_ty)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
-                let root_local = self.local_for_path(target, &segments[0])?;
+                let root = self.path_receiver_root(target, &segments[0])?;
                 let receiver = self.lower_path_receiver_to_local(
                     target,
                     &segments[..segments.len() - 1],
-                    root_local,
+                    root,
                 );
                 Some(VirtualFieldTarget {
                     receiver,
