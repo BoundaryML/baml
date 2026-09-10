@@ -11,6 +11,7 @@ import {
   type Prompt,
   promptAt,
   type Reported,
+  type Said,
   type Score,
   type Sitting,
   score,
@@ -30,7 +31,7 @@ type Phase =
       index: number;
       prompt: Prompt;
       source: string;
-      compiles: boolean;
+      said: Said;
       exchange: Exchange;
       reported: Reported | null;
     }
@@ -187,26 +188,26 @@ export default function App() {
   }, [seed, length, show]);
 
   const answer = useCallback(
-    (compiles: boolean) => {
+    (said: Said) => {
       if (phase.kind !== 'asking' || sitting === null) {
         return;
       }
       const exchange = answerAt(
         sitting,
         phase.index,
-        given(compiles, reasoning, ''),
+        given(said, reasoning, ''),
       );
       if (exchange === null) {
         setPhase({ kind: 'done' });
         return;
       }
       setPhase({
-        compiles,
         exchange,
         index: phase.index,
         kind: 'revealed',
         prompt: phase.prompt,
         reported: compilerReport(sitting, phase.index),
+        said,
         source: phase.source,
       });
     },
@@ -221,7 +222,7 @@ export default function App() {
       if (phase.kind !== 'revealed' || sitting === null) {
         return;
       }
-      setAnswers([...answers, given(phase.compiles, reasoning, mark)]);
+      setAnswers([...answers, given(phase.said, reasoning, mark)]);
       show(sitting, phase.index + 1, total);
     },
     [phase, sitting, answers, reasoning, total, show],
@@ -320,10 +321,10 @@ export default function App() {
                 </label>
               )}
               <div className="choices">
-                <button onClick={() => answer(true)} type="button">
+                <button onClick={() => answer('compiles')} type="button">
                   It compiles
                 </button>
-                <button onClick={() => answer(false)} type="button">
+                <button onClick={() => answer('rejected')} type="button">
                   It is rejected
                 </button>
               </div>
@@ -334,10 +335,14 @@ export default function App() {
             <div className="reveal">
               <p
                 className={
-                  phase.exchange.judgement.verdict_correct ? 'right' : 'wrong'
+                  phase.exchange.judgement.verdict_correct === true
+                    ? 'right'
+                    : 'wrong'
                 }
               >
-                {phase.exchange.judgement.verdict_correct ? 'Right.' : 'Wrong.'}{' '}
+                {phase.exchange.judgement.verdict_correct === true
+                  ? 'Right.'
+                  : 'Wrong.'}{' '}
                 {phase.reported?.compiles
                   ? 'It compiles.'
                   : 'The compiler rejects it.'}

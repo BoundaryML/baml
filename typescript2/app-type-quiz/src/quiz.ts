@@ -34,13 +34,12 @@ export interface Sitting {
   length: number;
 }
 
+/** What a learner said the compiler does, or that they would not commit. */
+export type Said = 'compiles' | 'rejected' | 'unsure';
+
 /** What a learner said about one question. */
-export function given(
-  compiles: boolean,
-  reasoning: string,
-  mark: string,
-): Given {
-  return new GivenClass({ compiles, mark, reasoning });
+export function given(said: Said, reasoning: string, mark: string): Given {
+  return new GivenClass({ mark, reasoning, said });
 }
 
 export function sittingLength({ seed, length }: Sitting): number {

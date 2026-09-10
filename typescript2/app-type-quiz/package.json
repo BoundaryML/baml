@@ -6,12 +6,13 @@
   "scripts": {
     "generate": "cd ../../baml_language && cargo run -q -p baml_cli -- generate --project tools/type_quiz --output-dir ../typescript2/app-type-quiz/src/baml_sdk",
     "build:wasm": "wasm-pack build ../../baml_language/crates/fmt_wasm --target web --out-dir ../../../typescript2/app-type-quiz/wasm --out-name fmt_wasm --release",
-    "prepare:deps": "pnpm generate && pnpm build:wasm",
+    "prepare:deps": "pnpm build:bridge && pnpm generate && pnpm build:wasm",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:smoke": "node scripts/smoke.mjs"
+    "test:smoke": "node scripts/smoke.mjs",
+    "build:bridge": "cd ../../baml_language/sdks/typescript/bridge_typescript_web && pnpm install && pnpm build:debug"
   },
   "dependencies": {
     "@b/pkg-grammar-hljs": "workspace:*",

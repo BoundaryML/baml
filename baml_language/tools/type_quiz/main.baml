@@ -65,8 +65,9 @@ function prompt_at(seed: int, length: int, index: int) -> root.engine.Prompt? th
 /// Every field is a bool or a string, and deliberately so: see the note at the
 /// top of this file on what an enum becomes on its way in.
 class Given {
-    /// Whether the learner said the case compiles.
-    compiles: bool,
+    /// What the learner said the compiler does: `compiles`, `rejected`, or
+    /// `unsure` when they would not commit.
+    said: string,
     /// What they said it turns on. Empty when they were not asked.
     reasoning: string,
     /// How they marked their own reasoning: `sound`, `partial`, `wrong`, or
@@ -74,11 +75,21 @@ class Given {
     mark: string,
 }
 
-function verdict_given(given: Given) -> root.engine.VerdictKind throws never {
-    if (given.compiles) {
+/// `given.said` as the engine's verdict, or `null` when the learner abstained.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the word is not one this surface offers, for
+///   the same reason as `marked_given`.
+function verdict_given(given: Given) -> root.engine.VerdictKind? throws never {
+    if (given.said == "compiles") {
         root.engine.VerdictKind.Compiles
-    } else {
+    } else if (given.said == "rejected") {
         root.engine.VerdictKind.Rejected
+    } else if (given.said == "unsure") {
+        null
+    } else {
+        throw baml.panics.Unreachable { message: `no such answer: ${given.said}` }
     }
 }
 
@@ -199,4 +210,118 @@ function read_back(transcript: root.engine.Transcript) -> string throws never {
         `cases that no longer behave as recorded:\n${stale.join("\n")}`
     };
     `${score.verdicts_right} of ${score.asked} verdicts right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}`
+}
+
+// ─── the adaptive sitting ────────────────────────────────────────────────────
+//
+// The default mode: no fixed length, and no answer key on the page. The page
+// holds a `Profile` (plain data, so it survives the boundary and browser
+// storage alike) and hands it back with every answer; the engine decides what
+// to ask next and when to stop.
+
+/// A profile that has seen nothing, over every rule the bank can conclude a
+/// case with and every naive model it knows.
+function fresh_profile() -> root.engine.Profile throws never {
+    root.engine.fresh(
+        root.bank.rule_orders(4),
+        root.bank.models().map((model) -> {
+            model.id
+        }),
+    )
+}
+
+/// The case behind a prompt, generated again from its item and seed, or
+/// `null` when no such item exists.
+function candidate_of(item: string, seed: int) -> root.engine.Candidate? throws never {
+    let found = bank_items().find((candidate) -> {
+        candidate.id() == item
+    })
+        ?? return null;
+    root.engine.generate(found, root.engine.Seed { state: seed })
+}
+
+/// The rules a case holds as the tracer reads them: its trace, inner rule
+/// first, without the flow rule every probe ends in.
+function tracer_rules(candidate: root.engine.Candidate) -> string[] throws never {
+    let flow = root.bank.flow_requires_subtype().name;
+    candidate.case.trace
+        .map((claim) -> {
+            claim.rule.name
+        })
+        .filter((name) -> {
+            name != flow
+        })
+}
+
+/// The next case to put to a learner, and the rule to teach first if one is
+/// stuck.
+class Next {
+    prompt: root.engine.Prompt,
+    teach: root.engine.Rule?,
+}
+
+/// The case the model would ask next: a draw of candidates from the verified
+/// items at a seed of the session and step, scored for this learner, and
+/// picked at random in proportion. `null` when the bank has nothing to draw.
+function next_prompt(
+    profile: root.engine.Profile,
+    knobs: root.engine.Knobs,
+    session: int,
+    step: int,
+) -> Next? throws never {
+    let seed = root.engine.seed_for(`mastery/${session}`, step);
+    let streams = root.engine.split(seed);
+    let verified = bank_items().filter((item) -> {
+        item.status() is root.engine.Verified
+    });
+    let reads = root.engine
+        .batch(verified, streams.left, root.bank.default_weights(), root.bank.default_budget())
+        .map((scored) -> {
+            root.engine.Read { scored, rules: tracer_rules(scored.candidate) }
+        });
+    let chosen = root.engine.choose(profile, knobs, reads, streams.right)
+        ?? return null;
+    let question = root.engine.Question {
+        item: chosen.scored.item,
+        seed: chosen.scored.seed.state,
+        case: chosen.scored.candidate.case,
+    };
+    let teach = match (root.engine.to_teach(profile)) {
+        let name: string => {
+            root.bank.rules().find((rule) -> {
+                rule.name == name
+            })
+        },
+        null => null,
+    };
+    Next { prompt: root.engine.prompt_of(question), teach }
+}
+
+/// The profile after the learner answered the case at `item` and `seed`.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if there is no such case: the page only hands
+///   back what `next_prompt` gave it, so a missing case is a defect in the
+///   page rather than something to absorb.
+function observe_answer(
+    profile: root.engine.Profile,
+    knobs: root.engine.Knobs,
+    item: string,
+    seed: int,
+    given: Given,
+) -> root.engine.Profile throws never {
+    let candidate = candidate_of(item, seed)
+        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` };
+    let verdict = match (verdict_given(given)) {
+        let said: root.engine.VerdictKind => {
+            said == root.engine.verdict_kind(candidate.case.key)
+        },
+        null => null,
+    };
+    root.engine.observe(
+        profile,
+        knobs,
+        root.engine.Observed { rules: tracer_rules(candidate), traps: candidate.traps, verdict },
+    )
 }

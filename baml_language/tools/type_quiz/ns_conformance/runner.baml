@@ -132,7 +132,19 @@ function compiles_by_key(question: root.engine.Question) -> bool throws never {
 }
 
 function said(compiles: bool, reasoning: string, mark: string) -> root.Given throws never {
-    root.Given { compiles, reasoning, mark }
+    root.Given {
+        said: if (compiles) {
+            "compiles"
+        } else {
+            "rejected"
+        },
+        reasoning,
+        mark,
+    }
+}
+
+function unsure() -> root.Given throws never {
+    root.Given { said: "unsure", reasoning: "", mark: "" }
 }
 
 /// Answering with the key's verdict is right and answering with the other is
@@ -143,7 +155,7 @@ function answering_report() -> string throws never {
     let right = indices.every((i) -> {
         match (root.answer_at(seed_used(), length_used(), i, said(compiles_by_key(questions[i]), "", ""))) {
             let exchange: root.engine.Exchange => {
-                exchange.judgement.verdict_correct && exchange.question == questions[i]
+                exchange.judgement.verdict_correct == true && exchange.question == questions[i]
             },
             null => false,
         }
@@ -157,12 +169,18 @@ function answering_report() -> string throws never {
                 said(!compiles_by_key(questions[i]), "", ""),
             )
         ) {
-            let exchange: root.engine.Exchange => !exchange.judgement.verdict_correct,
+            let exchange: root.engine.Exchange => exchange.judgement.verdict_correct == false,
             null => false,
         }
     });
     let past_end = root.answer_at(seed_used(), length_used(), length_used(), said(true, "", "")) == null;
-    `right=${right} wrong=${wrong} past_end=${past_end}`
+    let abstained = match (root.answer_at(seed_used(), length_used(), 0, unsure())) {
+        let exchange: root.engine.Exchange => {
+            exchange.judgement.verdict_correct == null && exchange.answer.verdict == null
+        },
+        null => false,
+    };
+    `right=${right} wrong=${wrong} past_end=${past_end} abstained=${abstained}`
 }
 
 /// Every mark the surface offers becomes the engine's own word for it, and an
@@ -190,7 +208,7 @@ function marking_report() -> string throws never {
 }
 
 test "answer: the key decides, at every question and in both directions" {
-    assert.equal(answering_report(), "right=true wrong=true past_end=true")
+    assert.equal(answering_report(), "right=true wrong=true past_end=true abstained=true")
 }
 
 test "answer: every mark the surface offers is understood, and none means none" {
@@ -267,13 +285,15 @@ function judging_is_the_key() -> bool throws never {
     );
     let said_compiles = answered(root.engine.VerdictKind.Compiles);
     let said_rejected = answered(root.engine.VerdictKind.Rejected);
-    root.engine.judge(compiles, said_compiles, null).verdict_correct
-        && !root.engine.judge(compiles, said_rejected, null).verdict_correct
-        && !root.engine.judge(rejected, said_compiles, null).verdict_correct
-        && root.engine.judge(rejected, said_rejected, null).verdict_correct
+    let no_verdict = root.engine.Answer { verdict: null, reasoning: "" };
+    root.engine.judge(compiles, said_compiles, null).verdict_correct == true
+        && root.engine.judge(compiles, said_rejected, null).verdict_correct == false
+        && root.engine.judge(rejected, said_compiles, null).verdict_correct == false
+        && root.engine.judge(rejected, said_rejected, null).verdict_correct == true
+        && root.engine.judge(compiles, no_verdict, null).verdict_correct == null
 }
 
-test "judge: the verdict is right exactly when it matches the key" {
+test "judge: the verdict is right exactly when it matches the key, and absent when none was given" {
     assert.is_true(judging_is_the_key())
 }
 
@@ -320,7 +340,11 @@ function answers_given() -> root.Given[] throws never {
     let marks = ["sound", "partial", "wrong", ""];
     baml.iter.Range.new(0, length_used())
         .map((index) -> {
-            said(index % 2 == 0, `reason ${index}`, marks[index % marks.length()])
+            if (index % 3 == 2) {
+                unsure()
+            } else {
+                said(index % 2 == 0, `reason ${index}`, marks[index % marks.length()])
+            }
         })
         .collect()
 }
@@ -359,10 +383,11 @@ test "download: the score shown is the engine's count of the same sitting" {
     assert.is_true(score_matches_the_sitting())
 }
 
-/// A scratch directory of this process's own, so a suite running beside
-/// another does not read its files.
-function scratch() -> string throws never {
-    `.type-quiz-scratch-${baml.sys.pid()}`
+/// A scratch directory of this process's and this test's own: tests in one
+/// process run concurrently, so two sharing a directory would each remove
+/// the other's files mid-flight.
+function scratch(tag: string) -> string throws never {
+    `.type-quiz-scratch-${baml.sys.pid()}-${tag}`
 }
 
 function clean_up(dir: string) -> void throws never {
@@ -373,7 +398,7 @@ function clean_up(dir: string) -> void throws never {
 
 /// A downloaded sitting survives the trip to disk, and comes back unchanged.
 function disk_round_trip() -> string throws never {
-    let dir = scratch();
+    let dir = scratch("disk");
     clean_up(dir);
     let one = every_shape();
     let report = match (root.engine.save(one, dir)) {
@@ -393,7 +418,7 @@ function disk_round_trip() -> string throws never {
 
 /// `review` reads a sitting a learner really sat, and reports it standing.
 function review_round_trip() -> string throws never {
-    let dir = scratch();
+    let dir = scratch("review");
     clean_up(dir);
     let transcript = root.sitting_of(seed_used(), length_used(), false, answers_given());
     let report = match (root.engine.save(transcript, dir)) {
@@ -405,7 +430,7 @@ function review_round_trip() -> string throws never {
 }
 
 function missing_file_is_reported() -> bool throws never {
-    root.review(`${scratch()}/not-here.json`).starts_with("could not read")
+    root.review(`${scratch("missing")}/not-here.json`).starts_with("could not read")
 }
 
 test "download: a sitting survives the trip to disk" {
@@ -424,9 +449,9 @@ test "review: a missing file is reported, not thrown" {
 
 function tally_report() -> string throws never {
     let score = root.engine.tally(every_shape());
-    `asked=${score.asked} right=${score.verdicts_right} sound=${score.sound} partial=${score.partial} wrong=${score.wrong} unmarked=${score.unmarked}`
+    `asked=${score.asked} committed=${score.committed} right=${score.verdicts_right} sound=${score.sound} partial=${score.partial} wrong=${score.wrong} unmarked=${score.unmarked}`
 }
 
 test "transcript: a sitting counts up" {
-    assert.equal(tally_report(), "asked=4 right=4 sound=1 partial=1 wrong=1 unmarked=1")
+    assert.equal(tally_report(), "asked=4 committed=4 right=4 sound=1 partial=1 wrong=1 unmarked=1")
 }

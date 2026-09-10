@@ -49,10 +49,12 @@ function prompt_of(question: Question) -> Prompt throws never {
     Prompt { item: question.item, seed: question.seed, files: question.case.files }
 }
 
-/// What the learner said. `reasoning` is empty in simple mode, which asks for
+/// What the learner said. `verdict` is absent when they said they were not
+/// sure, which is an answer in its own right: it is what makes a committed
+/// answer worth believing. `reasoning` is empty in simple mode, which asks for
 /// none.
 class Answer {
-    verdict: VerdictKind,
+    verdict: VerdictKind?,
     reasoning: string,
 }
 
@@ -79,10 +81,11 @@ class Reasoning {
 /// A judged answer.
 ///
 /// The verdict is right or wrong by the case's key and nothing else, so that
-/// half is never a matter of opinion. The reasoning is judged separately and
-/// is absent when there was none to judge.
+/// half is never a matter of opinion; it is absent when the learner gave no
+/// verdict, since abstaining is neither right nor wrong. The reasoning is
+/// judged separately and is absent when there was none to judge.
 class Judgement {
-    verdict_correct: bool,
+    verdict_correct: bool?,
     reasoning: Reasoning?,
 }
 
@@ -121,13 +124,19 @@ function judge(
     answer: Answer,
     reasoning: Reasoning?,
 ) -> Judgement throws never {
-    Judgement { verdict_correct: answer.verdict == verdict_kind(question.case.key), reasoning }
+    let verdict_correct = match (answer.verdict) {
+        let verdict: VerdictKind => verdict == verdict_kind(question.case.key),
+        null => null,
+    };
+    Judgement { verdict_correct, reasoning }
 }
 
 // ─── reading a sitting back ──────────────────────────────────────────────────
 
 class Score {
     asked: int,
+    /// Answers that gave a verdict; the rest abstained.
+    committed: int,
     verdicts_right: int,
     sound: int,
     partial: int,
@@ -155,9 +164,14 @@ function tally(transcript: Transcript) -> Score throws never {
     let understandings = marked(transcript);
     Score {
         asked: transcript.exchanges.length(),
+        committed: transcript.exchanges
+            .filter((exchange) -> {
+                exchange.judgement.verdict_correct != null
+            })
+            .length(),
         verdicts_right: transcript.exchanges
             .filter((exchange) -> {
-                exchange.judgement.verdict_correct
+                exchange.judgement.verdict_correct == true
             })
             .length(),
         sound: how_many(understandings, Understanding.Sound),
