@@ -361,7 +361,7 @@ function _media_role_error(kind: string, role: string) -> ai.errors.Failure {
 /// audio, so audio in a tool result degrades into a user turn after the run of results
 /// (`lower_journal`). There is no video input part at all.
 function _lower_block(
-    block: ai.content.ContentBlock,
+    block: ai.content.Block,
     position: string,
     preview: bool = false,
 ) -> OaInputPart {
@@ -459,7 +459,7 @@ function _lower_block(
 }
 
 function _lower_blocks(
-    blocks: ai.content.ContentBlock[],
+    blocks: ai.content.Block[],
     position: string,
     preview: bool = false,
 ) -> OaInputPart[] {
@@ -601,7 +601,7 @@ function lower_journal(
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let content: ai.content.ContentBlock => {
+                        let content: ai.content.Block => {
                             items.push(
                                 OaMessageItem {
                                     role: "assistant",
@@ -815,10 +815,7 @@ function _request(
     // open-ended JSON back (tool schemas, then the per-message directives that
     // ride on a content part) -> user passthrough LAST.
     let pruned = _restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools);
-    let body = ai.wire.merge_request_body(
-        _apply_message_metadata(pruned, metadata),
-        c.request_body,
-    );
+    let body = ai.wire.merge_request_body(_apply_message_metadata(pruned, metadata), c.request_body);
     baml.http.Request {
         method: "POST",
         url: _url(c),
@@ -912,7 +909,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
     if ((resp.status ?? "") == "failed" || resp.error != null) {
         throw _response_failure(resp)
     }
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     let has_call = false;
     let refused = false;
     let output: OaOutputItem[] = resp.output ?? [];

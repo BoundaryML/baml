@@ -11,7 +11,7 @@ class RunStarted {
 /// screenshot after a tool ran, a document the host attaches), and every
 /// client lowers the turn at its position in the journal.
 class UserMessage {
-    content: root.content.ContentBlock[],
+    content: root.content.Block[],
     /// Per-message provider directives, carried verbatim like
     /// `root.PromptMessage.metadata` (Anthropic `cache_control`, for example).
     metadata: map<string, baml.json.json>,
@@ -37,7 +37,7 @@ class UserMessage {
 }
 
 class AssistantMessage {
-    content: root.content.Block[],
+    content: root.content.ModelBlock[],
     client_id: string,
 }
 
@@ -51,7 +51,7 @@ class ToolRequested {
 /// screenshot from a computer-use tool, a rendered chart).
 class ToolCompleted {
     id: string,
-    content: root.content.ContentBlock[],
+    content: root.content.Block[],
 
     /// `output` is the tool's result serialized as JSON text.
     function new(id: string, output: string) -> ToolCompleted {

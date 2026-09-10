@@ -244,12 +244,12 @@ class ai.content.ToolUse$stream {
   args: map<string, unknown>
 }
 enum ai.content.StopReason {Complete, ToolUse, MaxTokens, Refused}
-type ai.content.Block = ai.content.ContentBlock | ai.content.Reasoning | ai.content.ToolUse
-type ai.content.Block$stream = ai.content.ContentBlock$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream
-type ai.content.ContentBlock = ai.content.Text | ai.content.Media
-type ai.content.ContentBlock$stream = ai.content.Text$stream | ai.content.Media$stream
-function ai.content.blocks(items: string | image | audio | video | pdf | ai.content.Text | ai.content.Media[]) -> ai.content.ContentBlock[]  [expr] {
-  { let out: ai.content.ContentBlock[] = []; for item in items { match (item) { text: string => { out.push(ai.content.Text { text: text }) } null, block: ai.content.ContentBlock => { out.push(block) } null, media: image | audio | video | pdf => { out.push(Media.new(media)) } null } } } out
+type ai.content.Block = ai.content.Text | ai.content.Media
+type ai.content.Block$stream = ai.content.Text$stream | ai.content.Media$stream
+type ai.content.ModelBlock = ai.content.Block | ai.content.Reasoning | ai.content.ToolUse
+type ai.content.ModelBlock$stream = ai.content.Block$stream | ai.content.Reasoning$stream | ai.content.ToolUse$stream
+function ai.content.blocks(items: string | image | audio | video | pdf | ai.content.Text | ai.content.Media[]) -> ai.content.Block[]  [expr] {
+  { let out: ai.content.Block[] = []; for item in items { match (item) { text: string => { out.push(ai.content.Text { text: text }) } null, block: ai.content.Block => { out.push(block) } null, media: image | audio | video | pdf => { out.push(Media.new(media)) } null } } } out
 }
 function ai.content.kind(self: ?) -> string  [expr] {
   {  } match (self.media) { image: baml.media.Image => "image", audio: baml.media.Audio => "audio", video: baml.media.Video => "video", pdf: baml.media.Pdf => "pdf" }
@@ -257,7 +257,7 @@ function ai.content.kind(self: ?) -> string  [expr] {
 function ai.content.new(value: image | audio | video | pdf, provider_id: string? = null, revised_prompt: string? = null) -> ai.content.Media  [expr] {
   {  } ai.content.Media { media: value, provider_id: provider_id, revised_prompt: revised_prompt }
 }
-function ai.content.text(content: ai.content.ContentBlock[]) -> string  [expr] {
+function ai.content.text(content: ai.content.Block[]) -> string  [expr] {
   { let out = ""; for block in content { match (block) { t: ai.content.Text => { out = `...` } null, m: ai.content.Media => { out = `...` } null } } } out
 }
 
@@ -417,11 +417,11 @@ function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
 
 --- <builtin>/ai/ns_events/events.baml ---
 class ai.events.AssistantMessage {
-  content: root.content.Block[]
+  content: root.content.ModelBlock[]
   client_id: string
 }
 class ai.events.AssistantMessage$stream {
-  content: root.content.Block$stream[]
+  content: root.content.ModelBlock$stream[]
   client_id: string | null
 }
 class ai.events.FinalProduced {
@@ -490,11 +490,11 @@ class ai.events.Timing$stream {
 }
 class ai.events.ToolCompleted {
   id: string
-  content: root.content.ContentBlock[]
+  content: root.content.Block[]
 }
 class ai.events.ToolCompleted$stream {
   id: string | null
-  content: root.content.ContentBlock$stream[]
+  content: root.content.Block$stream[]
 }
 class ai.events.ToolFailed {
   id: string
@@ -527,11 +527,11 @@ class ai.events.Usage$stream {
   reasoning_tokens: int | null
 }
 class ai.events.UserMessage {
-  content: root.content.ContentBlock[]
+  content: root.content.Block[]
   metadata: map<string, baml.json.json>
 }
 class ai.events.UserMessage$stream {
-  content: root.content.ContentBlock$stream[]
+  content: root.content.Block$stream[]
   metadata: map<string, baml.json.json$stream>
 }
 type ai.events.Event = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
@@ -677,8 +677,8 @@ function ai.internal._redact_value_end(tail: string) -> int  [expr] {
 function ai.internal._resolve_pending_call(pending: string[], id: string) -> void  [expr] {
   {  } if let index: int = pending.index_of(id) { let _ = pending.remove_at(index) }
 }
-function ai.internal._wire_blocks(content: root.content.Block[], keep_reasoning: bool) -> root.content.Block[]  [expr] {
-  { let out: root.content.Block[] = []; for block in content { match (block) { text: root.content.Text => { if (text.text.trim() Ne "") { out.push(text) } } null, reasoning: root.content.Reasoning => { if (keep_reasoning) { out.push(reasoning) } } null, use: root.content.ToolUse => { out.push(use) } null, media: root.content.Media => null } } } out
+function ai.internal._wire_blocks(content: root.content.ModelBlock[], keep_reasoning: bool) -> root.content.ModelBlock[]  [expr] {
+  { let out: root.content.ModelBlock[] = []; for block in content { match (block) { text: root.content.Text => { if (text.text.trim() Ne "") { out.push(text) } } null, reasoning: root.content.Reasoning => { if (keep_reasoning) { out.push(reasoning) } } null, use: root.content.ToolUse => { out.push(use) } null, media: root.content.Media => null } } } out
 }
 
 --- <builtin>/ai/ns_mcp/mcp.baml ---
@@ -926,22 +926,17 @@ class ai.wire.SentAs$stream {
   value: T | null
   call: root.events.LLMCall$stream | null
 }
-class ai.wire.ToolResultBlocks {
-  inline: root.content.ContentBlock[]
-  trailing: root.content.ContentBlock[]
-}
-class ai.wire.ToolResultBlocks$stream {
-  inline: root.content.ContentBlock$stream[]
-  trailing: root.content.ContentBlock$stream[]
-}
 function ai.wire.credential_sources(cred: root.Credential?, canonical_env: string?) -> string  [expr] {
   { let names: string[] = []; if let named: baml.env.Ref = cred { names.push(named.name) }; if let canonical: string = canonical_env { names.push(canonical) } } if (names.length() Eq 0) {  } "(no environment v..." else {  } names.join(", ")
+}
+function ai.wire.degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal  [expr] {
+  { let out: root.events.Event[] = []; let attached: root.content.Block[] = []; for event in j.entries() { match (event) { completed: root.events.ToolCompleted => { let inline: root.content.Block[] = []; let moved: root.content.Block[] = []; for block in completed.content { match (block) { text: root.content.Text => { inline.push(text) } null, media: root.content.Media => { if (carries.includes(media.kind())) { inline.push(media) } else { moved.push(media) } } null } }; if (moved.length() Gt 0) { if (inline.length() Eq 0) { inline.push(root.content.Text { text: root.content.text(moved) }) }; let tool = tool_name(j, completed.id) NullCoalesce completed.id; attached.push(root.content.Text { text: "attached from the..." Add tool Add "`" }); for block in moved { attached.push(block) } }; out.push(root.events.ToolCompleted { id: completed.id, content: inline }) } null, failed: root.events.ToolFailed => { out.push(failed) } null, _ => { if (attached.length() Gt 0) { out.push(root.events.UserMessage { content: attached, metadata: map {  } }); attached = [] }; out.push(event) } null } }; if (attached.length() Gt 0) { out.push(root.events.UserMessage { content: attached, metadata: map {  } }) } } root.Journal { log: out }
 }
 function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json?) -> baml.json.json  [expr] {
   {  } match (overrides) { null => base, _ => root.internal._merge_json(base, overrides) }
 }
-function ai.wire.prompt_blocks(message: root.PromptMessage) -> root.content.ContentBlock[]  [expr] {
-  { let out: root.content.ContentBlock[] = []; for part in message.parts { match (part) { text: string => { out.push(root.content.Text { text: text }) } null, media: root.MediaPart => { out.push(root.content.Media { media: media, provider_id: null, revised_prompt: null }) } null } } } out
+function ai.wire.prompt_blocks(message: root.PromptMessage) -> root.content.Block[]  [expr] {
+  { let out: root.content.Block[] = []; for part in message.parts { match (part) { text: string => { out.push(root.content.Text { text: text }) } null, media: root.MediaPart => { out.push(root.content.Media { media: media, provider_id: null, revised_prompt: null }) } null } } } out
 }
 function ai.wire.redact_request_headers(headers: map<string, string>) -> map<string, string>  [expr] {
   { let out: map<string, string> = map {  }; for name in headers.keys() { let lower = name.to_lower_case(); let sensitive = lower Eq "authorization" Or lower Eq "proxy-authorization" Or lower Eq "x-api-key" Or lower Eq "api-key" Or lower Eq "x-goog-api-key" Or lower Eq "x-amz-security-token" Or lower Eq "cookie" } if (sensitive) { let _ = out.set(name, "REDACTED") } else {  } if let value: string = headers.get(name) { let _ = out.set(name, value) } } out
@@ -972,9 +967,6 @@ function ai.wire.send_as_with_wire(req: baml.http.Request, provider: string, cli
 }
 function ai.wire.tool_name(j: root.Journal, id: string) -> string?  [expr] {
   { for event in j.entries() {  } if let assistant: root.events.AssistantMessage = event { for block in assistant.content {  } if let use: root.content.ToolUse = block {  } if (use.id Eq id) { return use.name } } } null
-}
-function ai.wire.tool_result_blocks(j: root.Journal, completed: root.events.ToolCompleted, carries: string[]) -> ai.wire.ToolResultBlocks  [expr] {
-  { let inline: root.content.ContentBlock[] = []; let moved: root.content.ContentBlock[] = []; for block in completed.content { match (block) { text: root.content.Text => { inline.push(text) } null, media: root.content.Media => { if (carries.includes(media.kind())) { inline.push(media) } else { moved.push(media) } } null } }; let trailing: root.content.ContentBlock[] = []; if (moved.length() Gt 0) { let tool = tool_name(j, completed.id) NullCoalesce completed.id; trailing.push(root.content.Text { text: "attached from the..." Add tool Add "`" }); for block in moved { trailing.push(block) } } } ai.wire.ToolResultBlocks { inline: inline, trailing: trailing }
 }
 
 --- <builtin>/ai/runner.baml ---
@@ -1117,13 +1109,13 @@ lambda (ctx) in prompt: captures [body]
 
 --- <builtin>/ai/turn.baml ---
 class ai.ModelTurn {
-  content: root.content.Block[]
+  content: root.content.ModelBlock[]
   stop_reason: root.content.StopReason
   usage: root.events.Usage?
   calls: root.events.LLMCall[]
 }
 class ai.ModelTurn$stream {
-  content: root.content.Block$stream[]
+  content: root.content.ModelBlock$stream[]
   stop_reason: root.content.StopReason | null
   usage: root.events.Usage$stream | null
   calls: root.events.LLMCall$stream[]

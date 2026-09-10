@@ -413,7 +413,7 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 // ---------------------------------------------------------------------------
 // Content blocks on the wire. Every turn a client lowers — a rendered prompt
 // message, a journal user turn, a tool result, a model turn — is a list of
-// `root.content.ContentBlock`, so each client has ONE lowering path per block
+// `root.content.Block`, so each client has ONE lowering path per block
 // kind and declares, beside it, what it does with each kind at each position:
 //
 //   Accept   lower natively at that position;
@@ -426,8 +426,8 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 /// A rendered prompt message's parts as content blocks: a `string` part is
 /// `Text`, a media part is `Media` with null provenance. The rendered prompt
 /// then lowers through the same path as the journal's turns.
-function prompt_blocks(message: root.PromptMessage) -> root.content.ContentBlock[] {
-    let out: root.content.ContentBlock[] = [];
+function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
+    let out: root.content.Block[] = [];
     for (let part in message.parts) {
         match (part) {
             let text: string => {
@@ -435,7 +435,9 @@ function prompt_blocks(message: root.PromptMessage) -> root.content.ContentBlock
                 null
             },
             let media: root.MediaPart => {
-                out.push(root.content.Media { media: media, provider_id: null, revised_prompt: null });
+                out.push(
+                    root.content.Media { media: media, provider_id: null, revised_prompt: null },
+                );
                 null
             },
         };
@@ -473,12 +475,12 @@ function tool_name(j: root.Journal, id: string) -> string? {
 function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal {
     let out: root.events.Event[] = [];
     // moved out of the current run of tool results, each behind its note
-    let attached: root.content.ContentBlock[] = [];
+    let attached: root.content.Block[] = [];
     for (let event in j.entries()) {
         match (event) {
             let completed: root.events.ToolCompleted => {
-                let inline: root.content.ContentBlock[] = [];
-                let moved: root.content.ContentBlock[] = [];
+                let inline: root.content.Block[] = [];
+                let moved: root.content.Block[] = [];
                 for (let block in completed.content) {
                     match (block) {
                         let text: root.content.Text => {
@@ -500,7 +502,11 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
                         inline.push(root.content.Text { text: root.content.text(moved) });
                     }
                     let tool = tool_name(j, completed.id) ?? completed.id;
-                    attached.push(root.content.Text { text: "attached from the result of tool `" + tool + "`" });
+                    attached.push(
+                        root.content.Text {
+                            text: "attached from the result of tool `" + tool + "`",
+                        },
+                    );
                     for (let block in moved) {
                         attached.push(block);
                     }

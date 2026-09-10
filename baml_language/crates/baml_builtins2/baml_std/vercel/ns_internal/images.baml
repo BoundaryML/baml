@@ -162,7 +162,7 @@ function _gw_images_file(media: ai.MediaPart, preview: bool = false) -> GwImages
 /// does image editing / variations (image-model protocol v4) — at every
 /// position. The other media kinds have no representation and are rejected.
 function _gw_images_collect(
-    blocks: ai.content.ContentBlock[],
+    blocks: ai.content.Block[],
     parts: string[],
     files: GwImagesFile[],
     preview: bool = false,
@@ -426,7 +426,7 @@ function gateway_images_parse(
         ?? _gw_images_find_output_format(c.request_body);
     let fallback_mime = _gw_images_mime(requested);
     let images: string[] = resp.images ?? [];
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     for (let encoded in images) {
         if (encoded.trim() != "") {
             content.push(ai.content.Media.new(value = _gw_images_value(encoded, fallback_mime)));

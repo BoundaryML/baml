@@ -474,11 +474,7 @@ function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = fa
 ///
 /// A tool result's text goes in `functionResponse.response`; its media parts
 /// go in `functionResponse.parts` (`lower_journal`).
-function _lower_block(
-    block: ai.content.ContentBlock,
-    fetch_url: bool,
-    preview: bool = false,
-) -> GmPart {
+function _lower_block(block: ai.content.Block, fetch_url: bool, preview: bool = false) -> GmPart {
     match (block) {
         let text: ai.content.Text => GmPart.of_text(text.text),
         let media: ai.content.Media => _gm_media_part(media.media, fetch_url, preview = preview),
@@ -486,7 +482,7 @@ function _lower_block(
 }
 
 function _lower_blocks(
-    blocks: ai.content.ContentBlock[],
+    blocks: ai.content.Block[],
     fetch_url: bool,
     preview: bool = false,
 ) -> GmPart[] {
@@ -611,7 +607,7 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
                 let parts: GmPart[] = [];
                 for (let b in a.content) {
                     match (b) {
-                        let content: ai.content.ContentBlock => {
+                        let content: ai.content.Block => {
                             parts.push(_lower_block(content, fetch_url, preview = preview));
                             null
                         },
@@ -862,7 +858,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
             err.message ?? baml.json.stringify(baml.json.to_json(resp)),
         )
     }
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     let has_call = false;
     let call_index = 0;
     let cand: GmCandidate? = resp.candidates?.at(0);

@@ -568,7 +568,7 @@ class BedrockPrompt {
 ///   user        | Accept | Accept | Accept | Accept  | Accept
 ///   assistant   | Accept | Accept | Accept | Accept  | Accept
 ///   tool_result | Accept | Accept | Accept | Degrade | Accept
-function _lower_block(block: ai.content.ContentBlock, preview: bool = false) -> ContentBlock? {
+function _lower_block(block: ai.content.Block, preview: bool = false) -> ContentBlock? {
     match (block) {
         let text: ai.content.Text => {
             // Converse rejects empty and whitespace-only text blocks, and a
@@ -591,7 +591,7 @@ function _lower_block(block: ai.content.ContentBlock, preview: bool = false) -> 
     }
 }
 
-function _lower_blocks(blocks: ai.content.ContentBlock[], preview: bool = false) -> ContentBlock[] {
+function _lower_blocks(blocks: ai.content.Block[], preview: bool = false) -> ContentBlock[] {
     let out: ContentBlock[] = [];
     for (let block in blocks) {
         if let lowered: ContentBlock = _lower_block(block, preview = preview) {
@@ -739,9 +739,7 @@ function _push_tool_result(
     } else {
         "success"
     };
-    let block = ContentBlock.of_tool_result(
-        ToolResultBlock { toolUseId: id, content: content, status: status },
-    );
+    let block = ContentBlock.of_tool_result(ToolResultBlock { toolUseId: id, content: content, status: status });
     // `.at` is null on an empty list, which covers the no-messages case.
     if let last: PendingMessage = pending.at(pending.length() - 1) {
         if (last.tool_results) {
@@ -783,7 +781,7 @@ function _lower_journal(
                 let content: ContentBlock[] = [];
                 for (let block in assistant.content) {
                     match (block) {
-                        let inner: ai.content.ContentBlock => {
+                        let inner: ai.content.Block => {
                             if let lowered: ContentBlock = _lower_block(inner, preview = preview) {
                                 content.push(lowered);
                             }
@@ -792,7 +790,11 @@ function _lower_journal(
                         let use: ai.content.ToolUse => {
                             content.push(
                                 ContentBlock.of_tool_use(
-                                    ToolUseBlock { toolUseId: use.id, name: use.name, input: use.args },
+                                    ToolUseBlock {
+                                        toolUseId: use.id,
+                                        name: use.name,
+                                        input: use.args,
+                                    },
                                 ),
                             );
                             null
@@ -835,13 +837,7 @@ function _lower_journal(
                 null
             },
             let failed: ai.events.ToolFailed => {
-                _push_tool_result(
-                    pending,
-                    failed.id,
-                    [ContentBlock.of_text(failed.message)],
-                    true,
-                    with_status,
-                );
+                _push_tool_result(pending, failed.id, [ContentBlock.of_text(failed.message)], true, with_status);
             },
             _ => null,
         };
@@ -1321,7 +1317,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
             raw_output: baml.json.stringify(baml.json.to_json(response)),
         }
     }
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     let blocks: ResponseContentBlock[] = message.content ?? [];
     for (let block in blocks) {
         if let text: string = block.text {

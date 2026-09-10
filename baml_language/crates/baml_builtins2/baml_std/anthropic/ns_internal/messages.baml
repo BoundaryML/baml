@@ -350,7 +350,7 @@ function _media_block(
 /// There is no audio or video input block at all, so those are rejected
 /// everywhere — an invented `{"type":"input_audio"}` used to guarantee a 400.
 function _lower_block(
-    block: ai.content.ContentBlock,
+    block: ai.content.Block,
     position: string,
     preview: bool = false,
 ) -> AnthBlock? {
@@ -388,7 +388,7 @@ function _lower_block(
 }
 
 function _lower_blocks(
-    blocks: ai.content.ContentBlock[],
+    blocks: ai.content.Block[],
     position: string,
     preview: bool = false,
 ) -> AnthBlock[] {
@@ -495,7 +495,7 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
                 let blocks: AnthBlock[] = [];
                 for (let b in m.content) {
                     match (b) {
-                        let content: ai.content.ContentBlock => {
+                        let content: ai.content.Block => {
                             if let lowered: AnthBlock = _lower_block(content, "assistant", preview = preview) {
                                 blocks.push(lowered);
                             }
@@ -843,7 +843,7 @@ function _stop_reason(s: string) -> ai.content.StopReason {
 
 /// One decoded response -> canonical content blocks, stop reason and usage.
 function parse(resp: Response) -> ai.ModelTurn {
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     for (let b in resp.content) {
         match (b.type) {
             "text" => {

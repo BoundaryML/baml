@@ -136,7 +136,7 @@ function _oai_images_media_rejected(kind: string) -> ai.errors.InvalidRequest {
 /// (internal) Collect a turn's text into `parts`: every text block trimmed, blanks
 /// dropped. Any media block is a hard error: /v1/images/generations takes
 /// text only, at every position.
-function _oai_images_collect(blocks: ai.content.ContentBlock[], parts: string[]) -> void {
+function _oai_images_collect(blocks: ai.content.Block[], parts: string[]) -> void {
     for (let block in blocks) {
         match (block) {
             let text: ai.content.Text => {
@@ -369,7 +369,7 @@ function _oai_images_block(datum: OaImageDatum, mime: string) -> ai.content.Medi
 function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTurn {
     let mime = _oai_images_mime(resp.output_format ?? c.output_format);
     let data: OaImageDatum[] = resp.data ?? [];
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     for (let datum in data) {
         if let block: ai.content.Media = _oai_images_block(datum, mime) {
             content.push(block);

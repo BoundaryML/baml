@@ -365,7 +365,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         reasoning_tokens: null,
     };
 
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     let stop: ai.content.StopReason = ai.content.StopReason.Complete;
     if (has_tools) {
         let outcome = baml.json.path_or<json>(result, ".structured_output.outcome", structured);

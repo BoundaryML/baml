@@ -625,7 +625,7 @@ function _chat_media_part(
 ///   assistant   | Accept | Accept  | Accept  | Accept  | Reject
 ///   tool_result | Accept | Degrade | Degrade | Degrade | Reject
 function _chat_lower_block(
-    block: ai.content.ContentBlock,
+    block: ai.content.Block,
     compat: ChatCompat,
     preview: bool = false,
 ) -> ChatContentPart {
@@ -636,7 +636,7 @@ function _chat_lower_block(
 }
 
 function _chat_lower_blocks(
-    blocks: ai.content.ContentBlock[],
+    blocks: ai.content.Block[],
     compat: ChatCompat,
     preview: bool = false,
 ) -> ChatContentPart[] {
@@ -789,7 +789,7 @@ function chat_lower_journal(
                 let calls: ChatToolCall[] = [];
                 for (let block in assistant.content) {
                     match (block) {
-                        let content: ai.content.ContentBlock => {
+                        let content: ai.content.Block => {
                             parts.push(_chat_lower_block(content, compat, preview = preview));
                             null
                         },
@@ -1226,7 +1226,7 @@ function _chat_tool_args(raw: string, provider: string) -> map<string, unknown> 
 }
 
 function _chat_push_tool_uses(
-    content: ai.content.Block[],
+    content: ai.content.ModelBlock[],
     calls: CcToolCall[],
     provider: string,
 ) -> void {
@@ -1273,7 +1273,7 @@ function chat_parse(
         null => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
     };
 
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     if let reasoning: string = message.reasoning_content {
         if (reasoning != "") {
             content.push(ai.content.Reasoning { summary: reasoning });

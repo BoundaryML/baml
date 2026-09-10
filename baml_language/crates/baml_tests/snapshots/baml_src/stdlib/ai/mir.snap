@@ -11130,183 +11130,338 @@ fn ai.wire.tool_name(j: ai.Journal, id: string) -> string | null {
     }
 }
 
-fn ai.wire.tool_result_blocks(j: ai.Journal, completed: ai.events.ToolCompleted, carries: string[]) -> ai.wire.ToolResultBlocks {
+fn ai.wire.degrade_tool_media(j: ai.Journal, carries: string[]) -> ai.Journal {
     // Locals:
-    let _0: ai.wire.ToolResultBlocks // _0 // return
+    let _0: ai.Journal // _0 // return
     let _1: ai.Journal // j // param
-    let _2: ai.events.ToolCompleted // completed // param
-    let _3: string[] // carries // param
-    let _4: (ai.content.Media | ai.content.Text)[] // inline
-    let _5: (ai.content.Media | ai.content.Text)[] // moved
-    let _6: (ai.content.Media | ai.content.Text)[]
-    let _7: baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>
-    let _8: unknown
-    let _9: bool
-    let _10: ai.content.Media | ai.content.Text
-    let _11: ai.content.Media | ai.content.Text // block
-    let _12: ai.content.Media | ai.content.Text
-    let _13: ai.content.Text // text
-    let _14: int
-    let _15: ai.content.Text
-    let _16: reflect.Type
-    let _17: ai.content.Media // media
+    let _2: string[] // carries // param
+    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // out
+    let _4: (ai.content.Media | ai.content.Text)[] // attached
+    let _5: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _6: baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    let _7: unknown
+    let _8: bool
+    let _9: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // event
+    let _11: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _12: ai.events.ToolCompleted // completed
+    let _13: (ai.content.Media | ai.content.Text)[] // inline
+    let _14: (ai.content.Media | ai.content.Text)[] // moved
+    let _15: (ai.content.Media | ai.content.Text)[]
+    let _16: baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>
+    let _17: unknown
     let _18: bool
-    let _19: string
-    let _20: reflect.Type
-    let _21: int
-    let _22: ai.content.Media
-    let _23: reflect.Type
-    let _24: int
-    let _25: ai.content.Media
-    let _26: reflect.Type
-    let _27: (ai.content.Media | ai.content.Text)[] // trailing
-    let _28: bool
-    let _29: int
-    let _30: string // tool
-    let _31: string
-    let _32: string | null
-    let _33: string
-    let _34: int
-    let _35: ai.content.Text
-    let _36: string
-    let _37: string
-    let _38: string
-    let _39: reflect.Type
-    let _40: (ai.content.Media | ai.content.Text)[]
-    let _41: baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>
-    let _42: unknown
-    let _43: bool
-    let _44: ai.content.Media | ai.content.Text
-    let _45: ai.content.Media | ai.content.Text // block
-    let _46: int
-    let _47: ai.content.Media | ai.content.Text
-    let _48: reflect.Type
-    let _49: (ai.content.Media | ai.content.Text)[]
-    let _50: (ai.content.Media | ai.content.Text)[]
+    let _19: ai.content.Media | ai.content.Text
+    let _20: ai.content.Media | ai.content.Text // block
+    let _21: ai.content.Media | ai.content.Text
+    let _22: ai.content.Text // text
+    let _23: int
+    let _24: ai.content.Text
+    let _25: reflect.Type
+    let _26: ai.content.Media // media
+    let _27: bool
+    let _28: string
+    let _29: reflect.Type
+    let _30: int
+    let _31: ai.content.Media
+    let _32: reflect.Type
+    let _33: int
+    let _34: ai.content.Media
+    let _35: reflect.Type
+    let _36: bool
+    let _37: int
+    let _38: bool
+    let _39: int
+    let _40: int
+    let _41: ai.content.Text
+    let _42: string
+    let _43: (ai.content.Media | ai.content.Text)[]
+    let _44: reflect.Type
+    let _45: string // tool
+    let _46: string
+    let _47: string | null
+    let _48: string
+    let _49: int
+    let _50: ai.content.Text
+    let _51: string
+    let _52: string
+    let _53: string
+    let _54: reflect.Type
+    let _55: (ai.content.Media | ai.content.Text)[]
+    let _56: baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>
+    let _57: unknown
+    let _58: bool
+    let _59: ai.content.Media | ai.content.Text
+    let _60: ai.content.Media | ai.content.Text // block
+    let _61: int
+    let _62: ai.content.Media | ai.content.Text
+    let _63: reflect.Type
+    let _64: int
+    let _65: ai.events.ToolCompleted
+    let _66: string
+    let _67: (ai.content.Media | ai.content.Text)[]
+    let _68: reflect.Type
+    let _69: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _70: ai.events.ToolFailed // failed
+    let _71: int
+    let _72: ai.events.ToolFailed
+    let _73: reflect.Type
+    let _74: bool
+    let _75: int
+    let _76: int
+    let _77: ai.events.UserMessage
+    let _78: (ai.content.Media | ai.content.Text)[]
+    let _79: map<string, baml.json.json>
+    let _80: reflect.Type
+    let _81: int
+    let _82: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _83: reflect.Type
+    let _84: bool
+    let _85: int
+    let _86: int
+    let _87: ai.events.UserMessage
+    let _88: (ai.content.Media | ai.content.Text)[]
+    let _89: map<string, baml.json.json>
+    let _90: reflect.Type
+    let _91: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
 
     bb0: {
+        _3 = []: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _4 = []: ai.content.Text | ai.content.Media[];
-        _5 = []: ai.content.Text | ai.content.Media[];
-        _6 = copy _2.1;
-        _7 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Text>(copy _6) -> [bb1];
+        _5 = call const fn ai.Journal.entries(copy _1) -> [bb1];
     }
 
     bb1: {
-        _8 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>(copy _7) -> [bb2];
+        _6 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _5) -> [bb2];
     }
 
     bb2: {
-        _9 = is_type(copy _8, baml.iter.Done);
-        branch copy _9 -> [bb10, bb3];
+        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _6) -> [bb3];
     }
 
     bb3: {
-        _10 = copy _8;
-        fresh_cell(_11);
-        _11 = copy _10;
-        _12 = copy _11;
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["content"], name: "Text" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb9, bb4];
+        _8 = is_type(copy _7, baml.iter.Done);
+        branch copy _8 -> [bb37, bb4];
     }
 
     bb4: {
-        _17 = copy _11;
-        _19 = call const fn ai.content.Media.kind(copy _17) -> [bb5];
+        _9 = copy _7;
+        fresh_cell(_10);
+        _10 = copy _9;
+        _11 = copy _10;
+        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb5];
     }
 
     bb5: {
-        _20 = load_type(string);
-        _18 = call const fn baml.Array.includes<copy _20>(copy _3, copy _19) -> [bb6];
+        _69 = copy _10;
+        _69 = narrow_bind copy _69 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb6];
     }
 
     bb6: {
-        branch copy _18 -> [bb8, bb7];
+        _75 = len(_4);
+        goto -> bb7;
     }
 
     bb7: {
-        _25 = copy _17;
-        _26 = load_type(ai.content.Text | ai.content.Media);
-        _24 = call const fn baml.Array.push<copy _26>(copy _5, copy _25) -> [bb1];
+        _74 = copy _75 > const 0_i64;
+        branch copy _74 -> [bb8, bb10];
     }
 
     bb8: {
-        _22 = copy _17;
-        _23 = load_type(ai.content.Text | ai.content.Media);
-        _21 = call const fn baml.Array.push<copy _23>(copy _4, copy _22) -> [bb1];
+        _78 = copy _4;
+        _79 = {  }: map<string, baml.json.json>;
+        _77 = ai.events.UserMessage { copy _78, copy _79 };
+        _80 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _76 = call const fn baml.Array.push<copy _80>(copy _3, copy _77) -> [bb9];
     }
 
     bb9: {
-        _13 = copy _12;
-        _15 = copy _13;
-        _16 = load_type(ai.content.Text | ai.content.Media);
-        _14 = call const fn baml.Array.push<copy _16>(copy _4, copy _15) -> [bb1];
+        _4 = []: ai.content.Text | ai.content.Media[];
+        goto -> bb10;
     }
 
     bb10: {
-        _27 = []: ai.content.Text | ai.content.Media[];
-        _29 = len(_5);
-        goto -> bb11;
+        _82 = copy _10;
+        _83 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _81 = call const fn baml.Array.push<copy _83>(copy _3, copy _82) -> [bb2];
     }
 
     bb11: {
-        _28 = copy _29 > const 0_i64;
-        branch copy _28 -> [bb12, bb20];
+        _70 = copy _69;
+        _72 = copy _70;
+        _73 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _71 = call const fn baml.Array.push<copy _73>(copy _3, copy _72) -> [bb2];
     }
 
     bb12: {
-        _33 = copy _2.0;
-        _32 = call const fn ai.wire.tool_name(copy _1, copy _33) -> [bb13];
+        _12 = copy _11;
+        _13 = []: ai.content.Text | ai.content.Media[];
+        _14 = []: ai.content.Text | ai.content.Media[];
+        _15 = copy _12.1;
+        _16 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Text>(copy _15) -> [bb13];
     }
 
     bb13: {
-        _31 = short_circuit(??) copy _32 -> [eval: bb14, join: bb15];
+        _17 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>(copy _16) -> [bb14];
     }
 
     bb14: {
-        _31 = copy _2.0;
-        goto -> bb15;
+        _18 = is_type(copy _17, baml.iter.Done);
+        branch copy _18 -> [bb22, bb15];
     }
 
     bb15: {
-        _30 = copy _31;
-        _38 = copy _30;
-        _37 = const "attached from the result of tool `" + copy _38;
-        _36 = copy _37 + const "`";
-        _35 = ai.content.Text { copy _36 };
-        _39 = load_type(ai.content.Text | ai.content.Media);
-        _34 = call const fn baml.Array.push<copy _39>(copy _27, copy _35) -> [bb16];
+        _19 = copy _17;
+        fresh_cell(_20);
+        _20 = copy _19;
+        _21 = copy _20;
+        _21 = narrow_bind copy _21 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["content"], name: "Text" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb21, bb16];
     }
 
     bb16: {
-        _40 = copy _5;
-        _41 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Text>(copy _40) -> [bb17];
+        _26 = copy _20;
+        _28 = call const fn ai.content.Media.kind(copy _26) -> [bb17];
     }
 
     bb17: {
-        _42 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>(copy _41) -> [bb18];
+        _29 = load_type(string);
+        _27 = call const fn baml.Array.includes<copy _29>(copy _2, copy _28) -> [bb18];
     }
 
     bb18: {
-        _43 = is_type(copy _42, baml.iter.Done);
-        branch copy _43 -> [bb20, bb19];
+        branch copy _27 -> [bb20, bb19];
     }
 
     bb19: {
-        _44 = copy _42;
-        fresh_cell(_45);
-        _45 = copy _44;
-        _47 = copy _45;
-        _48 = load_type(ai.content.Text | ai.content.Media);
-        _46 = call const fn baml.Array.push<copy _48>(copy _27, copy _47) -> [bb17];
+        _34 = copy _26;
+        _35 = load_type(ai.content.Text | ai.content.Media);
+        _33 = call const fn baml.Array.push<copy _35>(copy _14, copy _34) -> [bb13];
     }
 
     bb20: {
-        _49 = copy _4;
-        _50 = copy _27;
-        _0 = ai.wire.ToolResultBlocks { copy _49, copy _50 };
-        goto -> bb21;
+        _31 = copy _26;
+        _32 = load_type(ai.content.Text | ai.content.Media);
+        _30 = call const fn baml.Array.push<copy _32>(copy _13, copy _31) -> [bb13];
     }
 
     bb21: {
+        _22 = copy _21;
+        _24 = copy _22;
+        _25 = load_type(ai.content.Text | ai.content.Media);
+        _23 = call const fn baml.Array.push<copy _25>(copy _13, copy _24) -> [bb13];
+    }
+
+    bb22: {
+        _37 = len(_14);
+        goto -> bb23;
+    }
+
+    bb23: {
+        _36 = copy _37 > const 0_i64;
+        branch copy _36 -> [bb24, bb36];
+    }
+
+    bb24: {
+        _39 = len(_13);
+        goto -> bb25;
+    }
+
+    bb25: {
+        _38 = copy _39 == const 0_i64;
+        branch copy _38 -> [bb26, bb28];
+    }
+
+    bb26: {
+        _43 = copy _14;
+        _42 = call const fn ai.content.text(copy _43) -> [bb27];
+    }
+
+    bb27: {
+        _41 = ai.content.Text { copy _42 };
+        _44 = load_type(ai.content.Text | ai.content.Media);
+        _40 = call const fn baml.Array.push<copy _44>(copy _13, copy _41) -> [bb28];
+    }
+
+    bb28: {
+        _48 = copy _12.0;
+        _47 = call const fn ai.wire.tool_name(copy _1, copy _48) -> [bb29];
+    }
+
+    bb29: {
+        _46 = short_circuit(??) copy _47 -> [eval: bb30, join: bb31];
+    }
+
+    bb30: {
+        _46 = copy _12.0;
+        goto -> bb31;
+    }
+
+    bb31: {
+        _45 = copy _46;
+        _53 = copy _45;
+        _52 = const "attached from the result of tool `" + copy _53;
+        _51 = copy _52 + const "`";
+        _50 = ai.content.Text { copy _51 };
+        _54 = load_type(ai.content.Text | ai.content.Media);
+        _49 = call const fn baml.Array.push<copy _54>(copy _4, copy _50) -> [bb32];
+    }
+
+    bb32: {
+        _55 = copy _14;
+        _56 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Text>(copy _55) -> [bb33];
+    }
+
+    bb33: {
+        _57 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Text>(copy _56) -> [bb34];
+    }
+
+    bb34: {
+        _58 = is_type(copy _57, baml.iter.Done);
+        branch copy _58 -> [bb36, bb35];
+    }
+
+    bb35: {
+        _59 = copy _57;
+        fresh_cell(_60);
+        _60 = copy _59;
+        _62 = copy _60;
+        _63 = load_type(ai.content.Text | ai.content.Media);
+        _61 = call const fn baml.Array.push<copy _63>(copy _4, copy _62) -> [bb33];
+    }
+
+    bb36: {
+        _66 = copy _12.0;
+        _67 = copy _13;
+        _65 = ai.events.ToolCompleted { copy _66, copy _67 };
+        _68 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _64 = call const fn baml.Array.push<copy _68>(copy _3, copy _65) -> [bb2];
+    }
+
+    bb37: {
+        _85 = len(_4);
+        goto -> bb38;
+    }
+
+    bb38: {
+        _84 = copy _85 > const 0_i64;
+        branch copy _84 -> [bb39, bb40];
+    }
+
+    bb39: {
+        _88 = copy _4;
+        _89 = {  }: map<string, baml.json.json>;
+        _87 = ai.events.UserMessage { copy _88, copy _89 };
+        _90 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _86 = call const fn baml.Array.push<copy _90>(copy _3, copy _87) -> [bb40];
+    }
+
+    bb40: {
+        _91 = copy _3;
+        _0 = ai.Journal { copy _91 };
+        goto -> bb41;
+    }
+
+    bb41: {
         return;
     }
 }

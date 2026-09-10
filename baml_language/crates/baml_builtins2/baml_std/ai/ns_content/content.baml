@@ -1,6 +1,6 @@
 // Canonical content: the blocks a turn carries, normalized away from any one
-// provider's envelope. `ContentBlock` is what ANY turn may carry (a user turn,
-// a tool result, a model turn); `Block` adds what only a model turn produces.
+// provider's envelope. `Block` is what ANY turn may carry (a user turn, a tool
+// result, a model turn); `root.content.ModelBlock` adds what only a model turn produces.
 // Clients build these; the journal records them inside root.events.*.
 //
 // Mirrors _planv2/pages/04_reference/01_api.md (the `ai.content` namespace).
@@ -62,24 +62,25 @@ class Media {
 }
 
 /// What any turn may carry.
-type ContentBlock = Text | Media;
+type Block = Text | Media;
 
-/// What a model turn may additionally produce.
-type Block = ContentBlock | Reasoning | ToolUse;
+/// What a model turn produces: any `Block` plus the model-only reasoning and
+/// tool-use blocks. Every other turn carries `Block[]`.
+type ModelBlock = Block | Reasoning | ToolUse;
 
 /// Content blocks from ordinary values: a bare `string` becomes `Text`, a bare
 /// `image` / `audio` / `video` / `pdf` becomes `Media` with null provenance, and
 /// a block already built passes through. The one constructor behind
 /// `root.events.UserMessage.of` and `root.events.ToolCompleted.of`.
-function blocks(items: (string | image | audio | video | pdf | Text | Media)[]) -> ContentBlock[] {
-    let out: ContentBlock[] = [];
+function blocks(items: (string | image | audio | video | pdf | Text | Media)[]) -> Block[] {
+    let out: Block[] = [];
     for (let item in items) {
         match (item) {
             let text: string => {
                 out.push(Text { text: text });
                 null
             },
-            let block: ContentBlock => {
+            let block: Block => {
                 out.push(block);
                 null
             },
@@ -94,7 +95,7 @@ function blocks(items: (string | image | audio | video | pdf | Text | Media)[]) 
 
 /// The readable projection of a block list: `Text` blocks as written, each
 /// `Media` block as a `[image]`-style placeholder, joined in order.
-function text(content: ContentBlock[]) -> string {
+function text(content: Block[]) -> string {
     let out = "";
     for (let block in content) {
         match (block) {

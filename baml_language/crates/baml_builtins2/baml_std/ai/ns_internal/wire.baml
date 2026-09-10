@@ -87,8 +87,11 @@ function _merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.j
 /// Reasoning survives only for the client that produced it; empty and
 /// whitespace-only text blocks are dropped (Anthropic rejects them outright,
 /// and no provider needs them).
-function _wire_blocks(content: root.content.Block[], keep_reasoning: bool) -> root.content.Block[] {
-    let out: root.content.Block[] = [];
+function _wire_blocks(
+    content: root.content.ModelBlock[],
+    keep_reasoning: bool,
+) -> root.content.ModelBlock[] {
+    let out: root.content.ModelBlock[] = [];
     for (let block in content) {
         match (block) {
             let text: root.content.Text => {
