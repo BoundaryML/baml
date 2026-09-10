@@ -14,16 +14,23 @@ fn db_with(src: &str) -> ProjectDatabase {
 }
 
 /// Lower the project to bytecode. A panic here (e.g. `Ty::Error` reaching the
-/// convert boundary) fails the test directly.
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
 fn bytecode_ok(db: &ProjectDatabase) -> Result<(), String> {
-    baml_compiler2_emit::generate_project_bytecode(db)
+    baml_compiler2_emit::generate_project_bytecode(db, package(db))
         .map(|_| ())
         .map_err(|e| format!("{e:?}"))
 }
 
 /// Lower the project to bytecode and return the `Program` for inspection.
 fn compile_program(db: &ProjectDatabase) -> bex_vm_types::Program {
-    baml_compiler2_emit::generate_project_bytecode(db).expect("should compile to bytecode")
+    baml_compiler2_emit::generate_project_bytecode(db, package(db))
+        .expect("should compile to bytecode")
 }
 
 /// `throw <non-literal expression>` in a function with no `throws` clause.
@@ -72,7 +79,7 @@ fn generic_llm_function_with_generic_return_compiles() {
 #[test]
 fn error_bearing_program_returns_recoverable_error() {
     let db = db_with("function f(a: NonexistentType) -> int { 0 }");
-    match db.get_bytecode() {
+    match db.get_bytecode(package(&db)) {
         Ok(_) => panic!("expected a LoweringError for an error-bearing program"),
         Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count }) => {
             assert!(error_count > 0, "expected a positive error count");

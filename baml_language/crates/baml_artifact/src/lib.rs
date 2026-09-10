@@ -17,7 +17,12 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Any change to a Borsh-derived type reachable from `Program` or
 /// `PackageInterface` bumps this. The same rule applies to other payload types
 /// stored in this envelope, such as the `baml pack` dispatch envelope.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// Version 4: `ExternalCallTarget::{Free, Method}` name their item by head
+/// (`function` / `class` as a qualified name) instead of a package spelling
+/// plus path, so a package interface's call targets carry package identity
+/// the way its types do.
+pub const FORMAT_VERSION: u32 = 4;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.

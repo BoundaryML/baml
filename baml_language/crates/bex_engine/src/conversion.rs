@@ -2491,14 +2491,23 @@ pub(crate) fn union_runtime_ty(a: &RuntimeTy, b: &RuntimeTy) -> RuntimeTy {
 /// solves all arguments together with variance tracking); retained as a
 /// best-effort per-pair primitive exercised by the unit tests below.
 #[cfg(test)]
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: a per-pair primitive with no VM to supply facts"
+)]
 pub(crate) fn infer_bindings_runtime(
     formal: &RuntimeTy,
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> =
+    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty<baml_type::TypeName>> =
         rustc_hash::FxHashMap::default();
-    baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
+    baml_type_runtime::infer_value_bindings(
+        &Ty::from(formal),
+        &Ty::from(actual),
+        &mut bindings,
+        &baml_type::normalize::NoFacts,
+    );
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
         // narrow cannot fail; skip defensively rather than panic if it ever does.
@@ -2523,14 +2532,24 @@ pub(crate) fn infer_bindings_runtime(
 ///
 /// Contrast [`infer_bindings_runtime`], the per-argument best-effort merge kept
 /// for the self-receiver and callable-summary paths.
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: inference runs at the host entry boundary, before any VM exists to supply facts"
+)]
 pub(crate) fn infer_bindings_runtime_checked(
     pairs: &[(RuntimeTy, RuntimeTy)],
 ) -> Result<indexmap::IndexMap<String, RuntimeTy>, String> {
     let mut cons = baml_type_runtime::InferenceConstraints::new();
     for (formal, actual) in pairs {
-        cons.record(&Ty::from(formal), &Ty::from(actual));
+        cons.record(
+            &Ty::from(formal),
+            &Ty::from(actual),
+            &baml_type::normalize::NoFacts,
+        );
     }
-    let bindings = cons.solve().map_err(|e| e.message)?;
+    let bindings = cons
+        .solve(&baml_type::normalize::NoFacts)
+        .map_err(|e| e.message)?;
     let mut out = indexmap::IndexMap::new();
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the

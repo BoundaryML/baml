@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_hir::{contributions::Definition, package::lang_roots};
 use baml_type::{
-    ParamTy, QualifiedTypeName, Ty,
+    DeclName, ParamTy, Ty,
     normalize::TypeContext,
     pattern_overlap::TypeVarBoundsMap,
     unify::{TypeBindings, substitute_ty},
@@ -126,7 +126,7 @@ pub struct ImplDataSourceMap {
 pub fn interface_loc_qtn<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> Option<QualifiedTypeName> {
+) -> Option<DeclName> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
     Some(qualify_def(
         db,
@@ -185,7 +185,13 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
         match ty {
             // BEP-062: `reflect.AnyFunction` is legal only as a value type; as a
             // bound it is rejected and contributes no constraint.
-            Ty::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+            Ty::Interface(qtn, ..)
+                if qtn.is_lang_root_type(
+                    lang_roots(db),
+                    baml_base::LangPackage::Reflect,
+                    "AnyFunction",
+                ) =>
+            {
                 diags.push(TirTypeError::BuiltinInterfaceNotABound { interface: qtn });
             }
             Ty::Interface(qtn, generics, assoc, _) => {
@@ -228,8 +234,7 @@ pub fn impl_data<'db>(
     let block = impl_block_data(db, impl_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let ns = &pkg_info.namespace_path;
 
     // Normalize in-body → free: an in-body impl's generics are the class's and
@@ -424,7 +429,11 @@ pub fn impl_data<'db>(
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
         // BEP-062 (E0153): `reflect.AnyFunction`'s conformance is compiler-derived;
         // a written impl is rejected outright.
-        if iface_qtn.is_reflect_root_type("AnyFunction") {
+        if iface_qtn.is_lang_root_type(
+            lang_roots(db),
+            baml_base::LangPackage::Reflect,
+            "AnyFunction",
+        ) {
             conformance_diags.push((
                 TirTypeError::BuiltinInterfaceNotImplementable {
                     interface: iface_qtn.clone(),
@@ -972,17 +981,17 @@ enum OrphanOutcome {
 /// interface is allowed only if — scanning `[T, args..]` left to right — a type
 /// local to `current_package` appears before any *uncovered* type parameter.
 fn orphan_check(
-    current_package: &Name,
-    iface_qtn: &QualifiedTypeName,
+    current_package: baml_base::SourceRoot,
+    iface_qtn: &DeclName,
     for_ty: &Ty,
     iface_args: &[Ty],
 ) -> OrphanOutcome {
-    if iface_qtn.package() == current_package {
+    if iface_qtn.root() == current_package {
         return OrphanOutcome::Ok;
     }
     for input in std::iter::once(for_ty).chain(iface_args.iter()) {
         match input {
-            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.package() == current_package => {
+            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.root() == current_package => {
                 return OrphanOutcome::Ok;
             }
             Ty::TypeVar(param, _) => {
@@ -1078,8 +1087,8 @@ pub fn validate_impl_signatures<'db>(
     let file = impl_loc.file(db);
     let block = impl_block_data(db, impl_loc);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let current_package = pkg_info.package.clone();
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let current_package = pkg_info.root;
+    let pkg_id = pkg_info.root;
 
     // The canonical algebra context: hir_ty's fact oracle carrying the impl's
     // own param env (TIR's `GlobalTypeContext` role).
@@ -1093,8 +1102,7 @@ pub fn validate_impl_signatures<'db>(
     let iface_generic_params = crate::lower::interface_declared_params(db, data.interface);
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
-    let iface_pkg_items =
-        baml_compiler2_ppir::package_items(db, PackageId::new(db, iface_pkg_info.package.clone()));
+    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_info.root);
 
     // ── E0116: field-type conformance (in-body impls). ──
     if !iface_data.fields.is_empty()
@@ -1192,7 +1200,7 @@ pub fn validate_impl_signatures<'db>(
         }
         // E0139: orphan rule (RFC-2451 covered).
         match orphan_check(
-            &current_package,
+            current_package,
             &iface_qtn,
             &data.for_ty_pattern,
             &data.interface_args,
@@ -1495,14 +1503,14 @@ pub struct ResolvedImpl<'db> {
 
 /// Every `implements` block id declared in a package, as stable `ImplLoc`s.
 #[salsa::tracked(returns(ref))]
-pub fn package_impl_locs<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {
+pub fn package_impl_locs(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
+) -> Vec<baml_compiler2_hir::loc::ImplLoc<'_>> {
     let mut out = Vec::new();
-    // Scan only the package's own files (`package_files`), so edits to
-    // another root's file set never invalidate this query.
-    for file in baml_compiler2_hir::package::package_files(db, pkg_id) {
+    // Scan only the package's own files, so edits to another root's file
+    // set never invalidate this query.
+    for file in pkg_id.files(db) {
         // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible.
         out.extend(
@@ -1569,10 +1577,10 @@ pub fn substitute_interface(
 /// `(interface, concrete implementor)` → impl lookup.
 pub fn get_implements_block<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
 ) -> Option<ResolvedImpl<'db>> {
     get_implements_block_within_depth(
         db,
@@ -1585,10 +1593,10 @@ pub fn get_implements_block<'db>(
 }
 
 /// Collect the package of every qualified type name occurring in `ty`.
-fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
-    let push = |qtn: &QualifiedTypeName, out: &mut Vec<Name>| {
-        if !out.contains(qtn.package()) {
-            out.push(qtn.package().clone());
+fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
+    let push = |qtn: &DeclName, out: &mut Vec<baml_base::SourceRoot>| {
+        if !out.contains(&qtn.root()) {
+            out.push(qtn.root());
         }
     };
     match ty {
@@ -1661,9 +1669,9 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
 }
 
 /// [`collect_ty_packages`] for an interface constraint.
-fn collect_interface_packages(iface: &baml_type::Interface, out: &mut Vec<Name>) {
-    if !out.contains(iface.name.package()) {
-        out.push(iface.name.package().clone());
+fn collect_interface_packages(iface: &baml_type::Interface, out: &mut Vec<baml_base::SourceRoot>) {
+    if !out.contains(&iface.name.root()) {
+        out.push(iface.name.root());
     }
     for g in &iface.generics {
         collect_ty_packages(g, out);
@@ -1681,13 +1689,16 @@ pub fn implements_interface(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
     interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     // The blanket stdlib impl supplies AnyClass's default-method dispatch, but
     // membership is compiler-derived and narrower. Reuse the normalizer's
     // class-only rule so `requires AnyClass` cannot observe the blanket.
-    if interface.name.is_reflect_root_type("AnyClass") {
+    if interface
+        .name
+        .is_lang_root_type(lang_roots(db), baml_base::LangPackage::Reflect, "AnyClass")
+    {
         return is_subtype(concrete, &interface.to_ty());
     }
 
@@ -1699,8 +1710,7 @@ pub fn implements_interface(
 
     let realized = baml_type::RealizedTy::try_from(concrete).is_ok()
         && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok();
-    for pkg_name in roots {
-        let pkg_id = PackageId::new(db, pkg_name);
+    for pkg_id in roots {
         let found = if realized {
             get_implements_block(db, pkg_id, concrete, interface, aliases).is_some()
         } else {
@@ -1715,12 +1725,12 @@ pub fn implements_interface(
 
 /// Symbolic universal membership — the type-var-bearing backend of
 /// [`implements_interface`].
-pub fn type_implements_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn type_implements_interface(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     let mut packages = vec![pkg_id];
@@ -1748,10 +1758,10 @@ pub fn type_implements_interface<'db>(
 /// matching block is required: several distinct matches return `None`.
 pub fn get_implements_block_symbolic<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> Option<ResolvedImpl<'db>> {
     let mut packages = vec![pkg_id];
@@ -1783,10 +1793,10 @@ pub fn get_implements_block_symbolic<'db>(
 /// [`get_implements_block`] with an explicit recursion budget.
 fn get_implements_block_within_depth<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     depth: u32,
 ) -> Option<ResolvedImpl<'db>> {
     debug_assert!(
@@ -1869,7 +1879,7 @@ fn match_impl_head<'db>(
     data: &ImplData<'db>,
     concrete: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
 ) -> Option<TypeBindings> {
     if interface_loc_qtn(db, data.interface).as_ref() != Some(&requested_iface.name)
         || data.interface_args.len() != requested_iface.generics.len()
@@ -1890,7 +1900,14 @@ fn match_impl_head<'db>(
     let mut pairs: Vec<(&Ty, &Ty)> = Vec::with_capacity(1 + requested_iface.generics.len());
     pairs.push((&data.for_ty_pattern, concrete));
     pairs.extend(data.interface_args.iter().zip(&requested_iface.generics));
-    let bindings = match_ty_patterns(&pairs, &param_names, aliases)?;
+    let bindings = match_ty_patterns(
+        &pairs,
+        &param_names,
+        &baml_type::unify::AliasEquivCtx {
+            aliases,
+            lang: lang_roots(db),
+        },
+    )?;
 
     let associated_types_agree =
         requested_iface
@@ -1898,8 +1915,11 @@ fn match_impl_head<'db>(
             .iter()
             .all(|(name, requested_ty)| {
                 match data.associated_types.iter().find(|(n, _)| n == name) {
-                    Some((_, impl_ty)) => baml_type::unify::AliasEquivCtx(aliases)
-                        .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty),
+                    Some((_, impl_ty)) => baml_type::unify::AliasEquivCtx {
+                        aliases,
+                        lang: lang_roots(db),
+                    }
+                    .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty),
                     None => true,
                 }
             });
@@ -1937,9 +1957,9 @@ fn impl_bounds_hold_symbolic(
 /// Symbolic-capable: `concrete` may carry free vars.
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> Vec<ResolvedImpl<'db>> {
     let mut packages = vec![pkg_id];
@@ -1963,9 +1983,14 @@ pub fn impls_for_type<'db>(
             {
                 continue;
             }
-            let Some(bindings) =
-                match_ty_patterns(&[(&data.for_ty_pattern, concrete)], &param_names, aliases)
-            else {
+            let Some(bindings) = match_ty_patterns(
+                &[(&data.for_ty_pattern, concrete)],
+                &param_names,
+                &baml_type::unify::AliasEquivCtx {
+                    aliases,
+                    lang: lang_roots(db),
+                },
+            ) else {
                 continue;
             };
             if impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
@@ -1980,12 +2005,12 @@ pub fn impls_for_type<'db>(
 /// block — the implementor shape matches but a concrete generic bound fails —
 /// return the first failing `(param, required_bound_as_ty, actual_arg)`.
 /// Diagnostic-only.
-pub fn first_failing_impl_bound<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
+pub fn first_failing_impl_bound(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg_id: baml_base::SourceRoot,
     concrete: &Ty,
     requested: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> Option<(Name, Ty, Ty)> {
     let Ty::Interface(requested_qtn, requested_args, _, _) = requested else {
@@ -2013,7 +2038,14 @@ pub fn first_failing_impl_bound<'db>(
             if data.interface_args.len() == requested_args.len() {
                 pairs.extend(data.interface_args.iter().zip(requested_args));
             }
-            let Some(bindings) = match_ty_patterns(&pairs, &param_names, aliases) else {
+            let Some(bindings) = match_ty_patterns(
+                &pairs,
+                &param_names,
+                &baml_type::unify::AliasEquivCtx {
+                    aliases,
+                    lang: lang_roots(db),
+                },
+            ) else {
                 continue;
             };
             for (name, bounds) in &data.generic_params {
@@ -2071,8 +2103,8 @@ impl<'db> ResolvedImpl<'db> {
 mod tests {
     use super::*;
 
-    fn qtn(pkg: &str, name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new(pkg), Vec::new(), Name::new(name))
+    fn qtn(pkg: &str, name: &str) -> DeclName {
+        crate::test_heads::new(Name::new(pkg), Vec::new(), Name::new(name))
     }
 
     #[test]
@@ -2085,11 +2117,11 @@ mod tests {
         let mut out = Vec::new();
         collect_ty_packages(&ty, &mut out);
         assert!(
-            out.contains(&Name::new("user")),
+            out.contains(&crate::test_heads::root("user")),
             "for-type head package, got {out:?}"
         );
         assert!(
-            out.contains(&Name::new("dep")),
+            out.contains(&crate::test_heads::root("dep")),
             "nested covered-arg package, got {out:?}"
         );
     }
@@ -2111,7 +2143,10 @@ mod tests {
         let mut out = Vec::new();
         collect_interface_packages(&iface, &mut out);
         for pkg in ["ifacepkg", "argpkg", "pinpkg"] {
-            assert!(out.contains(&Name::new(pkg)), "missing {pkg}, got {out:?}");
+            assert!(
+                out.contains(&crate::test_heads::root(pkg)),
+                "missing {pkg}, got {out:?}"
+            );
         }
     }
 }

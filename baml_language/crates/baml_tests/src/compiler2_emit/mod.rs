@@ -27,7 +27,10 @@ fn make_db() -> ProjectDatabase {
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(db).expect("compilation should succeed")
+    let package = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
+    generate_project_bytecode(db, package).expect("compilation should succeed")
 }
 
 #[test]

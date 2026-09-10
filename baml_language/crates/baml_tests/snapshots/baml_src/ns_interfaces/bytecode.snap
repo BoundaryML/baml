@@ -1211,6 +1211,18 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     return
 }
 
+function interfaces.$init_test_ns_interfaces_semicolons(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "semicolon_terminated_interface_declarations"
+    make_closure .<lambda($init_test_ns_interfaces_semicolons, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.<(#0 as user.interfaces.BtviPrintable)>.display(self: #0) -> string {
     load_var self
     load_type interfaces.BtviNamed
@@ -1986,6 +1998,12 @@ function interfaces.<(user.interfaces.SapcPolite as user.interfaces.SapcGreeter)
     return
 }
 
+function interfaces.<(user.interfaces.SemicolonValue as user.interfaces.SemicolonSource)>.get(self: interfaces.SemicolonValue) -> string {
+    load_var self
+    load_field .value
+    return
+}
+
 function interfaces.<(user.interfaces.SgidMultiFormat as user.interfaces.SgidConverter<float>)>.convert(self: interfaces.SgidMultiFormat) -> float {
     load_const 42.5
     return
@@ -2424,6 +2442,14 @@ function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string 
     load_type interfaces.RcpfPerson
     virtual_load_field .occupation
     bin_op +
+    return
+}
+
+function interfaces.SemicolonSource.again(self: interfaces.SemicolonSource) -> (#0 as interfaces.SemicolonSource).Item {
+    load_var self
+    load_type interfaces.SemicolonSource
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
     return
 }
 
@@ -4453,6 +4479,15 @@ function interfaces.sapc_main() -> string {
     init_instance user.interfaces.SapcPolite .name
     load_type interfaces.SapcFarewell
     load_const "bye"
+    virtual_call nargs=1 ntypeargs=0
+    return
+}
+
+function interfaces.semicolon_declarations_main() -> string {
+    load_const "named"
+    init_instance user.interfaces.SemicolonValue .value
+    load_type interfaces.SemicolonSource<Error = never, Item = string>
+    load_const "again"
     virtual_call nargs=1 ntypeargs=0
     return
 }

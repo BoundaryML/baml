@@ -889,23 +889,39 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 /// which handles the same shorthand when the `client:` value is a dynamic
 /// string / `baml.env.Ref` instead of a literal. Add a prefix in one place and
 /// you must add it in the other.
+/// The builtin `"provider/model"` shorthand: each prefix and the provider
+/// class it constructs (`<pkg>.<class>.new(model = ...)`).
+///
+/// The ONE provider table. A literal `client "openai/gpt-4o-mini"` lowers
+/// straight to the constructor (`spec_client_provider`); a dynamic
+/// `client:` expression lowers to `ai.clients.resolve(selector, providers)`
+/// where `providers` is a lambda synthesized from this same table
+/// (`synthesize_llm_spec_body`). The stdlib never names a provider package —
+/// every provider implements `ai.Client`, so `ai` sits below them in the
+/// package graph — and the two lowerings cannot drift because they read one
+/// list.
+pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
+    ("openai", "openai", "ResponsesClient"),
+    ("openai-chat", "openai", "ChatClient"),
+    ("openai-images", "openai", "ImageClient"),
+    ("azure", "openai", "AzureClient"),
+    ("ollama", "openai", "OllamaClient"),
+    ("openrouter", "openai", "OpenRouterClient"),
+    ("anthropic", "anthropic", "Client"),
+    ("google", "google", "GeminiClient"),
+    ("vertex", "google", "VertexClient"),
+    ("bedrock", "aws", "BedrockClient"),
+    ("ai-gateway-images", "vercel", "AiGatewayImageClient"),
+    ("claude-code", "claude_code", "ClaudeCodeClient"),
+];
+
+/// The provider a `"provider/model"` literal names, as `(package, class)`.
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
     let (prefix, _model) = client.split_once('/')?;
-    match prefix {
-        "openai" => Some(("openai", "ResponsesClient")),
-        "openai-chat" => Some(("openai", "ChatClient")),
-        "openai-images" => Some(("openai", "ImageClient")),
-        "azure" => Some(("openai", "AzureClient")),
-        "ollama" => Some(("openai", "OllamaClient")),
-        "openrouter" => Some(("openai", "OpenRouterClient")),
-        "anthropic" => Some(("anthropic", "Client")),
-        "google" => Some(("google", "GeminiClient")),
-        "vertex" => Some(("google", "VertexClient")),
-        "bedrock" => Some(("aws", "BedrockClient")),
-        "ai-gateway-images" => Some(("vercel", "AiGatewayImageClient")),
-        "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
-        _ => None,
-    }
+    SHORTHAND_PROVIDERS
+        .iter()
+        .find(|(known, _, _)| *known == prefix)
+        .map(|(_, pkg, class)| (*pkg, *class))
 }
 
 /// The prompt literal shapes an LLM function accepts.

@@ -1,39 +1,57 @@
-//! Qualified type names and package identity.
+//! Qualified type names and package keys.
 //!
-//! [`QualifiedTypeName`] identifies a class/enum/type-alias by its definition's
-//! package and short name; [`Package`] distinguishes the user's own (implicit
-//! root) package from named dependencies.
+//! [`QualifiedTypeName`] identifies a class/enum/interface/type-alias by the
+//! package it is declared in, its namespace path, and its short name. It is
+//! generic over the *package key* `P`, because the two layers that name a
+//! declaration identify its package differently:
+//!
+//! - The compiler keys by the package itself: [`DeclName`] carries the
+//!   [`SourceRoot`] (a package IS a root; see `baml_base::files`). Two
+//!   consumers that spell one package differently see EQUAL heads, a
+//!   nameless package needs no name, and nothing can be rendered without a
+//!   viewpoint — a `DeclName` has no `Display`, no `Borsh`, and no
+//!   `HeadDisplay`, so every db-free spelling of a compiler type is a compile
+//!   error rather than a leak.
+//! - The wire keys by spelling: [`TypeName`](crate::TypeName) carries a
+//!   [`Package`], the artifact's own root (`Local`) or a dependency by the name
+//!   the artifact's edges give it (`Dep`). An artifact is its own viewpoint, so
+//!   this is edge-relative naming by construction (rustc's `LOCAL_CRATE`).
+//!
+//! The emit boundary maps the first to the second through the emitting
+//! package's dependency edges; the import boundary (a package interface blob)
+//! maps back through the importing root's edges. Nothing in between compares
+//! a package name string.
 
 use std::fmt;
 
-use baml_base::Name;
+use baml_base::{LangPackage, LangRoots, Name, SourceRoot};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{BuiltinTypeName, PrimitiveType};
 
-/// Which package a type is defined in. `Local` is the user's own (implicit
-/// root) package — the "current" package for everything a user writes;
-/// `Dep(name)` is a named dependency (e.g. `baml`). Encoding this as a type
-/// rather than a magic `"user"` string means the local-vs-dependency
-/// distinction is checked by the compiler, not by string comparison: the only
-/// place the `"user"` string appears is [`Package::from_name`] (the boundary
-/// where upstream `Name`-based package info is classified).
+/// The wire's package key: which package a type is defined in, relative to the
+/// artifact naming it. `Local` is the artifact's own root — its spelling is a
+/// display decision (the root's declared name, else the default
+/// [`RESERVED_USER_PACKAGE`]); `Dep(name)` is a dependency by the name the
+/// artifact's dependency edge gives it (e.g. `baml`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Package {
-    /// The user's own implicit root package (`RESERVED_USER_PACKAGE`).
+    /// The artifact's own root.
     Local,
-    /// A named dependency package.
+    /// A dependency, by the artifact's edge name for it.
     Dep(Name),
 }
 
-/// The interned `Name` of the reserved implicit `user` package, materialized
-/// once so [`QualifiedTypeName::package`] can hand out a `&Name` for `Local`.
+/// The interned `Name` of the default self-spelling, materialized once so
+/// [`QualifiedTypeName::package`] can hand out a `&Name` for `Local`.
 static USER_PACKAGE_NAME: Name = Name::new_inline(RESERVED_USER_PACKAGE);
 
 impl Package {
-    /// Classify an upstream package `Name`: the reserved `user` package becomes
-    /// [`Package::Local`], everything else a [`Package::Dep`]. This is the one
-    /// spot the `"user"` magic string is read.
+    /// The wire codec from a spelling: the default self-spelling
+    /// [`RESERVED_USER_PACKAGE`] encodes as [`Package::Local`], any other
+    /// spelling as [`Package::Dep`]. Only the emit boundary (a root's closure
+    /// spelling → its wire key) and wire-side reparses of a rendered name go
+    /// through here; the compiler's own heads never carry a spelling.
     pub fn from_name(name: Name) -> Self {
         if name.as_str() == RESERVED_USER_PACKAGE {
             Package::Local
@@ -42,7 +60,7 @@ impl Package {
         }
     }
 
-    /// The package's `Name` (`Local` resolves to the reserved `user` name).
+    /// The package's spelling (`Local` spells as the default self name).
     pub fn as_name(&self) -> &Name {
         match self {
             Package::Local => &USER_PACKAGE_NAME,
@@ -54,9 +72,29 @@ impl Package {
 // Order/sort by the package *name* string, preserving the pre-enum `Ord`
 // (where `pkg` was a `Name`) so `QualifiedTypeName`'s derived ordering — and
 // any sorted output keyed on it — is unchanged.
+//
+// The variant breaks a tie, which happens for exactly one pair: `Local` and a
+// dependency spelled with the default self-name. Comparing those two as equal
+// would contradict the derived `Eq`, which says they are different packages,
+// and an `Ord` that disagrees with `Eq` silently corrupts every sorted
+// container keyed on it. No other pair ties, so no existing order moves.
 impl Ord for Package {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_name().as_str().cmp(other.as_name().as_str())
+        self.as_name()
+            .as_str()
+            .cmp(other.as_name().as_str())
+            .then_with(|| self.variant_rank().cmp(&other.variant_rank()))
+    }
+}
+
+impl Package {
+    /// Tiebreaker for two packages that spell the same. Never observable on
+    /// its own: the spelling always dominates.
+    fn variant_rank(&self) -> u8 {
+        match self {
+            Package::Local => 0,
+            Package::Dep(_) => 1,
+        }
     }
 }
 
@@ -66,47 +104,39 @@ impl PartialOrd for Package {
     }
 }
 
-/// A qualified type name with separate package and local name.
+/// A qualified type name: a declaration's package (by key `P`), namespace
+/// path, and short name.
 ///
-/// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
-/// identify a type by its definition's package (e.g. `"user"`, `"baml"`)
-/// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
+/// Used in `Ty::Class`, `Ty::Enum`, `Ty::Interface`, and `Ty::TypeAlias` to
+/// unambiguously identify a declaration. See the module docs for the two
+/// package keys.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub struct QualifiedTypeName {
-    /// The package this type is defined in (`Local` for user code, `Dep` for a
-    /// dependency like `baml`).
-    pkg: Package,
+pub struct QualifiedTypeName<P = Package> {
+    /// The package this type is defined in, by key.
+    pkg: P,
     /// The namespace this type is defined in (e.g. `["llm"]`).
     namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
     name: Name,
 }
 
-impl QualifiedTypeName {
-    pub fn new(pkg: Name, namespace: Vec<Name>, name: Name) -> Self {
+/// The compiler's qualified name: the declaring package IS its source root.
+/// Session-local — never rendered without a viewpoint, never serialized.
+pub type DeclName = QualifiedTypeName<SourceRoot>;
+
+impl<P> QualifiedTypeName<P> {
+    /// A qualified name under package key `pkg`.
+    pub fn qualified(pkg: P, namespace: Vec<Name>, name: Name) -> Self {
         Self {
-            pkg: Package::from_name(pkg),
+            pkg,
             namespace,
             name,
         }
     }
 
-    /// A local (`user`-package) type with no namespace — a bare class/enum
-    /// name. Replaces the legacy `TypeName::local`.
-    pub fn local(name: Name) -> Self {
-        Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name)
-    }
-
-    pub fn package(&self) -> &Name {
-        self.pkg.as_name()
-    }
-
-    /// Whether this type lives in the user's own (implicit root) package — the
-    /// "current" package for everything a user writes. User-facing rendering
-    /// omits the package for these; only dependency types carry a package
-    /// qualifier. Use this instead of comparing `package()` to `"user"`.
-    pub fn is_local(&self) -> bool {
-        matches!(self.pkg, Package::Local)
+    /// The package key.
+    pub fn key(&self) -> &P {
+        &self.pkg
     }
 
     pub fn namespace(&self) -> &Vec<Name> {
@@ -117,7 +147,33 @@ impl QualifiedTypeName {
         &self.name
     }
 
-    /// Whether this is the generated stream-view companion for a local type.
+    /// The same declaration under a different package key: the boundary
+    /// operation that re-spells a head (root → wire name, or wire name →
+    /// root).
+    pub fn map_key<Q>(&self, f: impl FnOnce(&P) -> Q) -> QualifiedTypeName<Q>
+    where
+        Name: Clone,
+    {
+        QualifiedTypeName {
+            pkg: f(&self.pkg),
+            namespace: self.namespace.clone(),
+            name: self.name.clone(),
+        }
+    }
+
+    /// [`map_key`](Self::map_key) for a fallible re-spelling.
+    pub fn try_map_key<Q, E>(
+        &self,
+        f: impl FnOnce(&P) -> Result<Q, E>,
+    ) -> Result<QualifiedTypeName<Q>, E> {
+        Ok(QualifiedTypeName {
+            pkg: f(&self.pkg)?,
+            namespace: self.namespace.clone(),
+            name: self.name.clone(),
+        })
+    }
+
+    /// Whether this is the generated stream-view companion for a type.
     ///
     /// Stream types currently use the `$stream` source-level suffix. Keeping
     /// this query on the compiler-owned qualified name avoids duplicating that
@@ -134,16 +190,107 @@ impl QualifiedTypeName {
             .unwrap_or_else(|| self.name.as_str())
     }
 
+    /// The `[...namespace, name]` path inside the package, as borrowed
+    /// strings — the builtin registries are keyed this way.
+    fn path_in_package(&self) -> Vec<&str> {
+        self.namespace
+            .iter()
+            .map(Name::as_str)
+            .chain(std::iter::once(self.name.as_str()))
+            .collect()
+    }
+
+    /// Whether this names `name` at the root namespace of `pkg`'s declaring
+    /// package — the shape every builtin-recognition predicate shares.
+    fn is_root_item(&self, name: &str) -> bool {
+        self.namespace.is_empty() && self.name.as_str() == name
+    }
+}
+
+impl DeclName {
+    /// A declaration in `root`'s package.
+    pub fn in_root(root: SourceRoot, namespace: Vec<Name>, name: Name) -> Self {
+        Self::qualified(root, namespace, name)
+    }
+
+    /// The declaring package.
+    pub fn root(&self) -> SourceRoot {
+        self.pkg
+    }
+
+    /// Whether this is `name` at the root namespace of the installed language
+    /// package `package` (`baml.Int`, `reflect.AnyClass`, …). `false` when
+    /// that package is not installed.
+    pub fn is_lang_root_type(&self, lang: LangRoots, package: LangPackage, name: &str) -> bool {
+        lang.is(package, self.pkg) && self.is_root_item(name)
+    }
+
+    /// Whether this lives in the `baml.panics` namespace (a panic class or the
+    /// `Panic` alias).
+    pub fn is_panic_type(&self, lang: LangRoots) -> bool {
+        lang.is(LangPackage::Baml, self.pkg)
+            && self.namespace.len() == 1
+            && self.namespace[0].as_str() == baml_base::PANICS_NAMESPACE
+    }
+
+    /// The primitive a builtin companion class stands for
+    /// (`baml.Int` → `int`), if this is one.
+    pub fn builtin_primitive(&self, lang: LangRoots) -> Option<PrimitiveType> {
+        lang.is(LangPackage::Baml, self.pkg)
+            .then(|| PrimitiveType::from_builtin_class_path(&self.path_in_package()))
+            .flatten()
+    }
+
+    /// The lowercase alias of a builtin companion class (`baml.String` →
+    /// `string`, `baml.media.Image` → `image`, `baml.json.json` → `json`), if
+    /// this is one. See [`TypeName::builtin_alias`](QualifiedTypeName::builtin_alias).
+    pub fn builtin_alias(&self, lang: LangRoots) -> Option<&'static str> {
+        lang.is(LangPackage::Baml, self.pkg)
+            .then(|| {
+                BuiltinTypeName::from_builtin_definition_path(&self.path_in_package())
+                    .map(BuiltinTypeName::alias)
+            })
+            .flatten()
+    }
+}
+
+impl QualifiedTypeName<Package> {
+    /// A wire name from a package spelling (see [`Package::from_name`]).
+    pub fn new(pkg: Name, namespace: Vec<Name>, name: Name) -> Self {
+        Self {
+            pkg: Package::from_name(pkg),
+            namespace,
+            name,
+        }
+    }
+
+    /// A type at the root namespace of the artifact's own package — a bare
+    /// class/enum name.
+    pub fn local(name: Name) -> Self {
+        Self::qualified(Package::Local, Vec::new(), name)
+    }
+
+    /// The package spelling (`Local` spells as [`RESERVED_USER_PACKAGE`]).
+    pub fn package(&self) -> &Name {
+        self.pkg.as_name()
+    }
+
+    /// Whether this type lives in the artifact's own package. Wire-side
+    /// rendering omits the package for these; only dependency types carry a
+    /// package qualifier. Use this instead of comparing `package()` to the
+    /// default spelling.
+    pub fn is_local(&self) -> bool {
+        matches!(self.pkg, Package::Local)
+    }
+
     pub fn is_builtin_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
+        self.package().as_str() == "baml" && self.is_root_item(name)
     }
 
     /// [`Self::is_builtin_root_type`] for the `reflect` package's root
     /// namespace (`reflect.AnyFunction`, `reflect.AnyClass`, …).
     pub fn is_reflect_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "reflect"
-            && self.namespace.is_empty()
-            && self.name.as_str() == name
+        self.package().as_str() == "reflect" && self.is_root_item(name)
     }
 
     /// Returns `true` if this type lives in the `baml.panics` namespace
@@ -164,8 +311,7 @@ impl QualifiedTypeName {
     }
 
     /// The user-facing display name (legacy `TypeName::display_name`): the
-    /// reserved `user` package is elided for local types, dependency packages
-    /// are kept.
+    /// artifact's own package is elided, dependency packages are kept.
     pub fn display_name(&self) -> Name {
         if self.is_local() {
             let parts: Vec<String> = self
@@ -183,12 +329,12 @@ impl QualifiedTypeName {
     /// Parse a dotted path into a qualified name: the first segment is the
     /// package, the last is the short name, and any middle segments form the
     /// namespace (`"baml.json.json"` → pkg `baml`, ns `["json"]`, name `json`).
-    /// A single bare segment is treated as a local (`user`-package) type.
+    /// A single bare segment is treated as a type of the artifact's own package.
     pub fn from_dotted_path(path: &str) -> Self {
         let segments: Vec<&str> = path.split('.').collect();
         let name = Name::new(*segments.last().expect("path must be non-empty"));
         match segments.len() {
-            0 | 1 => Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name),
+            0 | 1 => Self::local(name),
             _ => Self::new(
                 Name::new(segments[0]),
                 segments[1..segments.len() - 1]
@@ -201,10 +347,9 @@ impl QualifiedTypeName {
     }
 
     /// The dotted path `package.namespace.name` (no `<generic_params>` suffix).
-    /// When `user_facing`, the reserved implicit `user` package is elided
-    /// ([`RESERVED_USER_PACKAGE`]) — the single structural source of the
-    /// "no `user.` in names" rule. The canonical form (`user_facing = false`)
-    /// keeps the package for dumps/identity.
+    /// When `user_facing`, the artifact's own package is elided — the single
+    /// structural source of the "no `user.` in names" rule. The canonical
+    /// form (`user_facing = false`) keeps the package for dumps/identity.
     pub fn render_dotted(&self, user_facing: bool) -> String {
         let namespace = self
             .namespace
@@ -223,8 +368,8 @@ impl QualifiedTypeName {
     }
 
     /// User-facing rendering of the qualified name: identical to the canonical
-    /// [`fmt::Display`] except the reserved implicit `user` package is elided.
-    /// Call this instead of post-processing the canonical string.
+    /// [`fmt::Display`] except the artifact's own package is elided. Call this
+    /// instead of post-processing the canonical string.
     pub fn render_user_facing(&self) -> String {
         self.render_dotted(true)
     }
@@ -234,13 +379,7 @@ impl QualifiedTypeName {
         if self.package().as_str() != "baml" {
             return None;
         }
-        let path: Vec<&str> = self
-            .namespace
-            .iter()
-            .map(Name::as_str)
-            .chain(std::iter::once(self.name.as_str()))
-            .collect();
-        PrimitiveType::from_builtin_class_path(&path)
+        PrimitiveType::from_builtin_class_path(&self.path_in_package())
     }
 
     /// If this names a builtin `baml` companion class that has a lowercase
@@ -255,50 +394,8 @@ impl QualifiedTypeName {
         if self.package().as_str() != "baml" {
             return None;
         }
-        let path: Vec<&str> = self
-            .namespace
-            .iter()
-            .map(Name::as_str)
-            .chain(std::iter::once(self.name.as_str()))
-            .collect();
-        BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
-    }
-
-    /// The addressable spelling: the shortest form that pastes back into
-    /// `baml describe` (and name resolution generally) and finds this type
-    /// again from any scope. The single source of describe's paste-back
-    /// addressing convention:
-    ///
-    /// - builtin companion class with a lowercase alias → the alias
-    ///   (`string`);
-    /// - workspace type at package root → its bare name (`Foo`);
-    /// - workspace type in a namespace → `root.<ns>.<Name>` (the workspace
-    ///   package is addressed as `root` — its literal name would read as an
-    ///   item *named* that, which is nothing);
-    /// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
-    pub fn render_addressable(&self) -> String {
-        if let Some(alias) = self.builtin_alias() {
-            return alias.to_string();
-        }
-        if self.is_local() {
-            // Runtime-minted declarations no longer thread a discriminator
-            // through the namespace (their identity is the type tag), so
-            // the written namespace is the address.
-            if self.namespace().is_empty() {
-                self.name.to_string()
-            } else {
-                let path = self
-                    .namespace()
-                    .iter()
-                    .chain(std::iter::once(&self.name))
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                format!("{ADDRESSABLE_USER_PACKAGE}.{path}")
-            }
-        } else {
-            self.render_user_facing()
-        }
+        BuiltinTypeName::from_builtin_definition_path(&self.path_in_package())
+            .map(BuiltinTypeName::alias)
     }
 }
 
@@ -307,20 +404,11 @@ impl QualifiedTypeName {
 /// literal package name would read as an item named `user`, which is nothing.
 pub const ADDRESSABLE_USER_PACKAGE: &str = "root";
 
-/// The package-name prefix for addressable paths: the workspace package is
-/// spelled [`ADDRESSABLE_USER_PACKAGE`], every other package by its own name.
-pub fn addressable_package(package: &Name) -> &str {
-    if package.as_str() == RESERVED_USER_PACKAGE {
-        ADDRESSABLE_USER_PACKAGE
-    } else {
-        package.as_str()
-    }
-}
-
-/// The reserved implicit root package for user-authored code. It is the
-/// *current* package for everything a user writes, so it must never be shown in
-/// user-facing output (`user.Dog` → `Dog`). The canonical `Display` keeps it
-/// (for dumps/identity); only the user-facing path elides it.
+/// The default display spelling of a nameless package that nothing depends
+/// on — a project with no manifest, a runtime-compiled package. It has no
+/// semantics: it is what such a package's own types are spelled by on the
+/// wire ([`Package::Local`]) and never shown in user-facing output
+/// (`user.Dog` → `Dog`). No code path classifies a package by it.
 pub const RESERVED_USER_PACKAGE: &str = "user";
 
 /// Prefix of synthetic effect-polymorphism type parameters. These are an
@@ -338,7 +426,7 @@ pub fn is_synthetic_effect_param(name: &Name) -> bool {
         .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
 }
 
-impl fmt::Display for QualifiedTypeName {
+impl fmt::Display for QualifiedTypeName<Package> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.render_dotted(false))
     }

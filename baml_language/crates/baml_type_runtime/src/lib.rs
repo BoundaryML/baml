@@ -1,6 +1,6 @@
 //! Shared generic type-variable inference and union normalization.
 //!
-//! These are the pure `Ty`-walking primitives behind generic-call inference.
+//! These are the pure `Ty<N>`-walking primitives behind generic-call inference.
 //! They live in this dedicated crate — which depends only on the type
 //! vocabulary (`baml_type`), neither the compiler frontend nor the BEX engine —
 //! so that:
@@ -9,12 +9,12 @@
 //!   typed expressions, re-exporting them so its callers are unchanged; and
 //! - the runtime engine (`bex_engine`) uses them at the *inbound boundary* over
 //!   types synthesized from argument values, by widening its
-//!   [`baml_type::RuntimeTy`] up to [`Ty`] (`From`), running the shared unifier,
+//!   [`baml_type::RuntimeTy`] up to [`Ty<N>`] (`From`), running the shared unifier,
 //!   and narrowing each resulting binding back down (`TryFrom`).
 //!
 //! Keeping one algorithm here removes the hand-maintained `RuntimeTy` port the
 //! runtime engine previously carried, without a runtime → compiler dependency
-//! edge, and lets a crate that needs only the `Ty`/`RuntimeTy` *definitions*
+//! edge, and lets a crate that needs only the `Ty<N>`/`RuntimeTy` *definitions*
 //! depend on `baml_type` without pulling in inference (see
 //! `02a-inbound-inference-generics.md` and `01c-inbound-inference-reuse.md`).
 //!
@@ -24,12 +24,7 @@
 
 #[cfg(test)]
 use baml_type::Name;
-#[expect(
-    deprecated,
-    reason = "fact-free by necessity: inference runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
-)]
-use baml_type::normalize::NoFacts;
-use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr, normalize::TypeContext};
+use baml_type::{FunctionParamTy, Head, HeadDisplay, ParamTy, Ty, TyAttr, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -110,12 +105,19 @@ pub struct InferError {
 /// reached through, in encounter order. Drive it across every argument of a call
 /// (one [`record`](Self::record) per arg), then [`solve`](Self::solve) once so
 /// conflicting occurrences across *different* arguments are caught.
-#[derive(Default)]
-pub struct InferenceConstraints {
-    vars: FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
+pub struct InferenceConstraints<N: Head = baml_type::DeclName> {
+    vars: FxHashMap<ParamTy, Vec<(Variance, Ty<N>)>>,
 }
 
-impl InferenceConstraints {
+impl<N: Head> Default for InferenceConstraints<N> {
+    fn default() -> Self {
+        Self {
+            vars: FxHashMap::default(),
+        }
+    }
+}
+
+impl<N: Head> InferenceConstraints<N> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -123,18 +125,32 @@ impl InferenceConstraints {
     /// Record the occurrences of every `TypeVar` in `formal` against `actual`,
     /// starting from a covariant root. Uses the runtime leaf decisions (a
     /// `TypeVar` actual / `Unknown` carries no information).
-    pub fn record(&mut self, formal: &Ty, actual: &Ty) {
+    pub fn record(&mut self, formal: &Ty<N>, actual: &Ty<N>, ctx: &impl TypeContext<N>) {
         collect(
             formal,
             actual,
             Variance::Covariant,
             &mut self.vars,
             InferOpts::COMPILE_TIME,
+            ctx,
         );
     }
 
-    fn record_with(&mut self, formal: &Ty, actual: &Ty, opts: InferOpts<'_>) {
-        collect(formal, actual, Variance::Covariant, &mut self.vars, opts);
+    fn record_with(
+        &mut self,
+        formal: &Ty<N>,
+        actual: &Ty<N>,
+        opts: InferOpts<'_>,
+        ctx: &impl TypeContext<N>,
+    ) {
+        collect(
+            formal,
+            actual,
+            Variance::Covariant,
+            &mut self.vars,
+            opts,
+            ctx,
+        );
     }
 
     /// Best-effort bindings, **ignoring variance** — every occurrence of a var
@@ -142,10 +158,10 @@ impl InferenceConstraints {
     /// This is the compile-time path: it preserves today's behavior and leans on
     /// the variance-aware downstream subtyping checks to reject the unsound
     /// joins. The runtime path uses [`solve`](Self::solve) instead.
-    fn solve_best_effort(&self) -> FxHashMap<ParamTy, Ty> {
+    fn solve_best_effort(&self) -> FxHashMap<ParamTy, Ty<N>> {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
-            let mut acc: Option<Ty> = None;
+            let mut acc: Option<Ty<N>> = None;
             for (_, ty) in occ {
                 acc = Some(match acc {
                     None => ty.clone(),
@@ -166,10 +182,13 @@ impl InferenceConstraints {
     /// `join(lowers) <: T <: meet(uppers)` and every equality member mutually
     /// equal and consistent with the bounds; otherwise the var has no solution
     /// and the whole inference fails. On success, returns the resolved bindings.
-    pub fn solve(&self) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
+    pub fn solve(&self, ctx: &impl TypeContext<N>) -> Result<FxHashMap<ParamTy, Ty<N>>, InferError>
+    where
+        N: HeadDisplay,
+    {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
-            if let Some(ty) = solve_var(name, occ)? {
+            if let Some(ty) = solve_var(name, occ, ctx)? {
                 out.insert(name.clone(), ty);
             }
         }
@@ -178,14 +197,14 @@ impl InferenceConstraints {
 }
 
 /// Resolve one `TypeVar`'s recorded occurrences to a single binding, or fail.
-#[expect(
-    deprecated,
-    reason = "fact-free by necessity: this solver runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
-)]
-fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
-    let mut lowers: Vec<&Ty> = Vec::new();
-    let mut uppers: Vec<&Ty> = Vec::new();
-    let mut equals: Vec<&Ty> = Vec::new();
+fn solve_var<N: Head + HeadDisplay>(
+    param: &ParamTy,
+    occ: &[(Variance, Ty<N>)],
+    ctx: &impl TypeContext<N>,
+) -> Result<Option<Ty<N>>, InferError> {
+    let mut lowers: Vec<&Ty<N>> = Vec::new();
+    let mut uppers: Vec<&Ty<N>> = Vec::new();
+    let mut equals: Vec<&Ty<N>> = Vec::new();
     for (variance, ty) in occ {
         match variance {
             Variance::Covariant => lowers.push(ty),
@@ -203,11 +222,11 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
 
     // Invariant occurrences must be rigidly equal to one another (canonical
     // equivalence: coercion-free, union-order-insensitive).
-    let rigid: Option<Ty> = match equals.split_first() {
+    let rigid: Option<Ty<N>> = match equals.split_first() {
         None => None,
         Some((first, rest)) => {
             for other in rest {
-                if !NoFacts.equivalent(first, other) {
+                if !ctx.equivalent(first, other) {
                     return fail(format!(
                         "`{param}` would have to be both `{first}` and `{other}` at the same \
                          time. Because `{param}` appears inside a list, map, or class type, it \
@@ -220,13 +239,13 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
     };
 
     let lower = join_all(&lowers);
-    let upper = meet_all(param, &uppers)?;
+    let upper = meet_all(param, &uppers, ctx)?;
 
     match rigid {
         Some(eq) => {
             // T == eq; every lower must be <: eq and eq <: every upper.
             if let Some(l) = &lower
-                && !NoFacts.is_subtype(l, &eq)
+                && !ctx.is_subtype(l, &eq)
             {
                 return fail(format!(
                     "`{param}` would have to be both `{eq}` and `{l}` at the same time: one \
@@ -235,7 +254,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
                 ));
             }
             for u in &uppers {
-                if !NoFacts.is_subtype(&eq, u) {
+                if !ctx.is_subtype(&eq, u) {
                     return fail(format!(
                         "one argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                          map, or class type), but a function argument only accepts `{u}` for \
@@ -247,7 +266,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
         }
         None => match (lower, upper) {
             (Some(l), Some(u)) => {
-                if !NoFacts.is_subtype(&l, &u) {
+                if !ctx.is_subtype(&l, &u) {
                     return fail(format!(
                         "`{param}` can't satisfy every argument at once: one argument supplies a \
                          `{l}` for `{param}`, while a function argument only accepts `{u}` for \
@@ -266,8 +285,8 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
 }
 
 /// Join a set of lower bounds into a single type (their union), or `None` if empty.
-fn join_all(tys: &[&Ty]) -> Option<Ty> {
-    let mut acc: Option<Ty> = None;
+fn join_all<N: Head>(tys: &[&Ty<N>]) -> Option<Ty<N>> {
+    let mut acc: Option<Ty<N>> = None;
     for ty in tys {
         acc = Some(match acc {
             None => (*ty).clone(),
@@ -280,12 +299,16 @@ fn join_all(tys: &[&Ty]) -> Option<Ty> {
 /// Meet a set of upper bounds. Returns `None` if empty. Fails if the meet
 /// collapses to `Never` (irreconcilable contravariant occurrences, e.g. a `T`
 /// required to be `<: int` *and* `<: string`).
-fn meet_all(param: &ParamTy, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
-    let mut acc: Option<Ty> = None;
+fn meet_all<N: Head + HeadDisplay>(
+    param: &ParamTy,
+    tys: &[&Ty<N>],
+    ctx: &impl TypeContext<N>,
+) -> Result<Option<Ty<N>>, InferError> {
+    let mut acc: Option<Ty<N>> = None;
     for ty in tys {
         acc = Some(match acc {
             None => (*ty).clone(),
-            Some(prev) => meet_ty(&prev, ty),
+            Some(prev) => meet_ty(&prev, ty, ctx),
         });
     }
     if let Some(m) = &acc
@@ -306,14 +329,10 @@ fn meet_all(param: &ParamTy, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
 /// subtype relation. For comparable types it is the narrower one; for unrelated
 /// types it is `Never` (no common subtype) — which the solver reads as an
 /// irreconcilable conflict.
-#[expect(
-    deprecated,
-    reason = "fact-free by necessity — see the `NoFacts` import note"
-)]
-fn meet_ty(a: &Ty, b: &Ty) -> Ty {
-    if NoFacts.is_subtype(a, b) {
+fn meet_ty<N: Head>(a: &Ty<N>, b: &Ty<N>, ctx: &impl TypeContext<N>) -> Ty<N> {
+    if ctx.is_subtype(a, b) {
         a.clone()
-    } else if NoFacts.is_subtype(b, a) {
+    } else if ctx.is_subtype(b, a) {
         b.clone()
     } else {
         Ty::Never {
@@ -332,12 +351,13 @@ fn meet_ty(a: &Ty, b: &Ty) -> Ty {
 /// matching structures, composing the current variance with the position's own
 /// variance (function parameters flip, container arguments go invariant). The
 /// solver later combines the recorded occurrences per their variance.
-fn collect(
-    formal: &Ty,
-    actual: &Ty,
+fn collect<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
     variance: Variance,
-    vars: &mut FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
+    vars: &mut FxHashMap<ParamTy, Vec<(Variance, Ty<N>)>>,
     opts: InferOpts<'_>,
+    ctx: &impl TypeContext<N>,
 ) {
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
@@ -358,7 +378,7 @@ fn collect(
         // occurrences of the same var under a container reject rather than join
         // (`02e`: `pair<T>(a: T[], b: T[])` over `int[]`/`string[]`).
         (Ty::List(f, _), Ty::List(a, _)) => {
-            collect(f, a, variance.compose(Variance::Invariant), vars, opts);
+            collect(f, a, variance.compose(Variance::Invariant), vars, opts, ctx);
         }
         (
             Ty::Map {
@@ -369,13 +389,13 @@ fn collect(
             },
         ) => {
             let inv = variance.compose(Variance::Invariant);
-            collect(fk, ak, inv, vars, opts);
-            collect(fv, av, inv, vars, opts);
+            collect(fk, ak, inv, vars, opts, ctx);
+            collect(fv, av, inv, vars, opts, ctx);
         }
         (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
             let formal_inner = nullable_non_null_part(formal).expect("checked above");
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
-            collect(&formal_inner, &actual_inner, variance, vars, opts);
+            collect(&formal_inner, &actual_inner, variance, vars, opts, ctx);
         }
         // Equal-length union ↔ union member pairing, for formals with NO
         // *direct* `TypeVar` member (a nested one — `List<T> | int` — is what
@@ -401,7 +421,7 @@ fn collect(
                     .filter(|a_member| heads_correspond(formal_member, a_member));
                 if let (Some(actual_member), None) = (correspondents.next(), correspondents.next())
                 {
-                    collect(formal_member, actual_member, variance, vars, opts);
+                    collect(formal_member, actual_member, variance, vars, opts, ctx);
                 }
             }
         }
@@ -418,23 +438,23 @@ fn collect(
         (Ty::Union(f_members, _), _)
             if f_members.iter().any(|m| matches!(m, Ty::TypeVar(_, _))) =>
         {
-            let tv_members: Vec<&Ty> = f_members
+            let tv_members: Vec<&Ty<N>> = f_members
                 .iter()
                 .filter(|m| matches!(m, Ty::TypeVar(_, _)))
                 .collect();
             // Only an unambiguous single `TypeVar` member has a reasonable
             // candidate. More than one ⇒ ambiguous ⇒ bind nothing.
             if let [tv] = tv_members.as_slice() {
-                let concrete: Vec<&Ty> = f_members
+                let concrete: Vec<&Ty<N>> = f_members
                     .iter()
                     .filter(|m| !matches!(m, Ty::TypeVar(_, _)))
                     .collect();
                 // The residual is every actual atom NOT already explained by a
                 // concrete sibling (coercion-free subtype — `int` is NOT
                 // absorbed by a `float` sibling; see `covers`).
-                let residual: Vec<Ty> = union_atoms(actual)
+                let residual: Vec<Ty<N>> = union_atoms(actual)
                     .into_iter()
-                    .filter(|atom| !concrete.iter().any(|c| covers(c, atom)))
+                    .filter(|atom| !concrete.iter().any(|c| covers(c, atom, ctx)))
                     .collect();
                 // Empty residual ⇒ the actual is fully explained by concrete
                 // siblings (e.g. `tag_or_value("hi")`) ⇒ bind nothing; `T` is
@@ -443,7 +463,7 @@ fn collect(
                 // arm, which honors `rigid`/`allow_typevar_actuals`.
                 if !residual.is_empty() {
                     let residual_ty = normalize_union_members(residual, TyAttr::default());
-                    collect(tv, &residual_ty, variance, vars, opts);
+                    collect(tv, &residual_ty, variance, vars, opts, ctx);
                 }
             }
         }
@@ -464,23 +484,23 @@ fn collect(
             // Parameters are contravariant; return and throws are covariant.
             let param_variance = variance.compose(Variance::Contravariant);
             for (fp, ap) in fp.iter().zip(ap.iter()) {
-                collect(&fp.ty, &ap.ty, param_variance, vars, opts);
+                collect(&fp.ty, &ap.ty, param_variance, vars, opts, ctx);
             }
-            collect(fr, ar, variance, vars, opts);
-            collect(fth, ath, variance, vars, opts);
+            collect(fr, ar, variance, vars, opts, ctx);
+            collect(fth, ath, variance, vars, opts, ctx);
         }
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                collect(ft, at, inv, vars, opts);
+                collect(ft, at, inv, vars, opts, ctx);
             }
         }
         // `Future<T, E>` is its own variant — descend into both params so the
         // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
         (Ty::Future(f_value, f_error, _), Ty::Future(a_value, a_error, _)) => {
             let inv = variance.compose(Variance::Invariant);
-            collect(f_value, a_value, inv, vars, opts);
-            collect(f_error, a_error, inv, vars, opts);
+            collect(f_value, a_value, inv, vars, opts, ctx);
+            collect(f_error, a_error, inv, vars, opts, ctx);
         }
         // A heterogeneous future array — e.g. `[spawn { 1 }, spawn { 2 }]` —
         // types as `(Future<A, EA> | Future<B, EB>)[]` because `Future` is
@@ -491,7 +511,7 @@ fn collect(
         // through the invariant equality path.
         (Ty::Future(_, _, _), Ty::Union(members, _)) => {
             for member in members {
-                collect(formal, member, variance, vars, opts);
+                collect(formal, member, variance, vars, opts, ctx);
             }
         }
         (
@@ -500,14 +520,14 @@ fn collect(
         ) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                collect(ft, at, inv, vars, opts);
+                collect(ft, at, inv, vars, opts, ctx);
             }
             for (formal_name, formal_ty) in f_assoc {
                 if let Some((_, actual_ty)) = a_assoc
                     .iter()
                     .find(|(actual_name, _)| actual_name == formal_name)
                 {
-                    collect(formal_ty, actual_ty, inv, vars, opts);
+                    collect(formal_ty, actual_ty, inv, vars, opts, ctx);
                 }
             }
         }
@@ -515,14 +535,14 @@ fn collect(
     }
 }
 
-fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
+fn nullable_non_null_part<N: Head>(ty: &Ty<N>) -> Option<Ty<N>> {
     let Ty::Union(members, attr) = ty else {
         return None;
     };
     if !members.iter().any(Ty::is_null) {
         return None;
     }
-    let non_null: Vec<Ty> = members
+    let non_null: Vec<Ty<N>> = members
         .iter()
         .filter(|member| !member.is_null())
         .cloned()
@@ -541,7 +561,7 @@ fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
 /// literals, enums, variants — its catch-all no-op) never pair: collecting
 /// them binds nothing, so pairing one would only steal the slot from a
 /// genuine correspondent.
-fn heads_correspond(formal: &Ty, actual: &Ty) -> bool {
+fn heads_correspond<N: Head>(formal: &Ty<N>, actual: &Ty<N>) -> bool {
     match (formal, actual) {
         (Ty::Class(f, ..), Ty::Class(a, ..)) | (Ty::Interface(f, ..), Ty::Interface(a, ..)) => {
             f == a
@@ -558,7 +578,7 @@ fn heads_correspond(formal: &Ty, actual: &Ty) -> bool {
 /// its members (one level); anything else is a single atom. Used by the
 /// union-with-`TypeVar`-member inference arm to subtract concrete siblings atom
 /// by atom.
-fn union_atoms(actual: &Ty) -> Box<[Ty]> {
+fn union_atoms<N: Head>(actual: &Ty<N>) -> Box<[Ty<N>]> {
     match actual {
         Ty::Union(members, _) => members.clone(),
         other => Box::new([other.clone()]),
@@ -572,18 +592,17 @@ fn union_atoms(actual: &Ty) -> Box<[Ty]> {
 /// representation widenings (literal → primitive, union membership). This keeps
 /// the subtraction consistent with the TIR's runtime-tag-identity match
 /// dispatch (`builder.rs::atoms_overlap`).
-#[expect(
-    deprecated,
-    reason = "fact-free by necessity — see the `NoFacts` import note"
-)]
-fn covers(concrete: &Ty, atom: &Ty) -> bool {
-    NoFacts.is_subtype(atom, concrete)
+fn covers<N: Head>(concrete: &Ty<N>, atom: &Ty<N>, ctx: &impl TypeContext<N>) -> bool {
+    ctx.is_subtype(atom, concrete)
 }
 
 /// Merge a fresh best-effort solve into an existing bindings map, unioning with
 /// any binding already present — preserving the cross-call accumulation the old
 /// `&mut`-threaded unifier provided (callers invoke it once per argument).
-fn merge_best_effort(bindings: &mut FxHashMap<ParamTy, Ty>, cons: &InferenceConstraints) {
+fn merge_best_effort<N: Head>(
+    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
+    cons: &InferenceConstraints<N>,
+) {
     for (name, ty) in cons.solve_best_effort() {
         bindings
             .entry(name)
@@ -592,16 +611,22 @@ fn merge_best_effort(bindings: &mut FxHashMap<ParamTy, Ty>, cons: &InferenceCons
     }
 }
 
-pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
+pub fn infer_bindings<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
+    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
+    ctx: &impl TypeContext<N>,
+) {
     let mut cons = InferenceConstraints::new();
-    cons.record_with(formal, actual, InferOpts::COMPILE_TIME);
+    cons.record_with(formal, actual, InferOpts::COMPILE_TIME, ctx);
     merge_best_effort(bindings, &cons);
 }
 
-pub fn infer_bindings_allow_typevars(
-    formal: &Ty,
-    actual: &Ty,
-    bindings: &mut FxHashMap<ParamTy, Ty>,
+pub fn infer_bindings_allow_typevars<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
+    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
+    ctx: &impl TypeContext<N>,
 ) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
@@ -611,6 +636,7 @@ pub fn infer_bindings_allow_typevars(
             allow_typevar_actuals: true,
             ..InferOpts::COMPILE_TIME
         },
+        ctx,
     );
     merge_best_effort(bindings, &cons);
 }
@@ -618,11 +644,12 @@ pub fn infer_bindings_allow_typevars(
 /// Like [`infer_bindings`] but treats `rigid` (when `Some`) as a rigid type
 /// variable that is never bound from an argument — the pinned `Self` of an
 /// interface method call. Every other variable infers exactly as before.
-pub fn infer_bindings_rigid_self(
-    formal: &Ty,
-    actual: &Ty,
-    bindings: &mut FxHashMap<ParamTy, Ty>,
+pub fn infer_bindings_rigid_self<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
+    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
     rigid: Option<&ParamTy>,
+    ctx: &impl TypeContext<N>,
 ) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
@@ -632,6 +659,7 @@ pub fn infer_bindings_rigid_self(
             rigid,
             ..InferOpts::COMPILE_TIME
         },
+        ctx,
     );
     merge_best_effort(bindings, &cons);
 }
@@ -641,15 +669,20 @@ pub fn infer_bindings_rigid_self(
 /// decisions as [`infer_bindings`] — a `Class` arm binds only when the formal
 /// and actual name the same class, and the top type carries no special-case
 /// skip. The runtime engine reaches this by widening its `RuntimeTy` inputs to
-/// `Ty` and narrowing the resulting bindings back.
+/// `Ty<N>` and narrowing the resulting bindings back.
 ///
 /// This is the *best-effort* (variance-ignoring) merge, kept for callers that
 /// solve one argument at a time. Callers that want the variance-aware reject
 /// (`02d`/`02e`) should accumulate an [`InferenceConstraints`] across all
 /// arguments and call [`InferenceConstraints::solve`].
-pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
+pub fn infer_value_bindings<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
+    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
+    ctx: &impl TypeContext<N>,
+) {
     let mut cons = InferenceConstraints::new();
-    cons.record(formal, actual);
+    cons.record(formal, actual, ctx);
     merge_best_effort(bindings, &cons);
 }
 
@@ -659,11 +692,11 @@ pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<P
 ///
 /// Used when the same type variable is inferred from multiple arguments
 /// (e.g., `pair<T>(myInt, myString)` → `T` gets `int` then `string`).
-pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
+pub fn union_ty<N: Head>(a: &Ty<N>, b: &Ty<N>) -> Ty<N> {
     normalize_union_members([a.clone(), b.clone()], TyAttr::default())
 }
 
-// ── Pure `Ty` walks (substitution, typevar queries, erasure) ──────────────────
+// ── Pure `Ty<N>` walks (substitution, typevar queries, erasure) ──────────────────
 //
 // Generic tree traversal lives with the shared type vocabulary. Inference-only
 // operations remain here so vocabulary-only consumers do not pull in this crate.
@@ -673,7 +706,7 @@ pub use baml_type::{
 };
 
 /// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
-pub fn contains_typevar(ty: &Ty) -> bool {
+pub fn contains_typevar<N: Head>(ty: &Ty<N>) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
 }
 
@@ -682,7 +715,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
 /// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
-pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
+pub fn contains_typevar_where<N: Head>(ty: &Ty<N>, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param, _) if pred(param)))
 }
 
@@ -691,7 +724,10 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&ParamTy) -> bool) -> bool 
 /// Bounded generic parameters are compile-time evidence, not concrete runtime
 /// type tags. MIR and bytecode metadata both need the same erasure behavior, so
 /// keep the recursive shape walk here beside the other generic utilities.
-pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool) -> Ty {
+pub fn erase_typevars_matching<N: Head>(
+    ty: &Ty<N>,
+    should_erase: &impl Fn(&ParamTy) -> bool,
+) -> Ty<N> {
     if !contains_typevar(ty) {
         return ty.clone();
     }
@@ -772,7 +808,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
 
 #[cfg(test)]
 mod tests {
-    use baml_type::Ty;
+    #![expect(
+        deprecated,
+        reason = "these tests exercise the fact-free lattice at the wire head"
+    )]
+    use baml_type::{Ty, normalize::NoFacts};
 
     use super::*;
 
@@ -790,26 +830,26 @@ mod tests {
         ParamTy::new(index, Name::new(name))
     }
 
-    fn tv(name: &str) -> Ty {
+    fn tv(name: &str) -> Ty<TypeName> {
         Ty::TypeVar(param(name), a())
     }
 
-    fn int() -> Ty {
+    fn int() -> Ty<TypeName> {
         Ty::Int { attr: a() }
     }
 
-    fn string() -> Ty {
+    fn string() -> Ty<TypeName> {
         Ty::String { attr: a() }
     }
 
-    fn null() -> Ty {
+    fn null() -> Ty<TypeName> {
         Ty::Null { attr: a() }
     }
 
     #[test]
     fn binds_bare_typevar() {
         let mut b = FxHashMap::default();
-        infer_bindings(&tv("T"), &int(), &mut b);
+        infer_bindings(&tv("T"), &int(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
@@ -818,7 +858,7 @@ mod tests {
         // `T | string | null` vs `int` ⇒ T = int (G5 reversal).
         let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &int(), &mut b);
+        infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
@@ -827,7 +867,7 @@ mod tests {
         // `T | string | null` vs `string` ⇒ the string sibling absorbs it; T unbound.
         let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &string(), &mut b);
+        infer_bindings(&formal, &string(), &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
     }
 
@@ -836,7 +876,7 @@ mod tests {
         // `T | string | null` vs `null` ⇒ T = null (null not absorbed by string sibling).
         let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &null(), &mut b);
+        infer_bindings(&formal, &null(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&null()));
     }
 
@@ -845,12 +885,12 @@ mod tests {
         // `T | U | string` vs `int` ⇒ no principled split ⇒ both unbound.
         let formal = Ty::Union(Box::new([tv("T"), tv("U"), string()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &int(), &mut b);
+        infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
         assert!(!b.contains_key(&param("U")));
     }
 
-    fn boolt() -> Ty {
+    fn boolt() -> Ty<TypeName> {
         Ty::Bool { attr: a() }
     }
 
@@ -862,7 +902,7 @@ mod tests {
         let formal = Ty::Union(Box::new([tv("T"), int()]), a());
         let actual = Ty::Union(Box::new([int(), string()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &actual, &mut b);
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
@@ -874,7 +914,7 @@ mod tests {
         let formal = Ty::Union(Box::new([tv("T"), int(), null()]), a());
         let actual = Ty::Union(Box::new([int(), string()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &actual, &mut b);
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
@@ -886,7 +926,7 @@ mod tests {
         let formal = Ty::Union(Box::new([tv("T"), tv("U"), int()]), a());
         let actual = Ty::Union(Box::new([int(), string(), boolt()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &actual, &mut b);
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
         assert!(!b.contains_key(&param("U")));
     }
@@ -902,11 +942,11 @@ mod tests {
         let formal = Ty::Union(Box::new([list_tv, int()]), a());
         let actual = Ty::Union(Box::new([list_int, int()]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &actual, &mut b);
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
-    fn opt_of(arg: Ty) -> Ty {
+    fn opt_of(arg: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Class(
             baml_type::TypeName::local(Name::new("Opt")),
             Box::new([arg]),
@@ -914,7 +954,7 @@ mod tests {
         )
     }
 
-    fn non() -> Ty {
+    fn non() -> Ty<TypeName> {
         Ty::Class(
             baml_type::TypeName::local(Name::new("Non")),
             Box::new([]),
@@ -931,12 +971,12 @@ mod tests {
         let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
         let reordered = Ty::Union(Box::new([non(), opt_of(int())]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &reordered, &mut b);
+        infer_bindings(&formal, &reordered, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
 
         let declared = Ty::Union(Box::new([opt_of(int()), non()]), a());
         let mut b2 = FxHashMap::default();
-        infer_bindings(&formal, &declared, &mut b2);
+        infer_bindings(&formal, &declared, &mut b2, &NoFacts);
         assert_eq!(b2.get(&param("T")), Some(&int()));
     }
 
@@ -947,7 +987,7 @@ mod tests {
         let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
         let actual = Ty::Union(Box::new([opt_of(int()), opt_of(string())]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &actual, &mut b);
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
     }
 
@@ -957,7 +997,7 @@ mod tests {
         let float = Ty::Float { attr: a() };
         let formal = Ty::Union(Box::new([tv("T"), float]), a());
         let mut b = FxHashMap::default();
-        infer_bindings(&formal, &int(), &mut b);
+        infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
@@ -970,11 +1010,11 @@ mod tests {
 
     use baml_type::{FunctionParamTy, TypeName};
 
-    fn list(t: Ty) -> Ty {
+    fn list(t: Ty<TypeName>) -> Ty<TypeName> {
         Ty::List(Box::new(t), a())
     }
 
-    fn map_str(value: Ty) -> Ty {
+    fn map_str(value: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Map {
             key: Box::new(string()),
             value: Box::new(value),
@@ -982,11 +1022,11 @@ mod tests {
         }
     }
 
-    fn boxed(t: Ty) -> Ty {
+    fn boxed(t: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Class(TypeName::local(Name::new("GenericBox")), Box::new([t]), a())
     }
 
-    fn pair_cls(first: Ty, second: Ty) -> Ty {
+    fn pair_cls(first: Ty<TypeName>, second: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Class(
             TypeName::local(Name::new("GenericPair")),
             Box::new([first, second]),
@@ -994,11 +1034,11 @@ mod tests {
         )
     }
 
-    fn float() -> Ty {
+    fn float() -> Ty<TypeName> {
         Ty::Float { attr: a() }
     }
 
-    fn func0(ret: Ty) -> Ty {
+    fn func0(ret: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Function {
             params: Box::new([]),
             ret: Box::new(ret),
@@ -1007,7 +1047,7 @@ mod tests {
         }
     }
 
-    fn func1(param: Ty, ret: Ty) -> Ty {
+    fn func1(param: Ty<TypeName>, ret: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Function {
             params: Box::new([FunctionParamTy::required(None, param)]),
             ret: Box::new(ret),
@@ -1017,20 +1057,22 @@ mod tests {
     }
 
     /// Drive the checked solver over a list of `(formal, actual)` argument pairs.
-    fn solve_call(args: &[(Ty, Ty)]) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
-        let mut cons = InferenceConstraints::new();
+    fn solve_call(
+        args: &[(Ty<TypeName>, Ty<TypeName>)],
+    ) -> Result<FxHashMap<ParamTy, Ty<TypeName>>, InferError> {
+        let mut cons = InferenceConstraints::<TypeName>::new();
         for (formal, actual) in args {
-            cons.record(formal, actual);
+            cons.record(formal, actual, &NoFacts);
         }
-        cons.solve()
+        cons.solve(&NoFacts)
     }
 
-    fn get<'a>(b: &'a FxHashMap<ParamTy, Ty>, name: &str) -> Option<&'a Ty> {
+    fn get<'a>(b: &'a FxHashMap<ParamTy, Ty<TypeName>>, name: &str) -> Option<&'a Ty<TypeName>> {
         b.get(&param(name))
     }
 
     /// Assert a binding is a union whose members are exactly `expected` (any order).
-    fn assert_union_members(ty: &Ty, expected: &[Ty]) {
+    fn assert_union_members(ty: &Ty<TypeName>, expected: &[Ty<TypeName>]) {
         let Ty::Union(members, _) = ty else {
             panic!("expected a union, got {ty}");
         };

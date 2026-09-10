@@ -145,11 +145,7 @@ fn classify_fragment(
             let mut db = ProjectDatabase::new();
             db.ensure_stdlib_sources();
             let root = db
-                .add_source_root(baml_db::SourceRootSpec {
-                    path: Path::new("/baml-fragment-scratch").to_path_buf(),
-                    package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-                    kind: baml_db::SourceRootKind::Workspace,
-                })
+                .add_source_root(baml_db::SourceRootSpec::new(Path::new("/baml-fragment-scratch").to_path_buf(), baml_db::SourceRootKind::Workspace))
                 .unwrap_or_else(|e| unreachable!("scratch workspace root must be addable: {e}"));
             (db, root)
         });
@@ -628,11 +624,10 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let workspace = db
-            .add_source_root(baml_db::SourceRootSpec {
-                path: Path::new("/test").to_path_buf(),
-                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_db::SourceRootKind::Workspace,
-            })
+            .add_source_root(baml_db::SourceRootSpec::new(
+                Path::new("/test").to_path_buf(),
+                baml_db::SourceRootKind::Workspace,
+            ))
             .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
         let file =
             db.add_or_update_file_in(workspace, Path::new("/test/main.baml"), "class Foo {}\n");
@@ -661,11 +656,10 @@ mod tests {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let workspace = db
-            .add_source_root(baml_db::SourceRootSpec {
-                path: Path::new("/test").to_path_buf(),
-                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-                kind: baml_db::SourceRootKind::Workspace,
-            })
+            .add_source_root(baml_db::SourceRootSpec::new(
+                Path::new("/test").to_path_buf(),
+                baml_db::SourceRootKind::Workspace,
+            ))
             .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
         let src = r#"/// Doc.
 class Point { x int }

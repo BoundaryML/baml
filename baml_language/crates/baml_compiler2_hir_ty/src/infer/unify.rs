@@ -732,9 +732,9 @@ mod tests {
     }
 
     fn class(name: &str, args: impl IntoIterator<Item = Ty>) -> Ty {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         Ty::intern(InferTy::Class(
-            TypeName::local(Name::new(name)),
+            crate::test_heads::local(Name::new(name)),
             args.into_iter().collect(),
             TyAttr::default(),
         ))

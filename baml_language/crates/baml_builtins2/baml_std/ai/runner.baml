@@ -5,11 +5,11 @@
 
 interface Runner {
     /// The error surface of this runner (`never` if the runner cannot throw).
-    type Error = never
+    type Error = never;
 
     /// Execute one spec to completion. `Out` lives on the method and is
     /// inferred from the spec argument, so no call site needs to name it.
-    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> throws Self.Error
+    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> throws Self.Error;
 }
 
 class RunResult<Out> {
@@ -321,7 +321,7 @@ class Agent {
             | baml.errors.Timeout
             | baml.errors.UnknownError
             | reflect.errors.CompilationError
-            | root.errors.Failure
+            | root.errors.Failure;
 
         function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
             let schema_attempts = self._validated_schema_attempts();
