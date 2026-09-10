@@ -217,3 +217,32 @@ function outer_variable_through_assignment(t: reflect.Type) -> unknown {
     }
     xs
 }
+
+// A PARTIAL clause is judged by the names it wrote: `unknown | _` would
+// publish this throw (pinned in `ns_scoped_type_bindings`), but `string | _`
+// does not admit it, and the open remainder is not a name - it is what the
+// body fills, so it cannot absorb a binding the body opened.
+function partial_clause_too_narrow(t: reflect.Type) -> unknown throws string | _ {
+    type T = unreflect(t)
+    throw as_t<T>(1)
+}
+
+// A lambda's own partial clause is judged by the same rule: `unknown | _`
+// admits the thrown type, so this reports nothing, while `string | _` below
+// does not admit it. (Pinned here rather than in `ns_scoped_type_bindings`
+// because a called lambda with a partial clause cannot run today.)
+function lambda_partial_clause_covers(t: reflect.Type) -> int throws unknown {
+    let f = () -> int throws unknown | _ {
+        type T = unreflect(t)
+        throw as_t<T>(1)
+    }
+    f()
+}
+
+function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+    let f = () -> int throws string | _ {
+        type T = unreflect(t)
+        throw as_t<T>(1)
+    }
+    f()
+}

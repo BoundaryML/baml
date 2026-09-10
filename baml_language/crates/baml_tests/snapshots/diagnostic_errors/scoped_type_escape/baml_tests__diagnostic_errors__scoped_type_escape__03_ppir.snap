@@ -44,6 +44,12 @@ function user.inferred_throws_publish_the_binding(t: reflect.Type) -> int  [expr
 function user.lambda_infers_its_own_clause(t: reflect.Type) -> unknown  [expr] {
   { let f = () -> { { type T = unreflect(t) } risky(as_t("x"), false) } } f
 }
+function user.lambda_partial_clause_covers(t: reflect.Type) -> int  [expr] {
+  { let f = () -> int throws unknown | _ { { type T = unreflect(t); throw as_t(1) } } } f()
+}
+function user.lambda_partial_clause_too_narrow(t: reflect.Type) -> int  [expr] {
+  { let f = () -> int throws string | _ { { type T = unreflect(t); throw as_t(1) } } } f()
+}
 function user.list_relaxed_wrongly(t: reflect.Type) -> string  [expr] {
   { type T = unreflect(t); let v: T = as_t(1); let a: T[] = [v]; throw a }
 }
@@ -61,6 +67,9 @@ function user.outer_map_through_an_inner_variable(t: reflect.Type) -> unknown  [
 }
 function user.outer_variable_through_assignment(t: reflect.Type) -> unknown  [expr] {
   { let xs = []; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))); xs = ys } } xs
+}
+function user.partial_clause_too_narrow(t: reflect.Type) -> unknown  [expr] {
+  { type T = unreflect(t); throw as_t(1) }
 }
 function user.return_against_a_narrower_type(t: reflect.Type) -> int  [expr] {
   { type T = unreflect(t); return as_t(1) }
@@ -88,3 +97,5 @@ function user.value_through_an_open_variable(t: reflect.Type) -> string  [expr] 
 lambda () in lambda_infers_its_own_clause: captures [t]
 lambda () in imprecise_unknown_clause: captures [v]
 lambda () in return_from_an_inferred_lambda: captures [t]
+lambda () in lambda_partial_clause_covers: captures [t]
+lambda () in lambda_partial_clause_too_narrow: captures [t]

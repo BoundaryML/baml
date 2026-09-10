@@ -3435,25 +3435,74 @@ impl<'db> InferenceContext<'db> {
     /// PUBLISHES its contributions - an inferred owner or lambda clause as
     /// its surface, a `catch` as its arms' bindings - so a contribution
     /// typed by a scoped binding whose block has closed is reported at its
-    /// throw (E0171) and dropped. A declared clause judges each
-    /// contribution at the throw itself and publishes nothing, so that road
-    /// never comes here.
-    fn drop_escaping_effects(&mut self, channel: Vec<(ExprId, Ty)>) -> Vec<(ExprId, Ty)> {
+    /// throw (E0171) and dropped.
+    ///
+    /// `declared` is the clause's own NAMED half, which only a PARTIAL
+    /// clause (`throws X | _`) brings here: a closed clause judged every
+    /// contribution at the throw and publishes nothing, and an omitted one
+    /// names nothing. A name the author wrote that already admits the
+    /// contribution says everything a caller needs, so the surface carries
+    /// the name and the contribution needs no entry of its own - it is not
+    /// an escape. That is the same verdict, by the same relation, that a
+    /// closed clause reaches at the throw; an open clause can only reach it
+    /// here, where its named half is known. Deciding by the relation rather
+    /// than by the contribution's nearest relaxation is equivalent and
+    /// needs no relaxation: the relaxation is the LEAST supertype free of
+    /// the binding, so it fits a binding-free name exactly when the
+    /// contribution itself does.
+    fn drop_escaping_effects(
+        &mut self,
+        channel: Vec<(ExprId, Ty)>,
+        declared: Option<&Ty>,
+    ) -> Vec<(ExprId, Ty)> {
         let mut kept = Vec::with_capacity(channel.len());
         for (at, contribution) in channel {
-            match self.escaping_scoped_param(&contribution) {
-                Some(param) => {
-                    self.report_scoped_type_escape(
-                        at,
-                        &param,
-                        &contribution,
-                        ScopedTypeEscapeKind::Thrown,
-                    );
-                }
-                None => kept.push((at, contribution)),
+            let Some(param) = self.escaping_scoped_param(&contribution) else {
+                kept.push((at, contribution));
+                continue;
+            };
+            if let Some(declared) = declared
+                && self.declared_name_publishes(&contribution, declared)
+            {
+                continue;
             }
+            self.report_scoped_type_escape(at, &param, &contribution, ScopedTypeEscapeKind::Thrown);
         }
         kept
+    }
+
+    /// Whether the names a clause WROTE already admit `contribution`, so a
+    /// caller reading the surface learns nothing more from the contribution
+    /// itself.
+    ///
+    /// A clause's open remainder is not a name: `_` is instantiated as an
+    /// effect variable that the body's own contributions fill, so it is
+    /// stripped before the question is asked - otherwise every clause would
+    /// "admit" everything through its own hole. What is left must be ground,
+    /// or the answer is not provable and the contribution is treated as
+    /// escaping (the conservative direction: the author can always widen the
+    /// name they wrote).
+    fn declared_name_publishes(&mut self, contribution: &Ty, declared: &Ty) -> bool {
+        let contribution = self.table.resolve_completely(contribution);
+        if contribution.has_infer() {
+            return false;
+        }
+        let declared = self.table.resolve_completely(declared);
+        let named = match declared.kind() {
+            InferTy::Union(members, _) => {
+                let named: Vec<Ty> = members
+                    .iter()
+                    .filter(|member| !member.has_infer())
+                    .cloned()
+                    .collect();
+                if named.is_empty() {
+                    return false;
+                }
+                self.union_of(&named)
+            }
+            _ => declared,
+        };
+        !named.has_infer() && !named.has_error() && self.cached_subtype(&contribution, &named)
     }
 
     fn scoped_type_params(&self) -> Vec<baml_type::ParamTy> {
@@ -8287,8 +8336,29 @@ impl<'db> InferenceContext<'db> {
             // `sub` below binds contributions into it (the pre-split
             // `throws_clause_parts` probe on the instantiated clause was
             // vacuously closed).
+            //
+            // BUG: that variable is never decided for a lambda whose clause
+            // is partial, so it finalizes to the `Error` sentinel and CALLING
+            // such a lambda panics in runtime lowering ("`Error` is not a
+            // valid `RuntimeTy`"). `let f = () -> int throws unknown | _ {
+            // throw "x" }; f()` checks clean and dies at run time, with no
+            // scoped binding involved (reproduced 2026-09-09). Defining one
+            // without calling it is fine, so the effect default
+            // (`default_unsolved_effects_to_never`) is not reaching this
+            // class.
             if !declared.has_error() {
                 for (at, contribution) in &channel {
+                    // A contribution the clause's own written names already
+                    // admit is published by those names. Relating it to the
+                    // clause anyway would deposit it into the open
+                    // remainder's variable, which was minted outside this
+                    // body and so may not take a binding the body opened -
+                    // refusing a throw the author already covered.
+                    if self.escaping_scoped_param(contribution).is_some()
+                        && self.declared_name_publishes(contribution, declared)
+                    {
+                        continue;
+                    }
                     if contribution.has_infer() || !self.sub(contribution, declared) {
                         self.pending_diags.push(PendingDiag::ThrowsViolation {
                             at: *at,
@@ -8305,7 +8375,7 @@ impl<'db> InferenceContext<'db> {
                 // An INFERRED clause publishes every contribution as part
                 // of the lambda's type, so one typed by a binding the
                 // body's own blocks closed cannot stay.
-                let channel = self.drop_escaping_effects(channel);
+                let channel = self.drop_escaping_effects(channel, None);
                 if channel.is_empty() {
                     Ty::never()
                 } else {
@@ -10152,7 +10222,7 @@ impl<'db> InferenceContext<'db> {
         let channel = self.throws_channels.pop().expect("pushed above");
         // An arm's binding would carry the fact's type past the block that
         // scoped it.
-        let channel = self.drop_escaping_effects(channel);
+        let channel = self.drop_escaping_effects(channel, None);
         // catch discharges a SET of throw FACTS, never a value of a
         // union type (match scrutinizes values; catch removes facts):
         // each contribution finalizes and top-level unions split into
@@ -10780,7 +10850,7 @@ impl<'db> InferenceContext<'db> {
                 let contributions = self.throws_channels[0].clone();
                 // Every block has closed: a contribution still typed by a
                 // scoped binding would be published as the owner's surface.
-                let contributions = self.drop_escaping_effects(contributions);
+                let contributions = self.drop_escaping_effects(contributions, declared.as_ref());
                 let mut resolved: Vec<Ty> = contributions
                     .iter()
                     .map(|(_, ty)| self.finalize_ty(ty).into_ty())

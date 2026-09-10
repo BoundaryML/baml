@@ -202,3 +202,39 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                       ─────┬────
      ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
      ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:227:11]
+ 227 │     throw as_t<T>(1)
+     ·           ─────┬────
+     ·                ╰── this throws `T`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation
+     ╰────
+
+  [type] E0097
+
+  × `throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape
+     ╭─[scoped_type_escape.baml:242:82]
+ 242 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+ 243 │ │       let f = () -> int throws string | _ {
+ 244 │ │           type T = unreflect(t)
+ 245 │ │           throw as_t<T>(1)
+ 246 │ │       }
+ 247 │ │       f()
+ 248 │ ╰─▶ }
+     ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:242:82]
+ 242 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+ 243 │ │       let f = () -> int throws string | _ {
+ 244 │ │           type T = unreflect(t)
+ 245 │ │           throw as_t<T>(1)
+ 246 │ │       }
+ 247 │ │       f()
+ 248 │ ├─▶ }
+     · ╰──── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────

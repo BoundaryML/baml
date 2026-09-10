@@ -261,6 +261,28 @@ test "values and effects leave a block only through binding-free types" {
     assert.equal(discarded_by_a_wildcard(int_t), 2)
 }
 
+// A PARTIAL clause (`throws X | _`) is judged by the names it WROTE, exactly
+// as a closed clause is: a name that already admits the thrown type publishes
+// it, so the binding never reaches the surface and the inferred remainder is
+// unaffected. A lambda's own clause is judged the same way; it is pinned in
+// the `scoped_type_escape` project instead, because a CALLED lambda carrying
+// a partial clause cannot run at all today (see the `BUG` note on the
+// lambda's clause judgment in `infer.rs`).
+function partial_clause_publishes_a_scoped_throw(t: reflect.Type, plain: bool) -> int throws unknown | _ {
+    type T = unreflect(t)
+    if (plain) { throw "plain" }
+    throw Boom<T> { payload: as_t<T>(1) }
+}
+
+test "a partial clause publishes a scoped throw through the name it wrote" {
+    let int_t = reflect.Type.of<int>()
+    let boomed = partial_clause_publishes_a_scoped_throw(int_t, false) catch (e) { _ => e }
+    assert.is_true(reflect.Type.of_value(boomed) == reflect.Type.of<Boom<int>>())
+    // The `_` half still carries what the body infers.
+    let plain = partial_clause_publishes_a_scoped_throw(int_t, true) catch (e) { _ => e }
+    assert.is_true(reflect.Type.of_value(plain) == reflect.Type.of<string>())
+}
+
 // `unreflect` in a DECLARATION is E0168, and the remedy the diagnostic names
 // is this: bind the runtime type inside a body and reach the declaration
 // through an ordinary type parameter. Pinned so the advice stays followable.
