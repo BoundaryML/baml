@@ -71,8 +71,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # Read-only: canary size-gate jobs write matching hosted-runner keys.
-          # ix toolchain differences can miss; its seed disk supplies downloads.
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
       - name: "Load .envrc with direnv"
@@ -87,11 +87,27 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
+      - name: "Build cargo-size-gate"
+        run: cargo build -p cargo-size-gate
+        working-directory: baml_language
+
+      - name: "Separate helper and release-build sccache stats"
+        id: release_cache
+        working-directory: baml_language
+        run: |
+          # Log the helper's stats, then measure only the nested release builds.
+          # Use the credential-mapping wrapper if an ix seed supplied a fresh
+          # helper and no compiler invocation has started the server yet.
+          "$RUSTC_WRAPPER" --show-stats
+          "$RUSTC_WRAPPER" --zero-stats
+          # ix seeds may contain old timing reports; upload only this measurement.
+          rm -rf target/cargo-timings
+
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
         run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
+          ./target/debug/cargo-size-gate size-gate check \
             --only baml-cli,packed-program \
             --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -106,15 +122,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: "Show sccache stats"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         run: sccache --show-stats
 
       - name: "Dump sccache stats (json)"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         run: sccache --show-stats --stats-format json > sccache-stats-size-gate-linux.json
 
       - name: "Upload sccache stats"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: sccache-stats-size-gate-linux
@@ -122,7 +138,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: "Upload cargo timings"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-linux
@@ -162,8 +178,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-wasm"
-          # Read-only: canary size-gate jobs write matching hosted-runner keys.
-          # ix toolchain differences can miss; its seed disk supplies downloads.
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
       - name: "Load .envrc with direnv"
@@ -178,11 +194,27 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
+      - name: "Build cargo-size-gate"
+        run: cargo build -p cargo-size-gate
+        working-directory: baml_language
+
+      - name: "Separate helper and release-build sccache stats"
+        id: release_cache
+        working-directory: baml_language
+        run: |
+          # Log the helper's stats, then measure only the nested release builds.
+          # Use the credential-mapping wrapper if an ix seed supplied a fresh
+          # helper and no compiler invocation has started the server yet.
+          "$RUSTC_WRAPPER" --show-stats
+          "$RUSTC_WRAPPER" --zero-stats
+          # ix seeds may contain old timing reports; upload only this measurement.
+          rm -rf target/cargo-timings
+
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
         run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
+          ./target/debug/cargo-size-gate size-gate check \
             --only bridge_wasm \
             --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
@@ -197,15 +229,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: "Show sccache stats"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         run: sccache --show-stats
 
       - name: "Dump sccache stats (json)"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         run: sccache --show-stats --stats-format json > sccache-stats-size-gate-wasm.json
 
       - name: "Upload sccache stats"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: sccache-stats-size-gate-wasm
@@ -213,7 +245,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: "Upload cargo timings"
-        if: always()
+        if: ${{ always() && steps.release_cache.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-size-gate-wasm
@@ -242,8 +274,10 @@ jobs:
           merge-multiple: true
           path: reports
 
-      # Rebuild cargo-size-gate from the checked-out source. rust-cache only
-      # restores Cargo downloads; compilation uses the ix seed and R2 sccache.
+      # Build cargo-size-gate from source. We share the linux size-gate
+      # job's rust-cache (same shared-key, same runner OS), so this is a
+      # near-instant cache hit in the common case — no upload/download of
+      # the binary required.
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
@@ -262,8 +296,8 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           shared-key: "linux-cargo"
-          # The hosted canary linux measurement job is the cache writer;
-          # neither ix job writes, and different toolchains can miss this key.
+          # The linux size-gate job already populated this cache; we just
+          # consume it here.
           save-if: false
 
       - name: "Load .envrc with direnv"

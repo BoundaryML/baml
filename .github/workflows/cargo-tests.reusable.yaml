@@ -14,9 +14,8 @@
 # no build output). As on canary, only canary writes the cache
 # (`save-if: ${{ github.ref == 'refs/heads/canary' }}`); PR branches read the
 # shared entry instead of each saving a fresh one, so cache usage doesn't blow
-# out. rust-cache also hashes installed toolchains and CARGO_*/RUST* environment
-# variables, not just Cargo.lock: a shared-key alone does not ensure reuse.
-# Size-gate has different profile settings and writes its own canary entries.
+# out. rust-cache keys are content-addressed on Cargo.lock, so jobs sharing a
+# `shared-key` reuse the same entry.
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:

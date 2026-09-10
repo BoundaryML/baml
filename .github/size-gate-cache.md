@@ -1,78 +1,65 @@
-# Size-gate cache audit (2026-09-10)
+# Size-gate R2 cache audit (2026-09-10)
 
-Audited canary `38275af01f5762f409d38d387f4e756d5ac016b3`, the September R2 migration, and completed canary and PR runs. R2 compiler caching is working. The confirmed defect is missed Cargo dependency caching: size-gate's read-only keys have no matching writer. There is no evidence in the sampled runs of stale compiled artifacts being reused.
+The nested release builds do use sccache, and their requests reach the same server as the helper build. Previously the reported counters combined helper and release compilation, while the uploaded Cargo timings covered only the helper. This change separates those phases and records timings for the actual release builds, so a high aggregate cache hit rate cannot obscure expensive uncached LTO/linking.
 
-## Evidence from CI
+## Build and stats path
 
-Every job below reports `s3, name: baml-build3, prefix: /baml/ci/` and zero cache read errors, write errors, and timeouts. Hits/misses are sccache's cacheable Rust compilations, not all compiler invocations. All ten jobs report `No cache found.` for Swatinem/rust-cache.
+1. CI loads `.envrc` via direnv. It sets `RUSTC_WRAPPER`, the R2 bucket/endpoint/prefix, and the server configuration. Windows first builds its native credential-mapping wrapper.
+2. Previously `cargo run --timings -p cargo-size-gate -- size-gate check ...` built the debug helper and ran it. `--timings` applied only to that outer build.
+3. The helper's `run_cargo_build` uses `Command::new("cargo")` for the CLI/WASM release build; `build_pack` does the same for the CLI and pack host. Neither clears the environment or removes the wrapper/server variables. Those child processes inherit the cache configuration.
+4. sccache statistics belong to the server, not to the process asking for them. The final `sccache --show-stats` therefore included both phases. The report-only job has its own runner/server and its helper-only counters must not be confused with measurement-job counters.
 
-| Run | Job | R2 hits | R2 misses | Hit rate |
+The updated workflow builds the helper explicitly, prints its cache counters, resets counters through the credential-mapping wrapper, and invokes the prebuilt helper. End-of-measurement stats now exclude helper/bootstrap compilation. Stats/timing uploads require the reset step to succeed, so a failed helper build cannot masquerade as release-build stats. The wrapper is used for reset so an ix seed with an already-built helper still starts a server with the right credentials.
+
+Both nested release build commands now pass `--timings`. Measurement jobs clear old timing reports before starting, including any reports inherited from ix seeds. Their timing artifacts therefore describe the nested release invocations rather than helper compilation. Compiler profiles, R2 settings, GitHub cache policy, size baselines, and report enforcement are unchanged.
+
+## Direct reproduction
+
+Built the actual `cargo-size-gate` source, then ran that prebuilt binary against a temporary Cargo workspace with a library and binary, using the production release settings (`lto="fat"`, `codegen-units=1`, `opt-level="s"`, stripped symbols). An isolated sccache 0.10.0 server used a temporary local disk cache; no R2 credentials were supplied. A tracing wrapper recorded the compiler arguments and inherited wrapper/server variables.
+
+| Probe | Requests | Rust hits | Rust misses | Non-cacheable binary calls |
+| --- | ---: | ---: | ---: | ---: |
+| Cold nested release build | 8 | 0 | 1 | 1 |
+| Delete target directory, repeat (cumulative) | 16 | 1 | 1 | 2 |
+| Reset counters, delete target, original `cargo run` entry point with helper already built | 8 | 1 | 0 | 1 |
+
+The helper was already compiled and was invoked directly, so none of these requests could come from building it. Both release compiler calls used the inherited wrapper and the same socket. The library invocation had `linker-plugin-lto`; the binary invocation had `lto=fat` and was classified as non-cacheable (`crate-type`). The second build hit for the library but still rebuilt/linked the executable. Repeating through the original `cargo run` entry point also hit the nested library, confirming that outer Cargo does not drop the wrapper/server environment. The modified nested build produced a Cargo timing HTML report.
+
+A separate isolated compiler probe confirmed that identical inputs hit after deleting outputs, while source changes, tracked `env!` changes, and optimization-flag changes each miss. These are local transport tests of the pinned sccache version, not a byte-for-byte cached-versus-uncached BAML release comparison.
+
+## Existing CI evidence (combined counters before this change)
+
+Every job below reports `s3, name: baml-build3, prefix: /baml/ci/` and zero cache read errors, write errors, and timeouts. Hits/misses count cacheable Rust compilations, not all compiler work.
+
+| Run | Job | R2 hits | R2 misses | Non-cacheable calls |
 | --- | --- | ---: | ---: | ---: |
-| [Canary push 34499800289](https://github.com/BoundaryML/baml/actions/runs/34499800289) | [Linux](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645574) | 708 | 1 | 99.86% |
-| Same | [macOS](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645723) | 713 | 1 | 99.86% |
-| Same | [Windows](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645605) | 640 | 77 | 89.26% |
-| Same | [WASM](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645501) | 449 | 0 | 100% |
-| Same | [Report](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102958675002) | 41 | 0 | 100% |
-| [PR run 34512477133](https://github.com/BoundaryML/baml/actions/runs/34512477133) | [Linux](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973154) | 689 | 20 | 97.18% |
-| Same | [macOS](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973209) | 689 | 25 | 96.50% |
-| Same | [Windows](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973217) | 618 | 99 | 86.19% |
-| Same | [WASM](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973274) | 433 | 16 | 96.44% |
-| Same | [Report](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/103001956988) | 41 | 0 | 100% |
+| [Canary 34499800289](https://github.com/BoundaryML/baml/actions/runs/34499800289) | [Linux measurement](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645574) | 708 | 1 | 143 |
+| Same | [macOS measurement](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645723) | 713 | 1 | 144 |
+| Same | [Windows measurement](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645605) | 640 | 77 | 133 |
+| Same | [WASM measurement](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102947645501) | 449 | 0 | 104 |
+| Same | [Report helper only](https://github.com/BoundaryML/baml/actions/runs/34499800289/job/102958675002) | 41 | 0 | 16 |
+| [PR 34512477133](https://github.com/BoundaryML/baml/actions/runs/34512477133) | [Linux measurement](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973154) | 689 | 20 | 143 |
+| Same | [macOS measurement](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973209) | 689 | 25 | 144 |
+| Same | [Windows measurement](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973217) | 618 | 99 | 133 |
+| Same | [WASM measurement](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/102989973274) | 433 | 16 | 104 |
+| Same | [Report helper only](https://github.com/BoundaryML/baml/actions/runs/34512477133/job/103001956988) | 41 | 0 | 16 |
 
-The canary measurement jobs took about 16m Linux, 15m macOS, 30m Windows, and 81s WASM despite high hit rates. Their non-cacheable calls were 143, 144, 133, and 104 respectively, mostly `crate-type`. A high sccache hit rate does not eliminate executable/cdylib linking, build-script execution, packing, and measurement. Cargo's `Compiling` messages alone do not establish a miss; rustc still goes through the wrapper on a cache hit.
+The canary Linux log says the debug helper finished in 4.31s, the nested CLI release build in 7m43s, and the nested CLI/pack-host release build in 7m10s. The latter still compiles/links the two shipping executables. Fat LTO executes inside the uncached binary compilation, so the high hit rate does not imply that most CPU work is cached. New nested timing reports are needed to quantify that work; the previous helper-only timing artifact cannot do so. Likewise Cargo's `Compiling` log messages alone do not establish sccache misses.
 
-The native reports in this canary run contain three actual policy violations; the report job fails on those JSON results. The daily [baseline refresh run 34460902515](https://github.com/BoundaryML/baml/actions/runs/34460902515) successfully builds the helper and adopts reports, then fails while enqueueing its PR because `CI-v2 Failure Alert` is failing. Neither failure indicates an R2 cache failure. This cache fix does not change ceilings or enqueue/merge a baseline PR.
+The first canary push after the repository-secret change, [run 33797930291](https://github.com/BoundaryML/baml/actions/runs/33797930291), already showed Linux 703/1 hits/misses, macOS 708/1, Windows 635/77, and WASM 443/0, all using `baml-build3` with zero read/write errors. Native policy violations in the September 10 canary run are reported in freshly produced JSON and are separate from cache transport. The daily baseline-refresh run failed while enqueueing its PR, after successfully adopting reports; this change does not modify that workflow or its baselines.
 
-The first canary push after the repository-secret change, [run 33797930291](https://github.com/BoundaryML/baml/actions/runs/33797930291) on September 3, shows the same split: Linux 703/1 hits/misses, macOS 708/1, Windows 635/77, and WASM 443/0, all using `baml-build3` with zero read/write errors, while all four dependency caches miss. This is not a new R2 authentication failure appearing after the secrets move.
+## R2 configuration, keys, and branch behavior
 
-## Why the dependency cache misses
+[PR #4685](https://github.com/BoundaryML/baml/pull/4685) moved the cache from `baml-build1` in the old account to `baml-build3` at `https://c0bf62c013f607c849c6a50cdd627b7b.r2.cloudflarestorage.com`, region `auto`. This selects a new remote namespace. HTTPS and `auto` match [sccache's R2 requirements](https://github.com/mozilla/sccache/blob/v0.10.0/docs/S3.md). [PR #4738](https://github.com/BoundaryML/baml/pull/4738) moved credentials from the GitHub deployment environment to optional reusable-workflow repository secrets. Current callers pass both credential names, and the sampled logs demonstrate actual access to the new bucket.
 
-[Swatinem/rust-cache's configuration](https://github.com/Swatinem/rust-cache/blob/v2/src/config.ts) builds keys from the prefix/shared key, runner OS/architecture, installed Rust versions and compiler environment, then manifests/lockfiles/configuration. Its restore prefix retains the environment hash and only drops the final manifest hash. A different compiler environment therefore cannot fall back to the writer's entry.
+`.envrc` enables R2 only when both `BAML_SCCACHE_R2_*` credentials are present. POSIX `tools/baml-sccache` and Windows `tools_sccache` map them to `AWS_*` before starting sccache. CI reads and writes objects under `baml/ci/`; local developer builds use `baml/local/`. R2 has no GitHub branch scope: credentialed PR, canary, main, merge-group and ix jobs can share compiler objects. Fork PRs without secrets fall back to local disk; cross-run compiler reuse is not expected there.
 
-Observed restore keys in canary run 34499800289:
+The [pinned sccache key construction](https://github.com/mozilla/sccache/blob/v0.10.0/src/compiler/rust.rs) hashes compiler identity, compiler arguments, source and dependency contents, tracked environment, and working directory. Sharing an R2 namespace therefore does not mean sharing outputs across different source/profile/target/features. Linked executables and cdylibs are not cached by this version. `.envrc` exports `SCCACHE_BASEDIRS`, but version 0.10.0 does not implement it: different checkout paths can cause extra misses. Hosted paths are stable in the samples; ix/local cross-path reuse must not be assumed.
 
-| Family | Size-gate reader | Cargo-test writer |
-| --- | --- | --- |
-| Linux | `v0-rust-linux-cargo-Linux-x64-358631ac` | `v0-rust-linux-cargo-Linux-x64-da02379a` |
-| WASM | `v0-rust-linux-wasm-Linux-x64-358631ac` | `v0-rust-linux-wasm-Linux-x64-da02379a` |
-| Windows | `v0-rust-windows-cargo-Windows_NT-x64-5f662bdc` | `v0-rust-windows-cargo-Windows_NT-x64-e8921c96` |
-| macOS | `v0-rust-macos-cargo-Darwin-arm64-70e14784` | Cargo-test job disabled |
+Swatinem/rust-cache is secondary and caches Cargo downloads, not `target/`. All sampled measurement jobs miss it because its environment keys differ from cargo-test writers (and the macOS writer is disabled). This is missed dependency-download caching, not evidence that the nested release builds bypass R2. No Swatinem writes or key changes are introduced here. The daily GitHub cache purge does not delete R2 compiler objects. mise's tool cache and uploaded size-report artifacts are also separate from R2.
 
-Cargo-test writers set `CARGO_PROFILE_DEV_OPT_LEVEL=1` and `CARGO_PROFILE_TEST_OPT_LEVEL=1`. Windows additionally sets both debug profiles to `line-tables-only`. Size-gate does not. The Linux writer successfully restores an older manifest entry ending `da02379a-738ce5f2`, then uploads a new cache; the size reader with `358631ac` cannot see either. Both jobs report the same installed Rust versions, isolating the environment mismatch. The profile divergence predates the R2 move: [#4075](https://github.com/BoundaryML/baml/pull/4075) introduced the optimization settings in July. The macOS cargo-test job was disabled in [#4418](https://github.com/BoundaryML/baml/pull/4418) in August.
+Validation passed: all 11 `cargo-size-gate` tests, package clippy with warnings denied, rustfmt, actionlint, and parsed-workflow assertions for build/reset/measurement order, reset-gated diagnostics, and unchanged Swatinem inputs.
 
-The fix lets the four hosted measurement jobs save their own exact keys only on `refs/heads/canary`. This preserves build profiles, existing key invalidation, and PR read-only dependency caching. It adds at most one writer per size-gate platform/environment, with normal manifest-key churn, rather than copying test profile settings into release measurement jobs. The Linux report job remains a reader. No compiled `target/` directory is added to rust-cache.
+## Limits
 
-The baseline-refresh workflow previously requested the default cache paths including `target/`, unlike the writer's `cache-targets: false`; [GitHub's cache version](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching) also depends on the requested paths. Its environment differed and it did not initialize sccache. It now uses the same download paths and environment as the hosted Linux size-gate writer, loads `.envrc`, and uses R2 for its helper compilation. It still downloads existing size reports rather than rebuilding shipping artifacts.
-
-## Read/write paths and invalidation
-
-| Layer | Contents/path | Writer and isolation |
-| --- | --- | --- |
-| R2 sccache | Bucket `baml-build3`, account endpoint `https://c0bf62c013f607c849c6a50cdd627b7b.r2.cloudflarestorage.com`, region `auto`, CI prefix `baml/ci/` | Credentialed builds read and write content-addressed compiler objects; CI jobs/branches share this namespace. Local developer builds use `baml/local/`. |
-| rust-cache | Cargo home registry, git dependencies, and eligible installed binaries/metadata; excludes `baml_language/target` | Cargo-test jobs and now hosted size-gate measurements write only on canary, under their actual environment keys. Report/baseline/ix jobs only read. |
-| mise | Installed tools selected by `install_args` | `mise-baml3` prefix plus platform/configuration/tool-set hashes; only canary saves. Size-gate uses pinned sccache 0.10.0. |
-| Reports | `size-gate-<platform>.json` artifacts | Written by each measurement job and downloaded from that workflow run by the report job. They are not restored from rust-cache or R2. |
-| Baselines | Committed `.ci/size-gate/*.toml` and `.cargo/size-gate.toml` | Compared against fresh measurements. The scheduled refresh deliberately selects a completed branch CI run with all four reports and records its provenance in a reviewed PR. |
-
-`.envrc` selects R2 only when both `BAML_SCCACHE_R2_*` credentials exist. The POSIX `tools/baml-sccache` wrapper maps those to `AWS_*` immediately before invoking sccache. Windows bootstraps the native `tools_sccache` binary, then sets `RUSTC_WRAPPER` to its absolute path, avoiding cmd.exe's argument limit. A per-worktree Unix socket isolates POSIX servers. `.envrc` exports `SCCACHE_BASEDIRS`, but the pinned sccache 0.10.0 source does not implement that variable: checkout paths and the compiler working directory can still cause misses. Hosted jobs in the samples use stable checkout paths; cross-path ix/local reuse must not be assumed. `sccache --version` runs before `.envrc` but does not start the server; compilation starts it through the credential-mapping wrapper.
-
-The bucket/account migration in [#4685](https://github.com/BoundaryML/baml/pull/4685) changed `baml-build1` in the old account to `baml-build3` in the BoundaryML account, invalidating the old remote namespace. The HTTPS endpoint and `auto` region match [sccache's R2 requirements](https://github.com/mozilla/sccache/blob/v0.10.0/docs/S3.md). [#4738](https://github.com/BoundaryML/baml/pull/4738) moved credentials from the GitHub deployment environment to optional reusable-workflow repository secrets. `ci.yaml`, `ix-ci.yml`, and `canary-cache-refresh.yml` explicitly pass both names to their callees. Recent logs confirm the new bucket is actually used, not merely configured.
-
-sccache keys incorporate compiler identity, compiler arguments (including profile, target and features), dependency/source inputs and tracked environment; they are not branch-name or Cargo.lock-only keys. Cargo runs the release build before size measurement and repacks the fixture. Source/profile changes should invalidate compilation while identical inputs can share objects across branches. Executables and cdylibs are not cached as linked outputs by this sccache version. See [Rust support and caveats](https://github.com/mozilla/sccache/blob/v0.10.0/docs/Rust.md) and [key construction](https://github.com/mozilla/sccache/blob/v0.10.0/src/compiler/rust.rs).
-
-The scheduled cache purge deletes GitHub cache entries for the Linux/WASM/MSRV/Windows shared-key prefixes, then invokes cargo-tests. It does not delete R2 objects. It does not populate size-gate's different environment keys; after a purge, the next successful canary measurement populates those again. macOS is left warm because that refresh workflow has no macOS cargo-test repopulator. Toolchain/environment changes create new keys; manifest-only changes can restore an older download cache and fetch the missing dependencies safely.
-
-## Validation
-
-`actionlint` passes on all five affected workflows; applicable `prek` hooks pass. A parsed-workflow check confirms four canary-only writers, identical cache paths and compiler environment between the Linux measurement/report/baseline jobs, and read-only baseline/report/ix consumers.
-
-An isolated local sccache 0.10.0 probe (no R2 credentials, separate temporary disk cache and server socket) compiled a tiny Rust library six times, deleting outputs before every build: the identical second compile hit; changing source, an `env!` input, or optimization flags each missed. Copying identical inputs to a different checkout path also missed, consistent with 0.10.0 ignoring `SCCACHE_BASEDIRS`. Final totals were 1 hit, 5 misses, zero storage errors. This tests basic compiler-cache invalidation, not the full BAML release output or R2 transport.
-
-## Branch behavior and limits
-
-- Canary pushes: credentialed R2 reads/writes; cargo tests and hosted size measurements save dependency caches. Cache saves require the action's successful post-job path.
-- Same-repository PRs, main pushes and merge groups: R2 reads/writes if secrets are supplied; size-gate dependency caches are read-only, with canary/default-branch caches available under GitHub's scope rules. A new environment key remains cold until canary writes it.
-- Fork PRs: optional secrets are empty, so `.envrc` unsets R2 settings and uses runner-local sccache. Dependency caches remain readable when GitHub scope/version/key rules permit, but no dependency writes are enabled. The local compiler cache is not uploaded, so cross-run compiler misses are expected.
-- ix preview: trusted jobs retain seeded ignored files through `clean: false`; fork PRs use hosted runners. ix remains read-only for rust-cache and primarily relies on its seed and R2. Installed toolchain differences can prevent a match with hosted canary keys. No new ix cache writer is introduced.
-
-No bucket purge, cache deletion, baseline change, or merge was performed for this audit. R2 credentials are shared across trusted CI code, not a security boundary between same-repository branches. The evidence demonstrates reuse and zero reported storage errors; it is not a byte-for-byte cached-versus-uncached rebuild comparison, a full review of every procedural macro's undeclared inputs, or an inspection of R2 credentials/lifecycle policies. Upstream explicitly documents limitations for procedural macros that read untracked files. A fresh fork/ix run was not used to validate those paths. Existing canary/PR logs cannot prove that new canary-only cache writes have occurred before the fix lands; initial PR dependency misses remain expected.
+No evidence of stale compiled output reuse was found. This does not prove byte-for-byte output equivalence for a full BAML uncached rebuild, audit every procedural macro's undeclared inputs, or inspect R2 credential permissions/lifecycle settings. [Upstream documents caveats for procedural macros reading untracked files](https://github.com/mozilla/sccache/blob/v0.10.0/docs/Rust.md). Existing CI counters combine phases and cannot precisely allocate hits between individual nested builds; the new phase reset and timings make that distinction observable. A fresh fork/ix runner path has not been exercised. No bucket/cache purge, baseline update, or merge was performed.

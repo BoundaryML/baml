@@ -46,16 +46,6 @@ defaults:
   run:
     shell: bash
 
-# Match the linux measurement/report environment for rust-cache's key. R2
-# credentials stay under their BAML names until the compiler wrapper runs.
-env:
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
-  CARGO_INCREMENTAL: 0
-  CARGO_NET_RETRY: 10
-  CARGO_TERM_COLOR: always
-  RUSTUP_MAX_RETRIES: 10
-
 jobs:
   refresh:
     name: "Refresh baselines from latest canary CI"
@@ -71,26 +61,13 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Same paths/key as the canary linux measurement job. Compiled
-          # artifacts come from R2 sccache, not this dependency-download cache.
-          cache-all-crates: true
-          cache-targets: false
+          # Reuse the linux size-gate job's cache so building the debug
+          # cargo-size-gate binary is a near-instant cache hit.
           shared-key: "linux-cargo"
           save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
 
       - name: "Adopt latest CI sizes (bake --branch)"
         id: bake
@@ -135,10 +112,6 @@ jobs:
             cat "$GITHUB_WORKSPACE/refresh-body.md"
           } > "$GITHUB_WORKSPACE/pr-body.md"
           cat "$GITHUB_WORKSPACE/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
 
       - name: "Open/update baseline-refresh PR"
         id: cpr

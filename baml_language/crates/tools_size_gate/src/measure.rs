@@ -49,7 +49,13 @@ fn run_cargo_build(workspace_root: &Path, config: &ArtifactConfig, extra: &[&str
     let package = config.require_package()?;
 
     let mut cmd = Command::new("cargo");
-    cmd.arg("build").arg("--release").arg("-p").arg(package);
+    // The outer cargo invocation only times the size-gate helper. Capture the
+    // release build itself so CI can distinguish cacheable crate work from LTO.
+    cmd.arg("build")
+        .arg("--release")
+        .arg("--timings")
+        .arg("-p")
+        .arg(package);
 
     if let Some(target) = &config.target {
         cmd.arg("--target").arg(target);
@@ -96,6 +102,7 @@ fn build_pack(workspace_root: &Path, name: &str, config: &ArtifactConfig) -> Res
     let status = Command::new("cargo")
         .arg("build")
         .arg("--release")
+        .arg("--timings")
         .args(["-p", &pack.cli_package, "--bin", &pack.cli_bin])
         .args(["-p", &pack.host_package, "--bin", &pack.host_bin])
         .current_dir(workspace_root)
