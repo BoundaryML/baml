@@ -1381,25 +1381,6 @@ function babysit_push_allowed(id: string, head: string) -> bool {
 
 /// One queue for issue-created PRs and direct babysit requests. Failed/terminal
 /// requests need a new explicit request; pending approvals retain their owner.
-function request_blocks_babysit(row: json, proposals: json[]) -> bool {
-    if (
-        baml.json.path_or<string>(row, ".result.kind", "") != "awaiting_approval"
-            || baml.json.path_or<string>(row, ".status", "") != "done"
-    ) {
-        return true;
-    };
-    let id = baml.json.path_or<int>(row, ".id", 0);
-    proposals
-        .filter((p: json) -> bool {
-            baml.json.path_or<int>(p, ".request_id", -1) == id
-                && ["pending", "approved", "executing"].includes(
-                    baml.json.path_or<string>(p, ".status", ""),
-                )
-        })
-        .length()
-        > 0
-}
-
 function active_babysit_request(pr: string) -> int? {
     let rows = select(
         "babysit_requests",
@@ -1407,27 +1388,14 @@ function active_babysit_request(pr: string) -> int? {
             + eq(pr)
             + "&dataset="
             + eq(dataset())
-            + "&or=(status.in.(queued,running),and(status.eq.done,result->>kind.in.(green,waiting_on_checks,awaiting_approval)))&order=id&limit=101",
+            + "&or=(status.in.(queued,running),and(status.eq.done,result->>kind.in.(green,waiting_on_checks)))&order=id&limit=101",
     );
     if (rows.length() > 100) {
         throw StoreError { message: "too many active babysit requests; refusing ambiguous ownership" };
     };
-    let proposals = select(
-        "babysit_proposals",
-        "select=request_id,status&pr="
-            + eq(pr)
-            + "&dataset="
-            + eq(dataset())
-            + "&status=in.(pending,approved,executing)&limit=101",
-    );
-    if (proposals.length() > 100) {
-        throw StoreError { message: "too many active proposals; refusing ambiguous ownership" };
+    if (rows.length() > 0) {
+        return baml.json.path_or<int>(rows.at(0) ?? baml.json.parse("{}"), ".id", 0);
     };
-    for (let row in rows) {
-        if (request_blocks_babysit(row, proposals)) {
-            return baml.json.path_or<int>(row, ".id", 0);
-        };
-    }
     null
 }
 
@@ -1510,16 +1478,4 @@ function pr_activity_link(pr: string) -> string {
         return pr;
     };
     "<" + base + "/prs/" + number + "?dataset=" + dataset() + "|View babysitter activity>"
-}
-
-function retire_babysit_proposals(request_id: int) -> null {
-    update(
-        "babysit_proposals",
-        "request_id=eq."
-            + request_id.to_string()
-            + "&status=in.(pending,approved)&dataset="
-            + eq(dataset()),
-        { "status": "stale" }.to_json(),
-    );
-    null
 }

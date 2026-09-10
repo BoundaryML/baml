@@ -68,14 +68,16 @@ function website_http(req: baml.http.Request) -> baml.http.Response {
         let enriched = baml.json.from_json<map<string, json>>(traced);
         let proposal = baml.json.path_or<string?>(traced, ".meta.proposal_id", null);
         if (proposal != null) {
-            let rows = select(
+            let rows: json[] = select(
                 "babysit_proposals",
                 "select=id,summary,status&dataset="
                     + eq(dataset())
                     + "&id="
                     + eq(proposal ?? "")
                     + "&limit=1",
-            );
+            ) catch (_) {
+                StoreError => []
+            };
             if (rows.length() == 0) {
                 let path = automatic_fix_path(proposal ?? "");
                 if (baml.fs.exists(path)) {
