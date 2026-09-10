@@ -77,9 +77,23 @@ class Future<T, E> {
 /// first error encountered in input order.
 function all_complete<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
     spawn {
-        futures.map((f) -> {
-            await f
-        })
+        let values: T[] = [];
+        let errors: E[] = [];
+        for (let f in futures) {
+            // Observe every input, including failures after the first one. A
+            // throwing map callback would return before later inputs settle.
+            {
+                values.push(await f);
+            } catch (e) {
+                let e => {
+                    errors.push(e);
+                },
+            };
+        }
+        if (errors.length() > 0) {
+            throw errors[0];
+        }
+        values
     }
 }
 
