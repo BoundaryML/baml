@@ -1939,6 +1939,20 @@ impl BexEngine {
                 // function type is realized here; a non-realized position (an
                 // unfilled type variable) is a contract violation surfaced as a
                 // type mismatch rather than erased.
+                // Dispatch addresses an optional parameter by name
+                // (`CallLayout::from_modes`), so a declared function type that
+                // leaves one unnamed has no slot the host could fill.
+                if params.iter().any(|param| {
+                    matches!(param.mode, baml_type::FunctionParamMode::Optional)
+                        && param.name.is_none()
+                }) {
+                    return Err(EngineError::TypeMismatch {
+                        message:
+                            "host callable cannot be bound: its declared type has an optional \
+                                  parameter without a name"
+                                .to_string(),
+                    });
+                }
                 let realized_params = params
                     .iter()
                     .map(|param| {

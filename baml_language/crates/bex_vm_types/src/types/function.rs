@@ -494,7 +494,8 @@ impl Function {
             .get(index)
             .copied()
             .unwrap_or(false)
-            .then(|| self.param_names[index].as_str())
+            .then(|| self.param_names.get(index).map(String::as_str))
+            .flatten()
     }
 
     /// The value slots the body reads, receiver included for a method.
