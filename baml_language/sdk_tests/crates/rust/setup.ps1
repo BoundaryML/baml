@@ -25,7 +25,7 @@ try {
 
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
-# harness_setup/src/rust.rs).
+# codegen/src/rust.rs).
 $env:CARGO_TARGET_DIR = Join-Path $WorkspaceRoot 'target\sdk-rust-target'
 New-Item -ItemType Directory -Force -Path $env:CARGO_TARGET_DIR | Out-Null
 
@@ -57,7 +57,7 @@ Get-ChildItem -Directory | ForEach-Object {
 # processes - so `setup_guard::ran` (see harness_runner) can prove this
 # script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV, so the
 # var stays unset and the guard fails with a helpful message. Keep the
-# var name in sync with SETUP_ENV_VAR in harness_setup/src/rust.rs.
+# var name in sync with SETUP_ENV_VAR in codegen/src/rust.rs.
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_RUST_SETUP=1'
 }

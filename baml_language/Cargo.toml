@@ -13,7 +13,7 @@ members = [
   "sdks/python/rust/*",
   "sdks/swift/rust/*",
   "sdks/rust/*",
-  "sdk_tests/harness_setup",
+  "sdk_tests/codegen",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
   # `sdk_tests/crates/java` follows typescript_node's soft-fail model
@@ -33,8 +33,8 @@ members = [
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
-  # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
-  # package name `sdk_test_harness_setup`), so a workspace
+  # `sdk_tests/codegen/src/lib.rs::BuildDiagnostics` —
+  # package name `sdk_test_codegen`), so a workspace
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.

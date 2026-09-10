@@ -12,7 +12,7 @@ indexmap = { workspace = true }
 prost = { workspace = true }
 
 [build-dependencies]
-sdk_test_harness_setup = { path = "../../harness_setup" }
+sdk_test_codegen = { path = "../../codegen" }
 
 [package.metadata.ci]
 wasm_support = false

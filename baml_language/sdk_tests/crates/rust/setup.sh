@@ -37,7 +37,7 @@ echo "==> cargo build -p bridge_cffi (engine cdylib)"
 
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
-# harness_setup/src/rust.rs).
+# codegen/src/rust.rs).
 export CARGO_TARGET_DIR="$WORKSPACE_ROOT/target/sdk-rust-target"
 mkdir -p "$CARGO_TARGET_DIR"
 
@@ -61,7 +61,7 @@ done
 # this script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV,
 # so the var stays unset and the guard fails with a helpful message.
 # Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/rust.rs.
+# codegen/src/rust.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_RUST_SETUP=1" >> "$NEXTEST_ENV"
 fi

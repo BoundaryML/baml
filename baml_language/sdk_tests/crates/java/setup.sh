@@ -33,7 +33,7 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 # Shared Gradle home under target/ so dependency, wrapper, and
 # provisioned-JDK caches land in one place rather than in ~/.gradle.
 # Keep in sync with CACHE_SUBDIR / CACHE_ENV_VAR in
-# harness_setup/src/java.rs.
+# codegen/src/java.rs.
 export GRADLE_USER_HOME="$WORKSPACE_ROOT/target/gradle-home"
 mkdir -p "$GRADLE_USER_HOME"
 
@@ -63,7 +63,7 @@ fi
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
 # "setup.sh guard" section of ../../DEVELOPMENT.md for the format and
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/java.rs.
+# codegen/src/java.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_JAVA_SETUP=1" >> "$NEXTEST_ENV"
 fi

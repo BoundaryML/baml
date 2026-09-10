@@ -29,7 +29,7 @@ echo "==> build-xcframework.sh --host-only (bridge_swift staticlib)"
 # after this script and injects these vars into the matched tests'
 # processes — so `setup_guard::ran` (see harness_runner) can prove
 # this script ran *this* run. Keep the var name in sync with
-# SETUP_ENV_VAR in harness_setup/src/swift.rs.
+# SETUP_ENV_VAR in codegen/src/swift.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_SWIFT_SETUP=1" >> "$NEXTEST_ENV"
 fi

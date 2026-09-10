@@ -34,7 +34,7 @@ toolchain check per fixture, producing a `cargo test` matrix of
 The shared infrastructure is split into two crates so the heavy
 codegen + project-loading deps only land where they're needed:
 
-- **`sdk_test_harness_setup`** (`[build-dependencies]`) holds the build.rs
+- **`sdk_test_codegen`** (`[build-dependencies]`) holds the build.rs
   logic -- fixture discovery, codegen, install, scaffold emission,
   `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_shared`,
   `sdkgen_rust`, `baml_db`, `baml_ide`, `baml_codegen_types`.
@@ -44,7 +44,7 @@ codegen + project-loading deps only land where they're needed:
   `include!` each OUT_DIR scaffold, and the shared
   `build_diagnostics!` macro that emits the
   `mod build_diagnostics { #[test] fn no_build_failures }` block.
-  Only `std` deps. The scaffold emitted by `sdk_test_harness_setup` is just
+  Only `std` deps. The scaffold emitted by `sdk_test_codegen` is just
   a sequence of macro / function invocations against
   `::sdk_test_harness_runner::*` -- every generated `#[test]` body, including
   `no_build_failures`, lives in `sdk_test_harness_runner`.
@@ -53,10 +53,11 @@ codegen + project-loading deps only land where they're needed:
 
 ```text
 sdk_tests/
-|-- harness_setup/                        # build-script crate (heavy deps: codegen_*, baml_project, ...)
-|   |-- Cargo.toml                        # name = "sdk_test_harness_setup"
+|-- codegen/                              # codegen crate (heavy deps: sdkgen_*, baml_db, baml_ide, ...)
+|   |-- Cargo.toml                        # name = "sdk_test_codegen"; lib + bin
 |   `-- src/
 |       |-- lib.rs                        # generator-agnostic helpers + BuildDiagnostics
+|       |-- main.rs                       # `sdk_test_codegen` CLI (emit-bytecode, for the ABI probes)
 |       |-- python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
 |       |-- rust.rs                       # rust codegen + scaffold emit + TEST_MODS port gating
 |       |-- typescript.rs                 # Node codegen + Node scaffold emit
@@ -70,17 +71,17 @@ sdk_tests/
 `-- crates/                               # one crate per generator target; per-fixture content nested inside
     |-- python_pydantic2/
     |   |-- Cargo.toml                    # name = "sdk_test_python_pydantic2"
-    |   |                                 # [build-dependencies] sdk_test_harness_setup
+    |   |                                 # [build-dependencies] sdk_test_codegen
     |   |                                 # [dev-dependencies]   sdk_test_harness_runner
-    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::python_pydantic2::run_all()
+    |   |-- build.rs                      # one-liner -> sdk_test_codegen::python_pydantic2::run_all()
     |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
     |-- typescript/
     |   |-- Cargo.toml                    # name = "sdk_test_typescript"
-    |   |                                 # [build-dependencies] sdk_test_harness_setup
+    |   |                                 # [build-dependencies] sdk_test_codegen
     |   |                                 # [dev-dependencies]   sdk_test_harness_runner
-    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript::run_all()
+    |   |-- build.rs                      # one-liner -> sdk_test_codegen::typescript::run_all()
     |   |-- setup.sh                      # build the native bridge + install packages (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript::test_suite!()
@@ -92,9 +93,9 @@ sdk_tests/
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_web::test_suite!()
     `-- rust/
         |-- Cargo.toml                    # name = "sdk_test_rust"
-        |                                 # [build-dependencies] sdk_test_harness_setup
+        |                                 # [build-dependencies] sdk_test_codegen
         |                                 # [dev-dependencies]   sdk_test_harness_runner
-        |-- build.rs                      # one-liner -> sdk_test_harness_setup::rust::run_all()
+        |-- build.rs                      # one-liner -> sdk_test_codegen::rust::run_all()
         |-- setup.sh                      # serial `cargo test --no-run` pre-warm of target/sdk-rust-target (Unix)
         |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
         `-- src/lib.rs                    # invokes sdk_test_harness_runner::rust::test_suite!()
@@ -103,7 +104,7 @@ sdk_tests/
 ## How It Works
 
 1. **`crates/<generator>/build.rs`** calls
-   `sdk_test_harness_setup::<generator>::run_all()`, which:
+   `sdk_test_codegen::<generator>::run_all()`, which:
    - Scans `sdk_tests/fixtures/*/baml_src/` to discover the fixture
      set.
    - For each fixture: loads `.baml` files into a `ProjectDatabase`,
@@ -120,7 +121,7 @@ sdk_tests/
      target symlinks into `generated/customizable/` (NOT `generated/tests/`,
      where cargo would auto-discover every file as its own test target) and
      writes the `generated/tests/main.rs` gate file that decides which ported
-     files compile (see the `TEST_MODS` table in `harness_setup/src/rust.rs`).
+     files compile (see the `TEST_MODS` table in `codegen/src/rust.rs`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
      (or `package.json` + per-runtime TypeScript/Vitest configs for
      `typescript`) with the per-fixture package name. The rust
@@ -189,7 +190,7 @@ sdk_tests/
 aborting). `uv sync` / `pnpm install` failures hard-fail in the
 respective `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
 to a `mod build_diagnostics { #[test] fn no_build_failures }` that
-reads the file and fails with the records. `sdk_test_harness_setup`'s
+reads the file and fails with the records. `sdk_test_codegen`'s
 scaffold emitter stamps one invocation per generator scaffold.
 
 Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm` installed; `cargo nextest run` surfaces the same failures it would have hit before, just routed through a test rather than build.rs.
@@ -216,7 +217,7 @@ SDK_TEST_<GEN>_SETUP=1
 `SDK_TEST_PYTHON_PYDANTIC2_SETUP=1` for python_pydantic2 and
 `SDK_TEST_TYPESCRIPT_SETUP=1` for TypeScript. The
 canonical name is the `SETUP_ENV_VAR` const in each
-`harness_setup/src/<generator>.rs` (the setup scripts and the
+`codegen/src/<generator>.rs` (the setup scripts and the
 emitted `setup_guard!(...)` invocation must agree on it). nextest
 reads that file after the setup script and injects the var into the
 matched tests' processes for that run only, so presence of the var
@@ -232,11 +233,11 @@ the breadcrumb; the generated fixture tests are still free to fail if the local 
 Hard panics are retained for repo/author bugs: missing `fixtures/`
 directory, fixtures with zero `.baml` files, `.baml` files with
 `Severity::Error` diagnostics, unset `CARGO_MANIFEST_DIR` /
-`OUT_DIR`. See `sdk_test_harness_setup::BuildDiagnostics` for the split.
+`OUT_DIR`. See `sdk_test_codegen::BuildDiagnostics` for the split.
 
 ## Adding a Generator Target
 
-1. Add `sdk_tests/harness_setup/src/<target>.rs` with `run_all()`
+1. Add `sdk_tests/codegen/src/<target>.rs` with `run_all()`
    (codegen + pyproject/package.json template + `OUT_DIR` scaffold
    emission, threading a `BuildDiagnostics` through). Toolchain
    install stays OUT of build.rs -- put it in
@@ -254,7 +255,7 @@ directory, fixtures with zero `.baml` files, `.baml` files with
    just `include!(concat!(env!("OUT_DIR"), "/<target>_tests.rs"))`.
 3. Add `sdk_tests/crates/<target>/{Cargo.toml,build.rs,src/lib.rs,setup.sh}`
    following `crates/python_pydantic2/`'s shape. `Cargo.toml` wires
-   `sdk_test_harness_setup` as `[build-dependencies]` and `sdk_test_harness_runner`
+   `sdk_test_codegen` as `[build-dependencies]` and `sdk_test_harness_runner`
    as `[dev-dependencies]`.
 4. For each existing fixture that should run under this target,
    drop a `sdk_tests/crates/<target>/<fixture>/customizable/`

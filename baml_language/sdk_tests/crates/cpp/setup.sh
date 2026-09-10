@@ -58,7 +58,7 @@ BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
     "$WORKSPACE_ROOT/sdks/cpp/bridge_cpp/tests/run.sh"
 
 # Per-run breadcrumb for the in-test guard; see setup_guard in
-# harness_runner and SETUP_ENV_VAR in harness_setup/src/cpp.rs.
+# harness_runner and SETUP_ENV_VAR in codegen/src/cpp.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_CPP_SETUP=1" >> "$NEXTEST_ENV"
 fi

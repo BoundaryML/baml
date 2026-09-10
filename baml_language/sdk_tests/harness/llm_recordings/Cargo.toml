@@ -5,10 +5,11 @@
 # keyless) plus an insta binary snapshot of the raw SSE body (`.snap.sse`,
 # served verbatim by the BAML replay server).
 #
-# Neither sibling harness crate can host this: `sdk_test_harness_setup` is
-# `[build-dependencies]`-only codegen and `sdk_test_harness_runner` is
-# deliberately std-only. The recorder needs the engine (to invoke the
-# fixture request helper backed by the native-BAML provider lowering) + insta
+# Neither sibling crate can host this: `sdk_test_codegen` carries the
+# compiler and sdkgen closure but not the engine, and
+# `sdk_test_harness_runner` is deliberately std-only. The recorder needs
+# the engine (to invoke the fixture request helper backed by the
+# native-BAML provider lowering) + insta
 # + the network, so it is its own crate. It is also generator-agnostic
 # (recordings feed both the Python and TS replay tests), so it does not belong
 # inside a per-generator crate.

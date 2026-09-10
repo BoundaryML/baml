@@ -4,7 +4,7 @@
 //! `build_diagnostics::no_build_failures` and `setup_guard::ran` — is
 //! generated below by `sdk_test_harness_runner::java::test_suite!()`.
 //! The macro `include!`s the OUT_DIR scaffold emitted by
-//! `sdk_test_harness_setup::java::run_all` (`build.rs`).
+//! `sdk_test_codegen::java::run_all` (`build.rs`).
 //!
 //! Every test is `#[ignore]`d while `sdkgen_java` is a stub; tests are
 //! un-ignored capability by capability as the Java bridge lands (see

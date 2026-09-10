@@ -1,3 +1,3 @@
 fn main() {
-    sdk_test_harness_setup::csharp::run_all();
+    sdk_test_codegen::csharp::run_all();
 }

@@ -58,7 +58,7 @@ fails to *compile* (unlike pytest/vitest, where it just fails), so ported
 Rust tests are compiled only when the capability they exercise has landed:
 `generated/tests/main.rs` declares the enabled files as `#[path]` modules
 and lists the rest as `// LATER(<reason>)` comments. The single source of
-truth is the `TEST_MODS` table in `sdk_tests/harness_setup/src/rust.rs` —
+truth is the `TEST_MODS` table in `sdk_tests/codegen/src/rust.rs` —
 enabling a port is a one-line flip there.
 
 ## SDK implementation
@@ -146,7 +146,7 @@ sdk_tests/
     |   |       |-- customizable/         # symlinked from ../customizable/ (NOT under tests/ --
     |   |       |                         #   cargo would auto-discover gated-off ports)
     |   |       `-- tests/main.rs         # gate file: only modules declared here compile;
-    |   |                                 #   rows come from TEST_MODS in harness_setup/src/rust.rs
+    |   |                                 #   rows come from TEST_MODS in codegen/src/rust.rs
     |   |-- llm_functions/
     |   |   |-- customizable/
     |   |   `-- generated/

@@ -16,11 +16,9 @@ try {
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { throw "cargo build -p bridge_cffi failed" }
 
-    $env:BAML_ABI_PROBE_BYTECODE = Join-Path $fixtureDir "function-calls.bytecode"
-    cargo test -p sdk_test_harness_setup csharp_abi_probe_tests::emit_bridge_probe_function_calls_bytecode -- --ignored --exact
+    cargo run --quiet -p sdk_test_codegen -- emit-bytecode --fixture function_calls --out (Join-Path $fixtureDir "function-calls.bytecode")
     if ($LASTEXITCODE -ne 0) { throw "function_calls bytecode generation failed" }
 } finally {
-    Remove-Item Env:BAML_ABI_PROBE_BYTECODE -ErrorAction SilentlyContinue
     Pop-Location
 }
 

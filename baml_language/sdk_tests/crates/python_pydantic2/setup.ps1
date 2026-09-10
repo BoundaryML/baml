@@ -19,7 +19,7 @@ $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 $SdkPy = Join-Path $WorkspaceRoot 'sdks\python'
 
 # Shared uv cache under target/, matching the UV_CACHE_DIR the emitted
-# tests thread through (run_test_cmd / CACHE_ENV_VAR in harness_setup).
+# tests thread through (run_test_cmd / CACHE_ENV_VAR in codegen).
 $env:UV_CACHE_DIR = Join-Path $WorkspaceRoot 'target\uv-cache'
 New-Item -ItemType Directory -Force -Path $env:UV_CACHE_DIR | Out-Null
 
@@ -97,7 +97,7 @@ Get-ChildItem -Directory | ForEach-Object {
 # script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV, so the
 # var stays unset and the guard fails with a helpful message. Keep the
 # var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/python_pydantic2.rs.
+# codegen/src/python_pydantic2.rs.
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_PYTHON_PYDANTIC2_SETUP=1'
 }

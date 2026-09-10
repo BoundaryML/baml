@@ -1,5 +1,5 @@
 // Per-fixture Gradle build for the sdk_test_java crate. Written
-// verbatim by `sdk_test_harness_setup::java::codegen_fixture` into
+// verbatim by `sdk_test_codegen::java::codegen_fixture` into
 // `crates/java/<fixture>/generated/`.
 //
 // Source layout inside `generated/`:

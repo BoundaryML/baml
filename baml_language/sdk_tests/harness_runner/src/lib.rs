@@ -1,14 +1,14 @@
 //! Test-side runtime for the `sdk_tests/crates/<generator>/` crates.
 //! Wired in as `[dev-dependencies]` while the sibling
-//! `sdk_test_harness_setup` crate is wired in as
+//! `sdk_test_codegen` crate is wired in as
 //! `[build-dependencies]`.
 //!
 //! The scaffold emitted by
-//! `sdk_test_harness_setup::<generator>::run_all` is a sequence of
+//! `sdk_test_codegen::<generator>::run_all` is a sequence of
 //! macro / function invocations against this crate:
 //!
 //! ```text
-//! // OUT_DIR/<generator>_tests.rs (emitted by sdk_test_harness_setup)
+//! // OUT_DIR/<generator>_tests.rs (emitted by sdk_test_codegen)
 //! ::sdk_test_harness_runner::build_diagnostics!();          // or: !(ignore = "…")
 //! ::sdk_test_harness_runner::setup_guard!("SDK_TEST_…_SETUP"); // asserts setup.sh ran
 //!
@@ -527,13 +527,13 @@ fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
 }
 
 /// Read `$OUT_DIR/build_diagnostics.txt` (the file
-/// [`sdk_test_harness_setup::BuildDiagnostics::finalize`] writes) and panic
+/// [`sdk_test_codegen::BuildDiagnostics::finalize`] writes) and panic
 /// with the records if non-empty. Called from inside the
 /// `mod build_diagnostics { #[test] fn no_build_failures }` block
 /// the [`build_diagnostics!`] macro expands to — `out_dir` is
 /// `env!("OUT_DIR")` resolved at the macro's call site, so it
 /// points at the *generator crate's* OUT_DIR (where
-/// `sdk_test_harness_setup` wrote the file).
+/// `sdk_test_codegen` wrote the file).
 #[doc(hidden)]
 pub fn __check_build_diagnostics(out_dir: &str) {
     let path = format!("{out_dir}/build_diagnostics.txt");
@@ -578,7 +578,7 @@ pub fn __check_setup_ran(env_var: &str) {
 
 /// Emit the `mod setup_guard { #[test] fn ran }` test that asserts
 /// the per-generator setup script ran this test run (via
-/// [`__check_setup_ran`]). `sdk_test_harness_setup`'s scaffold
+/// [`__check_setup_ran`]). `sdk_test_codegen`'s scaffold
 /// emitter stamps one invocation per generator scaffold, passing the
 /// env var that generator's `setup.sh` writes to `$NEXTEST_ENV`:
 ///
@@ -614,7 +614,7 @@ macro_rules! setup_guard {
 /// Emit the shared `mod build_diagnostics { #[test] fn
 /// no_build_failures }` test that reads
 /// `$OUT_DIR/build_diagnostics.txt` and fails with the records.
-/// `sdk_test_harness_setup`'s scaffold emitter stamps one invocation per
+/// `sdk_test_codegen`'s scaffold emitter stamps one invocation per
 /// generator scaffold:
 ///
 /// ```text
@@ -627,7 +627,7 @@ macro_rules! setup_guard {
 ///
 /// `env!("OUT_DIR")` inside the expansion resolves at the macro's
 /// call site (i.e. inside the generator crate's test compilation),
-/// so the path lines up with where `sdk_test_harness_setup` wrote the file.
+/// so the path lines up with where `sdk_test_codegen` wrote the file.
 #[macro_export]
 macro_rules! build_diagnostics {
     () => {
@@ -655,7 +655,7 @@ macro_rules! build_diagnostics {
 pub mod python_pydantic2 {
     /// `include!`s `OUT_DIR/python_pydantic2_tests.rs` — the
     /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::python_pydantic2::run_all`.
+    /// `sdk_test_codegen::python_pydantic2::run_all`.
     #[macro_export]
     macro_rules! python_pydantic2_test_suite {
         () => {
@@ -671,7 +671,7 @@ pub mod python_pydantic2 {
 /// `sdk_test_harness_runner::java::test_suite!()`.
 pub mod java {
     /// `include!`s `OUT_DIR/java_tests.rs` — the per-fixture scaffold
-    /// emitted by `sdk_test_harness_setup::java::run_all`.
+    /// emitted by `sdk_test_codegen::java::run_all`.
     #[macro_export]
     macro_rules! java_test_suite {
         () => {
@@ -687,7 +687,7 @@ pub mod java {
 /// `sdk_test_harness_runner::swift::test_suite!()`.
 pub mod swift {
     /// `include!`s `OUT_DIR/swift_tests.rs` — the per-fixture
-    /// scaffold emitted by `sdk_test_harness_setup::swift::run_all`.
+    /// scaffold emitted by `sdk_test_codegen::swift::run_all`.
     #[macro_export]
     macro_rules! swift_test_suite {
         () => {
@@ -702,7 +702,7 @@ pub mod swift {
 /// `sdk_test_harness_runner::cpp::test_suite!()`.
 pub mod cpp {
     /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
-    /// by `sdk_test_harness_setup::cpp::run_all`.
+    /// by `sdk_test_codegen::cpp::run_all`.
     #[macro_export]
     macro_rules! cpp_test_suite {
         () => {
@@ -718,7 +718,7 @@ pub mod cpp {
 /// `sdk_test_harness_runner::rust::test_suite!()`.
 pub mod rust {
     /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
-    /// emitted by `sdk_test_harness_setup::rust::run_all`.
+    /// emitted by `sdk_test_codegen::rust::run_all`.
     #[macro_export]
     macro_rules! rust_test_suite {
         () => {
@@ -735,7 +735,7 @@ pub mod rust {
 pub mod typescript {
     /// `include!`s `OUT_DIR/typescript_tests.rs` — the
     /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::typescript::run_all`.
+    /// `sdk_test_codegen::typescript::run_all`.
     #[macro_export]
     macro_rules! typescript_test_suite {
         () => {
@@ -762,7 +762,7 @@ pub mod go {
 /// `crates/typescript_web/src/lib.rs`.
 pub mod typescript_web {
     /// `include!`s `OUT_DIR/typescript_web_tests.rs`, emitted by
-    /// `sdk_test_harness_setup::typescript_web::run_all_from_typescript_sources`.
+    /// `sdk_test_codegen::typescript_web::run_all_from_typescript_sources`.
     #[macro_export]
     macro_rules! typescript_web_test_suite {
         () => {

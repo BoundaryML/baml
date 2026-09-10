@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CMake compile-and-run driver for one C++ sdk-test fixture. Written into
-# <fixture>/generated/ by sdk_test_harness_setup::cpp; test sources come
+# <fixture>/generated/ by sdk_test_codegen::cpp; test sources come
 # from the customizable/ overlay (tests/*.cc), the typed SDK from
 # baml_sdk/ (emitted by sdkgen_cpp, consumed exactly like an end user:
 # add_subdirectory + baml::sdk, which builds the pinned protobuf-lite

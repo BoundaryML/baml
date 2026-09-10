@@ -83,7 +83,7 @@ Get-ChildItem -Directory | ForEach-Object {
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
 # "setup.sh guard" section of ..\..\README.md for the format and
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/typescript.rs.
+# codegen/src/typescript.rs.
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_TYPESCRIPT_SETUP=1'
 }

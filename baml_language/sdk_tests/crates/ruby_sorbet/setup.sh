@@ -15,10 +15,9 @@ mkdir -p "$FIXTURE_DIR"
 (
   cd "$WORKSPACE_ROOT"
   cargo build -p bridge_cffi
-  BAML_ABI_PROBE_BYTECODE="$FIXTURE_DIR/function-calls.bytecode" \
-    cargo test -p sdk_test_harness_setup \
-      csharp_abi_probe_tests::emit_bridge_probe_function_calls_bytecode \
-      -- --ignored --exact
+  cargo run --quiet -p sdk_test_codegen -- \
+    emit-bytecode --fixture function_calls \
+    --out "$FIXTURE_DIR/function-calls.bytecode"
 )
 
 if [[ "$(uname -s)" == "Darwin" ]]; then

@@ -5,7 +5,7 @@
 # per fixture (swift build --build-tests, swift test) plus the shared
 # `build_diagnostics::no_build_failures` test.
 #
-# `sdk_test_harness_setup` runs at build time (codegen + scaffold
+# `sdk_test_codegen` runs at build time (codegen + scaffold
 # emit); `sdk_test_harness_runner` runs at test time. The native
 # XCFramework build lives in setup.sh (fired by `cargo nextest run`
 # on macOS via .config/nextest.toml), NOT in build.rs.
@@ -16,7 +16,7 @@ edition = "2021"
 publish = false
 
 [build-dependencies]
-sdk_test_harness_setup = { path = "../../harness_setup" }
+sdk_test_codegen = { path = "../../codegen" }
 
 [dev-dependencies]
 sdk_test_harness_runner = { path = "../../harness_runner" }

@@ -3,6 +3,6 @@
 //! `build_diagnostics::no_build_failures` — is generated below by
 //! `sdk_test_harness_runner::typescript::test_suite!()`. The
 //! macro `include!`s the OUT_DIR scaffold emitted by
-//! `sdk_test_harness_setup::typescript::run_all` (`build.rs`).
+//! `sdk_test_codegen::typescript::run_all` (`build.rs`).
 #[cfg(test)]
 sdk_test_harness_runner::typescript::test_suite!();
