@@ -2490,6 +2490,7 @@ mod tests {
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
                 builtin_kind: None,
+                builtin_defaults: Vec::new(),
                 target,
                 linkability: ExternalLinkability::Linkable,
             }

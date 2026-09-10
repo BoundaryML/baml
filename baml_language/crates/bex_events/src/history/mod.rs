@@ -1,11 +1,12 @@
-//! Non-profile host history for run lifecycle and structured logs.
+//! Host run lifecycle history and compatibility readers for older log artifacts.
 //!
-//! Profiling data lives exclusively in `profiles-v1`. This module retains the
-//! mixed `.bamlvalue` container only for `RunStarted`, `RunCompleted`, log
-//! bodies, and log capture loss; it never reads or writes stack/profile data.
+//! New logs use the shared evidence/CAS store. Lifecycle records remain separate.
 
 #[cfg(not(target_arch = "wasm32"))]
-pub mod boundary_writer;
+mod lifecycle_writer;
+pub mod logs;
+#[cfg(not(target_arch = "wasm32"))]
+const LOG_STORE_LINK: &str = "log-store-v1.json";
 #[cfg(not(target_arch = "wasm32"))]
 pub mod path;
 
@@ -19,11 +20,13 @@ use std::{io, path::Path};
 
 #[cfg(not(target_arch = "wasm32"))]
 use self::{
-    boundary_writer::{BoundaryWriter, SegmentRotationPolicy},
+    lifecycle_writer::LifecycleWriter,
     path::{
         BoundaryHistoryPath, build_boundary_history_path, find_boundary_dir, list_boundary_dirs,
     },
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::run::RunOutcome;
 use crate::{
     ids::BoundaryId,
     run::{
@@ -35,11 +38,6 @@ use crate::{
         BlobRef, BlobStore, CaptureLossRecord, RunCompletedRecord, RunStartedRecord, ValueCodec,
         ValueFileRecord, read_bamlvalue_from_bytes,
     },
-};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::{
-    run::RunOutcome,
-    value::{LogEventRecord, ValueWriteOutcome},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,7 +93,7 @@ pub struct HistoryStore {
 #[derive(Debug)]
 struct HistoryStoreInner {
     search_roots: Vec<PathBuf>,
-    rotation_policy: SegmentRotationPolicy,
+    log_store_root: Option<PathBuf>,
     boundaries: HashMap<BoundaryId, BoundaryState>,
 }
 
@@ -103,7 +101,7 @@ struct HistoryStoreInner {
 struct BoundaryState {
     path: BoundaryHistoryPath,
     started: RunStartedRecord,
-    writer: BoundaryWriter,
+    writer: LifecycleWriter,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -123,10 +121,19 @@ impl HistoryStore {
         Self {
             inner: Arc::new(Mutex::new(HistoryStoreInner {
                 search_roots,
-                rotation_policy: SegmentRotationPolicy::default(),
+                log_store_root: None,
                 boundaries: HashMap::new(),
             })),
         }
+    }
+
+    #[must_use]
+    pub fn with_log_store_root(self, root: PathBuf) -> Self {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .log_store_root = Some(root);
+        self
     }
 
     pub fn begin(
@@ -144,13 +151,19 @@ impl HistoryStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut writer = BoundaryWriter::create_with_rotation_policy(
-            path.clone(),
-            start.boundary_id,
-            start.created_at_ms,
-            inner.rotation_policy,
-        )?;
+        let writer = LifecycleWriter::new(path.clone(), start.boundary_id);
         writer.write_run_started(&started)?;
+        if let Some(root) = &inner.log_store_root {
+            let root = if root.is_absolute() {
+                root.clone()
+            } else {
+                std::env::current_dir()?.join(root)
+            };
+            std::fs::write(
+                path.boundary_dir.join(LOG_STORE_LINK),
+                serde_json::to_vec(&root).map_err(io::Error::other)?,
+            )?;
+        }
         if !inner.search_roots.contains(&path.project_root) {
             inner.search_roots.push(path.project_root.clone());
         }
@@ -163,50 +176,6 @@ impl HistoryStore {
             },
         );
         Ok(())
-    }
-
-    pub fn append_log_body(
-        &self,
-        boundary_id: BoundaryId,
-        event: LogEventRecord,
-        codec: ValueCodec,
-        body: Vec<u8>,
-    ) -> io::Result<ValueWriteOutcome> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let state = inner.boundaries.get_mut(&boundary_id).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "history boundary {} was not begun",
-                    boundary_id.to_wire_string()
-                ),
-            )
-        })?;
-        state.writer.append_log_body(event, codec, body)
-    }
-
-    pub fn append_capture_loss(
-        &self,
-        boundary_id: BoundaryId,
-        record: &CaptureLossRecord,
-    ) -> io::Result<()> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let state = inner.boundaries.get_mut(&boundary_id).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "history boundary {} was not begun",
-                    boundary_id.to_wire_string()
-                ),
-            )
-        })?;
-        state.writer.append_capture_loss(record)
     }
 
     pub fn complete(
@@ -223,11 +192,10 @@ impl HistoryStore {
         // Remove first: a completion that fails to write must not leave the
         // boundary (and its open writer) parked in the map forever. The
         // error still reaches the caller.
-        let Some(mut state) = inner.boundaries.remove(&boundary_id) else {
+        let Some(state) = inner.boundaries.remove(&boundary_id) else {
             return Ok(());
         };
         state.writer.write_run_completed(&record)?;
-        state.writer.flush()?;
         Ok(())
     }
 
@@ -274,7 +242,26 @@ impl HistoryStore {
                     ),
                 )
             })?;
-        open_boundary_from_dir(&dir)
+        let mut run = open_boundary_from_dir(&dir)?;
+        match read_shared_log_history(&dir, boundary_id, &search_roots) {
+            Ok(Some((payloads, incomplete))) => {
+                if !payloads.is_empty() {
+                    run.payloads = payloads;
+                }
+                if incomplete {
+                    run.diagnostics.push(history_diagnostic(
+                        "logHistoryIncomplete",
+                        "Some captured history records or values are unavailable".to_owned(),
+                    ));
+                }
+            }
+            Ok(None) => {}
+            Err(error) => run.diagnostics.push(history_diagnostic(
+                "logHistoryUnavailable",
+                format!("Could not read shared log history: {error}"),
+            )),
+        }
+        Ok(run)
     }
 
     pub fn read_value(
@@ -307,10 +294,140 @@ impl HistoryStore {
         let Some(dir) = known_dir.or_else(|| find_boundary_dir(&search_roots, boundary_id)) else {
             return Ok(HistoryValueReadResult::Missing);
         };
+        if let Some(cid) = logs::value_ref_cid(value_ref_id) {
+            return read_shared_log_value(&dir, boundary_id, cid, &search_roots);
+        }
         let value_segments = read_value_segments(&dir)?;
         let blob_store = BlobStore::for_boundary_dir(&dir);
         read_value_from_segments_with_blobs_result(&value_segments, value_ref_id, Some(&blob_store))
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn shared_log_reader(
+    boundary_dir: &Path,
+    boundary_id: BoundaryId,
+    search_roots: &[PathBuf],
+) -> io::Result<Option<crate::prof::backend::ExecutionReader>> {
+    use crate::prof::backend::{ProfilerSession, StreamReader, list_executions};
+
+    let project_root = boundary_dir.ancestors().nth(3).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid lifecycle history directory",
+        )
+    })?;
+    let mut roots = Vec::new();
+    match std::fs::read(boundary_dir.join(LOG_STORE_LINK)) {
+        Ok(bytes) => {
+            let root: PathBuf = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+            if !root.is_absolute() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "log store path must be absolute",
+                ));
+            }
+            roots.push(root);
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    for root in std::iter::once(project_root).chain(search_roots.iter().map(PathBuf::as_path)) {
+        let root = ProfilerSession::resolve_store_root(root);
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+    for root in roots {
+        if !root.exists() {
+            continue;
+        }
+        let executions =
+            list_executions(&root).map_err(|error| io::Error::other(format!("{error:?}")))?;
+        if let Some(execution) = executions
+            .into_iter()
+            .find(|execution| execution.runtime_id == Some(boundary_id))
+        {
+            return StreamReader::open(&root, execution.stream)
+                .and_then(|reader| reader.execution(execution.id))
+                .map(Some)
+                .map_err(|error| io::Error::other(format!("{error:?}")));
+        }
+    }
+    Ok(None)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_shared_log_history(
+    boundary_dir: &Path,
+    boundary_id: BoundaryId,
+    search_roots: &[PathBuf],
+) -> io::Result<Option<(Vec<PayloadEvent>, bool)>> {
+    use crate::prof::backend::{DataState, ValueState};
+
+    let Some(reader) = shared_log_reader(boundary_dir, boundary_id, search_roots)? else {
+        return Ok(None);
+    };
+    let mut profile = reader
+        .load()
+        .map_err(|error| io::Error::other(format!("{error:?}")))?;
+    let incomplete = !matches!(profile.data_state, DataState::Complete)
+        || profile.logs.iter().any(|log| {
+            matches!(log.data, ValueState::Lost(_)) || matches!(log.context, ValueState::Lost(_))
+        })
+        || profile.summary.health.is_some_and(|health| {
+            health.value_attempt_transport_exceeded > 0
+                || health.structural_transport_exceeded > 0
+                || health.evidence_segment_publish_failed > 0
+                || health.evidence_queue_full > 0
+        });
+    profile.logs.sort_by_key(|log| log.timestamp_ms);
+    let payloads = profile
+        .logs
+        .iter()
+        .enumerate()
+        .map(|(index, log)| logs::log_payload(log, index))
+        .collect();
+    Ok(Some((payloads, incomplete)))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_shared_log_value(
+    boundary_dir: &Path,
+    boundary_id: BoundaryId,
+    cid: crate::prof::backend::ValueCid,
+    search_roots: &[PathBuf],
+) -> io::Result<HistoryValueReadResult> {
+    use crate::prof::backend::ValueState;
+
+    let Some(reader) = shared_log_reader(boundary_dir, boundary_id, search_roots)? else {
+        return Ok(HistoryValueReadResult::Missing);
+    };
+    let profile = reader
+        .load()
+        .map_err(|error| io::Error::other(format!("{error:?}")))?;
+    let belongs_to_run = profile.logs.iter().any(|log| {
+        [log.data, log.context].into_iter().any(|state| {
+            matches!(state, ValueState::Available { cid: value_cid, .. } if value_cid == cid)
+        })
+    });
+    if !belongs_to_run {
+        return Ok(HistoryValueReadResult::Missing);
+    }
+    Ok(match reader.read_value(cid) {
+        Ok(value) if value.codec.0 == 1 => HistoryValueReadResult::Available(HistoryValueBody {
+            codec: ValueCodec::BamlOutboundValue,
+            body: value.body,
+        }),
+        Ok(value) => HistoryValueReadResult::BodyUnavailable(HistoryValueBodyUnavailable {
+            reason: HistoryValueBodyUnavailableReason::BlobInvalid,
+            diagnostic: format!("unsupported log value codec {}", value.codec.0),
+        }),
+        Err(error) => HistoryValueReadResult::BodyUnavailable(HistoryValueBodyUnavailable {
+            reason: HistoryValueBodyUnavailableReason::BlobInvalid,
+            diagnostic: format!("shared log value is unavailable: {error:?}"),
+        }),
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -801,7 +918,7 @@ mod tests {
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    use super::{HistoryStore, HistoryValueReadResult};
+    use super::HistoryStore;
     use crate::{
         ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
         run::{
@@ -821,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn lifecycle_and_log_round_trip_without_profile_segments() {
+    fn lifecycle_round_trip_does_not_write_log_storage() {
         let project = temp_dir();
         std::fs::create_dir_all(&project).unwrap();
         let boundary_id = BoundaryId::from_bytes([8; 16]);
@@ -846,25 +963,6 @@ mod tests {
         };
         let store = HistoryStore::new(vec![project.clone()]);
         store.begin(&project, &start).unwrap();
-        let outcome = store
-            .append_log_body(
-                boundary_id,
-                LogEventRecord {
-                    call: TraceCallKey {
-                        process_euid: ProcessEuid([1; 16]),
-                        engine_id: EngineId(2),
-                        thread_id: BexThreadId(3),
-                        call_id: BexCallId(4),
-                    },
-                    level: Some("info".to_string()),
-                    source: None,
-                    timestamp_ms: 11,
-                    message_preview: Some("hello".to_string()),
-                },
-                ValueCodec::BamlOutboundValue,
-                vec![1, 2, 3],
-            )
-            .unwrap();
         store
             .complete(
                 boundary_id,
@@ -879,19 +977,18 @@ mod tests {
             .unwrap();
 
         let run = store.open(boundary_id).unwrap();
-        assert_eq!(run.payloads.len(), 1);
-        let HistoryValueReadResult::Available(body) = store
-            .read_value_result(boundary_id, &outcome.value_ref.id)
-            .unwrap()
-        else {
-            panic!("log body should be available");
-        };
-        assert_eq!(body.body, vec![1, 2, 3]);
-        assert!(
-            !walk_files(&project)
-                .iter()
-                .any(|path| path.extension().and_then(|ext| ext.to_str()) == Some("bamlprof"))
-        );
+        assert!(run.payloads.is_empty());
+        assert_eq!(run.status, crate::run::RunStatus::Succeeded);
+        assert!(!project.join(".baml/profiles-v1").exists());
+        for path in walk_files(&project) {
+            let bytes = std::fs::read(path).unwrap();
+            let values = crate::value::read_bamlvalue_from_bytes(&bytes).unwrap();
+            assert!(values.records.iter().all(|record| matches!(
+                record,
+                crate::value::ValueFileRecord::RunStarted(_)
+                    | crate::value::ValueFileRecord::RunCompleted(_)
+            )));
+        }
         let _ = std::fs::remove_dir_all(project);
     }
 
@@ -933,7 +1030,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_orders_logs_chronologically_across_threads() {
+    fn legacy_log_replay_preserves_chronology_across_threads() {
         let project = temp_dir();
         std::fs::create_dir_all(&project).unwrap();
         let boundary_id = BoundaryId::from_bytes([9; 16]);
@@ -947,14 +1044,28 @@ mod tests {
             (2, 20, "t2-a"),
             (2, 40, "t2-b"),
         ] {
-            store
-                .append_log_body(
-                    boundary_id,
-                    log_record(thread, ts, msg),
-                    ValueCodec::BamlOutboundValue,
-                    vec![0],
-                )
-                .unwrap();
+            let path =
+                super::path::build_boundary_history_path(&project, &start_context(boundary_id))
+                    .value_segment_path(thread, ts);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut bytes = Vec::new();
+            crate::value::encode::encode_header(&mut bytes, boundary_id).unwrap();
+            crate::value::encode::encode_log_event(
+                &mut bytes,
+                &crate::value::LogRecord {
+                    value_ref: crate::value::ValueRef::available(
+                        format!("legacy-{thread}-{ts}"),
+                        ValueCodec::BamlOutboundValue,
+                        1,
+                        1,
+                    ),
+                    body: vec![0],
+                    blob_ref: None,
+                    event: log_record(thread, ts, msg),
+                },
+            )
+            .unwrap();
+            std::fs::write(path, bytes).unwrap();
         }
         store
             .complete(
@@ -1012,10 +1123,6 @@ mod tests {
         std::fs::create_dir_all(&project).unwrap();
         let boundary_id = BoundaryId::from_bytes([7; 16]);
         let store = HistoryStore::new(vec![project.clone()]);
-        // Rotate on every record so the completion must create a new segment
-        // file; then make that creation impossible.
-        store.inner.lock().unwrap().rotation_policy =
-            super::boundary_writer::SegmentRotationPolicy::with_max_records(1);
         store.begin(&project, &start_context(boundary_id)).unwrap();
         let boundary_dir = {
             let inner = store.inner.lock().unwrap();

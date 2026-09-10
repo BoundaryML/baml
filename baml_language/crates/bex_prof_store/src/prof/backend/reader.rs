@@ -20,9 +20,9 @@ use fs2::FileExt;
 use super::{
     CctCounters, ContextKey, ContextRef, ContextTuple, CounterHealth, DecodedCasObject, EdgeKind,
     ErrorCapture, ErrorCaptureId, EvidenceFact, ExecutionEndStatus, ExecutionHealthSnapshot,
-    FunctionTable, MetaRecord, OverflowReason, Plane, SegmentReadError, SpanEnd, SpanRuntimeId,
-    SpanStart, StreamHighWater, StreamId, TerminalErrorRef, TerminalErrorTarget, ThreadEnd,
-    ThreadStart, ThrowSite, ValueCid, ValueOccurrence, ValueRole, decode_cas_object,
+    FunctionTable, LogEvent, MetaRecord, OverflowReason, Plane, SegmentReadError, SpanEnd,
+    SpanRuntimeId, SpanStart, StreamHighWater, StreamId, TerminalErrorRef, TerminalErrorTarget,
+    ThreadEnd, ThreadStart, ThrowSite, ValueCid, ValueOccurrence, ValueRole, decode_cas_object,
     decode_data_segment, decode_function_table, decode_meta_segment, segment_path,
     stream_directory, stream_open_in_process,
 };
@@ -50,6 +50,7 @@ pub enum ReadError {
     CyclicContextChain(ContextKey),
     DuplicateSpanStart(CallRef),
     DuplicateSpanEnd(CallRef),
+    DuplicateCallScope(CallRef),
     DuplicateValueOccurrence {
         call_ref: CallRef,
         role: ValueRole,
@@ -610,6 +611,8 @@ pub struct SpanEvidence {
     pub input: Option<ValueOccurrence>,
     pub output: Option<ValueOccurrence>,
     pub terminal_error: Option<TerminalErrorRef>,
+    /// `None` means attribution was not captured, not an empty scope.
+    pub scope: Option<super::CallScope>,
 }
 
 /// Tolerant thread lifecycle evidence (streams spec §4.5): a missing start
@@ -644,6 +647,7 @@ pub struct ExecutionProfile {
     pub thread_issues: Vec<ThreadIssue>,
     pub spans: HashMap<CallRef, SpanEvidence>,
     pub errors: HashMap<ErrorCaptureId, ErrorCapture>,
+    pub logs: Vec<LogEvent>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -714,6 +718,7 @@ impl ExecutionReader {
             thread_issues: Vec::new(),
             spans: HashMap::new(),
             errors: HashMap::new(),
+            logs: Vec::new(),
         };
         let mut segments_with_group = 0u64;
         if let Some(range) = range {
@@ -941,6 +946,14 @@ fn merge_evidence(
                 if thread.end.replace(end).is_some() {
                     return Err(ReadError::DuplicateThreadEnd(end.thread_ref));
                 }
+            }
+            EvidenceFact::LogEvent(log) => profile.logs.push(log),
+            EvidenceFact::CallScope(scope) => {
+                let span = profile.spans.entry(scope.call_ref).or_default();
+                if span.scope.is_some() {
+                    return Err(ReadError::DuplicateCallScope(scope.call_ref));
+                }
+                span.scope = Some(scope);
             }
         }
     }

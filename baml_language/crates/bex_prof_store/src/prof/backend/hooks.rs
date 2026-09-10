@@ -47,7 +47,6 @@ pub(crate) fn wake_for_backend_terminal() {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn configure_transport(
     memory: ProfilerMemoryGovernor,
     segment_bytes: u64,

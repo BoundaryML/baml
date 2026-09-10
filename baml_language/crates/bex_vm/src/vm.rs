@@ -253,6 +253,19 @@ pub trait VmCallInputCaptureHook: Send + Sync {
     fn capture_call_input(&self, capture: VmCallInputCapture<'_>);
 }
 
+pub struct VmCallScopeCapture<'a> {
+    pub call: TraceCallKey,
+    pub scope: &'a Arc<bex_events::prof::backend::ScopeContext>,
+    pub ring: Option<&'static bex_events::prof::Ring>,
+    pub manual: bool,
+}
+
+/// Runs synchronously on the current producer. The cached ring must not be
+/// written from another thread or retained for later publication.
+pub trait VmCallScopeCaptureHook: Send + Sync {
+    fn capture_call_scope(&self, capture: VmCallScopeCapture<'_>);
+}
+
 impl VmCaptureMask {
     #[must_use]
     pub const fn disabled() -> Self {
@@ -519,6 +532,7 @@ pub(crate) mod tests {
             error_class_ptrs: Arc::from(Vec::new()),
             panic_class_ptrs: Arc::from(Vec::new()),
             prof_ring: None,
+            log_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
             profiler_session: None,
@@ -535,6 +549,10 @@ pub(crate) mod tests {
             pending_error_captures: Vec::new(),
             prof_unwind_ordinal: 0,
             call_input_capture_hook: None,
+            call_scope_capture_hook: None,
+            inherited_scope_context: Arc::default(),
+            scope_overrides: Vec::new(),
+            pending_sysop_scope_call_id: None,
             thrown_value_causes: Vec::new(),
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
@@ -556,6 +574,97 @@ pub(crate) mod tests {
         };
         let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
         ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1)
+    }
+
+    #[test]
+    fn scope_snapshots_inherit_without_copy_and_restore_on_all_exits() {
+        use bex_events::prof::{
+            backend::{CapturePlan, ScopeContextPatch},
+            record::FunctionEndStatus,
+        };
+
+        let mut parent = test_vm(Vec::new());
+        let root = Arc::clone(parent.scope_context());
+        let (call, caller, _) = parent.prof_enter_call(0, None, CapturePlan::default());
+        parent.install_scope_patch(
+            call,
+            &ScopeContextPatch {
+                distinct_id: Some("parent".into()),
+                ..ScopeContextPatch::default()
+            },
+        );
+        let spawned = Arc::clone(parent.scope_context());
+        let (inner, _, _) = parent.prof_enter_call(0, None, CapturePlan::default());
+        assert!(Arc::ptr_eq(&spawned, parent.scope_context()));
+        parent.install_scope_patch(
+            inner,
+            &ScopeContextPatch {
+                distinct_id: Some("inner".into()),
+                ..ScopeContextPatch::default()
+            },
+        );
+        parent.prof_exit_call(inner, call, FunctionEndStatus::Errored);
+        assert!(Arc::ptr_eq(&spawned, parent.scope_context()));
+        parent.prof_exit_call(call, caller, FunctionEndStatus::Cancelled);
+        assert!(Arc::ptr_eq(&root, parent.scope_context()));
+        let mut child = test_vm(Vec::new());
+        child.set_inherited_scope_context(Arc::clone(&spawned));
+        assert!(Arc::ptr_eq(&spawned, child.scope_context()));
+
+        let (sysop, _) =
+            child.prof_enter_sysop(0, None, CapturePlan::default(), VmCaptureMask::disabled());
+        child.install_scope_patch(
+            sysop,
+            &ScopeContextPatch {
+                distinct_id: Some("sysop".into()),
+                ..ScopeContextPatch::default()
+            },
+        );
+        child.pending_sysop_call_id.take();
+        assert_eq!(child.scope_context().distinct_id.as_deref(), Some("sysop"));
+        child.resume_sysop_scope();
+        assert!(Arc::ptr_eq(&spawned, child.scope_context()));
+    }
+
+    #[test]
+    fn metadata_only_selected_calls_capture_the_effective_scope() {
+        use std::sync::Mutex;
+
+        use bex_events::{
+            ids::{EngineId, ProcessEuid},
+            prof::backend::{CapturePlan, ScopeContext, ScopeContextPatch},
+        };
+
+        struct Hook(Mutex<Vec<Arc<ScopeContext>>>);
+        impl super::VmCallScopeCaptureHook for Hook {
+            fn capture_call_scope(&self, capture: super::VmCallScopeCapture<'_>) {
+                assert!(capture.ring.is_none());
+                self.0.lock().unwrap().push(Arc::clone(capture.scope));
+            }
+        }
+
+        let mut vm = test_vm(Vec::new());
+        vm.bex_ref_seed = Some((ProcessEuid([1; 16]), EngineId(1)));
+        let hook = Arc::new(Hook(Mutex::new(Vec::new())));
+        vm.set_call_scope_capture_hook(Some(hook.clone()));
+        let plan = CapturePlan {
+            selected: true,
+            ..CapturePlan::default()
+        };
+        let (call, _, _) = vm.prof_enter_call(0, None, plan);
+        vm.install_scope_patch(
+            call,
+            &ScopeContextPatch {
+                distinct_id: Some("selected".into()),
+                ..ScopeContextPatch::default()
+            },
+        );
+        vm.maybe_capture_call_scope(call, plan);
+        vm.maybe_capture_call_scope(call, CapturePlan::default());
+        let captured = hook.0.lock().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert!(Arc::ptr_eq(&captured[0], vm.scope_context()));
+        assert_eq!(captured[0].distinct_id.as_deref(), Some("selected"));
     }
 
     #[test]
@@ -1240,6 +1349,10 @@ pub struct BexVm {
     /// `None` = profiling off. Pushes go through `prof_push_record`.
     pub prof_ring: Option<&'static bex_events::prof::Ring>,
 
+    /// The same per-resume transport ring, also available when only logs are on.
+    /// Its presence does not enable call profiling.
+    pub log_ring: Option<&'static bex_events::prof::Ring>,
+
     /// Per-root execution suppression for project/catalog work that must not
     /// become visible run/profile state. `$id` call ids are still minted.
     pub prof_suppressed: bool,
@@ -1302,6 +1415,11 @@ pub struct BexVm {
 
     /// Optional engine-owned hook for approved bytecode/sys-op input snapshots.
     pub call_input_capture_hook: Option<Arc<dyn VmCallInputCaptureHook>>,
+
+    call_scope_capture_hook: Option<Arc<dyn VmCallScopeCaptureHook>>,
+    inherited_scope_context: Arc<bex_events::prof::backend::ScopeContext>,
+    scope_overrides: Vec<(u64, Arc<bex_events::prof::backend::ScopeContext>)>,
+    pending_sysop_scope_call_id: Option<u64>,
 
     /// Thrown values already observed at their origin call. Stored as values
     /// instead of raw bits so GC forwarding can preserve rethrow identity.
@@ -1928,6 +2046,7 @@ impl BexVm {
             error_class_ptrs,
             panic_class_ptrs,
             prof_ring: None,
+            log_ring: None,
             prof_suppressed: false,
             root_profiler: RootProfiler::Inactive(InactiveReason::Disabled),
             profiler_session: None,
@@ -1944,6 +2063,10 @@ impl BexVm {
             pending_error_captures: Vec::new(),
             prof_unwind_ordinal: 0,
             call_input_capture_hook: None,
+            call_scope_capture_hook: None,
+            inherited_scope_context: Arc::default(),
+            scope_overrides: Vec::new(),
+            pending_sysop_scope_call_id: None,
             thrown_value_causes: Vec::new(),
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
@@ -2082,6 +2205,74 @@ impl BexVm {
 
     pub fn set_call_input_capture_hook(&mut self, hook: Option<Arc<dyn VmCallInputCaptureHook>>) {
         self.call_input_capture_hook = hook;
+    }
+
+    pub fn set_call_scope_capture_hook(&mut self, hook: Option<Arc<dyn VmCallScopeCaptureHook>>) {
+        self.call_scope_capture_hook = hook;
+    }
+
+    pub fn scope_context(&self) -> &Arc<bex_events::prof::backend::ScopeContext> {
+        self.scope_overrides
+            .last()
+            .map_or(&self.inherited_scope_context, |(_, scope)| scope)
+    }
+
+    /// Install the snapshot captured when the child was spawned, before entry.
+    pub fn set_inherited_scope_context(
+        &mut self,
+        scope: Arc<bex_events::prof::backend::ScopeContext>,
+    ) {
+        assert_eq!(
+            self.current_call_id, 0,
+            "scope inheritance must precede entry"
+        );
+        assert!(self.scope_overrides.is_empty());
+        self.inherited_scope_context = scope;
+    }
+
+    fn install_scope_patch(
+        &mut self,
+        call_id: u64,
+        patch: &bex_events::prof::backend::ScopeContextPatch,
+    ) {
+        if !patch.is_empty() {
+            let scope = Arc::new(patch.apply(self.scope_context()));
+            self.scope_overrides.push((call_id, scope));
+        }
+    }
+
+    fn exit_scope(&mut self, call_id: u64) {
+        while self
+            .scope_overrides
+            .last()
+            .is_some_and(|(id, _)| *id >= call_id)
+        {
+            self.scope_overrides.pop();
+        }
+    }
+
+    fn resume_sysop_scope(&mut self) {
+        if let Some(call_id) = self.pending_sysop_scope_call_id.take() {
+            self.exit_scope(call_id);
+        }
+    }
+
+    fn maybe_capture_call_scope(&self, call_id: u64, capture_plan: CapturePlan) {
+        if !capture_plan.selected {
+            return;
+        }
+        let (Some(hook), Some(call)) = (
+            self.call_scope_capture_hook.as_ref(),
+            self.trace_call_key_for_call_id(call_id),
+        ) else {
+            return;
+        };
+        hook.capture_call_scope(VmCallScopeCapture {
+            call,
+            scope: self.scope_context(),
+            ring: self.prof_ring,
+            manual: capture_plan.reasons.manual(),
+        });
     }
 
     pub fn drain_call_capture_events(&mut self) -> Vec<VmCallCaptureEvent> {
@@ -2235,6 +2426,7 @@ impl BexVm {
         if call_id == 0 {
             return;
         }
+        self.install_scope_patch(call_id, &local_id.context);
         if let Some(top) = self.id_overrides.last_mut()
             && top.0 == call_id
         {
@@ -2253,6 +2445,7 @@ impl BexVm {
         if call_id == 0 {
             return;
         }
+        self.install_scope_patch(call_id, &local_id.context);
         self.prof_push_set_function_id(call_id, local_id.boundary_id.as_bytes());
     }
 
@@ -3918,6 +4111,7 @@ impl BexVm {
                 let mut capture_mask = VmCaptureMask::from_capture_plan(capture_plan);
                 let (call_id, parent_call_id, start_accepted) =
                     self.prof_enter_call(entry_function_id, None, capture_plan);
+                self.maybe_capture_call_scope(call_id, capture_plan);
                 if !start_accepted {
                     capture_mask = VmCaptureMask::disabled();
                 }
@@ -4089,6 +4283,7 @@ impl BexVm {
         let capture_plan = self.prof_resolve_capture_plan(FunctionCaptureClass::Ordinary, None);
         let mut capture_mask = VmCaptureMask::from_capture_plan(capture_plan);
         let (call_id, parent_call_id, start_accepted) = self.prof_enter_call(0, None, capture_plan);
+        self.maybe_capture_call_scope(call_id, capture_plan);
         if !start_accepted {
             capture_mask = VmCaptureMask::disabled();
         }
@@ -4174,6 +4369,7 @@ impl BexVm {
         let capture_plan = self.prof_resolve_capture_plan(FunctionCaptureClass::Ordinary, None);
         let mut capture_mask = VmCaptureMask::from_capture_plan(capture_plan);
         let (call_id, parent_call_id, start_accepted) = self.prof_enter_call(0, None, capture_plan);
+        self.maybe_capture_call_scope(call_id, capture_plan);
         if !start_accepted {
             capture_mask = VmCaptureMask::disabled();
         }
@@ -5885,6 +6081,29 @@ impl BexVm {
         committed
     }
 
+    pub fn prof_publish_log(
+        &self,
+        session: &bex_events::prof::backend::ProfilerSession,
+        log: bex_events::prof::backend::EncodedLog,
+        reservation: bex_events::prof::backend::Reservation,
+        delivery: Option<Box<dyn bex_events::prof::backend::LogDelivery>>,
+    ) -> bool {
+        session.publish_log_with_delivery(
+            self.prof_boundary_handle,
+            log,
+            reservation,
+            delivery,
+            |payload_id| {
+                self.log_ring.is_some_and(|ring| {
+                    self.prof_push_record(
+                        ring,
+                        &bex_events::prof::record::RawRecord::Log { payload_id },
+                    )
+                })
+            },
+        )
+    }
+
     fn prof_note_transport_loss(&self) {
         let (Some(session), Some(handle)) =
             (self.profiler_session.as_ref(), self.prof_boundary_handle)
@@ -5986,6 +6205,7 @@ impl BexVm {
         parent_call_id: u64,
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
+        self.exit_scope(call_id);
         self.current_call_id = parent_call_id;
         // Drop the exiting call's `$id` override (and any stale deeper
         // entries — `>=` self-heals if a frame ever pops without an exit),
@@ -6203,6 +6423,7 @@ impl BexVm {
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
         self.pending_sysop_call_id = Some(call_id);
+        self.pending_sysop_scope_call_id = Some(call_id);
         self.pending_sysop_function_id = Some(function_id);
         let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
@@ -6393,12 +6614,13 @@ impl BexVm {
         // PR4b: host-closure calls ride the sys-op pair too. No Function
         // object backs them, so function_id 0 (unassigned).
         let capture_plan = self.prof_resolve_capture_plan(FunctionCaptureClass::Ordinary, None);
-        self.prof_enter_sysop(
+        let (call_id, _) = self.prof_enter_sysop(
             0,
             call_site,
             capture_plan,
             VmCaptureMask::from_capture_plan(capture_plan),
         );
+        self.maybe_capture_call_scope(call_id, capture_plan);
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
@@ -6485,6 +6707,7 @@ impl BexVm {
         if let Some(explicit_local_id) = &explicit_local_id {
             self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
         }
+        self.maybe_capture_call_scope(call_id, capture_plan);
         let entries: Vec<(String, Value)> = call_args
             .iter()
             .enumerate()
@@ -6913,6 +7136,7 @@ impl BexVm {
                 if let Some(explicit_local_id) = &explicit_local_id {
                     self.install_consumed_local_id_for_call(call_id, explicit_local_id);
                 }
+                self.maybe_capture_call_scope(call_id, capture_plan);
                 self.maybe_capture_call_inputs(
                     &callee_param_names,
                     call_id,
@@ -7363,6 +7587,7 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        self.resume_sysop_scope();
         // Re-arm the long-running-loop detector at every yield boundary so
         // each `exec()` call starts with a fresh budget; a single `exec()`
         // call yields back to the embedder eventually (e.g. via `Await`,
@@ -7419,6 +7644,7 @@ impl BexVm {
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
+        self.resume_sysop_scope();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
             let trace = self.capture_user_stack_trace();

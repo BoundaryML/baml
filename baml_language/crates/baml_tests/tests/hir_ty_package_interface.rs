@@ -11,6 +11,52 @@ use baml_compiler2_hir_ty::{
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::TestDbExt;
 
+#[test]
+fn builtin_constant_defaults_survive_package_interfaces() {
+    use baml_base::Literal;
+    use baml_compiler2_hir_ty::callable::BuiltinDefault;
+
+    let mut db = library_db();
+    db.file(
+        "<builtin>/app/defaults.baml",
+        r#"
+function defaults(
+    required: int,
+    absent: string? = null,
+    text: string = "named",
+    number: int = 7,
+    flag: bool = true,
+    computed: int = required + 1,
+) -> void { $compiler_intrinsic }
+
+function ordinary(value: int = 7) -> int { value }
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let interface = package_interface(&db, PackageId::new(&db, Name::new("app")));
+    let bytes = borsh::to_vec(interface).expect("serialize interface");
+    let decoded: baml_compiler2_hir_ty::package_interface::PackageInterface =
+        borsh::from_slice(&bytes).expect("deserialize interface");
+    assert_eq!(&decoded, interface);
+    let functions = &decoded.functions[&Vec::<Name>::new()];
+    assert_eq!(
+        functions[&Name::new("defaults")].builtin_defaults,
+        [
+            None,
+            Some(BuiltinDefault::Null),
+            Some(BuiltinDefault::Literal(Literal::String("named".to_owned()))),
+            Some(BuiltinDefault::Literal(Literal::Int(7))),
+            Some(BuiltinDefault::Literal(Literal::Bool(true))),
+            None,
+        ]
+    );
+    assert!(
+        functions[&Name::new("ordinary")]
+            .builtin_defaults
+            .is_empty()
+    );
+}
+
 const LIBRARY: &str = r#"
 interface Parent {
     type Root = string

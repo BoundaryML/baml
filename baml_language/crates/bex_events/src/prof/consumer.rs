@@ -20,6 +20,7 @@ use crate::{
 
 pub(crate) enum ControlMsg {
     Flush(mpsc::SyncSender<()>),
+    Drain(mpsc::SyncSender<()>),
     EngineClosed(u64),
 }
 
@@ -71,6 +72,20 @@ pub fn flush_and_join(timeout: Duration) -> bool {
     ack_rx.recv_timeout(timeout).is_ok()
 }
 
+/// Wait for live delivery without forcing a disk publication cycle.
+/// Call only after releasing the VM heap permit.
+pub fn drain_logs(timeout: Duration) -> bool {
+    let Some(tx) = CONTROL_TX.get() else {
+        return true;
+    };
+    let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+    if tx.send(ControlMsg::Drain(ack_tx)).is_err() {
+        return false;
+    }
+    crate::prof::registry::global_ctx().wake().force_wake();
+    ack_rx.recv_timeout(timeout).is_ok()
+}
+
 pub fn engine_closed(engine_id: u64) {
     let Some(tx) = CONTROL_TX.get() else {
         crate::prof::backend::unregister_engine_session(EngineId(engine_id));
@@ -88,6 +103,10 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
     loop {
         while let Ok(message) = control.try_recv() {
             match message {
+                ControlMsg::Drain(ack) => {
+                    drain_to_idle(env);
+                    let _ = ack.send(());
+                }
                 ControlMsg::Flush(ack) => {
                     drain_to_idle(env);
                     // Streams spec §5.6: publish everything publishable

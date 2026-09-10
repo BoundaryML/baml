@@ -116,6 +116,8 @@ struct OnSession {
     #[cfg(not(target_arch = "wasm32"))]
     producer_commands_rx: crossbeam_channel::Receiver<DecoderCommand>,
     #[cfg(not(target_arch = "wasm32"))]
+    payloads: super::ring_payload::PayloadSlots<PendingPayload>,
+    #[cfg(not(target_arch = "wasm32"))]
     _producer_queue_reservation: Reservation,
     clock: crate::prof::clock::TickConverter,
     /// Fork guard (streams spec §5.8): the pid this session was created in.
@@ -165,6 +167,101 @@ enum DecoderCommand {
     },
 }
 
+/// Already-serialized value bodies; only the consumer publishes them to CAS.
+#[derive(Debug)]
+pub struct EncodedLog {
+    pub event: super::LogEvent,
+    pub data: Option<Vec<u8>>,
+    pub context: Option<Vec<u8>>,
+}
+
+#[derive(Debug)]
+pub struct EncodedCallScope {
+    pub call_ref: crate::ids::CallRef,
+    pub distinct_id: Option<String>,
+    pub context: Result<Vec<u8>, ValueLossReason>,
+}
+
+#[derive(Debug)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "payload slots precharge the inline maximum; boxing adds a producer allocation"
+)]
+enum PendingPayload {
+    Log(PendingLog),
+    #[cfg(not(target_arch = "wasm32"))]
+    CallScope {
+        handle: ExecutionHandle,
+        scope: EncodedCallScope,
+        reservation: Reservation,
+    },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl super::decoder::ScopeSource for OnSession {
+    fn take_scope(
+        &self,
+        expected_handle: ExecutionHandle,
+        call_ref: crate::ids::CallRef,
+    ) -> Option<(super::CallScope, Reservation)> {
+        let PendingPayload::CallScope {
+            scope, reservation, ..
+        } = self.payloads.take_matching(|payload| {
+            matches!(payload, PendingPayload::CallScope { handle, scope, .. }
+                if *handle == expected_handle && scope.call_ref == call_ref)
+        })?
+        else {
+            unreachable!("predicate selects scopes");
+        };
+        Some(ProfilerSession::decode_scope(self, scope, reservation))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ProfilerSession {
+    fn decode_scope(
+        session: &OnSession,
+        scope: EncodedCallScope,
+        mut reservation: Reservation,
+    ) -> (super::CallScope, Reservation) {
+        let context = match scope.context {
+            Ok(body) => Self::publish_value_state(session, &body, &mut reservation),
+            Err(reason) => ValueState::Lost(reason),
+        };
+        (
+            super::CallScope {
+                call_ref: scope.call_ref,
+                distinct_id: scope.distinct_id,
+                context,
+            },
+            reservation,
+        )
+    }
+}
+
+/// Receives the original owned buffers after optional CAS publication.
+/// `event` value states are CAS receipts, not evidence-commit receipts.
+/// Retain the reservation for as long as an inbox owns these buffers.
+pub trait LogDelivery: std::fmt::Debug + Send {
+    fn deliver(self: Box<Self>, log: EncodedLog, reservation: Reservation);
+}
+
+#[derive(Debug)]
+struct PendingLog {
+    #[cfg(not(target_arch = "wasm32"))]
+    handle: Option<ExecutionHandle>,
+    log: EncodedLog,
+    reservation: Reservation,
+    delivery: Option<Box<dyn LogDelivery>>,
+}
+
+#[derive(Debug)]
+struct LogCollection {
+    sizing: DerivedSizing,
+    memory: ProfilerMemoryGovernor,
+    payloads: super::ring_payload::PayloadSlots<PendingPayload>,
+}
+
 #[derive(Debug)]
 pub enum RootAdmission {
     Inactive(RootProfiler),
@@ -209,13 +306,24 @@ fn global_setup_diagnostic_cell() -> &'static OnceLock<SetupDiagnostic> {
     &DIAGNOSTIC
 }
 
+fn global_session_cell() -> &'static OnceLock<Arc<ProfilerSession>> {
+    static GLOBAL: OnceLock<Arc<ProfilerSession>> = OnceLock::new();
+    &GLOBAL
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn global_log_history_cell() -> &'static OnceLock<()> {
+    static HISTORY: OnceLock<()> = OnceLock::new();
+    &HISTORY
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AwaitClockInvalid;
 
 /// Process/store session selected once and injected into engines.
 ///
-/// `Off` is a unit variant: it has no ring, consumer, heap, lock, path, clock,
-/// lazy initializer, or synchronization field.
+/// `Off` has no call profiler or store. Live logging can independently acquire
+/// bounded memory transport through the session's lazy log collection.
 #[derive(Debug)]
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 enum SessionKind {
@@ -226,15 +334,77 @@ enum SessionKind {
 #[derive(Debug)]
 pub struct ProfilerSession {
     kind: SessionKind,
+    logs: OnceLock<Option<Box<LogCollection>>>,
 }
 
 impl ProfilerSession {
+    pub fn enable_log_collection(&self) -> bool {
+        if matches!(self.kind, SessionKind::On(_)) {
+            return true;
+        }
+        self.logs
+            .get_or_init(|| {
+                let sizing = super::ProfilerSizingPolicy::derive(
+                    ProfilerConfig::default().process_memory_bytes,
+                    MeasuredLayouts::V1,
+                )
+                .ok()?;
+                let memory = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+                let payloads =
+                    super::ring_payload::PayloadSlots::new(sizing.producer_queue_slots, &memory)
+                        .ok()?;
+                Some(Box::new(LogCollection {
+                    sizing,
+                    memory,
+                    payloads,
+                }))
+            })
+            .is_some()
+    }
+
+    pub fn is_collecting_logs(&self) -> bool {
+        matches!(self.kind, SessionKind::On(_)) || self.logs.get().is_some_and(Option::is_some)
+    }
+
+    pub fn is_log_history_enabled(&self) -> bool {
+        matches!(self.kind, SessionKind::On(_))
+    }
+
+    pub fn reserve_log_work(&self) -> Result<Reservation, ValueLossReason> {
+        self.memory()
+            .ok_or(ValueLossReason::StoreUnavailable)?
+            .try_reserve(
+                ReservationClass::General,
+                Owner::Values,
+                MeasuredLayouts::V1.value_root_min_bytes,
+            )
+            .map_err(|_| ValueLossReason::ValueMemoryExceeded)
+    }
+
+    pub fn single_log_bytes(&self) -> Option<u64> {
+        self.sizing().map(|sizing| sizing.single_value_bytes)
+    }
+
     /// Constructs a session from the configuration. Invalid memory budgets
     /// fail to the state-free off variant and one diagnostic.
     #[must_use]
     #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_pass_by_value))]
     pub fn from_config(config: ProfilerConfig) -> (Arc<Self>, Option<SetupDiagnostic>) {
         Self::from_config_impl(config, None)
+    }
+
+    /// Explicit host opt-in to storing logs, without enabling call profiling.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_config_with_log_history(
+        mut config: ProfilerConfig,
+    ) -> (Arc<Self>, Option<SetupDiagnostic>) {
+        let profile_calls = config.enabled;
+        config.enabled = true;
+        let (mut session, diagnostic) = Self::from_config(config);
+        if let SessionKind::On(on) = &mut Arc::get_mut(&mut session).expect("new session").kind {
+            on.config.enabled = profile_calls;
+        }
+        (session, diagnostic)
     }
 
     /// Test seam: construct with an injected store platform (fault
@@ -262,6 +432,7 @@ impl ProfilerSession {
             return (
                 Arc::new(Self {
                     kind: SessionKind::Off,
+                    logs: OnceLock::new(),
                 }),
                 None,
             );
@@ -269,6 +440,7 @@ impl ProfilerSession {
         (
             Arc::new(Self {
                 kind: SessionKind::Off,
+                logs: OnceLock::new(),
             }),
             Some(SetupDiagnostic {
                 message: "profiling disabled: the local profiling store is unavailable on wasm32"
@@ -286,6 +458,7 @@ impl ProfilerSession {
             return (
                 Arc::new(Self {
                     kind: SessionKind::Off,
+                    logs: OnceLock::new(),
                 }),
                 None,
             );
@@ -303,6 +476,7 @@ impl ProfilerSession {
                         return (
                             Arc::new(Self {
                                 kind: SessionKind::Off,
+                                logs: OnceLock::new(),
                             }),
                             Some(SetupDiagnostic {
                                 message: format!(
@@ -325,6 +499,7 @@ impl ProfilerSession {
                         return (
                             Arc::new(Self {
                                 kind: SessionKind::Off,
+                                logs: OnceLock::new(),
                             }),
                             Some(SetupDiagnostic {
                                 message: format!(
@@ -339,6 +514,20 @@ impl ProfilerSession {
                     usize::try_from(sizing.producer_queue_slots).unwrap_or(usize::MAX);
                 let (producer_commands_tx, producer_commands_rx) =
                     crossbeam_channel::bounded(producer_queue_slots);
+                let Ok(payloads) =
+                    super::ring_payload::PayloadSlots::new(sizing.producer_queue_slots, &memory)
+                else {
+                    return (
+                        Arc::new(Self {
+                            kind: SessionKind::Off,
+                            logs: OnceLock::new(),
+                        }),
+                        Some(SetupDiagnostic {
+                            message: "profiling disabled: log payload slots exceed memory budget"
+                                .to_owned(),
+                        }),
+                    );
+                };
                 // One fixed reservation covers every pending index-plane
                 // record (streams spec §5.4): ≤ 1 StreamStarted + engines +
                 // 2 × execution slots. No per-record reservation exists.
@@ -356,6 +545,7 @@ impl ProfilerSession {
                         return (
                             Arc::new(Self {
                                 kind: SessionKind::Off,
+                                logs: OnceLock::new(),
                             }),
                             Some(SetupDiagnostic {
                                 message: format!(
@@ -383,6 +573,7 @@ impl ProfilerSession {
                         return (
                             Arc::new(Self {
                                 kind: SessionKind::Off,
+                                logs: OnceLock::new(),
                             }),
                             Some(SetupDiagnostic {
                                 message: format!("profiling disabled: {error}"),
@@ -417,6 +608,7 @@ impl ProfilerSession {
                 let _ = meta_queue;
                 (
                     Arc::new(Self {
+                        logs: OnceLock::new(),
                         kind: SessionKind::On(Box::new(OnSession {
                             config,
                             sizing,
@@ -428,6 +620,7 @@ impl ProfilerSession {
                             publishers,
                             #[cfg(not(target_arch = "wasm32"))]
                             decoder: Mutex::new(DirectDecoder::default()),
+                            payloads,
                             #[cfg(not(target_arch = "wasm32"))]
                             writer: Mutex::new(writer),
                             #[cfg(not(target_arch = "wasm32"))]
@@ -446,6 +639,7 @@ impl ProfilerSession {
             Err(error) => (
                 Arc::new(Self {
                     kind: SessionKind::Off,
+                    logs: OnceLock::new(),
                 }),
                 Some(SetupDiagnostic {
                     message: format!(
@@ -461,8 +655,7 @@ impl ProfilerSession {
     /// defaults; embedders needing another store root inject a session.
     #[must_use]
     pub fn global() -> &'static Arc<Self> {
-        static GLOBAL: OnceLock<Arc<ProfilerSession>> = OnceLock::new();
-        GLOBAL.get_or_init(|| {
+        global_session_cell().get_or_init(|| {
             let mut config = ProfilerConfig {
                 enabled: crate::prof::ProfConfig::global().is_enabled(),
                 ..ProfilerConfig::default()
@@ -475,12 +668,31 @@ impl ProfilerSession {
             {
                 config.store_root.clone_from(root);
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            let (session, diagnostic) = if global_log_history_cell().get().is_some() {
+                Self::from_config_with_log_history(config)
+            } else {
+                Self::from_config(config)
+            };
+            #[cfg(target_arch = "wasm32")]
             let (session, diagnostic) = Self::from_config(config);
             if let Some(diagnostic) = diagnostic {
                 let _ = global_setup_diagnostic_cell().set(diagnostic);
             }
             session
         })
+    }
+
+    /// Startup-only opt-in. Never replaces an existing process stream owner.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn configure_global_log_history() -> bool {
+        if let Some(session) = global_session_cell().get() {
+            return session.is_log_history_enabled();
+        }
+        let _ = global_log_history_cell().set(());
+        global_session_cell()
+            .get()
+            .is_none_or(|session| session.is_log_history_enabled())
     }
 
     /// The setup diagnostic the global session produced when it came up
@@ -533,7 +745,10 @@ impl ProfilerSession {
 
     #[must_use]
     pub const fn is_on(&self) -> bool {
-        matches!(self.kind, SessionKind::On(_))
+        match &self.kind {
+            SessionKind::Off => false,
+            SessionKind::On(session) => session.config.enabled,
+        }
     }
 
     #[must_use]
@@ -545,9 +760,9 @@ impl ProfilerSession {
     }
 
     #[must_use]
-    pub const fn sizing(&self) -> Option<DerivedSizing> {
+    pub fn sizing(&self) -> Option<DerivedSizing> {
         match &self.kind {
-            SessionKind::Off => None,
+            SessionKind::Off => self.logs.get()?.as_ref().map(|logs| logs.sizing),
             SessionKind::On(session) => Some(session.sizing),
         }
     }
@@ -555,7 +770,7 @@ impl ProfilerSession {
     #[must_use]
     pub fn memory(&self) -> Option<&ProfilerMemoryGovernor> {
         match &self.kind {
-            SessionKind::Off => None,
+            SessionKind::Off => self.logs.get()?.as_ref().map(|logs| &logs.memory),
             SessionKind::On(session) => Some(&session.memory),
         }
     }
@@ -624,8 +839,32 @@ impl ProfilerSession {
         })
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn consume_raw_bytes(
+        &self,
+        process_euid: crate::ids::ProcessEuid,
+        engine_id: crate::ids::EngineId,
+        bytes: &[u8],
+    ) {
+        if let Some(Some(logs)) = self.logs.get() {
+            for raw in crate::prof::record::iter(bytes) {
+                let Ok(raw) = raw else { break };
+                if let crate::prof::record::RawRecord::Log { payload_id } = raw
+                    && let Some(PendingPayload::Log(pending)) = logs.payloads.take(payload_id)
+                    && let Some(delivery) = pending.delivery
+                {
+                    delivery.deliver(pending.log, pending.reservation);
+                }
+            }
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.consume_profile_bytes(process_euid, engine_id, bytes);
+        #[cfg(target_arch = "wasm32")]
+        let _ = (process_euid, engine_id);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn consume_profile_bytes(
         &self,
         process_euid: crate::ids::ProcessEuid,
         engine_id: crate::ids::EngineId,
@@ -640,6 +879,7 @@ impl ProfilerSession {
             memory: &session.memory,
             sizing: session.sizing,
             clock: &session.clock,
+            scopes: session.as_ref(),
             boundaries: &session.publishers,
             writer: &session.writer,
         };
@@ -657,7 +897,186 @@ impl ProfilerSession {
                 super::decoder::record_engine_framing_error(&session.publishers, engine_id);
                 return;
             };
-            decoder.consume(&resources, raw);
+            if let crate::prof::record::RawRecord::Log { payload_id } = raw {
+                if let Some(PendingPayload::Log(mut pending)) = session.payloads.take(payload_id) {
+                    if let Some(body) = pending.log.data.as_ref() {
+                        pending.log.event.data =
+                            Self::publish_value_state(session, body, &mut pending.reservation);
+                    }
+                    if let Some(body) = pending.log.context.as_ref() {
+                        pending.log.event.context =
+                            Self::publish_value_state(session, body, &mut pending.reservation);
+                    }
+                    if let Some(handle) = pending.handle {
+                        DirectDecoder::consume_log(&resources, handle, pending.log.event.clone());
+                    }
+                    if let Some(delivery) = pending.delivery {
+                        delivery.deliver(pending.log, pending.reservation);
+                    }
+                } else {
+                    super::decoder::record_engine_framing_error(&session.publishers, engine_id);
+                }
+            } else if let crate::prof::record::RawRecord::CallScope { payload_id } = raw {
+                match session.payloads.take_or_acknowledge(payload_id) {
+                    Ok(Some(PendingPayload::CallScope {
+                        handle,
+                        scope,
+                        reservation,
+                    })) => {
+                        let (scope, reservation) = Self::decode_scope(session, scope, reservation);
+                        decoder.consume_call_scope(&resources, handle, scope, reservation);
+                    }
+                    // An end on another ring already claimed this scope.
+                    Ok(None) => {}
+                    _ => {
+                        super::decoder::record_engine_framing_error(&session.publishers, engine_id);
+                    }
+                }
+            } else if session.config.enabled {
+                decoder.consume(&resources, raw);
+            }
+        }
+    }
+
+    /// The callback must publish exactly one log record on success and no
+    /// record on failure. It runs on the producer without waiting for a lock.
+    pub fn publish_log(
+        &self,
+        handle: ExecutionHandle,
+        log: EncodedLog,
+        reservation: Reservation,
+        push: impl FnOnce(u64) -> bool,
+    ) -> bool {
+        self.publish_log_with_delivery(Some(handle), log, reservation, None, push)
+    }
+
+    pub fn publish_log_with_delivery(
+        &self,
+        handle: Option<ExecutionHandle>,
+        log: EncodedLog,
+        mut reservation: Reservation,
+        delivery: Option<Box<dyn LogDelivery>>,
+        push: impl FnOnce(u64) -> bool,
+    ) -> bool {
+        let payloads = match &self.kind {
+            #[cfg(not(target_arch = "wasm32"))]
+            SessionKind::On(session) => Some(&session.payloads),
+            _ => self
+                .logs
+                .get()
+                .and_then(Option::as_ref)
+                .map(|logs| &logs.payloads),
+        };
+        let Some(payloads) = payloads else {
+            return false;
+        };
+        let strings = [
+            &log.event.level,
+            &log.event.event_name,
+            &log.event.distinct_id,
+            &log.event.message_preview,
+        ]
+        .into_iter()
+        .flatten()
+        .fold(0u64, |bytes, value| {
+            bytes.saturating_add(value.capacity() as u64)
+        });
+        let required = [&log.data, &log.context]
+            .into_iter()
+            .flatten()
+            .fold(strings, |bytes, body| {
+                bytes.saturating_add(body.capacity() as u64)
+            });
+        if reservation
+            .try_grow(required.saturating_sub(reservation.accounted_bytes()))
+            .is_err()
+        {
+            if let Some(handle) = handle {
+                self.record_capture_transport_loss(handle);
+            }
+            return false;
+        }
+        let Some(slot) = payloads.reserve() else {
+            if let Some(handle) = handle {
+                self.record_capture_transport_loss(handle);
+            }
+            return false;
+        };
+        let accepted = slot.publish(
+            PendingPayload::Log(PendingLog {
+                #[cfg(not(target_arch = "wasm32"))]
+                handle,
+                log,
+                reservation,
+                delivery,
+            }),
+            push,
+        );
+        if !accepted && let Some(handle) = handle {
+            self.record_capture_transport_loss(handle);
+        }
+        accepted
+    }
+
+    /// The callback publishes one `RawRecord::CallScope` on success, and none
+    /// on failure. Payload ownership and rejection cleanup match log transport.
+    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
+    pub fn publish_call_scope(
+        &self,
+        handle: ExecutionHandle,
+        scope: EncodedCallScope,
+        reservation: Reservation,
+        push: impl FnOnce(u64) -> bool,
+    ) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let SessionKind::On(session) = &self.kind
+            && session.config.enabled
+            && session.boundaries.accepts_producer(handle)
+        {
+            let mut reservation = reservation;
+            let required = scope
+                .distinct_id
+                .as_ref()
+                .map_or(0, |id| id.capacity() as u64)
+                .saturating_add(
+                    scope
+                        .context
+                        .as_ref()
+                        .map_or(0, |body| body.capacity() as u64),
+                );
+            if reservation
+                .try_grow(required.saturating_sub(reservation.accounted_bytes()))
+                .is_err()
+            {
+                self.record_capture_transport_loss(handle);
+                return false;
+            }
+            let Some(slot) = session.payloads.reserve() else {
+                self.record_capture_transport_loss(handle);
+                return false;
+            };
+            let accepted = slot.publish(
+                PendingPayload::CallScope {
+                    handle,
+                    scope,
+                    reservation,
+                },
+                push,
+            );
+            if !accepted {
+                self.record_capture_transport_loss(handle);
+            }
+            return accepted;
+        }
+        drop((scope, reservation));
+        false
+    }
+
+    pub fn record_capture_transport_loss(&self, handle: ExecutionHandle) {
+        if let SessionKind::On(session) = &self.kind {
+            session
+                .boundaries
+                .record_value_attempt_transport_loss(handle);
         }
     }
 
@@ -821,6 +1240,7 @@ impl ProfilerSession {
             memory: &session.memory,
             sizing: session.sizing,
             clock: &session.clock,
+            scopes: session,
             boundaries: &session.publishers,
             writer: &session.writer,
         }
@@ -908,6 +1328,9 @@ impl ProfilerSession {
         &self,
         manual_eligible: bool,
     ) -> Result<Reservation, ValueLossReason> {
+        if !self.is_on() {
+            return Err(ValueLossReason::StoreUnavailable);
+        }
         let SessionKind::On(session) = &self.kind else {
             return Err(ValueLossReason::StoreUnavailable);
         };
@@ -1195,7 +1618,7 @@ impl ProfilerSession {
                                 metadata.root_thread_ref.process_euid,
                                 metadata.root_thread_ref.engine_id,
                             );
-                            decoder.complete_missing_values(&resources, handle);
+                            decoder.complete_missing_captures(&resources, handle);
                         }
                         let Some(slot) = session.publishers.get(handle.slot as usize) else {
                             continue;
@@ -1236,6 +1659,25 @@ impl ProfilerSession {
             .decoder
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (index, slot) in session.publishers.iter().enumerate() {
+            let identity = slot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .map(|runtime| (runtime.root, runtime.generation));
+            if let Some((root, generation)) = identity {
+                DirectDecoder::flush_due(
+                    &Self::decoder_resources(session, root.process_euid, root.engine_id),
+                    ExecutionHandle {
+                        slot: u32::try_from(index).expect("publisher slots are bounded by u32"),
+                        generation,
+                    },
+                    now,
+                    session.config.publish_interval,
+                    force,
+                );
+            }
+        }
         let mut writer = session
             .writer
             .lock()
@@ -1414,7 +1856,11 @@ impl ProfilerSession {
             ));
             drop(slot);
             RootAdmission::Active(ActiveRootAdmission {
-                profiler: RootProfiler::Active(ActiveRootProfiler { root_thread_ref }),
+                profiler: if session.config.enabled {
+                    RootProfiler::Active(ActiveRootProfiler { root_thread_ref })
+                } else {
+                    RootProfiler::Inactive(InactiveReason::Disabled)
+                },
                 completion,
             })
         }
@@ -1425,6 +1871,696 @@ impl ProfilerSession {
 mod tests {
     use super::*;
     use crate::prof::backend::{DiskBudget, ExecutionEndStatus};
+
+    #[derive(Debug)]
+    struct TestDelivery {
+        queue: Arc<std::sync::Mutex<Vec<(EncodedLog, Reservation)>>>,
+        drops: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl LogDelivery for TestDelivery {
+        fn deliver(self: Box<Self>, log: EncodedLog, reservation: Reservation) {
+            self.queue.lock().unwrap().push((log, reservation));
+        }
+    }
+
+    impl Drop for TestDelivery {
+        fn drop(&mut self) {
+            self.drops
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    fn test_log() -> EncodedLog {
+        EncodedLog {
+            event: super::super::LogEvent {
+                call_ref: None,
+                timestamp_ms: 42,
+                level: Some("info".to_owned()),
+                source: None,
+                source_column: None,
+                message_preview: None,
+                event_name: None,
+                distinct_id: None,
+                context: super::super::ValueState::Lost(ValueLossReason::StoreUnavailable),
+                data: super::super::ValueState::Lost(ValueLossReason::StoreUnavailable),
+            },
+            data: Some(vec![1, 2, 3]),
+            context: None,
+        }
+    }
+
+    fn log_bytes(id: u64) -> Vec<u8> {
+        let raw = crate::prof::record::RawRecord::Log { payload_id: id };
+        let mut bytes = vec![0; raw.encoded_len()];
+        raw.encode_to(&mut bytes);
+        bytes
+    }
+
+    #[test]
+    fn off_logs_deliver_once_without_disk_and_hold_budget_until_host_drain() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("must-not-exist");
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: false,
+            store_root: root.clone(),
+            ..ProfilerConfig::default()
+        });
+        assert!(diagnostic.is_none());
+        assert!(!session.is_collecting_logs());
+        assert!(session.enable_log_collection());
+        assert!(!session.is_on());
+        assert!(session.boundary_registry().is_none());
+        let memory = session.memory().unwrap();
+        let baseline = memory.used_bytes(ReservationClass::General);
+        let queue = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut bytes = Vec::new();
+        assert!(session.publish_log_with_delivery(
+            None,
+            test_log(),
+            session.reserve_log_work().unwrap(),
+            Some(Box::new(TestDelivery {
+                queue: queue.clone(),
+                drops: drops.clone()
+            })),
+            |id| {
+                bytes = log_bytes(id);
+                true
+            },
+        ));
+        let euid = crate::ids::ProcessEuid([0; 16]);
+        let engine = crate::ids::EngineId(1);
+        session.consume_raw_bytes(euid, engine, &bytes);
+        session.consume_raw_bytes(euid, engine, &bytes);
+        assert_eq!(queue.lock().unwrap().len(), 1);
+        assert_eq!(
+            queue.lock().unwrap()[0].0.data.as_deref(),
+            Some(&[1, 2, 3][..])
+        );
+        assert!(memory.used_bytes(ReservationClass::General) > baseline);
+        queue.lock().unwrap().clear();
+        assert_eq!(memory.used_bytes(ReservationClass::General), baseline);
+        assert_eq!(drops.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert!(!root.exists());
+
+        assert!(!session.publish_log_with_delivery(
+            None,
+            test_log(),
+            session.reserve_log_work().unwrap(),
+            Some(Box::new(TestDelivery {
+                queue: queue.clone(),
+                drops: drops.clone()
+            })),
+            |_| false,
+        ));
+        assert_eq!(drops.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert_eq!(memory.used_bytes(ReservationClass::General), baseline);
+        assert!(session.publish_log_with_delivery(
+            None,
+            test_log(),
+            session.reserve_log_work().unwrap(),
+            Some(Box::new(TestDelivery {
+                queue,
+                drops: drops.clone()
+            })),
+            |_| true,
+        ));
+        drop(session);
+        assert_eq!(drops.load(std::sync::atomic::Ordering::Relaxed), 3);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn explicit_history_replays_logs_without_call_capture() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let euid = crate::ids::ProcessEuid([97; 16]);
+        let root = temp.path().join("history");
+        let mut config = test_config(&root, euid);
+        config.enabled = false;
+        let (session, diagnostic) = ProfilerSession::from_config_with_log_history(config);
+        assert!(diagnostic.is_none());
+        assert!(!session.is_on());
+        assert!(session.is_log_history_enabled());
+        let thread = ThreadRef {
+            process_euid: euid,
+            engine_id: crate::ids::EngineId(1),
+            thread_id: crate::ids::BexThreadId(1),
+        };
+        let admission = session.register_root(
+            RootProfileIntent::UserRoot {
+                runtime_id: BoundaryId::from_bytes([2; 16]),
+            },
+            thread,
+            ProgramId([3; 16]),
+        );
+        assert!(!admission.profiler().is_active());
+        let RootAdmission::Active(admission) = admission else {
+            panic!("history root")
+        };
+        let mut bytes = Vec::new();
+        let queue = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let log = test_log();
+        let original_buffer = log.data.as_ref().unwrap().as_ptr();
+        assert!(session.publish_log_with_delivery(
+            Some(admission.completion.lease().handle()),
+            log,
+            session.reserve_log_work().unwrap(),
+            Some(Box::new(TestDelivery {
+                queue: queue.clone(),
+                drops
+            })),
+            |id| {
+                bytes = log_bytes(id);
+                true
+            },
+        ));
+        session.consume_raw_bytes(euid, thread.engine_id, &bytes);
+        {
+            let queue = queue.lock().unwrap();
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue[0].0.data.as_ref().unwrap().as_ptr(), original_buffer);
+            assert!(matches!(
+                queue[0].0.event.data,
+                ValueState::Available { .. }
+            ));
+        }
+        admission.completion.complete(ExecutionEndStatus::Succeeded);
+        session.maintain_ready_executions();
+        session.maintain_ready_executions();
+        session.force_publish();
+        let profile = load_execution(&root, euid, thread);
+        assert_eq!(profile.logs.len(), 1);
+        assert!(profile.spans.is_empty());
+        assert!(matches!(profile.logs[0].data, ValueState::Available { .. }));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn call_scopes_join_selected_calls_without_retained_ancestors() {
+        use crate::{
+            ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
+            prof::{
+                backend::{RoleMask, SelectionReasons},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+            },
+        };
+
+        for reorder in 0..5 {
+            let temp = tempfile::TempDir::new().unwrap();
+            let root = temp.path().join("scopes");
+            let euid = ProcessEuid([99; 16]);
+            let thread = ThreadRef {
+                process_euid: euid,
+                engine_id: EngineId(1),
+                thread_id: BexThreadId(1),
+            };
+            let (session, diagnostic) = ProfilerSession::from_config(test_config(&root, euid));
+            assert!(diagnostic.is_none());
+            let RootAdmission::Active(admission) = session.register_root(
+                RootProfileIntent::UserRoot {
+                    runtime_id: BoundaryId::from_bytes([1; 16]),
+                },
+                thread,
+                ProgramId([2; 16]),
+            ) else {
+                panic!("active root")
+            };
+            let handle = admission.completion.lease().handle();
+            let call_ref = CallRef {
+                process_euid: euid,
+                engine_id: thread.engine_id,
+                thread_id: if reorder == 4 {
+                    BexThreadId(2)
+                } else {
+                    thread.thread_id
+                },
+                call_id: BexCallId(2),
+            };
+            let emit = |raw: RawRecord<'_>| {
+                let mut bytes = [0; MAX_RECORD_LEN];
+                let len = raw.encode(&mut bytes);
+                session.consume_raw_bytes(euid, thread.engine_id, &bytes[..len]);
+            };
+            let child = RawRecord::CallFunction {
+                flags: CapturePlan {
+                    selected: true,
+                    roles: RoleMask::NONE,
+                    reasons: SelectionReasons::from_bits(4).unwrap(),
+                }
+                .to_call_flags(),
+                thread_id: call_ref.thread_id,
+                call_id: call_ref.call_id,
+                parent_call_id: BexCallId(u64::from(reorder != 4)),
+                function_id: FunctionId(2),
+                call_site: None,
+                ts_ticks: 20,
+            };
+            let end = RawRecord::EndFunction {
+                status: FunctionEndStatus::Ok,
+                thread_id: call_ref.thread_id,
+                call_id: call_ref.call_id,
+                ts_ticks: 30,
+            };
+            if reorder != 0 {
+                emit(end);
+                emit(child);
+            }
+            let mut scope_record = None;
+            if reorder != 3 {
+                assert!(session.publish_call_scope(
+                    handle,
+                    EncodedCallScope {
+                        call_ref,
+                        distinct_id: Some("effective-user".to_owned()),
+                        context: if reorder == 2 {
+                            Err(ValueLossReason::EncodeFailed)
+                        } else {
+                            Ok(vec![1, 2, 3])
+                        },
+                    },
+                    session.reserve_log_work().unwrap(),
+                    |payload_id| {
+                        scope_record = Some(RawRecord::CallScope { payload_id });
+                        true
+                    },
+                ));
+            }
+            if reorder == 1 || reorder == 4 {
+                emit(scope_record.take().unwrap());
+            }
+            if reorder == 4 {
+                emit(RawRecord::StartThreadSpawn {
+                    flags: 0,
+                    thread_id: call_ref.thread_id,
+                    parent_thread_id: thread.thread_id,
+                    parent_call_id: BexCallId(1),
+                    ts_ticks: 15,
+                    spawn_site: None,
+                    name: b"child",
+                });
+            }
+            emit(RawRecord::StartThread {
+                flags: 0,
+                thread_id: thread.thread_id,
+                parent_thread_id: BexThreadId(0),
+                parent_call_id: BexCallId(0),
+                ts_ticks: 1,
+                name: b"",
+            });
+            emit(RawRecord::CallFunction {
+                flags: 0,
+                thread_id: thread.thread_id,
+                call_id: BexCallId(1),
+                parent_call_id: BexCallId(0),
+                function_id: FunctionId(1),
+                call_site: None,
+                ts_ticks: 10,
+            });
+            if reorder == 0 {
+                emit(child);
+            }
+            if let Some(record) = scope_record {
+                emit(record);
+            }
+            if reorder == 0 {
+                let mut bytes = Vec::new();
+                assert!(session.publish_log(
+                    handle,
+                    test_log(),
+                    session.reserve_log_work().unwrap(),
+                    |id| {
+                        bytes = log_bytes(id);
+                        true
+                    },
+                ));
+                session.consume_raw_bytes(euid, thread.engine_id, &bytes);
+                session.force_publish();
+                let profile = load_execution(&root, euid, thread);
+                let span = &profile.spans[&call_ref];
+                assert!(span.end.is_none());
+                assert!(span.input.is_none() && span.output.is_none());
+                assert_eq!(span.scope.as_ref().unwrap().context, profile.logs[0].data);
+                assert_eq!(profile.spans.len(), 1);
+                emit(end);
+            }
+            if reorder == 4 {
+                emit(RawRecord::EndThread {
+                    status: ThreadEndStatus::Completed,
+                    thread_id: call_ref.thread_id,
+                    ts_ticks: 35,
+                });
+            }
+            emit(RawRecord::EndFunction {
+                status: FunctionEndStatus::Ok,
+                thread_id: thread.thread_id,
+                call_id: BexCallId(1),
+                ts_ticks: 40,
+            });
+            emit(RawRecord::EndThread {
+                status: ThreadEndStatus::Completed,
+                thread_id: thread.thread_id,
+                ts_ticks: 50,
+            });
+            admission.completion.complete(ExecutionEndStatus::Succeeded);
+            session.maintain_ready_executions();
+            session.maintain_ready_executions();
+            session.force_publish();
+            let profile = load_execution(&root, euid, thread);
+            assert_eq!(profile.spans.len(), 1);
+            let span = &profile.spans[&call_ref];
+            assert!(
+                span.start.is_some() && span.end.is_some(),
+                "order {reorder}"
+            );
+            if reorder == 3 {
+                assert!(span.scope.is_none());
+            } else {
+                let scope = span.scope.as_ref().unwrap();
+                assert_eq!(scope.distinct_id.as_deref(), Some("effective-user"));
+                if reorder == 2 {
+                    assert_eq!(
+                        scope.context,
+                        ValueState::Lost(ValueLossReason::EncodeFailed)
+                    );
+                } else {
+                    assert!(matches!(scope.context, ValueState::Available { .. }));
+                }
+            }
+            assert_eq!(profile.summary.health.unwrap().unmatched_call_facts, 0);
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn completed_calls_settle_scope_loss_while_execution_stays_active() {
+        use crate::{
+            ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
+            prof::{
+                backend::{RoleMask, SelectionReasons},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord},
+            },
+        };
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("scope-settlement");
+        let euid = ProcessEuid([101; 16]);
+        let (mut session, _) = ProfilerSession::from_config(test_config(&root, euid));
+        let SessionKind::On(on) = &mut Arc::get_mut(&mut session).unwrap().kind else {
+            panic!("on session")
+        };
+        on.payloads = super::super::ring_payload::PayloadSlots::new(1, &on.memory).unwrap();
+        let thread = ThreadRef {
+            process_euid: euid,
+            engine_id: EngineId(1),
+            thread_id: BexThreadId(1),
+        };
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserRoot {
+                runtime_id: BoundaryId::from_bytes([1; 16]),
+            },
+            thread,
+            ProgramId([2; 16]),
+        ) else {
+            panic!("active root")
+        };
+        let handle = admission.completion.lease().handle();
+        let SessionKind::On(on) = &session.kind else {
+            panic!("on session")
+        };
+        let emit = |raw: RawRecord<'_>| {
+            let mut bytes = [0; MAX_RECORD_LEN];
+            let len = raw.encode(&mut bytes);
+            session.consume_raw_bytes(euid, thread.engine_id, &bytes[..len]);
+        };
+        emit(RawRecord::StartThread {
+            flags: 0,
+            thread_id: thread.thread_id,
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
+            ts_ticks: 1,
+            name: b"",
+        });
+        emit(RawRecord::CallFunction {
+            flags: 0,
+            thread_id: thread.thread_id,
+            call_id: BexCallId(1),
+            parent_call_id: BexCallId(0),
+            function_id: FunctionId(1),
+            call_site: None,
+            ts_ticks: 2,
+        });
+        let mut stale = None;
+        for id in 2..258 {
+            let call_ref = CallRef {
+                process_euid: euid,
+                engine_id: thread.engine_id,
+                thread_id: thread.thread_id,
+                call_id: BexCallId(id),
+            };
+            let mode = id % 4;
+            let occupied = (mode == 2).then(|| on.payloads.reserve().unwrap());
+            if mode == 0 {
+                // Initial capture admission failed before a payload existed.
+                let exhausted = on
+                    .memory
+                    .try_reserve(
+                        ReservationClass::General,
+                        Owner::Values,
+                        on.memory.available_bytes(ReservationClass::General),
+                    )
+                    .unwrap();
+                assert!(session.reserve_value_work(false).is_err());
+                session.record_capture_transport_loss(handle);
+                drop(exhausted);
+            } else {
+                let accepted = session.publish_call_scope(
+                    handle,
+                    EncodedCallScope {
+                        call_ref,
+                        distinct_id: Some(format!("user-{id}")),
+                        context: Err(ValueLossReason::EncodeFailed),
+                    },
+                    session.reserve_value_work(false).unwrap(),
+                    |payload_id| {
+                        if mode == 1 {
+                            false
+                        } else {
+                            stale = Some(payload_id);
+                            true
+                        }
+                    },
+                );
+                assert_eq!(accepted, mode == 3);
+            }
+            drop(occupied);
+            let start = RawRecord::CallFunction {
+                flags: CapturePlan {
+                    selected: true,
+                    roles: RoleMask::NONE,
+                    reasons: SelectionReasons::from_bits(4).unwrap(),
+                }
+                .to_call_flags(),
+                thread_id: thread.thread_id,
+                call_id: call_ref.call_id,
+                parent_call_id: BexCallId(1),
+                function_id: FunctionId(2),
+                call_site: None,
+                ts_ticks: id * 10,
+            };
+            let end = RawRecord::EndFunction {
+                status: FunctionEndStatus::Ok,
+                thread_id: thread.thread_id,
+                call_id: call_ref.call_id,
+                ts_ticks: id * 10 + 1,
+            };
+            if id % 8 < 4 {
+                emit(end);
+                emit(start);
+            } else {
+                emit(start);
+                emit(end);
+            }
+            assert_eq!(on.decoder.lock().unwrap().call_state_counts(), (1, 0, 0));
+            if let Some(payload_id) = stale.take() {
+                assert!(on.payloads.reserve().is_none());
+                emit(RawRecord::CallScope { payload_id });
+            }
+        }
+        if let Some(payload_id) = stale {
+            emit(RawRecord::CallScope { payload_id });
+        }
+        session.force_publish();
+        let profile = load_execution(&root, euid, thread);
+        assert_eq!(
+            profile
+                .contexts
+                .values()
+                .map(|c| c.counters.completed_ok)
+                .sum::<u64>(),
+            256
+        );
+        assert_eq!(profile.spans.len(), 256);
+        for (call_ref, span) in &profile.spans {
+            assert!(span.end.is_some());
+            assert_eq!(span.scope.is_some(), call_ref.call_id.0 % 4 == 3);
+        }
+        assert_eq!(
+            session
+                .execution_checkpoint(handle)
+                .unwrap()
+                .health
+                .corrupt_records,
+            0
+        );
+        assert_eq!(on.decoder.lock().unwrap().call_state_counts(), (1, 0, 0));
+        drop(admission);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn scope_transport_rejection_and_teardown_release_shared_payload_budget() {
+        use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, ProcessEuid};
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("scope-capacity");
+        let euid = ProcessEuid([100; 16]);
+        let (mut session, _) = ProfilerSession::from_config(test_config(&root, euid));
+        let SessionKind::On(on) = &mut Arc::get_mut(&mut session).unwrap().kind else {
+            panic!("on session")
+        };
+        on.payloads = super::super::ring_payload::PayloadSlots::new(1, &on.memory).unwrap();
+        let thread = ThreadRef {
+            process_euid: euid,
+            engine_id: EngineId(1),
+            thread_id: BexThreadId(1),
+        };
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserRoot {
+                runtime_id: BoundaryId::from_bytes([1; 16]),
+            },
+            thread,
+            ProgramId([2; 16]),
+        ) else {
+            panic!("active root")
+        };
+        let handle = admission.completion.lease().handle();
+        let scope = || EncodedCallScope {
+            call_ref: CallRef {
+                process_euid: euid,
+                engine_id: thread.engine_id,
+                thread_id: thread.thread_id,
+                call_id: BexCallId(1),
+            },
+            distinct_id: Some("user".repeat(100)),
+            context: Ok(vec![1, 2, 3]),
+        };
+        let memory = session.memory().unwrap().clone();
+        let baseline = memory.used_bytes(ReservationClass::General);
+        assert!(!session.publish_call_scope(
+            handle,
+            scope(),
+            session.reserve_log_work().unwrap(),
+            |_| false,
+        ));
+        assert_eq!(memory.used_bytes(ReservationClass::General), baseline);
+        let mut log_id = 0;
+        assert!(session.publish_log(
+            handle,
+            test_log(),
+            session.reserve_log_work().unwrap(),
+            |id| {
+                log_id = id;
+                true
+            },
+        ));
+        let occupied = memory.used_bytes(ReservationClass::General);
+        assert!(!session.publish_call_scope(
+            handle,
+            scope(),
+            session.reserve_log_work().unwrap(),
+            |_| panic!("full slot"),
+        ));
+        assert_eq!(memory.used_bytes(ReservationClass::General), occupied);
+        session.consume_raw_bytes(euid, thread.engine_id, &log_bytes(log_id));
+        let mut scope_id = 0;
+        assert!(session.publish_call_scope(
+            handle,
+            scope(),
+            session.reserve_log_work().unwrap(),
+            |id| {
+                scope_id = id;
+                true
+            },
+        ));
+        assert_ne!(scope_id, log_id);
+        // A stale handle must not take the newly reused slot.
+        session.consume_raw_bytes(euid, thread.engine_id, &log_bytes(log_id));
+        assert!(!session.publish_log(
+            handle,
+            test_log(),
+            session.reserve_log_work().unwrap(),
+            |_| panic!("scope occupies slot"),
+        ));
+        drop(admission);
+        drop(session);
+        assert_eq!(memory.used_bytes(ReservationClass::General), 0);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn orphan_scope_is_discarded_without_poisoning_partial_replay() {
+        use crate::{
+            ids::{BexCallId, BexThreadId, CallRef, EngineId, ProcessEuid},
+            prof::record::{MAX_RECORD_LEN, RawRecord},
+        };
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("orphan-scope");
+        let euid = ProcessEuid([101; 16]);
+        let (session, _) = ProfilerSession::from_config(test_config(&root, euid));
+        let thread = ThreadRef {
+            process_euid: euid,
+            engine_id: EngineId(1),
+            thread_id: BexThreadId(1),
+        };
+        let RootAdmission::Active(admission) = session.register_root(
+            RootProfileIntent::UserRoot {
+                runtime_id: BoundaryId::from_bytes([1; 16]),
+            },
+            thread,
+            ProgramId([2; 16]),
+        ) else {
+            panic!("active root")
+        };
+        let mut id = 0;
+        assert!(session.publish_call_scope(
+            admission.completion.lease().handle(),
+            EncodedCallScope {
+                call_ref: CallRef {
+                    process_euid: euid,
+                    engine_id: thread.engine_id,
+                    thread_id: thread.thread_id,
+                    call_id: BexCallId(1)
+                },
+                distinct_id: Some("orphan".to_owned()),
+                context: Err(ValueLossReason::EncodeFailed),
+            },
+            session.reserve_log_work().unwrap(),
+            |payload_id| {
+                id = payload_id;
+                true
+            },
+        ));
+        let mut bytes = [0; MAX_RECORD_LEN];
+        let len = (RawRecord::CallScope { payload_id: id }).encode(&mut bytes);
+        session.consume_raw_bytes(euid, thread.engine_id, &bytes[..len]);
+        admission.completion.complete(ExecutionEndStatus::Succeeded);
+        session.maintain_ready_executions();
+        session.maintain_ready_executions();
+        session.force_publish();
+        let profile = load_execution(&root, euid, thread);
+        assert!(profile.spans.is_empty());
+        assert_eq!(profile.summary.health.unwrap().unmatched_call_facts, 1);
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn test_config(root: &std::path::Path, euid: crate::ids::ProcessEuid) -> ProfilerConfig {
@@ -1861,7 +2997,7 @@ mod tests {
             emit(end(call_id, ts + 1));
         }
         // The parent captures no values: its end must therefore retire the
-        // call outright rather than deferring via `waits_for_value`, so the
+        // call outright rather than deferring via `waits_for_capture`, so the
         // ordering below is load-bearing -- retiring it early really would
         // strip the context key the parked children's starts need.
         emit(call(1, 0, 10, ordinary, 100));

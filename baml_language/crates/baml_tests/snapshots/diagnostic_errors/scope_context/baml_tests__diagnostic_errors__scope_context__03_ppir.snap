@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.MetadataObject {
+  value: string
+}
+class user.MetadataObject$stream {
+  value: string | null
+}
+function user.arrays_are_not_scope_values() -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(metadata = map { "invalid": [1, 2] })
+}
+function user.bigint_is_not_a_scope_value(value: bigint) -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(metadata = map { "invalid": value })
+}
+function user.identity_must_be_string() -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(distinct_id = 1)
+}
+function user.maps_are_not_scope_values() -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(metadata = map { "invalid": map { "nested": true } })
+}
+function user.metadata_cannot_be_null() -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(metadata = null)
+}
+function user.objects_are_not_scope_values() -> boundary.LocalId  [expr] {
+  {  } boundary.id().context(metadata = map { "invalid": user.MetadataObject { value: "no" } })
+}

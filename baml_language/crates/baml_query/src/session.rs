@@ -49,6 +49,7 @@ use crate::{
 const HYDRATION_CACHE_ENTRIES: usize = 4096;
 
 /// Everything needed to bind one query session.
+#[derive(Clone)]
 pub struct QuerySessionBuilder {
     profile: CatalogProfile,
     scope: QueryScope,
@@ -103,6 +104,15 @@ impl QuerySessionBuilder {
     /// `baml` / schema `public`, value functions wired to this query's
     /// resolver and budget, planner/stubs registered, views planted.
     pub async fn build(self) -> Result<QuerySession, QueryError> {
+        let tables = Arc::new(Mutex::new(HashMap::new()));
+        self.clone().bind(Arc::clone(&tables)).await?;
+        Ok(QuerySession {
+            definition: self,
+            tables,
+        })
+    }
+
+    async fn bind(self, tables: SnapshotTables) -> Result<QueryRuntime, QueryError> {
         let tracker = BudgetTracker::new(self.budgets, self.cancel.clone());
         let hydration =
             HydrationContext::new(self.resolver, tracker.clone(), HYDRATION_CACHE_ENTRIES);
@@ -135,6 +145,7 @@ impl QuerySessionBuilder {
             self.profile.relations(),
             self.snapshot.clone(),
             self.factory,
+            tables,
         ));
         let catalog = MemoryCatalogProvider::new();
         catalog
@@ -165,7 +176,7 @@ impl QuerySessionBuilder {
             columns_table(&self.profile).map_err(|e| internal(&e))?,
         );
 
-        Ok(QuerySession {
+        Ok(QueryRuntime {
             ctx,
             profile: self.profile,
             scope: self.scope,
@@ -239,11 +250,13 @@ fn columns_table(profile: &CatalogProfile) -> datafusion::common::Result<Arc<dyn
 /// relations and views; instantiates a provider on first use and caches
 /// it for the session. A relation the backend does not serve resolves to
 /// an empty provider over the catalog schema (still queryable).
+type SnapshotTables = Arc<Mutex<HashMap<&'static str, Arc<dyn TableProvider>>>>;
+
 struct BamlSchemaProvider {
     relations: Vec<RelationDef>,
     snapshot: Snapshot,
     factory: Arc<dyn RelationProviderFactory>,
-    tables: Mutex<HashMap<&'static str, Arc<dyn TableProvider>>>,
+    tables: SnapshotTables,
     views: Mutex<HashMap<String, Arc<dyn TableProvider>>>,
 }
 
@@ -258,12 +271,13 @@ impl BamlSchemaProvider {
         relations: Vec<RelationDef>,
         snapshot: Snapshot,
         factory: Arc<dyn RelationProviderFactory>,
+        tables: SnapshotTables,
     ) -> BamlSchemaProvider {
         BamlSchemaProvider {
             relations,
             snapshot,
             factory,
-            tables: Mutex::new(HashMap::new()),
+            tables,
             views: Mutex::new(HashMap::new()),
         }
     }
@@ -340,9 +354,43 @@ impl SchemaProvider for BamlSchemaProvider {
     }
 }
 
-/// A bound session. One session executes one statement at a time; every
-/// execution ends in exactly one [`QueryOutcome`].
+/// Snapshot-fixed bindings and policy. Execution budgets, hydration caches,
+/// and outcomes belong to individual statements.
 pub struct QuerySession {
+    definition: QuerySessionBuilder,
+    tables: SnapshotTables,
+}
+
+impl QuerySession {
+    #[must_use]
+    pub fn snapshot(&self) -> &Snapshot {
+        &self.definition.snapshot
+    }
+
+    #[must_use]
+    pub fn profile(&self) -> &CatalogProfile {
+        &self.definition.profile
+    }
+
+    /// Plan and start a statement with fresh execution accounting.
+    #[allow(clippy::result_large_err)]
+    pub async fn execute(&self, sql: &str) -> Result<QueryExecution, (QueryError, QueryOutcome)> {
+        match self.definition.clone().bind(Arc::clone(&self.tables)).await {
+            Ok(runtime) => runtime.execute(sql).await,
+            Err(error) => {
+                let outcome = QueryOutcome::ended(
+                    self.definition.snapshot.clone(),
+                    crate::outcome::ValueEvaluations::default(),
+                    0,
+                    &error,
+                );
+                Err((error, outcome))
+            }
+        }
+    }
+}
+
+struct QueryRuntime {
     ctx: SessionContext,
     profile: CatalogProfile,
     scope: QueryScope,
@@ -352,24 +400,13 @@ pub struct QuerySession {
     functions: Arc<ValueFunctions>,
 }
 
-impl QuerySession {
-    #[must_use]
-    pub fn snapshot(&self) -> &Snapshot {
-        &self.snapshot
-    }
-
-    /// The rendered catalog slice this session exposes (`--schema`).
-    #[must_use]
-    pub fn profile(&self) -> &CatalogProfile {
-        &self.profile
-    }
-
+impl QueryRuntime {
     /// Plan and start one portable SQL statement.
     ///
     /// A planning failure still produces a terminal outcome — take it
     /// from the returned error via the second tuple element.
     #[allow(clippy::result_large_err)] // Preserve the public result shape without adding boxing.
-    pub async fn execute(&self, sql: &str) -> Result<QueryExecution, (QueryError, QueryOutcome)> {
+    async fn execute(&self, sql: &str) -> Result<QueryExecution, (QueryError, QueryOutcome)> {
         match self.plan_and_run(sql).await {
             Ok(stream) => Ok(QueryExecution {
                 snapshot: self.snapshot.clone(),
@@ -575,7 +612,7 @@ fn scan_scalar_functions(
     violation.map_or(Ok(()), Err)
 }
 
-impl QuerySession {
+impl QueryRuntime {
     /// Reject backend-gated functions before any read.
     fn check_capabilities(&self, plan: &LogicalPlan) -> Result<(), QueryError> {
         let backend = self.scope.backend;

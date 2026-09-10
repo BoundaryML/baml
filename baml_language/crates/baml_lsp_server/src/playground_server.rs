@@ -37,9 +37,8 @@ use bex_events::{
         StartedHostRun,
     },
     value::{
-        ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
-        LogEventRecord, ValueCodec, ValueIdAllocator, ValueRef, ValueWriter,
+        ValueCodec, ValueRef,
     },
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
@@ -157,6 +156,15 @@ fn complete_run_and_broadcast(
     outcome: RunOutcome,
 ) {
     let completed_at_ms = epoch_ms();
+    // Completed history must be replayable before the UI discards its live cache.
+    if !bex_events::prof::flush_and_join(std::time::Duration::from_secs(5)) {
+        broadcast_log_diagnostic(
+            broadcast_tx,
+            run_store,
+            boundary_id,
+            "shared log history publication timed out",
+        );
+    }
     if let Err(err) = history_store.complete(boundary_id, &outcome, completed_at_ms) {
         tracing::warn!(
             "History completion failed for {}: {err}",
@@ -502,24 +510,27 @@ fn inline_result_value(value: &bex_project::BexExternalValue) -> Option<Vec<u8>>
 fn drain_logs_and_broadcast(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    history_store: &HistoryStore,
     value_store: &LiveValueStore,
     boundary_id: BoundaryId,
     logger: &bex_project::TraceLogger,
 ) {
-    let mut fallback_writer = match ValueWriter::new_with_id_allocator(
-        ByteValueArtifactSink::new(),
-        boundary_id,
-        ValueIdAllocator::live_fallback(),
-    ) {
-        Ok(writer) => writer,
-        Err(err) => {
-            broadcast_log_diagnostic(broadcast_tx, run_store, boundary_id, err);
-            return;
-        }
-    };
     let report = logger.drain_encoded_logs();
-    for failure in &report.failures {
+    for failure in report.failures {
+        if failure.event.is_some()
+            && let Some(patch) = run_store.ingest_log_value_ref(
+                failure.boundary_id,
+                failure.call,
+                failure.metadata.level,
+                failure
+                    .metadata
+                    .message_preview
+                    .unwrap_or_else(|| "captured log".to_owned()),
+                failure.metadata.source,
+                None,
+            )
+        {
+            broadcast_run_patch(broadcast_tx, &patch);
+        }
         broadcast_log_diagnostic(
             broadcast_tx,
             run_store,
@@ -528,21 +539,15 @@ fn drain_logs_and_broadcast(
         );
     }
     let stats = logger.stats();
-    if stats.skipped_log_queue_full > 0 {
-        append_capture_loss_record(
-            history_store,
+    if stats.abandoned_reservations > 0
+        && let Some(patch) = run_store.add_diagnostic(
             boundary_id,
-            CaptureLossKind::Log,
-            stats.skipped_log_queue_full,
+            bex_events::history::logs::abandoned_log_diagnostic(stats.abandoned_reservations),
         )
-        .unwrap_or_else(|err| {
-            broadcast_log_diagnostic(
-                broadcast_tx,
-                run_store,
-                boundary_id,
-                format!("history capture-loss persistence failed: {err}"),
-            );
-        });
+    {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
+    if stats.skipped_log_queue_full > 0 {
         broadcast_log_loss_diagnostic(
             broadcast_tx,
             run_store,
@@ -553,41 +558,7 @@ fn drain_logs_and_broadcast(
     }
 
     for encoded in report.logs {
-        let event = LogEventRecord {
-            call: encoded.call,
-            level: encoded.metadata.level.clone(),
-            source: encoded.metadata.source.clone(),
-            timestamp_ms: encoded.metadata.timestamp_ms,
-            message_preview: encoded.metadata.message_preview.clone(),
-        };
-        let outcome = match history_store.append_log_body(
-            encoded.boundary_id,
-            event.clone(),
-            ValueCodec::BamlOutboundValue,
-            encoded.body.clone(),
-        ) {
-            Ok(outcome) => outcome,
-            Err(err) => {
-                broadcast_log_diagnostic(
-                    broadcast_tx,
-                    run_store,
-                    encoded.boundary_id,
-                    format!("history log persistence failed; retained live bytes only: {err}"),
-                );
-                match fallback_writer.append_log_body(
-                    ValueCodec::BamlOutboundValue,
-                    encoded.body.clone(),
-                    event,
-                ) {
-                    Ok(outcome) => outcome,
-                    Err(err) => {
-                        broadcast_log_diagnostic(broadcast_tx, run_store, encoded.boundary_id, err);
-                        continue;
-                    }
-                }
-            }
-        };
-        let value_ref = outcome.value_ref;
+        let value_ref = bex_events::history::logs::log_value_ref(&encoded.body);
         if let Ok(mut store) = value_store.lock() {
             let insert = store.insert(
                 encoded.boundary_id,
@@ -616,25 +587,6 @@ fn drain_logs_and_broadcast(
             broadcast_run_patch(broadcast_tx, &patch);
         }
     }
-}
-
-fn append_capture_loss_record(
-    history_store: &HistoryStore,
-    boundary_id: BoundaryId,
-    kind: CaptureLossKind,
-    skipped: u64,
-) -> std::io::Result<()> {
-    history_store.append_capture_loss(
-        boundary_id,
-        &CaptureLossRecord {
-            kind,
-            reason: CaptureLossReason::QueueFull,
-            skipped_count: skipped,
-            call: None,
-            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
-            timestamp_ms: epoch_ms(),
-        },
-    )
 }
 
 fn broadcast_log_diagnostic(
@@ -830,7 +782,15 @@ fn build_router(
     let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
     )));
-    let history_store = Arc::new(HistoryStore::new(workspace_roots.to_vec()));
+    let history_store = HistoryStore::new(workspace_roots.to_vec());
+    let history_store = if let Some(root) = workspace_roots.first() {
+        history_store.with_log_store_root(
+            bex_events::prof::backend::ProfilerSession::resolve_store_root(root),
+        )
+    } else {
+        history_store
+    };
+    let history_store = Arc::new(history_store);
     // Point the profiler at this workspace before any engine runs. Without
     // it the global session keeps its default *relative* `.baml/profiles-v1`,
     // which for a long-lived server resolves against whatever directory it
@@ -838,6 +798,11 @@ fn build_router(
     if let Some(root) = workspace_roots.first() {
         crate::playground_telemetry::configure_store_root(root);
         crate::playground_telemetry::warn_if_multi_root(&workspace_roots);
+        if !bex_events::prof::backend::ProfilerSession::configure_global_log_history() {
+            anyhow::bail!(
+                "log history must be configured before the shared runtime session starts"
+            );
+        }
     }
     let ws_state = WsState {
         seam,
@@ -1677,7 +1642,6 @@ async fn handle_function_run(
                 drain_logs_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    &history_store,
                     &value_store,
                     boundary_id,
                     &logger,
@@ -1702,7 +1666,6 @@ async fn handle_function_run(
                 drain_logs_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    &history_store,
                     &value_store,
                     boundary_id,
                     &logger,
@@ -1776,7 +1739,6 @@ fn handle_test_run(
                 drain_logs_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    &history_store,
                     &value_store,
                     boundary_id,
                     &logger,
@@ -1801,7 +1763,6 @@ fn handle_test_run(
                 drain_logs_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    &history_store,
                     &value_store,
                     boundary_id,
                     &logger,
@@ -2836,11 +2797,8 @@ mod tests {
 
     use bex_events::{
         history::HistoryValueBody,
-        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
-        run::{PayloadKind, ProjectId, RunTimeAnchor, TraceCallKey},
+        run::{PayloadKind, ProjectId, RunTimeAnchor},
     };
-    use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
-    use bex_vm_types::{RootHaver, Value};
 
     use super::*;
 
@@ -2855,28 +2813,51 @@ mod tests {
         ))
     }
 
-    struct EmptyRoots {
-        tlab: Tlab,
-    }
+    // These tests exercise host live delivery and disk replay, not BAML return values.
+    async fn emit_test_log(
+        project: &std::path::Path,
+        boundary_id: BoundaryId,
+        logger: &bex_project::TraceLogger,
+        persist: bool,
+    ) -> Arc<bex_engine::BexEngine> {
+        use bex_events::prof::backend::{ProfilerConfig, ProfilerSession};
+        use sys_native::SysOpsExt as _;
 
-    impl RootHaver for EmptyRoots {
-        fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
-
-        fn forward_roots(
-            &mut self,
-            _forward: &std::collections::HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
-        ) {
-        }
-    }
-
-    impl TlabHolder for EmptyRoots {
-        fn tlab(&self) -> &Tlab {
-            &self.tlab
-        }
-
-        fn tlab_mut(&mut self) -> &mut Tlab {
-            &mut self.tlab
-        }
+        let config = ProfilerConfig {
+            enabled: false,
+            store_root: ProfilerSession::resolve_store_root(project),
+            ..ProfilerConfig::default()
+        };
+        let (session, diagnostic) = if persist {
+            ProfilerSession::from_config_with_log_history(config)
+        } else {
+            ProfilerSession::from_config(config)
+        };
+        assert!(diagnostic.is_none(), "{diagnostic:?}");
+        let engine = Arc::new(
+            bex_engine::BexEngine::new_with_profiler_session(
+                baml_tests::stdlib_prefix::compile_source(
+                    r#"function main() -> void { log.info("hello from log"); }"#,
+                ),
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+                session,
+            )
+            .unwrap(),
+        );
+        engine
+            .call_function(
+                "main",
+                Vec::new(),
+                bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .with_boundary_id(boundary_id)
+                    .with_logger(logger.clone())
+                    .build(),
+                true,
+            )
+            .await
+            .unwrap();
+        engine
     }
 
     fn test_execution_request() -> ExecutionRequest {
@@ -2888,15 +2869,6 @@ mod tests {
             },
             args_summary: None,
             options_summary: None,
-        }
-    }
-
-    fn test_trace_key() -> TraceCallKey {
-        TraceCallKey {
-            process_euid: ProcessEuid([8; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(3),
         }
     }
 
@@ -3005,15 +2977,13 @@ mod tests {
         let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
 
         let logger = bex_project::TraceLogger::bounded(0);
-        logger.capture_with(boundary_id, test_trace_key(), |_| {
-            panic!("zero-capacity logger must not copy a value")
-        });
+        let _engine = emit_test_log(&project, boundary_id, &logger, false).await;
         assert_eq!(logger.stats().skipped_log_queue_full, 1);
+        assert!(!project.join(".baml/profiles-v1").exists());
 
         drain_logs_and_broadcast(
             &broadcast_tx,
             &run_store,
-            &history_store,
             &value_store,
             boundary_id,
             &logger,
@@ -3145,10 +3115,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn native_drain_persists_identified_log_and_retains_live_body() {
+    async fn native_drain_replays_recorded_shared_store_and_retains_live_body() {
         let project = unique_temp_dir("baml-native-log-history");
         std::fs::create_dir_all(&project).expect("project dir should be created");
         std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
+        let shared_project = unique_temp_dir("baml-native-shared-store");
+        std::fs::create_dir_all(&shared_project).unwrap();
+        let shared_root =
+            bex_events::prof::backend::ProfilerSession::resolve_store_root(&shared_project);
 
         let boundary_id = BoundaryId::from_bytes([13; 16]);
         let run_store = InMemoryRunStore::default();
@@ -3161,7 +3135,8 @@ mod tests {
                 trace_zero_ns: 0,
             },
         );
-        let history_store = HistoryStore::new(vec![project.clone()]);
+        let history_store =
+            HistoryStore::new(vec![project.clone()]).with_log_store_root(shared_root.clone());
         history_store.begin(&project, &start).unwrap();
         let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
             DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
@@ -3169,33 +3144,14 @@ mod tests {
         let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
 
         let logger = bex_project::TraceLogger::bounded(4);
-        let heap = BexHeap::new(Vec::new());
-        let manager = HeapPermitManager::new();
-        let permit = manager
-            .new_permit(EmptyRoots {
-                tlab: Tlab::new(Arc::clone(&heap)),
-            })
-            .await
-            .acquire()
-            .await;
-        logger.capture_with(boundary_id, test_trace_key(), |trace_heap| {
-            let snapshot =
-                trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(42));
-            (
-                bex_project::TraceLogMetadata {
-                    level: Some("info".to_string()),
-                    source: None,
-                    timestamp_ms: 21,
-                    message_preview: Some("hello from log".to_string()),
-                },
-                snapshot,
-            )
-        });
+        let engine = emit_test_log(&shared_project, boundary_id, &logger, true).await;
+        assert!(bex_events::prof::flush_and_join(
+            std::time::Duration::from_secs(5)
+        ));
 
         drain_logs_and_broadcast(
             &broadcast_tx,
             &run_store,
-            &history_store,
             &value_store,
             boundary_id,
             &logger,
@@ -3228,12 +3184,40 @@ mod tests {
                 .body,
             live.body
         );
+        let reopened = HistoryStore::new(vec![project.clone()]);
+        let replay = reopened.open(boundary_id).unwrap();
+        assert_eq!(replay.payloads.len(), 1);
+        assert_eq!(
+            reopened
+                .read_value(boundary_id, &value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            live.body
+        );
+        assert!(!project.join(".baml/profiles-v1").exists());
+        for execution in bex_events::prof::backend::list_executions(&shared_root).unwrap() {
+            let profile =
+                bex_events::prof::backend::StreamReader::open(&shared_root, execution.stream)
+                    .unwrap()
+                    .execution(execution.id)
+                    .unwrap()
+                    .load()
+                    .unwrap();
+            assert!(profile.spans.is_empty());
+            assert!(profile.contexts.is_empty());
+        }
 
         let patch = broadcast_rx
             .try_recv()
             .expect("drain should broadcast a RunStore patch");
         assert!(matches!(patch, WsOutMessage::RunPatch { .. }));
 
+        drop(engine);
+        assert!(bex_events::prof::drain_logs(
+            std::time::Duration::from_secs(5)
+        ));
         let _ = std::fs::remove_dir_all(project);
+        let _ = std::fs::remove_dir_all(shared_project);
     }
 }

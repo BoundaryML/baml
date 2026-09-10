@@ -14,7 +14,7 @@ use std::{
 };
 
 use baml_builtins2::{MediaContent, MediaValue};
-use bex_events::prof::backend::{Reservation, ValueLossReason};
+use bex_events::prof::backend::{Reservation, ScopeContext, ScopeValue, ValueLossReason};
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
@@ -142,7 +142,7 @@ impl TraceHeap {
         Self::default()
     }
 
-    /// The unbounded (logging) copy path has no reservation, so the only
+    /// The unbounded copy path has no reservation, so the only
     /// error it can see is an allocator failure. A `ValueMemoryExceeded` here
     /// is a builder bug; `CopyFailed` is the process running out of memory,
     /// which the profiler's bounded path reports as a loss instead.
@@ -195,6 +195,33 @@ impl TraceHeap {
         }
         let root = builder.alloc(TraceValue::Map(copied))?;
         Ok(builder.finish(root))
+    }
+
+    pub fn copy_scope_context_bounded(
+        scope: &ScopeContext,
+        reservation: &mut Reservation,
+    ) -> Result<TraceSnapshot, ValueLossReason> {
+        let mut builder = TraceSnapshotBuilder::bounded(reservation);
+        let mut entries = builder.vec_with_capacity(scope.metadata.len())?;
+        for (key, value) in &scope.metadata {
+            let key = builder.copy_str(key)?;
+            let value = match value {
+                ScopeValue::String(value) => TraceValue::String(builder.copy_str(value)?),
+                ScopeValue::Int(value) => TraceValue::Int(*value),
+                ScopeValue::Float(value) => TraceValue::Float(*value),
+                ScopeValue::Bool(value) => TraceValue::Bool(*value),
+            };
+            entries.push((key, builder.alloc(value)?));
+        }
+        let root = builder.alloc(TraceValue::Map(entries))?;
+        Ok(builder.finish(root))
+    }
+
+    pub(crate) fn copy_string_bounded(
+        value: &str,
+        reservation: &mut Reservation,
+    ) -> Result<String, ValueLossReason> {
+        TraceSnapshotBuilder::bounded(reservation).copy_str(value)
     }
 
     pub fn copy_values_from_bex_heap(
@@ -269,11 +296,6 @@ impl TraceHeap {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(handle, snapshot);
         handle
-    }
-
-    #[cfg(test)]
-    pub(crate) fn insert_for_test(&self, snapshot: TraceSnapshot) -> TraceSnapshotHandle {
-        self.insert_snapshot(snapshot)
     }
 }
 

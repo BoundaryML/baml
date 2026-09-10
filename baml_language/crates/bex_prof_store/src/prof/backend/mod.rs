@@ -9,7 +9,6 @@ mod cct_codec;
 mod decoder;
 mod domain;
 mod evidence;
-#[cfg(not(target_arch = "wasm32"))]
 mod evidence_codec;
 mod execution;
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,8 +17,9 @@ pub mod hooks;
 mod memory;
 #[cfg(not(target_arch = "wasm32"))]
 mod reader;
-#[cfg(not(target_arch = "wasm32"))]
+mod ring_payload;
 mod runtime;
+mod scope;
 mod session;
 mod sizing;
 #[cfg(not(target_arch = "wasm32"))]
@@ -45,20 +45,19 @@ pub use domain::{
     resolve_capture_plan,
 };
 pub use evidence::{
-    ErrorCapture, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, ErrorSource,
-    ErrorUnwindKind, RuntimeIdAnnotation, SpanEnd, SpanRuntimeId, SpanStart, TerminalErrorRef,
-    TerminalErrorTarget, ThreadEnd, ThreadStart, ThreadStartKind, ThrowSite, ValueLossReason,
-    ValueOccurrence, ValueRole, ValueState,
+    CallScope, ErrorCapture, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason,
+    ErrorSource, ErrorUnwindKind, LogEvent, RuntimeIdAnnotation, SpanEnd, SpanRuntimeId, SpanStart,
+    TerminalErrorRef, TerminalErrorTarget, ThreadEnd, ThreadStart, ThreadStartKind, ThrowSite,
+    ValueLossReason, ValueOccurrence, ValueRole, ValueState,
 };
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use evidence::{
     ErrorCodecError, decode_error_capture, decode_terminal_error_ref, encode_error_capture,
     encode_terminal_error_ref,
 };
-#[cfg(not(target_arch = "wasm32"))]
-pub use evidence_codec::{EvidenceCodecError, EvidenceFact};
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) use evidence_codec::{decode_evidence_payload, encode_evidence_facts};
+pub use evidence_codec::{
+    EncodedEvidenceBatch, EvidenceCodecError, EvidenceFact, decode_evidence_payload,
+    encode_evidence_facts,
+};
 pub use execution::{
     ExecutionEndStatus, ExecutionHandle, ExecutionMetadata, ExecutionPhase,
     ExecutionProducerHealthSnapshot, ExecutionRegistry, ExecutionSlotUnavailable,
@@ -86,11 +85,15 @@ pub use runtime::{
     reserve_session_error_attempt, reserve_session_error_value, resolve_session_thread_ends,
     submit_session_error_attempt, submit_session_terminal_error, unregister_engine_session,
 };
+#[cfg(target_arch = "wasm32")]
+#[doc(hidden)]
+pub use runtime::{consume_engine_bytes, register_engine_session, unregister_engine_session};
+pub use scope::{ScopeContext, ScopeContextPatch, ScopeValue};
 #[cfg(not(target_arch = "wasm32"))]
 pub use session::ActiveRootAdmission;
 pub use session::{
-    ActiveRootProfiler, AwaitClockInvalid, InactiveReason, ProfilerSession, RootAdmission,
-    RootProfileIntent, RootProfiler, SetupDiagnostic,
+    ActiveRootProfiler, AwaitClockInvalid, EncodedCallScope, EncodedLog, InactiveReason,
+    LogDelivery, ProfilerSession, RootAdmission, RootProfileIntent, RootProfiler, SetupDiagnostic,
 };
 pub use sizing::{
     DerivedSizing, DiskBudget, InvalidMemoryBudget, MeasuredLayouts, ProfilerConfig,
@@ -100,26 +103,20 @@ pub use sizing::{
 #[doc(hidden)]
 pub use wasm_runtime_stubs::{
     complete_session_error_value, record_session_error_attempt_loss,
-    record_session_terminal_error_loss, record_session_transport_loss, register_engine_session,
+    record_session_terminal_error_loss, record_session_transport_loss,
     reserve_session_error_attempt, reserve_session_error_value, submit_session_error_attempt,
-    submit_session_terminal_error, unregister_engine_session,
+    submit_session_terminal_error,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use writer::{ExecutionCheckpoint, StreamCheckpoint, counters};
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_runtime_stubs {
-    use std::sync::Arc;
-
     use super::{
         ErrorCaptureAttempt, ErrorCaptureId, ExecutionHandle, ProfilerSession, Reservation,
         TerminalErrorTarget, ValueLossReason, ValueState,
     };
-    use crate::ids::{CallRef, EngineId};
-
-    pub fn register_engine_session(_engine_id: EngineId, _session: &Arc<ProfilerSession>) {}
-
-    pub fn unregister_engine_session(_engine_id: EngineId) {}
+    use crate::ids::CallRef;
 
     pub fn reserve_session_error_attempt(
         _session: &ProfilerSession,

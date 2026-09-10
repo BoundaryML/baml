@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, fmt::Write};
 
 use crate::{
     rust_ident::{rust_class_type_ident, rust_field_ident, rust_field_value_ident},
-    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
+    types::{BamlType, NativeBuiltin, NativeClassDef, Param, Receiver, VmUsage},
 };
 
 // ============================================================================
@@ -1257,14 +1257,22 @@ fn emit_single_extraction_indented(
     out: &mut String,
     name: &str,
     idx: usize,
-    ty: &BamlType,
+    param: &Param,
     indent: &str,
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
+    if param.default_empty_map && matches!(param.ty, BamlType::Map(_, _)) {
+        writeln!(
+            out,
+            "{indent}let {name} = if args[{idx}].is_omitted() {{ IndexMap::new() }} else {{ vm.as_map(&args[{idx}])?.to_index_map() }};"
+        )
+        .unwrap();
+        return;
+    }
     let rhs = extraction_expr(
         &format!("&args[{idx}]"),
-        ty,
+        &param.ty,
         false,
         needs_owned,
         arraymap_needs_owned,
@@ -1426,7 +1434,7 @@ fn emit_arg_extractions_indented(
                     out,
                     &rust_field_ident(&p.name).to_string(),
                     arg_idx,
-                    &p.ty,
+                    p,
                     indent,
                     needs_owned,
                     arraymap_needs_owned,
@@ -1439,7 +1447,7 @@ fn emit_arg_extractions_indented(
                     out,
                     &rust_field_ident(&p.name).to_string(),
                     arg_idx,
-                    &p.ty,
+                    p,
                     indent,
                     needs_owned,
                     arraymap_needs_owned,
@@ -1470,7 +1478,7 @@ fn emit_arg_extractions_indented(
                     out,
                     &rust_field_ident(&p.name).to_string(),
                     arg_idx,
-                    &p.ty,
+                    p,
                     indent,
                     needs_owned,
                     arraymap_needs_owned,
@@ -1483,7 +1491,7 @@ fn emit_arg_extractions_indented(
                 out,
                 &rust_field_ident(&p.name).to_string(),
                 i,
-                &p.ty,
+                p,
                 indent,
                 needs_owned,
                 arraymap_needs_owned,
@@ -2275,6 +2283,27 @@ fn media_kind_expr(class_name: &str) -> String {
 mod tests {
     use super::*;
     use crate::extract::{extract_native_builtins, extract_native_builtins_for};
+
+    #[test]
+    fn empty_map_default_only_handles_omission() {
+        let (builtins, _, classes) = extract_native_builtins_for("boundary").unwrap();
+        let output = generate_native_trait(&builtins, &classes);
+        assert!(output.contains(
+            "if args[1].is_omitted() { IndexMap::new() } else { vm.as_map(&args[1])?.to_index_map() }"
+        ));
+        assert!(!output.contains("if args[1].is_null()"));
+        let param = Param {
+            name: "required".into(),
+            ty: BamlType::Map(Box::new(BamlType::String), Box::new(BamlType::Int)),
+            default_empty_map: false,
+        };
+        let mut required = String::new();
+        emit_single_extraction_indented(&mut required, "required", 0, &param, "", true, true);
+        assert_eq!(
+            required,
+            "let required = vm.as_map(&args[0])?.to_index_map();\n"
+        );
+    }
 
     #[test]
     fn test_camel_to_snake() {

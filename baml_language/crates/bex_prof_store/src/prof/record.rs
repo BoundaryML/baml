@@ -32,6 +32,10 @@ pub const START_THREAD_SPAWN_FIXED_LEN: usize = START_THREAD_FIXED_LEN + 16;
 pub const END_THREAD_LEN: usize = 18;
 /// See [`CALL_FUNCTION_LEN`].
 pub const SET_FUNCTION_ID_LEN: usize = 41;
+/// A session-local owned payload handle.
+pub const LOG_LEN: usize = 9;
+/// A session-local owned call scope payload handle.
+pub const CALL_SCOPE_LEN: usize = 9;
 
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
 pub const MAX_RECORD_LEN: usize = START_THREAD_SPAWN_FIXED_LEN + MAX_THREAD_NAME_LEN;
@@ -59,6 +63,8 @@ const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
 const TAG_END_FUNCTION_AWAITED: u8 = 0x06;
 const TAG_START_THREAD_SPAWN: u8 = 0x07;
+const TAG_LOG: u8 = 0x08;
+const TAG_CALL_SCOPE: u8 = 0x09;
 const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 
 /// Caller-side source span captured at a profiled call site.
@@ -203,6 +209,10 @@ pub enum RawRecord<'a> {
         /// Raw clock ticks; converted to ns by the consumer at transcode.
         ts_ticks: u64,
     },
+    /// Tag `0x08`: a captured log owned by the session payload table.
+    Log { payload_id: u64 },
+    /// Tag `0x09`: effective call scope owned by the session payload table.
+    CallScope { payload_id: u64 },
 }
 
 /// Why a byte range failed to decode. In a drained, committed range any of
@@ -236,6 +246,8 @@ impl RawRecord<'_> {
             }
             RawRecord::EndThread { .. } => END_THREAD_LEN,
             RawRecord::SetFunctionId { .. } => SET_FUNCTION_ID_LEN,
+            RawRecord::Log { .. } => LOG_LEN,
+            RawRecord::CallScope { .. } => CALL_SCOPE_LEN,
         }
     }
 
@@ -391,6 +403,14 @@ impl RawRecord<'_> {
                 w.bytes(&id);
                 w.u64(ts_ticks);
             }
+            RawRecord::Log { payload_id } => {
+                w.u8(TAG_LOG);
+                w.u64(payload_id);
+            }
+            RawRecord::CallScope { payload_id } => {
+                w.u8(TAG_CALL_SCOPE);
+                w.u64(payload_id);
+            }
         }
         debug_assert_eq!(w.pos, self.encoded_len());
         w.pos
@@ -403,6 +423,12 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
     let mut r = Reader { buf, pos: 0 };
     let tag = r.u8()?;
     let rec = match tag {
+        TAG_LOG => RawRecord::Log {
+            payload_id: r.u64()?,
+        },
+        TAG_CALL_SCOPE => RawRecord::CallScope {
+            payload_id: r.u64()?,
+        },
         TAG_CALL_FUNCTION => {
             let flags = r.u8()?;
             let thread_id = BexThreadId(r.u64()?);
@@ -774,6 +800,38 @@ mod tests {
     }
 
     #[test]
+    fn log_handle_has_a_fixed_layout_and_rejects_every_truncation() {
+        let record = RawRecord::Log {
+            payload_id: 0x0807_0605_0403_0201,
+        };
+        let mut bytes = [0; MAX_RECORD_LEN];
+        assert_eq!(record.encode(&mut bytes), LOG_LEN);
+        assert_eq!(&bytes[..LOG_LEN], &[8, 1, 2, 3, 4, 5, 6, 7, 8]);
+        for cut in 0..LOG_LEN {
+            assert_eq!(decode(&bytes[..cut]), Err(DecodeError::Truncated));
+        }
+        for payload_id in [0, 1, u64::MAX] {
+            roundtrip(RawRecord::Log { payload_id });
+        }
+    }
+
+    #[test]
+    fn scope_handle_has_a_fixed_layout_and_rejects_every_truncation() {
+        let record = RawRecord::CallScope {
+            payload_id: 0x0807_0605_0403_0201,
+        };
+        let mut bytes = [0; MAX_RECORD_LEN];
+        assert_eq!(record.encode(&mut bytes), CALL_SCOPE_LEN);
+        assert_eq!(&bytes[..CALL_SCOPE_LEN], &[9, 1, 2, 3, 4, 5, 6, 7, 8]);
+        for cut in 0..CALL_SCOPE_LEN {
+            assert_eq!(decode(&bytes[..cut]), Err(DecodeError::Truncated));
+        }
+        for payload_id in [0, 1, u64::MAX] {
+            roundtrip(RawRecord::CallScope { payload_id });
+        }
+    }
+
+    #[test]
     fn roundtrip_thread_names() {
         for len in [0usize, 1, 100, 255, 256] {
             let name = vec![b'x'; len];
@@ -889,7 +947,7 @@ mod tests {
     #[test]
     fn decode_rejects_unknown_tag_and_bad_status() {
         assert_eq!(decode(&[0x00]), Err(DecodeError::UnknownTag(0x00)));
-        assert_eq!(decode(&[0x08]), Err(DecodeError::UnknownTag(0x08)));
+        assert_eq!(decode(&[0x0a]), Err(DecodeError::UnknownTag(0x0a)));
         assert_eq!(decode(&[]), Err(DecodeError::Truncated));
 
         let mut buf = [0u8; MAX_RECORD_LEN];

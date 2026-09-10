@@ -210,6 +210,7 @@ impl ExecutionRuntime {
 struct EvidenceBatch {
     id: u64,
     facts: Vec<EvidenceFact>,
+    queued_at: Option<std::time::Instant>,
     general: Option<Reservation>,
     manual: Option<Reservation>,
 }
@@ -219,6 +220,7 @@ impl EvidenceBatch {
         Self {
             id: 1,
             facts: Vec::new(),
+            queued_at: None,
             general: None,
             manual: None,
         }
@@ -230,7 +232,10 @@ impl EvidenceBatch {
         manual_eligible: bool,
         memory: &ProfilerMemoryGovernor,
     ) -> Result<u64, ()> {
-        let charge = MeasuredLayouts::V1.evidence_item_min_bytes;
+        let charge = MeasuredLayouts::V1
+            .evidence_item_min_bytes
+            .max(std::mem::size_of::<EvidenceFact>() as u64)
+            .saturating_add(fact.heap_bytes());
         let reservation = memory
             .try_reserve(ReservationClass::General, Owner::Evidence, charge)
             .or_else(|general_error| {
@@ -244,7 +249,18 @@ impl EvidenceBatch {
         self.push_reserved(fact, reservation)
     }
 
-    fn push_reserved(&mut self, fact: EvidenceFact, reservation: Reservation) -> Result<u64, ()> {
+    fn push_reserved(
+        &mut self,
+        fact: EvidenceFact,
+        mut reservation: Reservation,
+    ) -> Result<u64, ()> {
+        let required = MeasuredLayouts::V1
+            .evidence_item_min_bytes
+            .max(std::mem::size_of::<EvidenceFact>() as u64)
+            .saturating_add(fact.heap_bytes());
+        reservation
+            .try_grow(required.saturating_sub(reservation.accounted_bytes()))
+            .map_err(|_| ())?;
         if reservation.owner() != Owner::Evidence || self.facts.try_reserve(1).is_err() {
             return Err(());
         }
@@ -257,14 +273,16 @@ impl EvidenceBatch {
             Some(aggregate) => aggregate.absorb(reservation).map_err(|_| ())?,
             None => *slot = Some(reservation),
         }
+        self.queued_at.get_or_insert_with(std::time::Instant::now);
         self.facts.push(fact);
         Ok(self.id)
     }
 
     fn target_reached(&self, target: u64) -> bool {
-        u64::try_from(self.facts.len())
-            .unwrap_or(u64::MAX)
-            .saturating_mul(MeasuredLayouts::V1.evidence_item_min_bytes)
+        self.general
+            .as_ref()
+            .map_or(0, Reservation::accounted_bytes)
+            .saturating_add(self.manual.as_ref().map_or(0, Reservation::accounted_bytes))
             >= target
     }
 
@@ -275,6 +293,7 @@ impl EvidenceBatch {
             Self {
                 id: next_id,
                 facts: Vec::new(),
+                queued_at: None,
                 general: None,
                 manual: None,
             },
@@ -309,6 +328,7 @@ struct CallState {
     next_runtime_id_ordinal: u32,
     start_ticks: u64,
     values_observed: u8,
+    scope_observed: bool,
     pending_end: Option<OwnedCallEnd>,
     _reservation: Reservation,
 }
@@ -321,7 +341,7 @@ impl CallState {
         };
     }
 
-    fn waits_for_value(&self, status: FunctionEndStatus) -> bool {
+    fn waits_for_capture(&self, status: FunctionEndStatus) -> bool {
         let mut required = 0;
         if self.roles.inputs() {
             required |= super::RoleMask::INPUT;
@@ -329,7 +349,7 @@ impl CallState {
         if self.roles.output() && status == FunctionEndStatus::Ok {
             required |= super::RoleMask::OUTPUT;
         }
-        self.values_observed & required != required
+        self.values_observed & required != required || !self.scope_observed
     }
 
     fn next_missing_value(&self, status: FunctionEndStatus) -> Option<super::ValueRole> {
@@ -457,6 +477,13 @@ struct PendingValueOccurrence {
 }
 
 #[derive(Debug)]
+struct PendingCallScope {
+    handle: ExecutionHandle,
+    scope: super::CallScope,
+    reservation: Reservation,
+}
+
+#[derive(Debug)]
 struct PendingErrorAttempt {
     handle: ExecutionHandle,
     attempt: ErrorCaptureAttempt,
@@ -498,9 +525,18 @@ pub(super) struct DirectDecoder {
     pending_thread_ends: HashMap<ThreadRef, PendingThreadEnd>,
     pending_runtime_ids: HashMap<CallRef, Vec<PendingRuntimeId>>,
     pending_values: HashMap<CallRef, Vec<PendingValueOccurrence>>,
+    pending_scopes: HashMap<CallRef, PendingCallScope>,
     pending_error_attempts: HashMap<ErrorCaptureId, PendingErrorAttempt>,
     error_targets: HashMap<ErrorCaptureId, ErrorTargetState>,
     pending_terminal_errors: Vec<PendingTerminalError>,
+}
+
+pub(super) trait ScopeSource {
+    fn take_scope(
+        &self,
+        handle: ExecutionHandle,
+        call_ref: CallRef,
+    ) -> Option<(super::CallScope, Reservation)>;
 }
 
 pub(super) struct DecoderResources<'a> {
@@ -509,6 +545,7 @@ pub(super) struct DecoderResources<'a> {
     pub memory: &'a ProfilerMemoryGovernor,
     pub sizing: DerivedSizing,
     pub clock: &'a TickConverter,
+    pub scopes: &'a dyn ScopeSource,
     pub boundaries: &'a [std::sync::Mutex<Option<ExecutionRuntime>>],
     /// The session's stream writer; hand-off target for sealed epochs and
     /// evidence batches (consumer thread only; lock order decoder → writer).
@@ -516,8 +553,38 @@ pub(super) struct DecoderResources<'a> {
 }
 
 impl DirectDecoder {
+    pub(super) fn flush_due(
+        resources: &DecoderResources<'_>,
+        handle: ExecutionHandle,
+        now: std::time::Instant,
+        interval: std::time::Duration,
+        force: bool,
+    ) {
+        let due = with_runtime_value(resources.boundaries, handle, |runtime| {
+            Some(
+                force
+                    || runtime.evidence.queued_at.is_some_and(|queued_at| {
+                        now.saturating_duration_since(queued_at) >= interval
+                    }),
+            )
+        })
+        .unwrap_or(false);
+        if due {
+            flush_evidence(resources, handle);
+        }
+    }
+
     pub(super) fn pending_thread_end_count(&self) -> usize {
         self.pending_thread_ends.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn call_state_counts(&self) -> (usize, usize, usize) {
+        (
+            self.calls.len(),
+            self.pending_ends.len(),
+            self.pending_scopes.len(),
+        )
     }
 
     /// Queue snapshot for one live execution (session checkpoint support).
@@ -717,6 +784,84 @@ impl DirectDecoder {
                 id,
                 ts_ticks,
             ),
+            RawRecord::Log { .. } | RawRecord::CallScope { .. } => {
+                unreachable!("session resolves owned payloads before decoding")
+            }
+        }
+    }
+
+    pub(super) fn consume_log(
+        resources: &DecoderResources<'_>,
+        handle: ExecutionHandle,
+        log: super::LogEvent,
+    ) {
+        with_runtime(resources.boundaries, handle, |runtime| {
+            if runtime
+                .evidence
+                .push(EvidenceFact::LogEvent(log), false, resources.memory)
+                .is_err()
+            {
+                runtime.health.evidence_queue_full =
+                    runtime.health.evidence_queue_full.saturating_add(1);
+            }
+        });
+    }
+
+    pub(super) fn consume_call_scope(
+        &mut self,
+        resources: &DecoderResources<'_>,
+        handle: ExecutionHandle,
+        scope: super::CallScope,
+        reservation: Reservation,
+    ) {
+        let call_ref = scope.call_ref;
+        let Some(call) = self.calls.get_mut(&call_ref) else {
+            if self.pending_scopes.contains_key(&call_ref) {
+                with_runtime(resources.boundaries, handle, |runtime| {
+                    runtime.health.corrupt_records =
+                        runtime.health.corrupt_records.saturating_add(1);
+                });
+                return;
+            }
+            self.pending_scopes.insert(
+                call_ref,
+                PendingCallScope {
+                    handle,
+                    scope,
+                    reservation,
+                },
+            );
+            return;
+        };
+        if call.boundary != handle || call.scope_observed {
+            with_runtime(resources.boundaries, handle, |runtime| {
+                runtime.health.corrupt_records = runtime.health.corrupt_records.saturating_add(1);
+            });
+            return;
+        }
+        call.scope_observed = true;
+        if matches!(call.span_state, SpanState::Queued(_) | SpanState::Durable) {
+            with_runtime(resources.boundaries, handle, |runtime| {
+                if runtime
+                    .evidence
+                    .push(
+                        EvidenceFact::CallScope(scope),
+                        call.manual_selected,
+                        resources.memory,
+                    )
+                    .is_err()
+                {
+                    runtime.health.evidence_queue_full =
+                        runtime.health.evidence_queue_full.saturating_add(1);
+                }
+            });
+        }
+        let end = call
+            .pending_end
+            .filter(|end| !call.waits_for_capture(end.status));
+        flush_evidence_if_target(resources, handle);
+        if let Some(end) = end {
+            self.consume_call_end(resources, end);
         }
     }
 
@@ -933,7 +1078,7 @@ impl DirectDecoder {
         let ready_end = self.calls.get_mut(&call_ref).and_then(|call| {
             call.observe_value(role);
             let end = call.pending_end?;
-            (!call.waits_for_value(end.status)).then_some(end)
+            (!call.waits_for_capture(end.status)).then_some(end)
         });
         if let Some(end) = ready_end {
             self.consume_call_end(resources, end);
@@ -1171,6 +1316,7 @@ impl DirectDecoder {
                 next_runtime_id_ordinal: u32::from(plan.reasons.root() && !plan.reasons.manual()),
                 start_ticks: fact.ts_ticks,
                 values_observed: 0,
+                scope_observed: !plan.selected,
                 pending_end: None,
                 _reservation: reservation,
             },
@@ -1178,6 +1324,14 @@ impl DirectDecoder {
         flush_evidence_if_target(resources, boundary);
         self.resolve_threads_for_parent(resources, fact.call_ref);
         self.resolve_runtime_ids(resources, fact.call_ref);
+        if let Some(pending) = self.pending_scopes.remove(&fact.call_ref) {
+            self.consume_call_scope(
+                resources,
+                pending.handle,
+                pending.scope,
+                pending.reservation,
+            );
+        }
         self.resolve_values(resources, fact.call_ref);
         self.refresh_error_dependencies();
         self.resolve_error_attempts(resources);
@@ -1191,7 +1345,27 @@ impl DirectDecoder {
             self.insert_pending_end(resources, fact);
             return;
         };
-        if call.waits_for_value(fact.status) {
+        if !call.scope_observed {
+            // Scope capture completes synchronously before the producer can
+            // publish an end. A different ring may still hold its record;
+            // claim that payload before settling an absent scope as loss.
+            // Only unobserved scopes scan the bounded payload capacity.
+            if let Some((scope, reservation)) =
+                resources.scopes.take_scope(call.boundary, fact.call_ref)
+            {
+                let handle = call.boundary;
+                call.pending_end = None;
+                self.calls.insert(fact.call_ref, call);
+                self.consume_call_scope(resources, handle, scope, reservation);
+                call = self
+                    .calls
+                    .remove(&fact.call_ref)
+                    .expect("scope keeps call open");
+            } else {
+                call.scope_observed = true;
+            }
+        }
+        if call.waits_for_capture(fact.status) {
             if call.pending_end.replace(fact).is_some() {
                 with_runtime(resources.boundaries, call.boundary, |runtime| {
                     runtime.health.corrupt_records =
@@ -2067,11 +2241,20 @@ impl DirectDecoder {
     /// transport loss. Materialize that per-span loss and then fold the
     /// already-retained structural end; evidence pressure must not turn a
     /// completed CCT invocation into an unmatched call.
-    pub(super) fn complete_missing_values(
+    pub(super) fn complete_missing_captures(
         &mut self,
         resources: &DecoderResources<'_>,
         handle: ExecutionHandle,
     ) {
+        // Missing whole-scope telemetry cannot distinguish empty scope from
+        // lost identity. Leave the durable scope absent, but unblock ends.
+        for call in self
+            .calls
+            .values_mut()
+            .filter(|call| call.boundary == handle)
+        {
+            call.scope_observed = true;
+        }
         loop {
             let missing = self.calls.iter().find_map(|(call_ref, call)| {
                 let end = call.pending_end?;
@@ -2093,6 +2276,15 @@ impl DirectDecoder {
                 manual_eligible,
                 None,
             );
+        }
+        loop {
+            let end = self.calls.values().find_map(|call| {
+                (call.boundary == handle)
+                    .then_some(call.pending_end)
+                    .flatten()
+            });
+            let Some(end) = end else { break };
+            self.consume_call_end(resources, end);
         }
     }
 
@@ -2147,6 +2339,11 @@ impl DirectDecoder {
                 !remove
             });
             !pending.is_empty()
+        });
+        self.pending_scopes.retain(|_, pending| {
+            let remove = pending.handle == handle;
+            unmatched_calls = unmatched_calls.saturating_add(u64::from(remove));
+            !remove
         });
         let mut missing_error_joins = 0u64;
         self.pending_error_attempts.retain(|_, pending| {

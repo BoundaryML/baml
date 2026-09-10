@@ -102,6 +102,7 @@ fn calls_batch(relation: &RelationDef, rows: &[CallRow]) -> RecordBatch {
             | "output_cid"
             | "error_cid"
             | "error_id"
+            | "distinct_id"
             | "error_lost_reason" => {
                 let mut b = StringBuilder::new();
                 for _ in rows {
@@ -206,7 +207,7 @@ fn calls_batch(relation: &RelationDef, rows: &[CallRow]) -> RecordBatch {
                 }
                 Arc::new(b.finish())
             }
-            "output" | "error" => {
+            "output" | "error" | "context" => {
                 let mut b = BinaryBuilder::new();
                 for _ in rows {
                     b.append_null();
@@ -962,6 +963,73 @@ async fn result_row_budget_is_query_global_and_terminal() {
     assert!(!outcome.query_completed);
     let error = outcome.error.expect("typed budget error");
     assert_eq!(error.code, "E_QUERY_BUDGET_EXCEEDED");
+}
+
+#[tokio::test]
+async fn repeated_statements_have_independent_budgets_and_outcomes() {
+    let mut budgets = QueryBudgets::unlimited();
+    budgets.max_result_rows = 2;
+    let fx = fixture_with(
+        (0..3).map(|i| call("e1", format!("c{i}"))).collect(),
+        FixtureResolver::default(),
+        budgets,
+        CancellationToken::new(),
+        CapabilityRegistry::new(),
+        QueryScope::local(),
+    )
+    .await;
+    let mut first = fx
+        .session
+        .execute("SELECT call_id FROM calls LIMIT 2")
+        .await
+        .unwrap();
+    assert_eq!(call_ids(&mut first).await.len(), 2);
+    let first = first.finish();
+    assert_eq!(first.result_state, ResultState::Complete);
+    assert_eq!(first.rows_streamed, 2);
+    let mut exhausted = fx
+        .session
+        .execute("SELECT call_id FROM calls")
+        .await
+        .unwrap();
+    let _ = call_ids(&mut exhausted).await;
+    assert_eq!(
+        exhausted.finish().result_state,
+        ResultState::BudgetExhausted
+    );
+    let mut next = fx
+        .session
+        .execute("SELECT call_id FROM calls LIMIT 1")
+        .await
+        .unwrap();
+    assert_eq!(call_ids(&mut next).await.len(), 1);
+    let next = next.finish();
+    assert_eq!(next.result_state, ResultState::Complete);
+    assert_eq!(next.rows_streamed, 1);
+    assert_eq!(next.value_evaluations.attempted, 0);
+}
+
+#[tokio::test]
+async fn overlapping_statements_do_not_share_accounting() {
+    let fx = fixture(
+        vec![call("e1", "c1"), call("e1", "c2")],
+        FixtureResolver::default(),
+    )
+    .await;
+    let mut first = fx
+        .session
+        .execute("SELECT call_id FROM calls LIMIT 1")
+        .await
+        .unwrap();
+    let mut second = fx
+        .session
+        .execute("SELECT call_id FROM calls LIMIT 2")
+        .await
+        .unwrap();
+    assert_eq!(call_ids(&mut second).await.len(), 2);
+    assert_eq!(second.finish().rows_streamed, 2);
+    assert_eq!(call_ids(&mut first).await.len(), 1);
+    assert_eq!(first.finish().rows_streamed, 1);
 }
 
 #[tokio::test]

@@ -1,0 +1,57 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[scope_context.baml:2:51]
+ 2 │     boundary.id().context(metadata = { "invalid": [1, 2] })
+   ·                                                   ───┬──
+   ·                                                      ╰── expected `int | float | string | bool | null`, found `int[]`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[scope_context.baml:6:51]
+ 6 │     boundary.id().context(metadata = { "invalid": { "nested": true } })
+   ·                                                   ─────────┬────────
+   ·                                                            ╰── expected `int | float | string | bool | null`, found `map<string, bool>`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scope_context.baml:14:51]
+ 14 │     boundary.id().context(metadata = { "invalid": MetadataObject { value: "no" } })
+    ·                                                   ───────────────┬──────────────
+    ·                                                                  ╰── expected `int | float | string | bool | null`, found `MetadataObject`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scope_context.baml:18:41]
+ 18 │     boundary.id().context(distinct_id = 1)
+    ·                                         ┬
+    ·                                         ╰── expected `string | null`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scope_context.baml:22:51]
+ 22 │     boundary.id().context(metadata = { "invalid": value })
+    ·                                                   ──┬──
+    ·                                                     ╰── expected `int | float | string | bool | null`, found `bigint`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scope_context.baml:26:38]
+ 26 │     boundary.id().context(metadata = null)
+    ·                                      ──┬─
+    ·                                        ╰── expected `map<string, int | float | string | bool | null>`, found `null`
+    ╰────

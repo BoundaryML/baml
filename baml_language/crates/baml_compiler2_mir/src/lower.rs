@@ -8021,7 +8021,7 @@ impl<'db> LoweringContext<'db> {
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
         };
 
-        // If this call targets a sys_op (`$rust_io_function`), an omitted
+        // Sys-ops and compiler intrinsics have no callee default prologue. An omitted
         // defaulted param must be materialized to its declared default HERE:
         // sys_ops have no bytecode body, so they never run the default-parameter
         // prologue that a regular callee would. Leaving `OmittedArg` for a
@@ -8030,15 +8030,26 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Call { callee, .. } => Some(*callee),
             _ => None,
         };
-        let sysop_callee = callee_expr.and_then(|callee| self.sys_op_callee(callee));
+        let inline_callee = callee_expr.and_then(|callee| {
+            self.sys_op_callee(callee)
+                .or_else(|| self.builtin_callee(callee, baml_compiler2_ast::BuiltinKind::Intrinsic))
+        });
+        let external_intrinsic = callee_expr
+            .filter(|&callee| self.check_intrinsic(callee).is_some())
+            .and_then(|callee| self.external_callee(callee).cloned());
         // A method-convention sys-op call (e.g. `output_format._render(...)`) has
         // a receiver-relative `param_index` — TIR strips `self` via
         // `skip_self_param` when building the call plan — but the callee's default
         // arena (`function_parameter_defaults`) is indexed self-inclusive. Shift
         // omitted-default indices by one to skip `self`; free-function sys-ops have
         // no `self`, so no shift.
-        let sysop_self_offset = match (sysop_callee, callee_expr) {
-            (Some(_), Some(callee)) if self.callee_uses_method_convention(callee) => 1,
+        let default_self_offset = match callee_expr {
+            Some(callee)
+                if (inline_callee.is_some() || external_intrinsic.is_some())
+                    && self.callee_uses_method_convention(callee) =>
+            {
+                1
+            }
             _ => 0,
         };
 
@@ -8060,40 +8071,59 @@ impl<'db> LoweringContext<'db> {
                     .remove(&arg)
                     .expect("call plan referenced an argument outside the call expression"),
                 crate::inference_provider::ParamBinding::OmittedDefault { param_index, .. } => {
-                    match sysop_callee {
-                        Some(callee_loc) => {
-                            self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
-                        }
-                        None => Operand::Constant(Constant::OmittedArg),
+                    match inline_callee {
+                        Some(callee_loc) => self
+                            .builtin_default_operand(callee_loc, param_index + default_self_offset),
+                        None => Self::constant_default_operand(
+                            external_intrinsic
+                                .as_ref()
+                                .and_then(|callee| {
+                                    callee
+                                        .builtin_defaults
+                                        .get(param_index + default_self_offset)
+                                })
+                                .and_then(Option::as_ref),
+                        ),
                     }
                 }
             })
             .collect()
     }
 
-    /// Materialize a sys-op parameter's omitted default as a constant operand.
-    /// `$rust_io_function` callees have no bytecode body — and thus no
+    /// Materialize a sys-op or intrinsic parameter's omitted constant default.
+    /// These callees have no bytecode body and thus no
     /// default-parameter prologue — so their omitted defaults must be folded at
     /// the call site. The default is read from the CALLEE's own defaults arena
     /// (correct cross-file/cross-package, where the caller's TIR tables don't
     /// cover the callee). Sys-op defaults are constant literals today; a
     /// non-constant default falls back to `OmittedArg` rather than mis-evaluate.
-    fn sysop_default_operand(
+    fn builtin_default_operand(
         &self,
         callee_loc: FunctionLoc<'db>,
         param_index: usize,
     ) -> Operand<'db> {
         let defaults = baml_compiler2_ppir::function_parameter_defaults(self.db, callee_loc);
-        let constant = defaults
+        let default = defaults
             .param_default(param_index)
             .map(|d| d.expr.expr())
-            .map(|id| match &defaults.defaults.exprs.exprs[id] {
-                AstExpr::Null => Constant::Null,
-                AstExpr::Literal(lit) => Self::lower_literal(lit),
-                _ => Constant::OmittedArg,
-            })
-            .unwrap_or(Constant::OmittedArg);
-        Operand::Constant(constant)
+            .and_then(|id| {
+                baml_compiler2_hir_ty::callable::BuiltinDefault::from_expr(
+                    &defaults.defaults.exprs.exprs[id],
+                )
+            });
+        Self::constant_default_operand(default.as_ref())
+    }
+
+    fn constant_default_operand(
+        default: Option<&baml_compiler2_hir_ty::callable::BuiltinDefault>,
+    ) -> Operand<'db> {
+        use baml_compiler2_hir_ty::callable::BuiltinDefault;
+
+        Operand::Constant(match default {
+            Some(BuiltinDefault::Null) => Constant::Null,
+            Some(BuiltinDefault::Literal(literal)) => Self::lower_literal(literal),
+            None => Constant::OmittedArg,
+        })
     }
 
     /// Operator-style `recv.to_string()` -> `string.from(recv)` desugar, the
@@ -9649,8 +9679,14 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
-        use baml_compiler2_ast::BuiltinKind;
+        self.builtin_callee(callee, baml_compiler2_ast::BuiltinKind::Io)
+    }
 
+    fn builtin_callee(
+        &self,
+        callee: AstExprId,
+        kind: baml_compiler2_ast::BuiltinKind,
+    ) -> Option<FunctionLoc<'db>> {
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
             let func_loc = if segments.len() == 1 {
@@ -9688,7 +9724,7 @@ impl<'db> LoweringContext<'db> {
             };
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                if matches!(body.as_ref(), FunctionBody::Builtin(actual) if *actual == kind) {
                     return Some(fl);
                 }
             }
@@ -9707,7 +9743,7 @@ impl<'db> LoweringContext<'db> {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                    if matches!(body.as_ref(), FunctionBody::Builtin(actual) if *actual == kind) {
                         return Some(fl);
                     }
                 }

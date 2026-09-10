@@ -11,6 +11,7 @@ pub(crate) mod id;
 // by the generated module.
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{Instance, Type, Value};
+use indexmap::IndexMap;
 
 use crate::{
     BexVm,

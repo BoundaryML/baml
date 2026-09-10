@@ -5,10 +5,10 @@
 
 pub mod artifact;
 pub mod encode;
+pub mod lifecycle;
 pub mod live_cache;
 pub mod read;
 pub mod record;
-pub mod writer;
 
 /// The `.bamlvalue` wire types, generated from `value/proto/bamlvalue.proto`.
 #[allow(
@@ -25,6 +25,7 @@ pub use artifact::{
     BlobRef, BlobStore, ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef,
     ValueArtifactSink,
 };
+pub use lifecycle::ValueWriter;
 pub use live_cache::{
     DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody,
     LiveValueCache, LiveValueEviction, LiveValueInsertResult, LiveValueKey, LiveValueLookup,
@@ -34,4 +35,3 @@ pub use record::{
     CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
     RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCodec, ValueFileRecord, ValueRef,
 };
-pub use writer::{ValueIdAllocator, ValueWriteOutcome, ValueWriter};

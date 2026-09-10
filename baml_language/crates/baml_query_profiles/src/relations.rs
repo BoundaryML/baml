@@ -396,6 +396,7 @@ fn provider_for(name: &str) -> Option<RowsFn> {
         "threads_v1" => threads_rows,
         "call_path_stats_v1" => contexts_rows,
         "calls_v1" => calls_rows,
+        "logs_v1" => logs_rows,
         "errors_v1" => errors_rows,
         "function_definitions_v1" => |b, u, f, _| functions_rows(b, u, f),
         "health_v1" => health_rows,
@@ -1154,8 +1155,49 @@ fn calls_rows(
                 .bin_opt("output", value_handle(output_state, start.roles.output()))
                 .bin_opt("error", value_handle(error_state, start.roles.error()))
                 .utf8_opt("error_id", error_id)
-                .utf8_opt("error_lost_reason", error_lost);
+                .utf8_opt("error_lost_reason", error_lost)
+                .utf8_opt(
+                    "distinct_id",
+                    span.scope.as_ref().and_then(|s| s.distinct_id.clone()),
+                )
+                .bin_opt(
+                    "context",
+                    value_handle(span.scope.as_ref().map(|s| s.context), true),
+                );
             builder.push(row);
+        }
+    }
+    Ok(())
+}
+
+fn logs_rows(
+    builder: &mut BatchBuilder,
+    universe: &ProfilesUniverse,
+    folds: &FoldCache,
+    targets: Option<&[String]>,
+) -> Result<(), QueryError> {
+    for (stream, summary) in selected(universe, targets) {
+        let execution_id = summary.id.encode();
+        let profile = folds.fold(stream, summary)?;
+        for (ordinal, log) in profile.logs.iter().enumerate() {
+            builder.push(
+                Row::default()
+                    .utf8("execution_id", execution_id.clone())
+                    .u64("log_id", ordinal as u64)
+                    .ts_opt(
+                        "timestamp",
+                        log.timestamp_ms
+                            .checked_mul(1_000_000)
+                            .and_then(|ns| i64::try_from(ns).ok()),
+                    )
+                    .u64("timestamp_ms", log.timestamp_ms)
+                    .utf8_opt("call_id", log.call_ref.map(|call| call.encode()))
+                    .utf8_opt("level", log.level.clone())
+                    .utf8_opt("event_name", log.event_name.clone())
+                    .utf8_opt("distinct_id", log.distinct_id.clone())
+                    .bin_opt("context", Some(encode_handle(log.context)))
+                    .bin_opt("data", Some(encode_handle(log.data))),
+            );
         }
     }
     Ok(())

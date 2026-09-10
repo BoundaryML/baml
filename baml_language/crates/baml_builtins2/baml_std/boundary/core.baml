@@ -36,4 +36,15 @@ class LocalId {
     ) -> LocalId throws baml.errors.InvalidArgument {
         $rust_function
     }
+
+    /// Returns this id with owned scope edits. Null metadata values remove keys;
+    /// a null identity inherits the caller's identity.
+    //baml:mut_vm
+    function context(
+        self,
+        metadata: map<string, string | int | float | bool | null> = {},
+        distinct_id: string? = null,
+    ) -> LocalId throws baml.errors.InvalidArgument {
+        $rust_function
+    }
 }

@@ -162,11 +162,11 @@ impl Drop for Registry {
     }
 }
 
-#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
+#[cfg(not(baml_loom))]
 pub(crate) use global::global_registry;
 #[cfg(not(baml_loom))]
 pub use global::ring_for_engine;
-#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
+#[cfg(not(baml_loom))]
 pub(crate) use global::{configure_global_transport, global_ctx};
 
 #[cfg(not(baml_loom))]

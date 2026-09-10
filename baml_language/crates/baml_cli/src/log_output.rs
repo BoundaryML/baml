@@ -62,6 +62,25 @@ impl LogOutput {
     }
 
     pub(crate) fn print(self, logger: Option<&TraceLogger>) {
+        self.print_logs(logger);
+        if let Some(logger) = logger {
+            let stats = logger.stats();
+            if stats.skipped_log_queue_full > 0 {
+                eprintln!(
+                    "WARN {} skipped {} logs because the subscriber inbox was full",
+                    self.command, stats.skipped_log_queue_full
+                );
+            }
+            if stats.abandoned_reservations > 0 {
+                eprintln!(
+                    "WARN {} {} log captures were abandoned before delivery",
+                    self.command, stats.abandoned_reservations
+                );
+            }
+        }
+    }
+
+    fn print_logs(self, logger: Option<&TraceLogger>) {
         let Some(logger) = logger else {
             return;
         };
@@ -105,7 +124,7 @@ impl LogOutput {
                         self.print(Some(logger));
                         break result;
                     }
-                    _ = interval.tick() => self.print(Some(logger)),
+                    _ = interval.tick() => self.print_logs(Some(logger)),
                 }
             }
         })

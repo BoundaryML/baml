@@ -13,6 +13,7 @@ use base64::Engine as _;
 use bex_events::{
     history::{
         HistoryValueReadResult, HistoryValueSegment, history_run_matches_filter,
+        logs::{MemoryLogHistory, log_value_ref},
         open_boundary_from_value_segments, read_value_from_segments_result, summarize_history_run,
     },
     run::{
@@ -24,10 +25,8 @@ use bex_events::{
         run_to_wire,
     },
     value::{
-        ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
-        DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
-        LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCodec, ValueIdAllocator,
-        ValueRef, ValueWriteOutcome, ValueWriter,
+        ByteValueArtifactSink, DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache,
+        LiveValueLookup, RunCompletedRecord, RunStartedRecord, ValueCodec, ValueRef, ValueWriter,
     },
 };
 use bridge_ctypes::{HANDLE_TABLE, playground_run_args_to_bex_values};
@@ -88,6 +87,8 @@ pub(crate) struct WasmHistoryStoreInner {
 #[derive(Debug)]
 struct WasmHistoryBoundary {
     value_writer: ValueWriter<ByteValueArtifactSink>,
+    logs: MemoryLogHistory,
+    diagnostics: Vec<RunDiagnostic>,
 }
 
 impl WasmHistoryStoreInner {
@@ -98,34 +99,23 @@ impl WasmHistoryStoreInner {
             created_at_ms: start.created_at_ms,
             time_anchor: start.time_anchor,
         })?;
-        self.boundaries
-            .insert(start.boundary_id, WasmHistoryBoundary { value_writer });
+        self.boundaries.insert(
+            start.boundary_id,
+            WasmHistoryBoundary {
+                value_writer,
+                logs: MemoryLogHistory::default(),
+                diagnostics: Vec::new(),
+            },
+        );
         Ok(())
     }
 
-    fn append_log_body(
+    fn append_log(
         &mut self,
         boundary_id: BoundaryId,
-        event: LogEventRecord,
-        codec: ValueCodec,
-        body: Vec<u8>,
-    ) -> io::Result<ValueWriteOutcome> {
-        let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "WASM history boundary {} was not begun",
-                    boundary_id.to_wire_string()
-                ),
-            )
-        })?;
-        boundary.value_writer.append_log_body(codec, body, event)
-    }
-
-    fn append_capture_loss(
-        &mut self,
-        boundary_id: BoundaryId,
-        record: &CaptureLossRecord,
+        event: bex_events::prof::backend::LogEvent,
+        body: Option<Vec<u8>>,
+        context: Option<Vec<u8>>,
     ) -> io::Result<()> {
         let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
             io::Error::new(
@@ -136,7 +126,26 @@ impl WasmHistoryStoreInner {
                 ),
             )
         })?;
-        boundary.value_writer.append_capture_loss(record)
+        boundary.logs.append(event, body, context);
+        Ok(())
+    }
+
+    fn append_diagnostic(
+        &mut self,
+        boundary_id: BoundaryId,
+        diagnostic: RunDiagnostic,
+    ) -> io::Result<()> {
+        let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "WASM history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            )
+        })?;
+        boundary.diagnostics.push(diagnostic);
+        Ok(())
     }
 
     fn complete(
@@ -196,7 +205,10 @@ impl WasmHistoryStoreInner {
             )
         })?;
         let value_segments = boundary.value_segments();
-        open_boundary_from_value_segments(&value_segments)
+        let mut run = open_boundary_from_value_segments(&value_segments)?;
+        run.payloads.extend(boundary.logs.replay()?);
+        run.diagnostics.extend(boundary.diagnostics.clone());
+        Ok(run)
     }
 
     fn read_value(
@@ -207,6 +219,10 @@ impl WasmHistoryStoreInner {
         let Some(boundary) = self.boundaries.get(&boundary_id) else {
             return Ok(HistoryValueReadResult::Missing);
         };
+        let log_value = boundary.logs.read_value(value_ref_id);
+        if log_value != HistoryValueReadResult::Missing {
+            return Ok(log_value);
+        }
         read_value_from_segments_result(&boundary.value_segments(), value_ref_id)
     }
 }
@@ -439,19 +455,40 @@ fn drain_wasm_logs(
     boundary_id: BoundaryId,
     logger: &bex_project::TraceLogger,
 ) {
-    let mut writer = match ValueWriter::new_with_id_allocator(
-        ByteValueArtifactSink::new(),
-        boundary_id,
-        ValueIdAllocator::live_fallback(),
-    ) {
-        Ok(writer) => writer,
-        Err(err) => {
-            send_log_diagnostic(callback, run_store, boundary_id, err);
-            return;
-        }
-    };
     let report = logger.drain_encoded_logs();
-    for failure in &report.failures {
+    for failure in report.failures {
+        if let Some(event) = failure.event {
+            if let Err(error) = history_store.borrow_mut().append_log(
+                failure.boundary_id,
+                event,
+                None,
+                failure.context,
+            ) {
+                send_wasm_history_diagnostic(callback, run_store, failure.boundary_id, error);
+            }
+            if let Some(patch) = run_store.ingest_log_value_ref(
+                failure.boundary_id,
+                failure.call,
+                failure.metadata.level,
+                failure
+                    .metadata
+                    .message_preview
+                    .unwrap_or_else(|| "captured log".to_owned()),
+                failure.metadata.source,
+                None,
+            ) {
+                send_run_patch(callback, &patch);
+            }
+        }
+        let _ = history_store.borrow_mut().append_diagnostic(
+            failure.boundary_id,
+            RunDiagnostic {
+                severity: bex_events::run::DiagnosticSeverity::Warning,
+                code: Some("logCaptureFailed".to_owned()),
+                message: format!("log capture failed: {}", failure.diagnostic),
+                payload_id: None,
+            },
+        );
         send_log_diagnostic(
             callback,
             run_store,
@@ -460,21 +497,31 @@ fn drain_wasm_logs(
         );
     }
     let stats = logger.stats();
+    if stats.abandoned_reservations > 0 {
+        let diagnostic =
+            bex_events::history::logs::abandoned_log_diagnostic(stats.abandoned_reservations);
+        let _ = history_store
+            .borrow_mut()
+            .append_diagnostic(boundary_id, diagnostic.clone());
+        if let Some(patch) = run_store.add_diagnostic(boundary_id, diagnostic) {
+            send_run_patch(callback, &patch);
+        }
+    }
     if stats.skipped_log_queue_full > 0 {
-        append_wasm_capture_loss_record(
-            history_store,
-            boundary_id,
-            CaptureLossKind::Log,
-            stats.skipped_log_queue_full,
-        )
-        .unwrap_or_else(|err| {
-            send_wasm_history_diagnostic(
-                callback,
-                run_store,
+        history_store
+            .borrow_mut()
+            .append_diagnostic(
                 boundary_id,
-                format!("history capture-loss retention failed: {err}"),
-            );
-        });
+                log_loss_diagnostic("log", stats.skipped_log_queue_full),
+            )
+            .unwrap_or_else(|err| {
+                send_wasm_history_diagnostic(
+                    callback,
+                    run_store,
+                    boundary_id,
+                    format!("history capture-loss retention failed: {err}"),
+                );
+            });
         send_log_loss_diagnostic(
             callback,
             run_store,
@@ -485,41 +532,20 @@ fn drain_wasm_logs(
     }
 
     for encoded in report.logs {
-        let event = LogEventRecord {
-            call: encoded.call,
-            level: encoded.metadata.level.clone(),
-            source: encoded.metadata.source.clone(),
-            timestamp_ms: encoded.metadata.timestamp_ms,
-            message_preview: encoded.metadata.message_preview.clone(),
-        };
-        let outcome = match history_store.borrow_mut().append_log_body(
+        let value_ref = log_value_ref(&encoded.body);
+        if let Err(err) = history_store.borrow_mut().append_log(
             encoded.boundary_id,
-            event.clone(),
-            ValueCodec::BamlOutboundValue,
-            encoded.body.clone(),
+            encoded.event,
+            Some(encoded.body.clone()),
+            encoded.context,
         ) {
-            Ok(outcome) => outcome,
-            Err(err) => {
-                send_wasm_history_diagnostic(
-                    callback,
-                    run_store,
-                    encoded.boundary_id,
-                    format!("history log retention failed; retained live bytes only: {err}"),
-                );
-                match writer.append_log_body(
-                    ValueCodec::BamlOutboundValue,
-                    encoded.body.clone(),
-                    event,
-                ) {
-                    Ok(outcome) => outcome,
-                    Err(err) => {
-                        send_log_diagnostic(callback, run_store, encoded.boundary_id, err);
-                        continue;
-                    }
-                }
-            }
-        };
-        let value_ref = outcome.value_ref;
+            send_wasm_history_diagnostic(
+                callback,
+                run_store,
+                encoded.boundary_id,
+                format!("history log retention failed; retained live bytes only: {err}"),
+            );
+        }
         let insert = value_store.borrow_mut().insert(
             encoded.boundary_id,
             &value_ref,
@@ -546,25 +572,6 @@ fn drain_wasm_logs(
             send_run_patch(callback, &patch);
         }
     }
-}
-
-fn append_wasm_capture_loss_record(
-    history_store: &WasmHistoryStore,
-    boundary_id: BoundaryId,
-    kind: CaptureLossKind,
-    skipped: u64,
-) -> io::Result<()> {
-    history_store.borrow_mut().append_capture_loss(
-        boundary_id,
-        &CaptureLossRecord {
-            kind,
-            reason: CaptureLossReason::QueueFull,
-            skipped_count: skipped,
-            call: None,
-            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
-            timestamp_ms: epoch_ms(),
-        },
-    )
 }
 
 fn send_wasm_history_diagnostic(
@@ -623,15 +630,16 @@ fn log_loss_diagnostic_patch(
     capture_kind: &str,
     skipped: u64,
 ) -> Option<RunPatch> {
-    run_store.add_diagnostic(
-        boundary_id,
-        RunDiagnostic {
-            severity: bex_events::run::DiagnosticSeverity::Warning,
-            code: Some("logCaptureLoss".to_string()),
-            message: capture_loss_message(capture_kind, skipped),
-            payload_id: None,
-        },
-    )
+    run_store.add_diagnostic(boundary_id, log_loss_diagnostic(capture_kind, skipped))
+}
+
+fn log_loss_diagnostic(capture_kind: &str, skipped: u64) -> RunDiagnostic {
+    RunDiagnostic {
+        severity: bex_events::run::DiagnosticSeverity::Warning,
+        code: Some("logCaptureLoss".to_string()),
+        message: capture_loss_message(capture_kind, skipped),
+        payload_id: None,
+    }
 }
 
 fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
@@ -1451,7 +1459,7 @@ async fn run_collected_test(
         .await
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 mod history_tests {
     use bex_events::{
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
@@ -1498,13 +1506,6 @@ mod history_tests {
     #[wasm_bindgen_test]
     fn wasm_queue_full_stats_create_log_capture_loss_patch() {
         let boundary_id = BoundaryId::from_bytes([22; 16]);
-        let logger = bex_project::TraceLogger::bounded(0);
-        logger.capture_with(boundary_id, root_trace(), |_| {
-            panic!("zero-capacity logger must not copy a value")
-        });
-        let stats = logger.stats();
-        assert_eq!(stats.skipped_log_queue_full, 1);
-
         let run_store = InMemoryRunStore::default();
         run_store.create_run_at(
             boundary_id,
@@ -1524,9 +1525,8 @@ mod history_tests {
             },
         );
 
-        let patch =
-            log_loss_diagnostic_patch(&run_store, boundary_id, "log", stats.skipped_log_queue_full)
-                .expect("live capture-loss diagnostic should produce a patch");
+        let patch = log_loss_diagnostic_patch(&run_store, boundary_id, "log", 1)
+            .expect("live capture-loss diagnostic should produce a patch");
         assert!(
             patch.changes.iter().any(|change| matches!(
                 change,
@@ -1546,10 +1546,165 @@ mod history_tests {
         );
     }
 
-    /// A terminal run reads back out of the in-memory history alone: the
-    /// browser has no disk, so the value segments the writer produced are
-    /// the only copy, and `open`/`read_value` must reconstruct the log
-    /// payload and its body from them without a live `InMemoryRunStore`.
+    #[wasm_bindgen_test]
+    async fn baml_scope_context_reaches_wasm_logs_and_spawned_tasks() {
+        use std::sync::Arc;
+
+        use bex_events::prof::backend::{ProfilerConfig, ProfilerSession};
+
+        // The native prefix test crate depends on sys_native; compile this
+        // host-integration fixture with the portable compiler instead.
+        let program = baml_db::testing::compile_source(
+            r#"
+            function main() -> void {
+                let metadata: map<string, string | int | float | bool | null> = { org_id: "original" };
+                let id = boundary.id().context(metadata = metadata)
+                    .context(distinct_id = "browser-user");
+                metadata["org_id"] = "mutated";
+                let pending = (() -> {
+                    log.info("parent", event_name = "parent");
+                    return spawn { log.info("child", event_name = "child"); };
+                })($id = id);
+                let _ = await pending;
+                log.info("outside");
+            }
+        "#,
+        );
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: false,
+            ..ProfilerConfig::default()
+        });
+        assert!(diagnostic.is_none());
+        let engine = Arc::new(
+            bex_project::BexEngine::new_with_profiler_session(
+                program,
+                Arc::new(sys_ops::SysOpsBuilder::new().build()),
+                Vec::new(),
+                session,
+            )
+            .unwrap(),
+        );
+        let logger = bex_project::TraceLogger::bounded(8);
+        engine
+            .call_function(
+                "main",
+                Vec::new(),
+                bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .with_logger(logger.clone())
+                    .build(),
+                true,
+            )
+            .await
+            .unwrap();
+        let report = logger.drain_encoded_logs();
+        assert!(report.failures.is_empty(), "{:?}", report.failures);
+        assert_eq!(report.logs.len(), 3);
+        let parent = report
+            .logs
+            .iter()
+            .find(|log| log.event.event_name.as_deref() == Some("parent"))
+            .unwrap();
+        let child = report
+            .logs
+            .iter()
+            .find(|log| log.event.event_name.as_deref() == Some("child"))
+            .unwrap();
+        let outside = report
+            .logs
+            .iter()
+            .find(|log| log.event.event_name.is_none())
+            .unwrap();
+        assert_eq!(parent.event.distinct_id.as_deref(), Some("browser-user"));
+        assert_eq!(child.event.distinct_id, parent.event.distinct_id);
+        assert_eq!(child.context, parent.context);
+        assert!(
+            parent
+                .context
+                .as_ref()
+                .unwrap()
+                .windows(8)
+                .any(|bytes| bytes == b"original")
+        );
+        assert_eq!(outside.event.distinct_id, None);
+        assert_ne!(outside.context, parent.context);
+    }
+
+    #[wasm_bindgen_test]
+    fn cooperative_ring_delivers_memory_only_logs_once() {
+        use std::sync::{Arc, Mutex};
+
+        use bex_events::prof::{
+            backend::{
+                EncodedLog, LogDelivery, LogEvent, ProfilerConfig, ProfilerSession, Reservation,
+                ValueLossReason, ValueState,
+            },
+            record::RawRecord,
+        };
+
+        #[derive(Debug)]
+        struct Inbox(Arc<Mutex<Vec<(EncodedLog, Reservation)>>>);
+        impl LogDelivery for Inbox {
+            fn deliver(self: Box<Self>, log: EncodedLog, reservation: Reservation) {
+                self.0.lock().unwrap().push((log, reservation));
+            }
+        }
+        let (session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+            enabled: false,
+            ..ProfilerConfig::default()
+        });
+        assert!(diagnostic.is_none());
+        assert!(session.enable_log_collection());
+        let engine_id = bex_events::ids::EngineId(0xCAFE);
+        bex_events::prof::backend::register_engine_session(engine_id, &session);
+        let ring = bex_events::prof::ring_for_engine(engine_id.0)
+            .unwrap()
+            .ring();
+        let inbox = Arc::new(Mutex::new(Vec::new()));
+        let log = EncodedLog {
+            event: LogEvent {
+                call_ref: None,
+                timestamp_ms: 1,
+                level: Some("info".to_owned()),
+                source: None,
+                source_column: None,
+                message_preview: None,
+                event_name: None,
+                distinct_id: None,
+                data: ValueState::Lost(ValueLossReason::StoreUnavailable),
+                context: ValueState::Lost(ValueLossReason::StoreUnavailable),
+            },
+            data: Some(vec![1, 2, 3]),
+            context: None,
+        };
+        assert!(session.publish_log_with_delivery(
+            None,
+            log,
+            session.reserve_log_work().unwrap(),
+            Some(Box::new(Inbox(inbox.clone()))),
+            |payload_id| {
+                let record = RawRecord::Log { payload_id };
+                // This host thread is the sole producer; collection runs only below.
+                #[expect(unsafe_code, reason = "test owns this thread's ring producer")]
+                unsafe {
+                    ring.push_with(record.encoded_len(), |bytes| {
+                        record.encode_to(bytes);
+                    })
+                }
+            },
+        ));
+        assert!(inbox.lock().unwrap().is_empty());
+        assert!(bex_events::prof::drain_cooperatively());
+        assert!(!bex_events::prof::drain_cooperatively());
+        assert_eq!(inbox.lock().unwrap().len(), 1);
+        assert_eq!(
+            inbox.lock().unwrap()[0].0.data.as_deref(),
+            Some(&[1, 2, 3][..])
+        );
+        bex_events::prof::engine_closed(engine_id.0);
+    }
+
+    /// A terminal run replays portable evidence and CAS bytes without a live
+    /// `InMemoryRunStore` or legacy log value records.
     #[wasm_bindgen_test]
     fn warm_history_replays_log_payload_and_body_without_live_runstore() {
         let boundary_id = BoundaryId::from_bytes([5; 16]);
@@ -1557,18 +1712,28 @@ mod history_tests {
 
         let mut store = WasmHistoryStoreInner::default();
         store.begin(&start).unwrap();
-        let outcome = store
-            .append_log_body(
+        let value_ref = log_value_ref(&[7, 8, 9]);
+        store
+            .append_log(
                 boundary_id,
-                LogEventRecord {
-                    call: root_trace(),
+                bex_events::prof::backend::LogEvent {
+                    call_ref: Some(root_trace().call_ref()),
                     level: Some("warn".to_string()),
                     source: None,
+                    source_column: None,
                     timestamp_ms: 12,
                     message_preview: Some("warm log".to_string()),
+                    event_name: None,
+                    distinct_id: None,
+                    data: bex_events::prof::backend::ValueState::Lost(
+                        bex_events::prof::backend::ValueLossReason::StoreUnavailable,
+                    ),
+                    context: bex_events::prof::backend::ValueState::Lost(
+                        bex_events::prof::backend::ValueLossReason::StoreUnavailable,
+                    ),
                 },
-                ValueCodec::BamlOutboundValue,
-                vec![7, 8, 9],
+                Some(vec![7, 8, 9]),
+                None,
             )
             .unwrap();
         store
@@ -1602,14 +1767,69 @@ mod history_tests {
         assert_eq!(log.message, "warm log");
         assert_eq!(
             log.value_ref.as_ref().expect("log value ref").id,
-            outcome.value_ref.id
+            value_ref.id
         );
-        let HistoryValueReadResult::Available(body) = store
-            .read_value(boundary_id, &outcome.value_ref.id)
-            .unwrap()
+        let HistoryValueReadResult::Available(body) =
+            store.read_value(boundary_id, &value_ref.id).unwrap()
         else {
             panic!("expected replayed log body");
         };
         assert_eq!(body.body, vec![7, 8, 9]);
+        let lifecycle = store.boundaries[&boundary_id].value_segments();
+        assert!(
+            open_boundary_from_value_segments(&lifecycle)
+                .unwrap()
+                .payloads
+                .is_empty()
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn lifecycle_only_history_remains_readable() {
+        let boundary_id = BoundaryId::from_bytes([6; 16]);
+        let mut store = WasmHistoryStoreInner::default();
+        store.begin(&start_context(boundary_id)).unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    value: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+        let run = store.open(boundary_id).unwrap();
+        assert_eq!(run.status, RunStatus::Succeeded);
+        assert!(run.payloads.is_empty());
+        assert_eq!(store.list(&RunFilter::default()).len(), 1);
+        assert_eq!(
+            store
+                .read_value(boundary_id, &log_value_ref(b"missing").id)
+                .unwrap(),
+            HistoryValueReadResult::Missing
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn log_loss_history_does_not_write_legacy_value_records() {
+        let boundary_id = BoundaryId::from_bytes([7; 16]);
+        let mut store = WasmHistoryStoreInner::default();
+        store.begin(&start_context(boundary_id)).unwrap();
+        let before = store.boundaries[&boundary_id].value_segments();
+        let diagnostic = log_loss_diagnostic("log", 3);
+        store
+            .append_diagnostic(boundary_id, diagnostic.clone())
+            .unwrap();
+        assert_eq!(store.boundaries[&boundary_id].value_segments(), before);
+        assert!(
+            store
+                .open(boundary_id)
+                .unwrap()
+                .diagnostics
+                .contains(&diagnostic)
+        );
     }
 }

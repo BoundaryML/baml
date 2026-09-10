@@ -3,7 +3,7 @@
 /// The value is emitted unchanged as the log event's `data`.
 /// Pass a map for structured fields, or pass a string, number, bool,
 /// list, class instance, enum variant, or null to inspect that value directly.
-function info(data: unknown) -> void {
+function info(data: unknown, event_name: string? = null) -> void {
     $compiler_intrinsic
 }
 
@@ -12,7 +12,7 @@ function info(data: unknown) -> void {
 /// The value is emitted unchanged as the log event's `data`.
 /// Pass a map for structured fields, or pass a string, number, bool,
 /// list, class instance, enum variant, or null to inspect that value directly.
-function debug(data: unknown) -> void {
+function debug(data: unknown, event_name: string? = null) -> void {
     $compiler_intrinsic
 }
 
@@ -21,7 +21,7 @@ function debug(data: unknown) -> void {
 /// The value is emitted unchanged as the log event's `data`.
 /// Pass a map for structured fields, or pass a string, number, bool,
 /// list, class instance, enum variant, or null to inspect that value directly.
-function warn(data: unknown) -> void {
+function warn(data: unknown, event_name: string? = null) -> void {
     $compiler_intrinsic
 }
 
@@ -30,6 +30,6 @@ function warn(data: unknown) -> void {
 /// The value is emitted unchanged as the log event's `data`.
 /// Pass a map for structured fields, or pass a string, number, bool,
 /// list, class instance, enum variant, or null to inspect that value directly.
-function error(data: unknown) -> void {
+function error(data: unknown, event_name: string? = null) -> void {
     $compiler_intrinsic
 }

@@ -92,6 +92,7 @@ pub enum VmUsage {
 pub struct Param {
     pub name: String,
     pub ty: BamlType,
+    pub default_empty_map: bool,
 }
 
 /// Receiver (the `self` parameter) of a method.
