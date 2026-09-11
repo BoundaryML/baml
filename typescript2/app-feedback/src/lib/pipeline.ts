@@ -54,7 +54,7 @@ export function stageInfo(issue: Issue): StageInfo[] {
 
   const o = issue.outcome;
   const terminal =
-    issue.status.state === "rejected" || issue.status.state === "deferred";
+    issue.status.state === "cancelled" || issue.status.state === "rejected" || issue.status.state === "deferred";
   const todo = (stage: Stage, detail: string): StageInfo => ({
     stage,
     state: terminal ? "skipped" : "todo",
@@ -139,6 +139,10 @@ export function statusLabel(issue: Issue): string {
   switch (s.state) {
     case "open":
       return "Open";
+    case "awaiting_approval":
+      return "Paused (legacy)";
+    case "approved":
+      return "Previously queued";
     case "in_progress":
       return s.pr ? "PR open" : "In progress";
     case "merged":
@@ -147,6 +151,8 @@ export function statusLabel(issue: Issue): string {
       return `Shipped ${s.version}`;
     case "deferred":
       return "Deferred";
+    case "cancelled":
+      return "Cancelled";
     case "rejected":
       return "Rejected";
   }
