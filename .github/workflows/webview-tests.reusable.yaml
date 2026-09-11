@@ -14,6 +14,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+
 jobs:
   typecheck:
     name: "Typecheck"
@@ -118,8 +121,19 @@ jobs:
         working-directory: typescript2
 
       - name: "Run unit tests"
+        id: unit-tests
+        continue-on-error: true
         run: pnpm --filter app-vscode-webview test:unit:run
         working-directory: typescript2
+
+      - name: "Upload unit test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: typescript2/app-vscode-webview/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
+          collection: xl5LO9gK
+          test-outcome: ${{ steps.unit-tests.outcome }}
 
   browser-tests:
     name: "Browser Tests (Playwright)"
@@ -170,5 +184,16 @@ jobs:
         working-directory: typescript2/app-vscode-webview
 
       - name: "Run browser tests"
+        id: browser-tests
+        continue-on-error: true
         run: pnpm --filter app-vscode-webview test:browser:run
         working-directory: typescript2
+
+      - name: "Upload browser test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: typescript2/app-vscode-webview/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
+          collection: xl5LO9gK
+          test-outcome: ${{ steps.browser-tests.outcome }}
