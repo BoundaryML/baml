@@ -1,19 +1,43 @@
 // The event catalog: the typed things that can appear in a root.Journal.
 // Only the runner produces events — clients and tools never append.
-//
-// Mirrors _planv2/pages/04_reference/02_events.md.
 
 class RunStarted {
     spec_name: string,
     arguments: map<string, unknown>,
 }
 
+/// A user turn: text and media, in order. The runner records the opening
+/// turn; a runner that observes its environment appends more mid-run (a
+/// screenshot after a tool ran, a document the host attaches), and every
+/// client lowers the turn at its position in the journal.
 class UserMessage {
-    content: string,
+    content: root.content.Block[],
+    /// Per-message provider directives, carried verbatim like
+    /// `root.PromptMessage.metadata` (Anthropic `cache_control`, for example).
+    metadata: map<string, baml.json.json>,
+
+    function new(text: string) -> UserMessage {
+        UserMessage { content: [root.content.Text { text: text }], metadata: {} }
+    }
+
+    /// A turn from ordinary values: text, the `image` / `audio` / `video` /
+    /// `pdf` primitives, or blocks already built (see `root.content.blocks`).
+    function of(
+        items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],
+        metadata: map<string, baml.json.json> = {},
+    ) -> UserMessage {
+        UserMessage { content: root.content.blocks(items), metadata: metadata }
+    }
+
+    /// The `Text` blocks joined; a media block contributes a `[image]`-style
+    /// placeholder.
+    function text(self) -> string {
+        root.content.text(self.content)
+    }
 }
 
 class AssistantMessage {
-    content: root.content.Block[],
+    content: root.content.ModelBlock[],
     client_id: string,
 }
 
@@ -23,9 +47,31 @@ class ToolRequested {
     args: map<string, unknown>,
 }
 
+/// A tool's result: its output text, plus any media the tool produced (a
+/// screenshot from a computer-use tool, a rendered chart).
 class ToolCompleted {
     id: string,
-    output: string, // the tool's result, serialized as JSON text
+    content: root.content.Block[],
+
+    /// `output` is the tool's result serialized as JSON text.
+    function new(id: string, output: string) -> ToolCompleted {
+        ToolCompleted { id: id, content: [root.content.Text { text: output }] }
+    }
+
+    /// A result from ordinary values: text, the `image` / `audio` / `video` /
+    /// `pdf` primitives, or blocks already built (see `root.content.blocks`).
+    function of(
+        id: string,
+        items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],
+    ) -> ToolCompleted {
+        ToolCompleted { id: id, content: root.content.blocks(items) }
+    }
+
+    /// The `Text` blocks joined — the tool's text output; a media block
+    /// contributes a `[image]`-style placeholder.
+    function text(self) -> string {
+        root.content.text(self.content)
+    }
 }
 
 class ToolFailed {
