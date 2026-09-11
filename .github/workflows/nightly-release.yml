@@ -296,7 +296,7 @@ jobs:
     if: ${{ always() && github.repository == 'BoundaryML/baml' && needs.dispatch-nightly.result == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: boundary-tools-dev
+    environment: infisical-github-baml-language-release
     permissions:
       actions: read
       contents: read
@@ -306,7 +306,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-mise
             mise.toml
-            tools/notify-release-failure.py
+            tools/
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/setup-mise

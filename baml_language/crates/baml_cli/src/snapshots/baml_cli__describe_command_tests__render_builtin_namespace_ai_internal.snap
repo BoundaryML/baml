@@ -7,8 +7,7 @@ function         ai.internal._gcp_project_id      <builtin>/ai/ns_internal/auth.
 function         ai.internal._gcp_quota_project_id <builtin>/ai/ns_internal/auth.baml:56
 function         ai.internal._aws_sign_request    <builtin>/ai/ns_internal/auth.baml:72
 function         ai.internal._aws_resolve_region  <builtin>/ai/ns_internal/auth.baml:92
-function         ai.internal._shorthand_prefixes  <builtin>/ai/ns_internal/clients.baml:7
-function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clients.baml:34
+function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clients.baml:13
 function         ai.internal._schema_for_signature <builtin>/ai/ns_internal/helpers.baml:5
 class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:18
 function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:52
@@ -39,5 +38,5 @@ function         ai.internal._redact_after        <builtin>/ai/ns_internal/wire.
 function         ai.internal._redact_value_end    <builtin>/ai/ns_internal/wire.baml:34
 function         ai.internal._merge_json          <builtin>/ai/ns_internal/wire.baml:48
 function         ai.internal._wire_blocks         <builtin>/ai/ns_internal/wire.baml:90
-function         ai.internal._flush_orphaned_calls <builtin>/ai/ns_internal/wire.baml:123
-function         ai.internal._resolve_pending_call <builtin>/ai/ns_internal/wire.baml:131
+function         ai.internal._flush_orphaned_calls <builtin>/ai/ns_internal/wire.baml:126
+function         ai.internal._resolve_pending_call <builtin>/ai/ns_internal/wire.baml:134

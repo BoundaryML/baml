@@ -24,8 +24,16 @@ use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/relink-oracle";
 
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
 fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
-    generate_project_bytecode_with_stdlib(&build_db(ROOT, files), OptLevel::Two, base)
+    let db = build_db(ROOT, files);
+    generate_project_bytecode_with_stdlib(&db, package(&db), OptLevel::Two, base)
         .expect("full compile failed")
 }
 
@@ -33,8 +41,8 @@ fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
 /// files from (in the CLI this is what `plan_reuse` loads from the cache; here
 /// it is produced in-process by `emit_units` over the previous sources).
 fn prev_units(files: &[(&str, &str)]) -> Vec<CompilationUnit> {
-    emit_units(&build_db(ROOT, files), OptLevel::Two)
-        .expect("emit_units for previous compile failed")
+    let db = build_db(ROOT, files);
+    emit_units(&db, package(&db), OptLevel::Two).expect("emit_units for previous compile failed")
 }
 
 fn relink(
@@ -56,14 +64,14 @@ fn relink_seeded(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
-    use baml_compiler2_hir_ty::throw_facts::file_throw_facts;
+    use baml_compiler2_hir_ty::throw_facts::export_file_throw_facts;
     let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
     for sf in prev_db.workspace_files() {
         let path = sf.path(&prev_db).display().to_string();
         let rel = path.trim_start_matches(&format!("{ROOT}/")).to_string();
         if clean.contains(&rel.as_str()) {
-            seeds.insert(path, file_throw_facts(&prev_db, sf).0.clone());
+            seeds.insert(path, export_file_throw_facts(&prev_db, sf));
         }
     }
     let mut db = build_db(ROOT, files);
@@ -78,8 +86,15 @@ fn relink_with_db(
     clean: &[&str],
 ) -> Program {
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
-    generate_project_bytecode_with_reuse_units(&db, OptLevel::Two, base, prev_units, &clean_files)
-        .expect("relink failed")
+    generate_project_bytecode_with_reuse_units(
+        &db,
+        package(&db),
+        OptLevel::Two,
+        base,
+        prev_units,
+        &clean_files,
+    )
+    .expect("relink failed")
 }
 
 fn assert_relink_matches(
@@ -310,6 +325,7 @@ fn assert_incremental_matches(
     let _ = take_lowered_files();
     let reused = generate_project_bytecode_with_reuse_units(
         &db,
+        package(&db),
         OptLevel::Two,
         base,
         prev_units,

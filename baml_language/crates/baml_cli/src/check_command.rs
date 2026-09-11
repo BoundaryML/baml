@@ -54,7 +54,7 @@ impl CheckArgs {
         // of leaving it on the full-compile path forever.
         let warmth = session.warm_prep();
         let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
-        let (db, cache) = (&session.db, &session.cache);
+        let (db, package, cache) = (&session.db, session.package, &session.cache);
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
         // With a cache, collect through the incremental collector so the fresh
@@ -62,13 +62,14 @@ impl CheckArgs {
         // identical to the read-only collector's.
         let (diagnostics, fresh_diagnostics) = match cache {
             Some(ctx) => {
-                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+                let incremental =
+                    ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
             None => (baml_db::collect_diagnostics(db), None),
         };
         if let Some(cache) = cache {
-            cache.verify_diagnostics(db)?;
+            cache.verify_diagnostics(db, package)?;
             cache.verify_stdlib_diagnostics(db)?;
             // Sampled field verification (rustc-style 1-in-32): `baml check`
             // serves clean files' cached diagnostics and seeds their throws, so
@@ -124,6 +125,7 @@ impl CheckArgs {
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
                     db,
+                    package,
                     cache.as_ref(),
                     reuse_plan.as_ref(),
                 ) {
@@ -132,12 +134,11 @@ impl CheckArgs {
                             .as_ref()
                             .expect("a cache is present, so fresh diagnostics were computed");
                         ctx.verify_and_store(
-                            db,
+                            &session,
                             &compiled,
                             fresh,
                             reuse_plan.as_ref(),
                             stdlib_interface_hit,
-                            || session.honest_db(),
                         )?;
                     }
                     Err(err) => {

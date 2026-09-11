@@ -13,7 +13,7 @@ interface Rng {
     /// - If `bytes` bytes cannot be allocated (`baml.panics.AllocFailure`).
     /// - If the implementation fails to produce the requested number of bytes
     ///   (for example, if the underlying system random number generator is unavailable)
-    function random(self, bytes: int) -> uint8array throws never
+    function random(self, bytes: int) -> uint8array throws never;
 
     /// Returns a uniformly random `int` over the full `[int.min_value(),
     /// int.max_value()]` range.
@@ -27,7 +27,14 @@ interface Rng {
         // off the end and its bit 6 lands on bit 62, the sign. No branch on
         // the sign is needed: the 63 surviving bits already tile the whole
         // signed range, one draw per value.
-        (bytes[0] << 56) | (bytes[1] << 48) | (bytes[2] << 40) | (bytes[3] << 32) | (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7]
+        (bytes[0] << 56)
+            | (bytes[1] << 48)
+            | (bytes[2] << 40)
+            | (bytes[3] << 32)
+            | (bytes[4] << 24)
+            | (bytes[5] << 16)
+            | (bytes[6] << 8)
+            | bytes[7]
     }
 }
 

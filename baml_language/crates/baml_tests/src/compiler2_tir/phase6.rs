@@ -1381,7 +1381,7 @@ function f() -> null {
         expr_type_in_function(&db, file, "f", "triple"),
         "() -> (() -> ((n: int) -> int throws never) throws never) throws never"
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> null throws never {
       { : never
         let triple = : () -> (() -> ((n: int) -> int throws never) throws never) throws never
@@ -1409,7 +1409,7 @@ function f() -> null {
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1438,7 +1438,7 @@ function f() -> null {
         expr_type_in_function(&db, file, "f", "quadruple"),
         "() -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never"
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> null throws never {
       { : never
         let quadruple = : () -> (() -> (() -> ((n: int) -> int throws never) throws never) throws never) throws never
@@ -1473,7 +1473,7 @@ function f() -> null {
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]

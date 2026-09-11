@@ -134,7 +134,7 @@ function scoped_type_bindings.<(user.scoped_type_bindings.ProbeClient as ai.Clie
     load_var self
     load_field .reply
     init_instance ai.content.Text .text
-    load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
+    load_type ai.content.Text | ai.content.Media | ai.content.Reasoning | ai.content.ToolUse
     alloc_array 1
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
@@ -233,7 +233,24 @@ function scoped_type_bindings.DynamicOutput@spec() -> ai.FunctionSpec<#0> {
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.scoped_type_bindings.DefaultClient
+    load_type #0
+    make_closure .<lambda(DynamicOutput@spec, 1)>, captures=0, ntypeargs=1
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "DynamicOutput"

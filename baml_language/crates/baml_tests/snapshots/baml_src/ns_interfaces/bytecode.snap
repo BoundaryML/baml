@@ -20,6 +20,65 @@ function interfaces.$init_test_ns_interfaces_b_1180(registry: testing.TestCollec
     return
 }
 
+function interfaces.$init_test_ns_interfaces_b_1470(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_direct_and_captured_interface_receivers"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_field_chains"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_bound_method"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_interface_field_assignment"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_captured_generic_interface"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interfaces.$init_test_ns_interfaces_b_1470_session(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_bound_method_on_session_global"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470_session, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "b1470_external_bound_method_on_session_global"
+    make_closure .<lambda($init_test_ns_interfaces_b_1470_session, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces"
@@ -1211,6 +1270,18 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     return
 }
 
+function interfaces.$init_test_ns_interfaces_semicolons(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces"
+    load_const "semicolon_terminated_interface_declarations"
+    make_closure .<lambda($init_test_ns_interfaces_semicolons, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function interfaces.<(#0 as user.interfaces.BtviPrintable)>.display(self: #0) -> string {
     load_var self
     load_type interfaces.BtviNamed
@@ -1333,6 +1404,21 @@ function interfaces.<(user.interfaces.B1180IntValue as user.interfaces.B1180Gett
 function interfaces.<(user.interfaces.B1180Person as user.interfaces.B1180Named)>.name(self: interfaces.B1180Person) -> string {
     load_var self
     load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.B1470Adder as user.interfaces.B1470Shift)>.shift(self: interfaces.B1470Adder, n: int) -> int {
+    load_var2 2 1
+    load_field .offset
+    add_int
+    return
+}
+
+function interfaces.<(user.interfaces.B1470Adder as user.interfaces.B1470Transform<int>)>.transform(self: interfaces.B1470Adder, value: int) -> int {
+    load_var self
+    load_field .offset
+    load_var value
+    add_int
     return
 }
 
@@ -1986,6 +2072,12 @@ function interfaces.<(user.interfaces.SapcPolite as user.interfaces.SapcGreeter)
     return
 }
 
+function interfaces.<(user.interfaces.SemicolonValue as user.interfaces.SemicolonSource)>.get(self: interfaces.SemicolonValue) -> string {
+    load_var self
+    load_field .value
+    return
+}
+
 function interfaces.<(user.interfaces.SgidMultiFormat as user.interfaces.SgidConverter<float>)>.convert(self: interfaces.SgidMultiFormat) -> float {
     load_const 42.5
     return
@@ -2427,6 +2519,14 @@ function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string 
     return
 }
 
+function interfaces.SemicolonSource.again(self: interfaces.SemicolonSource) -> (#0 as interfaces.SemicolonSource).Item {
+    load_var self
+    load_type interfaces.SemicolonSource
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    return
+}
+
 function interfaces.Uf08Dog.fetch(self: interfaces.Uf08Dog) -> string {
     load_const "fetched"
     return
@@ -2537,6 +2637,69 @@ function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> 
     load_const "nobody"
 
   L2:
+    return
+}
+
+function interfaces.b1470_bounded(value: #0) -> int[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int
+    load_type never
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_type #0
+    load_var value
+    make_closure .<lambda(b1470_bounded, 0)>, captures=1, ntypeargs=1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_generic(value: interfaces.B1470Transform<#0>, items: #0[]) -> #0[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #0
+    load_type never
+    load_var items
+    load_type #0
+    load_var value
+    make_closure .<lambda(b1470_generic, 0)>, captures=1, ntypeargs=1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_mapped(value: interfaces.B1470Shift, items: int[]) -> int[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int
+    load_type never
+    load_var2 2 1
+    make_closure .<lambda(b1470_mapped, 0)>, 1
+    call baml.Array.map
+    return
+}
+
+function interfaces.b1470_nested(value: interfaces.B1470Shift) -> int[][] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type int
+    load_type int[]
+    load_type never
+    load_const 1
+    load_const 2
+    load_type int
+    alloc_array 2
+    load_var value
+    make_closure .<lambda(b1470_nested, 0)>, 1
+    call baml.Array.map
     return
 }
 
@@ -4453,6 +4616,15 @@ function interfaces.sapc_main() -> string {
     init_instance user.interfaces.SapcPolite .name
     load_type interfaces.SapcFarewell
     load_const "bye"
+    virtual_call nargs=1 ntypeargs=0
+    return
+}
+
+function interfaces.semicolon_declarations_main() -> string {
+    load_const "named"
+    init_instance user.interfaces.SemicolonValue .value
+    load_type interfaces.SemicolonSource<Error = never, Item = string>
+    load_const "again"
     virtual_call nargs=1 ntypeargs=0
     return
 }

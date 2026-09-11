@@ -92,15 +92,15 @@ pub(crate) enum MemberResolution<'db> {
     /// no HIR location.
     External(std::sync::Arc<ExternalCallable>),
     ExternalField {
-        class: baml_type::QualifiedTypeName,
+        class: baml_type::DeclName,
         field: Name,
     },
     ExternalVariant {
-        enum_name: baml_type::QualifiedTypeName,
+        enum_name: baml_type::DeclName,
         variant: Name,
     },
     ExternalInterfaceVirtualField {
-        interface_name: baml_type::QualifiedTypeName,
+        interface_name: baml_type::DeclName,
         interface: Tir2Ty,
         field_index: u32,
         field: Name,

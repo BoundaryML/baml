@@ -743,6 +743,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "borsh",
  "la-arena",
  "num-bigint",
@@ -841,6 +842,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler_parser",
+ "baml_type",
  "indexmap",
  "rustc-hash 2.1.2",
  "salsa",
@@ -923,11 +925,14 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "ignore",
+ "indexmap",
  "rayon",
  "salsa",
+ "serde",
  "tempfile",
  "text-size",
  "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1196,6 +1201,7 @@ dependencies = [
  "bitflags 2.11.1",
  "borsh",
  "rustc-hash 2.1.2",
+ "salsa",
 ]
 
 [[package]]

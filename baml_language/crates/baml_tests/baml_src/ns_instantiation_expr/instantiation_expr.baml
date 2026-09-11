@@ -114,11 +114,11 @@ test "param_dependent_reflect_resolves_T" {
 // Multi-segment qualified instantiation value: a generic function in a nested
 // namespace, referenced by its fully-qualified name (`name.space.fun<string>`).
 function qualified_value_fn() -> string {
-    let f = user.instantiation_expr.qualified.q_describe<string>;
+    let f = root.instantiation_expr.qualified.q_describe<string>;
     f()
 }
 function qualified_value_id_fn() -> int {
-    let g = user.instantiation_expr.qualified.q_id<int>;
+    let g = root.instantiation_expr.qualified.q_id<int>;
     g(7)
 }
 

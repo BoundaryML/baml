@@ -1,6 +1,11 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use crate::{Name, QualifiedTypeName, RealizedTy};
+use baml_base::{LangPackage, LangRoots, SourceRoot};
+
+use crate::{
+    DeclName, Name, QualifiedTypeName, RealizedTy, TypeName,
+    compiler_aliases::{self, CompilerAlias, Construction},
+};
 
 /// The nine sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,10 +48,19 @@ impl TypeKind {
         }
     }
 
-    /// The builtin class that is the sealed view for this kind.
+    /// The builtin class that is the sealed view for this kind, by wire name.
     pub fn class_name(self) -> QualifiedTypeName {
         QualifiedTypeName::new(
             Name::new("reflect"),
+            vec![Name::new(self.namespace())],
+            Name::new("Type"),
+        )
+    }
+
+    /// [`Self::class_name`] in the installed `reflect` package.
+    pub fn class_decl(self, reflect: SourceRoot) -> DeclName {
+        DeclName::in_root(
+            reflect,
             vec![Name::new(self.namespace())],
             Name::new("Type"),
         )
@@ -70,14 +84,26 @@ pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
     }
 }
 
-/// Whether a nominal class is one of the nine sealed reflection-kind classes.
+/// Whether a nominal class is one of the nine sealed reflection-kind classes,
+/// by wire name.
 pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
-    name.package().as_str() == "reflect"
-        && name.namespace().len() == 1
+    name.package().as_str() == "reflect" && is_type_kind_class_path(name.namespace(), name.name())
+}
+
+/// [`is_type_kind_class`] for a compile-time head: the class must live in the
+/// installed `reflect` package.
+pub fn is_type_kind_class_decl(lang: LangRoots, name: &DeclName) -> bool {
+    lang.is(LangPackage::Reflect, name.root())
+        && is_type_kind_class_path(name.namespace(), name.name())
+}
+
+/// The `<kind>.Type` shape inside the `reflect` package.
+fn is_type_kind_class_path(namespace: &[Name], name: &Name) -> bool {
+    namespace.len() == 1
         && TypeKind::ALL
             .iter()
-            .any(|kind| name.namespace()[0].as_str() == kind.namespace())
-        && name.name().as_str() == "Type"
+            .any(|kind| namespace[0].as_str() == kind.namespace())
+        && name.as_str() == "Type"
 }
 
 /// A builtin type and where its values actually come from, for the
@@ -103,45 +129,47 @@ pub struct BuiltinCompanion {
 /// instance (and, for the generic carriers, an error-recovery type that
 /// reaches MIR lowering), so the two class-literal sites reject them.
 ///
-/// Same discipline as [`QualifiedTypeName::is_builtin_root_type`]: the
-/// `baml` package plus an EMPTY namespace, so a user's own `Int` class and
-/// the field-carrying `reflect.class.Field` are both untouched.
-pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion> {
-    if name.package().as_str() == "reflect"
-        && name.namespace().is_empty()
-        && name.name().as_str() == "Type"
-    {
-        return Some(BuiltinCompanion {
-            builtin: "reflect.Type",
-            origin: "`reflect.Type.of<T>()` and reflection",
-            carries_methods: true,
-        });
+/// The set is the compiler alias registry's, keyed by the installed language
+/// package and the full definition path, so a user's own `Int` class and
+/// `reflect.class.Field` stay nominal.
+pub fn builtin_companion_of_decl(lang: LangRoots, name: &DeclName) -> Option<BuiltinCompanion> {
+    companion(compiler_aliases::by_definition(lang, name)?)
+}
+
+/// [`builtin_companion_of_decl`] for a wire name (`baml.Int` spelled by the
+/// artifact's dependency edges).
+pub fn builtin_companion_of(name: &TypeName) -> Option<BuiltinCompanion> {
+    companion(compiler_aliases::by_type_name(name)?)
+}
+
+fn companion(alias: &CompilerAlias) -> Option<BuiltinCompanion> {
+    match alias.construction {
+        Construction::Builtin {
+            origin,
+            carries_methods,
+        } => Some(BuiltinCompanion {
+            builtin: alias.display_name(),
+            origin,
+            carries_methods,
+        }),
+        Construction::Alias | Construction::None => None,
     }
-    if name.package().as_str() != "baml" || !name.namespace().is_empty() {
-        return None;
-    }
-    let (builtin, origin, carries_methods) = match name.name().as_str() {
-        "Int" => ("int", "literals", true),
-        "Bigint" => ("bigint", "literals", true),
-        "Float" => ("float", "literals", true),
-        "String" => ("string", "literals", true),
-        "Bool" => ("bool", "literals", false),
-        "Null" => ("null", "the `null` literal", false),
-        "Uint8Array" => ("uint8array", "byte-string literals", true),
-        "Array" => ("array", "array literals", true),
-        "Map" => ("map", "map literals", true),
-        _ => return None,
-    };
-    Some(BuiltinCompanion {
-        builtin,
-        origin,
-        carries_methods,
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_roots;
+
+    /// `path` as a compile-time head over the test roots.
+    fn decl(path: &str) -> DeclName {
+        let wire = TypeName::from_dotted_path(path);
+        test_roots::new(
+            wire.package().clone(),
+            wire.namespace().clone(),
+            wire.name().clone(),
+        )
+    }
 
     #[test]
     fn kind_names_are_closed_and_recognized() {
@@ -154,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn companion_carriers_need_the_baml_package_and_an_empty_namespace() {
+    fn companion_carriers_require_the_exact_builtin_definition() {
         for (path, builtin) in [
             ("baml.Int", "int"),
             ("baml.Bigint", "bigint"),
@@ -166,9 +194,17 @@ mod tests {
             ("baml.Array", "array"),
             ("baml.Map", "map"),
             ("reflect.Type", "reflect.Type"),
+            ("baml.media.Image", "image"),
+            ("baml.future.Future", "baml.future.Future"),
         ] {
             assert_eq!(
-                builtin_companion_of(&QualifiedTypeName::from_dotted_path(path))
+                builtin_companion_of(&TypeName::from_dotted_path(path))
+                    .map(|companion| companion.builtin),
+                Some(builtin),
+                "{path} should be a companion carrier"
+            );
+            assert_eq!(
+                builtin_companion_of_decl(test_roots::lang(), &decl(path))
                     .map(|companion| companion.builtin),
                 Some(builtin),
                 "{path} should be a companion carrier"
@@ -182,13 +218,17 @@ mod tests {
             // field-carrying reflect classes the stdlib itself constructs.
             "reflect.class.Field",
             "reflect.class.Type",
-            "baml.media.Image",
             "baml.iter.Done",
             // A root-namespace `baml` class that really does hold fields.
             "baml.TaggedString",
         ] {
             assert_eq!(
-                builtin_companion_of(&QualifiedTypeName::from_dotted_path(path)),
+                builtin_companion_of(&TypeName::from_dotted_path(path)),
+                None,
+                "{path} should not be a companion carrier"
+            );
+            assert_eq!(
+                builtin_companion_of_decl(test_roots::lang(), &decl(path)),
                 None,
                 "{path} should not be a companion carrier"
             );

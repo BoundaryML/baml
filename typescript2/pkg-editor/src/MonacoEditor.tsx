@@ -19,6 +19,11 @@
  *     WebSocket to a real server). See `@b/pkg-editor/remote`.
  */
 
+import {
+  STDLIB_SOURCE_METHOD,
+  StdlibDocuments,
+  type StdlibSourceResult,
+} from '@b/pkg-lsp';
 import { type FC, useEffect, useRef, useState } from 'react';
 import './views-workbench.css';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
@@ -1141,6 +1146,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
       // Backend — connect LSP transport + runtime (re-run on reload)
       // ════════════════════════════════════════════════════════════════
 
+      const stdlibDocuments = new StdlibDocuments(vscode);
+      disposables.push(stdlibDocuments);
       const connect = async () => {
         if (disposed) return;
 
@@ -1183,6 +1190,15 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({
         // for the browser's own write-throughs.
         const lspClient = lcWrapper.getLanguageClient();
         if (lspClient) {
+          connDisposablesRef.current.push(
+            stdlibDocuments.connect((uri, token) =>
+              lspClient.sendRequest<StdlibSourceResult>(
+                STDLIB_SOURCE_METHOD,
+                { uri },
+                token,
+              ),
+            ),
+          );
           const diskChangeSub = lspClient.onNotification(
             'baml/fileChangedOnDisk',
             async (params: { uri: string; text: string }) => {

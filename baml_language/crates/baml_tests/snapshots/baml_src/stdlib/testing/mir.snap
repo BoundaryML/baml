@@ -2233,7 +2233,7 @@ fn testing._run_children_parallel(children: testing.TestSetChild[], pool: testin
         _22 = copy _3;
         _23 = load_type(testing._NamedChildReport);
         _24 = load_type(never);
-        _21 = call const fn baml.future.all_complete<copy _23, copy _24>(copy _22) -> [bb10];
+        _21 = call const fn baml.future.all<copy _23, copy _24>(copy _22) -> [bb10];
     }
 
     bb10: {

@@ -3652,7 +3652,7 @@ impl<'a> Parser<'a> {
     /// Parse a method declaration inside an interface body.
     ///
     /// Two forms:
-    /// - Required: `function name(params) -> ReturnType` (no body)
+    /// - Required: `function name(params) -> ReturnType;` (semicolon optional)
     /// - Default:  `function name(params) -> ReturnType { ... }`
     ///
     /// When there is no body we record a `METHOD_SIG` node so lowering can
@@ -3709,6 +3709,7 @@ impl<'a> Parser<'a> {
                 });
             }
         });
+        self.eat(TokenKind::Semicolon);
     }
 
     /// Look ahead from the current `function` token to see whether the
@@ -3785,9 +3786,9 @@ impl<'a> Parser<'a> {
                 TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
                     return Some(i);
                 }
-                TokenKind::RBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
-                    // End of the interface body without finding a body for
-                    // this method — it's a required signature.
+                TokenKind::RBrace | TokenKind::Semicolon
+                    if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 =>
+                {
                     return None;
                 }
                 // Encountering the start of another interface member at the
@@ -6733,6 +6734,8 @@ impl<'a> Parser<'a> {
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
             if text == "b" && self.parse_byte_string() {
                 // Byte string literal b"..."
+            } else if text == "map" && self.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace) {
+                self.parse_map_literal();
             } else if text == "env"
                 && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
                 && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
@@ -7433,6 +7436,9 @@ impl<'a> Parser<'a> {
     /// following token unambiguously starts another key.
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
+            if p.at(TokenKind::Word) {
+                p.bump(); // map
+            }
             p.expect(TokenKind::LBrace);
 
             // Parse map entries

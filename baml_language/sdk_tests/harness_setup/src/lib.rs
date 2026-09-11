@@ -202,11 +202,10 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     let mut db = ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
-        .add_source_root(SourceRootSpec {
-            path: canonical.clone(),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(
+            canonical.clone(),
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: cannot add workspace root: {e}"));
     let baml_files = baml_db::discover_baml_files(&canonical);
     assert!(
@@ -236,7 +235,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 
     let pool = baml_ide::build_symbol_pool(&db);
     let program = db
-        .get_bytecode()
+        .get_bytecode(root)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
     let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));

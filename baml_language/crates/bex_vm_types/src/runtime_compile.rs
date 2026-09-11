@@ -9,7 +9,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, RealizedTy, Ty};
+use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
@@ -26,7 +26,7 @@ pub struct RuntimeMountedClass {
     pub name: Name,
     pub tag: baml_type::typetag::TypeTag,
     pub docstring: Option<String>,
-    pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
+    pub fields: Vec<(Name, Ty<TypeName>, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,11 +60,37 @@ pub struct RuntimeTypeMount {
     pub ty: RealizedTy,
     pub classes: Vec<RuntimeMountedClass>,
     pub enums: Vec<RuntimeMountedEnum>,
-    pub witnesses: Vec<(Interface, Vec<(Name, Name)>)>,
+    pub witnesses: Vec<MountedWitness>,
 }
 
-#[derive(Clone, Debug, Default)]
+/// One interface a mounted type witnesses, with the `(field, method)` links
+/// its implementation is read through.
+pub type MountedWitness = (Interface<TypeName>, Vec<(Name, Name)>);
+
+/// The identity of a runtime package object across the compile seam: an
+/// opaque token minted from the object's address, valid for the request
+/// that carries it (the request pins its packages). Two aliases naming one
+/// package object carry one identity, so the compile world mounts one
+/// package reached under two names, never two look-alike packages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RuntimePackageIdentity(usize);
+
+impl RuntimePackageIdentity {
+    /// The identity of the package object at `ptr`.
+    pub fn of(ptr: crate::HeapPtr) -> Self {
+        Self(ptr.as_ptr() as usize)
+    }
+
+    /// A distinct identity for tests that hold no runtime object.
+    pub fn synthetic(token: usize) -> Self {
+        Self(token)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct RuntimePackageMount {
+    /// Which package object this is: two aliases of one object share it.
+    pub identity: RuntimePackageIdentity,
     /// Versioned `PackageInterface` artifact checked before the mount is used.
     pub interface_blob: Vec<u8>,
     pub types: Vec<RuntimeTypeMount>,

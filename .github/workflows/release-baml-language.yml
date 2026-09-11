@@ -2279,7 +2279,7 @@ jobs:
     # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
     if: ${{ always() && inputs.dry_run == false && (needs.plan.outputs.source_branch == 'canary' || (needs.plan.result == 'failure' && github.ref_type == 'tag' && github.ref_name == format('baml-language-source-{0}', inputs.source_sha))) }}
     runs-on: ubuntu-latest
-    environment: boundary-tools-dev
+    environment: infisical-github-baml-language-release
     permissions:
       actions: read
       contents: read
@@ -2290,7 +2290,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-mise
             mise.toml
-            tools/notify-release-failure.py
+            tools/
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/setup-mise
@@ -2302,6 +2302,6 @@ jobs:
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
-          CHANNEL: ${{ needs.plan.outputs.channel }}
+          CHANNEL: ${{ needs.plan.outputs.channel || inputs.channel }}
           RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}
         run: uv run --script tools/notify-release-failure.py

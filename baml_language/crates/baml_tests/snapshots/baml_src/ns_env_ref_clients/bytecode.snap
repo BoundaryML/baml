@@ -239,9 +239,34 @@ function env_ref_clients.EnvRefDynamicEcho@spec(question: string) -> ai.Function
     call baml.env.ref
     call baml.env.Ref.get
     jump_if_not_null_or_pop L0
-    load_const "openai/gpt-4o-mini"
+    jump L1
 
   L0:
+    store_var _9
+    jump L2
+
+  L1:
+    load_const "openai/gpt-4o-mini"
+    store_var _9
+
+  L2:
+    load_type never
+    load_var _9
+    make_closure .<lambda(EnvRefDynamicEcho@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "EnvRefDynamicEcho"
@@ -507,8 +532,42 @@ function env_ref_clients.EnvRefResolvedEcho@spec(question: string) -> ai.Functio
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_const "openai/gpt-4o-mini"
+    make_closure .<lambda(EnvRefResolvedEcho@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
+    store_var _8
+    load_type never
+    load_var _8
+    make_closure .<lambda(EnvRefResolvedEcho@spec, 2)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "EnvRefResolvedEcho"
@@ -633,7 +692,23 @@ function env_ref_clients.LiveEnvRefEcho@spec(question: string) -> ai.FunctionSpe
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.env_ref_clients.LiveEnvRefOpenAi
+    make_closure .<lambda(LiveEnvRefEcho@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "LiveEnvRefEcho"
@@ -762,9 +837,34 @@ function env_ref_clients.LiveEnvRefFallbackEcho@spec(question: string) -> ai.Fun
     call baml.env.ref
     call baml.env.Ref.get
     jump_if_not_null_or_pop L0
-    load_const "openai/gpt-4o-mini"
+    jump L1
 
   L0:
+    store_var _9
+    jump L2
+
+  L1:
+    load_const "openai/gpt-4o-mini"
+    store_var _9
+
+  L2:
+    load_type never
+    load_var _9
+    make_closure .<lambda(LiveEnvRefFallbackEcho@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "LiveEnvRefFallbackEcho"
@@ -1565,7 +1665,23 @@ function env_ref_clients.resolve_of_a_client_value_is_identity() -> string {
     load_const <omitted>
     call ai.clients.Retry.new
     store_var wrapped
+    load_type never
     load_var inner
+    make_closure .<lambda(resolve_of_a_client_value_is_identity, 0)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
@@ -1575,20 +1691,36 @@ function env_ref_clients.resolve_of_a_client_value_is_identity() -> string {
     load_var _6
     call baml.String.from
     store_var _5
+    load_type never
     load_var wrapped
+    make_closure .<lambda(resolve_of_a_client_value_is_identity, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _11
+    store_var _14
     load_type string
-    load_var _11
+    load_var _14
     call baml.String.from
-    store_var _10
+    store_var _13
     load_var _5
     load_const "|"
     bin_op +
-    load_var _10
+    load_var _13
     bin_op +
     return
 }
@@ -1596,6 +1728,24 @@ function env_ref_clients.resolve_of_a_client_value_is_identity() -> string {
 function env_ref_clients.resolve_of_a_ref_reads_at_call_time() -> string {
     load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
     call baml.env.ref
+    store_var selector
+    load_type never
+    load_var selector
+    make_closure .<lambda(resolve_of_a_ref_reads_at_call_time, 0)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
@@ -1616,30 +1766,94 @@ function env_ref_clients.resolve_of_a_ref_reads_at_call_time() -> string {
 }
 
 function env_ref_clients.resolve_shorthand_ids() -> string {
+    load_type never
     load_const "anthropic/claude-haiku-4-5"
+    make_closure .<lambda(resolve_shorthand_ids, 0)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
+    load_type never
     load_const "openai/gpt-4o-mini"
+    make_closure .<lambda(resolve_shorthand_ids, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
+    store_var _7
+    load_type never
     load_const "google/gemini-2.5-flash"
+    make_closure .<lambda(resolve_shorthand_ids, 2)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
+    store_var _12
+    load_type never
     load_const "openrouter/z-ai/glm-4.6"
+    make_closure .<lambda(resolve_shorthand_ids, 3)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _8
+    store_var _17
     load_type string
     load_var2 1 2
     load_var2 3 4
@@ -1651,7 +1865,23 @@ function env_ref_clients.resolve_shorthand_ids() -> string {
 }
 
 function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
+    load_type never
     load_const "acme-inc/super-model"
+    make_closure .<lambda(resolve_unknown_prefix_is_typed, 0)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"
@@ -1672,10 +1902,10 @@ function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
     load_var e
     load_field .detail
     call baml.String.from
-    store_var _8
+    store_var _11
     load_const "|"
     bin_op +
-    load_var _8
+    load_var _11
     bin_op +
 
   L1:
@@ -1683,7 +1913,23 @@ function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
 }
 
 function env_ref_clients.resolve_without_a_slash_is_typed() -> string {
+    load_type never
     load_const "gpt-4o-mini"
+    make_closure .<lambda(resolve_without_a_slash_is_typed, 0)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     load_type ai.Client
     load_const "id"

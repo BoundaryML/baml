@@ -7,7 +7,7 @@
 > B-18, B-19, B-21, B-22) — was replaced by the rigid statement model:
 > `type T = unreflect(e)` is the only spelling, `T` is a rigid frame parameter,
 > nothing is deferred to a runtime gate, and nothing typed by `T` leaves its
-> block (E0171). See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type
+> block (E0172). See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type
 > bindings". Rows marked done below describe the superseded behavior as it
 > was verified at the time, and so do the two sections named below.
 
@@ -175,7 +175,7 @@ external persistence or wire-format promise.
 > owner component; and a binding is NOT erased at block exit. Nothing typed by
 > `T` may be observable outside the block at all - the block's value leaves
 > only through a ground type that does not mention `T`, and anything else is
-> E0171. See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type bindings".
+> E0172. See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type bindings".
 
 `LowerCtx` continues to own the immutable declaration frame. Dynamic runtime
 type bindings are owned by the body-local `InferenceContext` as an ordered

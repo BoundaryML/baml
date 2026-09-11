@@ -692,6 +692,26 @@ pre > code {
   counter-reset: line;
 }
 
+/* Blog content uses normal block flow so neighboring prose margins collapse.
+ * Keep section headings distinct without separating them from their first subheading. */
+.blog-prose > h1 {
+  margin-top: 3rem;
+  margin-bottom: 1.25rem;
+}
+
+.blog-prose > h2 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.blog-prose > h1 + h2 {
+  margin-top: 1.25rem;
+}
+
+.blog-prose > :first-child {
+  margin-top: 0;
+}
+
 /* Inline code treatment across the website. */
 :not(pre) > code {
   padding: 2px 5px;

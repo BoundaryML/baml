@@ -79,7 +79,7 @@ test "generic method values follow the same realization rule" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `same` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `box.same<int>`. Or write the concrete function type after the binding name: `let copy: (int) -> int throws never = box.same`. Calling `box.same(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `same` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `box.same<int>`. Or write the concrete function type after the binding name: `let copy: (value: int) -> int throws never = box.same`. Calling `box.same(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -122,7 +122,7 @@ test "qualified method value recommends its available annotation spelling" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `emboss` needs concrete type arguments before it can be stored in `stamp`. This reference form cannot take type arguments as a stored value; choose concrete types for U with a function type annotation instead. Or write the concrete function type after the binding name: `let stamp: (int) -> string throws never = (Plate<int> as Embosser).emboss`. Calling `(Plate<int> as Embosser).emboss(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `emboss` needs concrete type arguments before it can be stored in `stamp`. This reference form cannot take type arguments as a stored value; choose concrete types for U with a function type annotation instead. Or write the concrete function type after the binding name: `let stamp: (u: int) -> string throws never = (Plate<int> as Embosser).emboss`. Calling `(Plate<int> as Embosser).emboss(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }

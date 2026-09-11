@@ -5,11 +5,11 @@
 
 interface Runner {
     /// The error surface of this runner (`never` if the runner cannot throw).
-    type Error = never
+    type Error = never;
 
     /// Execute one spec to completion. `Out` lives on the method and is
     /// inferred from the spec argument, so no call site needs to name it.
-    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> throws Self.Error
+    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> throws Self.Error;
 }
 
 class RunResult<Out> {
@@ -98,7 +98,7 @@ class Agent {
                     },
                 };
                 if let output: string = outcome {
-                    j.append_all([root.events.ToolCompleted { id: call.id, output: output }]);
+                    j.append_all([root.events.ToolCompleted.new(call.id, output)]);
                 }
                 null
             },
@@ -286,9 +286,9 @@ class Agent {
             turn
         } else if (attempts_left > 1) {
             batch.push(
-                root.events.UserMessage {
-                    content: "The reply did not match the required schema. Answer again with only the corrected value.",
-                },
+                root.events.UserMessage.new(
+                    "The reply did not match the required schema. Answer again with only the corrected value.",
+                ),
             );
             j.append_all(batch);
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)
@@ -321,7 +321,7 @@ class Agent {
             | baml.errors.Timeout
             | baml.errors.UnknownError
             | reflect.errors.CompilationError
-            | root.errors.Failure
+            | root.errors.Failure;
 
         function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
             let schema_attempts = self._validated_schema_attempts();

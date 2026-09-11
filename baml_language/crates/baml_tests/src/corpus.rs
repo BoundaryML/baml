@@ -193,7 +193,7 @@ fn corpus_snapshots() {
     assert!(!files.is_empty(), "no .baml files found in baml_src/");
 
     let mut db = ProjectDatabase::new();
-    db.workspace(Path::new("."));
+    let package = db.workspace(Path::new("."));
     let mut source_files: Vec<(String, SourceFile)> = Vec::with_capacity(files.len());
     for (rel, content) in &files {
         let sf = db.file(rel, content);
@@ -322,7 +322,12 @@ fn corpus_snapshots() {
         let mut pkg_files: Vec<_> = all_files
             .iter()
             .copied()
-            .filter(|f| file_package(&db, *f).package.as_str() == *pkg)
+            .filter(|f| {
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(file_package(&db, *f).root)
+                    .as_str()
+                    == *pkg
+            })
             .collect();
         pkg_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
 
@@ -346,7 +351,7 @@ fn corpus_snapshots() {
     // `OptLevel::Two` matches what the deleted per-project codegen tests used
     // (`generate_project_bytecode` defaults), and O2 lets emit reuse the MIR
     // memos the snapshots above populated.
-    let program = baml_compiler2_emit::generate_project_bytecode(&db)
+    let program = baml_compiler2_emit::generate_project_bytecode(&db, package)
         .expect("bytecode emit should succeed for an error-free corpus");
 
     // Emit mints tag-only type heads (the pointer half exists only once a heap

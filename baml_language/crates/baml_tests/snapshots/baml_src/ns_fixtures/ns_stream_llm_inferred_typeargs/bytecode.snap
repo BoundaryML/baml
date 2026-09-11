@@ -81,7 +81,23 @@ function fixtures.stream_llm_inferred_typeargs.TestFunc@spec(input: string) -> a
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _5
+    load_type never
     load_global user.fixtures.stream_llm_inferred_typeargs.TestClient
+    make_closure .<lambda(TestFunc@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _7
     load_const "TestFunc"

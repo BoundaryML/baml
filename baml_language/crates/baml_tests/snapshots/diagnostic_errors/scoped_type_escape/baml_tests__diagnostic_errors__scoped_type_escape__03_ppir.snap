@@ -20,6 +20,9 @@ function user.as_t(v: unknown) -> T  [expr] {
 function user.block_local_list_before_the_binding(t: reflect.Type) -> int  [expr] {
   { let ys = []; type T = unreflect(t); ys.push(as_t(1)) } ys.length()
 }
+function user.block_value_is_a_map_literal(t: reflect.Type) -> unknown  [expr] {
+  { let escaped = { type T = unreflect(t) } map { "key": as_t(1) } } escaped
+}
 function user.body_value_against_a_narrower_return(t: reflect.Type) -> int  [expr] {
   { type T = unreflect(t) } as_t(1)
 }

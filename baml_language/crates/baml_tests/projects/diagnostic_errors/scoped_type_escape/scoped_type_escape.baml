@@ -1,5 +1,5 @@
 // Nothing typed by a block-scoped `type T = …` binding may be observable
-// outside the block that binds it (E0171): the binding re-executes on every
+// outside the block that binds it (E0172): the binding re-executes on every
 // pass through its block and may bind `T` differently each time. A value
 // leaves only through a type that does not mention `T`, and a thrown type an
 // inferred `throws` clause or a `catch` outside the block would publish is
@@ -194,6 +194,16 @@ function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
         m.set("k", ys)
     }
     m
+}
+
+// A `map { … }` literal with entries carries the binding in its value type,
+// so the block's value publishes it exactly as any other container would.
+function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
+    let escaped = {
+        type T = unreflect(t)
+        map { key: as_t<T>(1) }
+    }
+    escaped
 }
 
 class Cell<T> { value T }

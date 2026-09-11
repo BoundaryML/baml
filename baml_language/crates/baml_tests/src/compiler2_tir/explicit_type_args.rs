@@ -493,7 +493,7 @@ function uses() -> int {
         let g = identity : (x: int) -> int throws never
         g(5) : int
       }
-      !! 141..149: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
+      !! 141..149: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (x: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
     }
     ");
 }

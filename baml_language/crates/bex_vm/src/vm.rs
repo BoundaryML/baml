@@ -8755,6 +8755,14 @@ impl BexVm {
                             FutureRead::Ready(v) => v,
                             FutureRead::Error(value) => {
                                 awaiting.mark_observed();
+                                // The producer's trace belongs to this error. A catch
+                                // in a stdlib collector may have no user frames of its
+                                // own, so capturing only the awaiter's stack loses it.
+                                let trace = awaiting.error_trace();
+                                if !trace.is_empty() {
+                                    self.record_throw_context(value, Arc::from(trace), Value::NULL);
+                                    self.preserve_throw_context(value, value);
+                                }
                                 let origin = self.prof_unwind_origin_for_frame(
                                     *frame_idx,
                                     self.cur_pc,

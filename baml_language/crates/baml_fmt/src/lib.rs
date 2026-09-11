@@ -34,11 +34,10 @@ pub fn format(source: &str, options: &FormatOptions) -> Result<String, Formatter
 pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml_db::SourceFile) {
     let mut db = ProjectDatabase::new();
     let root = db
-        .add_source_root(SourceRootSpec {
-            path: std::path::PathBuf::from("<fmt>"),
-            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_db::SourceRootKind::Workspace,
-        })
+        .add_source_root(SourceRootSpec::new(
+            "<fmt>",
+            baml_db::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
     let file =
         db.add_or_update_file_in(root, &std::path::PathBuf::from("<fmt>").join(name), source);
@@ -2241,5 +2240,264 @@ mod member_chain_layout_tests {
         let source = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload.decode_as_structured(schema_registry_value).validate_against(validation_rules_value);\n    out\n}\n";
         let expected = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload\n        .decode_as_structured(schema_registry_value)\n        .validate_against(validation_rules_value);\n    out\n}\n";
         assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
+mod interface_format_tests {
+    use super::{FormatOptions, format};
+
+    fn assert_round_trip(source: &str, options: &FormatOptions) -> String {
+        let formatted = format(source, options).unwrap_or_else(|e| panic!("{e:?}\n{source}"));
+        assert_eq!(format(&formatted, options).unwrap(), formatted);
+        formatted
+    }
+
+    #[test]
+    fn declaration_semicolons_are_canonical() {
+        let options = FormatOptions::default();
+        for terminator in ["", ";"] {
+            let source = format!(
+                "type Name = string{terminator}\ninterface Named {{\n type Key{terminator}\n type Error = never{terminator}\n name: Name,\n function label(self) -> string throws never{terminator}\n function display(self) -> string throws never {{ self.label() }}\n}}\nclass Item {{\n name: Name,\n implements Named {{ type Key = string{terminator}\n function label(self) -> string {{ self.name }} }}\n}}"
+            );
+            let formatted = assert_round_trip(&source, &options);
+            for expected in [
+                "type Name = string;",
+                "type Key;",
+                "type Error = never;",
+                "name: Name,",
+                "function label(self) -> string throws never;",
+                "type Key = string;",
+            ] {
+                assert!(
+                    formatted.contains(expected),
+                    "missing {expected}:\n{formatted}"
+                );
+            }
+            assert!(!formatted.contains("};"), "{formatted}");
+        }
+    }
+
+    #[test]
+    fn preserves_interface_terminator_comments() {
+        for declaration in ["function f(self) -> int throws never", "type Key = int"] {
+            for separator in [
+                " /* before */; // after\n",
+                " // before\n; // after\n",
+                "; /* after */\n",
+            ] {
+                let source = format!("interface I {{ {declaration}{separator} }}");
+                let formatted = assert_round_trip(&source, &FormatOptions::default());
+                for marker in ["/* before */", "// before", "// after", "/* after */"] {
+                    assert_eq!(
+                        formatted.matches(marker).count(),
+                        source.matches(marker).count(),
+                        "{formatted}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_line_comments_inside_interface_headers() {
+        for source in [
+            "interface I // name\n requires A, // target\n B { // body\n}\n",
+            "interface I {function f(self) -> string // result\n throws never // throws\n function g(self) -> int throws never // default\n { 1 }}",
+            "interface I {function f(\n self, // receiver\n value: string // parameter\n) -> string throws never}",
+        ] {
+            let formatted = assert_round_trip(source, &FormatOptions::default());
+            for line in source.lines() {
+                if let Some((_, comment)) = line.split_once("//") {
+                    let marker = format!("//{comment}");
+                    assert_eq!(formatted.matches(&marker).count(), 1, "{formatted}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_associated_type_comments() {
+        let source = "interface I {type /* keyword */ Key /* name */ extends /* bound */ string /* value */ = /* default */ string /* delimiter */; // end\n}";
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "/* keyword */",
+            "/* name */",
+            "/* bound */",
+            "/* value */",
+            "/* default */",
+            "/* delimiter */",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn required_signature_uses_full_available_width() {
+        let signature = "    function name(self) -> string throws never;";
+        let source = format!("interface I {{\n{signature}\n}}\n");
+        let options = FormatOptions {
+            line_width: signature.len(),
+            ..FormatOptions::default()
+        };
+        assert_eq!(assert_round_trip(&source, &options), source);
+        let narrower = FormatOptions {
+            line_width: signature.len() - 1,
+            ..options
+        };
+        assert!(assert_round_trip(&source, &narrower).contains("function name(\n"));
+    }
+
+    #[test]
+    fn formats_empty_and_attributed_interfaces() {
+        let options = FormatOptions::default();
+        for (source, expected) in [
+            ("interface  Empty{}", "interface Empty {}\n"),
+            ("interface Marker {\n\n}", "interface Marker {}\n"),
+            (
+                "interface Marker<T> requires Base {}",
+                "interface Marker<T> requires Base {}\n",
+            ),
+            (
+                "@@internal interface Marker {}",
+                "@@internal\ninterface Marker {}\n",
+            ),
+            (
+                "interface Marker {\n// kept\n}",
+                "interface Marker {\n    // kept\n}\n",
+            ),
+            (
+                "interface Empty{/* kept */}",
+                "interface Empty { /* kept */\n}\n",
+            ),
+            (
+                "@@internal interface  I{@@internal function f(self)->int throws never}",
+                "@@internal\ninterface I {\n    @@internal\n    function f(self) -> int throws never;\n}\n",
+            ),
+        ] {
+            assert_eq!(assert_round_trip(source, &options), expected);
+        }
+    }
+
+    #[test]
+    fn preserves_interface_comments() {
+        let source = r#"// declaration
+interface /* keyword */ Named /* name */ <T> /* generics */ requires /* requires */ Display /* target */, /* comma */ Identity /* header */ { // open
+// associated
+ type Key extends string = string; // alias
+ name: string; // field
+ // method
+ function label(self) -> string // signature
+ function value(self) -> T throws never // throws
+ // default
+ function fallback(self) -> string throws never { "fallback" } // body
+ // close
+} // end
+"#;
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "// declaration",
+            "/* keyword */",
+            "/* name */",
+            "/* generics */",
+            "/* requires */",
+            "/* target */",
+            "/* comma */",
+            "/* header */",
+            "// open",
+            "// associated",
+            "// alias",
+            "// field",
+            "// method",
+            "// signature",
+            "// throws",
+            "// default",
+            "// body",
+            "// close",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_generic_methods_and_wraps_signatures() {
+        let source = "interface I{function convert<T extends Display>(self, first:T, second:string)->map<string,T> throws never}";
+        let options = FormatOptions {
+            line_width: 60,
+            ..FormatOptions::default()
+        };
+        let formatted = assert_round_trip(source, &options);
+        assert!(
+            formatted.contains("function convert<T extends Display>(\n"),
+            "{formatted}"
+        );
+        assert!(formatted.contains("first: T,"), "{formatted}");
+        assert!(
+            formatted.contains(") -> map<string, T> throws never"),
+            "{formatted}"
+        );
+        assert!(
+            formatted
+                .lines()
+                .all(|line| line.len() <= options.line_width),
+            "{formatted}"
+        );
+    }
+
+    #[test]
+    fn wraps_requires_clause() {
+        let source = "interface Named requires FirstLongInterface, SecondLongInterface, ThirdLongInterface {function name(self)->string throws never}";
+        let options = FormatOptions {
+            line_width: 60,
+            ..FormatOptions::default()
+        };
+        let formatted = assert_round_trip(source, &options);
+        assert!(
+            formatted
+                .lines()
+                .all(|line| line.len() <= options.line_width),
+            "{formatted}"
+        );
+    }
+
+    #[test]
+    fn preserves_required_method_signature_comments() {
+        let source = "interface I {function /* keyword */ get /* name */ (self) /* params */ -> /* arrow */ string /* result */ throws /* throws */ never // end\n}";
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "/* keyword */",
+            "/* name */",
+            "/* params */",
+            "/* arrow */",
+            "/* result */",
+            "/* throws */",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_interface_members() {
+        let source = "interface  Named < T > requires  Display , Identity {\n type Key extends string = string;\n name  :string;\n function label( self ,value:T )->string throws never\n function fallback(self)->string throws never{return self.name}\n}\n";
+        let expected = "interface Named<T> requires Display, Identity {\n    type Key extends string = string;\n    name: string,\n    function label(self, value: T) -> string throws never;\n    function fallback(self) -> string throws never {\n        return self.name;\n    }\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).unwrap();
+        assert_eq!(formatted, expected);
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
     }
 }

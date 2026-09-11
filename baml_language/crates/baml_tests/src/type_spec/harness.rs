@@ -144,6 +144,7 @@ pub(crate) fn collect_hir_ty_error_channel(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,
 ) -> ErrorChannel {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
@@ -158,8 +159,8 @@ pub(crate) fn collect_hir_ty_error_channel(
         for (&expr_id, (expected, actual)) in &result.type_mismatches {
             let rendered = format!(
                 "expected {}, got {}",
-                expected.render_canonical(),
-                actual.render_canonical()
+                expected.render_with(&vp),
+                actual.render_with(&vp)
             );
             let entry = mismatches
                 .entry(range_key(source_map.expr_span(expr_id)))
@@ -507,6 +508,7 @@ pub(crate) fn collect_hir_ty_nodes(
     file: baml_base::SourceFile,
     fixture: &str,
 ) -> Vec<TypedNode> {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
     // Inference results per body owner, keyed by the owner's scope so
@@ -553,7 +555,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: name_span,
                 kind: NodeKind::Expr,
-                ty: format!("throws {}", owner.result.throws.render_canonical()),
+                ty: format!("throws {}", owner.result.throws.render_with(&vp)),
             });
         }
     }
@@ -565,7 +567,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: owner.source_map.expr_span(expr_id),
                 kind: NodeKind::Expr,
-                ty: ty.render_canonical(),
+                ty: ty.render_with(&vp),
             });
         }
         let Some(body) = owner.body.expr_body() else {
@@ -579,7 +581,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: owner.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
-                    ty: ty.render_canonical(),
+                    ty: ty.render_with(&vp),
                 });
             }
         }
@@ -603,7 +605,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,
-                    ty: ty.render_canonical(),
+                    ty: ty.render_with(&vp),
                 });
             }
         }

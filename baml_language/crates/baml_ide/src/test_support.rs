@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_base::{Name, SourceFile, SourceRoot, SourceRootKind};
+use baml_base::{SourceFile, SourceRoot, SourceRootKind};
 use baml_db::{ProjectDatabase, SourceRootSpec};
 use text_size::TextSize;
 
@@ -18,11 +18,10 @@ pub(crate) trait TestDbExt {
 impl TestDbExt for ProjectDatabase {
     fn workspace(&mut self, root: &Path) -> SourceRoot {
         self.ensure_stdlib_sources();
-        self.add_source_root(SourceRootSpec {
-            path: root.to_path_buf(),
-            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: SourceRootKind::Workspace,
-        })
+        self.add_source_root(SourceRootSpec::new(
+            root.to_path_buf(),
+            SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"))
     }
 
@@ -205,6 +204,9 @@ pub(crate) fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize)
 /// A test project with multiple BAML files for project-level IDE features.
 pub(crate) struct ProjectTest {
     pub(crate) db: ProjectDatabase,
+    /// The package every source was added under: the fixture's `Workspace`
+    /// root.
+    pub(crate) package: SourceRoot,
     pub(crate) files: Vec<SourceFile>,
 }
 
@@ -232,7 +234,7 @@ impl ProjectTestBuilder {
     /// Build the project test.
     pub(crate) fn build(self) -> ProjectTest {
         let mut db = ProjectDatabase::default();
-        db.workspace(Path::new("/test"));
+        let package = db.workspace(Path::new("/test"));
 
         let mut files: Vec<SourceFile> = Vec::new();
         for (filename, content) in &self.sources {
@@ -240,7 +242,7 @@ impl ProjectTestBuilder {
             files.push(db.file(&path, content));
         }
 
-        ProjectTest { db, files }
+        ProjectTest { db, package, files }
     }
 }
 

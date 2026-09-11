@@ -717,11 +717,14 @@ pub(crate) fn synthesize_llm_spec_body(
     //     lower_cst.rs). Static, so an unknown prefix is a compile error.
     //     Provider construction is pure — it never touches env.
     //   * anything else — an arbitrary expression, wrapped in
-    //     `ai.clients.resolve(...)` so every dynamic selector shape works:
-    //     an `ai.Client` value (identity), a runtime `"provider/model"`
-    //     string, or a `baml.env.Ref` (read at call time, then the string
-    //     path). Unknown prefixes / unset vars become typed runtime `ai`
-    //     errors rather than an opaque `InitFailed`.
+    //     `ai.clients.resolve(selector, providers)` so every dynamic selector
+    //     shape works: an `ai.Client` value (identity), a runtime
+    //     `"provider/model"` string, or a `baml.env.Ref` (read at call time,
+    //     then the string path). Unknown prefixes / unset vars become typed
+    //     runtime `ai` errors rather than an opaque `InitFailed`. The call is
+    //     compiler-assisted like every `ai.clients.resolve` call
+    //     (`complete_client_resolve_call`): the provider table rides along
+    //     as a lambda synthesized from `SHORTHAND_PROVIDERS`.
     let default_client = match client_spec {
         crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
@@ -754,11 +757,16 @@ pub(crate) fn synthesize_llm_spec_body(
                 ]),
                 span,
             );
+            let args = ctx.complete_client_resolve_call(
+                resolve_callee,
+                vec![CallArg::positional(inner)],
+                span,
+            );
             ctx.alloc_expr(
                 Expr::Call {
                     callee: resolve_callee,
                     type_args: vec![],
-                    args: vec![CallArg::positional(inner)],
+                    args,
                 },
                 span,
             )
@@ -783,6 +791,127 @@ pub(crate) fn synthesize_llm_spec_body(
     );
 
     ctx.finish(Some(spec_obj))
+}
+
+/// Every prefix the `"provider/model"` shorthand knows, as a string array
+/// literal, for `ai.clients.resolve`'s error messages.
+fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
+    let elements = crate::lower_cst::SHORTHAND_PROVIDERS
+        .iter()
+        .map(|(prefix, _, _)| {
+            ctx.alloc_expr(Expr::Literal(Literal::String((*prefix).to_string())), span)
+        })
+        .collect();
+    ctx.alloc_expr(Expr::Array { elements }, span)
+}
+
+/// The runtime half of the `"provider/model"` shorthand, as a lambda:
+///
+/// ```text
+/// (prefix: string, model: string) -> ai.Client? => match (prefix) {
+///     "openai" => openai.ResponsesClient.new(model = model),
+///     ...
+///     _ => null,
+/// }
+/// ```
+///
+/// Generated from `SHORTHAND_PROVIDERS`, the same table the literal-client
+/// lowering reads, and handed to `ai.clients.resolve` at each call site
+/// (`complete_client_resolve_call`). The lambda's range is an empty one at
+/// the call's end: lambda scopes are located by exact span within their
+/// owner, so it must not share a range with any lambda written at the call,
+/// nor with the prompt lambda synthesized into a spec body.
+fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
+    let prefix_name = Name::new("prefix");
+    let model_name = Name::new("model");
+    let string_ty = || (TypeExprKind::String { attrs: vec![] }).at(span);
+    let param = |name: &Name| Param {
+        name: name.clone(),
+        type_expr: Some(string_ty()),
+        default: None,
+        span,
+        name_span: span,
+    };
+
+    let scrutinee = ctx.alloc_expr(Expr::Path(vec![prefix_name.clone()]), span);
+    let mut arms = Vec::with_capacity(crate::lower_cst::SHORTHAND_PROVIDERS.len() + 1);
+    for (prefix, pkg, class) in crate::lower_cst::SHORTHAND_PROVIDERS {
+        let pattern = ctx.alloc_pattern(
+            Pattern::Type(
+                (TypeExprKind::Literal {
+                    value: baml_base::Literal::String((*prefix).to_string()),
+                    attrs: vec![],
+                })
+                .at(span),
+            ),
+            span,
+        );
+        let ctor_callee = ctx.alloc_expr(
+            Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
+            span,
+        );
+        let model = ctx.alloc_expr(Expr::Path(vec![model_name.clone()]), span);
+        let body = ctx.alloc_expr(
+            Expr::Call {
+                callee: ctor_callee,
+                type_args: vec![],
+                args: vec![CallArg::named("model", model)],
+            },
+            span,
+        );
+        arms.push(ctx.alloc_match_arm(
+            MatchArm {
+                pattern,
+                guard: None,
+                body,
+            },
+            span,
+        ));
+    }
+    let wildcard = ctx.alloc_pattern(Pattern::Wildcard, span);
+    let null = ctx.alloc_expr(Expr::Null, span);
+    arms.push(ctx.alloc_match_arm(
+        MatchArm {
+            pattern: wildcard,
+            guard: None,
+            body: null,
+        },
+        span,
+    ));
+    let body = ctx.alloc_expr(
+        Expr::Match {
+            scrutinee,
+            scrutinee_type: None,
+            arms,
+        },
+        span,
+    );
+
+    let client_ty = (TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("Client")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(span);
+    let return_type = (TypeExprKind::Optional {
+        inner: Box::new(client_ty),
+        attrs: vec![],
+    })
+    .at(span);
+    let lambda_span = TextRange::empty(span.end());
+    ctx.alloc_expr(
+        Expr::Lambda(Box::new(LambdaDef {
+            kind: LambdaKind::Anonymous,
+            params: vec![param(&prefix_name), param(&model_name)],
+            defaults: FunctionDefaults::empty(),
+            return_type: Some(return_type),
+            throws: None,
+            body: Some(body),
+            span: lambda_span,
+        })),
+        lambda_span,
+    )
 }
 
 /// Synthesize the `@render_prompt` companion body: render the spec's prompt
@@ -3317,6 +3446,7 @@ impl LoweringContext {
             .map(|args_node| self.lower_call_args_node(&args_node))
             .unwrap_or_default();
         let (args, label_spans) = Self::finalize_call_args(lowered_args);
+        let args = self.complete_client_resolve_call(callee, args, node.span_range());
 
         let id = self.alloc_expr(
             Expr::Call {
@@ -3331,6 +3461,37 @@ impl LoweringContext {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    /// `ai.clients.resolve(selector)` is compiler-assisted: only the compiler
+    /// knows every provider (every provider package depends on `ai`, so `ai`
+    /// cannot name them), and the calling package reaches them all through
+    /// the prelude. So at each call site the compiler appends the provider
+    /// table — a constructor lambda and the list of prefixes it knows, both
+    /// synthesized from `SHORTHAND_PROVIDERS`, the one table the literal
+    /// `client "provider/model"` lowering reads too. A call that already
+    /// passes them is left alone.
+    fn complete_client_resolve_call(
+        &mut self,
+        callee: ExprId,
+        mut args: Vec<CallArg>,
+        span: TextRange,
+    ) -> Vec<CallArg> {
+        let is_resolve = matches!(
+            &self.exprs[callee],
+            Expr::Path(segments)
+                if segments.len() == 3
+                    && segments[0].as_str() == "ai"
+                    && segments[1].as_str() == "clients"
+                    && segments[2].as_str() == "resolve"
+        );
+        if is_resolve && args.len() == 1 {
+            let providers = synthesize_shorthand_providers(self, span);
+            args.push(CallArg::positional(providers));
+            let prefixes = synthesize_shorthand_prefixes(self, span);
+            args.push(CallArg::positional(prefixes));
+        }
+        args
     }
 
     fn finalize_call_args(

@@ -2117,7 +2117,7 @@ fn class_inherent_method_does_not_satisfy_interface_method() {
 async fn _unused_imports_compile() {
     // Silence dead-code warnings for `Ty` if all runtime tests above eventually
     // get gated/removed. Touching it here keeps the import live.
-    let _ = Ty::string();
+    let _ = Ty::<baml_type::TypeName>::string();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

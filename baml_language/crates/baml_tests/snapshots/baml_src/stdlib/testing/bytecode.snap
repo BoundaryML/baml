@@ -2530,7 +2530,7 @@ function testing._run_children_parallel(children: testing.TestSetChild[], pool: 
     load_type testing._NamedChildReport
     load_type never
     load_var futures
-    call baml.future.all_complete
+    call baml.future.all
     await
     call testing._aggregate_reports
     return

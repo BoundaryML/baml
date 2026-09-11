@@ -14,7 +14,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use baml_db::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRoot};
 
 use crate::{
     bytecode_cache::{CacheContext, prepare_reuse_plan},
@@ -66,16 +66,16 @@ fn run_scenario_with(
 
     // v2 served path: reuse plan + seed + incremental gate.
     let r2 = resolved(&root, edited);
-    let mut db2 = project_load::build_db_from_sources(&r2, |_| {});
+    let (mut db2, pkg2) = project_load::build_db_from_sources(&r2, |_| {});
     let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-    let pending_plan = ctx2.plan_reuse(&db2);
-    let plan = prepare_reuse_plan(&mut db2, pending_plan);
+    let pending_plan = ctx2.plan_reuse(&db2, pkg2);
+    let plan = prepare_reuse_plan(&mut db2, pkg2, pending_plan);
     let served = match serve_path {
         ServePath::RunTest => {
-            ctx2.collect_diagnostics_incremental(&db2, plan.as_ref())
+            ctx2.collect_diagnostics_incremental(&db2, pkg2, plan.as_ref())
                 .merged
         }
-        ServePath::Check => ctx2.collect_diagnostics_for_check(&db2, plan.as_ref()),
+        ServePath::Check => ctx2.collect_diagnostics_for_check(&db2, pkg2, plan.as_ref()),
     };
     let served_render = render_project_diagnostics(&db2, &served);
 
@@ -85,7 +85,7 @@ fn run_scenario_with(
         .unwrap_or_default();
 
     // v2 honest path: an independent fresh database, no cache, no seed.
-    let db_honest = project_load::build_db_from_sources(&r2, |_| {});
+    let (db_honest, _) = project_load::build_db_from_sources(&r2, |_| {});
     let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
     let honest_render = render_project_diagnostics(&db_honest, &honest);
 
@@ -362,18 +362,21 @@ fn check_corrupt_clean_blob_degrades_to_honest_file_check() {
     if cache_disabled() {
         return;
     }
-    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
-        ctx.corrupt_manifest_diagnostics_for_test("w.baml");
-        let pending_plan = ctx.plan_reuse(db);
-        let plan = prepare_reuse_plan(db, pending_plan);
-        let served = ctx.collect_diagnostics_for_check(db, plan.as_ref());
-        let honest = baml_db::collect_compiler2_diagnostics(db);
-        assert_eq!(
-            render_project_diagnostics(db, &served),
-            render_project_diagnostics(db, &honest),
-            "an undecodable clean-file blob must be recomputed honestly"
-        );
-    });
+    with_stored_manifest(
+        &[("w.baml", WARN), ("z.baml", UNRELATED)],
+        |ctx, db, package| {
+            ctx.corrupt_manifest_diagnostics_for_test("w.baml");
+            let pending_plan = ctx.plan_reuse(db, package);
+            let plan = prepare_reuse_plan(db, package, pending_plan);
+            let served = ctx.collect_diagnostics_for_check(db, package, plan.as_ref());
+            let honest = baml_db::collect_compiler2_diagnostics(db);
+            assert_eq!(
+                render_project_diagnostics(db, &served),
+                render_project_diagnostics(db, &honest),
+                "an undecodable clean-file blob must be recomputed honestly"
+            );
+        },
+    );
 }
 
 // ── Layout-scoped sentinel in mixed class+function files ─────────────────────
@@ -443,15 +446,15 @@ fn oracle_mixed_file_field_reorder() {
 /// so no `BAML_CACHE_VERIFY` mutation is needed (parallel-test safe).
 fn with_stored_manifest(
     files: &[(&str, &str)],
-    check: impl FnOnce(&CacheContext, &mut ProjectDatabase),
+    check: impl FnOnce(&CacheContext, &mut ProjectDatabase, SourceRoot),
 ) {
     let root = oracle_root();
     let _ = compile_and_store_v1(&root, files);
 
     let r1 = resolved(&root, files);
-    let mut db2 = project_load::build_db_from_sources(&r1, |_| {});
+    let (mut db2, pkg2) = project_load::build_db_from_sources(&r1, |_| {});
     let ctx2 = CacheContext::open(&r1).expect("cache reopens");
-    check(&ctx2, &mut db2);
+    check(&ctx2, &mut db2, pkg2);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -460,12 +463,16 @@ fn verify_diagnostics_passes_for_faithful_cache() {
     if cache_disabled() {
         return;
     }
-    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
-        assert!(
-            ctx.check_cached_diagnostics_against_fresh(db).is_ok(),
-            "the oracle must not bail on a faithfully-cached clean file"
-        );
-    });
+    with_stored_manifest(
+        &[("w.baml", WARN), ("z.baml", UNRELATED)],
+        |ctx, db, package| {
+            assert!(
+                ctx.check_cached_diagnostics_against_fresh(db, package)
+                    .is_ok(),
+                "the oracle must not bail on a faithfully-cached clean file"
+            );
+        },
+    );
 }
 
 #[test]
@@ -477,13 +484,17 @@ fn verify_diagnostics_bails_on_a_stale_cache() {
     // (unchanged), so the oracle would serve the cached blob. If the cache is
     // empty (a stale substitute that dropped the warning) while a fresh
     // check_file still produces it, the oracle must bail.
-    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
-        // Overwrite the manifest so w.baml's cached diagnostics are empty (a
-        // stale serve) while its content is unchanged.
-        ctx.poison_manifest_diagnostics_for_test("w.baml");
-        assert!(
-            ctx.check_cached_diagnostics_against_fresh(db).is_err(),
-            "the oracle must bail when the cached diagnostics drop a warning the fresh check has"
-        );
-    });
+    with_stored_manifest(
+        &[("w.baml", WARN), ("z.baml", UNRELATED)],
+        |ctx, db, package| {
+            // Overwrite the manifest so w.baml's cached diagnostics are empty (a
+            // stale serve) while its content is unchanged.
+            ctx.poison_manifest_diagnostics_for_test("w.baml");
+            assert!(
+                ctx.check_cached_diagnostics_against_fresh(db, package)
+                    .is_err(),
+                "the oracle must bail when the cached diagnostics drop a warning the fresh check has"
+            );
+        },
+    );
 }

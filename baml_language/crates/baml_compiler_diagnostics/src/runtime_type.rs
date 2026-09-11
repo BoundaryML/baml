@@ -150,7 +150,7 @@ pub fn runtime_type_must_be_named() -> Diagnostic {
     )
 }
 
-/// E0171 — a value typed by a body-scoped `type T = …` binding would be
+/// E0172 — a value typed by a body-scoped `type T = …` binding would be
 /// observable outside the block that binds `T`. The binding re-executes on
 /// every pass through its block and may bind `T` to a different type each
 /// time, so a `T`-typed value that outlived the block could break the
@@ -292,7 +292,7 @@ mod tests {
             ),
             (
                 scoped_type_escapes_block("Out"),
-                "E0171",
+                "E0172",
                 "scoped type `Out` cannot leave the block that binds it",
             ),
             (

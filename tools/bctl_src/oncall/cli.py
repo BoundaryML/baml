@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import typer
 from rich.console import Console
 
+from oncall.current import current_oncall
 from oncall.notify import compose_handoff
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
@@ -28,6 +30,18 @@ def _parse_or_die(path: Path) -> tuple[str, ScheduleFile]:
         console.print(f"[red]parse error[/]: {e}")
         raise typer.Exit(1)
     return text, sched
+
+
+@app.command()
+def current() -> None:
+    """Print the current release on-call name (Pacific time)."""
+    try:
+        names = current_oncall()
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        typer.echo(f"Could not read current on-call schedule: {error}", err=True)
+        raise typer.Exit(1)
+    for name in names:
+        typer.echo(name)
 
 
 @app.command()
@@ -112,10 +126,8 @@ def notify(
             console.print(f"[red]error[/] {loc}{e.message}")
         raise typer.Exit(1)
     try:
-        # `date.today()` is local-tz; UTC drift can shift the perceived day
-        # by up to ~1h around midnight. Fine — handoffs run on a weekly cron
-        # well away from any boundary.
-        msgs = compose_handoff(sched, datetime.date.today(), wc)
+        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        msgs = compose_handoff(sched, today, wc)
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
@@ -123,13 +135,13 @@ def notify(
     if post_to_slack:
         from oncall.slack import post as slack_post
 
-        for channel, body in msgs:
-            slack_post(wc, channel, body)
+        for message in msgs:
+            slack_post(wc, message.channel, message.text, blocks=message.blocks)
         console.print(f"[green]posted {len(msgs)} message(s)[/]")
     else:
-        for channel, body in msgs:
-            console.print(f"[bold]→ {channel}[/]")
-            console.print(body)
+        for message in msgs:
+            console.print(f"[bold]→ {message.channel}[/]")
+            console.print(message.text)
             console.print()
 
 
@@ -166,22 +178,16 @@ def notify_failure(
         parse_error = str(e)
         console.print(f"[yellow]warn[/]: schedule unparseable ({e}); posting without @-mention")
 
-    target_channel = channel or (sched.slack_config.notification_channel if sched else "#oncall")
-
-    # `oncall-founders` is the escalation rotation — skip it for routine
-    # workflow-failure pings; only the primary oncaller(s) get notified.
-    escalation_rotations = {"oncall-founders"}
+    target_channel = channel or (sched.slack_config.notification_channel if sched else "#general")
 
     oncall_names: list[str] = []
     if sched is not None:
-        current = _current_shift(sched, datetime.date.today())
+        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        current = _current_shift(sched, today)
         if current is not None:
-            for rot in sched.roster.rotations_in_order():
-                if rot in escalation_rotations:
-                    continue
-                name = current.assignments.get(rot)
-                if name:
-                    oncall_names.append(name)
+            name = current.assignments.get("oncall-releases")
+            if name:
+                oncall_names.append(name)
 
     def _build(mentions: list[str]) -> str:
         prefix = (" ".join(mentions) + " ") if mentions else ""

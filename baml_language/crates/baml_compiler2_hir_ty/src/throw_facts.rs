@@ -15,7 +15,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems},
+    package::{PackageItems, accessible_package},
 };
 use baml_type::{Ty, TyAttr, throw_facts::FunctionThrowFacts};
 
@@ -72,15 +72,18 @@ pub fn file_throw_facts(
     // construction (empty until seeded), so this memo records a dependency on
     // the seed map and a later `set_seeded_throw_facts` reliably invalidates it.
     // An absent/empty map yields no hit and falls through to honest extraction.
-    if let Some(seeds) = db.seeded_throw_facts() {
-        if let Some(facts) = seeds.by_path(db).get(&file.path(db).display().to_string()) {
-            return FileThrowFacts(facts.clone());
-        }
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    // Seeds are wire data: their heads are spelled, and resolve through the
+    // seeded file's own root. A seed naming a package this root cannot reach
+    // is not this compile's fact and is re-derived honestly below.
+    if let Some(seeds) = db.seeded_throw_facts()
+        && let Some(facts) = seeds.by_path(db).get(&file.path(db).display().to_string())
+        && let Some(facts) = respell_seeded_facts(db, pkg_info.root, facts)
+    {
+        return FileThrowFacts(facts);
     }
 
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
     let func_ns = pkg_info.namespace_path;
 
     // Class methods, interface default methods, and `implements`-block
@@ -507,9 +510,8 @@ fn lookup_type_in_scope<'db>(
         if first.as_str() == "root" {
             pkg_items.lookup_type(rest, type_name)
         } else {
-            let pkg_id = PackageId::new(db, first.clone());
-            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-            pkg.lookup_type(rest, type_name)
+            let package = accessible_package(db, pkg_items.root, first)?;
+            baml_compiler2_ppir::package_items(db, package).lookup_type(rest, type_name)
         }
     })
 }
@@ -594,6 +596,39 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
             out.insert(ty.clone());
         }
     }
+}
+
+/// Seeded facts re-spelled into `root`'s compile-time heads; `None` when a
+/// head names a package `root` cannot reach.
+fn respell_seeded_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: baml_base::SourceRoot,
+    facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>],
+) -> Option<Vec<baml_type::throw_facts::FunctionThrowFacts>> {
+    let spelling = baml_compiler2_hir::package::spelling(db);
+    facts
+        .iter()
+        .map(|fact| fact.try_map_heads(&mut |name| spelling.resolve(db, root, name).ok_or(())))
+        .collect::<Result<Vec<_>, ()>>()
+        .ok()
+}
+
+/// A file's throw facts spelled for the wire: every head by its root's
+/// spelling in this database. The dual of the seed re-spelling above, and
+/// what the incremental cache persists and compares.
+pub fn export_file_throw_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: baml_base::SourceFile,
+) -> Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>> {
+    let spelling = baml_compiler2_hir::package::spelling(db);
+    file_throw_facts(db, file)
+        .0
+        .iter()
+        .map(|fact| {
+            fact.try_map_heads::<_, std::convert::Infallible>(&mut |decl| Ok(spelling.wire(decl)))
+                .unwrap_or_else(|never| match never {})
+        })
+        .collect()
 }
 
 #[cfg(test)]

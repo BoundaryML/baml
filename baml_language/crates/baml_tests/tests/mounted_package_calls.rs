@@ -15,7 +15,7 @@
 //!      like the stdlib slice).
 //!
 //! The CONSUMER database is a fresh `ProjectDatabase` with NO `app`
-//! source anywhere. The blob is mounted via `set_mounted_packages` (checking
+//! source anywhere. The blob is mounted as a source-less root (checking
 //! resolves `app.…` through the interface rows and records loc-free
 //! `MemberResolution::External` callees), and bytecode is generated with
 //! `generate_project_bytecode_with_mounted_units(consumer_db, library_units)`:
@@ -28,8 +28,7 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_mounted_units};
-use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_hir_ty::package_interface::package_interface;
+use baml_compiler2_hir_ty::package_interface::export_interface;
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
@@ -135,12 +134,17 @@ const OPT: OptLevel = OptLevel::One;
 /// user-independent prefix image).
 fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     let mut db = ProjectDatabase::new();
-    db.workspace(std::path::Path::new("/mounted-calls"));
+    let package = db.workspace(std::path::Path::new("/mounted-calls"));
     db.dependency("app");
     db.file("<builtin>/app/lib.baml", LIB);
     assert_no_diagnostic_errors(&db);
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("app")));
+    let iface = export_interface(
+        &db,
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("app"))
+            .unwrap(),
+    );
     assert!(
         matches!(
             iface.lookup_type(&[], &Name::new("Widget$stream")),
@@ -148,10 +152,10 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
         ),
         "canonical PPIR companions must be part of the mounted export surface"
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize app interface");
 
-    let units = emit_units(&db, OPT).expect("library fixture emits units");
+    let units = emit_units(&db, package, OPT).expect("library fixture emits units");
     (blob, units)
 }
 
@@ -160,13 +164,12 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
 fn consumer_program(user_src: &str) -> Program {
     let (blob, lib_units) = compile_library();
     let mut db = ProjectDatabase::new();
-    db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    let package = db.workspace(std::path::Path::new("/mounted-calls"));
+    db.mount("app", blob);
     db.file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_mounted_units(&db, OPT, &lib_units)
+    generate_project_bytecode_with_mounted_units(&db, package, OPT, &lib_units)
         .expect("consumer compiles against the mounted blob")
 }
 
@@ -404,8 +407,7 @@ fn mounted_stream_companion_supports_consumer_llm_expansion() {
     let (blob, _) = compile_library();
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     db.file(
         "main.baml",
         r##"
@@ -513,14 +515,18 @@ function intrinsic_type<T>() -> reflect.Type throws never {
 "#,
     );
     assert_no_diagnostic_errors(&lib_db);
-    let iface = package_interface(&lib_db, PackageId::new(&lib_db, Name::new("app")));
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+    let iface = export_interface(
+        &lib_db,
+        baml_compiler2_hir::package::spelling(&lib_db)
+            .root(&Name::new("app"))
+            .unwrap(),
+    );
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize builtin app interface");
 
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     db.file(
         "main.baml",
         r#"

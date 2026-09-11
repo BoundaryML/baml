@@ -26,6 +26,16 @@ pub enum TypeExprOwner {
 /// rather than semantic ones ("duplicate definition", "type mismatch").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagnostic {
+    /// Builtin aliases have a fixed arity and no associated bindings. Report
+    /// these before AST lowering erases their written type arguments.
+    InvalidBuiltinTypeArguments {
+        name: String,
+        expected: usize,
+        got: usize,
+        associated_bindings: usize,
+        span: TextRange,
+    },
+
     /// A top-level item (class, function, enum, etc.) has no name token.
     MissingItemName {
         item_kind: &'static str,
@@ -290,7 +300,7 @@ pub enum LoweringDiagnostic {
 /// `anthropic` block to write `openai.ResponsesClient` is migration guidance
 /// that changes behavior. The mapping is the legacy `provider` name -> the
 /// native client, and it is deliberately the same set the `"provider/model"`
-/// shorthand resolves (`baml_std/ai/ns_internal/clients.baml::_from_shorthand`).
+/// shorthand resolves (`SHORTHAND_PROVIDERS` in `lower_cst.rs`).
 ///
 /// An unrecognized or absent provider keeps the generic `OpenAI` suggestion:
 /// there is nothing better to say, and it is still a valid client expression.
@@ -323,6 +333,23 @@ impl LoweringDiagnostic {
     /// construct `Span` values from the stored `TextRange`s.
     pub fn to_diagnostic(&self, file_id: FileId) -> Diagnostic {
         let (id, severity, message, range, label) = match self {
+            LoweringDiagnostic::InvalidBuiltinTypeArguments {
+                name,
+                expected,
+                got,
+                associated_bindings,
+                span,
+            } => (
+                DiagnosticId::InvalidBuiltinTypeArguments,
+                Severity::Error,
+                if *associated_bindings == 0 {
+                    format!("type `{name}` expects {expected} type argument(s), got {got}")
+                } else {
+                    format!("builtin type `{name}` does not accept associated-type bindings")
+                },
+                *span,
+                "invalid builtin type arguments",
+            ),
             LoweringDiagnostic::MissingItemName { item_kind, span } => (
                 DiagnosticId::MissingName,
                 Severity::Error,

@@ -189,7 +189,7 @@ impl<'db> InferenceContext<'db> {
             let missing: Vec<String> = report
                 .missing
                 .iter()
-                .map(|w| crate::exhaustiveness::render_witness_pat(self.db, w))
+                .map(|w| crate::exhaustiveness::render_witness_pat(self.db, &self.viewpoint(), w))
                 .collect();
             self.pending_diags
                 .push(super::PendingDiag::NonExhaustiveMatch {
@@ -1191,7 +1191,7 @@ impl<'db> InferenceContext<'db> {
             }
         };
 
-        let head = crate::lower::class_ty(qtn.clone(), args.clone());
+        let head = crate::lower::class_ty(self.lang(), qtn.clone(), args.clone());
         let declared = crate::lower::class_field_types(self.db, class);
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
@@ -1508,7 +1508,7 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn class_pattern_field_types(&self, qtn: &baml_type::TypeName, args: &[Ty]) -> Vec<Ty> {
+    fn class_pattern_field_types(&self, qtn: &baml_type::DeclName, args: &[Ty]) -> Vec<Ty> {
         match self.facts.definition_of(qtn) {
             Some(baml_compiler2_hir::contributions::Definition::Class(class)) => {
                 crate::lower::class_field_types(self.db, class)
@@ -1584,7 +1584,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
     fn interface_field_projection_for_class(
         &self,
         iface_ty: &baml_type::Ty,
-        class_qtn: &baml_type::QualifiedTypeName,
+        class_qtn: &baml_type::DeclName,
         _class_type_args: &[baml_type::Ty],
     ) -> Option<Vec<usize>> {
         use baml_compiler2_hir::contributions::Definition;
@@ -1601,10 +1601,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
         };
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(
-            db,
-            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
-        );
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
         // The class's implements block for THIS interface supplies the
         // `field as class_field` links (default: the same name).
         let block = class_data.implements.iter().find(|block| {
@@ -1728,7 +1725,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
 
     fn class_field_types(
         &self,
-        qtn: &baml_type::QualifiedTypeName,
+        qtn: &baml_type::DeclName,
         ty: &baml_type::Ty,
     ) -> Vec<baml_type::Ty> {
         let args: Vec<Ty> = match ty {

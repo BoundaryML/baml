@@ -75,7 +75,23 @@ function fixtures.json_llm_return_type.ExtractAny@spec() -> ai.FunctionSpec<baml
     alloc_array 0
     call ai.tools.Toolbox.new
     store_var _3
+    load_type never
     load_global user.fixtures.json_llm_return_type.TestClient
+    make_closure .<lambda(ExtractAny@spec, 1)>, 0
+    load_const "openai"
+    load_const "openai-chat"
+    load_const "openai-images"
+    load_const "azure"
+    load_const "ollama"
+    load_const "openrouter"
+    load_const "anthropic"
+    load_const "google"
+    load_const "vertex"
+    load_const "bedrock"
+    load_const "ai-gateway-images"
+    load_const "claude-code"
+    load_type string
+    alloc_array 12
     call ai.clients.resolve
     store_var _5
     load_const "ExtractAny"

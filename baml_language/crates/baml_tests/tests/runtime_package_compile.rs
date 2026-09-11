@@ -749,3 +749,38 @@ async fn package_tests_enumerate_invocable_zero_arg_functions() {
     let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "enumerated_test_runs");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+/// One package object mounted under two aliases is one package in the
+/// consumer's compile world: a type reached as `app.Twin` and as
+/// `z_last.Twin` is the same type, so crossing the two spellings in one
+/// signature type-checks, and the value flows through unchanged.
+const ALIAS_TWINS_SOURCE: &str = r####"
+class Twin {
+  x int
+}
+
+function main() -> bool {
+  let root_package = reflect.Package.current()
+  let generated = reflect.Package.compile(
+    { "main.baml": `
+function cross(t: app.Twin) -> z_last.Twin {
+  let same: z_last.Twin = t
+  same
+}
+` },
+    packages = { "app": root_package, "z_last": root_package },
+  )
+  if (generated.diagnostics().length() != 0) {
+    throw generated.diagnostics()[0].message
+  }
+  let cross = generated.get_function<(Twin) -> Twin>("root.cross")
+    ?? throw "missing root.cross"
+  cross(Twin { x: 7 }).x == 7
+}
+"####;
+
+#[tokio::test]
+async fn one_package_under_two_aliases_is_one_package() {
+    let output = baml_test!(baml: ALIAS_TWINS_SOURCE, entry: "main");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

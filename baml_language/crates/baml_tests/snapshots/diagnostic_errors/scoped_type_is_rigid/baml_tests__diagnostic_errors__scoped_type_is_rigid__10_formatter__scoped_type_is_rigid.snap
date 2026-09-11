@@ -6,7 +6,9 @@ source: crates/baml_tests/src/generated_tests.rs
 // an ordinary static obligation that an unbounded `T` does not satisfy.
 // Nothing is deferred to a runtime gate.
 
-interface Named { name string }
+interface Named {
+    name: string,
+}
 
 class Boom<T> {
     payload: T,
