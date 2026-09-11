@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+mod idle_gc;
 pub use future::LeakedFuture;
 mod inbound_config;
 pub mod logger;
@@ -672,6 +673,7 @@ struct ActiveCall {
 }
 
 struct ActiveCallGuard {
+    idle_work: idle_gc::WorkGuard,
     engine: Arc<BexEngine>,
     call_id: CallId,
 }
@@ -689,6 +691,7 @@ impl ShutdownGuard {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = EngineLifecycle::Closed;
         self.completed = true;
+        self.engine.idle_gc.close();
         self.engine.lifecycle_changed.notify_waiters();
     }
 }
@@ -705,6 +708,7 @@ impl Drop for ShutdownGuard {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if *lifecycle == EngineLifecycle::Closing {
             *lifecycle = EngineLifecycle::Running;
+            self.engine.idle_gc.suspend(false);
         }
         drop(lifecycle);
         self.engine.lifecycle_changed.notify_waiters();
@@ -748,9 +752,18 @@ impl ActiveCallGuard {
                 cancel
             }
         };
+        let idle_work = engine.idle_gc.start_work();
         drop(map);
         drop(lifecycle);
-        Ok((Self { engine, call_id }, cancel))
+        engine.ensure_idle_gc_worker();
+        Ok((
+            Self {
+                idle_work,
+                engine,
+                call_id,
+            },
+            cancel,
+        ))
     }
 
     fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
@@ -1098,6 +1111,7 @@ pub struct BexEngine {
     active_calls: Mutex<HashMap<CallId, ActiveCall>>,
     lifecycle: Mutex<EngineLifecycle>,
     lifecycle_changed: tokio::sync::Notify,
+    idle_gc: Arc<idle_gc::IdleGc>,
     shutdown_required: AtomicBool,
 
     futures: FutureManager,
@@ -1145,6 +1159,7 @@ impl Drop for BexEngine {
     /// candidate) drops quietly: it was never registered, so it must not
     /// emit a close notification.
     fn drop(&mut self) {
+        self.idle_gc.close();
         let rooted = self
             .rooted_unhandled_spawn_errors
             .get_mut()
@@ -2270,6 +2285,7 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        let idle_gc = idle_gc::IdleGc::new(&heap);
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
         // We just created the permit manager so `new_permit` will not block:
         // the only synchronization inside is the `holders` mutex which is
@@ -2280,10 +2296,12 @@ impl BexEngine {
         // If `new_permit` ever takes a real lock or schedules async work,
         // this assumption breaks and the constructor would deadlock — at
         // which point we'd have to make `BexEngine::new` async (TODO).
-        let futures_permit = futures::executor::block_on(
-            heap_permit_manager
-                .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)))),
-        );
+        let futures_permit = futures::executor::block_on(heap_permit_manager.new_permit(
+            FutureManagerInner::with_idle_gc(
+                Tlab::new_empty(Arc::clone(&heap)),
+                Arc::clone(&idle_gc),
+            ),
+        ));
 
         // Register the frozen globals pool as its own permit holder so the
         // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
@@ -2361,6 +2379,7 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             lifecycle: Mutex::new(EngineLifecycle::Running),
             lifecycle_changed: tokio::sync::Notify::new(),
+            idle_gc,
             shutdown_required: AtomicBool::new(false),
             futures: FutureManager::new(futures_permit),
             rooted_unhandled_spawn_errors: Mutex::new(VecDeque::new()),
@@ -3017,6 +3036,7 @@ impl BexEngine {
                 match *lifecycle {
                     EngineLifecycle::Running => {
                         *lifecycle = EngineLifecycle::Closing;
+                        self.idle_gc.suspend(true);
                         return Some(ShutdownGuard {
                             engine: Arc::clone(self),
                             completed: false,
@@ -3217,6 +3237,7 @@ impl BexEngine {
         self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
             .await;
         shutdown.complete();
+        self.idle_gc.join_worker().await;
     }
 
     fn enqueue_unhandled_spawn_errors(
@@ -3358,13 +3379,24 @@ impl BexEngine {
         level: bex_heap::CollectionLevel,
         reason: &'static str,
     ) -> bex_heap::GcStats {
-        let mut cycle = bex_heap::GcCycleProfiler::start();
+        let cycle = bex_heap::GcCycleProfiler::start();
         #[cfg(not(target_arch = "wasm32"))]
         let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
-        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        let heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
+        self.collect_garbage_parked(level, reason, heap_guard, cycle).await
+    }
+
+    async fn collect_garbage_parked(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+        reason: &'static str,
+        mut heap_guard: HeapGuard<'_>,
+        mut cycle: bex_heap::GcCycleProfiler,
+    ) -> bex_heap::GcStats {
+        let cleanup_version = self.idle_gc.cleanup_version();
         cycle.parked();
 
         // Collect roots from handles (objects returned to external code)
@@ -3454,6 +3486,9 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(unhandled_spawn_errors);
 
+        if level == bex_heap::CollectionLevel::Major {
+            self.idle_gc.collected(cleanup_version);
+        }
         drop(heap_guard);
         cycle.released();
 
@@ -3586,7 +3621,7 @@ impl BexEngine {
         // target it. The RAII guard removes the entry on drop (including
         // panic unwind). Insertion and guard construction are atomic, so a
         // panic here cannot leak registry entries.
-        let (_call_guard, cancel) =
+        let (call_guard, cancel) =
             ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
 
         // Fail fast if already cancelled — guarantees pre-cancelled IDs
@@ -3595,6 +3630,7 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+        Box::pin(self.collect_before_call(&call_guard.idle_work)).await;
 
         let (function_index, kind) = self.lookup_function(function_name)?;
         if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
@@ -4338,11 +4374,12 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
-        let (_call_guard, cancel) =
+        let (call_guard, cancel) =
             ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+        Box::pin(self.collect_before_call(&call_guard.idle_work)).await;
         let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
@@ -5748,6 +5785,9 @@ impl BexEngine {
         call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
+        // Count the producer until its task exits, even if its future was
+        // cancelled or removed earlier. Created before the task is scheduled.
+        let idle_work = self.idle_gc.start_work();
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
         // token. Firing the user token cancels the child; the watcher
@@ -5834,7 +5874,8 @@ impl BexEngine {
             attr: baml_type::TyAttr::default(),
         };
         let task = async move {
-            // Declared first so it drops last: if this future is dropped at
+            let _idle_work = idle_work;
+            // Outlives the execution locals (but not the idle guard): if dropped at
             // any await below (before the event loop takes over), the closer
             // emits the child's EndFunction/EndThread (follow-up 11).
             let mut prof_closer = SpawnProfCloser {
@@ -6007,9 +6048,6 @@ impl BexEngine {
                 copy_objects,
             )
             .await;
-        // The outcome is now externally rooted (or the child future is settled),
-        // and the VM has released its permit. Short calls must service pressure too.
-        Box::pin(self.maybe_collect_garbage()).await;
         if profile_thread {
             let status = match &result {
                 Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {
