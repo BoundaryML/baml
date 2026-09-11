@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!targets.json
+!run.py
+!entrypoint.sh
+
+!manager.py

@@ -1,0 +1,238 @@
+{
+  "id": "20260910T212624Z",
+  "start_utc": "2026-09-10T21:26:24.094580+00:00",
+  "configured_duration_seconds": 0,
+  "scheduled_end_utc": null,
+  "supervisor_pid": 718,
+  "vegeta_version": "Version: v12.13.0\nCommit: 507c4f028fbad80168f3b734dab9530d3aabfefa\nRuntime: go1.22.12 linux/amd64\nDate: 2025-10-31T11:31:52Z+0000",
+  "status": "running",
+  "targets": {
+    "node-baseline": {
+      "url": "https://baml-hw-0910-node-baseline.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=node-baseline",
+        "-targets=/results/continuous-runs/20260910T212624Z/node-baseline.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 15514,
+      "status_codes": {
+        "200": 15514
+      },
+      "errors": {},
+      "body_mismatches": 0,
+      "first_request_unix": 1789075584.373481,
+      "last_request_unix": 1789075739.303436,
+      "attack_pid": 743,
+      "observed_completion_qps_last_interval": 99.928,
+      "observed_request_qps": 100.129
+    },
+    "node-baml": {
+      "url": "https://baml-hw-0910-node-baml.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=node-baml",
+        "-targets=/results/continuous-runs/20260910T212624Z/node-baml.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 15514,
+      "status_codes": {
+        "200": 15514
+      },
+      "errors": {},
+      "body_mismatches": 0,
+      "first_request_unix": 1789075584.39026,
+      "last_request_unix": 1789075739.309185,
+      "attack_pid": 777,
+      "observed_completion_qps_last_interval": 100.128,
+      "observed_request_qps": 100.136
+    },
+    "python-baseline": {
+      "url": "https://baml-hw-0910-python-baseline.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=python-baseline",
+        "-targets=/results/continuous-runs/20260910T212624Z/python-baseline.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 15514,
+      "status_codes": {
+        "200": 15514
+      },
+      "errors": {},
+      "body_mismatches": 0,
+      "first_request_unix": 1789075584.210887,
+      "last_request_unix": 1789075739.300979,
+      "attack_pid": 736,
+      "observed_completion_qps_last_interval": 99.928,
+      "observed_request_qps": 100.026
+    },
+    "python-baml": {
+      "url": "https://baml-hw-0910-python-baml.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=python-baml",
+        "-targets=/results/continuous-runs/20260910T212624Z/python-baml.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 15514,
+      "status_codes": {
+        "200": 15514
+      },
+      "errors": {},
+      "body_mismatches": 0,
+      "first_request_unix": 1789075584.192818,
+      "last_request_unix": 1789075739.302664,
+      "attack_pid": 742,
+      "observed_completion_qps_last_interval": 99.928,
+      "observed_request_qps": 100.013
+    },
+    "baml-amazonlinux": {
+      "url": "https://baml-hw-0910-baml-al2023.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=baml-amazonlinux",
+        "-targets=/results/continuous-runs/20260910T212624Z/baml-amazonlinux.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 14515,
+      "status_codes": {
+        "0": 14515
+      },
+      "errors": {
+        "Get \"https://baml-hw-0910-baml-al2023.fly.dev/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)": 14515
+      },
+      "body_mismatches": 14515,
+      "first_request_unix": 1789075584.169993,
+      "last_request_unix": 1789075729.311032,
+      "attack_pid": 733,
+      "observed_completion_qps_last_interval": 100.128,
+      "observed_request_qps": 99.999
+    },
+    "baml-debian": {
+      "url": "https://baml-hw-0910-baml-debian.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=baml-debian",
+        "-targets=/results/continuous-runs/20260910T212624Z/baml-debian.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 15514,
+      "status_codes": {
+        "0": 835,
+        "200": 14567,
+        "502": 112
+      },
+      "errors": {
+        "Get \"https://baml-hw-0910-baml-debian.fly.dev/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)": 835,
+        "502 Bad Gateway": 112
+      },
+      "body_mismatches": 947,
+      "first_request_unix": 1789075584.175076,
+      "last_request_unix": 1789075739.305278,
+      "attack_pid": 749,
+      "observed_completion_qps_last_interval": 99.928,
+      "observed_request_qps": 100.0
+    },
+    "baml-alpine": {
+      "url": "https://baml-hw-0910-baml-alpine.fly.dev/",
+      "command": [
+        "vegeta",
+        "attack",
+        "-name=baml-alpine",
+        "-targets=/results/continuous-runs/20260910T212624Z/baml-alpine.targets",
+        "-rate=100/1s",
+        "-duration=0s",
+        "-timeout=10s",
+        "-workers=10",
+        "-max-workers=2000",
+        "-connections=100",
+        "-max-connections=2000",
+        "-keepalive=true",
+        "-http2=false",
+        "-redirects=0",
+        "-max-body=32"
+      ],
+      "requests": 14514,
+      "status_codes": {
+        "0": 14514
+      },
+      "errors": {
+        "Get \"https://baml-hw-0910-baml-alpine.fly.dev/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)": 14514
+      },
+      "body_mismatches": 14514,
+      "first_request_unix": 1789075584.176972,
+      "last_request_unix": 1789075729.309027,
+      "attack_pid": 756,
+      "observed_completion_qps_last_interval": 100.128,
+      "observed_request_qps": 99.999
+    }
+  },
+  "elapsed_seconds": 155.221
+}

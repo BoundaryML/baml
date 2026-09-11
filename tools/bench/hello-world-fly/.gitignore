@@ -1,0 +1,15 @@
+.tools/
+artifacts/
+node_modules/
+baml_sdk/
+dist/
+build/
+.venv/
+__pycache__/
+*.pyc
+*.log
+
+.baml/
+.env
+.env.*
+!.env.example
