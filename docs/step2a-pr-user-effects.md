@@ -102,7 +102,7 @@ Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4723), [upper sour
 
 Category: BREAKING_CHANGE.
 
-Rename public types to their shorter final names. Former implementation helpers become private. SAP parsing throws baml.errors.ParseError rather than LlmClient; update catch patterns and explicit throws clauses. Assertions change from UserPanic to AssertionFailed; thrown panics do not enter typed throws inference. Use panic-aware handling when recovery is intended.
+Rename public types to their shorter final names. Former implementation helpers become private. Assertions change from UserPanic to AssertionFailed; thrown panics do not enter typed throws inference. Use panic-aware handling when recovery is intended.
 
 Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4725), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/crates/baml_builtins2/baml_std).
 
@@ -390,9 +390,25 @@ Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4808), [upper sour
 
 Category: BUGFIX.
 
-Rust generation no longer skips representable LLM functions solely because of the former ai.errors.Failure throws contract. Regenerate clients to obtain direct, spec, and stream bindings. The independent non-identifier string-literal union limitation (#4371) remains; do not claim all skipped-function cases or silent success are fixed.
+Rust generation no longer skips representable LLM functions solely because ai.errors.Failure is an open interface in the throws contract. Open-interface errors use Error::Runtime; representable concrete errors retain typed Rust arms. Regenerate clients to obtain direct, spec, and stream bindings. The independent non-identifier string-literal union limitation (#4371) remains; do not claim all skipped-function cases or silent success are fixed.
 
 Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4623), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/sdks/rust/sdkgen_rust/src/emit/function.rs).
+
+## E50: #4623 — Nullable and mixed-enum matching
+
+Category: BUGFIX.
+
+Matching null in an optional enum no longer triggers a VM type error, and a value from another enum in a union no longer selects an arm by a coincident discriminant. Both correctly reach the wildcard arm.
+
+Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4623), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/crates/baml_compiler2_mir/src/lower.rs).
+
+## E51: #4623 — SAP parsing errors
+
+Category: BREAKING_CHANGE.
+
+baml.sap.parse and parse_type throw baml.errors.ParseError rather than baml.errors.LlmClient. Update catch patterns and explicit throws annotations for these parsing calls.
+
+Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4623), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/crates/baml_builtins2/baml_std/baml/ns_sap/sap.baml).
 
 ## Net-effect corrections
 

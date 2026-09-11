@@ -20,7 +20,7 @@ cargo +1.98.0 build --locked --manifest-path baml_language/Cargo.toml -p baml_cl
 
 Used the official lower-bound `aarch64-apple-darwin` release artifact from the canary manifest. Its SHA-256 was verified as `dad86121702f9f6c10ade1b5cd834379848d16910613f96fe398c875556dc67e`. The system/default wrapper was not used to select compiler versions. The initial default Rust 1.91.0 build attempt failed the dependency toolchain requirement; the explicit 1.98.0 build passed without changing any toolchain file.
 
-Extracted each BAML fence into its own temporary project and ran `check` with the appropriate compiler. Used `--agent-skill-check off` for the upper binary to avoid coupling validation to the installed coding-agent skill; the older lower CLI does not support that option. All 24 snippets pass: nine lower-bound migration examples and 15 final-API examples.
+Extracted each BAML fence into its own temporary project and ran `check` with the appropriate compiler. Used `--agent-skill-check off` for the upper binary to avoid coupling validation to the installed coding-agent skill; the older lower CLI does not support that option. All 26 snippets pass: ten lower-bound migration examples and 16 final-API examples. The two SAP migration snippets were checked during the final audit; the other 24 are unchanged from their successful checks, verified by exact source comparison.
 
 | BAML block | Section | Compiler boundary | Check |
 | --- | --- | --- | --- |
@@ -32,22 +32,24 @@ Extracted each BAML fence into its own temporary project and ran `check` with th
 | 6 | Function specs, streaming, and generated bindings | upper | Passed |
 | 7 | Shorter standard-library names | lower | Passed |
 | 8 | Shorter standard-library names | upper | Passed |
-| 9 | A dedicated assertion panic type | lower | Passed |
-| 10 | A dedicated assertion panic type | upper | Passed |
-| 11 | Comparison is total and reflexive | lower | Passed |
-| 12 | Comparison is total and reflexive | upper | Passed |
-| 13 | Comparison is total and reflexive | upper | Passed |
-| 14 | Narrow unrelated unions before member access | lower | Passed |
-| 15 | Narrow unrelated unions before member access | upper | Passed |
-| 16 | Runtime type bindings are local and rigid | lower | Passed |
-| 17 | Runtime type bindings are local and rigid | upper | Passed |
-| 18 | Runtime type bindings are local and rigid | upper | Passed |
-| 19 | `all_settled` replaces `all_complete` | lower | Passed |
-| 20 | `all_settled` replaces `all_complete` | upper | Passed |
-| 21 | Agent journals use structured content blocks | lower | Passed |
-| 22 | Agent journals use structured content blocks | upper | Passed |
-| 23 | WebSocket frames and closure | lower | Passed |
-| 24 | WebSocket frames and closure | upper | Passed |
+| 9 | Schema-Aligned Parsing error type | lower | Passed |
+| 10 | Schema-Aligned Parsing error type | upper | Passed |
+| 11 | A dedicated assertion panic type | lower | Passed |
+| 12 | A dedicated assertion panic type | upper | Passed |
+| 13 | Comparison is total and reflexive | lower | Passed |
+| 14 | Comparison is total and reflexive | upper | Passed |
+| 15 | Comparison is total and reflexive | upper | Passed |
+| 16 | Narrow unrelated unions before member access | lower | Passed |
+| 17 | Narrow unrelated unions before member access | upper | Passed |
+| 18 | Runtime type bindings are local and rigid | lower | Passed |
+| 19 | Runtime type bindings are local and rigid | upper | Passed |
+| 20 | Runtime type bindings are local and rigid | upper | Passed |
+| 21 | `all_settled` replaces `all_complete` | lower | Passed |
+| 22 | `all_settled` replaces `all_complete` | upper | Passed |
+| 23 | Agent journals use structured content blocks | lower | Passed |
+| 24 | Agent journals use structured content blocks | upper | Passed |
+| 25 | WebSocket frames and closure | lower | Passed |
+| 26 | WebSocket frames and closure | upper | Passed |
 
 Executed six self-contained example entry points, beyond compile-only validation:
 
@@ -59,6 +61,10 @@ Executed six self-contained example entry points, beyond compile-only validation
 | Journal text projection | Lower and upper | Both return Continuefound |
 
 Runtime validation caught a lower-bound assertion detail: assertions already raised a UserPanic at 0.18.0. The migration now changes the dedicated panic type; it does not claim assertions first became panics in this release. Target compilation also corrected nullable stream partials and the panic-context to_string API.
+
+## Enum-match boundary probes
+
+Executed the same four-variant enum match at both boundaries. For Mode? with null, 0.18.0 fails with “VM internal error: type error: expected variant, got any”; the pinned upper returns the wildcard result “other”. For Mode | Other with Other.W, 0.18.0 incorrectly returns the Mode.A result “a”; the pinned upper returns “other”. The #4623 runtime_ty_is_enum_only guard remains at the upper boundary and prevents the unsafe discriminant jump table in both cases. These are executed before/after probes, separate from the regression-suite count below.
 
 ## Runtime regression suites
 
@@ -80,6 +86,7 @@ Generated Python/pydantic, TypeScript/node, and Rust clients with naming_convent
 
 - Python lower exports Extract__render_prompt; upper exports Extract_spec / Extract_spec_async and Extract_stream / Extract_stream_async. Prompt text/messages methods and final_async are present. Partial models remain under stream_types.
 - TypeScript upper exports Extract_spec / Extract_spec_async and retains Extract$stream / Extract$stream_async. Partial Receipt$stream names remain unchanged.
+- Source attribution for the Rust fix is #4623: translate_throws filters open-interface arms into Error::Runtime while preserving representable typed arms. The ai.errors.Failure interface remains part of the BAML error contract.
 - Rust lower skips the representative Extract LLM function because of ai.errors.Failure. Upper emits direct, spec, and stream bindings. This is the scoped evidence for #4370; it does not resolve every reason a generator can skip a function.
 - #4371: generated a Route class with graph.query/graph.diff literal arms and an LLM function returning it. Both boundaries skip the class and function and exit 0. No fixed notification.
 - #4506: checked the issue’s exact generic unknown-method reproducer. Both boundaries report E0097 for the unnecessary explicit throws unknown. No new-fix conclusion is drawn from that diagnostic.
@@ -93,7 +100,7 @@ The #4759 claim is scoped to static O2 bytecode instruction counts, not measured
 
 Loaded the unchanged website get-posts.ts from the child checkout using Node 22.23.2 type stripping and temporary dependencies outside the repository. Both documents have a boolean isPublished: false, are absent from getPosts(), and return null from getPost(slug). The same loader returns 49 other posts as a control. Both bodies compile as MDX with remark-gfm. This is a loader and content-parser check, not a complete Next.js production build or visual rendering test.
 
-Structural checks verify the exact 97 inventory SHAs, 41 retained PRs, 49 effect IDs classified exactly once, every effect included once in aggregation, at most three PRs per aggregate entry, valid pinned-source paths, corresponding PR references in the draft, local review links, balanced fences, and Python example syntax. Markdown prose uses editor wrapping rather than injected hard line breaks. `git diff --check` and the applicable prek hooks passed.
+Structural checks verify the exact 97 inventory SHAs, 41 retained PRs, 51 effect IDs classified exactly once, every effect included once in aggregation, at most three PRs per aggregate entry, valid pinned-source paths, corresponding PR references in the draft, local review links, balanced fences, and Python example syntax. Markdown prose uses editor wrapping rather than injected hard line breaks. `git diff --check` and the applicable prek hooks passed.
 
 ## Limits and publication gates
 

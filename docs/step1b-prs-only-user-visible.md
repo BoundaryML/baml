@@ -4,7 +4,7 @@ Boundaries and exclusions: [complete inventory](step1a-full-commit-inventory.md)
 
 - [#4625](https://github.com/BoundaryML/baml/pull/4625): Offline agent skill installation.
 - [#4630](https://github.com/BoundaryML/baml/pull/4630): Interface default dispatch.
-- [#4623](https://github.com/BoundaryML/baml/pull/4623): Function specs, companions, and generated clients; Portable prompt and runtime values; Rust LLM function generation.
+- [#4623](https://github.com/BoundaryML/baml/pull/4623): Function specs, companions, and generated clients; Portable prompt and runtime values; Rust LLM function generation; Nullable and mixed-enum matching; SAP parsing errors.
 - [#4646](https://github.com/BoundaryML/baml/pull/4646): Callable union inference.
 - [#4632](https://github.com/BoundaryML/baml/pull/4632): Linux installer compatibility.
 - [#4686](https://github.com/BoundaryML/baml/pull/4686): Diagnostics while editing.

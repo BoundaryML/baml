@@ -29,6 +29,7 @@ Every effect from step2a appears exactly once below. No entry groups more than t
 | BREAKING_CHANGE | E39 | #4816 | Typed settled future outcomes |
 | BREAKING_CHANGE | E42 | #4807 | Structured journal content |
 | BREAKING_CHANGE | E44 | #4834 | Local rigid runtime type bindings |
+| BREAKING_CHANGE | E51 | #4623 | SAP parsing errors |
 | BUGFIX | E02, E37, E46 | #4630, #4808, #4820 | Interface default dispatch; Captured interface dispatch; Optional arguments through interfaces |
 | BUGFIX | E05, E14, E36 | #4646, #4721, #4799 | Callable union inference; Closure return scope; Checked lambda signatures |
 | BUGFIX | E06 | #4632 | Linux installer compatibility |
@@ -45,3 +46,4 @@ Every effect from step2a appears exactly once below. No entry groups more than t
 | BUGFIX | E47 | #4808 | Dynamic reflection witnesses |
 | BUGFIX | E48 | #4808 | Native callback contracts and artifacts |
 | BUGFIX | E49 | #4623 | Rust LLM function generation |
+| BUGFIX | E50 | #4623 | Nullable and mixed-enum matching |

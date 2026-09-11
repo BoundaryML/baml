@@ -18,7 +18,7 @@ All 97 commits are inventoried, including workflows, installers, editors, websit
 | `5f6f54234a3aebb29583c9979c14c32385635a3d` | [#4625](https://github.com/BoundaryML/baml/pull/4625) feat(cli): embed the BAML agent skill | Retain: E01 |
 | `ccd81982b812d114a080614799619f96ee7f0180` | [#4630](https://github.com/BoundaryML/baml/pull/4630) Interface dispatch bugfixes and unification | Retain: E02 |
 | `48156d3553b76c036a3fc3d8ff441fc757242b3a` | [#4633](https://github.com/BoundaryML/baml/pull/4633) refactor(mir): remove dead visualization nodes from MIR | Exclude: Dead MIR visualization nodes had no producers and emitted no instructions; active playground visualization is separate. |
-| `52b927bc99e85362f5d76e43c08bbb3647f099cc` | [#4623](https://github.com/BoundaryML/baml/pull/4623) Redesign FunctionSpec and streaming projections | Retain: E03, E04, E49 |
+| `52b927bc99e85362f5d76e43c08bbb3647f099cc` | [#4623](https://github.com/BoundaryML/baml/pull/4623) Redesign FunctionSpec and streaming projections | Retain: E03, E04, E49, E50, E51 |
 | `4bfbb6043627568ff3f27428ae63c86bdf183729` | [#4643](https://github.com/BoundaryML/baml/pull/4643) fix: concurrent named-client cache lookup race | Exclude: BAML v0 only; no v1 shipped effect. |
 | `3c523b5461e27b014780de7ba13d19ea9a3d97ba` | [#4642](https://github.com/BoundaryML/baml/pull/4642) engine: bump version to 0.226.2 | Exclude: BAML v0 only; no v1 shipped effect. |
 | `4c6aea042e0fc3e4fc6df816f93248b1094c40c8` | [#4645](https://github.com/BoundaryML/baml/pull/4645) engine: trigger releases manually, instead of by pushing two separate tags | Exclude: BAML v0 only; no v1 shipped effect. |
