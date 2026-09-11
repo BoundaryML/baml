@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_dropping_adapter_preserves_source_defaults() {
+    async fn narrowed_function_value_preserves_source_defaults() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -644,13 +644,13 @@ mod tests {
 
         assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
         engine_snapshot!(
-            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            "narrowed_function_value_preserves_source_defaults_bytecode",
             output.bytecode
         );
     }
 
     #[tokio::test]
-    async fn optional_adapter_reorders_named_optional_params() {
+    async fn narrowed_function_value_reorders_named_optionals() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -672,7 +672,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_concrete_call_argument() {
+    async fn narrowed_function_value_as_concrete_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_generic_call_argument() {
+    async fn narrowed_function_value_as_generic_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {

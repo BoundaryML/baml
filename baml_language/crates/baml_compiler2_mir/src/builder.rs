@@ -391,6 +391,7 @@ impl<'db> MirBuilder<'db> {
             "Call destination must be a local place"
         );
         self.set_terminator(Terminator::Call {
+            argument_layout: None,
             callee,
             args,
             ntypeargs,
@@ -399,6 +400,21 @@ impl<'db> MirBuilder<'db> {
             target,
             unwind,
         });
+    }
+
+    /// Attach the checked argument layout to the call terminator just emitted.
+    pub(crate) fn set_call_layout(&mut self, layout: Option<baml_type::CallLayout>) {
+        match &mut self.current_block_mut().terminator {
+            Some(
+                Terminator::Call {
+                    argument_layout, ..
+                }
+                | Terminator::VirtualCall {
+                    argument_layout, ..
+                },
+            ) => *argument_layout = layout,
+            _ => unreachable!("call layout requires a call terminator"),
+        }
     }
 
     /// Emit an open-world virtual interface-method call. The implementation is
@@ -451,6 +467,7 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall must carry at least the receiver value argument"
         );
         self.set_terminator(Terminator::VirtualCall {
+            argument_layout: None,
             iface,
             method,
             args,

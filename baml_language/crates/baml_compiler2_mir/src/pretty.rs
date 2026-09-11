@@ -731,6 +731,7 @@ mod tests {
         let terminator = Terminator::Call {
             callee: local_copy(1),
             args: Vec::new(),
+            argument_layout: None,
             ntypeargs: 0,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
@@ -747,6 +748,7 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
+            argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
                 Box::new([]),
