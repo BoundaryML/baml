@@ -6,7 +6,7 @@ Figure out the latest canary release that went out:
 - `release.json` / `baml-language.cfg`
 - `baml-language-a.b.c` git tags
 
-Use explicit lower and upper tags or commit IDs when supplied. Otherwise, use the latest released tag as `LOWER_REF` and `origin/canary` as `UPPER_REF`. Set both variables to the selected references, then fetch and pin them in a fresh checkout of BoundaryML/baml:
+A canary changelog must cover changes since the previous released language canary. Use explicit lower and upper tags or commit IDs when supplied, including for historical backtests. Otherwise, use the latest released language canary’s `baml-language-a.b.c` tag as `LOWER_REF` and `origin/canary` as `UPPER_REF`. A newer `baml-language-*-nightly.*` tag does not advance the canary lower boundary; include all changes since the previous canary, even if they have already appeared in nightlies. Set both variables to the selected references, then fetch and pin them in a fresh checkout of BoundaryML/baml:
 
 ```sh
 git fetch origin --tags
