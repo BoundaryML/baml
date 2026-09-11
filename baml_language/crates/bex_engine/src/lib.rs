@@ -7692,7 +7692,9 @@ mod concurrent_tests {
             .await;
         // Keep a permit active so automatic GC waits after claiming the checker.
         let mut tlab = bex_heap::Tlab::new_empty(engine.heap.clone());
-        tlab.alloc_string("x".repeat(engine.heap.gc_budget().full_budget_bytes));
+        while !engine.heap.should_gc() {
+            tlab.alloc_string("inline");
+        }
         drop(tlab);
         let checking_engine = engine.clone();
         let task = tokio::spawn(async move {

@@ -37,6 +37,7 @@ function TextSize(text: string) -> int { text.length() }
 function Async(n: int) -> int {
     let values = Empty();
     Grow(values, n);
+    Churn(n);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
     Size(values)
 }
@@ -85,7 +86,7 @@ async fn short_calls_service_pressure_after_export() {
 #[tokio::test]
 async fn long_compute_collects_before_returning() {
     let engine = engine();
-    let n = 1_000_000;
+    let n = 2_100_000;
     assert_eq!(
         call(&engine, "Churn", vec![Ext::Int(n)], true).await,
         Ext::Int(n * (n - 1) / 2)
@@ -94,8 +95,8 @@ async fn long_compute_collects_before_returning() {
     engine.shutdown().await;
 }
 
-#[tokio::test]
-async fn existing_old_array_growth_is_charged_and_survives() {
+#[tokio::test(start_paused = true)]
+async fn existing_old_array_growth_does_not_spend_slot_budget() {
     let engine = engine();
     let values = call(&engine, "Empty", vec![], false).await;
     engine.collect_garbage(CollectionLevel::Major).await;
@@ -111,7 +112,9 @@ async fn existing_old_array_growth_is_charged_and_survives() {
         Ext::Int(2_100_000)
     );
     let after = engine.heap().gc_budget();
-    assert!(after.full_collections > before.full_collections);
+    assert_eq!(after.full_collections, before.full_collections);
+    assert!(!engine.heap().should_gc());
+    engine.collect_garbage(CollectionLevel::Major).await;
     assert_eq!(
         call(&engine, "Size", vec![values.clone()], true).await,
         Ext::Int(2_100_000)
@@ -125,8 +128,8 @@ async fn existing_old_array_growth_is_charged_and_survives() {
     engine.shutdown().await;
 }
 
-#[tokio::test]
-async fn large_payloads_collect_even_with_few_objects() {
+#[tokio::test(start_paused = true)]
+async fn large_payloads_do_not_trigger_gc_with_few_objects() {
     let engine = engine();
     let mut kept = std::collections::VecDeque::new();
     for _ in 0..20 {
@@ -143,7 +146,8 @@ async fn large_payloads_collect_even_with_few_objects() {
             kept.pop_front();
         }
     }
-    assert!(engine.heap().gc_budget().full_collections >= 2);
+    assert_eq!(engine.heap().gc_budget().full_collections, 0);
+    assert!(!engine.heap().should_gc());
     engine.collect_garbage(CollectionLevel::Major).await;
     for value in kept {
         assert_eq!(

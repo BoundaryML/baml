@@ -1,8 +1,8 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
 //! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
-//! to 1024 as the VM allocates. Slot spending is charged on refill; known backing
-//! allocations are charged separately. Ordinary yields preserve unused capacity.
+//! to 1024 as the VM allocates. Only reserved object slots spend the GC budget;
+//! backing storage is excluded. Ordinary yields preserve unused capacity.
 
 use std::sync::Arc;
 
@@ -50,8 +50,8 @@ impl TlabChunk {
 ///
 /// # Performance
 ///
-/// Object placement uses an exclusive bump pointer. Reservation and payload
-/// accounting update the shared allocation budget; no collection runs here.
+/// Object placement uses an exclusive bump pointer. Reservations update the shared
+/// allocation budget; no collection runs here.
 /// Refill reserves another region from the heap.
 ///
 /// # Example
@@ -130,9 +130,6 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, obj: Object) -> HeapPtr {
-        self.heap
-            .gc_policy
-            .charge(crate::gc_policy::payload_bytes(&obj));
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }

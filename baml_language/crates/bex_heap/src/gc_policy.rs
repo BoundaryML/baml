@@ -1,15 +1,11 @@
 //! Allocation spending requests a full collection at the next VM safe point.
 //!
 //! This is headroom between collections, not a hard heap or RSS limit. Charges
-//! include reserved object slots and shallow estimates of known backing storage.
+//! count reserved object slots only, including unused TLAB capacity. Indirect
+//! backing storage (strings, containers, images, etc.) does not spend this budget.
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
-};
-
-use bex_vm_types::{
-    Object, Value,
-    types::{AllocationAccount, LockedWriteGuard},
 };
 
 use crate::BexHeap;
@@ -24,6 +20,7 @@ pub const POLL_INTERVAL: u64 = 4096;
 /// Diagnostic snapshot. Concurrent allocation may advance spending while read.
 #[derive(Debug, Clone, Copy)]
 pub struct GcBudgetSnapshot {
+    /// Bytes of object slots reserved since the last full GC; excludes payloads.
     pub bytes_since_full_gc: usize,
     pub full_budget_bytes: usize,
     pub full_collections: usize,
@@ -82,43 +79,6 @@ impl AllocationBudget {
     }
 }
 
-impl AllocationAccount for AllocationBudget {
-    fn charge(&self, bytes: usize) {
-        self.charge(bytes);
-    }
-}
-
-/// Shallow known backing storage. Shared strings are charged per reference;
-/// slices count their retained parent. Map estimates exclude hash-index overhead
-/// and out-of-line keys. Nested type metadata, opaque Rust/host data, futures,
-/// and runtime packages are excluded. These estimates do not bound RSS.
-pub(crate) fn payload_bytes(object: &Object) -> usize {
-    match object {
-        Object::String(s) => s.heap_size_estimate(),
-        Object::Array(a) => a
-            .lock()
-            .capacity()
-            .saturating_mul(size_of::<Value>())
-            .saturating_add(size_of::<bex_vm_types::RealizedTy>()),
-        Object::Uint8Array(a) => a.lock().capacity(),
-        Object::Map(m) => map_capacity_bytes(&m.lock()),
-        Object::Instance(i) => i
-            .fields
-            .capacity()
-            .saturating_mul(size_of::<bex_vm_types::AtomicValueSlot>())
-            .saturating_add(size_of_val(i.class_type_args.as_ref())),
-        _ => 0,
-    }
-}
-
-/// Estimate entry capacity, excluding the map's separate hash index.
-pub fn map_capacity_bytes(map: &indexmap::IndexMap<bex_str::BexStr, Value>) -> usize {
-    size_of_val(map).saturating_add(
-        map.capacity()
-            .saturating_mul(size_of::<(bex_str::BexStr, Value)>()),
-    )
-}
-
 impl BexHeap {
     pub fn gc_budget(&self) -> GcBudgetSnapshot {
         GcBudgetSnapshot {
@@ -131,19 +91,12 @@ impl BexHeap {
     pub fn gc_pressure(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.gc_policy.pressure)
     }
-
-    /// Charge positive backing-capacity growth when the write guard is dropped.
-    pub fn account_container_growth<'a, T>(
-        &'a self,
-        guard: LockedWriteGuard<'a, T>,
-        estimate: fn(&T) -> usize,
-    ) -> LockedWriteGuard<'a, T> {
-        guard.with_allocation_accounting(&self.gc_policy, estimate)
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::Object;
+
     use super::*;
     use crate::{CollectionLevel, Tlab};
 
@@ -235,24 +188,21 @@ mod tests {
     }
 
     #[test]
-    fn few_large_payloads_and_container_growth_spend_budget() {
+    fn large_and_shared_backing_storage_only_spends_object_slots() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
-        tlab.alloc_string("x".repeat(MIN_FULL_BUDGET));
-        assert!(heap.should_gc());
-        let container = bex_vm_types::types::LockedContainer::new(Vec::<u8>::new());
-        let before = heap.gc_budget().bytes_since_full_gc;
-        let capacity;
-        {
-            let mut guard = heap.account_container_growth(container.lock_mut(), Vec::capacity);
-            guard.reserve(4096);
-            capacity = guard.capacity();
+        let text = bex_str::BexStr::from("x".repeat(MIN_FULL_BUDGET));
+        tlab.alloc_string(text.clone());
+        for _ in 0..1000 {
+            tlab.alloc_string(text.clone());
+            tlab.alloc_string(text.substring(1, 128));
         }
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, before + capacity);
-        {
-            let mut guard = heap.account_container_growth(container.lock_mut(), Vec::capacity);
-            guard.push(1);
-        }
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, before + capacity);
+        tlab.alloc_uint8array(vec![0; MIN_FULL_BUDGET]);
+        // These 2002 objects reserve 2048 slots, regardless of backing size or sharing.
+        assert_eq!(
+            heap.gc_budget().bytes_since_full_gc,
+            2048 * size_of::<Object>()
+        );
+        assert!(!heap.should_gc());
     }
 }

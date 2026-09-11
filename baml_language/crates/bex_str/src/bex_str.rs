@@ -69,25 +69,6 @@ const _: fn() = || {
 };
 
 impl BexStr {
-    /// O(1) backing-storage estimate for GC allocation accounting. Shared backing is
-    /// counted per reference; slices retain their entire parent allocation.
-    /// Concat estimates include text length and this node, not every rope node
-    /// or temporary flattening storage. This is not exact allocator accounting.
-    pub fn heap_size_estimate(&self) -> usize {
-        let flat = |s: &FlatStr| {
-            s.data
-                .len()
-                .saturating_add(std::mem::size_of::<FlatStr>() + 2 * std::mem::size_of::<usize>())
-        };
-        match self {
-            Self::Inline { .. } => 0,
-            Self::Flat(s) | Self::Slice { parent: s, .. } => flat(s),
-            Self::Concat(_) => self.len().saturating_add(
-                std::mem::size_of::<ConcatNode>() + 2 * std::mem::size_of::<usize>(),
-            ),
-        }
-    }
-
     /// Empty string constant (Inline with len=0).
     pub fn empty() -> BexStr {
         BexStr::Inline {
