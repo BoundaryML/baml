@@ -98,9 +98,16 @@ sitting is drawn from, and the same session answered the same way asks the
 same questions in the same order.
 
 At the end the readout gives mastery (how many rules, and which are least
-certain), calibration (how often the committed answers were right against the
-bar, and how often the learner held back), and, when one of the quiz's naive
-models explains the errors clearly, how the learner seems to reason.
+certain), calibration, and, when one of the quiz's naive models explains the
+errors clearly, how the learner seems to reason.
+
+Calibration is how often the learner answered anyway when they did not know,
+against how often the bar asks them to, and not how many answers were right.
+The cases follow the learner, so the share they get right is held near
+whatever selection aims at and would measure the sitting rather than them.
+How often they answer when they do not know is estimated from the sitting and
+is not confounded that way; it is also what makes their right answers worth
+anything, since a learner who never holds back is guessing at even odds.
 
 ## Save slots
 

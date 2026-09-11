@@ -32,19 +32,27 @@ function ended(standing: Standing, knobs: Knobs, starved: boolean): string {
   }
 }
 
+/**
+ * Whether the learner held back when they should have.
+ *
+ * The comparison is how often they answered anyway when they did not know,
+ * against how often the bar asks them to, and not how many answers were
+ * right: selection holds the share right near whatever it aims at, so
+ * accuracy would measure the sitting rather than the learner.
+ */
 function calibrated(standing: Standing, knobs: Knobs): string {
-  const accuracy = standing.calibration;
-  if (accuracy === null) {
-    return 'You committed to nothing, so there is nothing to compare with the bar. Commit when you are surer than it; not sure is for the rest.';
+  const answers = standing.commits_unsure;
+  if (answers === null) {
+    return 'Nothing to judge that on yet.';
   }
-  const gap = accuracy - knobs.bar;
-  if (gap > 0.1) {
-    return 'You were right more often than the bar asks, so you could commit more often.';
+  const asked = 1 - knobs.bar;
+  if (answers > asked + 0.15) {
+    return 'You answer more often than you should when you do not know. Below the bar, not sure is the better play.';
   }
-  if (gap < -0.1) {
-    return 'You committed more often than you should have: below the bar, not sure is the better play.';
+  if (answers < asked - 0.15) {
+    return 'You hold back more often than you need to. Above the bar, answering is the better play.';
   }
-  return 'Well calibrated: you committed about as often as you should.';
+  return 'Well judged: you hold back about as often as the bar asks.';
 }
 
 export function Readout({
@@ -81,9 +89,9 @@ export function Readout({
       )}
       <h3>Calibration</h3>
       <p>
-        {standing.calibration === null
-          ? 'You held back on every case.'
-          : `Of the answers you committed to, ${percent(standing.calibration)} were right, against a bar of ${percent(knobs.bar)}. You held back on ${percent(standing.withheld)}.`}
+        {standing.commits_unsure === null
+          ? 'You have answered nothing, so there is nothing to judge.'
+          : `When you did not know, you answered anyway ${percent(standing.commits_unsure)} of the time; the bar asks for ${percent(1 - knobs.bar)}. You held back on ${percent(standing.withheld)} of all the cases.`}
       </p>
       <p className="note">{calibrated(standing, knobs)}</p>
       {suspected !== null && (

@@ -101,15 +101,38 @@ engine then holds in a slot typed as the enum, where `match` panics and `==`
 quietly answers false. A learner's answer is `Given { said, reasoning, mark }`
 of strings, and `main.baml` turns it into the engine's enums.
 
-The learner model lives in `ns_engine/learner.baml`: Elo-style knowledge
-tracing with partial pooling (one global ability, a per-rule deviation that
-shrinks toward it), an abstained answer as evidence in its own right, points
-derived from the bar at which a learner is asked to commit, difficulty from
-the rule orders the bank derives, suspicion of each naive model measured as a
-z-score against the learner's own estimate, teaching at a stall, a rate at
-which a case that has a foil is put as a choice between its two programs
-rather than as a verdict on one, and a stop rule that is one of mastered,
-budget, or stalled. Every tunable is a field of
+The learner model lives in `ns_engine/learner.baml`. A question is answered
+right when the learner applies every rule its case turns on and gets away
+with it, so the chance of that is the PRODUCT over the rules of how strongly
+they hold each, times a chance of being caught by each trap on the case; the
+three things that can then happen — right, wrong, held back — are a
+conjunctive (DINA) model with the abstention as an outcome of its own rather
+than a discounted wrong answer. Each rule's strength is the learner's general
+ability plus a deviation whose prior is centred on zero, which is the
+pooling. An answer updates both by the Gaussian posterior for one
+observation: the mean moves by the score of the log-likelihood and the
+variance falls by the Fisher information the outcome actually carries, so an
+answer the model already expected narrows nothing, and a rule the learner
+already holds is neither moved nor narrowed by a case that also turns on
+something they do not. Blame is derived rather than apportioned, and joint
+evidence does not count as independent evidence about each rule.
+
+How often a learner commits to an answer they do not have is ESTIMATED from
+the sitting rather than assumed from the bar: a learner who never says "not
+sure" is guessing at even odds, and reading their right answers as though
+they were not would certify them on a fraction of the evidence. That estimate
+is also the calibration the readout shows, since it is the one thing adaptive
+selection does not confound.
+
+The rest: points derived from the bar at which a learner is asked to commit,
+suspicion of each naive model as a one-step-ahead residual read as a z-score,
+teaching at a stall, a rate at which a case that has a foil is put as a
+choice between its two programs rather than as a verdict on one, and a stop
+rule that is one of mastered, budget, or stalled. Every bound is taken at
+`confidence / rules`, so testing twenty-five rules at once is still the claim
+it reads as; `target` is set to what the bank can actually prove, which for a
+perfect learner is about three rules in four, and raising it is a reason to
+write harder items rather than to move the number. Every tunable is a field of
 `Knobs`. The scripted learners in `ns_conformance/learner.baml` are what the
 model is held to: an expert is certified within budget and calibrated, a
 learner who never commits is never certified, a learner who reasons as

@@ -1,11 +1,39 @@
 // What we believe about a learner, and how a sitting should go for them.
 //
-// The model is Elo-style knowledge tracing with partial pooling: one global
-// ability, and a deviation per rule that shrinks toward it. Every answer moves
-// the global estimate, which stands in for rules barely tested, so certainty
-// is reached in a fraction of the questions that judging each rule on its own
-// would take. Recency needs no window: an update is a filter, so what happened
-// lately dominates and early mistakes wash out.
+// THE MODEL. A question is answered right when the learner applies every rule
+// its case turns on and gets away with it. Writing `s_r` for how strongly
+// they hold rule `r`, in log-odds, and `q` for the chance they work the whole
+// case out:
+//
+//     s_r = ability + offset(r)
+//     q   = Π σ(s_r) · (1 − trap_slip)^traps
+//
+// and then, for the three things that can happen:
+//
+//     P(right)    = q(1 − slip) + (1 − q)·commits/2
+//     P(wrong)    = q·slip      + (1 − q)·commits/2
+//     P(withheld) = (1 − q)(1 − commits)
+//
+// `slip` is erring while knowing; `commits` is committing while not knowing,
+// which is estimated from the learner rather than assumed; the half is the
+// coin a committed guess comes down to, the same for either kind of question
+// this quiz asks. This is the conjunctive (DINA) model of skills, with the
+// abstention as a third outcome rather than a discounted wrong answer.
+//
+// WHY THE PRODUCT. A case that turns on three rules is harder than one that
+// turns on one, with no hand-set penalty for depth. The gradient of `q` in a
+// rule the learner already holds is nearly zero, so an answer moves such a
+// rule barely at all and narrows it barely at all: blame is DERIVED from the
+// model instead of apportioned by a rule of thumb, and joint evidence stops
+// counting as though it were independent evidence about each rule.
+//
+// THE UPDATE is the Gaussian (Laplace) posterior for one observation, which
+// is what Elo and Glicko are when done properly: the mean moves by the score
+// of the log-likelihood and the variance falls by the FISHER INFORMATION the
+// outcome actually carries. An answer the model already expected narrows
+// nothing; an answer at even odds narrows a lot. Between observations every
+// variance grows a little, which is what keeps the filter answering to
+// recent evidence and makes a rule left alone need asking about again.
 //
 // A profile is a value with no enum in it, because it crosses into BAML from
 // the page and an enum argument arrives as a bare string (see main.baml).
@@ -27,11 +55,14 @@ class Skill {
     /// The lowest and highest orders this rule appears at in the bank.
     lowest: int,
     order: int,
-    /// Deviation from the global ability, in logits. Shrinks toward zero, so a
-    /// rule with little evidence borrows the global estimate.
+    /// Deviation from the global ability, in log-odds. Its prior is centred
+    /// on zero, which is the pooling: a rule with little evidence of its own
+    /// stays near the global estimate.
     offset: float,
-    /// Uncertainty of `offset`, as a standard deviation. Shrinks with evidence.
-    spread: float,
+    /// The VARIANCE of `offset`, not its spread. Falls by the information an
+    /// answer carries about this rule and grows a little with every
+    /// observation, so a rule left alone becomes uncertain again.
+    variance: float,
     /// The highest order answered correctly; zero when never.
     highest_right: int,
     /// Consecutive answers that were wrong or withheld. Drives teaching.
@@ -67,16 +98,24 @@ function suspicion_z(suspicion: Suspicion) -> float throws never {
 }
 
 class Profile {
-    /// Global ability, in logits.
+    /// Global ability, in log-odds.
     ability: float,
-    /// Uncertainty of `ability`, as a standard deviation.
-    spread: float,
+    /// The VARIANCE of `ability`, not its spread.
+    variance: float,
     /// Observations so far, withheld answers included.
     step: int,
     /// Answers that gave a verdict.
     committed: int,
     /// Committed answers that were right.
     right: int,
+    /// Answers the learner held back on.
+    held_back: int,
+    /// The model's own count of how many questions the learner did not know
+    /// the answer to: the sum of `1 − q` over the questions put. Held back
+    /// answers divided by this estimates how often they hold back when they
+    /// do not know, which is the one thing that makes a committed answer
+    /// worth anything.
+    unknown_mass: float,
     skills: Skill[],
     suspicions: Suspicion[],
     /// Consecutive observations that taught us nothing: no rule's estimate
@@ -98,13 +137,18 @@ class Knobs {
     /// The confidence below which a learner should say they are not sure.
     /// Sets the guess rate a committed answer is read with, and the points.
     bar: float,
-    /// The success probability a rule must reach, at its highest order, to
-    /// count as mastered.
+    /// How reliably a rule must be applied for us to call it mastered.
     target: float,
-    /// How many standard deviations below the estimate mastery is judged at.
+    /// The chance we accept of being wrong about ANY rule. Not a number of
+    /// standard deviations: the bound is taken at `confidence / rules` per
+    /// rule, so that testing twenty-five of them at once is still the claim
+    /// it reads as. See `z_for`.
     confidence: float,
-    /// Coverage: every rule mastered on its own (`true`), or the global
-    /// estimate confident with no rule further than `band` below it.
+    /// Coverage: every rule mastered on its own (`true`), or the general
+    /// level confident with no rule confidently lagging it by more than
+    /// `band` in log-odds. `band` has to clear what the pooling prior alone
+    /// allows — a rule nothing is known about sits `rule_z` times the prior
+    /// spread below zero — or no sitting could ever end.
     strict: bool,
     band: float,
     /// The most questions a sitting may ask.
@@ -135,6 +179,18 @@ class Knobs {
     /// Stop at the budget and nowhere else: a fixed number of cases,
     /// adapting all the way. Practice, as against certification.
     practice: bool,
+    /// The chance of erring while knowing. Without it a single wrong answer
+    /// from a learner the model is sure about would be impossible rather
+    /// than unlucky, and the estimate would lurch.
+    slip: float,
+    /// The chance one naive model's trap catches a learner who otherwise
+    /// works the case out. Each trap on a case gets its own chance.
+    trap_slip: float,
+    /// How much variance every estimate gains per observation. What a
+    /// learner knows drifts, and a filter that never widens stops answering
+    /// to new evidence; it also makes a rule left alone worth asking about
+    /// again.
+    drift: float,
     /// The z-score a naive model's suspicion must reach to be named as the
     /// way the learner reasons, and how far, also in standard deviations,
     /// it must stand clear of the next model: the models overlap, so a
@@ -146,10 +202,10 @@ class Knobs {
 function default_knobs() -> Knobs throws never {
     Knobs {
         bar: 0.75,
-        target: 0.85,
-        confidence: 1.28,
+        target: 0.75,
+        confidence: 0.1,
         strict: false,
-        band: 0.8,
+        band: 1.5,
         budget: 80,
         stall_after: 20,
         minimum: 40,
@@ -158,26 +214,43 @@ function default_knobs() -> Knobs throws never {
         recheck: 15,
         contrast: 0.5,
         practice: false,
+        slip: 0.08,
+        trap_slip: 0.15,
+        drift: 0.002,
         suspect: 3.0,
         clear: 1.0,
     }
+}
+
+/// What we believe before a learner has answered anything: they are as
+/// likely to know a rule as not, and we could be wrong about that by a wide
+/// margin. The rule prior is narrower than the global one because a rule is
+/// only ever a deviation from the ability, which is what pools them.
+function prior_variance() -> float throws never {
+    2.25
+}
+
+function prior_rule_variance() -> float throws never {
+    0.25
 }
 
 /// A profile that has seen nothing.
 function fresh(rules: RuleOrder[], models: string[]) -> Profile throws never {
     Profile {
         ability: 0.0,
-        spread: 1.5,
+        variance: prior_variance(),
         step: 0,
         committed: 0,
         right: 0,
+        held_back: 0,
+        unknown_mass: 0.0,
         skills: rules.map((r) -> {
             Skill {
                 rule: r.rule,
                 lowest: r.lowest,
                 order: r.highest,
                 offset: 0.0,
-                spread: 1.0,
+                variance: prior_rule_variance(),
                 highest_right: 0,
                 wrong_streak: 0,
                 seen: 0,
@@ -201,16 +274,11 @@ function logit(p: float) -> float throws never {
     baml.Float.ln(p / (1.0 - p))
 }
 
-/// The chance a learner who does not know still answers correctly: a coin
-/// flip, times the share of unsure learners the bar leaves committing.
-function guess(knobs: Knobs) -> float throws never {
-    0.5 * (1.0 - knobs.bar)
-}
-
-/// How hard a case is, in logits, from its order and how many naive models it
-/// traps.
-function difficulty(order: int, traps: int) -> float throws never {
-    0.8 * (order - 1) * 1.0 + 0.3 * traps * 1.0
+/// `numerator / denominator`, with the denominator held off zero. Every
+/// division below is by a probability the model itself produced, and one of
+/// them can come arbitrarily close to zero.
+function ratio(numerator: float, denominator: float) -> float throws never {
+    numerator / denominator.max(0.000001)
 }
 
 function skill_of(profile: Profile, rule: string) -> Skill? throws never {
@@ -219,37 +287,181 @@ function skill_of(profile: Profile, rule: string) -> Skill? throws never {
     })
 }
 
-/// The learner's strength at `rule`, in logits: ability plus deviation.
+/// How strongly the learner holds `rule`, in log-odds.
 function strength(profile: Profile, rule: string) -> float throws never {
     profile.ability + (skill_of(profile, rule)?.offset ?? 0.0)
 }
 
-/// The chance of a correct committed answer on a case of these rules.
+/// The chance the learner works a case of these rules out: every rule
+/// applied correctly, and no trap on it caught them.
+///
+/// A rule the case reaches twice must be applied twice, which the product
+/// counts for nothing extra in code and everything in meaning.
+function knowing(
+    profile: Profile,
+    knobs: Knobs,
+    rules: string[],
+    traps: int,
+) -> float throws never {
+    let held = rules.reduce(
+        (acc, rule) -> {
+            acc * logistic(strength(profile, rule))
+        },
+        1.0,
+    );
+    held * baml.Float.pow(1.0 - knobs.trap_slip, traps * 1.0)
+}
+
+/// How often the learner commits to an answer they do not have.
+///
+/// The bar asks them to hold back below it, so the prior is that they commit
+/// `1 - bar` of the time, worth a few observations against what the sitting
+/// has shown. ESTIMATED RATHER THAN ASSUMED, because the assumption fails in
+/// the unsafe direction: a learner who never says "not sure" is guessing at
+/// even odds, and reading their right answers as though they were not would
+/// certify them on a fraction of the evidence they have given.
+function commits(profile: Profile, knobs: Knobs) -> float throws never {
+    let prior = 4.0;
+    let holds = ratio(profile.held_back * 1.0 + prior * knobs.bar, profile.unknown_mass + prior);
+    (1.0 - holds).max(0.02).min(0.98)
+}
+
+/// What the three outcomes are worth, or how each moves with `q`.
+class Chances {
+    right: float,
+    wrong: float,
+    withheld: float,
+}
+
+function chances(q: float, knobs: Knobs, commits: float) -> Chances throws never {
+    Chances {
+        right: q * (1.0 - knobs.slip) + (1.0 - q) * commits / 2.0,
+        wrong: q * knobs.slip + (1.0 - q) * commits / 2.0,
+        withheld: (1.0 - q) * (1.0 - commits),
+    }
+}
+
+/// The derivative of each chance in `q`, which is what carries an answer
+/// back to the rules it turned on.
+function slopes(knobs: Knobs, commits: float) -> Chances throws never {
+    Chances {
+        right: 1.0 - knobs.slip - commits / 2.0,
+        wrong: knobs.slip - commits / 2.0,
+        withheld: 0.0 - (1.0 - commits),
+    }
+}
+
+/// Which of the three an answer was.
+function taken(of: Chances, verdict: bool?) -> float throws never {
+    match (verdict) {
+        let right: bool => {
+            if (right) {
+                of.right
+            } else {
+                of.wrong
+            }
+        },
+        null => of.withheld,
+    }
+}
+
+/// The chance of a right answer: what selection aims at, and what a
+/// suspicion's residual is measured against.
 function predict(
     profile: Profile,
     knobs: Knobs,
     rules: string[],
     traps: int,
 ) -> float throws never {
-    if (rules.length() == 0) {
-        return guess(knobs);
-    }
-    let mean = rules.reduce(
-        (acc, rule) -> {
-            acc + strength(profile, rule)
-        },
-        0.0,
-    )
-        / (rules.length() * 1.0);
-    let g = guess(knobs);
-    g + (1.0 - g) * logistic(mean - difficulty(rules.length(), traps))
+    chances(knowing(profile, knobs, rules, traps), knobs, commits(profile, knobs)).right
 }
 
-/// The lowest strength we would bet on for `skill`, `knobs.confidence`
-/// deviations below the estimate.
+// ─── how sure we are ─────────────────────────────────────────────────────────
+
+/// The number of standard deviations that leaves `tail` of a normal above
+/// it, by Acklam's rational approximation to the inverse normal.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `tail` is not strictly between zero and
+///   one, where no such number exists.
+function z_for(tail: float) -> float throws never {
+    if (tail <= 0.0 || tail >= 1.0) {
+        throw baml.panics.Unreachable { message: `no bound leaves ${tail} of a normal above it` }
+    }
+    0.0 - inverse_normal(tail)
+}
+
+/// The value below which `p` of a standard normal lies.
+function inverse_normal(p: float) -> float throws never {
+    let low = 0.02425;
+    if (p < low) {
+        return lower_tail(p);
+    }
+    if (p > 1.0 - low) {
+        return 0.0 - lower_tail(1.0 - p);
+    }
+    let q = p - 0.5;
+    let r = q * q;
+    let numerator = (
+        (
+            (((0.0 - 39.69683028665376) * r + 220.9460984245205) * r - 275.9285104469687) * r
+                + 138.357751867269
+        )
+            * r
+            - 30.66479806614716
+    )
+        * r
+        + 2.506628277459239;
+    let denominator = (
+        (
+            (((0.0 - 54.47609879822406) * r + 161.5858368580409) * r - 155.6989798598866) * r
+                + 66.80131188771972
+        )
+            * r
+            - 13.28068155288572
+    )
+        * r
+        + 1.0;
+    numerator * q / denominator
+}
+
+/// The approximation's own tail branch, for `p` below its central range.
+function lower_tail(p: float) -> float throws never {
+    let q = baml.Float.sqrt(0.0 - 2.0 * baml.Float.ln(p));
+    let numerator = (
+        (
+            (((0.0 - 0.007784894002430293) * q - 0.3223964580411365) * q - 2.400758277161838) * q
+                - 2.549732539343734
+        )
+            * q
+            + 4.374664141464968
+    )
+        * q
+        + 2.938163982698783;
+    let denominator = (
+        ((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q
+            + 3.754408661907416
+    )
+        * q
+        + 1.0;
+    numerator / denominator
+}
+
+/// The bound each rule is judged at. Twenty-five rules tested at once is
+/// twenty-five chances to be wrong, so the family-wise chance is divided
+/// among them: without that, `confidence` of one in ten would expect two and
+/// a half rules to sit below their own floor and still read as certain.
+function rule_z(profile: Profile, knobs: Knobs) -> float throws never {
+    let rules = profile.skills.length().max(1) * 1.0;
+    z_for(knobs.confidence / rules)
+}
+
+/// The lowest strength we would bet on for `skill`.
 function floor_of(profile: Profile, knobs: Knobs, skill: Skill) -> float throws never {
-    let variance = profile.spread * profile.spread + skill.spread * skill.spread;
-    profile.ability + skill.offset - knobs.confidence * baml.Float.sqrt(variance)
+    profile.ability
+        + skill.offset
+        - rule_z(profile, knobs) * baml.Float.sqrt(profile.variance + skill.variance)
 }
 
 /// The highest order at which we would bet on the learner for `skill`, among
@@ -257,12 +469,10 @@ function floor_of(profile: Profile, knobs: Knobs, skill: Skill) -> float throws 
 /// certainty, not by a single right answer, or a learner is pushed under
 /// constructors before the rule beneath has been settled.
 function climbed_rung(profile: Profile, knobs: Knobs, skill: Skill) -> int throws never {
-    let g = guess(knobs);
-    let floor = floor_of(profile, knobs, skill);
+    let held = logistic(floor_of(profile, knobs, skill));
     baml.iter.Range.new(1, skill.highest_right + 1).reduce(
         (acc, order) -> {
-            let p = g + (1.0 - g) * logistic(floor - difficulty(order, 0));
-            if (p >= knobs.target) {
+            if (baml.Float.pow(held, order * 1.0) >= knobs.target) {
                 order
             } else {
                 acc
@@ -272,13 +482,12 @@ function climbed_rung(profile: Profile, knobs: Knobs, skill: Skill) -> int throw
     )
 }
 
-/// A rule is mastered when we would bet on the learner at its highest order,
-/// and they have in fact been right there at least once. Easy cases alone
-/// never certify a rule that can appear in hard ones.
+/// A rule is mastered when we would bet on the learner applying it as
+/// reliably as `target` asks, and they have in fact been right at the
+/// deepest the bank takes it. Easy cases alone never certify a rule that can
+/// appear in hard ones.
 function mastered(profile: Profile, knobs: Knobs, skill: Skill) -> bool throws never {
-    let g = guess(knobs);
-    let p = g + (1.0 - g) * logistic(floor_of(profile, knobs, skill) - difficulty(skill.order, 0));
-    p >= knobs.target && skill.highest_right >= skill.order
+    logistic(floor_of(profile, knobs, skill)) >= knobs.target && skill.highest_right >= skill.order
 }
 
 function mastered_rules(profile: Profile, knobs: Knobs) -> string[] throws never {
@@ -302,48 +511,45 @@ class Observed {
     verdict: bool?,
 }
 
-/// The share of a wrong answer each rule bears: the least-known rule the most,
-/// so a well-established rule is not punished for a new one's failure. A
-/// withheld answer on a wrapped case is read as being about the wrapping: the
-/// learner met an axiom under a constructor and would not commit, which says
-/// nothing about the axiom on its own, so the outermost rule takes it all.
-function blame(
-    profile: Profile,
-    rules: string[],
-    right: bool,
-    withheld: bool,
-) -> float[] throws never {
-    let n = rules.length() * 1.0;
-    if (right) {
-        return rules.map((rule) -> {
-            1.0
-        });
+/// One parameter's posterior after an observation.
+class Posterior {
+    mean: float,
+    variance: float,
+}
+
+/// The Gaussian update for one parameter: the mean moves by the score of the
+/// log-likelihood and the variance falls by the information the outcome
+/// carries about this parameter, both of which the chain rule takes through
+/// `gradient`, the derivative of `q` in it.
+///
+/// A rule the learner already holds has a gradient near zero, so an answer
+/// neither moves it nor narrows it. That is the whole of blame, derived.
+function updated(
+    mean: float,
+    variance: float,
+    gradient: float,
+    score: float,
+    information: float,
+) -> Posterior throws never {
+    let sensitivity = gradient * gradient;
+    let after = 1.0 / (1.0 / variance + information * sensitivity);
+    Posterior {
+        // Bounded so a long run one way cannot drive the logistic flat, where
+        // every gradient would vanish and no later answer could move it back.
+        mean: (mean + after * score * gradient).max(0.0 - 8.0).min(8.0),
+        variance: after,
     }
-    if (withheld && rules.length() > 1) {
-        return rules.map((rule) -> {
-            if (rule == rules[rules.length() - 1]) {
-                n
-            } else {
-                0.0
-            }
-        });
-    }
-    let doubts = rules.map((rule) -> {
-        1.0 - logistic(strength(profile, rule))
-    });
-    let total = doubts.reduce(
-        (acc, d) -> {
-            acc + d
-        },
-        0.0,
-    );
-    doubts.map((d) -> {
-        if (total > 0.0) {
-            d * n / total
-        } else {
-            1.0
-        }
-    })
+}
+
+/// How many of `rules` are `rule`: a rule a case reaches twice must be
+/// applied twice, and its gradient counts twice over.
+function times_in(rules: string[], rule: string) -> float throws never {
+    rules
+        .filter((held) -> {
+            held == rule
+        })
+        .length()
+        * 1.0
 }
 
 /// The profile after `seen`. A pure function: the old profile is untouched.
@@ -351,79 +557,82 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
     let before = profile.skills.map((skill) -> {
         profile.ability + skill.offset
     });
-    let p = predict(profile, knobs, seen.rules, seen.traps.length());
-    // A withheld answer says the learner did not know, not that they believed
-    // the opposite: a fraction of a wrong answer's weight, and it never counts
-    // as committed.
-    let weight = match (seen.verdict) {
-        bool => 1.0,
-        null => 0.3,
-    };
-    let outcome = match (seen.verdict) {
-        let right: bool => {
-            if (right) {
-                1.0
-            } else {
-                0.0
-            }
+    let commit_rate = commits(profile, knobs);
+    let q = knowing(profile, knobs, seen.rules, seen.traps.length());
+    let chance = chances(q, knobs, commit_rate);
+    let slope = slopes(knobs, commit_rate);
+    // The score and the Fisher information of the outcome, both in `q`. The
+    // information is what the answer was worth: an outcome the model already
+    // expected carries almost none, and one at even odds carries the most.
+    let score = ratio(taken(slope, seen.verdict), taken(chance, seen.verdict));
+    let information = ratio(slope.right * slope.right, chance.right)
+        + ratio(slope.wrong * slope.wrong, chance.wrong)
+        + ratio(slope.withheld * slope.withheld, chance.withheld);
+    // Every estimate widens a little before the answer narrows it, and no
+    // wider than it was before anything was known.
+    let widened = (profile.variance + knobs.drift).min(prior_variance());
+    let doubts = seen.rules.map((rule) -> {
+        1.0 - logistic(strength(profile, rule))
+    });
+    let total_doubt = doubts.reduce(
+        (acc, doubt) -> {
+            acc + doubt
         },
-        null => 0.0,
-    };
-    let surprise = (outcome - p) * weight;
+        0.0,
+    );
+    let global = updated(profile.ability, widened, q * total_doubt, score, information);
     let right = seen.verdict == true;
-    let shares = blame(profile, seen.rules, right, seen.verdict == null);
     let step = profile.step + 1;
-    let gain = profile.spread / (profile.spread + 1.0);
-    let ability = profile.ability + 2.0 * gain * surprise;
-    let spread = (profile.spread * 0.92).max(0.25);
     let skills = profile.skills.map((skill) -> {
-        let at = seen.rules.index_of(skill.rule);
-        match (at) {
-            let i: int => {
-                // A rule that bore none of the blame gathered no evidence: its
-                // spread does not shrink and it does not count as seen, or an
-                // axiom met only under constructors the learner withheld on
-                // would read as well-studied while nothing about it was learnt.
-                if (shares[i] == 0.0) {
-                    return skill;
-                }
-                let own_gain = skill.spread / (skill.spread + 1.0);
-                let moved = skill.offset + 2.0 * own_gain * surprise * shares[i];
-                Skill {
-                    ...skill,
-                    // Shrinking toward zero is the pooling: a rule with little
-                    // evidence stays close to the global estimate.
-                    offset: moved * 0.97,
-                    spread: (skill.spread * 0.85).max(0.2),
-                    highest_right: if (right) {
-                        skill.highest_right.max(seen.rules.length())
-                    } else {
-                        skill.highest_right
-                    },
-                    wrong_streak: if (right) {
-                        0
-                    } else {
-                        skill.wrong_streak + 1
-                    },
-                    seen: skill.seen + 1,
-                    last_step: step,
-                }
+        let held = logistic(profile.ability + skill.offset);
+        let gradient = q * times_in(seen.rules, skill.rule) * (1.0 - held);
+        let own = updated(
+            skill.offset,
+            (skill.variance + knobs.drift).min(prior_rule_variance()),
+            gradient,
+            score,
+            information,
+        );
+        if (!seen.rules.includes(skill.rule)) {
+            return Skill { ...skill, variance: own.variance };
+        }
+        Skill {
+            ...skill,
+            offset: own.mean,
+            variance: own.variance,
+            highest_right: if (right) {
+                skill.highest_right.max(seen.rules.length())
+            } else {
+                skill.highest_right
             },
-            null => skill,
+            wrong_streak: if (right) {
+                0
+            } else {
+                skill.wrong_streak + 1
+            },
+            seen: skill.seen + 1,
+            last_step: step,
         }
     });
     let suspicions = profile.suspicions.map((suspicion) -> {
         // A committed answer on a case that traps the model is evidence for
-        // it by exactly the shortfall against the learner's own estimate. A
-        // withheld answer is not: the model predicts a particular wrong
-        // verdict, and not knowing is not that.
+        // it by the shortfall against what the model expected BEFORE this
+        // answer moved it: a one-step-ahead residual, so the sum is a
+        // martingale and its spread is the sum of the per-answer variances.
+        // A withheld answer is not evidence: the model predicts a particular
+        // wrong verdict, and not knowing is not that.
         match (seen.verdict) {
             bool => {
                 if (seen.traps.includes(suspicion.model)) {
+                    let outcome = if (right) {
+                        1.0
+                    } else {
+                        0.0
+                    };
                     Suspicion {
                         model: suspicion.model,
-                        score: suspicion.score + (p - outcome),
-                        variance: suspicion.variance + p * (1.0 - p),
+                        score: suspicion.score + (chance.right - outcome),
+                        variance: suspicion.variance + chance.right * (1.0 - chance.right),
                     }
                 } else {
                     suspicion
@@ -433,8 +642,8 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         }
     });
     let next = Profile {
-        ability,
-        spread,
+        ability: global.mean,
+        variance: global.variance,
         step,
         committed: profile.committed
             + (
@@ -452,6 +661,15 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
                     0
                 }
             ),
+        held_back: profile.held_back
+            + (
+                if (seen.verdict == null) {
+                    1
+                } else {
+                    0
+                }
+            ),
+        unknown_mass: profile.unknown_mass + (1.0 - q),
         skills,
         suspicions,
         quiet: 0,
@@ -501,8 +719,13 @@ class Standing {
     mastered: string[],
     /// Rules furthest below what we would bet on, worst first.
     shaky: string[],
-    /// Of committed answers, the share that were right; compare to the bar.
-    calibration: float?,
+    /// How often the learner commits to an answer they do not have,
+    /// estimated from the sitting; `null` before there is anything to
+    /// estimate it from. The bar asks for `1 - bar`, and THAT is the
+    /// comparison, not how many answers were right: selection holds the
+    /// share right near whatever it aims at, so accuracy measures the
+    /// sitting rather than the learner.
+    commits_unsure: float?,
     /// The share of answers withheld.
     withheld: float,
     /// The naive model the learner's errors most resemble, when one stands
@@ -517,12 +740,17 @@ function enough(profile: Profile, knobs: Knobs) -> bool throws never {
             mastered(profile, knobs, skill)
         });
     }
-    let g = guess(knobs);
-    let global_floor = profile.ability - knobs.confidence * profile.spread;
-    let global_ok = g + (1.0 - g) * logistic(global_floor - difficulty(2, 0)) >= knobs.target;
-    global_ok
+    // The level and the lag are two claims and are bounded separately. The
+    // level is one test, so it takes the whole of `confidence`; a rule
+    // lagging is twenty-five tests, so each takes its share. Comparing a
+    // per-rule floor against a global one would compare bounds taken at
+    // different confidences and always find the rule wanting.
+    let global_floor = profile.ability - z_for(knobs.confidence) * baml.Float.sqrt(profile.variance);
+    let lag = rule_z(profile, knobs);
+    logistic(global_floor) >= knobs.target
         && profile.skills.every((skill) -> {
-            skill.seen > 0 && floor_of(profile, knobs, skill) >= global_floor - knobs.band
+            skill.seen > 0
+                && skill.offset - lag * baml.Float.sqrt(skill.variance) >= 0.0 - knobs.band
         })
 }
 
@@ -575,8 +803,8 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
         why,
         mastered: mastered_rules(profile, knobs),
         shaky,
-        calibration: if (profile.committed > 0) {
-            profile.right * 1.0 / (profile.committed * 1.0)
+        commits_unsure: if (profile.step > 0) {
+            commits(profile, knobs)
         } else {
             null
         },
@@ -663,7 +891,7 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
     let aim = 0.0 - 3.0 * (p - knobs.aim).abs();
     // A case on top of a rule the learner has not got yet says nothing about
     // the rule on top.
-    let inner_unready = rules.length() >= 2 && logistic(strength(profile, rules[0]) - difficulty(1, 0)) < 0.55;
+    let inner_unready = rules.length() >= 2 && logistic(strength(profile, rules[0])) < 0.55;
     let readiness = if (inner_unready) {
         0.0 - 2.0
     } else {
@@ -750,16 +978,28 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
         },
         0.0,
     );
-    // Seek what we know least about. This is the classic active-learning
-    // term, and the only force that ever brings a rule nobody has been asked
-    // about to the front; without it a sitting settles on the rules it has
-    // already seen and stalls with the rest untouched.
+    // Seek what we know least about: the classic active-learning term.
+    // Pooling holds the per-rule variances close together, so on its own it
+    // separates cases only weakly; a rule nobody has been asked about is
+    // called out by name, since certification asks for every rule to have
+    // been met and a sitting would otherwise stall with one untouched.
     let unknown = rules.reduce(
         (acc, rule) -> {
-            acc.max(skill_of(profile, rule)?.spread ?? 0.0)
+            acc.max(baml.Float.sqrt(skill_of(profile, rule)?.variance ?? 0.0))
         },
         0.0,
     );
+    let unmet = rules.some((rule) -> {
+        match (skill_of(profile, rule)) {
+            let skill: Skill => skill.seen == 0,
+            null => false,
+        }
+    });
+    let reaching = if (unmet) {
+        3.0
+    } else {
+        0.0
+    };
     // Finish what was started: a rule already met but not yet mastered is
     // worth more than one never met, or a sitting spreads itself over every
     // rule at once and brings none of them home.
@@ -781,6 +1021,7 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
         + 0.5 * suspicion.min(4.0)
         + teaching
         + 2.0 * unknown
+        + reaching
         + ladder
         + finishing
 }

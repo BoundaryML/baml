@@ -849,3 +849,42 @@ test "judge: an answer of the wrong kind for the question is refused" {
     assert.equal(crossed_answers(), "verdict_on_choice=panicked choice_on_verdict=panicked")
 }
 
+// ─── the normal bound ────────────────────────────────────────────────────────
+
+function thousandths(x: float) -> int throws never {
+    (x * 1000.0).iround() catch (e) {
+        baml.errors.InvalidArgument => 0,
+    }
+}
+
+/// The bounds a table of the normal distribution gives, to three places.
+/// Every claim the model makes about how sure it is rests on these.
+function normal_bounds() -> string throws never {
+    [0.5, 0.1, 0.05, 0.025, 0.01, 0.001, 0.004]
+        .map((tail) -> {
+            `${thousandths(root.engine.z_for(tail))}`
+        })
+        .join(" ")
+}
+
+function refuses_impossible_bounds() -> string throws never {
+    let over = {
+        `${root.engine.z_for(1.0)}`
+    } catch (e) {
+        baml.panics.Panic => "panicked",
+    };
+    let under = {
+        `${root.engine.z_for(0.0)}`
+    } catch (e) {
+        baml.panics.Panic => "panicked",
+    };
+    `${over} ${under}`
+}
+
+test "normal: the bound for a tail matches the table" {
+    assert.equal(normal_bounds(), "0 1282 1645 1960 2326 3090 2652")
+}
+
+test "normal: a tail outside zero to one has no bound" {
+    assert.equal(refuses_impossible_bounds(), "panicked panicked")
+}

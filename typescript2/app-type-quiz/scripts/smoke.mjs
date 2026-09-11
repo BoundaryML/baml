@@ -287,7 +287,7 @@ try {
   await page.waitForSelector('.done', WAIT);
   const readout = await text(page, '.readout');
   expect(
-    readout.includes('rules mastered') && readout.includes('bar of 75%'),
+    readout.includes('rules mastered') && readout.includes('the bar asks for'),
     `the readout is missing mastery or calibration: ${readout}`,
   );
   expect(

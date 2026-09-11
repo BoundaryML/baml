@@ -184,9 +184,8 @@ function sit_from(
 function expert_report() -> string throws never {
     let knobs = root.engine.default_knobs();
     let sat = sit(expert, knobs, 1);
-    let calibration = sat.standing.calibration ?? 0.0;
     let suspected = sat.standing.suspected ?? "none";
-    `why=${sat.standing.why} within_budget=${sat.profile.step < knobs.budget} withheld=${sat.standing.withheld} calibrated=${calibration >= 0.95} suspected=${suspected}`
+    `why=${sat.standing.why} within_budget=${sat.profile.step < knobs.budget} withheld=${sat.standing.withheld} suspected=${suspected}`
 }
 
 /// Practice asks a fixed number of cases and stops nowhere else: the expert
@@ -200,9 +199,21 @@ function practice_report() -> string throws never {
     `certified=${certified.standing.why} practised=${practised.standing.why} asked_all=${practised.profile.step == count}`
 }
 
+/// A learner who holds back on everything shows, by holding back, that they
+/// hold back when they do not know: the estimate of that has to follow them
+/// down, or their silence would be read as honesty they have not shown.
 function silent_report() -> string throws never {
     let sat = sit(silent, root.engine.default_knobs(), 2);
-    `why=${sat.standing.why} mastered=${sat.standing.mastered.length()} committed=${sat.profile.committed}`
+    let commits = sat.standing.commits_unsure ?? 1.0;
+    `why=${sat.standing.why} mastered=${sat.standing.mastered.length()} committed=${sat.profile.committed} commits_unsure=${hundredths(commits)}`
+}
+
+/// `x` as hundredths. Through a function: the arithmetic reads a local bound
+/// from an earlier closure call (README, compiler issue 9).
+function hundredths(x: float) -> int throws never {
+    (x * 100.0).iround() catch (e) {
+        baml.errors.InvalidArgument => 0,
+    }
 }
 
 /// A strict sitting asks for every rule; a loose one stops on the overall
@@ -244,24 +255,45 @@ function typescripter_report() -> string throws never {
     `suspected=${named} leading=${leading(sat.profile)} taught=${sat.taught > 0} on_point=${sat.taught_off_point == 0} both_kinds=${sat.choices > 0 && sat.choices < sat.profile.step}`
 }
 
-/// The beginner is certified on nothing above order one, and the rules left
-/// shaky are the variance rules.
+/// A learner who knows the axioms and holds back on everything else is
+/// certified on nothing — four right answers on a rule do not establish
+/// that it is applied three times in four, let alone at a confidence shared
+/// out over twenty-five rules — but the model must still be able to tell
+/// what they know from what they do not. The test is therefore the
+/// SEPARATION: their axioms stand above their variance rules, which they
+/// never once committed to.
+function mean_offset(sat: Sat, variance_rules: bool) -> int throws never {
+    let offsets = sat.profile.skills
+        .filter((skill) -> {
+            skill.rule.starts_with("variance/") == variance_rules
+        })
+        .map((skill) -> {
+            skill.offset
+        });
+    if (offsets.length() == 0) {
+        return 0;
+    }
+    hundredths(
+        offsets.reduce(
+            (acc, offset) -> {
+                acc + offset
+            },
+            0.0,
+        )
+            / (offsets.length() * 1.0),
+    )
+}
+
 function beginner_report() -> string throws never {
     let sat = sit(beginner, root.engine.default_knobs(), 5);
     let variance = sat.standing.mastered.filter((rule) -> {
         rule.starts_with("variance/")
     });
-    let axioms = sat.standing.mastered.filter((rule) -> {
-        !rule.starts_with("variance/")
-    });
-    `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} some_axioms=${axioms.length() > 0} withheld_some=${sat.standing.withheld > 0.0}`
+    `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
 test "learner: an expert is certified well within the budget, and calibrated" {
-    assert.equal(
-        expert_report(),
-        "why=Mastered within_budget=true withheld=0.0 calibrated=true suspected=none",
-    )
+    assert.equal(expert_report(), "why=Mastered within_budget=true withheld=0.0 suspected=none")
 }
 
 test "learner: practice asks its count and stops nowhere else" {
@@ -269,7 +301,7 @@ test "learner: practice asks its count and stops nowhere else" {
 }
 
 test "learner: a learner who never commits is never certified" {
-    assert.equal(silent_report(), "why=Stalled mastered=0 committed=0")
+    assert.equal(silent_report(), "why=Stalled mastered=0 committed=0 commits_unsure=2")
 }
 
 test "learner: strict coverage costs more questions than an overall picture" {
@@ -277,32 +309,34 @@ test "learner: strict coverage costs more questions than an overall picture" {
 }
 
 /// Noise names no model: a learner answering by a bit unrelated to the case
-/// is suspected of reasoning as none of them does. Every model sits within
-/// half a standard deviation of chance, which is what a suspicion measured
-/// against the learner's own estimate is for.
+/// is suspected of reasoning as none of them does, and the model reads their
+/// never holding back for what it is — they commit to an answer they do not
+/// have almost every time, which is what makes their right answers worth
+/// little.
 function parity_report() -> string throws never {
     let sat = sit(parity, root.engine.default_knobs(), 10);
-    `suspected=${sat.standing.suspected ?? "none"} why=${sat.standing.why} leading=${leading(sat.profile)}`
+    let commits = sat.standing.commits_unsure ?? 0.0;
+    `suspected=${sat.standing.suspected ?? "none"} why=${sat.standing.why} commits_unsure=${hundredths(commits)} leading=${leading(sat.profile)}`
 }
 
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget leading=spelling=-1,covariant=-2,typescript=-4",
+        "suspected=none why=Budget commits_unsure=95 leading=typescript=12,covariant=-1,spelling=-3",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=53,covariant=28,spelling=-40 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=74,covariant=48,spelling=-41 taught=true on_point=true both_kinds=true",
     )
 }
 
-test "learner: knowing only the axioms certifies no variance rule" {
+test "learner: knowing only the axioms tells the axioms apart from the rest" {
     assert.equal(
         beginner_report(),
-        "certified=false variance_mastered=0 some_axioms=true withheld_some=true",
+        "certified=false variance_mastered=0 axioms_above_variance=true withheld_some=true",
     )
 }
 
@@ -598,5 +632,5 @@ function leaning_report() -> string throws never {
 }
 
 test "sitting: three questions in five ask about a case that compiles" {
-    assert.equal(leaning_report(), "compiled=62 of=169")
+    assert.equal(leaning_report(), "compiled=59 of=165")
 }

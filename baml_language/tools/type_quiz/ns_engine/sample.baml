@@ -159,22 +159,28 @@ function unit(seed: Seed) -> float throws never {
 
 // ─── sessions ────────────────────────────────────────────────────────────────
 
-/// `length` verdict kinds, half of each (the odd one compiles), in a seeded
-/// order. The order is a uniform shuffle, so the kind at a step is not
-/// predictable from the step's index or its predecessors; the balance is
-/// exact by construction, so any imbalance among served cases is the
-/// fallbacks' doing.
+/// `length` answers, each an even draw.
+///
+/// Even and independent, not exactly balanced. A balanced list gives its
+/// last answer away entirely and its second to last often, so a learner
+/// counting answers would be right without reading the program; an uneven
+/// run carries nothing so long as the draw behind it is unbiased, which is
+/// the trade taken here. Any imbalance among served cases is therefore the
+/// draw's or the fallbacks', and the health tests bound both.
 function schedule(seed: Seed, length: int) -> Rolled<VerdictKind[]> throws never {
-    let balanced: VerdictKind[] = baml.iter.Range.new(0, length)
-        .map((i) -> {
-            if (i % 2 == 0) {
+    let none: VerdictKind[] = [];
+    baml.iter.Range.new(0, length).reduce(
+        (acc, i) -> {
+            let drawn = below(acc.next, 2);
+            let kind = if (drawn.value == 0) {
                 VerdictKind.Compiles
             } else {
                 VerdictKind.Rejected
-            }
-        })
-        .collect();
-    pick_distinct(seed, balanced, length)
+            };
+            Rolled<VerdictKind[]> { value: acc.value.concat([kind]), next: drawn.next }
+        },
+        Rolled<VerdictKind[]> { value: none, next: seed },
+    )
 }
 
 /// A step of a session with a case to show: what the schedule wanted and

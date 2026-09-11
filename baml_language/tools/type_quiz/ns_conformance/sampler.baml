@@ -167,24 +167,39 @@ function draw_respects_count_and_caps() -> bool throws never {
         && root.engine.draw(item, seed, root.bank.default_weights(), 0).length() == 0
 }
 
-function schedule_is_balanced_and_seeded() -> bool throws never {
-    let compiling = (kinds: root.engine.VerdictKind[]) -> {
-        kinds
-            .filter((k) -> {
-                k == root.engine.VerdictKind.Compiles
-            })
-            .length()
-    };
-    let even = root.engine.schedule(root.engine.seed_from(9), 120).value;
-    let odd = root.engine.schedule(root.engine.seed_from(9), 7).value;
-    let other = root.engine.schedule(root.engine.seed_from(10), 120).value;
-    even.length() == 120
-        && compiling(even) == 60
-        && odd.length() == 7
-        && compiling(odd) == 4
-        && compiling(other) == 60
-        && even != other
+/// The answers a sitting is planned around are an even draw and nothing
+/// more: over four thousand of them the two come up equally often and one
+/// says nothing about the next.
+///
+/// Not exactly balanced, deliberately. A balanced list gives its last answer
+/// away entirely and its second to last often, so a learner counting answers
+/// would be right without reading the program.
+function schedule_is_even_and_seeded() -> bool throws never {
+    let long = root.engine.schedule(root.engine.seed_from(9), 4000).value;
+    let compiling = long
+        .filter((k) -> {
+            k == root.engine.VerdictKind.Compiles
+        })
+        .length();
+    let repeated = baml.iter.Range.new(1, long.length())
+        .filter((i) -> {
+            long[i] == long[i - 1]
+        })
+        .count();
+    let other = root.engine.schedule(root.engine.seed_from(10), 4000).value;
+    long.length() == 4000
+        && near_half(compiling, 4000)
+        && near_half(repeated, 3999)
+        && long != other
+        && root.engine.schedule(root.engine.seed_from(9), 7).value
+            == root.engine.schedule(root.engine.seed_from(9), 7).value
         && root.engine.schedule(root.engine.seed_from(0), 0).value.length() == 0
+}
+
+/// Within two points of a half, which four thousand draws pin to well under
+/// a standard deviation.
+function near_half(part: int, whole: int) -> bool throws never {
+    (part * 1.0 / (whole * 1.0) - 0.5).abs() <= 0.02
 }
 
 test "unit: draws stay in [0, 1)" {
@@ -207,8 +222,8 @@ test "draw: respects the count and drops capped candidates" {
     assert.is_true(draw_respects_count_and_caps())
 }
 
-test "schedule: balanced, seeded, and empty for zero length" {
-    assert.is_true(schedule_is_balanced_and_seeded())
+test "schedule: an even draw, seeded, and empty for zero length" {
+    assert.is_true(schedule_is_even_and_seeded())
 }
 
 // ─── a seed sweep over the bank ──────────────────────────────────────────────
