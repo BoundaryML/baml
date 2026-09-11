@@ -865,16 +865,77 @@ pub mod java {
     pub use crate::java_test_suite as test_suite;
 }
 
-/// Swift generator's test-side glue. Invoked from
-/// `crates/swift/src/lib.rs` as
-/// `sdk_test_harness_runner::swift::test_suite!()`.
+/// Expand one Swift fixture's check, gated or not. `macro_rules!` cannot
+/// expand to an attribute position, so the gate has to emit the whole item.
+///
+/// An ungated fixture still skips off-macOS — there is no Swift toolchain on
+/// the other CI hosts. A gated one is `#[ignore]`d everywhere: it is known
+/// broken on the only platform that can run it, so there is nothing for the
+/// host check to add.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __swift_gate {
+    ( ; $name:ident, $body:block ) => {
+        #[test]
+        #[cfg_attr(not(target_os = "macos"), ignore = "swift toolchain is macOS-only in CI")]
+        fn $name() $body
+    };
+    ( ($reason:literal) ; $name:ident, $body:block ) => {
+        #[test]
+        #[ignore = $reason]
+        fn $name() $body
+    };
+}
+
+/// Swift generator's test-side glue. Invoked from `crates/swift/src/lib.rs`.
 pub mod swift {
-    /// `include!`s `OUT_DIR/swift_tests.rs` — the per-fixture
-    /// scaffold emitted by `sdk_test_codegen::swift::run_all`.
+    /// Declare the Swift suite: one `swift test` per fixture, plus the shared
+    /// setup guard and fixture-manifest oracle.
+    ///
+    /// A row may carry `later "<reason>"` to mark that fixture's suite as
+    /// known-broken; it is then emitted `#[ignore]`d with that reason. Each
+    /// row states its own reason because the causes differ — an emitter gap is
+    /// not a hanging test.
+    ///
+    /// ```text
+    /// fixture type_shapes;
+    /// fixture llm_functions later "sdkgen_swift skips the streaming projections";
+    /// ```
+    ///
+    /// Everything that touches the Swift toolchain is macOS-only: this crate's
+    /// nextest setup binding is host-gated, so off-macOS no setup script runs
+    /// and nothing is generated. The setup guard is `cfg`-ed out there too, or
+    /// a Linux run would fail it before reaching the ignores. The manifest
+    /// oracle stays live on every host — it only reads the corpus.
     #[macro_export]
     macro_rules! swift_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/swift_tests.rs"));
+        ( $( fixture $name:ident $( later $reason:literal )? ; )+ ) => {
+            #[cfg(target_os = "macos")]
+            $crate::setup_guard!("SDK_TEST_SWIFT_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    // One test per fixture on purpose: `swift test` builds
+                    // first, and a sibling `swift build` test would contend for
+                    // the same SwiftPM `.build` lock (nextest runs a fixture's
+                    // tests concurrently; SwiftPM serializes them, doubling
+                    // wall clock — and a killed run leaves the lock held by an
+                    // orphaned swift-build).
+                    $crate::__swift_gate!( $( ($reason) )? ; swift_test, {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            "swift test",
+                            // SwiftPM reads no env var for its cache location;
+                            // the real sharing is its default per-user cache.
+                            // Threaded through for API uniformity with the
+                            // uv/pnpm targets.
+                            "swiftpm-cache",
+                            "BAML_SWIFTPM_CACHE_DIR",
+                        );
+                    });
+                }
+            )+
         };
     }
 

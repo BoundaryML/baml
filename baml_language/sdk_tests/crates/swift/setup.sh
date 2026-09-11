@@ -22,6 +22,11 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/swift
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 
+# Generate each fixture's SwiftPM package first: nothing else produces it, and
+# `swift test` builds against it.
+echo "==> sdk_test_codegen swift (generate fixture packages)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- swift)
+
 echo "==> build-xcframework.sh --host-only (bridge_swift staticlib)"
 "$WORKSPACE_ROOT/sdks/swift/scripts/build-xcframework.sh" --host-only
 

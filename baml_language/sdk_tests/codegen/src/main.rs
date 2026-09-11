@@ -32,6 +32,7 @@ const GENERATORS: &[(&str, RunAll)] = &[
         sdk_test_codegen::python_pydantic2::run_all,
     ),
     ("rust", sdk_test_codegen::rust::run_all),
+    ("swift", sdk_test_codegen::swift::run_all),
 ];
 
 const USAGE: &str = "\
