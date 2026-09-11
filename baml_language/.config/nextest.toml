@@ -284,3 +284,9 @@ setup = 'csharp_cdylib_win'
 # quarantining is the intended replacement.
 [profile.ci.junit]
 path = "junit.xml"
+
+# baml_bridge runs after the sdk suite in the same job, so it needs a
+# separate report: sharing `ci` would republish the stale sdk report
+# under the bridge outcome whenever the bridge run dies before writing.
+[profile.ci-bridge.junit]
+path = "junit.xml"

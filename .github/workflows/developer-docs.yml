@@ -30,7 +30,6 @@ permissions:
   contents: read
 
 env:
-  TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
 jobs:
   determine-changes:
@@ -111,6 +110,7 @@ jobs:
         id: docs-tests
         continue-on-error: true
         run: pnpm --filter app-developer-docs test:ci
+        working-directory: typescript2
 
       - name: Upload test results to Trunk
         if: ${{ !cancelled() }}
@@ -121,7 +121,8 @@ jobs:
           collection: aDqMrNXq
           normalize: node-test
           test-outcome: ${{ steps.docs-tests.outcome }}
-        working-directory: typescript2
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
+
       - name: Type-check
         run: pnpm --filter app-developer-docs typecheck
         working-directory: typescript2

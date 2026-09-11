@@ -24,7 +24,6 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
-  TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
 jobs:
   determine_changes:
@@ -595,7 +594,6 @@ jobs:
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
-      TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
   size-gate:
     name: "Size Gate"
@@ -672,6 +670,7 @@ jobs:
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
           test-outcome: ${{ steps.grammar-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Run highlight.js grammar tests"
         # The hljs port validates against pkg-grammar's fixtures, so a grammar
@@ -689,6 +688,7 @@ jobs:
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
           test-outcome: ${{ steps.hljs-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Run tree-sitter grammar tests"
         # Generates the parser and runs the corpus + fixture parse gate.

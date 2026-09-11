@@ -5,10 +5,12 @@ so intermittent failures are tracked per test rather than per red job.
 
 ## Setup
 
-Uploads are gated on the `TRUNK_ORG_TOKEN` repository secret; every upload
-step skips itself when it is unset, which is what keeps fork PRs out. The org
-slug (`boundaryml`) and the collection short IDs are hard-coded in the
-workflows, each next to a link to that collection in the web app.
+Uploads are gated on the `TRUNK_ORG_TOKEN` repository secret, passed to each
+upload step as the action's `token` input — never as a workflow-level env, so
+the test steps that run PR-authored code never see it. An upload step with no
+token skips itself, which is what keeps fork PRs out. The org slug
+(`boundaryml`) and the collection short IDs are hard-coded in the workflows,
+each next to a link to that collection in the web app.
 
 ## Collections
 
@@ -50,6 +52,7 @@ can clear failures it owns.
     normalize: nextest
     cargo-manifest-path: baml_language/Cargo.toml
     test-outcome: ${{ steps.my-tests.outcome }}
+    token: ${{ secrets.TRUNK_ORG_TOKEN }}
 ```
 
 Fork PRs get no token, so the upload is skipped and the action fails the job

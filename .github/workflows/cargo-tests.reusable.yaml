@@ -68,7 +68,6 @@ env:
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_TEST_OPT_LEVEL: "1"
   RUSTUP_MAX_RETRIES: 10
-  TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
 jobs:
 
@@ -142,6 +141,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.cargo-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       # Release leg: the profiler's value copy carries `debug_assert`-adjacent
       # logic whose behavior must not change when debug assertions are
@@ -261,6 +261,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.cargo-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       # Left on `cargo test` deliberately: nextest would fan these into
       # separate processes. The trade is that this binary reports nothing.
@@ -500,6 +501,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.cargo-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Free disk for CLI binary e2e tests"
         run: |
@@ -1206,6 +1208,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.sdk-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Run C# sdk tests"
         id: csharp-sdk-test
@@ -1224,6 +1227,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.csharp-sdk-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       # Record the content hashes the next run's backdate steps compare
       # against. Runs even on test failure: the bin/obj state saved by the
@@ -1261,19 +1265,20 @@ jobs:
         id: bridge-test
         if: matrix.sdk-label == 'rust'
         continue-on-error: true
-        run: cargo nextest run --profile ci -p baml_bridge --all-features
+        run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload rust bridge results to Trunk"
         if: ${{ !cancelled() && matrix.sdk-label == 'rust' }}
         uses: ./.github/actions/upload-test-results
         with:
-          junit-path: baml_language/target/nextest/ci/junit.xml
+          junit-path: baml_language/target/nextest/ci-bridge/junit.xml
           # https://app.trunk.io/boundaryml/flaky-tests/collections/9AZXu27s
           collection: 9AZXu27s
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.bridge-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Upload test results on failure"
         if: failure()
@@ -1653,6 +1658,7 @@ jobs:
           normalize: nextest
           cargo-manifest-path: baml_language/Cargo.toml
           test-outcome: ${{ steps.snapshot-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Check for snapshot changes"
         run: |
