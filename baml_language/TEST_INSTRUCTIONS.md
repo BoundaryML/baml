@@ -8,7 +8,7 @@ Answer one question first: **what is the test actually about?**
 |---|---|
 | BAML *behavior* — run code, assert a value or a catchable throw | `crates/baml_tests/baml_src/ns_<topic>/` as a `test` block |
 | A compile **error** (or intentionally broken syntax) | `crates/baml_tests/projects/diagnostic_errors/` or `projects/broken_syntax/` |
-| Compiler IR — PPIR/MIR/bytecode/diagnostics of code that compiles | `crates/baml_tests/baml_src/ns_fixtures/ns_<topic>/` (snapshots are generated automatically) |
+| Compiler IR — PPIR/MIR/bytecode/diagnostics of code that compiles | `crates/baml_tests/baml_src/ns_fixtures/ns_<topic>/`; IR goldens are opt-in via `src/corpus_snapshot_policy.rs` |
 | Something only Rust can see — VM/heap/GC state, host arg marshalling, wall-clock timing, salsa invalidation, CLI/LSP/FFI surface | a Rust test in the owning crate |
 
 **The default is a BAML `test` block.** If you find yourself writing a Rust test
@@ -117,7 +117,14 @@ mkdir -p crates/baml_tests/projects/diagnostic_errors/my_repro/   # semantic err
 mkdir -p crates/baml_tests/projects/broken_syntax/my_repro/       # parse errors
 ```
 
-### 3. Run and generate snapshots
+### 3. Select golden coverage, then run
+
+All corpus files are checked and emitted, but only examples explicitly listed
+in `crates/baml_tests/src/corpus_snapshot_policy.rs` get IR/formatter goldens.
+Prefer focused assertions. For a necessary golden, select its phase, document
+the regression it protects, and select exact MIR/bytecode function names.
+Diagnostics remain exhaustive. Do not add blanket snapshots of new namespaces
+or stdlib packages.
 
 ```bash
 cargo insta test --test-runner=nextest --accept -p baml_tests
@@ -125,7 +132,7 @@ cargo insta test --test-runner=nextest --accept -p baml_tests
 
 ### 4. Inspect the output
 
-Fixture snapshots land next to the source in the mirrored snapshot tree,
+Selected fixture snapshots land in the mirrored snapshot tree,
 `crates/baml_tests/snapshots/baml_src/ns_fixtures/ns_my_repro/`:
 
 | Snapshot | Contents |
