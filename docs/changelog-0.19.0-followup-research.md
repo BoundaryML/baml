@@ -25,7 +25,7 @@ Discord REST authenticated successfully and returned channel/thread/author metad
 | [#4616](https://github.com/BoundaryML/baml/pull/4616) | `sxlijin` | No report references found. | No target identified. |
 | [#4644](https://github.com/BoundaryML/baml/pull/4644) | `sxlijin` | No report references found. | No target identified. |
 | [#4646](https://github.com/BoundaryML/baml/pull/4646) | `hellovai` | No report references found. | No target identified. |
-| [#4632](https://github.com/BoundaryML/baml/pull/4632) | `sxlijin` | [#4624](https://github.com/BoundaryML/baml/issues/4624) | Draft #4624 update, gated on published wrapper verification. |
+| [#4632](https://github.com/BoundaryML/baml/pull/4632) | `sxlijin` | [#4624](https://github.com/BoundaryML/baml/issues/4624) | Gate the public changelog claim and #4624 update on a new published wrapper and bootstrap verification. |
 | [#4680](https://github.com/BoundaryML/baml/pull/4680) | `sxlijin` | No report references found. | No target identified. |
 | [#4687](https://github.com/BoundaryML/baml/pull/4687) | `sxlijin` | No report references found. | No target identified. |
 | [#4686](https://github.com/BoundaryML/baml/pull/4686) | `2kai2kai2` | No report references found. | No target identified. |
@@ -160,7 +160,7 @@ Linear issue descriptions, comments, and attachments were checked for external o
 | [B-1563](https://linear.app/boundaryml2/issue/B-1563/allow-string-null-truthiness-in-if-conditions) | Internal source/context; no external report recipient identified. |
 | [B-1576](https://linear.app/boundaryml2/issue/B-1576/fix-compiler-abort-for-inferred-arraymap-result) | GitHub origin/context: #4468. Apply the issue disposition above. |
 | [B-1580](https://linear.app/boundaryml2/issue/B-1580/infer-callback-throws-effects-through-optional-callback-parameters) | Internal source/context; no external report recipient identified. |
-| [B-1582](https://linear.app/boundaryml2/issue/B-1582/fix-remaining-runtime-reflection-and-dynamic-type-failures-found-by) | Internal source/context; no external report recipient identified. |
+| [B-1582](https://linear.app/boundaryml2/issue/B-1582/fix-remaining-runtime-reflection-and-dynamic-type-failures-found-by) | Maintainer-recorded external customer context. The linked #4501/#4519 fixes predate the lower boundary; no public report thread or named recipient was identified for a new notification. |
 | [B-1588](https://linear.app/boundaryml2/issue/B-1588/sev-2-bug-baml-rejects-valid-fireworks-chat-completions-responses) | GitHub origin/context: #4497. Apply the issue disposition above. |
 | [B-1591](https://linear.app/boundaryml2/issue/B-1591/standardize-c-sdk-generator-output-directory-on-baml-sdk) | Internal source/context; no external report recipient identified. |
 | [B-1610](https://linear.app/boundaryml2/issue/B-1610/require-baml-skill-when-running-in-agent-mode) | Internal source/context; no external report recipient identified. |
@@ -238,4 +238,4 @@ The reference graph also reaches dependency issues in the repositories below. Th
 
 ## Drafts and publication dependencies
 
-[0.19.0.todo.md](../typescript2/app-website/blog-releases/0.19.0.todo.md) contains six notification drafts: two contributor PRs, two external-opened issues, one additional maintainer-opened issue with external participants, and one dedicated Discord reply. Every draft links to https://boundaryml.com/changelog. The release date/version are provisional. The wrapper publication check is a concrete gate for #4624; all messages remain unsent.
+[0.19.0.todo.md](../typescript2/app-website/blog-releases/0.19.0.todo.md) contains six notification drafts: two contributor PRs, two external-opened issues, one additional maintainer-opened issue with external participants, and one dedicated Discord reply. Every draft links to https://boundaryml.com/changelog. The release date/version are provisional. A wrapper version bump, publication, and bootstrap verification gate both the installer changelog claim and #4624; all messages remain unsent.

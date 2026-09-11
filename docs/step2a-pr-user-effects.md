@@ -46,7 +46,7 @@ Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4646), [upper sour
 
 Category: BUGFIX.
 
-The installer selects GNU or musl wrappers. GNU builds target glibc 2.17 on x86_64 and 2.28 on ARM64. Re-run the installer to replace an incompatible wrapper. Wrapper publication is independently versioned; check its live catalog before notifying users.
+The installer selects GNU or musl wrappers. GNU builds target glibc 2.17 on x86_64 and 2.28 on ARM64. Re-run the installer to replace an incompatible wrapper. Wrapper publication is independently versioned. Before publishing this changelog claim or notifying users, bump/publish a newer wrapper and verify bootstrap on Bookworm and Alpine for both architectures. Omit the claim and notification if that separate release is deferred.
 
 Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4632), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/scripts/install.sh).
 

@@ -7,7 +7,7 @@ Assumed release date: 2026-09-11, America/Los_Angeles (PDT, UTC−07:00). Versio
 
 The fetched [canary manifest](https://pkg.boundaryml.com/manifest/v1/canary.json) identifies 0.18.0 and the lower SHA. Its released_at is 2026-08-29T00:24:04Z; the GitHub release publishedAt is 2026-09-03T22:23:45Z. These are separate timestamps, not the assumed next release date. The latest nightly is 0.18.1-nightly.20260909.a at ffcf6ba7bb6ec82b0eac478a5b8351bff265db47, published on GitHub 2026-09-10T08:20:57Z. It is a different channel and is not used as the previous canary. Repository release instructions are in [RELEASING.md](../baml_language/RELEASING.md). No release.json or baml-language.cfg exists in this checkout; release.toml is authoritative here.
 
-Initial `jj status` reported no jj repository. Worktree: `/Users/sam/baml-worktrees/baml/next-canary-changelog`; branch: `sxlijin/next-canary-changelog`. The child was clean at the pinned upper SHA. The releases-2 parent was not edited.
+Initial `jj status` reported no jj repository. The dedicated child worktree was clean at the pinned upper SHA on the PR head branch. The parent checkout and its existing changes were not edited.
 
 ## Complete unfiltered inventory
 
