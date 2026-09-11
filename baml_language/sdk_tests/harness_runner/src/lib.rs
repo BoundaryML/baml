@@ -672,16 +672,60 @@ macro_rules! build_diagnostics {
 }
 
 /// Python + pydantic2 generator's test-side glue. Invoked from
-/// `crates/python_pydantic2/src/lib.rs` as
-/// `sdk_test_harness_runner::python_pydantic2::test_suite!()`.
+/// `crates/python_pydantic2/src/lib.rs`.
 pub mod python_pydantic2 {
-    /// `include!`s `OUT_DIR/python_pydantic2_tests.rs` — the
-    /// per-fixture scaffold emitted by
-    /// `sdk_test_codegen::python_pydantic2::run_all`.
+    /// Declare the Python suite: three toolchain checks per fixture, plus the
+    /// shared setup guard and fixture-manifest oracle.
+    ///
+    /// The fixture list is source rather than build-script output because
+    /// `sdk_test_codegen` runs from `setup.sh`, which nextest fires *after*
+    /// this crate's test binary is already compiled. `fixture_manifest!`
+    /// keeps the list honest.
     #[macro_export]
     macro_rules! python_pydantic2_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/python_pydantic2_tests.rs"));
+        ( $( fixture $name:ident; )+ ) => {
+            $crate::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    const CACHE_SUBDIR: &str = "uv-cache";
+                    const CACHE_ENV_VAR: &str = "UV_CACHE_DIR";
+
+                    fn cmd(command: &str) {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            command,
+                            CACHE_SUBDIR,
+                            CACHE_ENV_VAR,
+                        );
+                    }
+
+                    #[test]
+                    fn ruff() {
+                        cmd("uv run ruff check --config pyproject.toml baml_sdk");
+                    }
+
+                    #[test]
+                    fn pyright() {
+                        cmd("uv run pyright");
+                    }
+
+                    #[test]
+                    fn pytest() {
+                        // Exit 5 is pytest's "collected no tests", which is a
+                        // pass for a fixture whose overlay is all static
+                        // type-check probes.
+                        $crate::run_test_cmd_allowing_exit_codes(
+                            stringify!($name),
+                            "uv run pytest -v",
+                            CACHE_SUBDIR,
+                            CACHE_ENV_VAR,
+                            &[5],
+                        );
+                    }
+                }
+            )+
         };
     }
 

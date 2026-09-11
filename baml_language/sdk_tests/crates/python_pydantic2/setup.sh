@@ -53,6 +53,11 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/python_pydantic2
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 SDK_PY="$WORKSPACE_ROOT/sdks/python"
 
+# Generate each fixture's baml_sdk/ and pyproject.toml first: nothing else
+# produces them, and every `uv sync` below needs that pyproject.
+echo "==> sdk_test_codegen python_pydantic2 (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- python_pydantic2)
+
 # Shared uv cache under target/, matching the UV_CACHE_DIR the emitted
 # tests thread through (run_test_cmd / CACHE_ENV_VAR in codegen).
 export UV_CACHE_DIR="$WORKSPACE_ROOT/target/uv-cache"

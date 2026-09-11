@@ -23,6 +23,18 @@ $SdkPy = Join-Path $WorkspaceRoot 'sdks\python'
 $env:UV_CACHE_DIR = Join-Path $WorkspaceRoot 'target\uv-cache'
 New-Item -ItemType Directory -Force -Path $env:UV_CACHE_DIR | Out-Null
 
+# Generate each fixture's baml_sdk/ and pyproject.toml first: nothing else
+# produces them, and the pyproject rewrite plus every `uv sync` below need it.
+Write-Host "==> sdk_test_codegen python_pydantic2 (generate fixture SDKs)"
+Push-Location $WorkspaceRoot
+try {
+    cargo run --quiet -p sdk_test_codegen -- python_pydantic2
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Pop-Location
+}
+
 # `uv` may not be on PATH directly; fall back to `mise which uv`, the
 # same fallback run_test_cmd uses for the test-time `uv run` calls.
 $UvBin = 'uv'
