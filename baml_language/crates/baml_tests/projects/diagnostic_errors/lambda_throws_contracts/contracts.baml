@@ -1,0 +1,20 @@
+class UnusedError {}
+type OpenErrors = unknown
+
+function Named() -> int throws string | int { throw 1 }
+
+function Lambdas(value: unknown) -> int throws never {
+    let unused = () -> int throws string | int { throw 1 };
+    let imprecise = () -> int throws unknown { 1 };
+    let mixed = () -> int throws OpenErrors | UnusedError { throw value };
+    let violation = () -> int throws string { throw 1 };
+    let covered = () -> int throws string { throw "boom" };
+    let open = () -> int throws string | _ { throw 1 };
+    1
+}
+
+function Accept(callback: () -> int throws string | int) -> int { 1 }
+
+function Contextual() -> int {
+    Accept(() -> int { throw 1 })
+}
