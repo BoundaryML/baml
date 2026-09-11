@@ -850,12 +850,47 @@ pub mod typescript {
     pub use crate::typescript_test_suite as test_suite;
 }
 
-/// Go generator's test-side glue.
+/// Go generator's test-side glue. Invoked from `crates/go/src/lib.rs`.
 pub mod go {
+    /// Declare the Go suite: one `go test ./...` per fixture, plus the shared
+    /// setup guard and fixture-manifest oracle.
+    ///
+    /// Takes two row kinds. `fixture` rows come from the shared corpus and are
+    /// the ones checked against [`fixtures::SHARED`]; a `synthetic` row has no
+    /// `baml_src` and is staged from a hand-built `SymbolPool` by
+    /// `sdk_test_codegen::go`, so it sits outside that check by construction.
+    ///
+    /// Also emits `FIXTURES`, the full list, so crate-local tests that sweep
+    /// every generated tree stay in step with the suite.
     #[macro_export]
     macro_rules! go_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/go_tests.rs"));
+        ( $( fixture $name:ident; )+ $( synthetic $synthetic:ident; )* ) => {
+            $crate::setup_guard!("SDK_TEST_GO_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            /// Every fixture this suite covers, corpus rows and synthetic alike.
+            pub(crate) const FIXTURES: &[&str] = &[
+                $( stringify!($name), )+
+                $( stringify!($synthetic), )*
+            ];
+
+            $(
+                mod $name {
+                    #[test]
+                    fn go_test() {
+                        $crate::run_go_test(stringify!($name));
+                    }
+                }
+            )+
+
+            $(
+                mod $synthetic {
+                    #[test]
+                    fn go_test() {
+                        $crate::run_go_test(stringify!($synthetic));
+                    }
+                }
+            )*
         };
     }
 

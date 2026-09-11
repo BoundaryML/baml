@@ -38,9 +38,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sdkgen_java::NamingConvention;
-
 use sdk_test_harness_runner::fixtures;
+use sdkgen_java::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, emit_cargo_line, fixtures_root_from_manifest,

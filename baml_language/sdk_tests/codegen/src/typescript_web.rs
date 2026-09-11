@@ -9,14 +9,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use sdk_test_harness_runner::fixtures;
 use sdkgen_typescript_shared::{sdkgen_typescript::NamingConvention, sdkgen_typescript_web};
 
 use super::typescript::{
     CACHE_ENV_VAR, CACHE_SUBDIR, TEST_RUNTIME, clean_generated, copy_customizable,
     has_vitest_tests, rewrite_test_bridge_imports,
 };
-use sdk_test_harness_runner::fixtures;
-
 use crate::{
     BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture, watch_dir,
     write_codegen_output_recording,

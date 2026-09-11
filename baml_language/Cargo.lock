@@ -6356,7 +6356,6 @@ dependencies = [
 name = "sdk_test_go"
 version = "0.1.0"
 dependencies = [
- "sdk_test_codegen",
  "sdk_test_harness_runner",
 ]
 

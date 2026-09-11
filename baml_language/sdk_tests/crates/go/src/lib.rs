@@ -1,5 +1,19 @@
+//! Go sdk-test crate. One `go test ./...` per fixture, declared below and
+//! expanded by `sdk_test_harness_runner::go::test_suite!`.
+//!
+//! The `fixture` rows must match `sdk_test_harness_runner::fixtures::SHARED`;
+//! the generated `fixture_manifest::matches_corpus` test enforces it.
 #[cfg(test)]
-sdk_test_harness_runner::go::test_suite!();
+sdk_test_harness_runner::go::test_suite! {
+    fixture docstrings_etc;
+    fixture function_calls;
+    fixture llm_functions;
+    fixture type_shapes;
+    fixture unsupported_only;
+    // No `baml_src`: built from a hand-constructed SymbolPool to exercise
+    // cross-package import collisions BAML source cannot express.
+    synthetic package_edges;
+}
 
 #[cfg(test)]
 mod generated_formatting_tests {
@@ -7,19 +21,13 @@ mod generated_formatting_tests {
 
     #[test]
     fn every_generator_owned_go_file_is_gofmt_clean() {
-        let fixtures = [
-            "docstrings_etc",
-            "function_calls",
-            "host_reflect",
-            "llm_functions",
-            "package_edges",
-            "type_shapes",
-            "unsupported_only",
-        ];
+        // Sourced from the suite's own list rather than repeated: a fixture
+        // named here but never generated would contribute zero files and slip
+        // past the `checked > 0` floor below.
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut checked = 0;
 
-        for fixture in fixtures {
+        for fixture in crate::FIXTURES {
             let generated_sdk = manifest_dir.join(fixture).join("generated/baml_sdk");
             for path in go_files_below(&generated_sdk) {
                 let output = Command::new("gofmt")
