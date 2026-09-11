@@ -157,10 +157,9 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
-    /// Runtime-checkable interface bounds, parallel to the callee frame's
-    /// De Bruijn generic parameter slots.  Kept separately from display text
-    /// so `unreflect(...)` calls can validate opaque runtime types before the
-    /// callee executes.
+    /// Interface bounds, parallel to the callee frame's De Bruijn generic
+    /// parameter slots. Kept as executable metadata (not display text) so
+    /// reflection and runtime specialization can check them.
     pub generic_param_bounds: Vec<Vec<RuntimeInterfaceBound>>,
     /// Display strings for the parameter types, parallel to `param_names`.
     pub display_param_types: Vec<String>,
@@ -342,7 +341,12 @@ pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
     /// Bind an exact runtime type value into this bytecode frame's type slot.
-    BindType(usize),
+    ///
+    /// The slot is a frame type-argument index, the same space
+    /// `TyTemplate::TypeArgRef` reads, so it carries that space's width: emit
+    /// compares the two directly, and a lossy conversion there would decide a
+    /// soundness question (whether a template read is clobbered) by accident.
+    BindType(u32),
 }
 
 /// The kind of a MIR statement.
@@ -456,10 +460,6 @@ pub enum Terminator<'db> {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
-        /// At least one explicit type argument was supplied through
-        /// `unreflect(...)`. The emitter encodes this on the call instruction so
-        /// the VM performs M-5/M-6 checks only for marker-instantiated calls.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
@@ -500,9 +500,6 @@ pub enum Terminator<'db> {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
-        /// Whether this call carries an `unreflect(...)` type argument and must
-        /// execute the runtime generic gate before entering the resolved method.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
@@ -863,14 +860,6 @@ pub enum Rvalue<'db> {
     /// other coarse tag checks.
     IsTypeTag { operand: Operand<'db>, tag: i64 },
 
-    /// Runtime-mint identity filter used by `is unreflect(t)` patterns.
-    /// `type_value` evaluates to an `Object::Type`; the VM reconstructs the
-    /// nominal mint of `operand` and compares the two identity tokens.
-    RuntimeIsType {
-        operand: Operand<'db>,
-        type_value: Operand<'db>,
-    },
-
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
@@ -936,11 +925,12 @@ pub enum Rvalue<'db> {
         /// The interface method's name.
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
-        /// appended to the resolved impl frame by the VM. Operands rather
-        /// than templates so a runtime type argument (`m<unreflect(t)>(…)`)
-        /// flows like any other — a written static argument is materialized
-        /// by the producer as a `LoadType` temp. The VM pops each as an
-        /// `Object::Type` either way.
+        /// appended to the resolved impl frame by the VM. Every argument is
+        /// a template today - a scoped `type T = …` slot included - so these
+        /// could be templates; they stay operands because the producer
+        /// materializes each as a `LoadType` temp anyway and the VM pops an
+        /// `Object::Type` either way, which keeps one stack discipline for
+        /// the whole call shape.
         type_args: Vec<Operand<'db>>,
     },
 
@@ -1059,10 +1049,6 @@ impl Rvalue<'_> {
             Self::IsType { operand: arg, .. } | Self::IsTypeTag { operand: arg, .. } => {
                 operand(arg)
             }
-            Self::RuntimeIsType {
-                operand: arg,
-                type_value,
-            } => operand(arg) && operand(type_value),
             Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
                 read(place, &in_bounds)
             }

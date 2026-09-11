@@ -813,14 +813,15 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
     let _1: reflect.enum.Type // category
     let _2: (string | reflect.enum.Value)[]
     let _3: reflect.enum.Value
-    let _4: string // prompt
-    let _5: ai.Prompt
-    let _6: reflect.enum.Type
-    let _7: unknown // parsed
-    let _8: reflect.enum.Type
-    let _9: string
+    let _4: reflect.enum.Type
+    let _5: string // prompt
+    let _6: ai.Prompt
+    let _7: reflect.Type
+    let _8: Category // parsed
+    let _9: reflect.Type
     let _10: string
-    let _11: unknown
+    let _11: string
+    let _12: Category
 
     bb0: {
         _3 = call const fn reflect.enum.value(const "RED", const "k7", const "warm", const <omitted>, const <omitted>) -> [bb1];
@@ -832,27 +833,29 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
     }
 
     bb2: {
-        _6 = copy _1;
-        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
+        _4 = copy _1;
+        bind_type(0, copy _4);
+        _7 = load_type(#0);
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _7>(const "sample") -> [bb3];
     }
 
     bb3: {
-        _4 = call const fn ai.Prompt.text(copy _5) -> [bb4];
+        _5 = call const fn ai.Prompt.text(copy _6) -> [bb4];
     }
 
     bb4: {
-        _8 = copy _1;
-        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
+        _9 = load_type(#0);
+        _8 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse<copy _9>(const "\"k7\"") -> [bb5];
     }
 
     bb5: {
-        _9 = copy _4;
-        _11 = copy _7;
-        _10 = call const fn reflect.enum.get_value(copy _11) -> [bb6];
+        _10 = copy _5;
+        _12 = copy _8;
+        _11 = call const fn reflect.enum.get_value(copy _12) -> [bb6];
     }
 
     bb6: {
-        _0 = copy _9 + copy _10;
+        _0 = copy _10 + copy _11;
         goto -> bb7;
     }
 

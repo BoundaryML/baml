@@ -358,6 +358,31 @@ There are a few different positions where `Self` might be used, which have diffe
 3. In interface `implements` methods: refers to the `for`-target type, accepting its type args.
 4. In `interface` default method bodies: the implementor for which the current call occurred. Since we do not expect the compiler to be able to fully monomorphize, this is typically not known until dynamically at call-time. As such, it is emitted as its own type arg.
 
+### Scoped runtime type bindings
+
+Because type parameters are real run-time values, a body can introduce one of its own. Inside a function, lambda, or block body, the statement
+
+```baml
+type T = unreflect(e);   // `e: reflect.Type | reflect.TypeView`, evaluated once when the statement runs
+                         // (a `reflect.class.PendingType` is accepted too, and resolves when the builder is built)
+type S = Wrapper<int>;   // a static right-hand side fills the slot with its realized template
+```
+
+binds `T` as a **rigid, unbounded type parameter of the enclosing frame** for the remainder of the block. `unreflect(e)` is legal in exactly this position: it lifts the `type` value `e` evaluates to into the frame's type-argument slot for `T`. In both forms `T` is opaque to static checking. It is not an alias of its right-hand side, and it carries no bounds.
+
+- Within its block, `T` behaves exactly as a declared generic parameter does: `f<T>(x)`, `Wrapper<T>`, `T[]`, annotations, and `reflect.Type.of<T>()` (which returns the bound value) all type-check statically. No check is deferred to run time and no occurrence of `T` is widened.
+- Because `T` is rigid, a value has type `T` only if it came from a `T`-typed source. A literal or an `int` is not a `T`. The explicit downcast is `match (v) { let x: T => …, _ => … }` (or `v is T`), which tests membership against the bound type at run time, exactly as it would for any other generic parameter.
+- A bounded slot (`f<U extends I>`) instantiated with a scoped `T` is an ordinary static obligation, and an unbounded `T` does not satisfy it. A bounded binding form that carries static bound evidence is future work.
+- `T` is nameable only from its statement to the end of its block; a shadowed static name is restored at the closing brace.
+- Nothing typed by `T` may be observable outside the block. The binding statement re-executes on every pass through its block (a loop, a re-entered lambda) and rebinds the same parameter to a possibly different type, so a `T`-typed value that outlived its block could enter a container whose element type it no longer satisfies. Concretely:
+  - **The block's value.** A block whose value type mentions `T` is a compile error unless the block's expected type is ground, does not mention `T`, and admits the value (so a `-> unknown` body or `let v: unknown = { … }` is fine; a discarded value, such as a statement's, is fine too).
+  - **`return`.** A `return` leaves every block of its function or lambda at once, so a returned value whose type mentions `T` is judged at the `return` by the same rule against the frame's declared return type; a lambda whose return type is inferred cannot return a `T`.
+  - **Flow narrowings** that mention `T` end at the closing brace.
+  - **Thrown types.** A thrown type naming `T` that an inferred `throws` clause or an enclosing `catch` would publish is an error at the throw: catch it inside the block, or declare the clause. A declared clause - closed or partial - may name the thrown type's **nearest relaxation**, the closest type free of `T` that is still a supertype of it under the variance rules, and a name that already admits the thrown type publishes it whichever spelling was used. `T` itself relaxes to `unknown`; a union relaxes its members and simplifies (`T | int` is `unknown`); a function type keeps the direction for its return and throws and flips it for its parameters (`() -> T throws never` relaxes to `() -> unknown throws never`, `(T) -> void` to `(never) -> void`); an invariant constructor has nothing closer than `unknown` itself, so `T[]`, `Boom<T>`, and `Future<T, E>` relax to `unknown`, never to `unknown[]`. The relaxation is computed over the structural rules only: an interface existential that happens to be a closer supertype (a blanket implementation covering every `Boom<T>`) is not considered. A declared `throws unknown` is therefore precise when *something* thrown relaxes to exactly `unknown`, and imprecise (E0097) only when a closer relaxation covers everything thrown.
+  - **Inference variables.** The relaxation is never applied for the author: an unannotated slot, an inferred clause, or an outer inference variable does not silently take it, because the closest slot type is not determined in general (an outer `Wrapper<…>` committed by its own initializer has no argument that holds a `T[]`). A variable introduced outside the block is never solved to a type that mentions `T` (an outer `let xs = []` cannot become `T[]` through a `push` inside the block), and neither is one the block introduced *before* the binding statement, because a value's type is fixed when the value is created and `T`'s slot is bound only when the statement runs. A variable introduced after the statement that is still open at the closing brace is decided there, while `T` is still nameable: if its bounds name `T` it becomes `T` and is judged as the block's value is, and otherwise it moves out to the enclosing scope, where it can never become `T` (so a callee's still-open instantiation cannot carry a `T` bound out of the block to a later context, where a rigid `T` fits nothing and the conflict could no longer be reported).
+  - **Invariance is why erasure is not an option.** Generics are invariant, so a `Stream<T?, T>` cannot leave as `Stream<unknown, unknown>` either; hand such a value to a host as `unknown`.
+- `unreflect(…)` anywhere else, whether a type argument (`f<unreflect(t)>()`), an annotation, a pattern, an item signature, a top-level alias, or nested inside a binding's static right-hand side, is a compile error (E0168): name the type first, then use the name.
+
 ## Functions
 
 A function signature in BAML includes:

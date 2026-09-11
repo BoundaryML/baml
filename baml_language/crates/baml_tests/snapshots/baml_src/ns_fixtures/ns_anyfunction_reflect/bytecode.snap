@@ -185,15 +185,17 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     call reflect.enum.new
     store_var category
     load_var category
+    bind_type 0
+    load_type #0
     load_const "sample"
     call user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt
     call ai.Prompt.text
     store_var prompt
-    load_var category
+    load_type #0
     load_const "\"k7\""
     call user.fixtures.anyfunction_reflect.RuntimeClassify@parse
     call reflect.enum.get_value
-    store_var _10
+    store_var _11
     load_var2 3 4
     bin_op +
     return

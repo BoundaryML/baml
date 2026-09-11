@@ -829,13 +829,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
                 self.place_reads_spawn_captured_local(place, seen)
             }
-            Rvalue::RuntimeIsType {
-                operand,
-                type_value,
-            } => {
-                self.operand_reads_spawn_captured_local(operand, seen)
-                    || self.operand_reads_spawn_captured_local(type_value, seen)
-            }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::MakeBoundMethod {
@@ -1522,10 +1515,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 match op {
                     IntrinsicOp::BindType(slot) => {
                         let [value] = args.as_slice() else {
-                            panic!("BindType expects exactly one operand")
+                            unreachable!("`BindType` carries exactly one operand")
                         };
                         self.emit_operand_pull(value);
-                        self.emit(Instruction::BindType(*slot));
+                        self.emit(Instruction::BindType(*slot as usize));
                     }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
@@ -1948,8 +1941,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         {
             // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
             // TYPE in the receiver's slot: `Self`, then the method-level type
-            // args (already `Object::Type` OPERANDS — a written static arg is
-            // a `LoadType` temp, a runtime `unreflect` arg any expression),
+            // args (already `Object::Type` OPERANDS — every one of them a
+            // `LoadType` temp, a scoped `type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
             let self_const =
@@ -2350,12 +2343,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
-                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
                 unwind: _,
             } => {
+                let ntypeargs = u16::try_from(*ntypeargs)
+                    .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
                 let call_span = self.current_debug_span;
                 let callee_item = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -2375,18 +2369,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let instruction = if runtime_id.is_some() {
                         Instruction::CallWithRuntimeId {
                             callee: global_callee,
-                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                                *ntypeargs,
-                                *runtime_type_check,
-                            ),
+                            ntypeargs,
                         }
                     } else {
                         Instruction::Call {
                             callee: global_callee,
-                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                                *ntypeargs,
-                                *runtime_type_check,
-                            ),
+                            ntypeargs,
                         }
                     };
                     // Pulling nested argument producers may install their own
@@ -2422,7 +2410,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
-                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2444,22 +2431,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
                 }
                 let nargs = args.len() - ntypeargs;
+                let nargs = u16::try_from(nargs)
+                    .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
+                let ntypeargs = u16::try_from(*ntypeargs)
+                    .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
                 let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId {
-                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                            *ntypeargs,
-                            *runtime_type_check,
-                        ),
-                    }
+                    Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
                 } else {
-                    Instruction::VirtualCall {
-                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                            *ntypeargs,
-                            *runtime_type_check,
-                        ),
-                    }
+                    Instruction::VirtualCall { nargs, ntypeargs }
                 };
                 let inst = self.emit(instruction);
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
@@ -3746,11 +3725,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));
-        Ok(())
-    }
-
-    fn runtime_is_type(&mut self) -> Result<(), Self::Error> {
-        self.emit(Instruction::RuntimeIsType);
         Ok(())
     }
 

@@ -1,0 +1,257 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:26:9]
+ 26 │         as_t<T>(1)
+    ·         ─────┬────
+    ·              ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:34:5]
+ 34 │     as_t<T>(1)
+    ·     ─────┬────
+    ·          ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:40:5]
+ 40 │     risky<T>(as_t<T>("x"), false)
+    ·     ────┬───
+    ·         ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:47:9]
+ 47 │         risky<T>(as_t<T>("x"), false)
+    ·         ────┬───
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:56:9]
+ 56 │         risky<T>(as_t<T>("x"), true)
+    ·         ────┬───
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:69:17]
+ 69 │         xs.push(as_t<T>(1))
+    ·                 ─────┬────
+    ·                      ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:81:11]
+ 81 │     throw a
+    ·           ┬
+    ·           ╰── this throws `T[]`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: unknown[]
+    ╭─[scoped_type_escape.baml:87:84]
+ 87 │ ╭─▶ function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
+ 88 │ │       type T = unreflect(t)
+ 89 │ │       let v: T = as_t<T>(1)
+ 90 │ │       let a: T[] = [v]
+ 91 │ │       throw a
+ 92 │ ╰─▶ }
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `string | unknown[]`, but this function may also throw `T[]`
+    ╭─[scoped_type_escape.baml:91:11]
+ 91 │     throw a
+    ·           ─
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: Boom<unknown>
+    ╭─[scoped_type_escape.baml:94:85]
+ 94 │ ╭─▶ function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | string {
+ 95 │ │       type T = unreflect(t)
+ 96 │ │       risky<T>(as_t<T>("x"), true)
+ 97 │ ╰─▶ }
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `string | Boom<unknown>`, but this function may also throw `Boom<T>`
+    ╭─[scoped_type_escape.baml:96:5]
+ 96 │     risky<T>(as_t<T>("x"), true)
+    ·     ────────
+    ╰────
+
+  [type] E0097
+
+  × `throws unknown` is imprecise: this function throws `string | (() -> unknown throws never)`; write `throws string | (() -> unknown throws never)`
+     ╭─[scoped_type_escape.baml:104:74]
+ 104 │ ╭─▶ function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
+ 105 │ │       type T = unreflect(t)
+ 106 │ │       let v: T = as_t<T>(1)
+ 107 │ │       throw () -> { ident<T>(v) }
+ 108 │ ╰─▶ }
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:115:16]
+ 115 │         return as_t<T>("x")
+     ·                ──────┬─────
+     ·                      ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:123:12]
+ 123 │     return as_t<T>(1)
+     ·            ─────┬────
+     ·                 ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:136:9]
+ 136 │         ident(as_t<T>(42))
+     ·         ─────────┬────────
+     ·                  ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:151:9]
+ 151 │         [ident(as_t<T>(42))]
+     ·         ──────────┬─────────
+     ·                   ╰── this has type `T[]`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:162:13]
+ 162 │     ys.push(as_t<T>(1))
+     ·             ─────┬────
+     ·                  ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: Undefined
+     ╭─[scoped_type_escape.baml:168:48]
+ 168 │ function erroneous_context(t: reflect.Type) -> Undefined {
+     ·                                                ─────────
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:182:23]
+ 182 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:193:23]
+ 193 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:204:9]
+ 204 │         map { key: as_t<T>(1) }
+     ·         ───────────┬───────────
+     ·                    ╰── this has type `map<string, T>`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+     ╭─[scoped_type_escape.baml:215:17]
+ 215 │         xs.push(Cell { value: ident(as_t<T>(1)) })
+     ·                 ─────────────────────────────────
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:215:37]
+ 215 │         xs.push(Cell { value: ident(as_t<T>(1)) })
+     ·                                     ─────┬────
+     ·                                          ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:225:23]
+ 225 │         ys.push(ident(as_t<T>(1)))
+     ·                       ─────┬────
+     ·                            ╰── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:237:11]
+ 237 │     throw as_t<T>(1)
+     ·           ─────┬────
+     ·                ╰── this throws `T`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+     ╰────
+
+  [type] E0097
+
+  × `throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape
+     ╭─[scoped_type_escape.baml:252:82]
+ 252 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+ 253 │ │       let f = () -> int throws string | _ {
+ 254 │ │           type T = unreflect(t)
+ 255 │ │           throw as_t<T>(1)
+ 256 │ │       }
+ 257 │ │       f()
+ 258 │ ╰─▶ }
+     ╰────
+
+  [type] E0172
+
+  × scoped type `T` cannot leave the block that binds it
+     ╭─[scoped_type_escape.baml:252:82]
+ 252 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+ 253 │ │       let f = () -> int throws string | _ {
+ 254 │ │           type T = unreflect(t)
+ 255 │ │           throw as_t<T>(1)
+ 256 │ │       }
+ 257 │ │       f()
+ 258 │ ├─▶ }
+     · ╰──── the type inferred here would be `T`; give the binding it flows into a type that does not mention `T`, such as `unknown`
+     ╰────
