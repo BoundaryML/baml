@@ -60,6 +60,24 @@ pub async fn shutdown_runtime() -> napi::Result<()> {
         .map_err(errors::bridge_error_to_napi)
 }
 
+/// Resolve once the process-global runtime has no active call and no pending
+/// spawned future, without closing it. The SDK's `beforeExit` hook awaits
+/// this before `shutdownRuntime`: registered host callables no longer pin the
+/// event loop (their tsfns are weak), so this pending promise is what keeps
+/// Node alive while real BAML work — including a host callback that re-enters
+/// the engine — is still in flight. A never-initialized runtime is idle.
+#[napi(js_name = "_waitForRuntimeIdle")]
+pub async fn wait_for_runtime_idle() -> napi::Result<()> {
+    match bridge_cffi::get_runtime() {
+        Ok(runtime) => {
+            runtime.wait_until_idle().await;
+            Ok(())
+        }
+        Err(bridge_cffi::BridgeError::NotInitialized) => Ok(()),
+        Err(e) => Err(errors::bridge_error_to_napi(e)),
+    }
+}
+
 #[napi(js_name = "newFunctionCall")]
 pub fn new_function_call() -> String {
     bridge_cffi::new_function_call_id().to_string()

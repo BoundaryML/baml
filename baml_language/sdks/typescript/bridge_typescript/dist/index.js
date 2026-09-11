@@ -14,6 +14,8 @@ import { attachCallContext } from './call_context.js';
 export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
+// Diagnostic for the SDK test suites (opt-in via BAML_BRIDGE_DIAGNOSTICS=1).
+export { _hostValueCount } from './host_value_registry.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';

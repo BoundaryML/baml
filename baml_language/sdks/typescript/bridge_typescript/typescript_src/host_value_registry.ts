@@ -23,9 +23,10 @@
 //      reads `_handle.key`, calls `lookupHostValue(key)` here, and re-throws
 //      the original JS error.
 //   5. When the engine drops its last `Arc<HostValueArc>(key)`, the Rust
-//      `host_release_callback` fires the TS-installed release callback
-//      (`native.registerHostValueReleaseCallback`), which calls `_releaseHostValue`
-//      here to remove the map entry.
+//      `host_release_callback` parks the key and wakes the TS-installed
+//      release callback (`native.registerHostValueReleaseCallback`), which
+//      calls `_releaseHostValues` here with a batch of released keys to
+//      remove their map entries.
 //
 // Foreign runtimes (a different Node process, the Python bridge, etc.) see
 // a `_handle` whose key doesn't resolve in their local registry; the
@@ -36,6 +37,7 @@
 // no-op since `mintHostValueKey` never returns `0`.
 
 import { mintHostValueKey, registerHostValueReleaseCallback, BamlHandle, type HandleKey } from './native.js';
+import { diagnosticsEnabled } from './platform.js';
 import { baml_bridge } from './proto/baml_cffi.js';
 
 const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
@@ -130,16 +132,30 @@ export function tryRehydrateHostValueByKey(handle: unknown): unknown {
 }
 
 /**
- * Internal: remove the map entry for `key`. Wired at module init as the
- * Rust-side release callback. Idempotent and absent-key-safe so the same
- * callback can be invoked for *every* `HostValueArc` release (including
- * callable keys, which never have a TS-side host-value entry).
+ * Diagnostic: number of JS values currently held for the engine (thrown
+ * host errors awaiting their engine-side release). Lets the SDK test suites
+ * observe the release channel; opt-in per `platform.diagnosticsEnabled`
+ * (`BAML_BRIDGE_DIAGNOSTICS=1` on Node), not a public API.
  */
-function _releaseHostValue(key: HandleKey): void {
-    hostValueMap.delete(handleKeyToBigint(key));
+export function _hostValueCount(): number {
+    if (!diagnosticsEnabled()) {
+        throw new Error('_hostValueCount is a diagnostic; enable BAML_BRIDGE_DIAGNOSTICS to use it');
+    }
+    return hostValueMap.size;
+}
+
+/**
+ * Internal: remove the map entries for a batch of released `keys`. Wired at
+ * module init as the Rust-side release callback. Idempotent and
+ * absent-key-safe: the same callback is invoked for *every* `HostValueArc`
+ * release (including callable keys, which never have a TS-side host-value
+ * entry), and a batch whose delivery threw is handed over again.
+ */
+function _releaseHostValues(keys: HandleKey[]): void {
+    for (const key of keys) hostValueMap.delete(handleKeyToBigint(key));
 }
 
 // Install the Rust-side release callback exactly once at module load. The
-// napi function is itself first-call-wins on the Rust side, so reloads
+// native function is itself first-call-wins on the Rust side, so reloads
 // (e.g. test harnesses) are harmless.
-registerHostValueReleaseCallback(_releaseHostValue);
+registerHostValueReleaseCallback(_releaseHostValues);
