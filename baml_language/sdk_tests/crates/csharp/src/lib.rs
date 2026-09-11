@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashSet,
         env,
         path::PathBuf,
         process::{Command, Output},
@@ -58,34 +57,15 @@ mod tests {
             "git ls-files failed: {}",
             String::from_utf8_lossy(&output.stderr),
         );
-        let deleted = Command::new("git")
-            .current_dir(&manifest)
-            .args([
-                "ls-files",
-                "--deleted",
-                "--",
-                ":(glob)baml_language/sdk_tests/crates/csharp/**/baml_sdk/**",
-            ])
-            .output()
-            .expect("failed to inspect deleted C# generated clients");
+        // `git ls-files` reads the index, so this holds whether or not the
+        // trees are on disk. Entries absent from the worktree are deliberately
+        // NOT exempted: codegen runs from setup.sh now, so a fresh clone has no
+        // `baml_sdk/` at all, and exempting them would hide the very mistake
+        // this test exists to catch.
+        let tracked = String::from_utf8_lossy(&output.stdout);
         assert!(
-            deleted.status.success(),
-            "git ls-files --deleted failed: {}",
-            String::from_utf8_lossy(&deleted.stderr),
-        );
-        let deleted = String::from_utf8_lossy(&deleted.stdout)
-            .lines()
-            .map(str::to_string)
-            .collect::<HashSet<_>>();
-        let tracked_output = String::from_utf8_lossy(&output.stdout);
-        let tracked = tracked_output
-            .lines()
-            .filter(|path| !deleted.contains(*path))
-            .collect::<Vec<_>>();
-        assert!(
-            tracked.is_empty(),
-            "generated C# client output must remain untracked:\n{}",
-            tracked.join("\n"),
+            tracked.trim().is_empty(),
+            "generated C# client output must remain untracked:\n{tracked}",
         );
     }
 

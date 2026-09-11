@@ -1,89 +1,76 @@
-//! C# fixture build setup.
+//! C# fixture codegen.
+//!
+//! Unlike every other generator, the C# fixtures live in-crate under
+//! `crates/csharp/<fixture>/baml_src/` rather than in the shared
+//! `sdk_tests/fixtures/` corpus: each one pairs a `.baml` project with a
+//! hand-written `Program.cs` consumer and its own `.csproj`, so it is not
+//! generator-agnostic input.
 
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::Path};
 
 use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::Severity};
 
-use crate::{emit_cargo_line, watch_dir};
+use crate::CodegenCtx;
 
-pub fn run_all() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    generate_fixture(
-        &manifest_dir,
-        "basic_calls",
-        "sdk_test_csharp.basic_calls",
-        "BasicCalls.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "type_roundtrips",
-        "sdk_test_csharp.type_roundtrips",
-        "TypeRoundtrips.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "generics",
-        "sdk_test_csharp.generics",
-        "Generics.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "failures_and_cancellation",
-        "sdk_test_csharp.failures_and_cancellation",
-        "FailuresAndCancellation.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "media",
-        "sdk_test_csharp.media",
-        "Media.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "streaming",
-        "sdk_test_csharp.streaming",
-        "Streaming.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "host_callables",
-        "sdk_test_csharp.host_callables",
-        "HostCallables.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "stdlib_resources",
-        "sdk_test_csharp.stdlib_resources",
-        "StdlibResources.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "dynamic_values",
-        "sdk_test_csharp.dynamic_values",
-        "DynamicValues.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "primitive_edges",
-        "sdk_test_csharp.primitive_edges",
-        "PrimitiveEdges.csproj",
-    );
-    generate_fixture(
-        &manifest_dir,
-        "stdlib_structurals",
-        "sdk_test_csharp.stdlib_structurals",
-        "StdlibStructurals.csproj",
-    );
-    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
+/// Every fixture directory under `crates/csharp/`. Kept sorted so a missing
+/// or extra row reads as a one-line diff against [`discover_fixtures`].
+///
+/// The crate also holds retired `phase*` and `*_slice` directories that carry
+/// no `baml_src/`; those are not fixtures and the oracle below ignores them.
+const FIXTURES: &[&str] = &[
+    "basic_calls",
+    "dynamic_values",
+    "failures_and_cancellation",
+    "generics",
+    "host_callables",
+    "media",
+    "primitive_edges",
+    "stdlib_resources",
+    "stdlib_structurals",
+    "streaming",
+    "type_roundtrips",
+];
+
+/// The `program_identity` stamped into a fixture's generated client.
+///
+/// Derived from the directory name rather than tabulated alongside it: the
+/// identity is baked into the emitted C# and a drifted pair would only show up
+/// as a confusing runtime mismatch.
+fn program_identity(fixture: &str) -> String {
+    format!("sdk_test_csharp.{fixture}")
 }
 
-fn generate_fixture(
-    manifest_dir: &std::path::Path,
-    fixture_name: &str,
-    program_identity: &str,
-    project_file: &str,
-) {
-    let fixture = manifest_dir.join(fixture_name);
+/// The fixture directories actually present on disk — every child of
+/// `crates/csharp/` holding a `baml_src/`.
+fn discover_fixtures(crate_dir: &Path) -> Vec<String> {
+    let mut found: Vec<String> = fs::read_dir(crate_dir)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", crate_dir.display()))
+        .flatten()
+        .filter(|entry| entry.path().join("baml_src").is_dir())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Generate every C# fixture client. Called by the `csharp` subcommand of the
+/// `sdk_test_codegen` binary, which `crates/csharp/setup.sh` runs before
+/// `dotnet build`.
+pub fn run_all(ctx: &CodegenCtx) {
+    let discovered = discover_fixtures(&ctx.crate_dir);
+    assert_eq!(
+        discovered,
+        FIXTURES,
+        "the C# FIXTURES table has drifted from {} — add or remove the rows listed above",
+        ctx.crate_dir.display()
+    );
+    for fixture in FIXTURES {
+        generate_fixture(&ctx.crate_dir, fixture);
+    }
+}
+
+fn generate_fixture(crate_dir: &Path, fixture_name: &str) {
+    let fixture = crate_dir.join(fixture_name);
     let baml_src = fixture.join("baml_src");
     let canonical = fs::canonicalize(&baml_src)
         .unwrap_or_else(|error| panic!("failed to locate {}: {error}", baml_src.display()));
@@ -136,7 +123,7 @@ fn generate_fixture(
             embedded_baml_toml: &embedded_baml_toml,
             cli_version: baml_version::CANONICAL_VERSION,
             required_bridge_version: baml_version::CANONICAL_VERSION,
-            program_identity,
+            program_identity: &program_identity(fixture_name),
             output_directory: output_directory.clone(),
         })
     };
@@ -159,14 +146,6 @@ fn generate_fixture(
     }
     if fixture_name == "stdlib_resources" {
         verify_stdlib_resources_surface(&fixture);
-    }
-
-    watch_dir(&baml_src);
-    for path in ["baml.toml", "Program.cs", project_file] {
-        emit_cargo_line(format_args!(
-            "cargo:rerun-if-changed={}",
-            fixture.join(path).display()
-        ));
     }
 }
 
@@ -779,4 +758,25 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     let done = fs::read_to_string(generated.join("Iter").join("Done.g.cs"))
         .expect("failed to read generated baml.iter.Done surface");
     assert!(done.contains("public sealed partial class Done"));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    fn crate_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap_or_else(|| unreachable!("the codegen crate is not inside sdk_tests"))
+            .join("crates")
+            .join("csharp")
+    }
+
+    /// The same drift check [`super::run_all`] makes before generating, as a
+    /// test — so a fixture added or removed without a table row fails an
+    /// ordinary `cargo test` instead of waiting for someone to run setup.sh.
+    #[test]
+    fn fixture_table_matches_disk() {
+        assert_eq!(super::discover_fixtures(&crate_dir()), super::FIXTURES);
+    }
 }

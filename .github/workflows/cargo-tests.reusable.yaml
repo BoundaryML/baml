@@ -116,8 +116,10 @@ jobs:
       # job neither builds nor runs them — their test binaries are also the
       # heaviest links in the workspace. (A nextest `-E` filter would only
       # skip *running* them; the cargo-level `--exclude` skips building them
-      # too.) The `sdk_test_*` crates need uv and run in the dedicated
-      # `sdk-tests` matrix below.
+      # too.) The `sdk_test_*` crates each need their own language toolchain,
+      # and their suites only pass behind the setup script that generates the
+      # SDK under test — both of which the dedicated `sdk-tests` matrix below
+      # provides.
       - name: "Build tests with --timings"
         run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
@@ -1128,11 +1130,20 @@ jobs:
         run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
         working-directory: baml_language
 
-      # Second pass: the build above ran the sdk_test_csharp build script,
-      # which regenerates every fixture's client tree with fresh mtimes even
-      # when the generated content is byte-identical (the writer stages and
-      # renames a whole new tree). Re-run the backdate so unchanged
-      # generated sources also count as older than the cached outputs.
+      # Generating the fixture clients used to be a side effect of the build
+      # above, back when this crate had a build script. It is explicit now, and
+      # must stay ahead of the backdate below so there is something to backdate:
+      # a cold runner has no baml_sdk/ trees, so they land with fresh mtimes.
+      # nextest's setup script regenerates them, but byte-identically, so the
+      # output writer skips the install and these mtimes survive to dotnet.
+      - name: "Generate C# fixture clients"
+        if: matrix.sdk-label == 'csharp'
+        run: cargo run --quiet -p sdk_test_codegen -- csharp
+        working-directory: baml_language
+
+      # Second pass: the step above writes every fixture's client tree with
+      # fresh mtimes. Re-run the backdate so unchanged generated sources also
+      # count as older than the cached outputs.
       - name: "Backdate unchanged C# generated clients"
         if: matrix.sdk-label == 'csharp'
         shell: bash

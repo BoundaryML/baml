@@ -6311,39 +6311,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "sdk_test_cpp"
-version = "0.1.0"
-dependencies = [
- "sdk_test_harness_runner",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_csharp"
-version = "0.1.0"
-dependencies = [
- "base64",
- "bex_project",
- "bridge_ctypes",
- "indexmap",
- "prost",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_go"
-version = "0.1.0"
-dependencies = [
- "sdk_test_harness_runner",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_harness_runner"
-version = "0.1.0"
-
-[[package]]
-name = "sdk_test_harness_setup"
+name = "sdk_test_codegen"
 version = "0.1.0"
 dependencies = [
  "baml_artifact",
@@ -6355,6 +6323,7 @@ dependencies = [
  "baml_version",
  "proc-macro2",
  "quote",
+ "sdk_test_harness_runner",
  "sdkgen_cpp",
  "sdkgen_csharp",
  "sdkgen_go",
@@ -6366,11 +6335,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_cpp"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+]
+
+[[package]]
+name = "sdk_test_csharp"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bex_project",
+ "bridge_ctypes",
+ "indexmap",
+ "prost",
+]
+
+[[package]]
+name = "sdk_test_go"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+]
+
+[[package]]
+name = "sdk_test_harness_runner"
+version = "0.1.0"
+
+[[package]]
 name = "sdk_test_java"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6388,7 +6385,6 @@ name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6403,7 +6399,6 @@ name = "sdk_test_rust"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6411,7 +6406,6 @@ name = "sdk_test_swift"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6419,7 +6413,6 @@ name = "sdk_test_typescript"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6427,7 +6420,6 @@ name = "sdk_test_typescript_web"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]

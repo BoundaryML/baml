@@ -178,7 +178,7 @@ setup = 'java_gradle_win'
 # out connecting to its forked daemon). A single package-wide override funnels
 # the entire sdk_test_java suite through the one-slot `java-gradle-serial` group,
 # which closes both races; it subsumes the old per-fixture groups. The two
-# non-gradle gates (`build_diagnostics`, `setup_guard`) ride along harmlessly.
+# non-gradle gates (`setup_guard`, `fixture_manifest`) ride along harmlessly.
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java)'
 test-group = 'java-gradle-serial'

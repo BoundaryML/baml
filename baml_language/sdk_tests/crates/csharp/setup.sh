@@ -4,6 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 workspace_root="$(cd ../../.. && pwd)"
 
+# Generate every fixture's baml_sdk/ client first: nothing else produces it,
+# and the solution build below compiles it. Runs before the CARGO_TARGET_DIR
+# reads so the driver builds into the ordinary workspace target dir.
+(cd "$workspace_root" && cargo run --quiet -p sdk_test_codegen -- csharp)
+
 (cd "$workspace_root" && cargo build -p bridge_cffi)
 
 target_dir="${CARGO_TARGET_DIR:-$workspace_root/target}"

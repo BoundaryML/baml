@@ -1,22 +1,17 @@
-# Python + pydantic2 sdk-test crate. Fans out across every fixture
-# under `sdk_tests/fixtures/<fixture>/baml_src/` and produces a
-# generated SDK at `<fixture>/generated/baml_sdk/` (alongside a
-# `pyproject.toml` + `.venv/`) plus three toolchain test invocations
-# per fixture (ruff, pyright, pytest) plus a shared
-# `build_diagnostics::no_build_failures` test.
+# Python + pydantic2 sdk-test crate. Three toolchain checks per fixture
+# (ruff, pyright, pytest) over the SDK generated at
+# `<fixture>/generated/baml_sdk/`, alongside a `pyproject.toml` + `.venv/`.
 #
-# `sdk_test_harness_setup` runs at build time (codegen + uv sync +
-# scaffold emit); `sdk_test_harness_runner` runs at test time (the
-# test_suite!() macro + run_test_cmd + build_diagnostics! macro the
-# scaffold invokes).
+# Both the codegen and `uv sync` come from `setup.sh`, which nextest fires via
+# its setup-script binding — nothing is generated during an ordinary build.
+# `sdk_test_harness_runner` supplies the `test_suite!` macro that declares the
+# tests.
 [package]
 name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
-[build-dependencies]
-sdk_test_harness_setup = { path = "../../harness_setup" }
 
 [dev-dependencies]
 sdk_test_harness_runner = { path = "../../harness_runner" }

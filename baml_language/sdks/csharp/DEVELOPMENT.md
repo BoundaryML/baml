@@ -8,7 +8,7 @@ RUSTC_WRAPPER= cargo test -p bex_engine --test opaque_resource_handles
 RUSTC_WRAPPER= cargo test -p sdk_test_csharp generated_baml_clients_are_not_tracked --lib
 ```
 
-The full C# fixture suite is prepared by `sdk_test_harness_setup`; it invokes
+The full C# fixture suite is prepared by `sdk_test_codegen`; it invokes
 the public C# generation facade twice and verifies deterministic manifests
 before running the .NET consumers. Generated fixture clients are disposable
 test output and must remain untracked.

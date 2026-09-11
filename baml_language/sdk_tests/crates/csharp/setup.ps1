@@ -5,6 +5,13 @@ $WorkspaceRoot = (Resolve-Path (Join-Path $CrateDir "../../..")).Path
 
 Push-Location $WorkspaceRoot
 try {
+    # Generate every fixture's baml_sdk/ client first: nothing else produces
+    # it, and the solution build below compiles it.
+    cargo run --quiet -p sdk_test_codegen -- csharp
+    if ($LASTEXITCODE -ne 0) {
+        throw "sdk_test_codegen csharp failed with exit code $LASTEXITCODE"
+    }
+
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build -p bridge_cffi failed with exit code $LASTEXITCODE"
