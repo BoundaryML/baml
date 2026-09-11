@@ -18,6 +18,9 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// `PackageInterface` bumps this. The same rule applies to other payload types
 /// stored in this envelope, such as the `baml pack` dispatch envelope.
 ///
+/// Version 3: `PopJumpIfTrue`, `JumpIfFalseOrPop`, `JumpIfTrueOrPop`, and
+/// `JumpIfNotNullOrPop` appended to the instruction set (#4759).
+///
 /// Version 4: `ExternalCallTarget::{Free, Method}` name their item by head
 /// (`function` / `class` as a qualified name) instead of a package spelling
 /// plus path, so a package interface's call targets carry package identity
@@ -28,7 +31,15 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// discriminants after it.
 ///
 /// Version 6 adds `Bytecode::call_layouts` (per-call-site argument layouts).
-pub const FORMAT_VERSION: u32 = 6;
+///
+/// Version 7: the interface-dispatch rework — `Function` gained
+/// `is_interface_body` + `native_key` wire fields, impl-rule method tables
+/// became provided-only, and `ProgramMethodImplFrag` carries a code-bucket
+/// offset instead of a name. (The rework shipped without bumping this
+/// constant; canary/dev builds were covered by the `BUILD_FINGERPRINT`
+/// equality check, which is exactly the gap this constant exists to close
+/// for stable builds.)
+pub const FORMAT_VERSION: u32 = 7;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.

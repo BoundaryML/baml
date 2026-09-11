@@ -434,6 +434,13 @@ def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     Test-only: seed an `Adt(Media(generic))` entry directly into `HANDLE_TABLE`.
     """
 
+def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.int]:
+    r"""
+    Test-only: seed an engine-heap (`BexHeapHandle`) entry through the shared
+    CFFI API — the identity-bearing, deduplicating arm. Two seeds of one
+    `slab_key` share a key.
+    """
+
 def _release_wire_handle(key: builtins.int) -> None:
     r"""
     Release a handle cloned for wire ownership when encoding aborts before the
@@ -442,7 +449,15 @@ def _release_wire_handle(key: builtins.int) -> None:
 
 def _live_handle_count() -> builtins.int:
     r"""
-    Test-only: return the number of live ordinary HANDLE_TABLE keys.
+    Test-only: return the number of live ordinary HANDLE_TABLE rows (a
+    refcounted engine-heap row counts once however many owners it has).
+    """
+
+def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
+    r"""
+    Test-only: the outstanding ownership count of a live key — the releases it
+    still owes — or `None` for a dead/unknown key. Lets an audit see an
+    exactly-once imbalance on a shared engine-heap key, which row counts hide.
     """
 
 def flush_events() -> None:

@@ -467,15 +467,28 @@ impl DescribeArgs {
                 member_name,
             }) => {
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) =
-                    describe::describe_item_member(&db, &files, parent, member_name.as_str())
-                else {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, package, name);
-                    return Ok(crate::ExitCode::Other);
-                };
-                self.emit_description(&db, &desc, &from)?;
-                Ok(crate::ExitCode::Success)
+                let descs = describe::describe_item_member(
+                    &db,
+                    package,
+                    &files,
+                    parent,
+                    member_name.as_str(),
+                );
+                match descs.as_slice() {
+                    [] => {
+                        eprintln!("no symbol found: {name}");
+                        print_did_you_mean(&db, package, name);
+                        Ok(crate::ExitCode::Other)
+                    }
+                    [desc] => {
+                        self.emit_description(&db, desc, &from)?;
+                        Ok(crate::ExitCode::Success)
+                    }
+                    // Several impls of the class provide a method of this
+                    // name; each description carries its block's head, so
+                    // show them all, exactly like an ambiguous bare name.
+                    _ => self.emit_descriptions(&db, &descs, &from),
+                }
             }
             None => {
                 // Exact-name fallback: an unqualified name may live in any
@@ -491,29 +504,40 @@ impl DescribeArgs {
                     return Ok(crate::ExitCode::Other);
                 }
 
-                if self.json {
-                    let documents: Vec<serde_json::Value> = matches
-                        .iter()
-                        .map(|desc| description_to_json(&db, desc, self.budget, &from))
-                        .collect();
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&documents)
-                            .context("failed to serialize output as JSON")?
-                    );
-                    return Ok(crate::ExitCode::Success);
-                }
-
-                for (i, desc) in matches.iter().enumerate() {
-                    if i > 0 {
-                        println!();
-                    }
-                    render_description(&db, desc, self.budget, &from);
-                }
-
-                Ok(crate::ExitCode::Success)
+                self.emit_descriptions(&db, &matches, &from)
             }
         }
+    }
+
+    /// Print several descriptions in the selected output mode: one JSON
+    /// array, or the rendered descriptions separated by blank lines.
+    fn emit_descriptions(
+        &self,
+        db: &ProjectDatabase,
+        descs: &[SymbolDescription],
+        project_root: &std::path::Path,
+    ) -> Result<crate::ExitCode> {
+        if self.json {
+            let documents: Vec<serde_json::Value> = descs
+                .iter()
+                .map(|desc| description_to_json(db, desc, self.budget, project_root))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&documents)
+                    .context("failed to serialize output as JSON")?
+            );
+            return Ok(crate::ExitCode::Success);
+        }
+
+        for (i, desc) in descs.iter().enumerate() {
+            if i > 0 {
+                println!();
+            }
+            render_description(db, desc, self.budget, project_root);
+        }
+
+        Ok(crate::ExitCode::Success)
     }
 
     /// Print one description in the selected output mode.
@@ -642,6 +666,19 @@ pub fn write_description(
         .canonical_fqn()
         .map(|f| format!("  ({})", painter.fqn(f, definition_kind)))
         .unwrap_or_default();
+    // An impl-tier method names the block it belongs to — the one thing that
+    // tells `Duration.mul` for `Multiply<int>` from the one for
+    // `Multiply<bigint>`.
+    let implements_part = desc
+        .kind
+        .implements()
+        .map(|head| {
+            format!(
+                "  ({})",
+                painter.fqn(&format!("implements {head}"), definition_kind)
+            )
+        })
+        .unwrap_or_default();
     let name_display = painter.fqn(&desc.name, definition_kind);
     let loc = painter.location(
         &file_path,
@@ -651,7 +688,7 @@ pub fn write_description(
 
     writeln!(
         w,
-        "{} {name_display}{fqn_part}  {loc}",
+        "{} {name_display}{fqn_part}{implements_part}  {loc}",
         painter.keyword(kind_str)
     )?;
 
@@ -761,8 +798,8 @@ pub fn write_description(
     let mut render_budget =
         RenderBudget::new(budget.saturating_sub(lines_used), full_output_budget);
 
-    // ── Methods (classes) ────────────────────────────────────────────────────
-    if let baml_ide::SymbolKind::Class {
+    // ── Methods (concrete types) ─────────────────────────────────────────────
+    if let baml_ide::SymbolKind::ConcreteType {
         instance_methods,
         static_methods,
         ..
@@ -840,27 +877,64 @@ pub fn write_description(
     // ── Implementations ──────────────────────────────────────────────────────
     // Interfaces: the impl blocks whose head names this interface — the "who
     // implements it" list, separate from references (which no longer repeat
-    // the head mentions these rows own).
-    if let Some((_, implementations)) = interface.filter(|(_, imps)| !imps.is_empty()) {
+    // the head mentions these rows own). Concrete types: every impl that
+    // applies to the type — of the type first, then the blanket/pattern
+    // impls it falls under (rustdoc parity) — each with the methods it
+    // provides listed under it, since those belong to that instantiation and
+    // target; a dependency's precompiled impl has no site.
+    let implementations = kind_implementations(&desc.kind);
+    if !implementations.is_empty() {
         writeln!(w)?;
         writeln!(w, "implementations ({}):", implementations.len())?;
         render_budget.consume(SECTION_HEADER_COST);
         let mut elided = 0usize;
         for imp in implementations {
             if !render_budget.can_start_atomic() {
-                elided += 1;
+                elided += impl_row_cost(imp);
                 continue;
             }
-            let imp_abs = imp.file.path(db);
-            let imp_path = relative_path(&imp_abs, project_root);
-            let imp_line = line_number_at_offset(imp.file.text(db), imp.span.start().into());
-            let loc = painter.location(
-                &imp_abs,
-                &imp_path.display().to_string(),
-                &imp_line.to_string(),
-            );
-            writeln!(w, "  {}  {loc}", styled_declaration(&painter, &imp.display))?;
+            let display = styled_declaration(&painter, &imp.display);
+            match &imp.location {
+                Some(location) => {
+                    let imp_abs = location.file.path(db);
+                    let imp_path = relative_path(&imp_abs, project_root);
+                    let imp_line =
+                        line_number_at_offset(location.file.text(db), location.span.start().into());
+                    let loc = painter.location(
+                        &imp_abs,
+                        &imp_path.display().to_string(),
+                        &imp_line.to_string(),
+                    );
+                    writeln!(w, "  {display}  {loc}")?;
+                }
+                None => writeln!(w, "  {display}")?,
+            }
             render_budget.consume(LIST_ENTRY_COST);
+            // What the impl binds and provides, as its block spells them.
+            let bindings =
+                imp.associated_types
+                    .iter()
+                    .map(|(name, ty)| format!("type {name} = {ty}"))
+                    .chain(imp.field_links.iter().map(|(iface_field, class_field)| {
+                        format!("{iface_field} as {class_field}")
+                    }));
+            for binding in bindings {
+                if !render_budget.can_start_atomic() {
+                    elided += LIST_ENTRY_COST;
+                    continue;
+                }
+                writeln!(w, "    {}", styled_declaration(&painter, &binding))?;
+                render_budget.consume(LIST_ENTRY_COST);
+            }
+            for m in &imp.methods {
+                let unit_cost = method_line_cost(m);
+                if !render_budget.can_start_atomic() {
+                    elided += unit_cost;
+                    continue;
+                }
+                write_method_row(w, db, &painter, project_root, "    ", m)?;
+                render_budget.consume(unit_cost);
+            }
         }
         write_elision_marker(w, elided, render_budget.full_output)?;
     }
@@ -976,7 +1050,7 @@ fn interface_higher_section_cost(
         cost += SECTION_HEADER_COST + desc.dependencies.len() * LIST_ENTRY_COST;
     }
     if !implementations.is_empty() {
-        cost += SECTION_HEADER_COST + implementations.len() * LIST_ENTRY_COST;
+        cost += SECTION_HEADER_COST + implementations.iter().map(impl_row_cost).sum::<usize>();
     }
     cost
 }
@@ -1256,7 +1330,7 @@ fn minimum_full_output_budget(
         required.add_required(ITEM_HEADER_COST.saturating_add(body_line_count));
     }
 
-    if let baml_ide::SymbolKind::Class {
+    if let baml_ide::SymbolKind::ConcreteType {
         instance_methods,
         static_methods,
         ..
@@ -1277,14 +1351,17 @@ fn minimum_full_output_budget(
         }
     }
 
-    if let baml_ide::SymbolKind::Interface {
-        implementations, ..
-    } = &desc.kind
-        && !implementations.is_empty()
-    {
+    let implementations = kind_implementations(&desc.kind);
+    if !implementations.is_empty() {
         required.add_soft_overhead(SECTION_HEADER_COST);
-        for _ in implementations {
+        for imp in implementations {
             required.add_atomic(LIST_ENTRY_COST);
+            for _ in 0..imp.associated_types.len() + imp.field_links.len() {
+                required.add_atomic(LIST_ENTRY_COST);
+            }
+            for method in &imp.methods {
+                required.add_atomic(method_line_cost(method));
+            }
         }
     }
 
@@ -1294,6 +1371,22 @@ fn minimum_full_output_budget(
     }
 
     required.minimum
+}
+
+/// The implementations a described symbol lists: an interface's implementors,
+/// a class's applicable impls; empty for every other kind.
+fn kind_implementations(kind: &baml_ide::SymbolKind) -> &[baml_ide::ImplRow] {
+    match kind {
+        baml_ide::SymbolKind::Interface {
+            implementations, ..
+        }
+        | baml_ide::SymbolKind::ConcreteType {
+            implementations, ..
+        } => implementations,
+        baml_ide::SymbolKind::Item { .. }
+        | baml_ide::SymbolKind::Member { .. }
+        | baml_ide::SymbolKind::Local { .. } => &[],
+    }
 }
 
 fn add_method_budget(required: &mut BudgetRequirement, methods: &[describe::MethodRef]) {
@@ -1307,6 +1400,14 @@ fn add_method_budget(required: &mut BudgetRequirement, methods: &[describe::Meth
 
 fn method_line_cost(method: &describe::MethodRef) -> usize {
     1 + usize::from(method.docstring.is_some())
+}
+
+/// The lines an impl row renders: its header, its bindings (associated
+/// types, field links), and every method under it.
+fn impl_row_cost(imp: &describe::ImplRow) -> usize {
+    LIST_ENTRY_COST
+        + (imp.associated_types.len() + imp.field_links.len()) * LIST_ENTRY_COST
+        + imp.methods.iter().map(method_line_cost).sum::<usize>()
 }
 
 /// Write the soft-budget elision marker for `elided` hidden lines (no-op when
@@ -1371,7 +1472,9 @@ pub(crate) fn definition_line_range(
     )
 }
 
-/// Render a `methods:` / `static_methods:` section.
+/// Render a `methods:` / `static_methods:` section — a type's INHERENT
+/// methods (impl-provided methods sit under their impl in the
+/// implementations section, rustdoc's shape).
 ///
 /// Each method shows its first-line docstring (when present) followed by its
 /// canonical signature and full definition line range. The section consumes
@@ -1401,27 +1504,49 @@ fn write_method_section(
             elided_lines += unit_cost;
             continue;
         }
-        if let Some(doc) = &m.docstring {
-            // `fragment` renders `///` lines as comments (and self-gates on color).
-            let doc_line = painter.fragment(&format!("/// {doc}"));
-            writeln!(w, "  {doc_line}")?;
-        }
-        let text = m.file.text(db);
-        let (start, end) =
-            definition_line_range(text, m.item_range.start().into(), m.item_range.end().into());
-        let m_abs = m.file.path(db);
-        let m_path = relative_path(&m_abs, project_root);
-        let loc = painter.location(
-            &m_abs,
-            &m_path.display().to_string(),
-            &format!("{start}-{end}"),
-        );
-        let sig = styled_declaration(painter, &m.signature);
-        writeln!(w, "  {sig}  {loc}")?;
+        write_method_row(w, db, painter, project_root, "  ", m)?;
         budget.consume(unit_cost);
     }
     write_elision_marker(w, elided_lines, budget.full_output)?;
     Ok(())
+}
+
+/// One method's lines at `indent`: its first-line docstring (when present),
+/// then its canonical signature and definition line range — no range for a
+/// dependency's precompiled impl method, which has no source here.
+fn write_method_row(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    painter: &crate::paint::Painter,
+    project_root: &std::path::Path,
+    indent: &str,
+    m: &describe::MethodRef,
+) -> std::io::Result<()> {
+    if let Some(doc) = &m.docstring {
+        // `fragment` renders `///` lines as comments (and self-gates on color).
+        let doc_line = painter.fragment(&format!("/// {doc}"));
+        writeln!(w, "{indent}{doc_line}")?;
+    }
+    let sig = styled_declaration(painter, &m.signature);
+    match &m.location {
+        Some(location) => {
+            let text = location.file.text(db);
+            let (start, end) = definition_line_range(
+                text,
+                location.item_range.start().into(),
+                location.item_range.end().into(),
+            );
+            let m_abs = location.file.path(db);
+            let m_path = relative_path(&m_abs, project_root);
+            let loc = painter.location(
+                &m_abs,
+                &m_path.display().to_string(),
+                &format!("{start}-{end}"),
+            );
+            writeln!(w, "{indent}{sig}  {loc}")
+        }
+        None => writeln!(w, "{indent}{sig}"),
+    }
 }
 
 /// Render a flat listing of entries to stdout.
@@ -1632,15 +1757,24 @@ fn method_json(
     methods
         .iter()
         .map(|method| {
-            let path = relative_path(&method.file.path(db), project_root);
-            let text = method.file.text(db);
+            // `null` location fields: a dependency's precompiled impl method
+            // has no source in this database.
+            let site = method.location.as_ref().map(|location| {
+                let path = relative_path(&location.file.path(db), project_root);
+                let text = location.file.text(db);
+                (
+                    path.to_string_lossy().into_owned(),
+                    line_number_at_offset(text, location.item_range.start().into()),
+                    line_number_at_offset(text, location.item_range.end().into()),
+                )
+            });
             serde_json::json!({
                 "name": method.name,
                 "signature": method.signature,
                 "docstring": method.docstring,
-                "file": path.to_string_lossy(),
-                "line_start": line_number_at_offset(text, method.item_range.start().into()),
-                "line_end": line_number_at_offset(text, method.item_range.end().into()),
+                "file": site.as_ref().map(|(path, _, _)| path.clone()),
+                "line_start": site.as_ref().map(|(_, start, _)| *start),
+                "line_end": site.as_ref().map(|(_, _, end)| *end),
             })
         })
         .collect()
@@ -1658,22 +1792,18 @@ fn description_to_json(
     // don't carry it), so consumers never branch on absence.
     let (instance_methods, static_methods): (&[baml_ide::MethodRef], &[baml_ide::MethodRef]) =
         match &desc.kind {
-            baml_ide::SymbolKind::Class {
+            baml_ide::SymbolKind::ConcreteType {
                 instance_methods,
                 static_methods,
                 ..
             } => (instance_methods, static_methods),
             _ => (&[], &[]),
         };
-    let (interface_members, implementations): (&[baml_ide::InterfaceMember], &[baml_ide::ImplRow]) =
-        match &desc.kind {
-            baml_ide::SymbolKind::Interface {
-                members,
-                implementations,
-                ..
-            } => (members, implementations),
-            _ => (&[], &[]),
-        };
+    let interface_members: &[baml_ide::InterfaceMember] = match &desc.kind {
+        baml_ide::SymbolKind::Interface { members, .. } => members,
+        _ => &[],
+    };
+    let implementations = kind_implementations(&desc.kind);
     serde_json::json!({
         "name": desc.name,
         "kind": desc.kind.definition_kind().as_str(),
@@ -1717,13 +1847,28 @@ fn description_to_json(
             })
         }).collect::<Vec<_>>(),
         "implementations": implementations.iter().map(|imp| {
-            let path = relative_path(&imp.file.path(db), project_root);
+            // `null` site fields: a dependency's precompiled impl.
+            let site = imp.location.as_ref().map(|location| {
+                let path = relative_path(&location.file.path(db), project_root);
+                (
+                    path.to_string_lossy().into_owned(),
+                    line_number_at_offset(location.file.text(db), location.span.start().into()),
+                )
+            });
             serde_json::json!({
                 "display": imp.display,
-                "file": path.to_string_lossy(),
-                "line": line_number_at_offset(imp.file.text(db), imp.span.start().into()),
+                "file": site.as_ref().map(|(path, _)| path.clone()),
+                "line": site.as_ref().map(|(_, line)| *line),
+                "associated_types": imp.associated_types.iter().map(|(name, ty)| {
+                    serde_json::json!({ "name": name, "type": ty })
+                }).collect::<Vec<_>>(),
+                "field_links": imp.field_links.iter().map(|(iface_field, class_field)| {
+                    serde_json::json!({ "interface_field": iface_field, "class_field": class_field })
+                }).collect::<Vec<_>>(),
+                "methods": method_json(db, project_root, &imp.methods),
             })
         }).collect::<Vec<_>>(),
+        "implements": desc.kind.implements(),
         "container": desc.kind.container().map(|container| {
             let path = relative_path(&container.file.path(db), project_root);
             serde_json::json!({

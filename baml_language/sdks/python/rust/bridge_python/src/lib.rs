@@ -73,8 +73,10 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<py_handle::BamlPyHandle>()?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
+    m.add_wrapped(wrap_pyfunction!(py_handle::_seed_heap_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_release_wire_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_live_handle_count))?;
+    m.add_wrapped(wrap_pyfunction!(py_handle::_handle_refcount))?;
     m.add_class::<runtime::BamlRuntime>()?;
     media::register(m)?;
     m.add_class::<types::FunctionResult>()?;

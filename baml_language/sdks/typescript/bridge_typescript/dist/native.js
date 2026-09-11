@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, HostSpanManager, _seedFunctionRefHandle, _seedGenericMediaHandle, cancelFunctionCall, completeHostCall, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, HostSpanManager, _handleRefcount, _liveHandleCount, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, cancelFunctionCall, completeHostCall, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseHostCallable, shutdownRuntime } = nativeBinding
 export { BamlAudio }
 export { BamlCallContext }
 export { BamlHandle }
@@ -605,8 +605,11 @@ export { BamlPdf }
 export { BamlRuntime }
 export { BamlVideo }
 export { HostSpanManager }
+export { _handleRefcount }
+export { _liveHandleCount }
 export { _seedFunctionRefHandle }
 export { _seedGenericMediaHandle }
+export { _seedHeapHandle }
 export { cancelFunctionCall }
 export { completeHostCall }
 export { flushEvents }

@@ -309,7 +309,13 @@ pub(crate) fn render_to_string_honoring_overrides(
                 results: Vec::new(),
             }),
         },
-        Ok(None) => render_done(vm, value, &pending, &[]),
+        // Pass 1 collected `first_ptr` as an override; pass 2 must agree.
+        Ok(None) => NativeCallResult::Error(
+            crate::errors::VmInternalError::OverrideWalkSkew {
+                interface: "ToString",
+            }
+            .into(),
+        ),
     }
 }
 
@@ -348,20 +354,25 @@ impl Continuation for ToStringWalkContinuation {
                 .unwrap_or_default(),
         );
 
-        // Dispatch the next override, if any (and resolvable); otherwise render.
+        // Dispatch the next override, if any; otherwise render. Every pending
+        // pointer was collected as an override by pass 1, so a pass-2 miss is
+        // a skew between the two passes, not a fallback case.
         if let Some(&next_ptr) = self.pending.get(self.results.len()) {
-            match make_to_string_callee(vm, Value::object(next_ptr)) {
-                Err(e) => return NativeCallResult::Error(e.into()),
-                Ok(Some(callee)) => {
-                    return NativeCallResult::YieldToCall {
-                        callee,
-                        args: vec![],
-                        type_args: vec![],
-                        continuation: self,
-                    };
-                }
-                Ok(None) => {}
-            }
+            return match make_to_string_callee(vm, Value::object(next_ptr)) {
+                Err(e) => NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => NativeCallResult::YieldToCall {
+                    callee,
+                    args: vec![],
+                    type_args: vec![],
+                    continuation: self,
+                },
+                Ok(None) => NativeCallResult::Error(
+                    crate::errors::VmInternalError::OverrideWalkSkew {
+                        interface: "ToString",
+                    }
+                    .into(),
+                ),
+            };
         }
         render_done(vm, self.root, &self.pending, &self.results)
     }

@@ -768,6 +768,38 @@ function f() -> int {
     }
 
     #[test]
+    fn an_enum_type_offers_its_impl_methods() {
+        // An enum is a concrete type like any other: it cannot carry an
+        // in-body block, but in-body is not special — the methods its impls
+        // provide are members, reached through the type like a class's.
+        let test = CursorTest::new(
+            r#"enum Status { Active Done }
+
+interface Named {
+    function label(self) -> string throws never
+}
+
+implement Named for Status {
+    function label(self) -> string throws never {
+        return "status"
+    }
+}
+
+function f() -> int {
+    let a = Status.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(
+            labels.contains(&"Active") && labels.contains(&"label"),
+            "an enum's members are its variants AND its impl-provided methods: {labels:?}"
+        );
+    }
+
+    #[test]
     fn a_value_receiver_never_offers_a_static() {
         let test = CursorTest::new(
             r#"function f(n: int) -> int {

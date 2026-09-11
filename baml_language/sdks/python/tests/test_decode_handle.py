@@ -21,10 +21,12 @@ import baml_bridge.proto
 
 from baml_bridge import BamlFunctionSpec, BamlPyHandle, BamlRuntimeValue, BamlStream
 from baml_bridge.baml_py import (
+    _handle_refcount,
     _live_handle_count,
     _release_wire_handle,
     _seed_function_ref_handle,
     _seed_generic_media_handle,
+    _seed_heap_handle,
 )
 from baml_bridge.cffi.v1 import (
     baml_handle_pb2,
@@ -302,3 +304,36 @@ async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatc
             await call()
 
     assert decoded == [b"cancelled-result"] * 3
+
+
+def test_heap_handles_dedup_to_one_refcounted_key():
+    # The identity-bearing arm: one heap object owns ONE table key however many
+    # times it crosses; every crossing is one more ownership of that key, and
+    # every owner (Python object or wire clone) owes exactly one release.
+    before = _live_handle_count()
+    key1, handle_type = _seed_heap_handle(7001)
+    key2, _ = _seed_heap_handle(7001)
+    assert key1 == key2
+    assert _live_handle_count() == before + 1
+    # Two crossings, two owed releases: the row count hides that, the
+    # refcount shows it.
+    assert _handle_refcount(key1) == 2
+
+    first = BamlPyHandle(key1, handle_type)
+    second = BamlPyHandle(key2, handle_type)
+    # Cloning for the wire keeps the key (a copy is another owner of the same
+    # identity), unlike the fresh key an identity-free row gets.
+    wire_key, _ = first._clone_key_for_wire()
+    assert wire_key == key1
+    assert _live_handle_count() == before + 1
+    assert _handle_refcount(key1) == 3
+
+    # Three owners, three releases; the row survives until the last one.
+    _release_wire_handle(wire_key)
+    assert _handle_refcount(key1) == 2
+    del first
+    assert _handle_refcount(key1) == 1
+    assert _live_handle_count() == before + 1
+    del second
+    assert _handle_refcount(key1) is None
+    assert _live_handle_count() == before

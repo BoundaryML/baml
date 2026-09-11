@@ -1,0 +1,54 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: "format!(\"{listing}\\n---\\n{output}\")"
+---
+class Meters  scale.baml:6-18
+
+class Meters {
+    value: int,
+}
+
+implementations (4):
+  implement Scale<int> for Meters  scale.baml:8
+    function scale(self, by: int) -> int throws never  scale.baml:9-11
+  implement Scale<float> for Meters  scale.baml:13
+    function scale(self, by: float) -> int throws never  scale.baml:14-16
+  implement Scale<string> for Meters  extra.baml:2
+    function scale(self, by: string) -> int throws never  extra.baml:3-5
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
+
+references (0):
+
+---
+method scale  (implements Scale<int>)  scale.baml:9-11
+
+        function scale(self, by: int) -> int throws never {
+            return self.value * by
+        }
+
+container:
+  class            Meters                           scale.baml:6
+
+references (0):
+
+method scale  (implements Scale<float>)  scale.baml:14-16
+
+        function scale(self, by: float) -> int throws never {
+            return self.value
+        }
+
+container:
+  class            Meters                           scale.baml:6
+
+references (0):
+
+method scale  (implements Scale<string>)  extra.baml:3-5
+
+    function scale(self, by: string) -> int throws never {
+        return 0
+    }
+
+container:
+  class            Meters                           scale.baml:6
+
+references (0):

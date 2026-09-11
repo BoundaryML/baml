@@ -339,40 +339,70 @@ impl<'vm> ImplResolver<'vm> {
     /// spelled over the rule's own templates (`for_ty_pattern` ++
     /// `interface_args`) so it realizes against the match exactly like a
     /// provided row's frame (see the frame law on
-    /// [`MethodImpl`](bex_vm_types::types::MethodImpl)). `None` means the
-    /// interface has no such method, or the method is required and unprovided
-    /// — unreachable for accepted programs.
+    /// [`MethodImpl`](bex_vm_types::types::MethodImpl)).
+    ///
+    /// TOTAL for an accepted program. The compiler checks every virtual call
+    /// against the interface's declaration and proves every required method
+    /// provided, so each way this can fail to name a callee is an invariant
+    /// break and an `Err`, distinguished by kind: the rule's head is not an
+    /// interface ([`VmInternalError::ImplRuleHeadNotInterface`]), the
+    /// interface declares no such method
+    /// ([`VmInternalError::UndeclaredInterfaceMethod`]), a required method is
+    /// unprovided ([`VmInternalError::UnprovidedRequiredMethod`]), or a
+    /// declared default was never bound
+    /// ([`VmInternalError::UnboundInterfaceDefault`]). There is deliberately
+    /// no "not found" answer: collapsing these into one let the shim lanes
+    /// render structurally over a broken image. A reflective probe ("does
+    /// this impl have `m`?") must consult the interface's declaration first
+    /// and only then resolve here.
     pub(crate) fn rule_method_impl<'r>(
         self,
         rule: &'r RuntimeImplRule,
         method: &str,
-    ) -> Option<RuleMethodImpl<'r>> {
-        use bex_vm_types::types::MethodImpl;
+    ) -> Result<RuleMethodImpl<'r>, VmInternalError> {
+        use bex_vm_types::types::{MethodImpl, ObjectType};
         if let Some(provided) = rule.methods.get(method) {
-            return Some(RuleMethodImpl {
+            return Ok(RuleMethodImpl {
                 method: Cow::Borrowed(provided),
                 is_default: false,
             });
         }
-        let bex_vm_types::Object::Interface(iface) = self.vm.get_object(rule.interface_head) else {
-            return None;
+        let head_object = self.vm.get_object(rule.interface_head);
+        let bex_vm_types::Object::Interface(iface) = head_object else {
+            return Err(VmInternalError::ImplRuleHeadNotInterface {
+                found: ObjectType::of(head_object),
+                method: method.to_string(),
+            });
         };
-        let method_def = iface.methods.iter().find(|m| m.name.as_str() == method)?;
-        // A wire-declared default must have been bound to its pointer at
-        // load/graft; a null alongside `default: Some(..)` is a binding bug,
-        // not an absent default.
-        debug_assert!(
-            method_def.default.is_none() || !method_def.default_fn.is_null(),
-            "interface default for `{method}` declared but unbound"
-        );
+        let interface = || iface.name.render_dotted(false);
+        let Some(method_def) = iface.methods.iter().find(|m| m.name.as_str() == method) else {
+            return Err(VmInternalError::UndeclaredInterfaceMethod {
+                interface: interface(),
+                method: method.to_string(),
+            });
+        };
         let default_fn = method_def.default_fn;
         if default_fn.is_null() {
-            return None;
+            return Err(match method_def.default {
+                // A wire-declared default must have been bound to its pointer
+                // at load/graft; a null alongside `default: Some(..)` is a
+                // binding bug, not an absent default.
+                Some(_) => VmInternalError::UnboundInterfaceDefault {
+                    interface: interface(),
+                    method: method.to_string(),
+                },
+                // No default and no provided row: the compiler rejects such
+                // an impl, so this rule table is corrupt or stale.
+                None => VmInternalError::UnprovidedRequiredMethod {
+                    interface: interface(),
+                    method: method.to_string(),
+                },
+            });
         }
         let mut frame = Vec::with_capacity(1 + rule.interface_args.len());
         frame.push(rule.for_ty_pattern.clone());
         frame.extend(rule.interface_args.iter().cloned());
-        Some(RuleMethodImpl {
+        Ok(RuleMethodImpl {
             method: Cow::Owned(MethodImpl {
                 fqn: default_fn,
                 frame,

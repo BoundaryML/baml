@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 790
 expression: output
 ---
 class Counter  methods.baml:15-25
@@ -14,5 +13,8 @@ methods:
 
 static_methods:
   function make() -> Counter throws never  methods.baml:22-24
+
+implementations (1):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
 
 references (0):

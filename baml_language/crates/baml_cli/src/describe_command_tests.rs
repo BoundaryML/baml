@@ -190,12 +190,21 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
             parent,
             member_name,
         }) => {
-            if let Some(desc) =
-                baml_ide::describe_item_member(db, &files, parent, member_name.as_str())
-            {
-                capture_description(db, &desc, 30)
-            } else {
+            let descs = baml_ide::describe_item_member(
+                db,
+                package(db),
+                &files,
+                parent,
+                member_name.as_str(),
+            );
+            if descs.is_empty() {
                 format!("NO DESCRIPTION: {name}\n")
+            } else {
+                descs
+                    .iter()
+                    .map(|desc| capture_description(db, desc, 30))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             }
         }
         None => {
@@ -488,20 +497,47 @@ class IntDecoder {
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(
-        output.contains("type Output = int"),
-        "expected class describe to include associated type bindings, got:\n{output}"
+        !output.contains("implements "),
+        "the class block is fields-only; impls are the implementations section, got:\n{output}"
+    );
+    assert!(
+        line_under(&output, "implement Decoder<string> for IntDecoder")
+            .contains("type Output = int"),
+        "an impl lists its associated-type bindings under its row, got:\n{output}"
     );
     assert!(
         output.contains("function decode"),
-        "expected class describe to list implements-block methods, got:\n{output}"
+        "expected class describe to list the impl's methods under it, got:\n{output}"
     );
     insta::assert_snapshot!(output);
 }
 
+/// The one description a member drill-in must yield.
+fn sole(mut descs: Vec<baml_ide::SymbolDescription>) -> baml_ide::SymbolDescription {
+    assert_eq!(descs.len(), 1, "expected exactly one description");
+    descs.remove(0)
+}
+
+/// The line rendered directly under the impl row containing `row` — where
+/// that impl's first provided method sits (rustdoc's shape: an impl's
+/// methods list under the impl, never among the type's inherent methods).
+fn line_under(listing: &str, row: &str) -> String {
+    let mut lines = listing.lines();
+    lines
+        .find(|line| line.contains(row))
+        .unwrap_or_else(|| panic!("no `{row}` row in:\n{listing}"));
+    lines
+        .next()
+        .unwrap_or_else(|| panic!("nothing under `{row}` in:\n{listing}"))
+        .to_string()
+}
+
 /// Drill-in reaches an implements-block method: post-erasure such methods
 /// are not class members (`MethodOwner::Impl`), but `describe C.m` must
-/// still find them through the enumeration's impl tier, with the RESOLVED
-/// signature (`Self.Output` reads as `int`).
+/// still find them through the enumeration's impl tier. This pins the
+/// drill-in's SOURCE body (written `Self.Output` and all); the RESOLVED
+/// signature (`-> int`) is the class listing's, pinned by
+/// `render_describe_class_shows_associated_type_bindings`.
 #[test]
 fn render_describe_class_impl_method_drill_in() {
     let db = make_db(&[(
@@ -530,8 +566,13 @@ class IntDecoder {
     let parent = pkg
         .lookup_type(&[], &baml_db::Name::new("IntDecoder"))
         .expect("IntDecoder resolves");
-    let desc = baml_ide::describe_item_member(&db, &files, parent, "decode")
-        .expect("describe must find the implements-block method");
+    let desc = sole(baml_ide::describe_item_member(
+        &db,
+        package(&db),
+        &files,
+        parent,
+        "decode",
+    ));
     // The drill-in renders the SOURCE body (written `Self.Output` and all);
     // the resolved signature (`-> int`) is the class listing's, pinned by
     // `render_describe_class_shows_associated_type_bindings`.
@@ -541,6 +582,177 @@ class IntDecoder {
         "expected the method body, got:\n{output}"
     );
     insta::assert_snapshot!(output);
+}
+
+/// Same-named methods provided by DIFFERENT impls of one class — the stdlib's
+/// `Duration` provides `mul` for both `Multiply<int>` and `Multiply<bigint>`
+/// — must read apart: the listing groups each under its impl's head, and the
+/// drill-in yields one description per impl, each labeled with that head,
+/// instead of an arbitrary first match. The impl SET is rustdoc's: an
+/// out-of-body impl in ANOTHER file counts exactly like an in-body block, and
+/// the blanket impls the class falls under (the stdlib's `Concrete for T`)
+/// appear in the implementations list.
+#[test]
+fn render_describe_same_named_impl_methods_are_labeled_per_impl() {
+    let db = make_db(&[
+        (
+            "scale.baml",
+            r#"
+interface Scale<By> {
+    function scale(self, by: By) -> int throws never
+}
+
+class Meters {
+    value: int
+    implements Scale<int> {
+        function scale(self, by: int) -> int throws never {
+            return self.value * by
+        }
+    }
+    implements Scale<float> {
+        function scale(self, by: float) -> int throws never {
+            return self.value
+        }
+    }
+}
+"#,
+        ),
+        (
+            "extra.baml",
+            r#"
+implement Scale<string> for Meters {
+    function scale(self, by: string) -> int throws never {
+        return 0
+    }
+}
+"#,
+        ),
+    ]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+
+    let descs = baml_ide::describe(&db, package(&db), &files, "Meters");
+    assert_eq!(descs.len(), 1);
+    let listing = capture_description(&db, &descs[0], 60);
+    assert!(
+        !listing.contains("methods:"),
+        "an impl's methods are not the type's inherent methods, got:\n{listing}"
+    );
+    for (row, by) in [
+        ("implement Scale<int> for Meters", "by: int"),
+        ("implement Scale<float> for Meters", "by: float"),
+        ("implement Scale<string> for Meters", "by: string"),
+    ] {
+        assert!(
+            line_under(&listing, row).contains(&format!("function scale(self, {by})")),
+            "the `{row}` impl lists its own `scale` under it, got:\n{listing}"
+        );
+    }
+    assert!(
+        listing.contains("implement<T> Concrete for T"),
+        "a blanket impl spells its generic context, got:\n{listing}"
+    );
+    // The cross-file impl's `Meters` mention is the implementations row's, not
+    // a reference as well.
+    assert!(
+        listing.contains("references (0):"),
+        "an impl row's for-target mention must not double-report as a reference, got:\n\
+         {listing}"
+    );
+
+    let pkg_id = db.workspace_root().unwrap();
+    let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
+    let parent = pkg
+        .lookup_type(&[], &baml_db::Name::new("Meters"))
+        .expect("Meters resolves");
+    let drill_ins = baml_ide::describe_item_member(&db, package(&db), &files, parent, "scale");
+    assert_eq!(
+        drill_ins.len(),
+        3,
+        "one description per impl providing `scale`"
+    );
+    let labels: Vec<Option<&str>> = drill_ins.iter().map(|d| d.kind.implements()).collect();
+    assert_eq!(
+        labels,
+        [
+            Some("Scale<int>"),
+            Some("Scale<float>"),
+            Some("Scale<string>")
+        ]
+    );
+    // The cross-file method drills into ITS file, not the class's.
+    let cross_file = &drill_ins[2];
+    assert!(
+        cross_file.file_path.ends_with("extra.baml") && cross_file.full_body.contains("return 0"),
+        "the drill-in must read the method from its own file, got {} with body:\n{}",
+        cross_file.file_path,
+        cross_file.full_body
+    );
+    let output = drill_ins
+        .iter()
+        .map(|desc| capture_description(&db, desc, 30))
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(format!("{listing}\n---\n{output}"));
+}
+
+/// An enum is a concrete type like any other: it cannot carry an in-body
+/// block, but in-body is not special. Its impls (`implement … for Color`, in
+/// any file) and the blanket impls it falls under list exactly as a class's
+/// do, its impl methods group under their impl, and `Color.m` drills in.
+#[test]
+fn render_describe_enum_impl_surface() {
+    let db = make_db(&[
+        (
+            "color.baml",
+            r#"
+enum Color { Red  Green }
+
+interface Named {
+    function label(self) -> string throws never
+}
+"#,
+        ),
+        (
+            "extra.baml",
+            r#"
+implement Named for Color {
+    function label(self) -> string throws never {
+        return "color"
+    }
+}
+"#,
+        ),
+    ]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+
+    let descs = baml_ide::describe(&db, package(&db), &files, "Color");
+    assert_eq!(descs.len(), 1);
+    let listing = capture_description(&db, &descs[0], 60);
+    assert!(
+        line_under(&listing, "implement Named for Color").contains("function label(self)")
+            && listing.contains("implement<T> Concrete for T"),
+        "an enum lists its impls with their methods like a class, got:\n{listing}"
+    );
+
+    let pkg_id = db.workspace_root().unwrap();
+    let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
+    let parent = pkg
+        .lookup_type(&[], &baml_db::Name::new("Color"))
+        .expect("Color resolves");
+    let drill_in = sole(baml_ide::describe_item_member(
+        &db,
+        package(&db),
+        &files,
+        parent,
+        "label",
+    ));
+    assert_eq!(drill_in.kind.implements(), Some("Named"));
+    assert_eq!(
+        drill_in.kind.container().map(|c| c.name.as_str()),
+        Some("Color")
+    );
+    let output = capture_description(&db, &drill_in, 30);
+    insta::assert_snapshot!(format!("{listing}\n---\n{output}"));
 }
 
 #[test]
@@ -755,7 +967,13 @@ fn render_describe_member_field() {
     let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_item_member(&db, &files, def, "x").unwrap();
+    let desc = sole(baml_ide::describe_item_member(
+        &db,
+        package(&db),
+        &files,
+        def,
+        "x",
+    ));
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -771,7 +989,13 @@ fn render_describe_ns_member() {
     let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_ide::describe_item_member(&db, &files, def, "model").unwrap();
+    let desc = sole(baml_ide::describe_item_member(
+        &db,
+        package(&db),
+        &files,
+        def,
+        "model",
+    ));
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -1260,9 +1484,11 @@ fn render_describe_methods_respect_budget() {
     );
 
     // A characterization value: it tracks `baml.String`'s rendered size, so a
-    // stdlib surface change moves it. What the test pins is the *property* the
-    // helper checks — the hinted budget is minimal and renders everything.
-    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 113);
+    // stdlib surface change moves it (the class `implementations` section —
+    // every impl the class falls under, rustdoc parity — is part of it). What
+    // the test pins is the *property* the helper checks — the hinted budget
+    // is minimal and renders everything.
+    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 131);
 }
 
 #[test]

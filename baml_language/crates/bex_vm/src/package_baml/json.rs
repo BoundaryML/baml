@@ -119,7 +119,13 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
                 results: Vec::new(),
             }),
         },
-        Ok(None) => render_to_json_done(vm, value, &pending, &[]),
+        // Pass 1 collected `first_ptr` as an override; pass 2 must agree.
+        Ok(None) => NativeCallResult::Error(
+            VmInternalError::OverrideWalkSkew {
+                interface: "ToJson",
+            }
+            .into(),
+        ),
     }
 }
 
@@ -387,20 +393,25 @@ impl Continuation for ToJsonWalkContinuation {
         // so we hold no extra heap root for it across the next dispatch.
         self.results.push(value_to_serde(vm, value));
 
-        // Dispatch the next override, if any (and resolvable); otherwise render.
+        // Dispatch the next override, if any; otherwise render. Every pending
+        // pointer was collected as an override by pass 1, so a pass-2 miss is
+        // a skew between the two passes, not a fallback case.
         if let Some(&next_ptr) = self.pending.get(self.results.len()) {
-            match make_to_json_callee(vm, Value::object(next_ptr)) {
-                Err(e) => return NativeCallResult::Error(e.into()),
-                Ok(Some(callee)) => {
-                    return NativeCallResult::YieldToCall {
-                        callee,
-                        args: vec![],
-                        type_args: vec![],
-                        continuation: self,
-                    };
-                }
-                Ok(None) => {}
-            }
+            return match make_to_json_callee(vm, Value::object(next_ptr)) {
+                Err(e) => NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => NativeCallResult::YieldToCall {
+                    callee,
+                    args: vec![],
+                    type_args: vec![],
+                    continuation: self,
+                },
+                Ok(None) => NativeCallResult::Error(
+                    VmInternalError::OverrideWalkSkew {
+                        interface: "ToJson",
+                    }
+                    .into(),
+                ),
+            };
         }
         render_to_json_done(vm, self.root, &self.pending, &self.results)
     }
@@ -1750,13 +1761,13 @@ impl Continuation for ClassFromJsonCont {
     }
 }
 
-/// If `ty` is a class/interface type whose `baml.FromJson` rule carries an
-/// override, returns a `YieldToCall` dispatching that `from_json(j)` with the
-/// rule's realized frame. The deserialize analog of
-/// `try_yield_user_from_json`, but resolved through the impl rules (so
+/// If `ty` is a class/interface type whose `baml.FromJson` rule PROVIDES
+/// `from_json`, returns a `YieldToCall` dispatching that `from_json(j)` with
+/// the rule's realized frame. The deserialize counterpart of the `ToJson`
+/// shim (`make_to_json_callee`), resolved through the impl rules like it (so
 /// blanket and out-of-body impls and runtime-declared classes all reach
-/// their override). Returns `None` for non-class types, media, and types
-/// whose rule is absent or inherits the structural default body (→ the
+/// their provided method). Returns `None` for non-class types, media, and
+/// types whose rule is absent or adopts the structural default body (→ the
 /// structural fallback, which is what that default delegates to).
 fn try_yield_interface_from_json(
     vm: &mut BexVm,
@@ -1792,7 +1803,10 @@ fn try_yield_interface_from_json(
         _ => super::resolve::ImplResolver::new(vm),
     };
     let (rule, bound_args) = resolver.resolve_implements_rule(ty, from_json_head, &[])?;
-    let resolved = resolver.rule_method_impl(&rule, "from_json")?;
+    let resolved = match resolver.rule_method_impl(&rule, "from_json") {
+        Ok(resolved) => resolved,
+        Err(e) => return Some(NativeCallResult::Error(e.into())),
+    };
     if resolved.is_default {
         // The rule adopts the structural default body: the caller renders the
         // structural conversion itself.

@@ -101,11 +101,20 @@ use sha2::{Digest, Sha256};
 /// (an adopted interface default resolves at dispatch through the
 /// interface's `default_fn`, never through a baked row), rule fragments
 /// moved onto their declaring unit, and `ProgramMethodImplFrag` carries the
-/// body's code-bucket offset in that unit rather than a name. A body has no
-/// name-keyed coordinates on the PROGRAM wire — its spelling survives only
-/// as the `CompilationUnit`'s link-internal export/import key; compile
-/// boundaries read coordinates from the declaration-keyed placement
-/// registry, with a Pass-1 slot replay only at the stdlib-splice boundary.
+/// body's code-bucket offset in that unit rather than a name. Nothing on the
+/// PROGRAM wire KEYS on a body's spelling any more: it survives as display
+/// data only (`Function::name`, and the per-instruction `OperandMeta` in
+/// `Bytecode::meta`) plus the `CompilationUnit`'s link-internal
+/// export/import key; compile boundaries read coordinates from the
+/// declaration-keyed placement registry, with a Pass-1 slot replay only at
+/// the stdlib-splice boundary. Two further changes ride this version:
+/// `MethodImpl::frame` follows the `[owner ++ own]` convention with NO
+/// associated-type slots (an adopted default's owner frame is
+/// `[Self, interface args..]`; a body's `Self.Assoc` reduces as a
+/// projection), and the generated `SysOp` enum's variants for in-class impl
+/// methods were respelled (`<Iface>For<Class>`), which reassigns
+/// discriminants — a wire AND host-ABI change for embedders matching on
+/// variant names.
 ///
 /// Version 12: appended `PopJumpIfTrue`, `JumpIfFalseOrPop`,
 /// `JumpIfTrueOrPop`, and `JumpIfNotNullOrPop` to the instruction/opcode sets.
@@ -115,7 +124,16 @@ use sha2::{Digest, Sha256};
 /// count flag bit from call instructions.
 ///
 /// Version 14: `Bytecode::call_layouts` records each call site's argument layout.
-pub const FORMAT_VERSION: u32 = 14;
+///
+/// Version 15: `CompilationUnit` gained `referenced_names` and
+/// `bakes_type_layout` — the incremental reverse-dependency edges, recorded
+/// by codegen at its resolution sites and carried with the unit. Previously
+/// the CLI reconstructed them from compiled operands joined against the
+/// runtime name maps, which silently severed every edge into a name class
+/// that left those maps (version 11 removed interface-machinery bodies from
+/// them, so direct calls to interface bodies stopped dirtying their
+/// callers).
+pub const FORMAT_VERSION: u32 = 15;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

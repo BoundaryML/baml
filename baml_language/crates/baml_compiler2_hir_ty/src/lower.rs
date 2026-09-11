@@ -1737,6 +1737,43 @@ pub fn class_self_ty<'db>(
     ))
 }
 
+/// The type an enum declaration denotes: its nominal type (enums take no
+/// generic params) - the counterpart of [`class_self_ty`].
+pub fn enum_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    enum_loc: baml_compiler2_hir::loc::EnumLoc<'db>,
+) -> baml_type::Ty {
+    let data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+    baml_type::Ty::Enum(
+        qualify_def(db, Definition::Enum(enum_loc), &data.name),
+        TyAttr::default(),
+    )
+}
+
+/// The concrete type a declaration denotes at its own generic params - the
+/// self type an `implements` block for it is matched against, and so the
+/// key of its impl surface (describe, hover, completion): [`class_self_ty`]
+/// for a class (a builtin carrier bridges to its builtin, so `baml.String`
+/// answers `string`), [`enum_self_ty`] for an enum. `None` for a
+/// declaration that is no concrete type: an interface is an existential, an
+/// alias a spelling of another type, the rest are values.
+pub fn declaration_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    definition: Definition<'db>,
+) -> Option<baml_type::Ty> {
+    match definition {
+        Definition::Class(class) => Some(class_self_ty(db, class)),
+        Definition::Enum(enum_loc) => Some(enum_self_ty(db, enum_loc)),
+        Definition::Interface(_)
+        | Definition::TypeAlias(_)
+        | Definition::Function(_)
+        | Definition::TemplateString(_)
+        | Definition::Client(_)
+        | Definition::RetryPolicy(_)
+        | Definition::Let(_) => None,
+    }
+}
+
 /// A generic frame from bare interface param names (no `Self` slot -
 /// the registry's `requires` lowering; the full interface frame with
 /// `Self` at index 0 stays `function_generic_frame`'s).

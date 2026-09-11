@@ -148,6 +148,15 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
 /// per crossing) is what lets the identity-bearing arm reuse a key without
 /// breaking that contract: the Nth crossing bumps the count, the Nth release
 /// balances it, and the row dies at zero.
+///
+/// LIFETIME DISCIPLINE IS THE BRIDGE'S, per language. The table sees keys,
+/// not owners, so on a shared (identity-arm) key a double release is
+/// indistinguishable from a co-owner's legitimate one: it silently takes that
+/// owner's ownership, and the table cannot detect it. Each bridge therefore
+/// guarantees exactly-once at its wrapper — trivially where release IS drop
+/// (Rust), by tracking a released flag on the wrapper (never in this table)
+/// where a host can reach a handle after releasing it. Tests observe the
+/// balance through [`Self::refcount`].
 struct CffiHandleTableRow {
     value: Arc<CffiHandleTableEntry>,
     refcount: u64,
@@ -276,7 +285,20 @@ impl CffiHandleTable {
         true
     }
 
-    /// Return the number of currently live handle-table keys.
+    /// The outstanding ownership count of a live key — the number of releases
+    /// it still owes. Test instrumentation for the leak audits, which cannot
+    /// see an imbalance on a shared key through [`Self::len`] alone (rows,
+    /// not owners). `None` for a dead or unknown key.
+    pub fn refcount(&self, key: u64) -> Option<u64> {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+            .map(|row| row.refcount)
+    }
+
+    /// Return the number of live handle-table rows (a refcounted engine-heap
+    /// row counts once however many owners it has).
     pub fn len(&self) -> usize {
         self.entries
             .read()
@@ -284,7 +306,7 @@ impl CffiHandleTable {
             .len()
     }
 
-    /// Return whether the handle table currently owns no keys.
+    /// Return whether the handle table currently has no live rows.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

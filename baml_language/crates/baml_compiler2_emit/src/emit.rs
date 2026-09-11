@@ -409,6 +409,13 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
     /// pointer itself) rather than `LoadDeref` (which would dereference the cell).
     loading_for_closure_capture: bool,
+
+    /// Reference record every resolution this codegen performs writes into
+    /// (see [`crate::UnitReferences`]): each function/`let` global-slot
+    /// resolution and each class/enum object-index resolution records the
+    /// resolved item's name at the site that resolved it. The finished
+    /// function's layout-baking bit is OR'd in by [`Self::compile`].
+    references: &'obj mut crate::UnitReferences,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
@@ -475,6 +482,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             lambda_names: ctx.lambda_names.to_vec(),
             // Codegen resolves places at the runtime's head; anchor the
             // compiler-side capture types once, here, rather than at each read.
+            references: ctx.references,
             capture_types: ctx
                 .capture_types
                 .iter()
@@ -510,9 +518,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .map(|(name, _)| name.clone())
     }
 
-    fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+    fn class_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
         let full_name = tn.render_dotted(false);
-        self.class_object_indices
+        let idx = self
+            .class_object_indices
             .get(&full_name)
             .copied()
             .or_else(|| {
@@ -520,7 +529,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .get(tn.display_name().as_str())
                     .copied()
             })
-            .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied())
+            .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied());
+        if idx.is_some() {
+            self.references.record(&full_name);
+        }
+        idx
     }
 
     /// Class field metadata for a class type name, resolved through the same
@@ -537,9 +550,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// [`Self::class_object_index_for_type_name`]. Used by `is <Enum>` to test
     /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
     /// which cannot distinguish two enum types (`Color` vs `Status`).
-    fn enum_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+    fn enum_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
         let full_name = tn.render_dotted(false);
-        self.enum_object_indices
+        let idx = self
+            .enum_object_indices
             .get(&full_name)
             .copied()
             .or_else(|| {
@@ -547,7 +561,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .get(tn.display_name().as_str())
                     .copied()
             })
-            .or_else(|| self.enum_object_indices.get(tn.name().as_str()).copied())
+            .or_else(|| self.enum_object_indices.get(tn.name().as_str()).copied());
+        if idx.is_some() {
+            self.references.record(&full_name);
+        }
+        idx
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
@@ -1069,7 +1087,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // 5. Build the Function
         // Note: `name` is set by the caller after `compile_mir_function` returns.
         // `span` is set by `compile_mir_function` from the MIR function span.
-        Function {
+        let function = Function {
             name: String::new(),
             source_file: String::new(), // caller sets this after compile_mir_function returns
             docstring: None,
@@ -1101,7 +1119,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
             runtime_package: bex_vm_types::HeapPtr::null(),
-        }
+        };
+        // The layout-baking bit is a pure function of the finished bytecode's
+        // instruction KINDS (no name-map join), so the one exhaustive
+        // classification in `relink` derives it — recording it per emitted
+        // instruction here would duplicate that list and drift.
+        self.references.bakes_type_layout |=
+            bex_vm_types::relink::visit_index_operands_ref(&function, |_| {});
+        function
     }
 
     /// Allocate stack slots only for Real locals.
@@ -1630,6 +1655,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn emit_init_instance(&mut self, class_name: &str, ntypeargs: u16, field_count: usize) {
         if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            self.references.record(class_name);
             let fields = (0..field_count).collect::<Vec<_>>();
             let display_fields = fields
                 .iter()
@@ -2006,21 +2032,36 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// back to an indirect call). A body missing its slot is an internal
     /// error: `ItemRef::InterfaceBody` only exists for declarations this database
     /// sees, and Pass 1 slots every one of them.
-    fn try_function_global_index(&self, item: &baml_compiler2_mir::ItemRef<'ctx>) -> Option<usize> {
-        match item {
-            baml_compiler2_mir::ItemRef::InterfaceBody(body) => Some(
-                *self
-                    .interface_body_slots
-                    .get(&body.decl)
-                    .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}")),
-            ),
-            _ => self.globals.get(&item.to_string()).copied(),
+    fn try_function_global_index(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef<'ctx>,
+    ) -> Option<usize> {
+        if let baml_compiler2_mir::ItemRef::InterfaceBody(body) = item {
+            let slot = *self
+                .interface_body_slots
+                .get(&body.decl)
+                .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}"));
+            // The body's rendered spelling is display-only for resolution, but
+            // its last segment (the method name) is exactly what the declaring
+            // file's `defined_names` produces — the incremental edge grain.
+            self.references.record(&item.to_string());
+            return Some(slot);
         }
+        let rendered = item.to_string();
+        let slot = self.globals.get(&rendered).copied();
+        if slot.is_some() {
+            self.references.record(&rendered);
+        }
+        slot
     }
 
     /// [`Self::try_function_global_index`], panicking with `what` when the
     /// item does not resolve.
-    fn function_global_index(&self, item: &baml_compiler2_mir::ItemRef<'ctx>, what: &str) -> usize {
+    fn function_global_index(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef<'ctx>,
+        what: &str,
+    ) -> usize {
         self.try_function_global_index(item)
             .unwrap_or_else(|| panic!("{what}: {item}"))
     }
@@ -2138,11 +2179,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // A non-function global item (a client, a top-level `let`,
                 // ...): read the value `$init` stored in its slot, unwrapped.
                 let name_str = item_ref.to_string();
-                let global_idx = self
+                let global_idx = *self
                     .globals
                     .get(&name_str)
                     .unwrap_or_else(|| panic!("undefined global item: {name_str}"));
-                let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
+                self.references.record(&name_str);
+                let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
             Constant::GenericFunction { item, type_args } => {
@@ -2156,8 +2198,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // references that aren't registered in this compilation context).
                 // Emit a Null constant so tests don't panic; runtime will fail
                 // if the code path is actually executed.
-                let Some(enum_obj_idx) = self.enum_object_indices.get(&enum_name_str).copied()
-                else {
+                let enum_obj_idx = self.enum_object_indices.get(&enum_name_str).copied();
+                if enum_obj_idx.is_some() {
+                    self.references.record(&enum_name_str);
+                }
+                let Some(enum_obj_idx) = enum_obj_idx else {
                     let idx = self.add_constant(ConstValue::Null);
                     let inst = self.emit(Instruction::LoadConst(idx));
                     self.set_operand(
@@ -3470,6 +3515,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
         if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            self.references.record(class_name);
             let inst = self.emit(Instruction::AllocInstance {
                 class_obj: ObjectIndex::from_raw(class_obj_idx),
                 ntypeargs,
@@ -3996,6 +4042,7 @@ mod tests {
         let capture_types = Vec::new();
         let spawn_capture_indices = HashSet::new();
         let line_starts = [0];
+        let mut references = crate::UnitReferences::default();
 
         let function = compile_mir_function(
             &body,
@@ -4016,6 +4063,7 @@ mod tests {
                 lambda_names: &lambda_names,
                 capture_types: &capture_types,
                 spawn_capture_indices: &spawn_capture_indices,
+                references: &mut references,
             },
             OptLevel::One,
         );

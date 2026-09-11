@@ -68,13 +68,22 @@ pub struct SymbolDescription {
 /// [`Self::definition_kind`].
 #[derive(Clone, Serialize)]
 pub enum SymbolKind {
-    Class {
+    /// A concrete type declaration — a class or an enum. Both are impl
+    /// targets alike (an enum cannot carry an in-body block, but in-body is
+    /// not special), so both carry the same surface: the methods reachable
+    /// on the type and the impls that apply to it.
+    ConcreteType {
+        kind: ConcreteTypeKind,
         /// See [`SymbolKind::canonical_fqn`].
         canonical_fqn: Option<String>,
         /// Instance methods (first param `self`).
         instance_methods: Vec<MethodRef>,
         /// Static methods (no `self` param).
         static_methods: Vec<MethodRef>,
+        /// Every impl that applies to the type — of the type (in-body or
+        /// out-of-body, any file) first, then the blanket/pattern impls it
+        /// falls under (rustdoc parity).
+        implementations: Vec<ImplRow>,
     },
     Interface {
         /// See [`SymbolKind::canonical_fqn`].
@@ -99,16 +108,25 @@ pub enum SymbolKind {
         kind: MemberKind,
         /// The containing item, when it resolved.
         container: Option<DepRef>,
+        /// For an implements-block method, the block's interface head with
+        /// its instantiation. `None` for every other member.
+        implements: Option<String>,
     },
     /// A local inside a function.
     Local { kind: LocalKind },
 }
 
-/// A top-level item kind with no describe-specific payload (classes and
-/// interfaces have their own [`SymbolKind`] variants).
+/// Which concrete type declaration a [`SymbolKind::ConcreteType`] describes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ConcreteTypeKind {
+    Class,
+    Enum,
+}
+
+/// A top-level item kind with no describe-specific payload (concrete types
+/// and interfaces have their own [`SymbolKind`] variants).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ItemKind {
-    Enum,
     TypeAlias,
     Function,
     TemplateString,
@@ -137,10 +155,12 @@ impl SymbolKind {
     /// The compiler's flat kind, for display labels and kind-based coloring.
     pub fn definition_kind(&self) -> DefinitionKind {
         match self {
-            SymbolKind::Class { .. } => DefinitionKind::Class,
+            SymbolKind::ConcreteType { kind, .. } => match kind {
+                ConcreteTypeKind::Class => DefinitionKind::Class,
+                ConcreteTypeKind::Enum => DefinitionKind::Enum,
+            },
             SymbolKind::Interface { .. } => DefinitionKind::Interface,
             SymbolKind::Item { kind, .. } => match kind {
-                ItemKind::Enum => DefinitionKind::Enum,
                 ItemKind::TypeAlias => DefinitionKind::TypeAlias,
                 ItemKind::Function => DefinitionKind::Function,
                 ItemKind::TemplateString => DefinitionKind::TemplateString,
@@ -169,7 +189,7 @@ impl SymbolKind {
     /// bare name, and a member's owner is the container row.
     pub fn canonical_fqn(&self) -> Option<&str> {
         match self {
-            SymbolKind::Class { canonical_fqn, .. }
+            SymbolKind::ConcreteType { canonical_fqn, .. }
             | SymbolKind::Interface { canonical_fqn, .. }
             | SymbolKind::Item { canonical_fqn, .. } => canonical_fqn.as_deref(),
             SymbolKind::Member { .. } | SymbolKind::Local { .. } => None,
@@ -180,7 +200,19 @@ impl SymbolKind {
     pub fn container(&self) -> Option<&DepRef> {
         match self {
             SymbolKind::Member { container, .. } => container.as_ref(),
-            SymbolKind::Class { .. }
+            SymbolKind::ConcreteType { .. }
+            | SymbolKind::Interface { .. }
+            | SymbolKind::Item { .. }
+            | SymbolKind::Local { .. } => None,
+        }
+    }
+
+    /// The implements-block head an impl-tier method belongs to — `Some` only
+    /// for such a method.
+    pub fn implements(&self) -> Option<&str> {
+        match self {
+            SymbolKind::Member { implements, .. } => implements.as_deref(),
+            SymbolKind::ConcreteType { .. }
             | SymbolKind::Interface { .. }
             | SymbolKind::Item { .. }
             | SymbolKind::Local { .. } => None,
@@ -192,7 +224,7 @@ impl SymbolKind {
 /// exhaustive mapping: a new compiler kind fails compilation here, forcing a
 /// decision about which payload its descriptions carry.
 enum KindClass {
-    Class,
+    ConcreteType(ConcreteTypeKind),
     Interface,
     Item(ItemKind),
     Member(MemberKind),
@@ -201,9 +233,9 @@ enum KindClass {
 
 fn classify_definition_kind(kind: DefinitionKind) -> KindClass {
     match kind {
-        DefinitionKind::Class => KindClass::Class,
+        DefinitionKind::Class => KindClass::ConcreteType(ConcreteTypeKind::Class),
+        DefinitionKind::Enum => KindClass::ConcreteType(ConcreteTypeKind::Enum),
         DefinitionKind::Interface => KindClass::Interface,
-        DefinitionKind::Enum => KindClass::Item(ItemKind::Enum),
         DefinitionKind::TypeAlias => KindClass::Item(ItemKind::TypeAlias),
         DefinitionKind::Function => KindClass::Item(ItemKind::Function),
         DefinitionKind::TemplateString => KindClass::Item(ItemKind::TemplateString),
@@ -230,10 +262,19 @@ pub struct MethodRef {
     pub signature: String,
     /// First line of the method's docstring, if any.
     pub docstring: Option<String>,
+    /// Where the definition lives; `None` for a method of a mounted or
+    /// precompiled impl (a dependency's blanket impl), which has no source
+    /// in this database.
+    pub location: Option<MemberLocation>,
+}
+
+/// A member's definition site.
+#[derive(Clone, Serialize)]
+pub struct MemberLocation {
     #[serde(skip)]
     pub file: SourceFile,
     pub file_path: String,
-    /// Byte range of the full method definition (1-based line range when rendered).
+    /// Byte range of the full definition (1-based line range when rendered).
     #[serde(serialize_with = "serialize_range")]
     pub item_range: TextRange,
 }
@@ -287,22 +328,46 @@ pub struct InterfaceMember {
     pub item_range: TextRange,
 }
 
-/// An impl block whose head names the described interface.
+/// An impl row: under an interface, a block whose head names it; under a
+/// concrete type, an impl that applies to it, WITH the methods it provides —
+/// rustdoc's shape, since an impl's methods belong to that instantiation and
+/// target, not to every type the declaration heads.
 #[derive(Clone, Serialize)]
 pub struct ImplRow {
-    /// `implement <Head> for <Target>` in canonical spelling.
+    /// `implement<T …> <Head> for <Target>` in canonical spelling.
     pub display: String,
+    /// The block's source site; `None` for a mounted or precompiled impl (a
+    /// dependency's), which has no source in this database.
+    pub location: Option<ImplLocation>,
+    /// The impl's associated-type bindings, `(name, canonical type)` —
+    /// listed under the row as `type Output = int`.
+    pub associated_types: Vec<(String, String)>,
+    /// The impl's field links, `(interface field, class field)` — listed
+    /// under the row as `interface_field as class_field`.
+    pub field_links: Vec<(String, String)>,
+    /// The methods the impl provides, in declaration order. Empty for an
+    /// interface's implementor rows: the contract is the interface's own
+    /// member surface, and a type's describe shows what each impl provides.
+    pub methods: Vec<MethodRef>,
+}
+
+/// An impl block's source site.
+#[derive(Clone, Serialize)]
+pub struct ImplLocation {
     #[serde(skip)]
     pub file: SourceFile,
     pub file_path: String,
     /// Byte range of the impl block.
     #[serde(serialize_with = "serialize_range")]
     pub span: TextRange,
-    /// Byte range of the head's interface mention (`Named` in
-    /// `implement Named for Robot`) — the site this row REPLACES in the
-    /// reference list, so the two sections never double-report one mention.
-    #[serde(serialize_with = "serialize_range")]
-    pub head_span: TextRange,
+    /// The mention of the DESCRIBED symbol in the block's header that this
+    /// row reports INSTEAD of the reference list, so the two sections never
+    /// double-report one site: the interface head (`Named` in
+    /// `implement Named for Robot`) for an interface's rows, the for-target
+    /// (`Robot`) for a class's rows. `None` when the header writes no such
+    /// mention — an in-body `implements` block names its class implicitly.
+    #[serde(serialize_with = "serialize_optional_range")]
+    pub claimed_mention: Option<TextRange>,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -416,34 +481,42 @@ pub fn describe_by_definition(
     describe_top_level(db, viewer, files, &sym)
 }
 
-/// Describe a member (field, variant) within a known parent item.
+/// Describe a member (method, field, variant, associated type) within a known
+/// parent item.
 ///
-/// Searches the parent item's children in the file outline for a member
-/// matching `member_name`, then delegates to `describe_member()`.
+/// A class method drills into the method itself — signature + body — through
+/// `describe_type_method`, which returns EVERY match for the name: an
+/// inherent method is unique, but several impls of one class may each provide
+/// a method of that name, and each is a distinct description labeled with its
+/// block's head. Every other member resolves to at most one description.
+/// Empty if the parent declares no such member.
 pub fn describe_item_member(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     parent_def: Definition<'_>,
     member_name: &str,
-) -> Option<SymbolDescription> {
-    // A class method drills into the method itself — signature + body — which
-    // the field/variant member path below cannot render.
-    if let Definition::Class(class_loc) = parent_def {
-        if let Some(desc) = describe_class_method(db, files, class_loc, member_name) {
-            return Some(desc);
+) -> Vec<SymbolDescription> {
+    if let Definition::Class(_) | Definition::Enum(_) = parent_def {
+        let methods = describe_type_method(db, viewer, files, parent_def, member_name);
+        if !methods.is_empty() {
+            return methods;
         }
     }
 
     // Interface members (methods, fields, associated types) are declared on
     // the interface's own item data — the outline walk below never descends
     // into interfaces, so this arm is their only road.
-    if let Definition::Interface(iface_loc) = parent_def {
-        if let Some(desc) = describe_interface_member(db, files, iface_loc, member_name) {
-            return Some(desc);
-        }
+    if let Definition::Interface(iface_loc) = parent_def
+        && let Some(desc) = describe_interface_member(db, files, iface_loc, member_name)
+    {
+        return vec![desc];
     }
 
-    let (parent_file, parent_name_span) = crate::syntax::definition_span(db, parent_def)?;
+    let Some((parent_file, parent_name_span)) = crate::syntax::definition_span(db, parent_def)
+    else {
+        return Vec::new();
+    };
 
     // Get the parent's name from the source text.
     let parent_name = {
@@ -466,13 +539,13 @@ pub fn describe_item_member(
                         name_span: child.name_span,
                         container_name: Some(parent_name),
                     };
-                    return describe_member(db, files, &sym);
+                    return describe_member(db, files, &sym).into_iter().collect();
                 }
             }
         }
     }
 
-    None
+    Vec::new()
 }
 
 /// Build a full `SymbolDescription` for a single `SymbolInfo`.
@@ -524,15 +597,19 @@ fn describe_top_level(
 
     // ── Kind payload ─────────────────────────────────────────────────────────
     let kind = match classify_definition_kind(sym.kind) {
-        KindClass::Class => {
-            let (instance_methods, static_methods) = match definition {
-                Some(Definition::Class(class_loc)) => collect_class_methods(db, class_loc),
-                _ => (Vec::new(), Vec::new()),
+        KindClass::ConcreteType(kind) => {
+            let ((instance_methods, static_methods), implementations) = match definition {
+                Some(definition @ (Definition::Class(_) | Definition::Enum(_))) => {
+                    collect_type_rows(db, viewer, definition)
+                }
+                _ => ((Vec::new(), Vec::new()), Vec::new()),
             };
-            SymbolKind::Class {
+            SymbolKind::ConcreteType {
+                kind,
                 canonical_fqn: canonical_fqn(db, viewer, sym, definition),
                 instance_methods,
                 static_methods,
+                implementations,
             }
         }
         KindClass::Interface => {
@@ -559,23 +636,34 @@ fn describe_top_level(
         KindClass::Member(kind) => SymbolKind::Member {
             kind,
             container: None,
+            implements: None,
         },
         KindClass::Local(kind) => SymbolKind::Local { kind },
     };
 
-    // An impl-head mention (`implement Named for …`, `implements Named {`)
-    // is reported by the implementations section; keeping it in the
-    // reference list too would double-count the same site.
-    if let SymbolKind::Interface {
-        implementations, ..
-    } = &kind
-    {
-        references.retain(|reference| {
-            !implementations.iter().any(|imp| {
-                imp.file == reference.file && imp.head_span.contains_range(reference.range)
+    // The mention an impl row claims (the interface head in `implement Named
+    // for …`, the for-target in `implement Scale<string> for Meters`) is
+    // reported by the implementations section; keeping it in the reference
+    // list too would double-count the same site.
+    let implementations: &[ImplRow] = match &kind {
+        SymbolKind::Interface {
+            implementations, ..
+        }
+        | SymbolKind::ConcreteType {
+            implementations, ..
+        } => implementations,
+        SymbolKind::Item { .. } | SymbolKind::Member { .. } | SymbolKind::Local { .. } => &[],
+    };
+    references.retain(|reference| {
+        !implementations.iter().any(|imp| {
+            imp.location.as_ref().is_some_and(|location| {
+                location.file == reference.file
+                    && location
+                        .claimed_mention
+                        .is_some_and(|mention| mention.contains_range(reference.range))
             })
-        });
-    }
+        })
+    });
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
@@ -588,7 +676,10 @@ fn describe_top_level(
     // - everything else: the real source body.
     let full_body = if matches!(
         kind,
-        SymbolKind::Class { .. } | SymbolKind::Interface { .. }
+        SymbolKind::ConcreteType {
+            kind: ConcreteTypeKind::Class,
+            ..
+        } | SymbolKind::Interface { .. }
     ) {
         let mut body = docstring_lines(docstring.as_deref());
         body.push_str(&shape);
@@ -681,6 +772,7 @@ fn describe_member(
         kind: SymbolKind::Member {
             kind: member_kind,
             container,
+            implements: None,
         },
         file_path: file_path_string(db, file),
         file,
@@ -1062,32 +1154,48 @@ fn build_shape<'db>(
 
 // ── Class methods ──────────────────────────────────────────────────────────────
 
-/// Build `(instance_methods, static_methods)` for a class's describe output.
-/// Instance methods have a `self` first parameter; the rest are static. The
-/// enumeration (inherent methods, then implements-block methods) is the
-/// shared spine [`crate::info::collect_class_methods_impl`].
-fn collect_class_methods(
+/// Build a concrete type's describe rows from its one collected surface
+/// ([`crate::info::collect_type_surface`]): `(instance_methods,
+/// static_methods)` — the INHERENT methods, split on a `self` first
+/// parameter — and the impl rows, each carrying the methods that impl
+/// provides. A source impl carries its site (claiming its for-target
+/// mention from the reference list); a mounted/precompiled one has none.
+fn collect_type_rows(
     db: &dyn baml_compiler2_ppir::Db,
-    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
-) -> (Vec<MethodRef>, Vec<MethodRef>) {
+    viewer: baml_base::SourceRoot,
+    definition: Definition<'_>,
+) -> ((Vec<MethodRef>, Vec<MethodRef>), Vec<ImplRow>) {
+    let surface = crate::info::collect_type_surface(db, viewer, definition);
+    let method_ref = |m: crate::info::CollectedMethod| MethodRef {
+        name: m.name,
+        signature: m.signature,
+        docstring: m.docstring,
+        location: m.location,
+    };
     let mut instance = Vec::new();
     let mut statics = Vec::new();
-    for m in crate::info::collect_class_methods_impl(db, class_loc) {
+    for m in surface.inherent {
         let bucket = if m.is_instance {
             &mut instance
         } else {
             &mut statics
         };
-        bucket.push(MethodRef {
-            name: m.name,
-            signature: m.signature,
-            docstring: m.docstring,
-            file: m.file,
-            file_path: m.file_path,
-            item_range: m.item_range,
-        });
+        bucket.push(method_ref(m));
     }
-    (instance, statics)
+    let implementations = surface
+        .impls
+        .into_iter()
+        .map(|imp| ImplRow {
+            display: imp.display,
+            location: imp
+                .block
+                .map(|block| impl_block_location(db, block, ClaimedMention::ForTarget)),
+            associated_types: imp.associated_types,
+            field_links: imp.field_links,
+            methods: imp.methods.into_iter().map(method_ref).collect(),
+        })
+        .collect();
+    ((instance, statics), implementations)
 }
 
 // ── Interface surface ────────────────────────────────────────────────────────
@@ -1208,54 +1316,72 @@ fn collect_interface_impls(
         .iter()
         .filter_map(|&block| {
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
-            let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
-            let file = block.file(db);
-            let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
             Some(ImplRow {
-                display: render_impl_row(db, viewer, facts),
-                file,
-                file_path: file_path_string(db, file),
-                span: source_map.span,
-                head_span: source_map.type_refs.span(data.interface_target),
+                display: crate::info::render_impl_row(
+                    db,
+                    viewer,
+                    &facts.generic_params,
+                    &facts.interface,
+                    &facts.for_ty_pattern,
+                ),
+                location: Some(impl_block_location(
+                    db,
+                    block,
+                    ClaimedMention::InterfaceHead,
+                )),
+                associated_types: facts
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| {
+                        (
+                            name.as_str().to_string(),
+                            render::display_addressable_ty(db, viewer, &ty.to_plain()),
+                        )
+                    })
+                    .collect(),
+                field_links: crate::info::impl_field_links(db, block),
+                methods: Vec::new(),
             })
         })
         .collect()
 }
 
-/// `implement <Head> for <Target>`: the head's short name plus any written
-/// generic arguments and associated-type pins, the for-target in the
-/// canonical owner spelling (`int`, `T[]`, `user.Foo`). The head keeps its
-/// SHORT name deliberately — every row sits under the interface it names, so
-/// repeating the full path would be noise; the variation a reader scans for
-/// is the instantiation and the implementor.
-fn render_impl_row(
+/// Which header mention an impl row claims from the reference list — see
+/// [`ImplLocation::claimed_mention`].
+#[derive(Clone, Copy)]
+enum ClaimedMention {
+    /// The interface head: the rows under a described INTERFACE.
+    InterfaceHead,
+    /// The written for-target: the rows under a described CLASS.
+    ForTarget,
+}
+
+/// A source impl block's site, with the header mention its row claims.
+fn impl_block_location(
     db: &dyn baml_compiler2_ppir::Db,
-    viewer: baml_base::SourceRoot,
-    facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>,
-) -> String {
-    let iface = facts.interface.to_plain();
-    let mut head = iface.name.name().as_str().to_string();
-    let mut args: Vec<String> = iface
-        .generics
-        .iter()
-        .map(|ty| render::display_addressable_ty(db, viewer, ty))
-        .collect();
-    args.extend(iface.associated_types.iter().map(|(name, ty)| {
-        format!(
-            "{} = {}",
-            name.as_str(),
-            render::display_addressable_ty(db, viewer, ty)
-        )
-    }));
-    if !args.is_empty() {
-        head.push('<');
-        head.push_str(&args.join(", "));
-        head.push('>');
+    block: baml_compiler2_hir::loc::ImplLoc<'_>,
+    claimed: ClaimedMention,
+) -> ImplLocation {
+    use baml_compiler2_ppir::item_data::ImplSubjectData;
+    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    let file = block.file(db);
+    let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
+    let claimed_mention = match claimed {
+        ClaimedMention::InterfaceHead => Some(source_map.type_refs.span(data.interface_target)),
+        ClaimedMention::ForTarget => match &data.subject {
+            ImplSubjectData::Free { for_target, .. } => {
+                Some(source_map.type_refs.span(*for_target))
+            }
+            // An in-body block names its class implicitly: no mention to claim.
+            ImplSubjectData::InClass { .. } => None,
+        },
+    };
+    ImplLocation {
+        file,
+        file_path: file_path_string(db, file),
+        span: source_map.span,
+        claimed_mention,
     }
-    format!(
-        "implement {head} for {}",
-        render::display_addressable_ty(db, viewer, &facts.for_ty_pattern.to_plain())
-    )
 }
 
 /// Describe one interface member (drill-in): a method (required or
@@ -1320,6 +1446,7 @@ fn describe_interface_member(
             kind: SymbolKind::Member {
                 kind: MemberKind::Method,
                 container,
+                implements: None,
             },
             file_path: file_path_string(db, file),
             file,
@@ -1368,6 +1495,7 @@ fn describe_interface_member(
             kind: SymbolKind::Member {
                 kind: MemberKind::AssociatedType,
                 container,
+                implements: None,
             },
             file_path: file_path_string(db, file),
             file,
@@ -1385,34 +1513,39 @@ fn describe_interface_member(
     None
 }
 
-/// Describe a single class method (drill-in): its canonical signature, source
-/// body, docstring, and owning class. The body is shown for user methods; a
-/// builtin/native body (`$rust_function`, …) is elided to just the signature.
-/// Returns `None` if the class has no such (non-auto-derived) method.
-fn describe_class_method(
+/// Describe a concrete type's methods of one name (drill-in): canonical
+/// signature, source body, docstring, and owning type. A class's inherent
+/// tier holds at most one method of a name; the impl tier may hold SEVERAL —
+/// one per impl providing it (`Duration` provides `mul` for both
+/// `Multiply<int>` and `Multiply<bigint>`) — and every match is returned,
+/// each labeled with its impl's head so the reader can tell them apart. The
+/// body is shown for user methods; a builtin/native body (`$rust_function`,
+/// …) is elided to just the signature. Empty if the type has no such
+/// (non-auto-derived) method.
+fn describe_type_method(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
-    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+    definition: Definition<'_>,
     member_name: &str,
-) -> Option<SymbolDescription> {
-    use baml_compiler2_hir_ty::package_interface::ExportedType;
+) -> Vec<SymbolDescription> {
+    use baml_compiler2_hir_ty::package_interface::{ExportedFunction, ExportedType};
 
-    let file = class_loc.file(db);
-    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-
-    // Locate the (non-auto-derived) method by name: the inherent tier first
-    // (paired positionally with the class's exported methods), then the
-    // implements-block tier (paired with the exported IMPL rows) — the same
-    // two tiers the enumeration lists.
-    let (method_loc, ef) = class_data
-        .methods
-        .iter()
-        .enumerate()
-        .find(|(_, mid)| {
+    // Candidates in the enumeration's order: a class's inherent tier first
+    // (paired positionally with the class's exported methods), then EVERY
+    // impl-provided method of the name (paired with the exported IMPL rows).
+    let mut candidates: Vec<(
+        baml_compiler2_hir::loc::FunctionLoc<'_>,
+        Option<&ExportedFunction>,
+        Option<String>,
+    )> = Vec::new();
+    if let Definition::Class(class_loc) = definition {
+        let file = class_loc.file(db);
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        if let Some((idx, &method_loc)) = class_data.methods.iter().enumerate().find(|(_, mid)| {
             let m = baml_compiler2_ppir::item_data::function_data(db, **mid);
             m.name.as_str() == member_name && !m.metadata.is_language_internal
-        })
-        .map(|(idx, &method_loc)| {
+        }) {
             let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = pkg_info.root;
@@ -1425,18 +1558,82 @@ fn describe_class_method(
                     }
                     _ => None,
                 });
-            (method_loc, ef)
+            candidates.push((method_loc, ef, None));
+        }
+    }
+    // Only a SOURCE method can be drilled into (it has a body and a site); a
+    // mounted/precompiled impl's method shows in the listing with its
+    // signature and nothing more.
+    for imp in crate::info::type_impls(db, viewer, definition) {
+        for body in imp.methods {
+            if let crate::info::ImplMethodBody::Source { method, exported } = body
+                && baml_compiler2_ppir::item_data::function_data(db, method)
+                    .name
+                    .as_str()
+                    == member_name
+            {
+                candidates.push((method, exported, Some(imp.label.clone())));
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .map(|(method_loc, ef, implements)| {
+            describe_type_method_at(db, files, definition, method_loc, ef, implements)
         })
-        .or_else(|| {
-            crate::info::class_impl_methods(db, class_loc)
-                .into_iter()
-                .find(|(method_loc, _)| {
-                    baml_compiler2_ppir::item_data::function_data(db, *method_loc)
-                        .name
-                        .as_str()
-                        == member_name
-                })
-        })?;
+        .collect()
+}
+
+/// The described concrete type as a member's container.
+fn concrete_type_container(
+    db: &dyn baml_compiler2_ppir::Db,
+    definition: Definition<'_>,
+) -> Option<DepRef> {
+    let (name, kind) = match definition {
+        Definition::Class(class_loc) => (
+            baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .name
+                .clone(),
+            DefinitionKind::Class,
+        ),
+        Definition::Enum(enum_loc) => (
+            baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+                .name
+                .clone(),
+            DefinitionKind::Enum,
+        ),
+        Definition::Interface(_)
+        | Definition::TypeAlias(_)
+        | Definition::Function(_)
+        | Definition::TemplateString(_)
+        | Definition::Client(_)
+        | Definition::RetryPolicy(_)
+        | Definition::Let(_) => return None,
+    };
+    let (cfile, cspan) = crate::syntax::definition_span(db, definition)?;
+    Some(DepRef {
+        name: name.as_str().to_string(),
+        kind,
+        file_path: file_path_string(db, cfile),
+        file: cfile,
+        name_span: cspan,
+    })
+}
+
+/// One method's description — see [`describe_type_method`]. `implements` is
+/// the declaring impl's label for an impl-tier method. Every span-based read
+/// is against the METHOD's own file: an out-of-body impl's method may live in
+/// another file than the type it is for.
+fn describe_type_method_at(
+    db: &dyn baml_compiler2_ppir::Db,
+    files: &[SourceFile],
+    definition: Definition<'_>,
+    method_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    ef: Option<&baml_compiler2_hir_ty::package_interface::ExportedFunction>,
+    implements: Option<String>,
+) -> SymbolDescription {
+    let file = method_loc.file(db);
     let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
     let method_span = baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span;
     let signature = crate::info::resolved_function_sig_parts(db, method_loc, ef).render(
@@ -1460,28 +1657,17 @@ fn describe_class_method(
         )
     };
 
-    let name_span = function_def_name_span(db, file, method_span, member_name)
+    let name_span = function_def_name_span(db, file, method_span, m.name.as_str())
         .unwrap_or_else(|| TextRange::empty(method_span.start()));
-
-    // The owning class is the container.
-    let container =
-        crate::syntax::definition_span(db, Definition::Class(class_loc)).map(|(cfile, cspan)| {
-            DepRef {
-                name: class_data.name.as_str().to_string(),
-                kind: DefinitionKind::Class,
-                file_path: file_path_string(db, cfile),
-                file: cfile,
-                name_span: cspan,
-            }
-        });
 
     let references = find_references(db, files, file, name_span, method_span);
 
-    Some(SymbolDescription {
+    SymbolDescription {
         name: m.name.as_str().to_string(),
         kind: SymbolKind::Member {
             kind: MemberKind::Method,
-            container,
+            container: concrete_type_container(db, definition),
+            implements,
         },
         file_path: file_path_string(db, file),
         file,
@@ -1493,7 +1679,7 @@ fn describe_class_method(
         resolved_type: Some(signature),
         dependencies: Vec::new(),
         references,
-    })
+    }
 }
 
 /// The byte range of a method's name token within its `FUNCTION_DEF` node.
@@ -2317,6 +2503,18 @@ fn serialize_kind<S: serde::Serializer>(kind: &DefinitionKind, s: S) -> Result<S
     s.serialize_str(kind.as_str())
 }
 
+// serde's `serialize_with` contract requires `&Option<T>` here, not `Option<&T>`.
+#[expect(clippy::ref_option)]
+fn serialize_optional_range<S: serde::Serializer>(
+    range: &Option<TextRange>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match range {
+        Some(range) => serialize_range(range, s),
+        None => s.serialize_none(),
+    }
+}
+
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeStruct;
@@ -2418,10 +2616,19 @@ mod tests {
                     writeln!(out, "implementations:").unwrap();
                     for imp in implementations {
                         writeln!(out, "  {}", imp.display).unwrap();
+                        for (name, ty) in &imp.associated_types {
+                            writeln!(out, "    type {name} = {ty}").unwrap();
+                        }
+                        for (iface_field, class_field) in &imp.field_links {
+                            writeln!(out, "    {iface_field} as {class_field}").unwrap();
+                        }
+                        for m in &imp.methods {
+                            writeln!(out, "    {}", m.signature).unwrap();
+                        }
                     }
                 }
             }
-            if let super::SymbolKind::Class {
+            if let super::SymbolKind::ConcreteType {
                 instance_methods,
                 static_methods,
                 ..
@@ -2513,6 +2720,12 @@ class Config {
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Class);
     }
 
+    /// The one description a member drill-in must yield.
+    fn sole(mut descs: Vec<super::SymbolDescription>) -> super::SymbolDescription {
+        assert_eq!(descs.len(), 1, "expected exactly one description");
+        descs.remove(0)
+    }
+
     #[test]
     fn describe_item_member_field() {
         let project = make_multi_ns_project();
@@ -2524,7 +2737,13 @@ class Config {
         let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
-        let desc = super::describe_item_member(&project.db, &files, def, "x").unwrap();
+        let desc = sole(super::describe_item_member(
+            &project.db,
+            project.package,
+            &files,
+            def,
+            "x",
+        ));
         assert_eq!(desc.name, "x");
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Field);
     }
@@ -2540,7 +2759,10 @@ class Config {
         let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
-        assert!(super::describe_item_member(&project.db, &files, def, "nonexistent").is_none());
+        assert!(
+            super::describe_item_member(&project.db, project.package, &files, def, "nonexistent")
+                .is_empty()
+        );
     }
 
     fn make_project() -> ProjectTest {
@@ -2784,7 +3006,13 @@ implement Other for Robot {
         let def = named_interface_def(&project);
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
 
-        let desc = super::describe_item_member(&project.db, &files, def, "label").unwrap();
+        let desc = sole(super::describe_item_member(
+            &project.db,
+            project.package,
+            &files,
+            def,
+            "label",
+        ));
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Method);
         assert_eq!(desc.kind.container().unwrap().name, "Named");
         // A required method HAS no body: the description is docstring +
@@ -2803,7 +3031,13 @@ implement Other for Robot {
         let def = named_interface_def(&project);
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
 
-        let desc = super::describe_item_member(&project.db, &files, def, "greet").unwrap();
+        let desc = sole(super::describe_item_member(
+            &project.db,
+            project.package,
+            &files,
+            def,
+            "greet",
+        ));
         assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Method);
         assert!(desc.full_body.contains("self.label()"));
         assert_eq!(
@@ -2818,11 +3052,23 @@ implement Other for Robot {
         let def = named_interface_def(&project);
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
 
-        let field = super::describe_item_member(&project.db, &files, def, "name").unwrap();
+        let field = sole(super::describe_item_member(
+            &project.db,
+            project.package,
+            &files,
+            def,
+            "name",
+        ));
         assert_eq!(field.kind.definition_kind(), crate::DefinitionKind::Field);
         assert_eq!(field.kind.container().unwrap().name, "Named");
 
-        let assoc = super::describe_item_member(&project.db, &files, def, "Output").unwrap();
+        let assoc = sole(super::describe_item_member(
+            &project.db,
+            project.package,
+            &files,
+            def,
+            "Output",
+        ));
         assert_eq!(
             assoc.kind.definition_kind(),
             crate::DefinitionKind::AssociatedType

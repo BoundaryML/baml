@@ -577,6 +577,42 @@ impl<'db> FnSigParts<'db> {
         }
     }
 
+    /// Signature parts for a method known only by its exported descriptor —
+    /// a mounted or precompiled impl's method, which has no source item in
+    /// this database. Every slot is resolved; a `self` receiver stays bare;
+    /// synthetic callback effect parameters are elided like every other
+    /// renderer does.
+    pub fn of_exported(
+        exported: &'db baml_compiler2_hir_ty::package_interface::ExportedFunction,
+    ) -> FnSigParts<'db> {
+        FnSigParts {
+            name: exported.name.as_str().to_string(),
+            generics: exported
+                .generic_params
+                .iter()
+                .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                .map(|param| param.name().to_string())
+                .collect(),
+            params: exported
+                .params
+                .iter()
+                .map(|param| {
+                    let name = param
+                        .name
+                        .as_ref()
+                        .map_or_else(|| "_".to_string(), |name| name.as_str().to_string());
+                    SigParam {
+                        ty: (name != "self").then_some(SigSlot::Resolved(&param.ty)),
+                        optional: param.is_optional(),
+                        name,
+                    }
+                })
+                .collect(),
+            ret: SigSlot::Resolved(&exported.return_type),
+            throws: SigSlot::Resolved(&exported.callable_throws),
+        }
+    }
+
     /// Signature parts for an interface method signature. Interface method
     /// declarations must declare BOTH the return type and the `throws`
     /// clause, so an absent slot here is a malformed declaration

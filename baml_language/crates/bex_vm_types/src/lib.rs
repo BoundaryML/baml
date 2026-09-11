@@ -157,11 +157,12 @@ pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, ConstValue,
     DeclarationName, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
-    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, Instance, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, ImplCoherenceKey, Instance,
+    InterfaceBound, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard,
+    MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta,
+    SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
+    sys_op_for_path, type_tags,
 };
 pub use unit::{
     CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,

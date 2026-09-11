@@ -53,7 +53,7 @@ use bex_cache::{
     compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
     stdlib_interface_key, test_discovery_key,
 };
-use bex_vm_types::{CompilationUnit, Object, Program, relink};
+use bex_vm_types::{CompilationUnit, Program};
 
 use crate::{
     file_signature::{file_layout_hash, file_signature_hash},
@@ -73,8 +73,9 @@ const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 /// such a file to be re-lowered on any type-layout change. This is the
 /// conservative fallback for layout dependencies whose receiver type isn't
 /// recoverable without full type inference (e.g. `let p = mk(); p.x`, where
-/// `p`'s class is inferred and named nowhere in the file). See
-/// `bakes_type_layout`.
+/// `p`'s class is inferred and named nowhere in the file). The bit itself is
+/// recorded at emit and carried on the file's unit
+/// ([`CompilationUnit::bakes_type_layout`]).
 ///
 /// The value is deliberately not a valid identifier (it holds `\0`, `:`, `-`),
 /// so it can never collide with a real last-segment item name, with a
@@ -856,16 +857,16 @@ fn is_builtin_type_word(word: &str) -> bool {
 /// targets; associated-type bounds/defaults; and — crucially — type-alias
 /// right-hand sides.
 ///
-/// This complements `referenced_names_by_file`, which is derived from compiled
-/// bytecode operands and therefore only captures types that surface as an
-/// `Object` operand (a class constructed, an enum variant allocated). A file
-/// that touches a type purely through its *layout* — positional field access
-/// (`p.x` → `LoadField`), an enum variant match (`Discriminant`/`JumpTable`), a
-/// virtual call, or an inline-expanded type alias — leaves no such operand, so
-/// those references never enter the bytecode set. Extracting the names written
-/// in the file's type annotations recovers every dependency that appears in a
-/// signature (the common case, and every empirically-reproduced miss:
-/// `diff(p: Point)`, `pay(m: Money)`).
+/// This complements the unit's emit-recorded reference edges
+/// ([`CompilationUnit::referenced_names`]), which only capture items codegen
+/// resolved to a baked operand (a callee's slot, a constructed class's object
+/// index). A file that touches a type purely through its *layout* —
+/// positional field access (`p.x` → `LoadField`), an enum variant match
+/// (`Discriminant`/`JumpTable`), a virtual call, or an inline-expanded type
+/// alias — resolves no such operand, so those references never enter the
+/// recorded set. Extracting the names written in the file's type annotations
+/// recovers every dependency that appears in a signature (the common case,
+/// and every empirically-reproduced miss: `diff(p: Point)`, `pay(m: Money)`).
 ///
 /// Extraction is a deliberate over-approximation: tokenizing each annotation's
 /// `Display` also yields primitive keywords, generic-parameter names, and
@@ -1006,73 +1007,6 @@ fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
         || file_classes(db, file)
             .iter()
             .any(|&loc| !class_data(db, loc).implements.is_empty())
-}
-
-/// Last-segment names referenced by each user file's compiled bytecode,
-/// grouped by root-relative path.
-///
-/// Extracted from the Program (not source), so desugared references — a
-/// `for` loop's `next()`, injected guards — are all included. Object refs
-/// resolve through the pool (classes/enums/interfaces by name; function
-/// objects are a file's own lambdas — internal, skipped); global slots
-/// resolve through the inverted name maps.
-///
-/// A file whose bytecode bakes a type's *layout* through a non-`Object`
-/// operand (field offsets, enum discriminants, virtual-dispatch slots) also
-/// gets the `LAYOUT_SENTINEL` — see `bakes_type_layout`. The bytecode set is
-/// unioned with `syntactic_type_names` in `store_artifacts_with_manifest`, so both
-/// desugared-reference coverage and source-level type dependencies are kept.
-fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
-    let mut slot_names: HashMap<usize, &str> = HashMap::new();
-    for (name, &slot) in &program.function_global_indices {
-        slot_names.insert(slot, name);
-    }
-    for (name, &slot) in &program.let_global_indices {
-        slot_names.insert(slot, name);
-    }
-
-    let mut by_file: HashMap<&str, HashSet<String>> = HashMap::new();
-    for obj in program.objects.iter() {
-        let Object::Function(function) = obj else {
-            continue;
-        };
-        if function.source_file.is_empty() || function.source_file.starts_with("<builtin>/") {
-            continue;
-        }
-        let names = by_file.entry(function.source_file.as_str()).or_default();
-        let bakes_type_layout =
-            relink::visit_index_operands_ref(function, |operand| match operand {
-                relink::IndexOperandRef::Global(slot) => {
-                    if let Some(name) = slot_names.get(&slot.raw()) {
-                        names.insert(last_segment(name).to_string());
-                    }
-                }
-                relink::IndexOperandRef::Object(obj_idx) => {
-                    let referenced = match program.objects.get(obj_idx.raw()) {
-                        Some(Object::Class(class)) => Some(class.name.to_string()),
-                        Some(Object::Enum(enum_def)) => Some(enum_def.name.to_string()),
-                        Some(Object::Interface(iface)) => Some(iface.name.to_string()),
-                        _ => None,
-                    };
-                    if let Some(name) = referenced {
-                        names.insert(last_segment(&name).to_string());
-                    }
-                }
-            });
-        // Field offsets / discriminants / vtable slots bake a type's layout but
-        // name no `Object`; tag the file so any type-layout change re-lowers it.
-        if bakes_type_layout {
-            names.insert(LAYOUT_SENTINEL.to_string());
-        }
-    }
-    by_file
-        .into_iter()
-        .map(|(file, names)| {
-            let mut names: Vec<String> = names.into_iter().collect();
-            names.sort_unstable();
-            (file.to_string(), names)
-        })
-        .collect()
 }
 
 /// Root-relative display path for a user `SourceFile`, or `None` for a stdlib
@@ -1693,69 +1627,77 @@ impl CacheContext {
             user_files.len().saturating_sub(unit_entries_written)
         ));
 
-        let mut referenced = referenced_names_by_file(&compiled.program);
-        let mut files: Vec<ManifestFile> = user_files
-            .into_iter()
-            .map(|(sf, rel)| {
-                // Union the bytecode-derived references (desugared calls,
-                // constructed classes, plus the layout sentinel) with the
-                // types named in this file's source-level annotations, so
-                // layout/alias dependencies invisible to the bytecode are
-                // tracked too.
-                let mut set: HashSet<String> = referenced
-                    .remove(&rel)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect();
-                // The signature-surface names, kept both as their own manifest
-                // field (the cascade's meaning-propagation input) and folded into
-                // the full referenced set (the one-hop layout/name dependency).
-                let sig_names = syntactic_type_names(db, sf);
-                let mut sig_referenced_names: Vec<String> = sig_names.iter().cloned().collect();
-                sig_referenced_names.sort_unstable();
-                set.extend(sig_names);
-                // Tag coherence-participating files so any package-wide impl-set
-                // change re-checks every one of them together (IMPL_SENTINEL).
-                if file_has_impl_construct(db, sf) {
-                    set.insert(IMPL_SENTINEL.to_string());
-                }
-                let mut referenced_names: Vec<String> = set.into_iter().collect();
-                referenced_names.sort_unstable();
-                ManifestFile {
-                    content_hash: content_hash(sf.text(db)),
-                    signature_hash: file_signature_hash(db, sf),
-                    layout_hash: file_layout_hash(db, sf),
-                    defined_names: defined_names(db, sf),
-                    referenced_names,
-                    sig_referenced_names,
-                    // Free: seeded files return their seeds verbatim, dirty
-                    // files were extracted (and memoized) during the compile.
-                    throw_facts:
-                        baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, sf)
-                            .clone(),
-                    // Fresh blob if the gate re-checked this file, else the
-                    // carried clean blob, else empty. A re-checked file always
-                    // wins so a stale/poison carry can't persist.
-                    diagnostics: fresh_by_file
-                        .get(&rel)
-                        .cloned()
-                        .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
-                        .unwrap_or_else(crate::diagnostics_cache::empty_blob),
-                    // Verbatim copy of the unit's fragment bytes when this
-                    // compile produced/assembled the unit, else the plan's
-                    // carried manifest copy — the two are byte-identical by
-                    // construction, so the manifest copy can seed without
-                    // reading unit payloads.
-                    callable_throws_fragment: units_by_source
-                        .get(rel.as_str())
-                        .map(|unit| unit.callable_throws_fragment.clone())
-                        .or_else(|| plan.and_then(|p| p.clean_fragments.get(&rel).cloned()))
-                        .unwrap_or_default(),
-                    unit_key: unit_keys[&rel],
-                    rel_path: rel,
-                }
-            })
-            .collect();
+        let mut files: Vec<ManifestFile> = Vec::with_capacity(user_files.len());
+        for (sf, rel) in user_files {
+            // The file's assembled unit carries its emit-recorded reference
+            // edges (`CompilationUnit::referenced_names` / `bakes_type_layout`)
+            // — recorded by codegen at its resolution sites, so direct calls
+            // to interface-machinery bodies (which have no runtime name) are
+            // edges too. A clean file's unit arrives verbatim from the
+            // previous compile, its recorded edges with it; the edges are a
+            // pure function of the (content-identical) source, so the carry
+            // is exact. The units were assembled for every current file, so a
+            // missing one is corrupt state, never a benign gap.
+            let Some(unit) = units_by_source.get(rel.as_str()) else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("compiled output has no unit for `{rel}`"),
+                ));
+            };
+            // Union the unit-recorded references (desugared calls, constructed
+            // classes, plus the layout sentinel) with the types named in this
+            // file's source-level annotations, so layout/alias dependencies
+            // invisible to the bytecode are tracked too.
+            let mut set: HashSet<String> = unit.referenced_names.iter().cloned().collect();
+            // Field offsets / discriminants / vtable slots bake a type's
+            // layout but name no `Object`; tag the file so any type-layout
+            // change re-lowers it.
+            if unit.bakes_type_layout {
+                set.insert(LAYOUT_SENTINEL.to_string());
+            }
+            // The signature-surface names, kept both as their own manifest
+            // field (the cascade's meaning-propagation input) and folded into
+            // the full referenced set (the one-hop layout/name dependency).
+            let sig_names = syntactic_type_names(db, sf);
+            let mut sig_referenced_names: Vec<String> = sig_names.iter().cloned().collect();
+            sig_referenced_names.sort_unstable();
+            set.extend(sig_names);
+            // Tag coherence-participating files so any package-wide impl-set
+            // change re-checks every one of them together (IMPL_SENTINEL).
+            if file_has_impl_construct(db, sf) {
+                set.insert(IMPL_SENTINEL.to_string());
+            }
+            let mut referenced_names: Vec<String> = set.into_iter().collect();
+            referenced_names.sort_unstable();
+            files.push(ManifestFile {
+                content_hash: content_hash(sf.text(db)),
+                signature_hash: file_signature_hash(db, sf),
+                layout_hash: file_layout_hash(db, sf),
+                defined_names: defined_names(db, sf),
+                referenced_names,
+                sig_referenced_names,
+                // Free: seeded files return their seeds verbatim, dirty
+                // files were extracted (and memoized) during the compile.
+                // Spelled for the wire: every head by its root's spelling in
+                // this database, which is what the manifest compares.
+                throw_facts: baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(
+                    db, sf,
+                ),
+                // Fresh blob if the gate re-checked this file, else the
+                // carried clean blob, else empty. A re-checked file always
+                // wins so a stale/poison carry can't persist.
+                diagnostics: fresh_by_file
+                    .get(&rel)
+                    .cloned()
+                    .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
+                    .unwrap_or_else(crate::diagnostics_cache::empty_blob),
+                // Verbatim copy of the unit's fragment bytes — byte-identical
+                // to the plan's carried manifest copy by construction.
+                callable_throws_fragment: unit.callable_throws_fragment.clone(),
+                unit_key: unit_keys[&rel],
+                rel_path: rel,
+            });
+        }
         files.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
 
         let manifest = ProjectManifest {
@@ -2437,6 +2379,8 @@ mod tests {
 
     use std::path::{Path, PathBuf};
 
+    use bex_vm_types::Object;
+
     use super::*;
     use crate::cache_test_support::{
         cache_disabled, compile_and_store_v1, dirty_basenames, resolved, unique_root,
@@ -2488,6 +2432,59 @@ mod tests {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| s.to_string())
+    }
+
+    /// Compile through the CLI path, returning the program AND its assembled
+    /// units — the incremental-vs-scratch oracle needs both halves.
+    fn compile_artifacts_for_test(
+        db: &ProjectDatabase,
+        package: SourceRoot,
+        ctx: &CacheContext,
+        plan: Option<&ReusePlan>,
+    ) -> (Program, Vec<CompilationUnit>) {
+        let artifacts =
+            compile_program_artifacts(db, package, Some(ctx), plan).expect("compile succeeds");
+        let (CompiledUnits::Fresh(units) | CompiledUnits::Reused(units)) = artifacts.units else {
+            panic!("a cached compile always assembles units");
+        };
+        (artifacts.program, units)
+    }
+
+    /// The units half of the incremental-vs-scratch oracle: every unit the
+    /// warm (reuse) compile assembled must byte-equal the scratch compile's
+    /// freshly decomposed one. A divergence means the reuse path preserved
+    /// something a scratch compile derives differently — stale bytecode, a
+    /// stale `callable_throws` fragment, or stale recorded reference edges —
+    /// exactly the silent-staleness class the dirty partition must prevent.
+    /// Runs inside every relink scenario helper, so each scenario in the
+    /// matrix sweeps it automatically.
+    fn assert_units_match_scratch(warm: &[CompilationUnit], scratch: &[CompilationUnit]) {
+        let by_file = |units: &[CompilationUnit]| -> std::collections::BTreeMap<String, Vec<u8>> {
+            units
+                .iter()
+                .map(|u| {
+                    (
+                        u.source_file.clone(),
+                        borsh::to_vec(u).expect("unit serializes"),
+                    )
+                })
+                .collect()
+        };
+        let warm = by_file(warm);
+        let scratch = by_file(scratch);
+        assert_eq!(
+            warm.keys().collect::<Vec<_>>(),
+            scratch.keys().collect::<Vec<_>>(),
+            "warm and scratch compiles must produce units for the same files"
+        );
+        for (file, warm_bytes) in &warm {
+            assert!(
+                warm_bytes == &scratch[file],
+                "unit for `{file}` diverges between the warm incremental compile and \
+                 a scratch compile of the same sources — the reuse plan served stale \
+                 state for it"
+            );
+        }
     }
 
     /// Compile+cache `initial`, then plan a reuse against `edited` and summarize
@@ -2549,13 +2546,13 @@ mod tests {
             .map(|path| basename(path))
             .collect();
         let plan = prepare_reuse_plan(&mut db2, pkg2, pending_plan).expect("reuse plan available");
-        let relinked =
-            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("relink compile");
+        let (relinked, relinked_units) = compile_artifacts_for_test(&db2, pkg2, &ctx2, Some(&plan));
 
         // v2 honest path: an independent fresh database, no reuse plan — the
         // stdlib-spliced full compile the relink must reproduce byte-for-byte.
         let (db_full, pkg_full) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let full = compile_program(&db_full, pkg_full, Some(&ctx2), None).expect("full compile");
+        let (full, full_units) = compile_artifacts_for_test(&db_full, pkg_full, &ctx2, None);
+        assert_units_match_scratch(&relinked_units, &full_units);
         let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
             == borsh::to_vec(&full).expect("ser full");
 
@@ -2576,7 +2573,7 @@ mod tests {
     fn plan_diags_and_relink_after_edit(
         initial: &[(&str, &str)],
         edited: &[(&str, &str)],
-    ) -> Option<(PlanSummary, bool, bool)> {
+    ) -> Option<(PlanSummary, bool, Option<bool>)> {
         if cache_disabled() {
             return None;
         }
@@ -2604,12 +2601,23 @@ mod tests {
         let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
         let diags_match = diagnostic_sets_equal(&served, &honest);
 
-        let relinked =
-            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("relink compile");
-        let full =
-            compile_program(&db_honest, pkg_honest, Some(&ctx2), None).expect("full compile");
-        let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
-            == borsh::to_vec(&full).expect("ser full");
+        // Relink parity is only a question for a program that still COMPILES.
+        // Lowering runs on a checked program by contract (see the emit-side
+        // note on `lower_to_runtime`), so an edited program that still has
+        // errors has no artifact to compare — asking for one lowers an
+        // inconsistent TIR and trips an invariant somewhere in MIR. `None`
+        // says the comparison did not apply, never that it passed.
+        let edited_has_errors = honest
+            .iter()
+            .any(|d| d.severity == baml_db::baml_compiler_diagnostics::Severity::Error);
+        let byte_identical = (!edited_has_errors).then(|| {
+            let (relinked, relinked_units) =
+                compile_artifacts_for_test(&db2, pkg2, &ctx2, Some(&plan));
+            let (full, full_units) =
+                compile_artifacts_for_test(&db_honest, pkg_honest, &ctx2, None);
+            assert_units_match_scratch(&relinked_units, &full_units);
+            borsh::to_vec(&relinked).expect("ser relink") == borsh::to_vec(&full).expect("ser full")
+        });
 
         let summary = PlanSummary {
             dirty: dirty_basenames(&plan.dirty_files, &db2),
@@ -3059,6 +3067,120 @@ mod tests {
         );
     }
 
+    // ── Emit-recorded edges to interface-machinery bodies ────────────────────
+
+    /// The `default.<method>()` bypass compiles to a direct `Call` of the
+    /// interface's default-body slot — a slot that owns NO runtime name, so
+    /// the old bytecode-operand reversal produced no edge for it; the
+    /// emit-recorded `speak` edge on the impl file's unit is what connects
+    /// the two now. In this scenario the interface's `throws` declaration
+    /// widens (interface methods must declare `throws`, so the change is
+    /// signature-level) and the impl's `throws never` delegation to
+    /// `default.speak()` becomes an uncovered-throw error: the impl file
+    /// must be dirtied and re-checked, and the warm units/diagnostics must
+    /// match a scratch compile. (An impl file also always *spells* its
+    /// interface's name, so the syntactic edge over-covers this particular
+    /// shape; the recorded edge is the one that exists by construction rather
+    /// than by spelling — the truly spelling-free severed lane is pinned by
+    /// `plan_reuse_function_value_reference_edit_dirties_holder` below.)
+    #[test]
+    fn plan_reuse_default_body_throws_widening_dirties_bypass_caller() {
+        let iface_v1 = "class BoomErr {\n}\n\
+                        interface Speaker {\n  \
+                        function speak(self) -> string throws never {\n    \"quiet\"\n  }\n}\n";
+        // The default method's contract widens and its body now throws.
+        let iface_v2 = "class BoomErr {\n}\n\
+                        interface Speaker {\n  \
+                        function speak(self) -> string throws BoomErr {\n    \
+                        throw BoomErr {}\n  }\n}\n";
+        let impl_file = "class Wrap {\n  implements Speaker {\n    \
+                         function speak(self) -> string throws never {\n      \
+                         \"wrapped \" + default.speak()\n    }\n  }\n}\n\
+                         function make_wrap() -> Wrap {\n  Wrap {}\n}\n";
+        let caller = "function use_it() -> string throws never {\n  \
+                      let w = make_wrap()\n  w.speak()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("iface.baml", iface_v1),
+            ("impl.baml", impl_file),
+            ("caller.baml", caller),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("iface.baml", iface_v2),
+            ("impl.baml", impl_file),
+            ("caller.baml", caller),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, diags_match, byte_identical)) =
+            plan_diags_and_relink_after_edit(&initial, &edited)
+        else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("impl.baml"),
+            "the impl file direct-calls the edited default body via \
+             `default.speak()` and must be re-checked (its `throws never` \
+             delegation is now an uncovered throw); {p:?}"
+        );
+        assert!(
+            p.clean.contains("z.baml"),
+            "an unrelated file stays clean; {p:?}"
+        );
+        assert!(
+            diags_match,
+            "warm served diagnostics must equal the honest full check — the \
+             impl's uncovered-throw error must not be hidden by a stale clean \
+             blob; {p:?}"
+        );
+        assert!(
+            byte_identical.is_none_or(|same| same),
+            "when the edited program still compiles, relink must equal the full compile; {p:?}"
+        );
+    }
+
+    /// A function referenced as a VALUE (`let f = other_fn`) reaches its
+    /// callee through a pooled `GenericFunction` wrapper — no `Call` operand
+    /// names it, and the old operand reversal skipped `Function`-kind pool
+    /// objects entirely, so an arity change to the target left the holder
+    /// clean with stale no-error diagnostics. The emit-recorded edge (made at
+    /// the wrapper's slot resolution) dirties the holder.
+    #[test]
+    fn plan_reuse_function_value_reference_edit_dirties_holder() {
+        let def_v1 = "function other_fn() -> int {\n  7\n}\n";
+        let def_v2 = "function other_fn(x: int) -> int {\n  x\n}\n";
+        let holder = "function use_val() -> int {\n  let f = other_fn\n  f()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("def.baml", def_v1),
+            ("holder.baml", holder),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("def.baml", def_v2),
+            ("holder.baml", holder),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, diags_match, byte_identical)) =
+            plan_diags_and_relink_after_edit(&initial, &edited)
+        else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("holder.baml"),
+            "the value-reference edge must dirty the holder when the target's \
+             signature changes (its `f()` call is now an arity error); {p:?}"
+        );
+        assert!(
+            diags_match,
+            "the holder's arity error must not be hidden by a stale clean blob; {p:?}"
+        );
+        assert!(
+            byte_identical.is_none_or(|same| same),
+            "when the edited program still compiles, relink must equal the full compile; {p:?}"
+        );
+    }
+
     #[test]
     fn plan_reuse_signature_edit_invalidates_caller_seed() {
         // A change to C's *signature* (a new param) dirties its direct caller B
@@ -3152,8 +3274,9 @@ mod tests {
              mismatch at boundary's call site must not be hidden; {p:?}"
         );
         assert!(
-            byte_identical,
-            "the relink must reproduce a full compile byte-for-byte; {p:?}"
+            byte_identical.is_none_or(|same| same),
+            "when the edited program still compiles, the relink must reproduce a full \
+             compile byte-for-byte; {p:?}"
         );
     }
 
@@ -3529,25 +3652,30 @@ mod tests {
     }
 
     #[test]
-    fn referenced_names_carry_layout_sentinel_for_field_reader() {
+    fn unit_records_carry_layout_flag_for_field_reader() {
         let (db, package) = build_db(&[(
             "a.baml",
             "class Point {\n  x int\n  y int\n}\n\
              function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
         )]);
         let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
-        let program = baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib(
-            &db,
-            package,
-            CLI_OPT_LEVEL,
-            &base,
-        )
-        .expect("project compiles");
-        let refs = referenced_names_by_file(&program);
-        let a = refs.get("a.baml").expect("a.baml has referenced names");
+        let (_, units) =
+            baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib_artifacts(
+                &db,
+                package,
+                CLI_OPT_LEVEL,
+                &base,
+            )
+            .expect("project compiles");
+        let a = units
+            .iter()
+            .find(|u| u.source_file == "a.baml")
+            .expect("a.baml has a unit");
         assert!(
-            a.iter().any(|n| n == LAYOUT_SENTINEL),
-            "a field reader's bytecode must carry the layout sentinel; got {a:?}"
+            a.bakes_type_layout,
+            "a field reader's unit must record the layout-baking bit \
+             (the manifest turns it into LAYOUT_SENTINEL); names: {:?}",
+            a.referenced_names
         );
     }
 

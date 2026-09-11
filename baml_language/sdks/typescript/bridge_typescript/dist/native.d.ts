@@ -148,6 +148,19 @@ export declare class HostSpanManager {
 }
 
 /**
+ * Test-only: the outstanding ownership count of a live key — the releases it
+ * still owes — or `null` for a dead/unknown key. Lets an audit see an
+ * exactly-once imbalance on a shared engine-heap key, which row counts hide.
+ */
+export declare function _handleRefcount(key: HandleKey): number | null
+
+/**
+ * Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
+ * row counts once however many owners it has).
+ */
+export declare function _liveHandleCount(): number
+
+/**
  * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
  * `[key, handleType]` so test code can construct a `BamlHandle`.
  */
@@ -155,6 +168,13 @@ export declare function _seedFunctionRefHandle(globalIndex: number): [HandleKey,
 
 /** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
 export declare function _seedGenericMediaHandle(): [HandleKey, number]
+
+/**
+ * Test-only: seed an engine-heap (`BexHeapHandle`) entry into `HANDLE_TABLE`
+ * — the identity-bearing, deduplicating arm — returning `[key, handleType]`.
+ * Two seeds of one `slabKey` share a key.
+ */
+export declare function _seedHeapHandle(slabKey: number): [HandleKey, number]
 
 export declare function cancelFunctionCall(callId: string): boolean
 

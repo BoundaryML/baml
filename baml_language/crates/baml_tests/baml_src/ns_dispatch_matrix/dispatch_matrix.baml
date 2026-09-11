@@ -22,7 +22,9 @@
 //                                         dynamic for an existential arg
 //                                         (object-safety rules)
 //   13   value-position shim              rule frame realized by the shim
-//   14   `default.<field>()` field call   value road (view read) + indirect
+//   14a  `default.<field>()` field call   value road (view read) + indirect
+//   14b  `self.<field>()` in a default    value road (view read) + indirect
+//   14c  `<expr>.<field>()` member access  value road (view read) + indirect
 //
 // Rows 1-5 all dispatch open-world (every interface-mediated call is a
 // virtual call): a concrete receiver's TIR resolution still CARRIES the
@@ -218,11 +220,20 @@ function row13_shim_to_string() -> string throws never {
     `${f}`
 }
 
-// Row 14: `default.<field>()` — the member after `default.` is a
-// FUNCTION-TYPED FIELD, not a method, so the bypass road declines (there is
-// no default body to reference) and lowering falls through to the value
-// road: `default.formatter` reads `self` viewed at the declaring interface,
-// and the call is an ordinary indirect call of the field's value.
+// Row 14: calling a FUNCTION-TYPED FIELD of an interface-typed receiver.
+// A field is not a method, so neither spelling may dispatch: both read the
+// field through the interface's virtual-field view and then call the value
+// indirectly.
+//
+// The three spellings reach three different call roads, and every one must
+// decline dispatch. `default.formatter` (14a) takes the bypass road, which
+// declines because there is no default body to reference. `self.formatter`
+// inside the DEFAULT BODY (14b) spells a local-rooted PATH. A call-expression
+// base (14c) spells a MEMBER ACCESS. Dispatching any of them would emit a
+// virtual call keyed on a field name, which runtime resolution (provided
+// rows, then the interface's `default_fn`) can never resolve — so it would
+// fail with `UnresolvedVirtualCall` the first time the call ran. 14b and 14c
+// each reproduced exactly that before the roads learned to decline.
 interface Formatting {
     formatter: (int) -> string throws never
     function present(self) -> string throws never {
@@ -239,9 +250,33 @@ class Card {
     }
 }
 
+// Adopts `present`, so calling it EXECUTES the interface's default body and
+// with it the `self.formatter(1)` field call.
+class Plain {
+    formatter: (int) -> string throws never
+    implements Formatting {}
+}
+
+function make_formatting() -> Formatting throws never {
+    Plain { formatter: (n: int) -> string { "made " + n.to_string() } }
+}
+
 function row14_default_field_call() -> string throws never {
     let c = Card { formatter: (n: int) -> string { "num " + n.to_string() } };
     c.present()
+}
+
+function row14b_adopted_default_field_call() -> string throws never {
+    let p = Plain { formatter: (n: int) -> string { "plain " + n.to_string() } };
+    p.present()
+}
+
+// Row 14c: the same field call spelled as a MEMBER ACCESS — the base is a
+// call expression, not a path, so it takes the other call road. Both roads
+// must decline dispatch for a field; the shapes they emit differ only in how
+// the receiver is produced.
+function row14c_member_access_field_call() -> string throws never {
+    make_formatting().formatter(9)
 }
 
 test "row1 static call reaches a provided method" {
@@ -304,4 +339,12 @@ test "row13 interpolation renders through the provided to_string" {
 
 test "row14 default.<field>() calls the field value through the view" {
     assert.equal(row14_default_field_call(), "card num 7")
+}
+
+test "row14b an adopted default body calls self.<field> through the view" {
+    assert.equal(row14b_adopted_default_field_call(), "presented plain 1")
+}
+
+test "row14c a member-access field call reads through the view too" {
+    assert.equal(row14c_member_access_field_call(), "made 9")
 }

@@ -6876,6 +6876,72 @@ fn union_ruling_mixed_inherent_and_impl_arm_is_rejected() {
     );
 }
 
+/// Two same-head impls differing only in POSITIVE bounds genuinely overlap
+/// under the open-world regime: a later package can always introduce a type
+/// implementing both marker interfaces, at which point both impls apply.
+/// (Disjointness is provable only through a forced ground witness — the
+/// blanket-vs-concrete shape — which same-head generic patterns never
+/// produce.) So this rejection is required, not conservative; pin it
+/// because the REGIME is the assumption: negative bounds or specialization
+/// would make this pair admissible, and relaxing this test is the signal
+/// that `ImplCoherenceKey`'s constraint-set leg just became load-bearing.
+#[test]
+fn same_head_impls_differing_only_in_bounds_are_rejected_as_overlapping() {
+    assert_compile_error_code(
+        r#"
+        interface CbdMarkA {
+            function ma(self) -> int throws never
+        }
+        interface CbdMarkB {
+            function mb(self) -> int throws never
+        }
+        interface CbdConv {
+            function conv(self) -> int throws never
+        }
+        class CbdBox<T> {
+            inner: T
+        }
+        implements<T extends CbdMarkA> CbdConv for CbdBox<T> {
+            function conv(self) -> int throws never { return 1 }
+        }
+        implements<T extends CbdMarkB> CbdConv for CbdBox<T> {
+            function conv(self) -> int throws never { return 2 }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+/// `default.<method>()` names the interface's default BODY; a bodyless
+/// required method has none, so the reference must fail to resolve. This
+/// pin is load-bearing for MIR's `default.` bypass: its fall-through to
+/// ordinary lowering (which exists for declared FIELDS) would emit a
+/// virtual call on `self` at the declaring interface for a required
+/// method — dispatching straight back to the caller's own provided
+/// method, i.e. unbounded recursion — so TIR rejecting the spelling is
+/// what keeps that shape unreachable.
+#[test]
+fn default_bypass_of_required_method_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        interface DreqIface {
+            function must(self) -> string throws never
+            function wrap(self) -> string throws never { "w" }
+        }
+        class DreqHolder {
+            implements DreqIface {
+                function must(self) -> string throws never { "m" }
+                function wrap(self) -> string throws never { "x " + default.must() }
+            }
+        }
+        function dreq_probe(h: DreqHolder) -> string throws never {
+            h.wrap()
+        }
+        "#,
+        "unresolved name: `default.must`",
+    );
+}
+
 /// A bounded blanket impl must not resolve a member on a receiver whose
 /// class args are still UNSOLVED by discharging its bound against an
 /// unrelated caller env param that happens to share the `(index, name)`
@@ -6911,9 +6977,12 @@ fn bounded_blanket_impl_does_not_discharge_against_unrelated_env_param() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("expected `ProbeMarker`, found `int`")),
         "a bounded blanket impl must not resolve on an unsolved receiver via \
-         env-identity coincidence"
+         env-identity coincidence: the impl's `T extends ProbeMarker` must be \
+         checked against the eventual solution (`int`) and fail there; got {errors:?}"
     );
 }
 

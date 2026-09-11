@@ -267,9 +267,7 @@ pub(super) fn shim_rule_method(
     else {
         return Ok(None);
     };
-    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
-        return Ok(None);
-    };
+    let resolved = resolver.rule_method_impl(&rule, method)?;
     let type_args = resolver.realize_frame(&resolved.method.frame, &bound_args)?;
     Ok(Some(ShimRuleMethod {
         callee: resolved.method.fqn,
@@ -353,12 +351,16 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ),
 ];
 
-/// Resolves native function pointers for unresolved native functions in objects.
+/// Resolves native function pointers for `NativeUnresolved` functions at load.
 ///
-/// Only functions in VM-owned native namespaces are resolved here. Functions
-/// from other packages (e.g. `assert.*`, `testing.*`) are left as
-/// `NativeUnresolved` so they can be wired up by future package implementations.
-/// They will only fail at runtime if actually called.
+/// Dispatch keys on the function's `native_key` (minted by emit for every
+/// `$rust_function` body), never its display name. Two shapes fail HERE, at
+/// load, rather than at first call: an unkeyed native body (no key can ever
+/// resolve it) and a VM-owned key with no native behind it (the package's
+/// generated trait requires an implementation for every `$rust_function` it
+/// declares). Keyed functions from other stdlib packages (`assert.*`,
+/// `testing.*`, …) stay `NativeUnresolved` for a future implementation to
+/// wire up, and fail only if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {
         Object::Function(function) => {

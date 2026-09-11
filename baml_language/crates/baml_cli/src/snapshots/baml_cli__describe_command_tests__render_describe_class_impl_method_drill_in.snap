@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-method decode  interfaces.baml:10-12
+method decode  (implements Decoder<string>)  interfaces.baml:10-12
 
         function decode(self, raw: string) -> Self.Output {
             return 1
