@@ -30,7 +30,7 @@ use text_size::TextRange;
 
 use crate::{
     outline::{OutlineItem, file_outline},
-    symbols::{Internals, is_synthesized},
+    symbols::{Internals, Surface, surface_of},
 };
 
 // ── Substring mode (workspace/symbol) ────────────────────────────────────────
@@ -306,6 +306,23 @@ struct Candidate {
     declared_in: SourceFile,
 }
 
+/// What describe's ranked search can land on, stated once.
+///
+/// A search SUGGESTS: it answers "what does this?", so anything a reader
+/// cannot write is noise. That is the whole difference from a listing,
+/// which addresses rather than suggests — carriers stay, because `baml.Int`
+/// really is the documentation for `int`.
+/// The stdlib's `_` mark is deliberately NOT decided here: a candidate can
+/// be a MEMBER (`ZonedDateTime._offset_ns`), which has no [`Definition`] to
+/// classify, so `search_ranked` applies [`Internals`] to items and members
+/// alike in one place.
+fn is_searchable(db: &dyn baml_compiler2_ppir::Db, name: &Name, def: Definition<'_>) -> bool {
+    match surface_of(db, name, def) {
+        Surface::LanguageInternal | Surface::Synthetic | Surface::Companion => false,
+        Surface::AliasedCarrier | Surface::StdlibInternal | Surface::Public => true,
+    }
+}
+
 /// Everything in `packages` the ranked search can land on, addressed from
 /// `viewer`.
 fn ranked_candidates(
@@ -323,7 +340,7 @@ fn ranked_candidates(
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {
-                if is_synthesized(db, name, *def) {
+                if !is_searchable(db, name, *def) {
                     continue;
                 }
                 let path = dotted(prefix, ns_path, name.as_str());
@@ -379,8 +396,6 @@ fn collect_definition_candidates(
     path: &str,
     out: &mut Vec<Candidate>,
 ) {
-    use baml_compiler2_ast::ast::FunctionOrigin;
-
     let declared_in = def.file(db);
     let member = |name: &str, kind: &'static str, docstring: Option<&String>| Candidate {
         kind,
@@ -401,7 +416,7 @@ fn collect_definition_candidates(
             );
             for &method in &class.methods {
                 let func = item_data::function_data(db, method);
-                if !matches!(func.metadata.origin, FunctionOrigin::UserDefined) {
+                if !is_searchable(db, &func.name, Definition::Function(method)) {
                     continue;
                 }
                 out.push(member(

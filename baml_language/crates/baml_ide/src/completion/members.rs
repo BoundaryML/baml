@@ -58,9 +58,7 @@ pub(crate) fn complete(
         DotTarget::Namespace(members) => {
             for member in members {
                 if let NamespaceMemberKind::Item(def) = &member.kind {
-                    if symbols::is_synthesized(db, &member.name, *def)
-                        || is_builtin_companion(db, *def)
-                    {
+                    if !symbols::offered_in_completion(db, &member.name, *def) {
                         continue;
                     }
                     // A type position reaches the namespace's TYPES; its
@@ -85,31 +83,4 @@ fn is_type_definition(def: Definition<'_>) -> bool {
             | DefinitionKind::Interface
             | DefinitionKind::TypeAlias
     )
-}
-
-/// Whether a definition is a companion carrier the reader can reach some
-/// other way — in which case its package path is a spelling nobody writes.
-///
-/// `baml.Int` is where `int`'s methods live and `int` is how it is written,
-/// so `baml.` offers `int` rather than teaching the carrier. But a carrier
-/// is only noise when there IS another spelling: `int[].filled` and
-/// `map<string, int>.of` do not parse, and `reflect.Type` has no alias at
-/// all, so `baml.Array`, `baml.Map`, and `reflect.Type` are the only handles
-/// on those members and hiding them would make them unreachable.
-///
-/// The distinction is the language's own
-/// ([`members_reachable_without_carrier`](baml_type::type_kind::BuiltinCompanion::members_reachable_without_carrier)),
-/// not a list kept here.
-fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> bool {
-    let Definition::Class(class) = def else {
-        return false;
-    };
-    let data = baml_compiler2_ppir::item_data::class_data(db, class);
-    let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-    let qtn = baml_type::DeclName::in_root(pkg.root, pkg.namespace_path, data.name.clone());
-    baml_type::type_kind::builtin_companion_of_decl(
-        baml_compiler2_hir::package::lang_roots(db),
-        &qtn,
-    )
-    .is_some_and(|companion| companion.members_reachable_without_carrier)
 }

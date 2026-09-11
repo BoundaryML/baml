@@ -33,7 +33,7 @@ pub(crate) fn complete(
         // one; none can, so the enumeration of what to WRITE drops them —
         // the same rule search enumerates by.
         if let ScopeNameKind::Item(def) = &entry.kind
-            && symbols::is_synthesized(db, &entry.name, *def)
+            && !symbols::offered_in_completion(db, &entry.name, *def)
         {
             continue;
         }

@@ -21,7 +21,7 @@ pub(crate) fn complete(
 ) {
     for entry in type_names_in_scope_at(db, file, offset) {
         if let baml_compiler2_ppir::resolve::TypeScopeNameKind::Item(def) = &entry.kind
-            && symbols::is_synthesized(db, &entry.name, *def)
+            && !symbols::offered_in_completion(db, &entry.name, *def)
         {
             continue;
         }

@@ -919,6 +919,43 @@ function f() -> int {
     /// `reflect.Type`'s class name IS the builtin's canonical spelling
     /// (`TYPE_SYSTEM.md`), not a stand-in for one, so the carrier rule must
     /// not reach it — there is nothing else to write.
+    /// `baml.media` declares nothing BUT carriers — `Image`, `Audio`,
+    /// `Video`, `Pdf` are the classes `image`, `audio`, `video`, `pdf`
+    /// denote — so hiding carriers empties that qualifier entirely. That is
+    /// the rule working, not failing: the alias is what source writes, and
+    /// it is offered in every position where a reader can write one, so
+    /// nothing is stranded behind the empty list.
+    #[test]
+    fn a_namespace_of_nothing_but_carriers_offers_nothing() {
+        const ALIASES: [&str; 4] = ["image", "audio", "video", "pdf"];
+
+        let carrier_path =
+            CursorTest::new("function f() -> int {\n    let a = baml.media.<[CURSOR]\n    0\n}\n");
+        let under_media = complete(&carrier_path);
+        assert!(
+            labels(&under_media).is_empty(),
+            "every name under `baml.media` is reached by its alias instead"
+        );
+
+        for source in [
+            // A type position...
+            "function f(a: <[CURSOR]) -> int throws never { 0 }\n",
+            // ...and a value position, where the alias roots
+            // `image.from_base64(..)`.
+            "function f() -> int {\n    let a = <[CURSOR]\n    0\n}\n",
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let offered = labels(&items);
+            for alias in ALIASES {
+                assert!(
+                    offered.contains(&alias),
+                    "`{alias}` is the spelling the reader needs: {offered:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn a_self_spelled_builtin_is_offered_under_its_own_path() {
         for (source, expected) in [

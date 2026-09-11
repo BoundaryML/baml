@@ -11,7 +11,10 @@ use baml_compiler2_hir::{
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
 
-use crate::{line_index::LineIndex, symbols::Internals};
+use crate::{
+    line_index::LineIndex,
+    symbols::{Internals, Surface},
+};
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -107,9 +110,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| {
-            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
-        }) {
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Hide)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -122,9 +123,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| {
-            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
-        }) {
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Hide)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -341,16 +340,35 @@ fn is_local_package_name(package_name: &Name) -> bool {
     matches!(Package::from_name(package_name.clone()), Package::Local)
 }
 
-/// Generated partial-output types (`Foo$stream`) are compiler artifacts, not
-/// addressable describe targets. Callable `@...` companions remain visible so
-/// BAML source references such as `Foo@spec` continue to round-trip through
-/// listing and resolution.
-fn is_hidden_synthesized_type(
+/// What `baml describe`'s listings show, stated once for every call site.
+///
+/// A listing is an ADDRESSING view: its output is meant to paste back into
+/// `baml describe`, so it keeps everything that resolves and drops only what
+/// cannot be named at all. That is why it is the one view that shows
+/// carriers and `@` companions.
+fn is_listed(
     db: &dyn baml_compiler2_ppir::Db,
     item_name: &Name,
     def: Definition<'_>,
+    internals: Internals,
 ) -> bool {
-    !matches!(def, Definition::Function(_)) && crate::symbols::is_synthesized(db, item_name, def)
+    match crate::symbols::surface_of(db, item_name, def) {
+        Surface::LanguageInternal => false,
+        // `$invoke_collector` is hand-written stdlib that resolves from
+        // source, so an addressing view keeps it. The predicate this
+        // replaced also asked whether the declaration was a function; that
+        // branch was vestigial, since a `$`-named TYPE never reaches a
+        // listing (PPIR synthesizes those rather than lowering them).
+        Surface::Synthetic => true,
+        // `Foo@spec` is written in real BAML source and resolves, so an
+        // addressing view lists it.
+        Surface::Companion => true,
+        // `baml.Int` resolves and has documentation worth reading, even
+        // though `int` is how one writes it.
+        Surface::AliasedCarrier => true,
+        Surface::StdlibInternal => internals == Internals::Show,
+        Surface::Public => true,
+    }
 }
 
 /// Build a single `ListingEntry` from a definition.
@@ -363,13 +381,10 @@ fn make_entry<'db>(
     def: Definition<'db>,
     internals: Internals,
 ) -> Option<ListingEntry> {
-    if def.is_language_internal(db) || is_hidden_synthesized_type(db, &item_name, def) {
+    if !is_listed(db, &item_name, def, internals) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
-    if internals.hides(db, item_name.as_str(), file) {
-        return None;
-    }
     let file_path = file.path(db).display().to_string();
     let line = entry_line(db, line_indexes, file, name_span.start());
 
