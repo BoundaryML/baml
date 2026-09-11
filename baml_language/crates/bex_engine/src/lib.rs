@@ -708,7 +708,7 @@ impl Drop for ShutdownGuard {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if *lifecycle == EngineLifecycle::Closing {
             *lifecycle = EngineLifecycle::Running;
-            self.engine.idle_gc.suspend(false);
+            self.engine.idle_gc.resume();
         }
         drop(lifecycle);
         self.engine.lifecycle_changed.notify_waiters();
@@ -755,6 +755,7 @@ impl ActiveCallGuard {
         let idle_work = engine.idle_gc.start_work();
         drop(map);
         drop(lifecycle);
+        #[cfg(not(target_arch = "wasm32"))]
         engine.ensure_idle_gc_worker();
         Ok((
             Self {
@@ -2297,10 +2298,7 @@ impl BexEngine {
         // this assumption breaks and the constructor would deadlock — at
         // which point we'd have to make `BexEngine::new` async (TODO).
         let futures_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            FutureManagerInner::with_idle_gc(
-                Tlab::new_empty(Arc::clone(&heap)),
-                Arc::clone(&idle_gc),
-            ),
+            FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)), Arc::clone(&idle_gc)),
         ));
 
         // Register the frozen globals pool as its own permit holder so the
@@ -3036,7 +3034,7 @@ impl BexEngine {
                 match *lifecycle {
                     EngineLifecycle::Running => {
                         *lifecycle = EngineLifecycle::Closing;
-                        self.idle_gc.suspend(true);
+                        self.idle_gc.suspend();
                         return Some(ShutdownGuard {
                             engine: Arc::clone(self),
                             completed: false,
@@ -3237,6 +3235,7 @@ impl BexEngine {
         self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
             .await;
         shutdown.complete();
+        #[cfg(not(target_arch = "wasm32"))]
         self.idle_gc.join_worker().await;
     }
 

@@ -193,10 +193,7 @@ impl FutureManagerGuard<'_> {
         inner.active_futures.insert(
             id,
             FutureState {
-                _idle_work: inner
-                    .idle_gc
-                    .as_ref()
-                    .map(crate::idle_gc::IdleGc::start_work),
+                _idle_work: inner.idle_gc.start_work(),
                 future: ptr,
                 origin,
             },
@@ -567,22 +564,17 @@ pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
     active_futures: HashMap<FutureId, FutureState>,
-    idle_gc: Option<Arc<crate::idle_gc::IdleGc>>,
+    // Mandatory bookkeeping on both targets. Only the native build contains
+    // the background worker; WASM consumes the state at call entry.
+    idle_gc: Arc<crate::idle_gc::IdleGc>,
 }
 impl FutureManagerInner {
-    pub fn new(tlab: Tlab) -> Self {
+    pub(crate) fn new(tlab: Tlab, idle_gc: Arc<crate::idle_gc::IdleGc>) -> Self {
         Self {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
-            idle_gc: None,
-        }
-    }
-
-    pub(crate) fn with_idle_gc(tlab: Tlab, idle: Arc<crate::idle_gc::IdleGc>) -> Self {
-        Self {
-            idle_gc: Some(idle),
-            ..Self::new(tlab)
+            idle_gc,
         }
     }
 
@@ -622,7 +614,7 @@ impl TlabHolder for FutureManagerInner {
 
 struct FutureState {
     // Mirrors registry ownership without making the timer inspect heap objects.
-    _idle_work: Option<crate::idle_gc::WorkGuard>,
+    _idle_work: crate::idle_gc::WorkGuard,
     /// Heap pointer to the `Object::Future`. Rooted via `RootHaver` so
     /// the heap object survives even when no awaiter / producer stack
     /// holds it directly (fire-and-forget spawn before the producer task
@@ -684,7 +676,10 @@ mod tests {
         let heap = BexHeap::new(Vec::new());
         let permit_manager = Arc::new(HeapPermitManager::new());
         let permit = permit_manager
-            .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap))))
+            .new_permit(FutureManagerInner::new(
+                Tlab::new_empty(Arc::clone(&heap)),
+                crate::idle_gc::IdleGc::new(&heap),
+            ))
             .await;
         (FutureManager::new(permit), permit_manager)
     }

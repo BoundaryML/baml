@@ -21,14 +21,47 @@ pub(crate) struct CleanupVersion {
     releases: usize,
 }
 
+/// Only a running coordinator can have a deadline. Suspending or closing it
+/// removes that deadline as part of the state transition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scheduling {
+    Disarmed,
+    Waiting(Instant),
+    Suspended,
+    Closed,
+}
+
+impl Scheduling {
+    fn is_running(self) -> bool {
+        matches!(self, Self::Disarmed | Self::Waiting(_))
+    }
+
+    fn deadline(self) -> Option<Instant> {
+        match self {
+            Self::Waiting(deadline) => Some(deadline),
+            Self::Disarmed | Self::Suspended | Self::Closed => None,
+        }
+    }
+
+    fn arm(&mut self, deadline: Instant) {
+        if matches!(self, Self::Disarmed) {
+            *self = Self::Waiting(deadline);
+        }
+    }
+
+    fn disarm(&mut self) {
+        if matches!(self, Self::Waiting(_)) {
+            *self = Self::Disarmed;
+        }
+    }
+}
+
 struct State {
     work: usize,
     revision: u64,
     collected: CleanupVersion,
     observed_releases: usize,
-    deadline: Option<Instant>,
-    suspended: bool,
-    closed: bool,
+    scheduling: Scheduling,
     #[cfg(not(target_arch = "wasm32"))]
     worker: Option<tokio::task::JoinHandle<()>>,
 }
@@ -52,8 +85,8 @@ impl Drop for WorkGuard {
         let mut s = self.idle.lock();
         s.work -= 1;
         s.revision = s.revision.wrapping_add(1);
-        if s.work == 0 && !s.suspended && !s.closed {
-            s.deadline = Some(Instant::now() + IDLE_DELAY);
+        if s.work == 0 && s.scheduling.is_running() {
+            s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
         }
         drop(s);
         self.idle.wake.notify_one();
@@ -71,9 +104,7 @@ impl IdleGc {
                     releases: heap.root_release_epoch(),
                 },
                 observed_releases: heap.root_release_epoch(),
-                deadline: None,
-                suspended: false,
-                closed: false,
+                scheduling: Scheduling::Disarmed,
                 #[cfg(not(target_arch = "wasm32"))]
                 worker: None,
             }),
@@ -104,14 +135,14 @@ impl IdleGc {
             s.observed_releases = current.releases;
             // A release while already waiting must not postpone the existing
             // deadline. On WASM it may only be observed at the next admission.
-            if s.work == 0 && !s.suspended && !s.closed && current != s.collected {
+            if s.work == 0 && current != s.collected {
                 #[cfg(not(target_arch = "wasm32"))]
                 let deadline = Instant::now() + IDLE_DELAY;
                 // WASM has no observer while idle: service newly observed root
                 // releases at this admission instead of delaying another call.
                 #[cfg(target_arch = "wasm32")]
                 let deadline = Instant::now();
-                s.deadline.get_or_insert(deadline);
+                s.scheduling.arm(deadline);
             }
         }
     }
@@ -120,12 +151,10 @@ impl IdleGc {
         let mut s = self.lock();
         self.refresh(&mut s);
         let idle_due_on_entry = s.work == 0
-            && !s.suspended
-            && !s.closed
-            && s.deadline.is_some_and(|d| d <= Instant::now())
+            && s.scheduling.deadline().is_some_and(|d| d <= Instant::now())
             && self.version(&s) != s.collected;
         s.work += 1;
-        s.deadline = None;
+        s.scheduling.disarm();
         drop(s);
         self.wake.notify_one();
         WorkGuard {
@@ -144,41 +173,46 @@ impl IdleGc {
         let mut s = self.lock();
         s.collected = version;
         if self.version(&s) == version {
-            s.deadline = None;
-        } else if s.work == 0 && !s.suspended && !s.closed {
-            s.deadline.get_or_insert(Instant::now() + IDLE_DELAY);
+            s.scheduling.disarm();
+        } else if s.work == 0 {
+            s.scheduling.arm(Instant::now() + IDLE_DELAY);
         }
         drop(s);
         self.wake.notify_one();
     }
 
-    pub(crate) fn suspend(&self, suspended: bool) {
+    pub(crate) fn suspend(&self) {
         let mut s = self.lock();
-        s.suspended = suspended;
-        s.deadline = if !suspended && !s.closed && s.work == 0 && self.version(&s) != s.collected {
-            Some(Instant::now() + IDLE_DELAY)
-        } else {
-            None
-        };
+        if s.scheduling != Scheduling::Closed {
+            s.scheduling = Scheduling::Suspended;
+        }
+        drop(s);
+        self.wake.notify_one();
+    }
+
+    pub(crate) fn resume(&self) {
+        let mut s = self.lock();
+        if s.scheduling == Scheduling::Suspended {
+            s.scheduling = if s.work == 0 && self.version(&s) != s.collected {
+                Scheduling::Waiting(Instant::now() + IDLE_DELAY)
+            } else {
+                Scheduling::Disarmed
+            };
+        }
         drop(s);
         self.wake.notify_one();
     }
 
     pub(crate) fn close(&self) {
-        let mut s = self.lock();
-        s.closed = true;
-        s.deadline = None;
-        drop(s);
+        self.lock().scheduling = Scheduling::Closed;
         self.wake.notify_one();
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) async fn join_worker(&self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let worker = self.lock().worker.take();
-            if let Some(worker) = worker {
-                let _ = worker.await;
-            }
+        let worker = self.lock().worker.take();
+        if let Some(worker) = worker {
+            let _ = worker.await;
         }
     }
 
@@ -186,10 +220,8 @@ impl IdleGc {
     fn due(&self) -> bool {
         let mut s = self.lock();
         self.refresh(&mut s);
-        !s.closed
-            && !s.suspended
-            && s.work == 0
-            && s.deadline.is_some_and(|d| d <= Instant::now())
+        s.work == 0
+            && s.scheduling.deadline().is_some_and(|d| d <= Instant::now())
             && self.version(&s) != s.collected
     }
 
@@ -205,11 +237,11 @@ impl IdleGc {
                 notified.as_mut().enable();
                 let deadline = {
                     let mut s = self.lock();
-                    if s.closed {
+                    if s.scheduling == Scheduling::Closed {
                         return;
                     }
                     self.refresh(&mut s);
-                    s.deadline
+                    s.scheduling.deadline()
                 };
                 match deadline {
                     Some(deadline) => tokio::select! {
@@ -232,34 +264,32 @@ impl IdleGc {
             Box::pin(engine.try_idle_gc()).await;
             drop(engine); // No strong engine reference across a timer/event wait.
             let mut s = self.lock();
-            if s.deadline.is_some_and(|d| d <= Instant::now()) {
+            if s.scheduling.deadline().is_some_and(|d| d <= Instant::now()) {
                 // Keep cleanup pending after timeout/contention; one bounded
                 // retry per idle delay, not a busy loop at an expired deadline.
-                s.deadline = Some(Instant::now() + IDLE_DELAY);
+                s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
             }
         }
     }
 }
 
 impl BexEngine {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn ensure_idle_gc_worker(self: &Arc<Self>) {
-        #[cfg(not(target_arch = "wasm32"))]
+        let mut s = self.idle_gc.lock();
+        if s.scheduling == Scheduling::Closed
+            || s.worker
+                .as_ref()
+                .is_some_and(|worker| !worker.is_finished())
         {
-            let mut s = self.idle_gc.lock();
-            if s.closed
-                || s.worker
-                    .as_ref()
-                    .is_some_and(|worker| !worker.is_finished())
-            {
-                return;
-            }
-            // Embedders without a Tokio runtime still get entry/safe-point GC.
-            // A later call on a runtime can start the single idle worker.
-            let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-                return;
-            };
-            s.worker = Some(runtime.spawn(Arc::clone(&self.idle_gc).run(Arc::downgrade(self))));
+            return;
         }
+        // Embedders without a Tokio runtime still get entry/safe-point GC.
+        // A later call on a runtime can start the single idle worker.
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        s.worker = Some(runtime.spawn(Arc::clone(&self.idle_gc).run(Arc::downgrade(self))));
     }
 
     pub(crate) async fn collect_before_call(self: &Arc<Self>, work: &WorkGuard) {
@@ -412,7 +442,7 @@ mod tests {
         assert_eq!(engine.heap.gc_budget().full_collections, 0);
         advance(IDLE_DELAY / 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
-        assert!(engine.idle_gc.lock().deadline.is_none());
+        assert_eq!(engine.idle_gc.lock().scheduling, Scheduling::Disarmed);
         assert_eq!(engine.heap.stats().active_handles, 1);
         advance(IDLE_DELAY * 10).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
@@ -422,7 +452,7 @@ mod tests {
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 2);
         assert_eq!(engine.heap.stats().active_handles, 0);
-        assert!(engine.idle_gc.lock().deadline.is_none());
+        assert_eq!(engine.idle_gc.lock().scheduling, Scheduling::Disarmed);
         engine.shutdown().await;
         assert!(engine.idle_gc.lock().worker.is_none());
     }
@@ -612,8 +642,37 @@ mod tests {
             weak.upgrade().is_none(),
             "sleeping worker must not own engine"
         );
-        assert!(idle.lock().closed);
+        assert_eq!(idle.lock().scheduling, Scheduling::Closed);
         assert!(idle.lock().worker.as_ref().unwrap().is_finished());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn completion_and_collection_cannot_rearm_suspended_or_closed_cleanup() {
+        let heap = BexHeap::new(vec![]);
+        let idle = IdleGc::new(&heap);
+        drop(idle.start_work());
+        assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+
+        idle.suspend();
+        drop(idle.start_work());
+        let collected = idle.cleanup_version();
+        idle.collected(collected);
+        assert_eq!(idle.lock().scheduling, Scheduling::Suspended);
+        idle.resume();
+        assert_eq!(idle.lock().scheduling, Scheduling::Disarmed);
+
+        drop(idle.start_work());
+        idle.suspend();
+        idle.resume();
+        assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+
+        idle.close();
+        idle.suspend();
+        idle.resume();
+        drop(idle.start_work());
+        idle.collected(collected);
+        assert_eq!(idle.lock().scheduling, Scheduling::Closed);
+        assert!(!idle.due());
     }
 
     #[tokio::test(start_paused = true)]
