@@ -5962,6 +5962,9 @@ function baml.sys.exit(code: int) -> never {
     throw
 }
 
+function baml.sys.heap_stats() -> baml.sys.HeapStats {
+}
+
 function baml.sys.panic(message: string) -> never {
     load_var message
     init_instance baml.panics.UserPanic .message

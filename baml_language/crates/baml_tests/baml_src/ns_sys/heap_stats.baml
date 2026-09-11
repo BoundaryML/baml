@@ -14,15 +14,16 @@ testset "heap_stats" {
         assert.equal(decoded, stats);
     }
 
-    test "reflects allocations in the calling VM" {
+    test "includes live allocations in the calling VM" {
         let before = baml.sys.heap_stats();
         let values: HeapStatsAllocation[] = [];
         for (let i = 0; i < 4096; i += 1) {
             values.push(HeapStatsAllocation { value: i });
         }
         let after = baml.sys.heap_stats();
-        assert.is_true(after.runtime_objects > before.runtime_objects);
-        assert.is_true(after.tlab_chunks > before.tlab_chunks);
+        // A concurrent collection may reduce the counters since `before`, but
+        // these distinct instances remain rooted by `values` across collection.
+        assert.is_true(after.runtime_objects >= values.length());
         assert.equal(after.compile_time_objects, before.compile_time_objects);
         assert.equal(values[4095].value, 4095);
     }

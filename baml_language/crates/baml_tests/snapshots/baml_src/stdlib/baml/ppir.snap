@@ -1905,6 +1905,20 @@ function baml.spawn.set_limit(self: ?, limit: int) -> void  [builtin]
 lambda (params) in options: captures [group, cancel, detach]
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.HeapStats {
+  total_objects: int
+  compile_time_objects: int
+  runtime_objects: int
+  active_handles: int
+  tlab_chunks: int
+}
+class baml.sys.HeapStats$stream {
+  total_objects: int | null
+  compile_time_objects: int | null
+  runtime_objects: int | null
+  active_handles: int | null
+  tlab_chunks: int | null
+}
 class baml.sys.Process {
   _handle: $rust_type
   stdin: baml.sys.WritePipe
@@ -1983,6 +1997,7 @@ function baml.sys.exit(code: int) -> never  [expr] {
   { throw root.panics.Exit { code: code } }
 }
 function baml.sys.flush(self: ?) -> void  [builtin]
+function baml.sys.heap_stats() -> baml.sys.HeapStats  [builtin]
 function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io>  [expr] {
   {  } self
 }

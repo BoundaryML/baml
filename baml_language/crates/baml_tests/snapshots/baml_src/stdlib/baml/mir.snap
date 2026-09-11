@@ -9489,6 +9489,8 @@ fn baml.sys.sleep = builtin(io)
 
 fn baml.sys.collect_garbage = builtin(io)
 
+fn baml.sys.heap_stats = builtin(vm)
+
 fn baml.sys.panic(message: string) -> never {
     // Locals:
     let _0: never // _0 // return
