@@ -8,11 +8,11 @@ from typing import Any
 from slack_sdk import WebClient
 
 
-def client() -> WebClient:
+def client(*, retry_handlers=None) -> WebClient:
     token = os.environ.get("SLACK_BOUNDARY_BOT_TOKEN")
     if not token:
         raise RuntimeError("SLACK_BOUNDARY_BOT_TOKEN not set")
-    return WebClient(token=token)
+    return WebClient(token=token, retry_handlers=retry_handlers)
 
 
 def lookup_user_id(wc: WebClient, email: str) -> str:

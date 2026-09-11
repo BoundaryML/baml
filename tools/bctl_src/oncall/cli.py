@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -10,7 +11,7 @@ import typer
 from rich.console import Console
 
 from oncall.current import current_oncall
-from oncall.notify import compose_handoff
+from oncall.notify import compose_handoff, deliver_handoff, notification_friday
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
 
@@ -106,43 +107,47 @@ def fill_schedule() -> None:
 
 @app.command()
 def notify(
-    post_to_slack: bool = typer.Option(False, "--post-to-slack", help="Actually post to Slack"),
+    post_to_slack: bool = typer.Option(False, "--post-to-slack", help="Post and schedule in Slack using a durable GitHub journal"),
+    run_started_at: str = typer.Option("", help="Original workflow creation time (ISO 8601 with timezone), stable across reruns"),
 ) -> None:
-    """Compose and (optionally) post the weekly on-call handoff."""
-    path = _schedule_path()
-
-    wc = None
-    if post_to_slack:
-        from oncall.slack import client as slack_client
-
-        wc = slack_client()
-
-    text, sched = _parse_or_die(path)
-    errors = validate(sched, text)
-    blocking = [e for e in errors if not e.fixable]
+    """Notify Thursday's incoming Friday oncaller and schedule two threaded replies."""
+    text, sched = _parse_or_die(_schedule_path())
+    blocking = [e for e in validate(sched, text) if not e.fixable]
     if blocking:
         for e in blocking:
-            loc = f"L{e.line}: " if e.line else ""
-            console.print(f"[red]error[/] {loc}{e.message}")
+            console.print(f"[red]error[/] {e.message}")
         raise typer.Exit(1)
     try:
-        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
-        msgs = compose_handoff(sched, today, wc)
-    except RuntimeError as e:
+        reference = datetime.datetime.fromisoformat(run_started_at) if run_started_at else datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+        friday = notification_friday(reference)
+        if not post_to_slack:
+            plan = compose_handoff(sched, friday, None)
+            typer.echo(f"→ {plan['channel']} (incoming shift {friday})")
+            typer.echo(plan["parent"]["text"])
+            for reminder in plan["reminders"]:
+                when = datetime.datetime.fromtimestamp(reminder["post_at"], ZoneInfo("America/Los_Angeles"))
+                typer.echo(f"{when.isoformat()} in the same thread: {reminder['text']}")
+            return
+
+        from oncall.notification_state import GitHubState
+        from oncall.slack import client as slack_client
+
+        repository = os.environ.get("GITHUB_REPOSITORY")
+        if not repository:
+            raise RuntimeError("GITHUB_REPOSITORY must be set for durable notification state")
+        journal = GitHubState(repository, friday)
+        state = journal.load()
+        wc = slack_client(retry_handlers=[])
+        if state is None:
+            state = compose_handoff(sched, friday, wc)
+            journal.save(state)
+        if state["friday"] != friday.isoformat():
+            raise RuntimeError("journal shift date does not match this run")
+        deliver_handoff(wc, state, journal.save)
+        typer.echo(f"Handoff posted; both Friday replies scheduled in {state['parent']['channel']} thread {state['parent']['ts']}")
+    except (RuntimeError, ValueError) as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
-
-    if post_to_slack:
-        from oncall.slack import post as slack_post
-
-        for message in msgs:
-            slack_post(wc, message.channel, message.text, blocks=message.blocks)
-        console.print(f"[green]posted {len(msgs)} message(s)[/]")
-    else:
-        for message in msgs:
-            console.print(f"[bold]→ {message.channel}[/]")
-            console.print(message.text)
-            console.print()
 
 
 @app.command(name="notify-failure")

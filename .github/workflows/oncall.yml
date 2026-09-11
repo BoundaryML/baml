@@ -7,7 +7,7 @@ on:
       - 'tools/bctl'
       - 'tools/bctl_src/**'
   schedule:
-    - cron: '0 8 * * 5'
+    - cron: '0 17 * * 4'
       timezone: America/Los_Angeles
   workflow_dispatch:
     inputs:
@@ -33,6 +33,9 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v8.1.0
       - run: ./tools/bctl oncall check
+      - name: Test oncall tooling
+        working-directory: tools
+        run: uv run --frozen pytest
 
       - name: Scope check - schedule-file-only PR?
         id: scope
@@ -64,15 +67,25 @@ jobs:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'notify')
     runs-on: ubuntu-latest
     environment: boundary-tools-prod
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: oncall-notifications
+      cancel-in-progress: false
     env:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v8.1.0
       - name: Validate schedule
         run: ./tools/bctl oncall check
-      - name: Post weekly handoff and release reminder
-        run: ./tools/bctl oncall notify --post-to-slack
+      - name: Post Thursday handoff and schedule Friday threaded reminders
+        run: |
+          # created_at stays fixed when rerunning on Friday or later.
+          started_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          ./tools/bctl oncall notify --post-to-slack --run-started-at "$started_at"
 
   fill-schedule:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'fill-schedule')
