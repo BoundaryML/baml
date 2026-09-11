@@ -48,13 +48,6 @@ impl HostSpanManager {
     pub fn context_depth(&self) -> usize {
         self.stack.len()
     }
-
-    /// Build a `HostSpanContext` for passing to `call_function`.
-    ///
-    /// Always `None` now that no real spans exist.
-    pub fn host_span_context(&self) -> Option<bex_events::HostSpanContext> {
-        None
-    }
 }
 
 #[cfg(test)]

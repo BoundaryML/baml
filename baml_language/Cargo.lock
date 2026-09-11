@@ -1309,7 +1309,6 @@ name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
  "base64",
- "bex_external_types",
  "bex_prof_store",
  "bex_vm_types",
  "crossbeam-channel",

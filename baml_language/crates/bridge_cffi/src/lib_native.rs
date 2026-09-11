@@ -20,8 +20,6 @@ use crate::{
 
 #[path = "api.rs"]
 pub mod api;
-#[path = "collector.rs"]
-pub mod collector;
 #[path = "ffi/mod.rs"]
 mod ffi;
 #[path = "host_spans.rs"]

@@ -67,6 +67,3 @@ extra-paths = ["tests/sim"]
 conflicting-metaclass = "ignore"
 # proto.py constructs types dynamically at runtime (List[fn()], Literal[var]).
 invalid-type-form = "ignore"
-# Collector subclass returns a Python FunctionLog wrapper instead of the
-# Rust FunctionLog — nominally different types that are functionally identical.
-invalid-method-override = "warn"

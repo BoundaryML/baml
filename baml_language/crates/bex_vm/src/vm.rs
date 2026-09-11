@@ -1799,7 +1799,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::UnscheduledFuture(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
-                Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 Object::TypeAlias(_) => type_tags::UNKNOWN,
@@ -3437,7 +3436,7 @@ impl BexVm {
             Object::UnscheduledFuture(_) => return None,
 
             // Opaque native handles are not BAML data types at all.
-            Object::RustData(_) | Object::Collector(_) => return None,
+            Object::RustData(_) => return None,
 
             // A GC-debug sentinel is never a live value.
             #[cfg(feature = "heap_debug")]

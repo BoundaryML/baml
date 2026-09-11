@@ -236,12 +236,6 @@ impl Tlab {
         self.alloc(Object::RustData(data))
     }
 
-    /// Allocate a collector object on the heap.
-    #[inline]
-    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.alloc(Object::Collector(collector))
-    }
-
     /// Allocate a type descriptor object on the heap.
     ///
     /// Static materialization inside the VM should go through
@@ -387,10 +381,6 @@ pub trait TlabHolder {
 
     fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
         self.tlab_mut().alloc_rust_data(data)
-    }
-
-    fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.tlab_mut().alloc_collector(collector)
     }
 
     fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {

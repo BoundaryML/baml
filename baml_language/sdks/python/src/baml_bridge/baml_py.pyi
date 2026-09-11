@@ -11,13 +11,8 @@ __all__ = [
     "BamlPyHandle",
     "BamlRuntime",
     "BamlVideo",
-    "Collector",
-    "FunctionLog",
     "FunctionResult",
     "HostSpanManager",
-    "LLMCall",
-    "Timing",
-    "Usage",
     "cancel_function_call",
     "flush_events",
     "get_runtime",
@@ -194,11 +189,11 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
+    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -228,92 +223,6 @@ class BamlVideo:
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
-class Collector:
-    r"""
-    Python-facing Collector that tracks BAML function call logs.
-
-    Usage:
-    ```python
-    from baml_py import Collector
-    collector = Collector("my_collector")
-    result = await b.MyFunction("input", baml_options={"collector": collector})
-    print(collector.logs)
-    print(collector.usage)
-    ```
-    """
-    @property
-    def name(self) -> builtins.str:
-        r"""
-        The collector's name.
-        """
-    @property
-    def logs(self) -> builtins.list[FunctionLog]:
-        r"""
-        All function logs tracked by this collector, in insertion order.
-        """
-    @property
-    def last(self) -> typing.Optional[FunctionLog]:
-        r"""
-        The most recent function log, or None if empty.
-        """
-    @property
-    def usage(self) -> Usage:
-        r"""
-        Aggregate token usage across all tracked calls.
-        """
-    def __new__(cls, name: typing.Optional[builtins.str] = None) -> Collector: ...
-    def clear(self) -> builtins.int:
-        r"""
-        Clear all tracked logs and release event store references.
-        Returns the number of logs that were cleared.
-        """
-    def id(self, function_log_id: builtins.str) -> typing.Optional[FunctionLog]:
-        r"""
-        Look up a function log by its span ID string.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class FunctionLog:
-    r"""
-    Read-only view of a single BAML function invocation.
-    """
-    @property
-    def id(self) -> builtins.str:
-        r"""
-        The span ID for this function invocation.
-        """
-    @property
-    def function_name(self) -> builtins.str:
-        r"""
-        The BAML function name.
-        """
-    @property
-    def timing(self) -> Timing:
-        r"""
-        Timing information (start time, duration).
-        """
-    @property
-    def usage(self) -> Usage:
-        r"""
-        Token usage for this function invocation.
-        """
-    @property
-    def calls(self) -> builtins.list[LLMCall]:
-        r"""
-        Child LLM calls made during this function invocation.
-        """
-    @property
-    def tags(self) -> builtins.dict[builtins.str, builtins.str]:
-        r"""
-        Tags (metadata) attached to this invocation.
-        """
-    @property
-    def result(self) -> typing.Optional[builtins.bytes]:
-        r"""
-        The result value as protobuf-encoded bytes, or None if not yet complete.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class FunctionResult:
@@ -367,71 +276,6 @@ class HostSpanManager:
         Number of active spans (call depth).
         """
 
-@typing.final
-class LLMCall:
-    r"""
-    A single LLM call within a function invocation.
-    """
-    @property
-    def function_name(self) -> builtins.str:
-        r"""
-        The LLM function name.
-        """
-    @property
-    def provider(self) -> typing.Optional[builtins.str]:
-        r"""
-        The provider name, if known.
-        """
-    @property
-    def timing(self) -> Timing:
-        r"""
-        Timing information for this LLM call.
-        """
-    @property
-    def usage(self) -> Usage:
-        r"""
-        Token usage for this LLM call.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class Timing:
-    r"""
-    Timing information for a span.
-    """
-    @property
-    def start_time_utc_ms(self) -> builtins.int:
-        r"""
-        Start time as UTC milliseconds since epoch.
-        """
-    @property
-    def duration_ms(self) -> typing.Optional[builtins.int]:
-        r"""
-        Duration in milliseconds, or None if not yet complete.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class Usage:
-    r"""
-    Token usage from LLM calls.
-    """
-    @property
-    def input_tokens(self) -> typing.Optional[builtins.int]:
-        r"""
-        Number of input tokens, or None if not reported.
-        """
-    @property
-    def output_tokens(self) -> typing.Optional[builtins.int]:
-        r"""
-        Number of output tokens, or None if not reported.
-        """
-    @property
-    def cached_input_tokens(self) -> typing.Optional[builtins.int]:
-        r"""
-        Number of cached input tokens, or None if not reported.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""

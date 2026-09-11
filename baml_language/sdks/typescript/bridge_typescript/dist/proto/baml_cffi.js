@@ -3123,7 +3123,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} ADT_MEDIA_PDF=9 ADT_MEDIA_PDF value
              * @property {number} ADT_MEDIA_GENERIC=10 ADT_MEDIA_GENERIC value
              * @property {number} ADT_PROMPT_AST=11 ADT_PROMPT_AST value
-             * @property {number} ADT_COLLECTOR=12 ADT_COLLECTOR value
              * @property {number} ADT_TYPE=13 ADT_TYPE value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
@@ -3143,7 +3142,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[9] = "ADT_MEDIA_PDF"] = 9;
                 values[valuesById[10] = "ADT_MEDIA_GENERIC"] = 10;
                 values[valuesById[11] = "ADT_PROMPT_AST"] = 11;
-                values[valuesById[12] = "ADT_COLLECTOR"] = 12;
                 values[valuesById[13] = "ADT_TYPE"] = 13;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
@@ -3330,7 +3328,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 9:
                         case 10:
                         case 11:
-                        case 12:
                         case 13:
                         case 14:
                         case 15:
@@ -3415,10 +3412,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_PROMPT_AST":
                     case 11:
                         message.handleType = 11;
-                        break;
-                    case "ADT_COLLECTOR":
-                    case 12:
-                        message.handleType = 12;
                         break;
                     case "ADT_TYPE":
                     case 13:
@@ -15413,7 +15406,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 9:
                         case 10:
                         case 11:
-                        case 12:
                         case 13:
                         case 14:
                         case 15:
@@ -15503,10 +15495,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_PROMPT_AST":
                     case 11:
                         message.handleType = 11;
-                        break;
-                    case "ADT_COLLECTOR":
-                    case 12:
-                        message.handleType = 12;
                         break;
                     case "ADT_TYPE":
                     case 13:

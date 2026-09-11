@@ -174,7 +174,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
-                const resultBytes = rt.callFunctionSync(argsProto, null, null);
+                const resultBytes = rt.callFunctionSync(argsProto, null);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -191,7 +191,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
-                const resultBytes = await rt.callFunction(argsProto, null, null);
+                const resultBytes = await rt.callFunction(argsProto, null);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -236,7 +236,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
-                        const resultBytes = rt.callFunctionSync(argsProto, null, null);
+                        const resultBytes = rt.callFunctionSync(argsProto, null);
                         return decodeCallResult(resultBytes);
                     }
                     finally {
@@ -253,7 +253,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
-                        const resultBytes = await rt.callFunction(argsProto, null, null);
+                        const resultBytes = await rt.callFunction(argsProto, null);
                         return decodeCallResult(resultBytes);
                     }
                     finally {

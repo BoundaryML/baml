@@ -13,10 +13,7 @@ use pyo3_stub_gen::{
     inventory::submit,
 };
 
-use crate::{
-    errors::{bridge_error_to_sdk_panic, py_sdk_panic},
-    types::collector::Collector,
-};
+use crate::errors::{bridge_error_to_sdk_panic, py_sdk_panic};
 
 struct DecodedCallArgs {
     kwargs: bex_project::BexArgs,
@@ -97,10 +94,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
+            def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
+            def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -113,14 +110,12 @@ impl BamlRuntime {
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
     /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    /// * `collectors` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None, collectors=None))]
+    #[pyo3(signature = (args_proto, ctx=None))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
         args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
-        collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
     ) -> PyResult<Py<PyAny>> {
         // Byte-returning site (32c): pre-call host-boundary failures don't
         // raise — they become a structured BamlOutboundResult envelope so the
@@ -132,9 +127,8 @@ impl BamlRuntime {
             Ok((runtime, decoded))
         })();
 
-        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
-        // stability but no longer wired into the call context.
-        let _ = (&ctx, &collectors);
+        // Host tracing context is accepted for compatibility but is not wired into the call.
+        let _ = &ctx;
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
@@ -167,14 +161,12 @@ impl BamlRuntime {
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
     /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    /// * `collectors` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None, collectors=None))]
+    #[pyo3(signature = (args_proto, ctx=None))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
         args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
-        collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
     ) -> PyResult<Vec<u8>> {
         // Byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
@@ -192,9 +184,8 @@ impl BamlRuntime {
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
 
-        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
-        // stability but no longer wired into the call context.
-        let _ = (&ctx, &collectors);
+        // Host tracing context is accepted for compatibility but is not wired into the call.
+        let _ = &ctx;
         let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
             .with_type_args(decoded.type_args)
             .with_type_defs(decoded.type_defs)

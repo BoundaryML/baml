@@ -15025,7 +15025,6 @@ fn format_type_tag_name(tag: i64) -> String {
         baml_type::typetag::FUNCTION => "function".to_string(),
         baml_type::typetag::FUTURE => "future".to_string(),
         baml_type::typetag::TYPE => "reflect.Type".to_string(),
-        baml_type::typetag::COLLECTOR => "collector".to_string(),
         baml_type::typetag::UINT8ARRAY => "uint8array".to_string(),
         tag if tag >= baml_type::typetag::CLASS_BASE => {
             format!("class#{}", tag - baml_type::typetag::CLASS_BASE)

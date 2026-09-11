@@ -19,13 +19,8 @@ from .baml_py import (
     BamlCallContext,
     BamlPyHandle,
     BamlRuntime,
-    Collector as _RustCollector,
-    FunctionLog as _RustFunctionLog,
     FunctionResult,
     HostSpanManager,
-    LLMCall,
-    Timing,
-    Usage,
     cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
@@ -85,81 +80,6 @@ __version__ = "0.19.0"
 
 
 # ---------------------------------------------------------------------------
-# FunctionLog / Collector wrappers (decode protobuf result → Python value)
-# ---------------------------------------------------------------------------
-
-
-def _wrap_log(log: _RustFunctionLog) -> "FunctionLog":
-    return FunctionLog(log)
-
-
-class FunctionLog:
-    """Python wrapper around the Rust FunctionLog that decodes the proto result."""
-
-    __slots__ = ("_inner",)
-
-    def __init__(self, inner: _RustFunctionLog):
-        self._inner = inner
-
-    @property
-    def id(self) -> str:
-        return self._inner.id
-
-    @property
-    def function_name(self) -> str:
-        return self._inner.function_name
-
-    @property
-    def timing(self) -> Timing:
-        return self._inner.timing
-
-    @property
-    def usage(self) -> Usage:
-        return self._inner.usage
-
-    @property
-    def calls(self) -> List[LLMCall]:
-        return self._inner.calls
-
-    @property
-    def tags(self) -> Dict[str, str]:
-        return self._inner.tags
-
-    @property
-    def result(self) -> Optional[Any]:
-        proto_bytes = self._inner.result
-        if proto_bytes is None:
-            return None
-        return decode_call_result(proto_bytes)
-
-    def __repr__(self):
-        return repr(self._inner)
-
-
-class Collector(_RustCollector):
-    """Python subclass of the Rust Collector that wraps FunctionLog results.
-
-    Overrides return the Python FunctionLog wrapper (which wraps the Rust
-    FunctionLog), so pyright sees a nominal type mismatch — suppress it.
-    """
-
-    @property
-    def logs(self) -> List["FunctionLog"]:  # type: ignore[override]
-        return [_wrap_log(log) for log in super().logs]
-
-    @property
-    def last(self) -> Optional["FunctionLog"]:  # type: ignore[override]
-        if last := super().last:
-            return _wrap_log(last)
-        return None
-
-    def id(self, function_log_id: str) -> Optional["FunctionLog"]:  # type: ignore[override]
-        if id := super().id(function_log_id):
-            return _wrap_log(id)
-        return None
-
-
-# ---------------------------------------------------------------------------
 # Runtime accessor
 # ---------------------------------------------------------------------------
 
@@ -206,26 +126,26 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
-        result_bytes = rt.call_function_sync(args_proto, ctx, collectors)
+        result_bytes = rt.call_function_sync(args_proto, ctx)
     finally:
         _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
 
 
 async def call_function(
-    rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None
+    rt, function_name, kwargs, ctx=None, _ctx=None
 ):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
-            result_bytes = await rt.call_function(args_proto, ctx, collectors)
+            result_bytes = await rt.call_function(args_proto, ctx)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
@@ -539,7 +459,7 @@ def define_function(
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
-                result_bytes = rt.call_function_sync(args_proto, None, None)
+                result_bytes = rt.call_function_sync(args_proto, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
@@ -580,7 +500,7 @@ def define_function(
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
-                    result_bytes = await rt.call_function(args_proto, None, None)
+                    result_bytes = await rt.call_function(args_proto, None)
                 except asyncio.CancelledError:
                     cancel_function_call(call_id)
                     raise
@@ -602,14 +522,9 @@ __all__ = [
     "BamlStream",
     "BamlFunctionSpec",
     "BamlRuntimeValue",
-    "Collector",
-    "FunctionLog",
     "FunctionResult",
     "HostSpanManager",
-    "LLMCall",
-    "Timing",
     "UNSET",
-    "Usage",
     "BamlCtxManager",
     "BamlCancelledError",
     "BamlError",

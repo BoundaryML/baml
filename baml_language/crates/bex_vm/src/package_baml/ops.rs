@@ -511,8 +511,6 @@ impl EqualsDriver {
             (Object::HostClosure(_), _) => Cmp::NotEqual,
             (Object::Future(x), Object::Future(y)) => step(x.id() == y.id()),
             (Object::Future(_), _) => Cmp::NotEqual,
-            (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
-            (Object::Collector(_), _) => Cmp::NotEqual,
 
             // A `type` value denotes a type and nothing more: two are equal
             // exactly when they are mutual subtypes, decided against the

@@ -894,7 +894,6 @@ impl BexEngine {
                 type_name: "unscheduled_future".to_string(),
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
-            Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             // Identity never crosses as *data* (BEP-066 H-4): no mint, digest
             // or pointer is serialized. It may cross as a rooted reference —
             // the handle resolves back to this same `Object::Type` in this
@@ -1039,12 +1038,8 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
                 SynthTy::Known(RuntimeTy::Media(media.kind, attr()))
             }
-            // A collector inhabits the concrete `Resource` leaf type, and a
-            // rendered prompt inhabits `ai.Prompt` — bind T to those rather than
+            // A rendered prompt inhabits `ai.Prompt` — bind T to that rather than
             // falling into the host-only catch-all below.
-            BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
-                SynthTy::Known(RuntimeTy::resource())
-            }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 SynthTy::Known(RuntimeTy::prompt_ast())
             }
@@ -1677,9 +1672,6 @@ impl BexEngine {
                     dynamic_enums,
                     runtime_named_objects,
                 );
-            }
-            BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
-                Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
                 // A lane type lands here. An anonymous declaration has no
@@ -3367,7 +3359,6 @@ fn value_matches_type_with_definitions(
             value.kind == bex_external_types::HostValueKind::Opaque
         }
         (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
-        (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
             RuntimeTy::Type { .. },
@@ -3557,7 +3548,7 @@ fn float_literal_matches(value: f64, source: &str) -> bool {
 ///   treats an empty container's element position vacuously), so every value
 ///   whose synthesized type produced a binding still passes.
 /// - **opaque / engine-minted typed carriers** (a typed heap handle such as a
-///   `Stream` receiver, a host callable, a reflected type / media / collector /
+///   `Stream` receiver, a host callable, a reflected type / media /
 ///   prompt, a host-only value, a raw handle) stay lenient — they are either
 ///   already typed by the engine or ride opaquely through the VM, so a value-shape
 ///   check isn't meaningful. This matches the pre-inference behavior for every
@@ -4110,7 +4101,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Future(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
-                | Object::Collector(_)
                 | Object::Type(_) => None,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => None,
@@ -4239,7 +4229,6 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 | Object::Future(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
-                | Object::Collector(_)
                 | Object::Type(_) => {
                     panic!(
                         "Cannot convert object type to BexExternalValue for sys op: {:?}",

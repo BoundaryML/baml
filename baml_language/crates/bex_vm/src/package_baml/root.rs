@@ -870,7 +870,6 @@ fn deep_copy_value_recursive(
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
-                Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 // A deep copy denotes the same type: clone the `TypeValue`
                 // whole, definition overlay and owner edge included.
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),

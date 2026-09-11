@@ -1,13 +1,24 @@
+import { BamlHandleType } from './generated/baml_bridge/cffi/v1/baml_handle';
 import type {
-  BamlOutboundValue as BamlOutboundValueType,
   BamlOutboundMapEntry,
+  BamlOutboundValue as BamlOutboundValueType,
   BamlValueMedia,
   BamlValuePromptAst,
   BamlValuePromptAstSimple,
 } from './generated/baml_bridge/cffi/v1/baml_outbound';
-import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_bridge/cffi/v1/baml_outbound';
-import { BamlHandleType } from './generated/baml_bridge/cffi/v1/baml_handle';
-import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from './types';
+import {
+  BamlOutboundValue,
+  MediaTypeEnum,
+} from './generated/baml_bridge/cffi/v1/baml_outbound';
+import type {
+  BamlJsClass,
+  BamlJsHandle,
+  BamlJsMedia,
+  BamlJsPromptAst,
+  BamlJsPromptAstMessage,
+  BamlJsPromptAstSimple,
+  BamlJsValue,
+} from './types';
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.HANDLE_UNSPECIFIED]: 'unspecified',
@@ -20,7 +31,6 @@ const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.ADT_MEDIA_PDF]: 'pdf',
   [BamlHandleType.ADT_MEDIA_GENERIC]: 'media',
   [BamlHandleType.ADT_PROMPT_AST]: 'prompt_ast',
-  [BamlHandleType.ADT_COLLECTOR]: 'collector',
   [BamlHandleType.ADT_TYPE]: 'type',
 };
 
@@ -28,7 +38,11 @@ export function handleTypeName(handleType: number): string {
   return HANDLE_TYPE_NAMES[handleType] ?? `handle(${handleType})`;
 }
 
-export type WrapHandleFn<T> = (key: bigint, handleType: number, typeName: string) => T;
+export type WrapHandleFn<T> = (
+  key: bigint,
+  handleType: number,
+  typeName: string,
+) => T;
 
 /**
  * Decode a base-sixteen hex string (the wire format for bigint values and
@@ -91,7 +105,11 @@ function deserializeMedia(m: BamlValueMedia): BamlJsMedia {
     case 'url':
       return { ...base, content_type: 'url' as const, url: m.value.url };
     case 'base64':
-      return { ...base, content_type: 'base64' as const, base64: m.value.base64 };
+      return {
+        ...base,
+        base64: m.value.base64,
+        content_type: 'base64' as const,
+      };
     case 'file':
       return { ...base, content_type: 'file' as const, file: m.value.file };
     default: {
@@ -101,42 +119,96 @@ function deserializeMedia(m: BamlValueMedia): BamlJsMedia {
   }
 }
 
-function deserializePromptAstSimple(s: BamlValuePromptAstSimple): BamlJsPromptAstSimple {
-  if (!s.value) return { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' };
+function deserializePromptAstSimple(
+  s: BamlValuePromptAstSimple,
+): BamlJsPromptAstSimple {
+  if (!s.value)
+    return {
+      $baml: { type: '$prompt_ast_simple' },
+      content_type: 'string',
+      value: '',
+    };
   switch (s.value.$case) {
     case 'string':
-      return { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: s.value.string };
+      return {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'string',
+        value: s.value.string,
+      };
     case 'media':
-      return { $baml: { type: '$prompt_ast_simple' }, content_type: 'media', value: deserializeMedia(s.value.media) };
+      return {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'media',
+        value: deserializeMedia(s.value.media),
+      };
     case 'multiple':
-      return { $baml: { type: '$prompt_ast_simple' }, content_type: 'multiple', value: s.value.multiple.items.map(deserializePromptAstSimple) };
+      return {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'multiple',
+        value: s.value.multiple.items.map(deserializePromptAstSimple),
+      };
     default: {
       const _exhaustive: never = s.value;
-      return { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' };
+      return {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'string',
+        value: '',
+      };
     }
   }
 }
 
 function deserializePromptAst(ast: BamlValuePromptAst): BamlJsPromptAst {
-  if (!ast.value) return { $baml: { type: '$prompt_ast' }, content_type: 'simple', value: { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' } };
+  if (!ast.value)
+    return {
+      $baml: { type: '$prompt_ast' },
+      content_type: 'simple',
+      value: {
+        $baml: { type: '$prompt_ast_simple' },
+        content_type: 'string',
+        value: '',
+      },
+    };
   switch (ast.value.$case) {
     case 'simple':
-      return { $baml: { type: '$prompt_ast' }, content_type: 'simple', value: deserializePromptAstSimple(ast.value.simple) };
+      return {
+        $baml: { type: '$prompt_ast' },
+        content_type: 'simple',
+        value: deserializePromptAstSimple(ast.value.simple),
+      };
     case 'message': {
       const msg = ast.value.message;
       const message: BamlJsPromptAstMessage = {
         $baml: { type: '$prompt_ast_message' },
-        role: msg.role,
         content: msg.content ? deserializePromptAstSimple(msg.content) : null,
-        ...(msg.metadataAsJson ? { metadata: tryParseJson(msg.metadataAsJson) } : {}),
+        role: msg.role,
+        ...(msg.metadataAsJson
+          ? { metadata: tryParseJson(msg.metadataAsJson) }
+          : {}),
       };
-      return { $baml: { type: '$prompt_ast' }, content_type: 'message', value: message };
+      return {
+        $baml: { type: '$prompt_ast' },
+        content_type: 'message',
+        value: message,
+      };
     }
     case 'multiple':
-      return { $baml: { type: '$prompt_ast' }, content_type: 'multiple', value: ast.value.multiple.items.map(deserializePromptAst) };
+      return {
+        $baml: { type: '$prompt_ast' },
+        content_type: 'multiple',
+        value: ast.value.multiple.items.map(deserializePromptAst),
+      };
     default: {
       const _exhaustive: never = ast.value;
-      return { $baml: { type: '$prompt_ast' }, content_type: 'simple', value: { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' } };
+      return {
+        $baml: { type: '$prompt_ast' },
+        content_type: 'simple',
+        value: {
+          $baml: { type: '$prompt_ast_simple' },
+          content_type: 'string',
+          value: '',
+        },
+      };
     }
   }
 }
@@ -189,7 +261,9 @@ function deserializeValue<T>(
       return holder.value.enumValue.value;
 
     case 'listValue':
-      return holder.value.listValue.items.map((item) => deserializeValue(item, wrapHandle));
+      return holder.value.listValue.items.map((item) =>
+        deserializeValue(item, wrapHandle),
+      );
 
     case 'mapValue':
       return deserializeMapEntries(holder.value.mapValue.entries, wrapHandle);
@@ -226,7 +300,11 @@ function deserializeValue<T>(
         typeof handle.key === 'bigint' ? handle.key : BigInt(handle.key ?? 0);
       return {
         $baml: { type: '$handle' as const },
-        handle: wrapHandle(key, handle.handleType, handleTypeName(handle.handleType)),
+        handle: wrapHandle(
+          key,
+          handle.handleType,
+          handleTypeName(handle.handleType),
+        ),
       } satisfies BamlJsHandle<T>;
     }
 

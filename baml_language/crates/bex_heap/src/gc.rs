@@ -774,7 +774,7 @@ impl BexHeap {
             // A `type` value is exactly the type it denotes: every edge it has
             // is a head, walked below.
             | Object::Type(_)
-            | Object::Collector(_)
+
             | Object::Float(_) => {}
         }
 
@@ -1059,7 +1059,6 @@ impl BexHeap {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
-            | Object::Collector(_)
             | Object::Float(_) => {}
         }
 
@@ -1454,7 +1453,6 @@ impl BexHeap {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
-            | Object::Collector(_)
             | Object::Float(_) => {}
         }
 
