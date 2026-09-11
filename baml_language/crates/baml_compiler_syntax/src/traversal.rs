@@ -106,7 +106,7 @@ fn boundary_token(node: &SyntaxNode, from_end: bool) -> Option<SyntaxToken> {
                     continue;
                 }
             }
-            _ => {}
+            NodeOrToken::Token(_) => {}
         }
         loop {
             let sibling = if from_end {
@@ -219,10 +219,10 @@ mod tests {
     #[test]
     fn trimmed_range_matches_scan_across_tree_shapes() {
         fn populate(b: &mut SyntaxTreeBuilder, seed: &mut u32, depth: usize) {
-            *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             let count = (*seed >> 16) % 6;
             for _ in 0..count {
-                *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
                 match (*seed >> 16) % 6 {
                     0 if depth > 0 => {
                         b.start_node(SyntaxKind::ERROR);
