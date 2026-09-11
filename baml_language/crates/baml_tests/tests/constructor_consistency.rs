@@ -70,7 +70,8 @@ function accept_runtime_type<T>() -> string {
 
 function use_precise_enum_as_runtime_type() -> string {
   let enum_t = reflect.enum.new("RuntimeEnum", [])
-  accept_runtime_type<unreflect(enum_t)>()
+  type E = unreflect(enum_t)
+  accept_runtime_type<E>()
 }
 "#,
     );

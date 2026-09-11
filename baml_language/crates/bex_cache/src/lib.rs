@@ -109,7 +109,13 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 12: appended `PopJumpIfTrue`, `JumpIfFalseOrPop`,
 /// `JumpIfTrueOrPop`, and `JumpIfNotNullOrPop` to the instruction/opcode sets.
-pub const FORMAT_VERSION: u32 = 12;
+///
+/// Version 13: removed `RuntimeIsType` from the instruction/opcode sets, so
+/// every opcode declared after it renumbers, and dropped the type-argument
+/// count flag bit from call instructions.
+///
+/// Version 14: `Bytecode::call_layouts` records each call site's argument layout.
+pub const FORMAT_VERSION: u32 = 14;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

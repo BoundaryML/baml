@@ -1,0 +1,11 @@
+[package]
+name = "listing-08-01"
+
+# [scripts]
+# dev = "-f main"
+
+# Add a client generator, then generate its SDK:
+#   baml generate add python/pydantic2
+#   baml generate
+#
+# Run `baml generate add --help` to see every supported output type.

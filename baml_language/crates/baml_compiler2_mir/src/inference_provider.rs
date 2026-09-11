@@ -111,50 +111,42 @@ pub(crate) enum MemberResolution<'db> {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct CallPlan {
     pub(crate) bindings: Vec<ParamBinding>,
+    /// The value slots the call was checked against, without a bound receiver.
+    pub(crate) argument_layout: baml_type::CallLayout,
     /// Full solved owner + callable generic frame, in declared order.
     pub(crate) type_args: Vec<Tir2Ty>,
     pub(crate) own_offset: usize,
     pub(crate) explicit: bool,
     pub(crate) slots: Vec<CallTypeArgPlan>,
-    pub(crate) deferred_checks: Vec<RuntimeCheck>,
     pub(crate) target: Option<ExternalCallTarget>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub(crate) side_channels: CallSideChannels,
 }
 
+/// One written generic slot as MIR consumes it. Only the WRITTEN shape
+/// survives the conversion: inference's solved `ty` decides the call's
+/// instantiation before MIR runs, and lowering emits from `emission_ty`
+/// alone.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum CallTypeArgPlan {
-    Static {
-        ty: Tir2Ty,
-        emission_ty: Tir2Ty,
-        runtime_bindings: Box<[ScopedTypeBinding]>,
-    },
-    Runtime {
-        operand: AstExprId,
-        occurrence_ty: Tir2Ty,
-        parameter: baml_type::ParamTy,
-    },
+pub(crate) struct CallTypeArgPlan {
+    pub(crate) emission_ty: Tir2Ty,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum RuntimeCheck {
-    Argument {
-        arg: AstExprId,
-        expected: Tir2Ty,
-    },
-    Bound {
-        argument: Tir2Ty,
-        bound: baml_type::Interface,
-    },
-}
-
+/// One lexical `type T = …` binding: the rigid parameter MIR reserves a
+/// frame slot for, and where its runtime type comes from.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ScopedTypeBinding {
     pub(crate) name: Name,
     pub(crate) parameter: baml_type::ParamTy,
-    pub(crate) operand: Option<AstExprId>,
-    pub(crate) template_ty: Option<Tir2Ty>,
-    pub(crate) occurrence_ty: Tir2Ty,
+    pub(crate) source: ScopedTypeSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ScopedTypeSource {
+    /// `unreflect(expr)`: the operand's `reflect.Type` value.
+    Runtime(AstExprId),
+    /// A static type, loaded as a template in the enclosing frame.
+    Static(Tir2Ty),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -182,15 +174,6 @@ pub(crate) enum ParamBinding {
         param_index: usize,
         param_name: Name,
     },
-}
-
-/// A function value accepted at a runtime-incompatible parameter shape - the
-/// adapter MIR emits (source shape from the value, target from the slot).
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FunctionCoercion {
-    pub(crate) source_params: Box<[baml_type::FunctionParamTy]>,
-    pub(crate) target_params: Box<[baml_type::FunctionParamTy]>,
-    pub(crate) target_return: Tir2Ty,
 }
 
 /// The one table store behind the `tir_*` accessors: converted ONCE at
@@ -246,10 +229,6 @@ pub(crate) struct ConvertedTables<'db> {
     path_member_resolutions: FxHashMap<AstExprId, Vec<MemberResolution<'db>>>,
     call_plans: FxHashMap<AstExprId, CallPlan>,
     type_bindings: FxHashMap<AstStmtId, ScopedTypeBinding>,
-    runtime_type_bindings: FxHashMap<AstExprId, ScopedTypeBinding>,
-    runtime_type_params: Vec<baml_type::ParamTy>,
-    runtime_checks: Vec<RuntimeCheck>,
-    function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
     /// Condition expressions the checker marked for truthiness coercion
     /// (`Adjust::Truthy`, B-1563): lowering wraps the operand in the
     /// truthy test so the branch itself stays strict-bool.
@@ -310,19 +289,6 @@ impl<'db> ConvertedTables<'db> {
     pub(crate) fn type_binding(&self, stmt: AstStmtId) -> Option<&ScopedTypeBinding> {
         self.type_bindings.get(&stmt)
     }
-    pub(crate) fn runtime_type_binding(&self, operand: AstExprId) -> Option<&ScopedTypeBinding> {
-        self.runtime_type_bindings.get(&operand)
-    }
-    pub(crate) fn runtime_type_params(&self) -> &[baml_type::ParamTy] {
-        &self.runtime_type_params
-    }
-    #[allow(dead_code)]
-    pub(crate) fn runtime_checks(&self) -> &[RuntimeCheck] {
-        &self.runtime_checks
-    }
-    pub(crate) fn function_coercion(&self, expr: AstExprId) -> Option<&FunctionCoercion> {
-        self.function_coercions.get(&expr)
-    }
     pub(crate) fn truthy_condition(&self, expr: AstExprId) -> bool {
         self.truthy_conditions.contains(&expr)
     }
@@ -333,10 +299,7 @@ impl<'db> ConvertedTables<'db> {
 
 /// Materializes one `InferenceResult` into TIR-shaped tables: interned
 /// types to the plain family, the resolution enum variant-for-variant,
-/// the path ladder into TIR's three keyings, and adjustments into
-/// `FunctionCoercion` (source shape from `type_of_expr`, target from the
-/// adjustment - the redundancy TIR stored, reconstructed at the
-/// boundary).
+/// the path ladder into TIR's three keyings, and truthiness adjustments.
 fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db> {
     let mut out = ConvertedTables::default();
     for (&expr, ty) in &result.type_of_expr {
@@ -379,6 +342,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         out.call_plans.insert(
             call,
             CallPlan {
+                argument_layout: plan.argument_layout.clone(),
                 bindings: plan
                     .bindings
                     .iter()
@@ -404,34 +368,9 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                 slots: plan
                     .slots
                     .iter()
-                    .map(|slot| match slot {
-                        hir_infer::CallTypeArgPlan::Static {
-                            ty,
-                            emission_ty,
-                            runtime_bindings,
-                        } => CallTypeArgPlan::Static {
-                            ty: ty.clone(),
-                            emission_ty: emission_ty.clone(),
-                            runtime_bindings: runtime_bindings
-                                .iter()
-                                .map(convert_scoped_type_binding)
-                                .collect(),
-                        },
-                        hir_infer::CallTypeArgPlan::Runtime {
-                            operand,
-                            occurrence_ty,
-                            parameter,
-                        } => CallTypeArgPlan::Runtime {
-                            operand: *operand,
-                            occurrence_ty: occurrence_ty.clone(),
-                            parameter: parameter.clone(),
-                        },
+                    .map(|slot| CallTypeArgPlan {
+                        emission_ty: slot.emission_ty.clone(),
                     })
-                    .collect(),
-                deferred_checks: plan
-                    .deferred_checks
-                    .iter()
-                    .map(convert_runtime_check)
                     .collect(),
                 target: plan.target.clone(),
                 side_channels: CallSideChannels {
@@ -445,65 +384,13 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         .iter()
         .map(|(&stmt, binding)| (stmt, convert_scoped_type_binding(binding)))
         .collect();
-    for bindings in result.type_ref_bindings.values() {
-        for binding in bindings {
-            let Some(operand) = binding.operand else {
-                continue;
-            };
-            out.runtime_type_bindings
-                .entry(operand)
-                .or_insert_with(|| convert_scoped_type_binding(binding));
-        }
-    }
-    out.runtime_type_params = out
-        .runtime_type_bindings
-        .values()
-        .map(|binding| binding.parameter.clone())
-        .collect();
-    out.runtime_type_params.sort_by(|left, right| {
-        left.index()
-            .cmp(&right.index())
-            .then_with(|| left.name().cmp(right.name()))
-    });
-    out.runtime_checks = result
-        .runtime_checks
-        .iter()
-        .map(convert_runtime_check)
-        .collect();
     for (&expr, adjustments) in &result.expr_adjustments {
         for adjustment in adjustments {
             match adjustment.kind {
                 hir_infer::Adjust::Truthy => {
                     out.truthy_conditions.insert(expr);
-                    continue;
                 }
-                hir_infer::Adjust::FunctionAdapter => {}
             }
-            let (
-                Some(Tir2Ty::Function {
-                    params: source_params,
-                    ..
-                }),
-                Tir2Ty::Function {
-                    params: target_params,
-                    ret: target_return,
-                    ..
-                },
-            ) = (
-                result.type_of_expr.get(&expr).cloned(),
-                adjustment.target.clone(),
-            )
-            else {
-                continue;
-            };
-            out.function_coercions.insert(
-                expr,
-                FunctionCoercion {
-                    source_params,
-                    target_params,
-                    target_return: *target_return,
-                },
-            );
         }
     }
     out.exhaustiveness = MatchExhaustiveness::NonExhaustiveSet(
@@ -516,21 +403,9 @@ fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> Scoped
     ScopedTypeBinding {
         name: binding.name.clone(),
         parameter: binding.parameter.clone(),
-        operand: binding.operand,
-        template_ty: binding.template_ty.clone(),
-        occurrence_ty: binding.occurrence_ty.clone(),
-    }
-}
-
-fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
-    match check {
-        hir_infer::RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
-            arg: *arg,
-            expected: expected.clone(),
-        },
-        hir_infer::RuntimeCheck::Bound { argument, bound } => RuntimeCheck::Bound {
-            argument: argument.clone(),
-            bound: bound.clone(),
+        source: match &binding.source {
+            hir_infer::ScopedTypeSource::Runtime(operand) => ScopedTypeSource::Runtime(*operand),
+            hir_infer::ScopedTypeSource::Static(ty) => ScopedTypeSource::Static(ty.clone()),
         },
     }
 }

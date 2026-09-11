@@ -376,15 +376,6 @@ export class HostSpanManager {
   contextDepth(): number { return 0; }
 }
 
-export class Timing {}
-export class Usage {}
-export class LlmCall {}
-export { LlmCall as LLMCall };
-export class FunctionLog {}
-export class Collector {
-  constructor(_name?: string | null) {}
-}
-
 export class BamlRuntime {
   static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
@@ -406,14 +397,14 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
+  callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null): Uint8Array {
     try {
       return callWasmFunctionSync(encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
-  async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
+  async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null): Promise<Uint8Array> {
     try {
       return await callWasmFunction(encodedArgs);
     } catch (error) {

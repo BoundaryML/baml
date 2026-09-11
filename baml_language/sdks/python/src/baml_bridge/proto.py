@@ -1116,7 +1116,7 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
     # Everything else (UNTAGGED_RUST_DATA, UNTAGGED_BEX_HEAP, FUNCTION_REF,
-    # ADT_PROMPT_AST, ADT_COLLECTOR, ADT_TYPE, ADT_MEDIA_GENERIC): bare
+    # ADT_PROMPT_AST, ADT_TYPE, ADT_MEDIA_GENERIC): bare
     # BamlPyHandle. The outer codegen class (if any) wraps it via
     # `_decode_class` → private-attr injection.
     return pyhandle

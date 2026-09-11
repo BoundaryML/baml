@@ -1,6 +1,6 @@
 [project]
 name = "baml_bridge"
-version = "0.18.0"
+version = "0.19.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
@@ -67,6 +67,3 @@ extra-paths = ["tests/sim"]
 conflicting-metaclass = "ignore"
 # proto.py constructs types dynamically at runtime (List[fn()], Literal[var]).
 invalid-type-form = "ignore"
-# Collector subclass returns a Python FunctionLog wrapper instead of the
-# Rust FunctionLog — nominally different types that are functionally identical.
-invalid-method-override = "warn"

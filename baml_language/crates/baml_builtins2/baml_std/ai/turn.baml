@@ -13,7 +13,7 @@ class ModelTurnInput {
 }
 
 class ModelTurn {
-    content: root.content.Block[],
+    content: root.content.ModelBlock[],
     stop_reason: root.content.StopReason,
     usage: root.events.Usage?,
     // Every HTTP exchange behind this turn, oldest first: failed legs from

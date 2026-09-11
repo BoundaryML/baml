@@ -250,7 +250,6 @@ pub(crate) fn display_instruction(
         | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
-        | Instruction::RuntimeIsType
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
@@ -448,7 +447,6 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::AwaitAny => Style::new().green().bright(),
         Instruction::Discriminant
         | Instruction::TypeTag
-        | Instruction::RuntimeIsType
         | Instruction::IsType(_)
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
@@ -964,7 +962,6 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
-        Instruction::RuntimeIsType => "runtime_is_type".to_string(),
         Instruction::IsType(const_idx) => {
             let name = meta_str(const_idx);
             format!("is_type {name}")
@@ -1297,7 +1294,6 @@ pub fn display_compact_bytecode(
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::Truthy
-            | OpCode::RuntimeIsType
             | OpCode::ThrowIfPanic
             | OpCode::Unreachable
             | OpCode::MakeCell

@@ -10,10 +10,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use prost::Message;
 
-use crate::{
-    errors::bridge_error_to_napi,
-    types::{HostSpanManager, collector::Collector},
-};
+use crate::{errors::bridge_error_to_napi, types::HostSpanManager};
 
 struct DecodedCallArgs {
     kwargs: bex_project::BexArgs,
@@ -73,7 +70,6 @@ impl BamlRuntime {
         &self,
         args_proto: Buffer,
         ctx: Option<&HostSpanManager>,
-        collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<Buffer> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
@@ -81,7 +77,7 @@ impl BamlRuntime {
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, decoded, rt))
         })();
-        let _ = (&ctx, &collectors);
+        let _ = &ctx;
 
         let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
@@ -125,14 +121,13 @@ impl BamlRuntime {
         env: &'e Env,
         args_proto: Buffer,
         ctx: Option<&HostSpanManager>,
-        collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
             let decoded = decode_args(args_proto.as_ref())?;
             Ok((runtime, decoded))
         })();
-        let _ = (&ctx, &collectors);
+        let _ = &ctx;
 
         // Same shared call_and_encode as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.

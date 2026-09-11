@@ -204,7 +204,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
     call_ids: list[int] = []
 
     class BlockingRuntime:
-        async def call_function(self, _args, _ctx, _collectors):
+        async def call_function(self, _args, _ctx):
             entered.set()
             await asyncio.Future()
 
@@ -241,7 +241,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
     call_ids: list[int] = []
 
     class BlockingRuntime:
-        async def call_function(self, _args, _ctx, _collectors):
+        async def call_function(self, _args, _ctx):
             entered.set()
             await asyncio.Future()
 
@@ -273,7 +273,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
 @pytest.mark.asyncio
 async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatch):
     class CompletedRuntime:
-        async def call_function(self, _args, _ctx, _collectors):
+        async def call_function(self, _args, _ctx):
             return b"cancelled-result"
 
     decoded: list[bytes] = []

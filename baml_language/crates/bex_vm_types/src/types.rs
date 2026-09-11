@@ -414,19 +414,6 @@ pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
 /// Prompt AST tree node.
 pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
 
-/// Opaque handle to a `Collector` object from `bex_events`.
-///
-/// Uses `Arc<dyn Any + Send + Sync>` to avoid a dependency from `bex_vm_types` on `bex_events`.
-/// Downcast to `bex_events::Collector` at the `bex_engine` layer.
-#[derive(Clone, Debug)]
-pub struct CollectorRef(pub std::sync::Arc<dyn std::any::Any + Send + Sync>);
-
-impl PartialEq for CollectorRef {
-    fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that

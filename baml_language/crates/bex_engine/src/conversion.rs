@@ -894,7 +894,6 @@ impl BexEngine {
                 type_name: "unscheduled_future".to_string(),
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
-            Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             // Identity never crosses as *data* (BEP-066 H-4): no mint, digest
             // or pointer is serialized. It may cross as a rooted reference —
             // the handle resolves back to this same `Object::Type` in this
@@ -1039,12 +1038,8 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
                 SynthTy::Known(RuntimeTy::Media(media.kind, attr()))
             }
-            // A collector inhabits the concrete `Resource` leaf type, and a
-            // rendered prompt inhabits `ai.Prompt` — bind T to those rather than
+            // A rendered prompt inhabits `ai.Prompt` — bind T to that rather than
             // falling into the host-only catch-all below.
-            BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
-                SynthTy::Known(RuntimeTy::resource())
-            }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 SynthTy::Known(RuntimeTy::prompt_ast())
             }
@@ -1678,9 +1673,6 @@ impl BexEngine {
                     runtime_named_objects,
                 );
             }
-            BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
-                Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
-            }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
                 // A lane type lands here. An anonymous declaration has no
                 // spelling to anchor against and is refused: it should have
@@ -1918,21 +1910,20 @@ impl BexEngine {
                 }
                 // `throws` is the callable's declared error contract `E`
                 // (`call_host_value<T, E>`). When the parameter pins no
-                // concrete error type the throws lowers to a bottom/unit
-                // shape: an omitted `throws` becomes `Never` (the function-type
-                // lowering's default) and a bare `-> void` throws becomes
-                // `Void`. Neither names an error the host is obligated to
-                // honor — and the host is foreign code that may surface a
-                // native exception regardless (materialized as
-                // `baml.errors.HostCallable`). Normalize both to
-                // `Unknown` so such a throw is accepted opaquely and an
-                // in-BAML `catch` can match it, rather than being rejected as a
-                // `HostContractViolation`. Concrete throws (e.g.
-                // `throws ParseError`) pass through unchanged and stay enforced.
+                // concrete error type the throws lowers to the unit shape
+                // `Void`, which names no error the host is obligated to honor
+                // — and the host is foreign code that may surface a native
+                // exception regardless (materialized as
+                // `baml.errors.HostCallable`). Normalize it to `Unknown` so
+                // such a throw is accepted opaquely and an in-BAML `catch` can
+                // match it, rather than being rejected as a
+                // `HostContractViolation`. Every declared contract passes
+                // through unchanged and stays enforced — including an explicit
+                // `throws never`, which promises BAML the callback cannot
+                // throw at all, so a native throw against it is a violation
+                // like any other off-contract throw.
                 let normalized_throws = match throws {
-                    RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
-                        RuntimeTy::Unknown { attr }
-                    }
+                    RuntimeTy::Void { attr } => RuntimeTy::Unknown { attr },
                     other => other,
                 };
                 // The VM heap stores the callable's signature as `RealizedTy`
@@ -1940,6 +1931,20 @@ impl BexEngine {
                 // function type is realized here; a non-realized position (an
                 // unfilled type variable) is a contract violation surfaced as a
                 // type mismatch rather than erased.
+                // Dispatch addresses an optional parameter by name
+                // (`CallLayout::from_modes`), so a declared function type that
+                // leaves one unnamed has no slot the host could fill.
+                if params.iter().any(|param| {
+                    matches!(param.mode, baml_type::FunctionParamMode::Optional)
+                        && param.name.is_none()
+                }) {
+                    return Err(EngineError::TypeMismatch {
+                        message:
+                            "host callable cannot be bound: its declared type has an optional \
+                                  parameter without a name"
+                                .to_string(),
+                    });
+                }
                 let realized_params = params
                     .iter()
                     .map(|param| {
@@ -3354,7 +3359,6 @@ fn value_matches_type_with_definitions(
             value.kind == bex_external_types::HostValueKind::Opaque
         }
         (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
-        (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
             RuntimeTy::Type { .. },
@@ -3544,7 +3548,7 @@ fn float_literal_matches(value: f64, source: &str) -> bool {
 ///   treats an empty container's element position vacuously), so every value
 ///   whose synthesized type produced a binding still passes.
 /// - **opaque / engine-minted typed carriers** (a typed heap handle such as a
-///   `Stream` receiver, a host callable, a reflected type / media / collector /
+///   `Stream` receiver, a host callable, a reflected type / media /
 ///   prompt, a host-only value, a raw handle) stay lenient — they are either
 ///   already typed by the engine or ride opaquely through the VM, so a value-shape
 ///   check isn't meaningful. This matches the pre-inference behavior for every
@@ -4097,7 +4101,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Future(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
-                | Object::Collector(_)
                 | Object::Type(_) => None,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => None,
@@ -4226,7 +4229,6 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 | Object::Future(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_)
-                | Object::Collector(_)
                 | Object::Type(_) => {
                     panic!(
                         "Cannot convert object type to BexExternalValue for sys op: {:?}",

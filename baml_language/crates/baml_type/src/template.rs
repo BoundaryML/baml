@@ -262,6 +262,74 @@ fn walk_template<N: Clone>(
     }
 }
 
+/// Read-only pre-order traversal: the immutable sibling of [`walk_template`],
+/// arm for arm, so the two cannot disagree about where children live.
+/// `visitor` sees every node, parents before children.
+fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&TyTemplate<N>)) {
+    visitor(template);
+    let mut child = |template: &TyTemplate<N>| visit_template(template, visitor);
+    match template {
+        TyTemplate::List(inner, _) => child(inner),
+        TyTemplate::Map { key, value, .. } => {
+            child(key);
+            child(value);
+        }
+        TyTemplate::Union(members, _) | TyTemplate::Class(_, members, _) => {
+            members.iter().for_each(&mut child);
+        }
+        TyTemplate::Interface(_, args, associated_bindings, _) => {
+            args.iter().for_each(&mut child);
+            associated_bindings
+                .iter()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().for_each(|param| child(&param.ty));
+            child(ret);
+            child(throws);
+        }
+        TyTemplate::Future(value, error, _) => {
+            child(value);
+            child(error);
+        }
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            child(base);
+            interface.generics.iter().for_each(&mut child);
+            interface
+                .associated_types
+                .iter()
+                .for_each(|(_, binding)| child(binding));
+        }
+        TyTemplate::TypeArgRef(_)
+        | TyTemplate::Int { .. }
+        | TyTemplate::Bigint { .. }
+        | TyTemplate::Float { .. }
+        | TyTemplate::String { .. }
+        | TyTemplate::Bool { .. }
+        | TyTemplate::Null { .. }
+        | TyTemplate::Uint8Array { .. }
+        | TyTemplate::Media(..)
+        | TyTemplate::Literal(..)
+        | TyTemplate::Enum(..)
+        | TyTemplate::EnumVariant(..)
+        | TyTemplate::RustType { .. }
+        | TyTemplate::Type { .. }
+        | TyTemplate::Resource { .. }
+        | TyTemplate::PromptAst { .. }
+        | TyTemplate::Void { .. }
+        | TyTemplate::TypeAlias(..)
+        | TyTemplate::Unknown { .. }
+        | TyTemplate::Never { .. } => {}
+    }
+}
+
 fn class_origin_args<'a, N: Clone + PartialEq>(
     origin: Option<&'a TyTemplate<N>>,
     class_name: &N,
@@ -630,6 +698,17 @@ impl TyTemplateInterface {
 /// the same bound as [`TyTemplate::substitute_symbolic`] rather than the
 /// stronger one reduction requires.
 impl<N: Clone> TyTemplateInterface<N> {
+    /// [`TyTemplate::for_each_type_arg_ref`] over every template position of
+    /// the constraint: the generic arguments, then the associated-type bindings.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        for generic in &self.generics {
+            generic.for_each_type_arg_ref(f);
+        }
+        for (_, binding) in &self.associated_types {
+            binding.for_each_type_arg_ref(f);
+        }
+    }
+
     /// Compile-time counterpart to [`Self::substitute`] (see
     /// [`TyTemplate::substitute_symbolic`]): resolve frame refs but leave
     /// unresolved positions symbolic, producing a `RuntimeInterface`.
@@ -792,6 +871,20 @@ impl<N: Clone> TyTemplate<N> {
     /// answers the same at either head.
     pub fn is_fully_concrete(&self) -> bool {
         <&RealizedTy<N>>::try_from(self).is_ok()
+    }
+
+    /// Calls `f` with the frame slot of every [`TyTemplate::TypeArgRef`] leaf,
+    /// in traversal order. A slot referenced more than once is reported once
+    /// per reference.
+    ///
+    /// These are exactly the frame type-arg slots evaluating the template reads,
+    /// which is what a pass that moves or repeats an evaluation has to respect.
+    pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
+        visit_template(self, &mut |template| {
+            if let TyTemplate::TypeArgRef(index) = template {
+                f(*index);
+            }
+        });
     }
 
     /// A lossy [`Ty`] view for rendering only: frame refs become
@@ -979,6 +1072,82 @@ mod tests {
         let interface_origins =
             TyTemplateOrigins::root().through_field(&chain, 1, &interface_field);
         assert!(interface_origins.class_transform_expands(0, &chain, 1));
+    }
+
+    /// [`visit_template`] and [`walk_template`] are separate traversals - one
+    /// immutable and total, one mutable and prunable - and only a doc comment
+    /// claims they agree about where children live. A slot walk that missed an
+    /// arm would silently under-report the frame slots a template reads, which
+    /// is what emit's virtualization leans on, so the claim is enforced: both
+    /// must reach the same nodes of a template carrying every child-bearing
+    /// variant.
+    #[test]
+    fn both_template_traversals_reach_the_same_children() {
+        let name = TypeName::local(crate::Name::new("Holder"));
+        let iface = TyTemplateInterface {
+            name: TypeName::local(crate::Name::new("Shown")),
+            generics: Box::new([TyTemplate::TypeArgRef(0)]),
+            associated_types: Box::new([(crate::Name::new("Item"), TyTemplate::TypeArgRef(1))]),
+        };
+        let every_shape = TyTemplate::class(
+            name.clone(),
+            Box::new([
+                TyTemplate::List(Box::new(TyTemplate::TypeArgRef(2)), TyAttr::default()),
+                TyTemplate::Map {
+                    key: Box::new(TyTemplate::TypeArgRef(3)),
+                    value: Box::new(TyTemplate::TypeArgRef(4)),
+                    attr: TyAttr::default(),
+                },
+                TyTemplate::Union(
+                    Box::new([TyTemplate::TypeArgRef(5), TyTemplate::TypeArgRef(6)]),
+                    TyAttr::default(),
+                ),
+                TyTemplate::interface(
+                    TypeName::local(crate::Name::new("Shown")),
+                    Box::new([TyTemplate::TypeArgRef(7)]),
+                    Box::new([(crate::Name::new("Item"), TyTemplate::TypeArgRef(8))]),
+                ),
+                TyTemplate::Function {
+                    params: Box::new([crate::TyTemplateFunctionParamTy {
+                        name: Some(crate::Name::new("a")),
+                        ty: TyTemplate::TypeArgRef(9),
+                        mode: crate::FunctionParamMode::Required,
+                    }]),
+                    ret: Box::new(TyTemplate::TypeArgRef(10)),
+                    throws: Box::new(TyTemplate::TypeArgRef(11)),
+                    attr: TyAttr::default(),
+                },
+                TyTemplate::Future(
+                    Box::new(TyTemplate::TypeArgRef(12)),
+                    Box::new(TyTemplate::TypeArgRef(13)),
+                    TyAttr::default(),
+                ),
+                TyTemplate::AssociatedTypeProjection {
+                    base: Box::new(TyTemplate::TypeArgRef(14)),
+                    interface: Box::new(iface),
+                    member: crate::Name::new("Item"),
+                    attr: TyAttr::default(),
+                },
+            ]),
+        );
+
+        let mut visited = 0usize;
+        visit_template(&every_shape, &mut |_| visited += 1);
+        let mut walked = 0usize;
+        walk_template(&mut every_shape.clone(), false, &mut |_, _| {
+            walked += 1;
+            true
+        });
+        assert_eq!(
+            visited, walked,
+            "the two traversals disagree about a template's children"
+        );
+
+        // And the slot walk built on the immutable one sees every leaf.
+        let mut slots = Vec::new();
+        every_shape.for_each_type_arg_ref(&mut |slot| slots.push(slot));
+        slots.sort_unstable();
+        assert_eq!(slots, (0..=14).collect::<Vec<u32>>());
     }
 
     #[test]

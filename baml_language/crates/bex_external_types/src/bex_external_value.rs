@@ -81,7 +81,6 @@ impl UnionMetadata {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
-    Collector(bex_vm_types::CollectorRef),
     /// A reflected type, carried at the sys-op lane's head so a definition
     /// table can be keyed by declaration identity rather than by name.
     ///
@@ -435,7 +434,6 @@ impl PartialEq for BexExternalValue {
 impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
-            BexExternalAdt::Collector(_) => "collector",
             BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",

@@ -71,7 +71,6 @@ BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_VIDEO == 8, "handle discriminant 
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_PDF == 9, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC == 10, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_PROMPT_AST == 11, "handle discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_COLLECTOR == 12, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TYPE == 13, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE == 14, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE == 15, "handle discriminant drifted");

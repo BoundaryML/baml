@@ -119,109 +119,8 @@ async fn scenario_four_pattern_two_mounts_a_runtime_type_as_a_static_name() {
 }
 
 #[tokio::test]
-async fn scoped_type_binding_evaluates_once_types_contracts_and_widens_on_escape() {
+async fn scoped_type_binding_evaluates_once_types_contracts_and_leaves_as_unknown() {
     let output = baml_test!(TYPE_BINDING_SOURCE);
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn structural_let_or_pattern_evaluates_each_unreflect_operand_once() {
-    let output = baml_test!(
-        r#"
-class First<T> { value unknown }
-class Counter {
-    evaluations int
-
-    function operand(self) -> reflect.Type {
-        self.evaluations += 1
-        reflect.Type.of<string>()
-    }
-}
-
-function main() -> bool {
-    let counter = Counter { evaluations: 0 }
-    let candidate: unknown = First<string> { value: "ok" }
-    let First<unreflect(counter.operand())> { value: let bound }
-        | let bound = candidate
-    counter.evaluations == 1 && bound == "ok"
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn nested_unreflect_annotations_and_patterns_use_realized_templates() {
-    let output = baml_test!(
-        r#"
-class Wrapper<T> { value T }
-
-function main() -> bool {
-    let t = reflect.Type.of<string>()
-    let value = Wrapper<string> { value: "ok" }
-    let annotated: Wrapper<unreflect(t)> = value
-    annotated is Wrapper<unreflect(t)>
-        && match annotated {
-            Wrapper<unreflect(t)> => true,
-            _ => false,
-        }
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn type_of_materializes_nested_unreflect_bindings_before_loading_the_template() {
-    let output = baml_test!(
-        r#"
-class Wrapper<T> { value T }
-
-function main() -> bool {
-    let t = reflect.Type.of<string>()
-    reflect.Type.of<Wrapper<unreflect(t)>>() == reflect.Type.of<Wrapper<string>>()
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn runtime_generic_apply_values_preserve_their_type_argument_slot() {
-    let output = baml_test!(
-        r#"
-function has_types<A, B>(first: A, second: B) -> bool {
-    reflect.Type.of<A>() == reflect.Type.of_value(first)
-        && reflect.Type.of<B>() == reflect.Type.of_value(second)
-}
-
-function main() -> bool {
-    let first = reflect.Type.of<string>()
-    let second = reflect.Type.of<int>()
-    let check = has_types<unreflect(first), unreflect(second)>
-    check("ok", 42)
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn match_scrutinee_runtime_annotation_binds_before_pattern_dispatch() {
-    let output = baml_test!(
-        r#"
-class Wrapper<T> { value T }
-
-function main() -> bool {
-    let t = reflect.Type.of<string>()
-    let wrapped = Wrapper<string> { value: "ok" }
-    match (wrapped : Wrapper<unreflect(t)>) {
-        Wrapper<string> { value } => value == "ok",
-        _ => false,
-    }
-}
-"#
-    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
@@ -250,46 +149,7 @@ function main() -> bool {
 }
 
 #[tokio::test]
-async fn scoped_type_argument_without_value_args_enforces_runtime_bounds() {
-    let output = baml_test!(
-        r#"
-interface SomeInterface {
-  label string
-}
-
-function needs_bound<A extends SomeInterface>() -> string {
-  "ok"
-}
-
-function main() -> bool {
-  let witness = reflect.interface.implementation<SomeInterface>().field("label")
-  let conforming = reflect.class.new("Conforming", {
-    "label": reflect.Type.of<string>(),
-  }, implementations = [witness])
-  let nonconforming = reflect.class.new("Nonconforming", {
-    "other": reflect.Type.of<string>(),
-  })
-
-  let rejected = {
-    type T = unreflect(nonconforming.as_type());
-    let result = needs_bound<T>() catch (e) {
-      reflect.errors.CompilationError => e.diagnostics[0].code
-    }
-    result is string && result == "E0001"
-  }
-  let accepted = {
-    type T = unreflect(conforming.as_type());
-    needs_bound<T>() == "ok"
-  }
-  rejected && accepted
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-#[should_panic(expected = "a runtime type has no scope here")]
+#[should_panic(expected = "this runtime type must be given a name before it can be used here")]
 async fn top_level_runtime_type_binding_is_rejected() {
     let _ = baml_test!(
         r#"
@@ -453,7 +313,7 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
 }
 
 /// The ticket's Agent repro: `ai.Agent<Out>.run` is `implements Runner<Out>`, so
-/// it took the same hole — a payload `baml.sap.parse<unreflect(t)>` handled fine
+/// it took the same hole — a payload `baml.sap.parse<T>` handled fine
 /// came back as `ai.errors.ParseFailed` through the runner.
 #[tokio::test]
 async fn agent_run_parses_a_reflected_output_type() {

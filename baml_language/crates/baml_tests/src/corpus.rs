@@ -1,7 +1,7 @@
 //! Single-compile snapshot pass over the whole `baml_src/` corpus.
 //!
 //! Every project that compiles cleanly lives in `baml_src/`: the runtime test
-//! namespaces (executed by `baml test` via `tests/baml_src.rs`) alongside the
+//! namespaces (executed via `baml_cli/tests/baml_corpus.rs`) alongside the
 //! compile-only compiler-phase fixtures under `ns_fixtures/` (excluded from
 //! execution by the `offline` profile in `baml_src/baml.toml`). This module
 //! builds ONE `ProjectDatabase` over the corpus and derives every snapshot
@@ -9,9 +9,11 @@
 //!
 //! - per-namespace diagnostics snapshots plus the corpus-wide zero-error
 //!   invariant,
-//! - per-fixture-namespace PPIR and MIR snapshots,
-//! - per-namespace bytecode snapshots for the whole corpus,
-//! - stdlib (`baml`/`testing`/`assert`/`ai`) PPIR/MIR/bytecode snapshots.
+//! - opt-in representative PPIR, MIR and bytecode snapshots,
+//! - opt-in formatter goldens, plus formatting/idempotency of every file.
+//!
+//! `corpus_snapshot_policy.rs` documents each selected example. No blanket
+//! stdlib dumps: runtime, prefix-equivalence and link-oracle tests cover it.
 //!
 //! The snapshot tree mirrors the corpus source tree: a namespace's snapshots
 //! live in `snapshots/baml_src/<same ns_ path>/`, named for their phase
@@ -30,7 +32,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Write as _,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use baml_base::SourceFile;
@@ -38,16 +40,14 @@ use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 use baml_db::ProjectDatabase;
 use bex_vm::debug::{BytecodeFormat, display_program};
-use bex_vm_types::{Function, FunctionOrigin};
+use bex_vm_types::Function;
 
 use crate::engine::TestDbExt;
 
 const SNAPSHOT_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml_src");
 
-/// The stdlib packages with dedicated phase snapshots. The remaining builtin
-/// packages (provider clients etc.) are covered indirectly through the corpus
-/// namespaces that exercise them.
-const SNAPSHOT_STDLIB_PACKAGES: &[&str] = &["baml", "testing", "assert", "ai", "reflect"];
+#[path = "corpus_snapshot_policy.rs"]
+mod snapshot_policy;
 
 fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
@@ -92,46 +92,6 @@ fn collect_baml_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) 
     }
 }
 
-/// Strip the `ns_` prefix from a directory segment if it names a valid namespace
-/// (BAML identifier: starts with a letter or `_`, rest alphanumeric or `_`),
-/// matching the compiler's `file_package` rule. Returns `None` otherwise.
-fn extract_ns_name(component: &str) -> Option<&str> {
-    let ns = component.strip_prefix("ns_")?;
-    let mut chars = ns.chars();
-    let valid = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    valid.then_some(ns)
-}
-
-/// Namespace key for a source file: the dotted chain of `ns_`-prefixed directory
-/// segments, e.g. `ns_assignments/assignments.baml` -> `assignments` and
-/// `ns_a/b/ns_c/x.baml` -> `a.c`. Functions with no source file (synthesized,
-/// e.g. the global `$init_test`) or no namespace -> `_root`.
-fn namespace_key(source_file: &str) -> String {
-    if source_file.is_empty() {
-        return "_root".to_string();
-    }
-    let parts: Vec<&str> = Path::new(source_file)
-        .parent()
-        .map(|parent| {
-            parent
-                .components()
-                .filter_map(|c| match c {
-                    Component::Normal(s) => s.to_str().and_then(extract_ns_name),
-                    _ => None,
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    if parts.is_empty() {
-        "_root".to_string()
-    } else {
-        parts.join(".")
-    }
-}
-
 /// Directory of a corpus-relative source path — the namespace's own directory.
 /// A namespace occupies exactly one directory in this corpus, so this doubles
 /// as the namespace's identity for grouping. Empty for the corpus root, which
@@ -163,26 +123,136 @@ fn snap(dir: &str, name: &str, content: &str) {
     });
 }
 
-/// Is this function name in a stdlib package? The package list is derived from
-/// `baml_builtins2::ALL`, so adding a builtin package never floods the user
-/// namespaces' snapshots.
-fn is_stdlib_function(name: &str) -> bool {
-    baml_builtins2::stdlib_package_names().iter().any(|pkg| {
-        let pkg: &str = pkg;
-        name.len() > pkg.len() && name.as_bytes()[pkg.len()] == b'.' && name.starts_with(pkg)
-    })
+/// Validate selectors before doing compiler work: a renamed or duplicated
+/// example must fail loudly instead of silently losing golden coverage.
+fn validate_snapshot_policy(files: &[(String, String)]) {
+    for (phase, examples) in [
+        ("ppir", snapshot_policy::PPIR),
+        ("mir", snapshot_policy::MIR),
+        ("bytecode", snapshot_policy::BYTECODE),
+        ("formatter", snapshot_policy::FORMATTER),
+    ] {
+        let mut destinations = std::collections::BTreeSet::new();
+        for example in examples {
+            assert!(
+                !example.reason.trim().is_empty(),
+                "{phase}: missing coverage rationale"
+            );
+            assert!(
+                files.iter().any(|(path, _)| path == example.path),
+                "{phase}: selected source is missing: {}",
+                example.path
+            );
+            let key = if phase == "formatter" {
+                example.path.to_owned()
+            } else {
+                source_dir(example.path)
+            };
+            assert!(
+                destinations.insert(key),
+                "{phase}: duplicate snapshot destination for {}",
+                example.path
+            );
+            if phase == "mir" || phase == "bytecode" {
+                assert!(
+                    !example.functions.is_empty(),
+                    "{phase}: select specific functions"
+                );
+                let unique: std::collections::BTreeSet<_> = example.functions.iter().collect();
+                assert_eq!(
+                    unique.len(),
+                    example.functions.len(),
+                    "{phase}: duplicate function selector"
+                );
+            }
+        }
+    }
 }
 
-/// MIR for every function of `file`, in source order (by declaration span) —
-/// an intrinsic, salsa-enumeration-independent key, so the snapshot never
-/// churns on a firewall/tie-break change the way a name sort would.
-fn render_file_mir(db: &ProjectDatabase, file: SourceFile, out: &mut String) {
+/// MIR for selected functions in source order. Everything else is still
+/// lowered by full-corpus bytecode emission, but does not get a textual dump.
+fn render_selected_mir(db: &ProjectDatabase, file: SourceFile, names: &[&str], out: &mut String) {
     let mut functions = file_functions(db, file).to_vec();
     functions.sort_by_key(|loc| function_source_map(db, *loc).span.start());
+    let mut found = std::collections::BTreeSet::new();
     for func_loc in functions {
-        let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(out, "{}", display_function(mir)).unwrap();
+        let name_span = function_source_map(db, func_loc).name_span;
+        let name = &file.text(db)[name_span];
+        if names.contains(&name) {
+            found.insert(name.to_owned());
+            let mir = lower_function(db, func_loc, OptLevel::Two);
+            writeln!(out, "{}", display_function(mir)).unwrap();
+        }
     }
+    for name in names {
+        assert!(
+            found.contains(*name),
+            "MIR snapshot function {name} missing from {}",
+            file.path(db).display()
+        );
+    }
+}
+
+#[test]
+fn snapshot_policy_is_valid() {
+    validate_snapshot_policy(&read_corpus_files());
+}
+
+/// Catch orphaned goldens even in a narrow nextest run, where Insta's
+/// package-wide --unreferenced check would also flag unrelated test suites.
+#[test]
+fn snapshot_inventory_matches_policy() {
+    fn collect(dir: &Path, files: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read snapshot directory") {
+            let path = entry.expect("snapshot entry").path();
+            if path.is_dir() {
+                collect(&path, files);
+            } else if path.extension().is_some_and(|ext| ext == "snap") {
+                files.push(path);
+            }
+        }
+    }
+    let root = Path::new(SNAPSHOT_BASE);
+    let mut expected = std::collections::BTreeSet::new();
+    for (phase, examples) in [
+        ("ppir", snapshot_policy::PPIR),
+        ("mir", snapshot_policy::MIR),
+        ("bytecode", snapshot_policy::BYTECODE),
+        ("fmt", snapshot_policy::FORMATTER),
+    ] {
+        for example in examples {
+            let name = if phase == "fmt" {
+                format!(
+                    "{}.fmt.snap",
+                    Path::new(example.path)
+                        .file_stem()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                )
+            } else {
+                format!("{phase}.snap")
+            };
+            expected.insert(root.join(source_dir(example.path)).join(name));
+        }
+    }
+    let mut files = Vec::new();
+    collect(root, &mut files);
+    let actual: std::collections::BTreeSet<_> = files
+        .into_iter()
+        // Diagnostics remain exhaustive and are generated for nonempty groups.
+        .filter(|path| {
+            !path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with("diagnostics.snap")
+        })
+        .collect();
+    assert_eq!(
+        actual, expected,
+        "missing or orphaned corpus goldens; update the policy and snapshots together"
+    );
 }
 
 #[test]
@@ -191,6 +261,7 @@ fn corpus_snapshots() {
 
     let files = read_corpus_files();
     assert!(!files.is_empty(), "no .baml files found in baml_src/");
+    validate_snapshot_policy(&files);
 
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
@@ -288,63 +359,30 @@ fn corpus_snapshots() {
         snap(&dir, &name, &output);
     }
 
-    // ---- Fixture namespaces: PPIR + MIR ----
-    let mut fixture_dirs: BTreeMap<String, Vec<SourceFile>> = BTreeMap::new();
-    for (rel, sf) in &source_files {
-        if rel.starts_with("ns_fixtures/") {
-            fixture_dirs.entry(source_dir(rel)).or_default().push(*sf);
-        }
-    }
-    assert!(
-        !fixture_dirs.is_empty(),
-        "no fixture namespaces found under baml_src/ns_fixtures/"
-    );
-
-    for (dir, ns_files) in &fixture_dirs {
-        let mut out = String::new();
-        writeln!(out, "=== PPIR ===").unwrap();
-        for sf in ns_files {
-            out.push_str(&crate::compiler2_tir::support::render_ppir(&db, *sf));
-        }
-        snap(dir, "ppir", &out);
-
-        let mut out = String::new();
-        writeln!(out, "=== MIR2 ===").unwrap();
-        for sf in ns_files {
-            render_file_mir(&db, *sf, &mut out);
-        }
-        snap(dir, "mir", &out);
-    }
-
-    // ---- Stdlib phase snapshots ----
-    for pkg in SNAPSHOT_STDLIB_PACKAGES {
-        use baml_compiler2_hir::file_package::file_package;
-        let mut pkg_files: Vec<_> = all_files
+    // ---- Representative PPIR and MIR only; still use the shared database ----
+    let selected_file = |path: &str| {
+        source_files
             .iter()
-            .copied()
-            .filter(|f| {
-                baml_compiler2_hir::package::spelling(&db)
-                    .of(file_package(&db, *f).root)
-                    .as_str()
-                    == *pkg
-            })
-            .collect();
-        pkg_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
-
-        let mut out = String::new();
-        writeln!(out, "=== PPIR (package {pkg}) ===").unwrap();
-        for sf in &pkg_files {
-            writeln!(out, "\n--- {} ---", sf.path(&db).display()).unwrap();
-            out.push_str(&crate::compiler2_tir::support::render_ppir(&db, *sf));
-        }
-        snap(&format!("stdlib/{pkg}"), "ppir", &out);
-
-        let mut out = String::new();
-        writeln!(out, "=== MIR2 (package {pkg}) ===").unwrap();
-        for sf in &pkg_files {
-            render_file_mir(&db, *sf, &mut out);
-        }
-        snap(&format!("stdlib/{pkg}"), "mir", &out);
+            .find(|(rel, _)| rel == path)
+            .unwrap_or_else(|| panic!("selected source missing: {path}"))
+            .1
+    };
+    for example in snapshot_policy::PPIR {
+        let out = format!(
+            "=== PPIR ===\n{}",
+            crate::compiler2_tir::support::render_ppir(&db, selected_file(example.path))
+        );
+        snap(&source_dir(example.path), "ppir", &out);
+    }
+    for example in snapshot_policy::MIR {
+        let mut out = String::from("=== MIR2 ===\n");
+        render_selected_mir(
+            &db,
+            selected_file(example.path),
+            example.functions,
+            &mut out,
+        );
+        snap(&source_dir(example.path), "mir", &out);
     }
 
     // ---- Bytecode: one emit, snapshotted per namespace ----
@@ -360,64 +398,32 @@ fn corpus_snapshots() {
     // bound pool resolves every head, matching what the runtime shows.
     let heap = crate::engine::bound_pool(&program);
 
-    // Group user (non-stdlib, non-auto-derived) functions by their namespace
-    // directory, so each namespace's bytecode lands beside its own sources.
-    let mut by_dir: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
-    for (name, idx) in crate::engine::named_and_interface_body_functions(&program) {
-        // Stdlib functions are not the user namespaces' subject; they get the
-        // dedicated per-package snapshots below.
-        if is_stdlib_function(name) || name.starts_with("env.") {
-            continue;
+    // Exact emitted names prevent a growing runtime namespace from silently
+    // inflating its golden. Missing functions fail instead of emitting nothing.
+    let by_name: BTreeMap<_, _> = crate::engine::named_and_interface_body_functions(&program)
+        .map(|(name, idx)| (name.as_str(), idx))
+        .collect();
+    for example in snapshot_policy::BYTECODE {
+        let mut functions: Vec<(String, &Function)> = Vec::new();
+        for name in example.functions {
+            let idx = *by_name
+                .get(name)
+                .unwrap_or_else(|| panic!("bytecode snapshot function missing: {name}"));
+            let func = crate::engine::bound_function(&heap, idx)
+                .unwrap_or_else(|| panic!("bytecode snapshot entry is not a function: {name}"));
+            assert_eq!(
+                func.source_file.replace('\\', "/"),
+                example.path,
+                "wrong source for {name}"
+            );
+            functions.push((name.strip_prefix("user.").unwrap_or(name).to_string(), func));
         }
-        let Some(func) = crate::engine::bound_function(&heap, idx) else {
-            continue;
-        };
-        if func.origin == FunctionOrigin::AutoDerive {
-            continue;
-        }
-        // The `llm_*` provider-suite namespaces are large wire-shape/behavior
-        // suites whose guarantees live in their own `test` blocks; their
-        // bytecode dumps flooded these snapshots (thousands of lines each)
-        // without adding signal. Codegen stability is still covered by the
-        // remaining namespaces (including the `ns_fixtures/` ones).
-        if namespace_key(&func.source_file).starts_with("llm_") {
-            continue;
-        }
-        // Strip the leading "user." package prefix for display.
-        let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
-        by_dir
-            .entry(source_dir(&func.source_file))
-            .or_default()
-            .push((display_name, func));
-    }
-
-    for (dir, mut funcs) in by_dir {
-        funcs.sort_by(|(a, _), (b, _)| a.cmp(b));
-        let output = display_program(&funcs, BytecodeFormat::Textual);
-        snap(&dir, "bytecode", &output);
-    }
-
-    // Stdlib bytecode, one snapshot per package.
-    for pkg in SNAPSHOT_STDLIB_PACKAGES {
-        let prefix = format!("{pkg}.");
-        let mut entries: Vec<(&String, usize)> =
-            crate::engine::named_and_interface_body_functions(&program)
-                .filter(|(name, _)| name.starts_with(&prefix))
-                .collect();
-        entries.sort_by_key(|(name, _)| *name);
-
-        let functions: Vec<(String, &Function)> = entries
-            .iter()
-            .map(|(name, idx)| {
-                let func = crate::engine::bound_function(&heap, *idx).unwrap_or_else(|| {
-                    panic!("function entry '{name}' (idx={idx}) is not a Function")
-                });
-                ((*name).clone(), func)
-            })
-            .collect();
-
-        let output = display_program(&functions, BytecodeFormat::Textual);
-        snap(&format!("stdlib/{pkg}"), "bytecode", &output);
+        functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+        snap(
+            &source_dir(example.path),
+            "bytecode",
+            &display_program(&functions, BytecodeFormat::Textual),
+        );
     }
 }
 
@@ -443,11 +449,12 @@ const KNOWN_FORMATTER_REJECTS: &[&str] = &[
     "ns_truthiness/truthiness.baml",
 ];
 
-/// Formatter coverage for the corpus: fixture files get an output snapshot;
+/// Formatter coverage for the corpus: selected files get an output snapshot;
 /// every corpus file must format successfully and idempotently.
 #[test]
 fn corpus_formatter() {
     let files = read_corpus_files();
+    validate_snapshot_policy(&files);
     let options = baml_fmt::FormatOptions::default();
 
     // Collect every violation so one run reports the full set.
@@ -480,7 +487,10 @@ fn corpus_formatter() {
             }
         };
 
-        if rel.starts_with("ns_fixtures/") {
+        if snapshot_policy::FORMATTER
+            .iter()
+            .any(|example| example.path == rel)
+        {
             let stem = Path::new(rel)
                 .file_stem()
                 .expect("corpus file has a stem")

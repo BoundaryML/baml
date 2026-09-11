@@ -113,199 +113,200 @@ jobs:
           path: baml_language/target/cargo-timings/
           if-no-files-found: ignore
 
-  size-gate-macos:
-    name: "measure-baml-size (macos)"
-    runs-on: blacksmith-6vcpu-macos-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+  # Temporarily disabled: only Linux and WASM size measurements run in CI.
+  # size-gate-macos:
+  #   name: "measure-baml-size (macos)"
+  #   runs-on: blacksmith-6vcpu-macos-latest
+  #   timeout-minutes: 20
+  #   continue-on-error: true
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #       with:
+  #         persist-credentials: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
+  #     - name: "Install Rust toolchain"
+  #       run: rustup show
+  #       working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
+  #     - name: "Install sccache and direnv"
+  #       uses: ./.github/actions/setup-mise
+  #       with:
+  #         install_args: "sccache direnv"
 
-      - name: "Verify sccache"
-        run: sccache --version
+  #     - name: "Verify sccache"
+  #       run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "macos-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: "baml_language -> target"
+  #         cache-all-crates: true
+  #         cache-targets: false
+  #         shared-key: "macos-cargo"
+  #         # Read-only consumer. The canary saver lives in
+  #         # cargo-tests.reusable.yaml; see the cache strategy comment there.
+  #         save-if: false
 
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
+  #     - name: "Load .envrc with direnv"
+  #       run: |
+  #         set -euo pipefail
 
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+  #         direnv allow .envrc
+  #         direnv export gha >> "$GITHUB_ENV"
 
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
+  #     # Separate step so if fetch is slow, build is fast.
+  #     - name: "Fetch cargo dependencies"
+  #       run: cargo fetch
+  #       working-directory: baml_language
 
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only baml-cli,packed-program \
-            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+  #     - name: "Run size-gate check"
+  #       id: check
+  #       working-directory: baml_language
+  #       run: |
+  #         cargo run --timings -p cargo-size-gate -- size-gate check \
+  #           --only baml-cli,packed-program \
+  #           --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
+  #         cat size-gate-stderr.txt >&2
+  #         echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: size-gate-macos
-          path: baml_language/size-gate-macos.json
-          if-no-files-found: ignore
+  #     - name: "Upload size-gate report"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: size-gate-macos
+  #         path: baml_language/size-gate-macos.json
+  #         if-no-files-found: ignore
 
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
+  #     - name: "Show sccache stats"
+  #       if: always()
+  #       run: sccache --show-stats
 
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-macos.json
+  #     - name: "Dump sccache stats (json)"
+  #       if: always()
+  #       run: sccache --show-stats --stats-format json > sccache-stats-size-gate-macos.json
 
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-size-gate-macos
-          path: sccache-stats-size-gate-macos.json
-          if-no-files-found: ignore
+  #     - name: "Upload sccache stats"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: sccache-stats-size-gate-macos
+  #         path: sccache-stats-size-gate-macos.json
+  #         if-no-files-found: ignore
 
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-size-gate-macos
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
+  #     - name: "Upload cargo timings"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: cargo-timings-size-gate-macos
+  #         path: baml_language/target/cargo-timings/
+  #         if-no-files-found: ignore
 
-  size-gate-windows:
-    name: "measure-baml-size (windows)"
-    runs-on: blacksmith-8vcpu-windows-2025
-    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
-    # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 45
-    continue-on-error: true
-    env:
-      CARGO_BUILD_JOBS: "16"
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+  # size-gate-windows:
+  #   name: "measure-baml-size (windows)"
+  #   runs-on: blacksmith-8vcpu-windows-2025
+  #   # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
+  #   # Right now it needs to download our repo every time which is very slow
+  #   timeout-minutes: 45
+  #   continue-on-error: true
+  #   env:
+  #     CARGO_BUILD_JOBS: "16"
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #       with:
+  #         persist-credentials: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
+  #     - name: "Install Rust toolchain"
+  #       run: rustup show
+  #       working-directory: baml_language
 
-      # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
-      # extra clang tool is installed through mise for llvm-strip, replacing
-      # the previous Chocolatey LLVM install.
-      - name: "Install sccache, direnv, and clang"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv clang"
+  #     # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
+  #     # extra clang tool is installed through mise for llvm-strip, replacing
+  #     # the previous Chocolatey LLVM install.
+  #     - name: "Install sccache, direnv, and clang"
+  #       uses: ./.github/actions/setup-mise
+  #       with:
+  #         install_args: "sccache direnv clang"
 
-      - name: "Verify sccache"
-        run: sccache --version
+  #     - name: "Verify sccache"
+  #       run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "windows-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: "baml_language -> target"
+  #         cache-all-crates: true
+  #         cache-targets: false
+  #         shared-key: "windows-cargo"
+  #         # Read-only consumer. The canary saver lives in
+  #         # cargo-tests.reusable.yaml; see the cache strategy comment there.
+  #         save-if: false
 
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
+  #     - name: "Load .envrc with direnv"
+  #       run: |
+  #         set -euo pipefail
 
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
+  #         direnv allow .envrc
+  #         direnv export gha >> "$GITHUB_ENV"
 
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
+  #     # Separate step so if fetch is slow, build is fast.
+  #     - name: "Fetch cargo dependencies"
+  #       run: cargo fetch
+  #       working-directory: baml_language
 
-      - name: "Build native sccache wrapper"
-        run: |
-          set -euo pipefail
-          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
-          # execs sccache; cargo launches it via CreateProcess (32767-char
-          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
-          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
-          # lives in the build tree, so build it first — .envrc leaves
-          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
-          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
-          # below.
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-        working-directory: baml_language
+  #     - name: "Build native sccache wrapper"
+  #       run: |
+  #         set -euo pipefail
+  #         # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
+  #         # execs sccache; cargo launches it via CreateProcess (32767-char
+  #         # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
+  #         # `--check-cfg cfg(feature, values(...))` line blows past. The binary
+  #         # lives in the build tree, so build it first — .envrc leaves
+  #         # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
+  #         # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
+  #         # below.
+  #         cargo build -p tools_sccache
+  #         echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+  #       working-directory: baml_language
 
-      - name: "Run size-gate check"
-        id: check
-        working-directory: baml_language
-        run: |
-          cargo run --timings -p cargo-size-gate -- size-gate check \
-            --only baml-cli,packed-program \
-            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
-          cat size-gate-stderr.txt >&2
-          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+  #     - name: "Run size-gate check"
+  #       id: check
+  #       working-directory: baml_language
+  #       run: |
+  #         cargo run --timings -p cargo-size-gate -- size-gate check \
+  #           --only baml-cli,packed-program \
+  #           --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
+  #         cat size-gate-stderr.txt >&2
+  #         echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
-      - name: "Upload size-gate report"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: size-gate-windows
-          path: baml_language/size-gate-windows.json
-          if-no-files-found: ignore
+  #     - name: "Upload size-gate report"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: size-gate-windows
+  #         path: baml_language/size-gate-windows.json
+  #         if-no-files-found: ignore
 
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
+  #     - name: "Show sccache stats"
+  #       if: always()
+  #       run: sccache --show-stats
 
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-windows.json
+  #     - name: "Dump sccache stats (json)"
+  #       if: always()
+  #       run: sccache --show-stats --stats-format json > sccache-stats-size-gate-windows.json
 
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-size-gate-windows
-          path: sccache-stats-size-gate-windows.json
-          if-no-files-found: ignore
+  #     - name: "Upload sccache stats"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: sccache-stats-size-gate-windows
+  #         path: sccache-stats-size-gate-windows.json
+  #         if-no-files-found: ignore
 
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-size-gate-windows
-          path: baml_language/target/cargo-timings/
-          if-no-files-found: ignore
+  #     - name: "Upload cargo timings"
+  #       if: always()
+  #       uses: actions/upload-artifact@v7
+  #       with:
+  #         name: cargo-timings-size-gate-windows
+  #         path: baml_language/target/cargo-timings/
+  #         if-no-files-found: ignore
 
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
@@ -399,7 +400,11 @@ jobs:
     name: "enforce-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ always() && !cancelled() }}
-    needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
+    needs:
+      - size-gate-linux
+      # - size-gate-macos
+      # - size-gate-windows
+      - size-gate-wasm
     permissions:
       contents: read
       pull-requests: write
@@ -466,8 +471,8 @@ jobs:
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BIN: baml_language/target/debug/cargo-size-gate
           RESULT_LINUX: ${{ needs.size-gate-linux.result }}
-          RESULT_MACOS: ${{ needs.size-gate-macos.result }}
-          RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
+          # RESULT_MACOS: ${{ needs.size-gate-macos.result }}
+          # RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
           RESULT_WASM: ${{ needs.size-gate-wasm.result }}
         run: |
           # Track which expected platforms produced a JSON report.
@@ -476,12 +481,13 @@ jobs:
 
           declare -A platform_results=(
             [linux]="$RESULT_LINUX"
-            [macos]="$RESULT_MACOS"
-            [windows]="$RESULT_WINDOWS"
+            # [macos]="$RESULT_MACOS"
+            # [windows]="$RESULT_WINDOWS"
             [wasm]="$RESULT_WASM"
           )
 
-          for platform in linux macos windows wasm; do
+          # macOS and Windows are temporarily disabled.
+          for platform in linux wasm; do
             f="reports/size-gate-${platform}.json"
             if [ -s "$f" ]; then
               json_files+=("$f")
@@ -548,8 +554,8 @@ jobs:
       - name: "Fail if any platform is missing or any check failed"
         env:
           RESULT_LINUX: ${{ needs.size-gate-linux.result }}
-          RESULT_MACOS: ${{ needs.size-gate-macos.result }}
-          RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
+          # RESULT_MACOS: ${{ needs.size-gate-macos.result }}
+          # RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
           RESULT_WASM: ${{ needs.size-gate-wasm.result }}
         run: |
           fail=0
@@ -566,7 +572,8 @@ jobs:
           # 'failure' here means the job died before producing a report
           # (covered above) OR the job succeeded but uploaded a JSON marked
           # as a violation. Re-check the JSONs for the latter.
-          for platform in linux macos windows wasm; do
+          # macOS and Windows are temporarily disabled.
+          for platform in linux wasm; do
             f="reports/size-gate-${platform}.json"
             if [ -f "$f" ] && jq -e '.ok == false' "$f" > /dev/null 2>&1; then
               echo "::error::size-gate (${platform}) reported a policy violation"

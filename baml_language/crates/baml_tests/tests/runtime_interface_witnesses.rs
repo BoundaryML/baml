@@ -1,5 +1,6 @@
-//! Executable oracles for structured runtime interface witnesses,
-//! bounded `unreflect`, open-schema rendering failures, and dynamic-rule GC.
+//! Executable oracles for structured runtime interface witnesses, scoped
+//! runtime types read back through their anchor interface, open-schema
+//! rendering failures, and dynamic-rule GC.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -74,7 +75,7 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractPerson<T extends PersonAnchor>(input: string) -> T {
+        function ExtractPerson<T>(input: string) -> T {
             client: TestClient
             prompt: `Extract a person from ${input}.\n${ctx.output_format()}`
         }
@@ -89,10 +90,13 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
                 "favorite_editor": reflect.Type.of<string>(),
             }, implementations = [anchor_impl])
 
-            let prompt = ExtractPerson@render_prompt<unreflect(person_t.as_type())>("sample").text()
-            let person: PersonAnchor = ExtractPerson@parse<unreflect(person_t.as_type())>(
+            // `Person` is a rigid, unbounded scoped type: reading the result
+            // through the anchor contract is an explicit downcast.
+            type Person = unreflect(person_t.as_type())
+            let prompt = ExtractPerson@render_prompt<Person>("sample").text()
+            let person: PersonAnchor = ExtractPerson@parse<Person>(
                 `{"name":"Ada","contact_email":"ada@example.com","favorite_editor":"vim"}`
-            )
+            ) else { throw "the runtime class does not implement PersonAnchor" }
             let runtime_leaf = reflect.class.get_field<string>(person, "favorite_editor")
             return prompt
                 + "\n<RESULT>"
@@ -115,97 +119,6 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
         result.ends_with("<RESULT>Ada|ada@example.com|vim"),
         "typed virtual fields or runtime leaf failed: {result}"
     );
-}
-
-#[tokio::test]
-async fn bounded_unreflect_fails_before_rendering() {
-    let output = baml_test!(
-        r##"
-        interface PersonAnchor {
-            name: string
-            email: string
-        }
-
-        client TestClient = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = "test-key",
-    base_url = "http://localhost:1234",
-);
-
-        function ExtractPerson<T extends PersonAnchor>() -> T {
-            client: TestClient
-            prompt: `${ctx.output_format()}`
-        }
-
-        function main() -> string {
-            // If rendering ran first this empty enum would produce E0159.
-            let not_a_person = reflect.enum.new("NoPerson", [])
-            let result = ExtractPerson@render_prompt<unreflect(not_a_person)>() catch (e) {
-                reflect.errors.CompilationError => {
-                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                }
-            }
-            if result is string {
-                return result
-            }
-            return "bound did not throw"
-        }
-        "##
-    );
-
-    let BexExternalValue::String(result) =
-        output.result.expect("bound failure should be catchable")
-    else {
-        panic!("expected string result")
-    };
-    assert_eq!(
-        result.as_str(),
-        "E0001|mismatched types",
-        "render ran before the static-equivalent bound diagnostic: {result}"
-    );
-}
-
-#[tokio::test]
-async fn unreflect_argument_is_revalidated_against_the_runtime_type() {
-    let output = baml_test!(
-        r#"
-        interface PersonAnchor {
-            name: string
-            email: string
-        }
-
-        function Echo<T extends PersonAnchor>(value: T) -> T {
-            value
-        }
-
-        function main() -> string {
-            let witness = reflect.interface.implementation<PersonAnchor>()
-                .field("name")
-                .field("email")
-            let person_t = reflect.class.new("Person", {
-                "name": reflect.Type.of<string>(),
-                "email": reflect.Type.of<string>(),
-            }, implementations = [witness])
-            let result = Echo<unreflect(person_t.as_type())>(42) catch (e) {
-                reflect.errors.CompilationError => {
-                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                }
-            }
-            if result is string {
-                return result
-            }
-            return "argument check did not throw"
-        }
-        "#
-    );
-
-    let BexExternalValue::String(result) = output
-        .result
-        .expect("runtime argument mismatch should be catchable")
-    else {
-        panic!("expected string result")
-    };
-    assert_eq!(result.as_str(), "E0001|mismatched types");
 }
 
 #[tokio::test]
@@ -273,7 +186,7 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractPerson<T extends PersonAnchor>() -> T {
+        function ExtractPerson<T>() -> T {
             client: TestClient
             prompt: `${ctx.output_format()}`
         }
@@ -290,14 +203,16 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
                 "name": reflect.Type.of<string>(),
                 "email": reflect.Type.of<string>(),
             }, implementations = [witness])
-            let left_prompt = ExtractPerson@render_prompt<unreflect(left.as_type())>().text()
-            let right_prompt = ExtractPerson@render_prompt<unreflect(right.as_type())>().text()
-            let l: PersonAnchor = ExtractPerson@parse<unreflect(left.as_type())>(
+            type Left = unreflect(left.as_type())
+            type Right = unreflect(right.as_type())
+            let left_prompt = ExtractPerson@render_prompt<Left>().text()
+            let right_prompt = ExtractPerson@render_prompt<Right>().text()
+            let l: PersonAnchor = ExtractPerson@parse<Left>(
                 `{"name":"Ada","email":"ada@example.com"}`
-            )
-            let r: PersonAnchor = ExtractPerson@parse<unreflect(right.as_type())>(
+            ) else { throw "left does not implement PersonAnchor" }
+            let r: PersonAnchor = ExtractPerson@parse<Right>(
                 `{"name":"Ada","email":"ada@example.com"}`
-            )
+            ) else { throw "right does not implement PersonAnchor" }
             return left != right
                 && left_prompt == right_prompt
                 && l.name == r.name
@@ -378,7 +293,7 @@ async fn witness_inherits_interface_default_methods() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractGreeter<T extends Greeter>(input: string) -> T {
+        function ExtractGreeter<T>(input: string) -> T {
             client: TestClient
             prompt: `Extract from ${input}.\n${ctx.output_format()}`
         }
@@ -389,9 +304,10 @@ async fn witness_inherits_interface_default_methods() {
                 "name": reflect.Type.of<string>(),
             }, implementations = [witness])
             let is_member = person_t.as_type().implements(reflect.Type.of<Greeter>())
-            let person: Greeter = ExtractGreeter@parse<unreflect(person_t.as_type())>(
+            type Person = unreflect(person_t.as_type())
+            let person: Greeter = ExtractGreeter@parse<Person>(
                 `{"name":"Ada"}`
-            )
+            ) else { throw "the runtime class does not implement Greeter" }
             // Virtual dispatch on the witnessed value reaches the interface's
             // default body, whose inner `self.name` reads the linked field.
             let prefix = "no|"

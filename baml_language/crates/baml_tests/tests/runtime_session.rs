@@ -340,7 +340,8 @@ function package_current_is_rejected() -> bool {
 function runtime_and_failed_contracts() -> bool {
   let s = reflect.Session.new()
   let string_t = reflect.Type.of<string>()
-  let value = s.eval<unreflect(string_t)>(`"ok"`)
+  type StringT = unreflect(string_t)
+  let value = s.eval<StringT>(`"ok"`)
   let rejected = (s.eval<string>(`
     let should_not_exist = 7
     42
@@ -413,6 +414,18 @@ function runtime_type_binding_persists() -> bool {
   s.eval(`type T = unreflect(reflect.Type.of<int>());`)
   let rebound = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<int>()`)
   first && later && rebound
+}
+
+// A step whose value is typed by a session binding publishes as `unknown`:
+// the binding lives only inside the step's own block, and later submissions
+// read the value through a global. Narrowing recovers it.
+function binding_typed_step_value_leaves_as_unknown() -> bool {
+  let s = reflect.Session.new()
+  s.eval(`type T = unreflect(reflect.Type.of<int>());`)
+  s.eval(`let v = match (1) { let x: T => x, _ => 0 }`)
+  let narrowed = s.eval<int>(`match (v) { let n: int => n, _ => -1 }`)
+  let unrelated = s.eval<string>(`"plain"`)
+  narrowed == 1 && unrelated == "plain"
 }
 
 function session_declarations_are_generative() -> bool {
@@ -611,6 +624,15 @@ async fn declaration_redefinition_is_newest_wins_without_relinking_old_code() {
 #[tokio::test]
 async fn session_client_declarations_do_not_perform_network_io() {
     let output = baml_test!(baml: SCENARIO_7, entry: "client_declaration_is_lazy");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn binding_typed_session_step_values_publish_as_unknown() {
+    let output = baml_test!(
+        baml: SCENARIO_7,
+        entry: "binding_typed_step_value_leaves_as_unknown"
+    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
