@@ -104,8 +104,8 @@ function NavigationBranch({
   return (
     <li>
       <div
-        className={`group/nav-item flex h-8 items-center rounded-lg text-[0.8rem] transition-colors hover:bg-accent/70 data-[active=true]:bg-accent data-[active=true]:text-accent-foreground ${
-          variant === 'mobile' ? 'w-full' : ''
+        className={`group/nav-item flex items-center rounded-lg transition-colors hover:bg-accent/70 data-[active=true]:bg-accent data-[active=true]:text-accent-foreground ${
+          variant === 'mobile' ? 'h-10 w-full text-sm' : 'h-8 text-[0.8rem]'
         }`}
         data-active={active}
         data-branch-active={branchActive}

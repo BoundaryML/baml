@@ -295,7 +295,7 @@ function oai_tools_and_journal() -> string {
     let args: map<string, unknown> = { };
     let journal = ai.Journal {
         log: [
-            ai.events.UserMessage { content: "earlier question" },
+            ai.events.UserMessage.new("earlier question"),
             ai.events.AssistantMessage {
                 content: [
                     ai.content.Text { text: "on it" },
@@ -1112,4 +1112,78 @@ testset "live" with testing.Sequential() {
     } else {
         log.warn("live::openai_responses not registered: OPENAI_API_KEY is unset")
     }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Responses column of the lowering table (`_lower_block` in responses.baml):
+// image and pdf are Accepted inside `function_call_output.output` as input
+// parts; audio has no part there and Degrades into a trailing user turn;
+// video is Rejected everywhere.
+
+function _oai_media_body(media: image | audio | video | pdf) -> json {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let input = _oai_input(
+        OaiEcho@spec("Say pong."),
+        root.llm_mock.media_journal("openai/gpt-4o-mini", media),
+        ai.tools.Toolbox.new([]),
+    );
+    baml.json.parse(openai.internal.render(cl, input).body)
+}
+
+// input: [prompt user, function_call, function_call, function_call_output
+// (string), function_call_output (parts), user(text + image)].
+function oai_journal_image_accepted() -> string {
+    let body = _oai_media_body(root.llm_mock.media_png());
+    [
+        baml.json.path<string>(body, ".input[3].call_id"),
+        baml.json.path<string>(body, ".input[3].output"),
+        baml.json.path<string>(body, ".input[4].output[0].text"),
+        baml.json.path<string>(body, ".input[4].output[1].type"),
+        baml.json.path<string>(body, ".input[4].output[1].image_url"),
+        baml.json.path<string>(body, ".input[5].role"),
+        baml.json.path<string>(body, ".input[5].content[0].text"),
+        baml.json.path<string>(body, ".input[5].content[1].type"),
+        baml.json.path_or<string>(body, ".input[6].role", "absent"),
+    ].join("|")
+}
+
+test "oai_journal_image_accepted" {
+    assert.equal(
+        oai_journal_image_accepted(),
+        "call_text|sunny in SF|captured:|input_image|data:image/png;base64,SGVsbG8=|user|Screenshot after the tool ran:|input_image|absent",
+    )
+}
+
+// Degrade: the result's output stays the plain text; the audio follows as a
+// user message behind a note naming the tool.
+function oai_journal_audio_degrades() -> string {
+    let body = _oai_media_body(root.llm_mock.media_mp3());
+    [
+        baml.json.path<string>(body, ".input[4].output"),
+        baml.json.path<string>(body, ".input[5].role"),
+        baml.json.path<string>(body, ".input[5].content[0].text"),
+        baml.json.path<string>(body, ".input[5].content[1].input_audio.format"),
+        baml.json.path<string>(body, ".input[6].content[0].text"),
+        baml.json.path<string>(body, ".input[6].content[1].type"),
+    ].join("|")
+}
+
+test "oai_journal_audio_degrades" {
+    assert.equal(
+        oai_journal_audio_degrades(),
+        `captured:|user|${root.llm_mock.degrade_note("capture")}|mp3|Screenshot after the tool ran:|input_audio`,
+    )
+}
+
+function oai_journal_video_rejected() -> string {
+    let clip = baml.media.Video.from_base64("QUJD", "video/mp4");
+    baml.json.stringify(_oai_media_body(clip)) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => invalid.detail,
+        _ => `unexpected error class: ${e.to_string()}`,
+    }
+}
+
+test "oai_journal_video_rejected" {
+    assert.equal(oai_journal_video_rejected(), "OpenAI Responses does not support video prompt input")
 }

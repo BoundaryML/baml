@@ -22,7 +22,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// (`function` / `class` as a qualified name) instead of a package spelling
 /// plus path, so a package interface's call targets carry package identity
 /// the way its types do.
-pub const FORMAT_VERSION: u32 = 4;
+///
+/// Version 5: inline `unreflect(…)` is gone with the `RuntimeIsType` opcode and
+/// the call-site marker-check flag it needed, which renumbers the instruction
+/// discriminants after it.
+pub const FORMAT_VERSION: u32 = 5;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.

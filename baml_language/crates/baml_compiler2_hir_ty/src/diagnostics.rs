@@ -16,9 +16,6 @@
 use std::fmt::{self, Write as _};
 
 use baml_base::{FileId, Name, SourceFile};
-use baml_compiler_diagnostics::runtime_type::{
-    RuntimeTypeEscape, RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
-};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -28,6 +25,30 @@ use baml_type::{DeclName, Ty};
 use text_size::TextRange;
 
 use crate::render::{Spell, Viewpoint};
+
+/// How a value typed by a block-scoped `type T = …` binding would leave its
+/// block (E0172); the two roads have different remedies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScopedTypeEscapeKind {
+    /// The block's value: it leaves only through a type that does not
+    /// mention `T`, such as `unknown`.
+    Value,
+    /// A thrown type an inferred `throws` clause or an enclosing `catch`
+    /// would publish: catch it inside the block, or name its relaxation in
+    /// a declared clause.
+    Thrown {
+        /// The closest type free of the binding that a declared clause may
+        /// name for the thrown type - what the remedy should actually say.
+        /// Computed when the diagnostic is materialized, where the thrown
+        /// type is final; `None` on a report that has not reached there.
+        relaxation: Option<Ty>,
+    },
+    /// A type still being inferred would become the escaping type: an outer
+    /// binding's element type, or a block value whose inference variable
+    /// the block leaves undecided. The remedy is an annotation on the
+    /// binding the value flows into.
+    Inferred,
+}
 
 /// The syntactic context an irrefutable-pattern rule fires in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,20 +156,10 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
-    /// A value name was written bare in a generic slot. Runtime-computed
-    /// slots require the whole-slot `unreflect(value)` marker.
+    /// A value name was written bare in a generic slot. A runtime type is
+    /// lifted into a type position only by a `type T = unreflect(value)`
+    /// binding; the slot then names `T`.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
-    /// An inline `unreflect(value)` type argument would escape its call: the
-    /// runtime parameter is rigid for that one call, but a type the call
-    /// publishes still mentions it, so the value or error that comes back
-    /// would carry a name that no longer means anything. The lexical
-    /// `type T = unreflect(v)` binding is the spelling that outlives a call.
-    /// `escape` picks the note; the headline and the fix are the same either
-    /// way.
-    RuntimeTypeMustBeNamed { escape: RuntimeTypeEscape },
-    /// `unreflect(...)` in a declaration signature has no executable scope
-    /// in which to allocate its runtime type slot.
-    RuntimeTypeHasNoScope,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -388,7 +399,9 @@ pub enum TirTypeError {
     /// Inferred escaping throws are not covered by the declared throws contract.
     ThrowsContractViolation {
         declared: Ty,
-        extra_types: Vec<String>,
+        /// What the body may throw beyond the clause, as ONE type so the
+        /// renderer parenthesizes what needs it.
+        extra: Ty,
     },
     /// Inferred escaping throws are explainable through a single callback path.
     CallbackThrowsContractViolation {
@@ -400,7 +413,15 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// An `unknown`-containing throws contract without an escaping value typed
     /// `unknown`.
-    ImpreciseUnknownThrows { inferred_types: Vec<String> },
+    ImpreciseUnknownThrows {
+        /// What the function actually throws, as ONE type so the renderer
+        /// parenthesizes what needs it - this message asks the author to
+        /// write what it prints. `None` when it throws nothing.
+        inferred: Option<Ty>,
+        /// The clause must stay (a member is a scoped thrown type's
+        /// relaxation); only its spelling is wrong.
+        needs_declaration: bool,
+    },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a type-level parameter (generic
@@ -435,13 +456,15 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
-    /// Runtime type arguments cannot enter the generated streaming
-    /// specialization path.
-    RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
-    /// Indirect call opcodes have no runtime-type-check operand, so allowing
-    /// one would either panic during debug emission or skip the check in
-    /// release builds.
-    RuntimeTypeArgumentOnIndirectCall,
+    /// A value typed by a body-scoped `type T = …` binding would be
+    /// observable outside the block that binds `T` (E0172): the block's
+    /// value, or a thrown type an inferred `throws` clause would publish.
+    /// `value` is the escaping type as it mentions `T`.
+    ScopedTypeEscapesBlock {
+        name: Name,
+        value: Ty,
+        kind: ScopedTypeEscapeKind,
+    },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -1005,16 +1028,6 @@ impl TirTypeError {
                     );
                     f.write_str(diagnostic.message.as_str())
                 }
-                TirTypeError::RuntimeTypeMustBeNamed { .. } => {
-                    let diagnostic =
-                        baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
-                    f.write_str(diagnostic.message.as_str())
-                }
-                TirTypeError::RuntimeTypeHasNoScope => {
-                    let diagnostic =
-                        baml_compiler_diagnostics::runtime_type::runtime_type_has_no_scope();
-                    f.write_str(diagnostic.message.as_str())
-                }
                 TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                     if suggestions.is_empty() {
                         write!(
@@ -1450,15 +1463,12 @@ impl TirTypeError {
                     f,
                     "invalid catch binding type `{type_name}`; use a concrete type instead"
                 ),
-                TirTypeError::ThrowsContractViolation {
-                    declared,
-                    extra_types,
-                } => {
+                TirTypeError::ThrowsContractViolation { declared, extra } => {
                     write!(
                         f,
                         "declared throws is `{}`, but this function may also throw `{}`",
                         declared.spell(vp),
-                        extra_types.join(" | ")
+                        extra.spell(vp)
                     )
                 }
                 TirTypeError::CallbackThrowsContractViolation {
@@ -1491,20 +1501,29 @@ impl TirTypeError {
                         extra_types.join(", ")
                     )
                 }
-                TirTypeError::ImpreciseUnknownThrows { inferred_types } => {
-                    if inferred_types.is_empty() {
-                        write!(
-                            f,
-                            "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
-                        )
-                    } else {
-                        let inferred = inferred_types.join(" | ");
-                        write!(
-                            f,
-                            "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
-                        )
+                TirTypeError::ImpreciseUnknownThrows {
+                    inferred,
+                    needs_declaration,
+                } => match inferred {
+                    None => write!(
+                        f,
+                        "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
+                    ),
+                    Some(inferred) => {
+                        let inferred = inferred.spell(vp);
+                        if *needs_declaration {
+                            write!(
+                                f,
+                                "`throws unknown` is imprecise: this function throws `{inferred}`; write `throws {inferred}`"
+                            )
+                        } else {
+                            write!(
+                                f,
+                                "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
+                            )
+                        }
                     }
-                }
+                },
                 TirTypeError::CannotInferTypeParameter { name } => {
                     write!(f, "cannot infer type parameter `{name}`")
                 }
@@ -1528,16 +1547,11 @@ impl TirTypeError {
                         "function `{callee_name}` expects {expected} type argument(s), got {got}"
                     )
                 }
-                TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name } => {
-                    write!(
-                        f,
-                        "runtime type arguments are not supported on streaming call `{callee_name}`"
-                    )
-                }
-                TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
+                TirTypeError::ScopedTypeEscapesBlock { name, .. } => {
                     let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::runtime_type_argument_on_indirect_call(
-                    );
+                        baml_compiler_diagnostics::runtime_type::scoped_type_escapes_block(
+                            name.as_str(),
+                        );
                     f.write_str(diagnostic.message.as_str())
                 }
                 TirTypeError::TypeIsNotGeneric { type_name, kind } => {
@@ -2418,14 +2432,6 @@ pub enum DiagnosticLocation {
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
     ObjectFieldName(ExprId, ExprId),
-    /// A whole `unreflect(carrier)` type-argument slot, named by its carrier
-    /// expression, inside the expression that wrote it. E0168 reports at the
-    /// slot and quotes `enclosing` back with the slot renamed, so both spans
-    /// travel together to the renderer, which is where the file text lives.
-    UnreflectArg {
-        carrier: ExprId,
-        enclosing: ExprId,
-    },
     Span(TextRange),
 }
 
@@ -2494,13 +2500,10 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::BodyTypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
-            DiagnosticLocation::UnreflectArg { carrier, .. } => source_map
-                .map(|sm| sm.unreflect_arg_span(*carrier))
-                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
-        let mut related: Vec<RenderedRelatedInformation> = self
+        let related: Vec<RenderedRelatedInformation> = self
             .related
             .iter()
             .filter_map(|note| {
@@ -2513,36 +2516,6 @@ impl<'db> TirDiagnostic<'db> {
                 )
             })
             .collect();
-
-        // E0168's suggestion quotes the author's own line back at them. This
-        // is the first point that holds both the file text and the resolved
-        // spans, so the rewrite is assembled here rather than in inference,
-        // which sees arena ids and no source at all.
-        if let DiagnosticLocation::UnreflectArg { enclosing, .. } = &self.primary
-            && let Some(source_map) = source_map
-        {
-            let enclosing = source_map.expr_span(*enclosing);
-            let rewrite = if enclosing.contains_range(primary_range) {
-                let text = scope_file.text(db);
-                let start = usize::from(enclosing.start());
-                text.get(start..usize::from(enclosing.end()))
-                    .map(|written| {
-                        RuntimeTypeNameRewrite::from_source(
-                            written,
-                            usize::from(primary_range.start()) - start
-                                ..usize::from(primary_range.end()) - start,
-                        )
-                    })
-                    .unwrap_or_default()
-            } else {
-                RuntimeTypeNameRewrite::default()
-            };
-            related.push(RenderedRelatedInformation {
-                file_id: scope_file.file_id(db),
-                range: primary_range,
-                message: runtime_type_must_be_named_help(&rewrite),
-            });
-        }
 
         RenderedTirDiagnostic {
             error: self.error.clone(),

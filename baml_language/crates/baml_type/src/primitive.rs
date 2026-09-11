@@ -42,19 +42,10 @@ impl PrimitiveType {
     /// classes in `baml_builtins2/baml_std/baml/ns_media/media.baml`, and
     /// `uint8array` has its class in `baml_builtins2/baml_std/baml/uint8array.baml`.
     pub fn builtin_class_path(&self) -> &'static [&'static str] {
-        match self {
-            Self::Int => &["Int"],
-            Self::Bigint => &["Bigint"],
-            Self::Float => &["Float"],
-            Self::Bool => &["Bool"],
-            Self::Null => &["Null"],
-            Self::String => &["String"],
-            Self::Uint8Array => &["Uint8Array"],
-            Self::Image => &["media", "Image"],
-            Self::Audio => &["media", "Audio"],
-            Self::Video => &["media", "Video"],
-            Self::Pdf => &["media", "Pdf"],
-        }
+        crate::compiler_aliases::by_target(crate::compiler_aliases::AliasTarget::Primitive(*self))
+            .definition
+            .expect("primitives have member declarations")
+            .path
     }
 
     pub fn from_literal(lit: &baml_base::Literal) -> Self {
@@ -71,35 +62,28 @@ impl PrimitiveType {
     /// `image`, …). Single source of truth — the [`fmt::Display`] impl delegates
     /// here.
     pub fn alias(&self) -> &'static str {
-        match self {
-            Self::Int => "int",
-            Self::Bigint => "bigint",
-            Self::Float => "float",
-            Self::String => "string",
-            Self::Bool => "bool",
-            Self::Null => "null",
-            Self::Uint8Array => "uint8array",
-            Self::Image => "image",
-            Self::Audio => "audio",
-            Self::Video => "video",
-            Self::Pdf => "pdf",
-        }
+        crate::compiler_aliases::by_target(crate::compiler_aliases::AliasTarget::Primitive(*self))
+            .display_name()
     }
 
     /// Resolve a lowercase source spelling to its semantic primitive.
     pub fn from_alias(alias: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|primitive| primitive.alias() == alias)
+        match crate::compiler_aliases::by_spelling(alias)?.target {
+            crate::compiler_aliases::AliasTarget::Primitive(primitive) => Some(primitive),
+            _ => None,
+        }
     }
 
     /// Inverse of [`builtin_class_path`](Self::builtin_class_path): map a class
     /// path (relative to the `baml` package, e.g. `["media", "Image"]`) back to
     /// the primitive it is the companion class for.
     pub fn from_builtin_class_path(path: &[&str]) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|primitive| primitive.builtin_class_path() == path)
+        match crate::compiler_aliases::by_definition_path(baml_base::LangPackage::Baml, path)?
+            .target
+        {
+            crate::compiler_aliases::AliasTarget::Primitive(primitive) => Some(primitive),
+            _ => None,
+        }
     }
 }
 
@@ -137,26 +121,11 @@ impl BuiltinTypeName {
     }
 
     pub fn from_alias(alias: &str) -> Option<Self> {
-        if let Some(primitive) = PrimitiveType::from_alias(alias) {
-            return Some(Self::Primitive(primitive));
-        }
-        Some(match alias {
-            "json" => Self::Json,
-            "void" => Self::Void,
-            "never" => Self::Never,
-            "unknown" => Self::Unknown,
-            _ => return None,
-        })
+        Self::from_target(crate::compiler_aliases::by_spelling(alias)?.target)
     }
 
     pub fn alias(self) -> &'static str {
-        match self {
-            Self::Primitive(primitive) => primitive.alias(),
-            Self::Json => "json",
-            Self::Void => "void",
-            Self::Never => "never",
-            Self::Unknown => "unknown",
-        }
+        crate::compiler_aliases::by_target(self.target()).display_name()
     }
 
     /// The path of this type's definition relative to the `baml` package.
@@ -164,18 +133,38 @@ impl BuiltinTypeName {
     /// Compiler intrinsics deliberately return `None`: their documentation is
     /// supplied by the language-topic registry instead.
     pub fn builtin_definition_path(self) -> Option<&'static [&'static str]> {
+        crate::compiler_aliases::by_target(self.target())
+            .definition
+            .map(|definition| definition.path)
+    }
+
+    fn target(self) -> crate::compiler_aliases::AliasTarget {
+        use crate::compiler_aliases::AliasTarget;
         match self {
-            Self::Primitive(primitive) => Some(primitive.builtin_class_path()),
-            Self::Json => Some(&["json", "json"]),
-            Self::Void | Self::Never | Self::Unknown => None,
+            Self::Primitive(primitive) => AliasTarget::Primitive(primitive),
+            Self::Json => AliasTarget::Json,
+            Self::Void => AliasTarget::Void,
+            Self::Never => AliasTarget::Never,
+            Self::Unknown => AliasTarget::Unknown,
         }
     }
 
+    fn from_target(target: crate::compiler_aliases::AliasTarget) -> Option<Self> {
+        use crate::compiler_aliases::AliasTarget;
+        Some(match target {
+            AliasTarget::Primitive(primitive) => Self::Primitive(primitive),
+            AliasTarget::Json => Self::Json,
+            AliasTarget::Void => Self::Void,
+            AliasTarget::Never => Self::Never,
+            AliasTarget::Unknown => Self::Unknown,
+            _ => return None,
+        })
+    }
+
     pub fn from_builtin_definition_path(path: &[&str]) -> Option<Self> {
-        if path == ["json", "json"] {
-            return Some(Self::Json);
-        }
-        PrimitiveType::from_builtin_class_path(path).map(Self::Primitive)
+        Self::from_target(
+            crate::compiler_aliases::by_definition_path(baml_base::LangPackage::Baml, path)?.target,
+        )
     }
 }
 

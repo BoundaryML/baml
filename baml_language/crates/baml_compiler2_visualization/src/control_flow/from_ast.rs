@@ -25,32 +25,6 @@ fn stmt_id_to_source_expr(id: ast::StmtId) -> u32 {
     STMT_SOURCE_EXPR_TAG | id.into_raw().into_u32()
 }
 
-fn expression_type_operands(body: &ast::ExprBody, expr: &ast::Expr) -> Vec<ast::ExprId> {
-    let mut operands = Vec::new();
-    match expr {
-        ast::Expr::Call { type_args, .. }
-        | ast::Expr::GenericApply { type_args, .. }
-        | ast::Expr::Object { type_args, .. } => {
-            for ty in type_args {
-                ty.unreflect_operands(&mut operands);
-            }
-        }
-        ast::Expr::Upcast { target, .. } => target.unreflect_operands(&mut operands),
-        ast::Expr::QualifiedPath {
-            qself, interface, ..
-        } => {
-            qself.unreflect_operands(&mut operands);
-            interface.unreflect_operands(&mut operands);
-        }
-        ast::Expr::Match {
-            scrutinee_type: Some(type_id),
-            ..
-        } => body.type_annotations[*type_id].unreflect_operands(&mut operands),
-        _ => {}
-    }
-    operands
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -176,9 +150,6 @@ impl<'a> AstGraphBuilder<'a> {
 
     fn visit_expr(&mut self, id: ast::ExprId) {
         let expr = self.body.exprs[id].clone();
-        for operand in expression_type_operands(self.body, &expr) {
-            self.visit_expr(operand);
-        }
         match &expr {
             ast::Expr::Block { stmts, tail_expr } => {
                 for stmt_id in stmts {
@@ -282,13 +253,14 @@ impl<'a> AstGraphBuilder<'a> {
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
             }
-            ast::Stmt::TypeBinding { value, .. } => {
-                let mut operands = Vec::new();
-                value.unreflect_operands(&mut operands);
-                for operand in operands {
-                    self.visit_expr(operand);
-                }
-            }
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Runtime(operand),
+                ..
+            } => self.visit_expr(*operand),
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Static(_),
+                ..
+            } => {}
             ast::Stmt::Throw { value } => {
                 self.visit_expr(*value);
             }
@@ -783,9 +755,6 @@ impl<'a> AstGraphBuilder<'a> {
                 None => format!("let {name}"),
             },
             ast::Pattern::Type(ty) => ty.to_string(),
-            ast::Pattern::Unreflect(expr) => {
-                format!("unreflect({})", self.body.display_expr(*expr))
-            }
             ast::Pattern::Class {
                 class,
                 generic_args,
@@ -901,9 +870,6 @@ fn push_callee_name(names: &mut Vec<String>, name: String) {
 }
 
 fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut Vec<String>) {
-    for operand in expression_type_operands(body, &body.exprs[id]) {
-        collect_callee_names_expr(body, operand, names);
-    }
     match &body.exprs[id] {
         ast::Expr::Call { callee, args, .. } => {
             push_callee_name(names, callee_display_name(body, *callee));
@@ -1064,13 +1030,14 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
 fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut Vec<String>) {
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
-        ast::Stmt::TypeBinding { value, .. } => {
-            let mut operands = Vec::new();
-            value.unreflect_operands(&mut operands);
-            for operand in operands {
-                collect_callee_names_expr(body, operand, names);
-            }
-        }
+        ast::Stmt::TypeBinding {
+            value: ast::TypeBindingValue::Runtime(operand),
+            ..
+        } => collect_callee_names_expr(body, *operand, names),
+        ast::Stmt::TypeBinding {
+            value: ast::TypeBindingValue::Static(_),
+            ..
+        } => {}
         ast::Stmt::Defer { body: defer_body } => {
             collect_callee_names_expr(body, *defer_body, names);
         }

@@ -870,7 +870,7 @@ async fn signature_object_literal_construction() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn unreflect_reifies_the_runtime_type_argument() {
+async fn a_scoped_runtime_type_reifies_as_the_callee_type_argument() {
     let output = baml_test!(
         r#"
         function inspect<T>() -> string throws never {
@@ -879,7 +879,8 @@ async fn unreflect_reifies_the_runtime_type_argument() {
 
         function main() -> string throws reflect.errors.CompilationError {
             let t = reflect.enum.new("Category", ["RED", "BLUE"])
-            return inspect<unreflect(t)>()
+            type T = unreflect(t)
+            return inspect<T>()
         }
         "#
     );
@@ -909,8 +910,9 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
                 reflect.enum.value("RED", alias = "k7", description = "warm"),
                 reflect.enum.value("BLUE", description = "cool"),
             ])
-            let prompt = Classify@render_prompt<unreflect(t)>("sample").text()
-            let parsed = Classify@parse<unreflect(t)>(`"k7"`)
+            type T = unreflect(t)
+            let prompt = Classify@render_prompt<T>("sample").text()
+            let parsed = Classify@parse<T>(`"k7"`)
             return prompt + "\n<PARSED>" + reflect.enum.get_value(parsed)
         }
         "##
@@ -964,7 +966,8 @@ function main() -> string {
         "speaker": reflect.Type.of<string>(),
         "words": reflect.Type.of<string[]>(),
     })
-    Extract@render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+    type Transcript = unreflect(runtime_class.as_type())
+    Extract@render_prompt<Wrapper<Transcript>>("sample").text()
 }
 "##
     );
@@ -1001,8 +1004,10 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
             // rather than the enum-kind view's zero-argument metadata reader.
             let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
             let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
-            let left_prompt = Classify@render_prompt<unreflect(left)>("sample").text()
-            let right_prompt = Classify@render_prompt<unreflect(right)>("sample").text()
+            type Left = unreflect(left)
+            type Right = unreflect(right)
+            let left_prompt = Classify@render_prompt<Left>("sample").text()
+            let right_prompt = Classify@render_prompt<Right>("sample").text()
             let tagged = left.meta(
                 alias = "category_code",
                 description = "A generated category",
@@ -1080,7 +1085,8 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
             let t = reflect.enum.new("Category", []) catch (e) {
                 _ => return "constructor threw"
             }
-            let rendered = Classify@render_prompt<unreflect(t)>("sample") catch (e) {
+            type T = unreflect(t)
+            let rendered = Classify@render_prompt<T>("sample") catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                 _ => "wrong render error",
             }
@@ -1105,8 +1111,10 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
     );
 }
 
+/// A scoped runtime type is an ordinary type argument to the streaming
+/// companion: nothing about `@stream` is special once `T` is a bound name.
 #[test]
-fn runtime_type_arguments_on_streaming_companions_obey_escape_rules() {
+fn a_scoped_runtime_type_is_an_ordinary_streaming_type_argument() {
     let db = setup_test_db(
         r##"
         client TestClient = openai.ResponsesClient.new(
@@ -1121,19 +1129,17 @@ fn runtime_type_arguments_on_streaming_companions_obey_escape_rules() {
 
         function main() -> null {
             let t = reflect.enum.new("Category", ["RED"])
-            Classify@stream<unreflect(t)>("sample")
+            type T = unreflect(t)
+            Classify@stream<T>("sample")
             return null
         }
         "##,
     );
-    let diagnostics = check_user_files(&db);
-    assert!(
-        diagnostics
-            .iter()
-            .flat_map(|diagnostic| &diagnostic.related_info)
-            .any(|related| related.message.contains("Classify@stream<Out>(\"sample\")")),
-        "missing runtime-type escape diagnostic with an @stream repair: {diagnostics:#?}"
-    );
+    let errors: Vec<_> = check_user_files(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "unexpected errors: {errors:#?}");
 }
 
 /// B-1582 item 3: a generic LLM function's `@render_prompt` companion has a

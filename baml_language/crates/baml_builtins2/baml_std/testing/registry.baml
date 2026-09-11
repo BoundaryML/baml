@@ -571,7 +571,7 @@ function _run_children_parallel(
     }
     // No catch: the children's bodies cannot throw, so the futures are
     // `Future<_NamedChildReport, never>` and awaiting them is infallible.
-    let named_results = await baml.future.all_complete(futures);
+    let named_results = await baml.future.all(futures);
     root._aggregate_reports(named_results)
 }
 

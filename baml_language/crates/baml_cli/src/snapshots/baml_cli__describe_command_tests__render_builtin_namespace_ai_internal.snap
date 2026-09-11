@@ -38,5 +38,5 @@ function         ai.internal._redact_after        <builtin>/ai/ns_internal/wire.
 function         ai.internal._redact_value_end    <builtin>/ai/ns_internal/wire.baml:34
 function         ai.internal._merge_json          <builtin>/ai/ns_internal/wire.baml:48
 function         ai.internal._wire_blocks         <builtin>/ai/ns_internal/wire.baml:90
-function         ai.internal._flush_orphaned_calls <builtin>/ai/ns_internal/wire.baml:123
-function         ai.internal._resolve_pending_call <builtin>/ai/ns_internal/wire.baml:131
+function         ai.internal._flush_orphaned_calls <builtin>/ai/ns_internal/wire.baml:126
+function         ai.internal._resolve_pending_call <builtin>/ai/ns_internal/wire.baml:134

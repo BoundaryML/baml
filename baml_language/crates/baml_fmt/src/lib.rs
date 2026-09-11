@@ -937,22 +937,27 @@ implements<T extends Named> Printable for Box<T> {
 
     #[test]
     fn test_runtime_type_syntax_formatting_is_idempotent() {
+        // The formatter is parse-only: it must preserve the scoped binding
+        // (the one legal `unreflect` position) and, for recovery, the inline
+        // spelling the checker rejects.
         let source = r#"function f(t: reflect.Type, value: int) -> int {
-    type T = Wrapper<unreflect(t)>
-    let annotated: Wrapper<unreflect(t)>? = null
+    type T = unreflect(t)
+    type S = Wrapper<string>
+    let annotated: Wrapper<T>? = null
     let result = identity<Wrapper<unreflect(t)>, string>(value)
     match (value) {
-        Wrapper<unreflect(t)> => result,
+        Wrapper<T> => result,
         _ => 0
     }
 }
 "#;
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("runtime type syntax should format");
-        assert!(formatted.contains("type T = Wrapper<unreflect(t)>"));
-        assert!(formatted.contains("let annotated: Wrapper<unreflect(t)>? = null"));
+        assert!(formatted.contains("type T = unreflect(t)"));
+        assert!(formatted.contains("type S = Wrapper<string>"));
+        assert!(formatted.contains("let annotated: Wrapper<T>? = null"));
         assert!(formatted.contains("identity<Wrapper<unreflect(t)>, string>"));
-        assert!(formatted.contains("Wrapper<unreflect(t)> => result"));
+        assert!(formatted.contains("Wrapper<T> => result"));
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }

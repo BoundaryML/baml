@@ -38,9 +38,11 @@ export function AuthoredPage({
       description={page.data.description}
       title={page.data.title}
       toc={page.data.toc.map((item) => ({
+        depth: item.depth,
         href: item.url,
         label: item.title,
       }))}
+      wideContent={path === '/baml/book/errors'}
     >
       <Content components={useMDXComponents(components)} />
     </DocsShell>

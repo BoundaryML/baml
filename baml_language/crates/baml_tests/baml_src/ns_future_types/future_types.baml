@@ -73,8 +73,7 @@ test "captured_local_future_is_int_future" {
 
 // The spawned body's type is the frame's `T`, so this future's value type is
 // whatever `T` was specialized to at the call site — not a compile-time constant
-// of this function. The spawn lowers `T` to a frame reference (`all_complete<T,
-// E>` emits `spawn<#0[], #1>`; see the `__baml_std__` MIR snapshot) that the
+// of this function. The spawn lowers `T` to a frame reference that the
 // runtime resolves against the caller-supplied type args.
 function spawn_is_int_future<T>(v: T) -> bool throws never {
     let f = spawn { v };
@@ -205,7 +204,7 @@ test "jump_table_picks_int_future_arm" {
 // ── 7. A future's arguments carry through a container element type ────────────
 
 // `Future<T, E>[]` is how the combinators take their inputs
-// (`baml.future.all_complete(futures)`), so the element type has to keep
+// (`baml.future.all(futures)`), so the element type has to keep
 // discriminating once it is a future.
 function future_array_matches_fn() -> bool throws never {
     let fs: baml.future.Future<int, never>[] = [spawn { 1 }];
