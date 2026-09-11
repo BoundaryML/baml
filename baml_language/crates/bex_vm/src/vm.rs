@@ -676,6 +676,54 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn input_capture_reads_arguments_only_when_selected_and_preserves_names() {
+        #[derive(Default)]
+        struct Inputs(std::sync::Mutex<Vec<(String, Value)>>);
+        impl super::VmCallInputCaptureHook for Inputs {
+            fn capture_call_input(&self, capture: super::VmCallInputCapture<'_>) {
+                *self.0.lock().unwrap() = capture.entries.to_vec();
+            }
+        }
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!();
+        };
+        function.param_names = vec!["first".into()];
+        let mut vm = test_vm(vec![Object::Function(function)]);
+        let function = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.bex_ref_seed = Some((
+            bex_events::ids::ProcessEuid([1; 16]),
+            bex_events::ids::EngineId(1),
+        ));
+        let inputs = Arc::new(Inputs::default());
+        vm.set_call_input_capture_hook(Some(inputs.clone()));
+        vm.maybe_capture_call_inputs(
+            function,
+            1,
+            (0..2).map(|_| panic!("disabled input capture must not read arguments")),
+            VmCaptureMask::disabled(),
+        );
+        assert!(inputs.0.lock().unwrap().is_empty());
+
+        vm.maybe_capture_call_inputs(
+            function,
+            1,
+            [Value::int(10), Value::int(20)].into_iter(),
+            VmCaptureMask {
+                inputs: true,
+                ..VmCaptureMask::disabled()
+            },
+        );
+        assert_eq!(
+            *inputs.0.lock().unwrap(),
+            [
+                ("first".into(), Value::int(10)),
+                ("arg1".into(), Value::int(20))
+            ]
+        );
+    }
+
+    #[test]
     fn runtime_cache_identity_unwraps_callable_allocations() {
         let (mut vm, function) = vm_with_native_entry();
         let closure_a = vm.tlab.alloc(Object::Closure(Closure {
@@ -2323,10 +2371,11 @@ impl BexVm {
         )
     }
 
-    fn maybe_capture_named_inputs(
+    fn maybe_capture_call_inputs(
         &self,
+        function: HeapPtr,
         call_id: u64,
-        entries: &[(String, Value)],
+        args: impl ExactSizeIterator<Item = Value>,
         mask: VmCaptureMask,
     ) {
         if !mask.inputs {
@@ -2338,37 +2387,30 @@ impl BexVm {
         let Some(call) = self.trace_call_key_for_call_id(call_id) else {
             return;
         };
+        // Borrow names only after capture is selected. Ordinary calls need no
+        // parameter-name clone or input-entry allocation.
+        let function = self
+            .get_object(function)
+            .as_callable()
+            .expect("input capture receives the resolved function");
+        let entries: Vec<_> = args
+            .enumerate()
+            .map(|(index, value)| {
+                let name = function
+                    .param_names
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| format!("arg{index}"));
+                (name, value)
+            })
+            .collect();
         hook.capture_call_input(VmCallInputCapture {
             call,
-            entries,
+            entries: &entries,
             heap: self.heap.as_ref(),
             permit: self.proof(),
             manual: mask.manual,
         });
-    }
-
-    fn maybe_capture_call_inputs(
-        &self,
-        param_names: &[String],
-        call_id: u64,
-        locals_offset: StackIndex,
-        arg_count: usize,
-        mask: VmCaptureMask,
-    ) {
-        if !mask.inputs {
-            return;
-        }
-        let base = locals_offset.into_raw();
-        let mut entries = Vec::with_capacity(arg_count);
-        for index in 0..arg_count {
-            let name = param_names
-                .get(index)
-                .cloned()
-                .unwrap_or_else(|| format!("arg{index}"));
-            let value = self.stack[StackIndex::from_raw(base + index)];
-            entries.push((name, value));
-        }
-        self.maybe_capture_named_inputs(call_id, &entries, mask);
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -6567,7 +6609,7 @@ impl BexVm {
         runtime_id: Option<Value>,
         frame_idx: usize,
     ) -> Result<VmExecState, VmError> {
-        let (sys_op, function_id, arity, capture_class, param_names) = {
+        let (sys_op, function_id, arity, capture_class) = {
             let obj = self.get_object(callee_fn_ptr);
             let Object::Function(f) = obj else {
                 return Err(VmInternalError::TypeError {
@@ -6592,7 +6634,6 @@ impl BexVm {
                 } else {
                     FunctionCaptureClass::Ordinary
                 },
-                f.param_names.clone(),
             )
         };
         let args_offset = self
@@ -6619,18 +6660,12 @@ impl BexVm {
         if let Some(explicit_local_id) = &explicit_local_id {
             self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
         }
-        let entries: Vec<(String, Value)> = call_args
-            .iter()
-            .enumerate()
-            .map(|(index, value)| {
-                let name = param_names
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_else(|| format!("arg{index}"));
-                (name, *value)
-            })
-            .collect();
-        self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
+        self.maybe_capture_call_inputs(
+            callee_fn_ptr,
+            call_id,
+            call_args.iter().copied(),
+            capture_mask,
+        );
         Ok(VmExecState::SysOp {
             operation: sys_op,
             args: call_args,
@@ -6787,7 +6822,6 @@ impl BexVm {
         } else {
             FunctionCaptureClass::Ordinary
         };
-        let callee_param_names = callee.param_names.clone();
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee_arity,
@@ -7003,10 +7037,11 @@ impl BexVm {
                     self.install_consumed_local_id_for_call(call_id, explicit_local_id);
                 }
                 self.maybe_capture_call_inputs(
-                    &callee_param_names,
+                    callee_fn_ptr,
                     call_id,
-                    locals_offset,
-                    arg_count,
+                    (0..arg_count).map(|index| {
+                        self.stack[StackIndex::from_raw(locals_offset.into_raw() + index)]
+                    }),
                     capture_mask,
                 );
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
