@@ -1,0 +1,39 @@
+{
+  "checked_utc": "2026-09-10T22:57:54.860356+00:00",
+  "run_id": "20260910T225650Z",
+  "start_utc": "2026-09-10T22:56:50.453127+00:00",
+  "duration_seconds": 0,
+  "configured_rps_per_target": 10,
+  "configured_rps_aggregate": 70,
+  "observed_completion_rps": {
+    "node-baseline": 9.988,
+    "node-baml": 9.988,
+    "python-baseline": 9.988,
+    "python-baml": 9.988,
+    "baml-amazonlinux": 9.988,
+    "baml-alpine": 9.988,
+    "baml-debian": 9.988
+  },
+  "observation_interval_seconds": 20.025000000000006,
+  "actual_attack_commands": [
+    "vegeta attack -name=node-baseline -targets=/results/continuous-runs/20260910T225650Z/node-baseline.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=node-baml -targets=/results/continuous-runs/20260910T225650Z/node-baml.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=python-baml -targets=/results/continuous-runs/20260910T225650Z/python-baml.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=baml-debian -targets=/results/continuous-runs/20260910T225650Z/baml-debian.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=baml-alpine -targets=/results/continuous-runs/20260910T225650Z/baml-alpine.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=python-baseline -targets=/results/continuous-runs/20260910T225650Z/python-baseline.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 ",
+    "vegeta attack -name=baml-amazonlinux -targets=/results/continuous-runs/20260910T225650Z/baml-amazonlinux.targets -rate=10/1s -duration=0s -timeout=10s -workers=10 -max-workers=2000 -connections=100 -max-connections=2000 -keepalive=true -http2=false -redirects=0 -max-body=32 "
+  ],
+  "machine_id": "8ee335b73679e8",
+  "image_ref": {
+    "registry": "registry.fly.io",
+    "repository": "baml-hw-0910-load",
+    "tag": "deployment-01M26RGWMYXTY9ZMF7MN9AYQVW",
+    "digest": "sha256:4e04ecd9bdceebdbba862d26a91ab1410dc63ad1563cf4a7856d290428e39f83"
+  },
+  "guest": {
+    "cpu_kind": "performance",
+    "cpus": 8,
+    "memory_mb": 16384
+  }
+}

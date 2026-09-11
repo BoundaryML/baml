@@ -1,0 +1,10 @@
+[package]
+name = "python-baml"
+
+[toolchain]
+version = "0.18.1-nightly.20260908.a"
+
+[generator.app]
+output_type = "python/pydantic"
+output_dir = "."
+naming_convention = "preserve-case"

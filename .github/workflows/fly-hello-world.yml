@@ -1,0 +1,34 @@
+name: Fly hello-world harness
+
+on:
+  pull_request:
+    paths:
+      - "tools/bench/hello-world-fly/**"
+      - ".github/workflows/fly-hello-world.yml"
+  push:
+    branches: [canary]
+    paths:
+      - "tools/bench/hello-world-fly/**"
+      - ".github/workflows/fly-hello-world.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: python3 tools/bench/hello-world-fly/scripts/check.py
+      - name: Check Node and shell syntax without starting workloads
+        working-directory: tools/bench/hello-world-fly
+        run: |
+          for source in */*.js */*.cjs; do node --check "$source"; done
+          for source in */*.sh; do sh -n "$source"; done

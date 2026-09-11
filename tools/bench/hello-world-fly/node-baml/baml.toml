@@ -1,0 +1,10 @@
+[package]
+name = "node-baml"
+
+[toolchain]
+version = "0.18.1-nightly.20260908.a"
+
+[generator.app]
+output_type = "typescript/node"
+output_dir = "."
+naming_convention = "preserve-case"
