@@ -16,7 +16,7 @@ on:
         options: [notify, fill-schedule, test-notify]
         default: fill-schedule
       sandbox_parent_ts:
-        description: Existing #sam-sandbox thread for test-notify (no new parent)
+        description: 'Existing #sam-sandbox thread for test-notify (no new parent)'
         type: string
         default: '1789163124.808429'
 
