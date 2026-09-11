@@ -4,76 +4,42 @@
 //! This module emits only the Node SDK, Node package configuration, and Node Rust
 //! test scaffold. Browser and Workers generation lives in [`crate::typescript_web`].
 
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use sdk_test_harness_runner::fixtures;
 use sdkgen_typescript_shared::sdkgen_typescript::{self, NamingConvention};
 
-use crate::{
-    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture, watch_dir,
-    write_codegen_output_recording,
-};
+use crate::{CodegenCtx, load_fixture, write_codegen_output};
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_node.json");
 const TSCONFIG_JSON: &str = include_str!("templates/tsconfig.json");
 const VITEST_NODE_CONFIG: &str = include_str!("templates/vitest_node.config.ts");
 pub(crate) const TEST_RUNTIME: &str = include_str!("templates/test_runtime.ts");
 
-pub(crate) const CACHE_SUBDIR: &str = "pnpm-store";
-pub(crate) const CACHE_ENV_VAR: &str = "npm_config_store_dir";
-const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_SETUP";
-
-pub fn run_all() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let fixtures = fixtures::discover_shared(&fixtures_root);
-    assert!(
-        !fixtures.is_empty(),
-        "no fixtures discovered under {}",
-        fixtures_root.display()
+/// Generate every Node TypeScript fixture SDK. Called by the `typescript`
+/// subcommand of the `sdk_test_codegen` binary, which
+/// `crates/typescript/setup.sh` runs before `pnpm install`.
+///
+/// Codegen failures abort rather than being recorded: this only runs when
+/// someone is running the Node suite, so a panic here should stop the setup
+/// script outright instead of surfacing later as a separate test.
+pub fn run_all(ctx: &CodegenCtx) {
+    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
+    assert_eq!(
+        discovered,
+        fixtures::SHARED,
+        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
+        ctx.fixtures_root.display()
     );
-
-    let mut diagnostics = BuildDiagnostics::new(&out_dir);
-    let mut fixture_tests = Vec::new();
-    for fixture in &fixtures {
-        let custom = manifest_dir.join(fixture).join("customizable");
-        fixture_tests.push(codegen_fixture(
-            &fixtures_root,
-            fixture,
-            &manifest_dir,
-            &custom,
-            &mut diagnostics,
-        ));
-    }
-
-    write_fixtures_tests_rs(&out_dir, &fixture_tests);
-    diagnostics.finalize();
-
-    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
-    watch_dir(&fixtures_root);
-    for fixture in &fixtures {
-        watch_dir(&manifest_dir.join(fixture).join("customizable"));
+    for fixture in fixtures::SHARED {
+        let custom = ctx.crate_dir.join(fixture).join("customizable");
+        codegen_fixture(&ctx.fixtures_root, fixture, &ctx.crate_dir, &custom);
     }
 }
 
-struct FixtureTests {
-    name: String,
-    has_tests: bool,
-}
-
-fn codegen_fixture(
-    fixtures_root: &Path,
-    fixture: &str,
-    manifest_dir: &Path,
-    custom: &Path,
-    diagnostics: &mut BuildDiagnostics,
-) -> FixtureTests {
+fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom: &Path) {
     let loaded = load_fixture(fixtures_root, fixture);
-    let generated = manifest_dir.join(fixture).join("generated");
+    let generated = crate_dir.join(fixture).join("generated");
     clean_generated(&generated);
 
     let node = generated.join("node");
@@ -83,7 +49,7 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output_recording(&node.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output(&node.join("baml_sdk"), output, fixture);
     if custom.exists() {
         copy_customizable(custom, &node);
     }
@@ -98,15 +64,15 @@ fn codegen_fixture(
         ("tsconfig.node.json", TSCONFIG_JSON.to_string()),
         ("vitest.node.config.ts", VITEST_NODE_CONFIG.to_string()),
     ];
-    for (relative, contents) in files {
-        if let Err(error) = fs::write(generated.join(relative), contents) {
-            diagnostics.record("package_json_write", fixture, error);
-        }
-    }
+    write_all(&generated, files);
+}
 
-    FixtureTests {
-        name: fixture.to_string(),
-        has_tests: has_vitest_tests(&node),
+/// Write each `(relative path, contents)` into `root`, failing loudly.
+pub(crate) fn write_all<const N: usize>(root: &Path, files: [(&str, String); N]) {
+    for (relative, contents) in files {
+        let path = root.join(relative);
+        fs::write(&path, contents)
+            .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
     }
 }
 
@@ -166,93 +132,4 @@ pub(crate) fn rewrite_test_bridge_imports(dir: &Path) {
             }
         }
     }
-}
-
-pub(crate) fn has_vitest_tests(dir: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return false;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            if has_vitest_tests(&path) {
-                return true;
-            }
-        } else if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".test.ts"))
-        {
-            return true;
-        }
-    }
-    false
-}
-
-fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
-    let mut buffer = String::new();
-    buffer.push_str("// Generated by sdk_test_codegen::typescript::run_all — do not edit.\n");
-    buffer.push_str("::sdk_test_harness_runner::build_diagnostics!();\n");
-    buffer.push_str(&format!(
-        "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
-    ));
-    // Runs through the bridge's own `attw` package script rather than
-    // `pnpm exec attw` so a local `pnpm attw` and this test stay the same
-    // check — the script stages the pack without the native addon
-    // (`typescript_src/attw-check.js` explains why).
-    buffer.push_str(&format!(
-        r#"
-mod bridge_typescript {{
-    #[test]
-    fn attw() {{
-        ::sdk_test_harness_runner::run_workspace_cmd(
-            "sdks/typescript/bridge_typescript",
-            "pnpm run attw",
-            "{CACHE_SUBDIR}",
-            "{CACHE_ENV_VAR}",
-        );
-    }}
-}}
-"#
-    ));
-
-    for fixture in fixtures {
-        let name = &fixture.name;
-        buffer.push_str(&format!(
-            r#"
-mod {name} {{
-    fn cmd(command: &str) {{
-        ::sdk_test_harness_runner::run_test_cmd(
-            "{name}",
-            command,
-            "{CACHE_SUBDIR}",
-            "{CACHE_ENV_VAR}",
-        );
-    }}
-
-    #[test]
-    fn esm_node() {{
-        ::sdk_test_harness_runner::assert_typescript_node_generated_esm("{name}", "node");
-    }}
-
-    #[test]
-    fn tsc_node() {{
-        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.node.json");
-    }}
-"#
-        ));
-        if fixture.has_tests {
-            buffer.push_str(
-                r#"
-    #[test]
-    fn vitest_node() {
-        cmd("pnpm exec vitest run --config vitest.node.config.ts");
-    }
-"#,
-            );
-        }
-        buffer.push_str("\n}\n");
-    }
-
-    fs::write(out_dir.join("typescript_tests.rs"), buffer).unwrap();
 }

@@ -4,22 +4,15 @@
 //! corpus from the sibling `sdk_tests/crates/typescript` package into its own
 //! ignored Web and Workers generated trees.
 
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use sdk_test_harness_runner::fixtures;
 use sdkgen_typescript_shared::{sdkgen_typescript::NamingConvention, sdkgen_typescript_web};
 
 use super::typescript::{
-    CACHE_ENV_VAR, CACHE_SUBDIR, TEST_RUNTIME, clean_generated, copy_customizable,
-    has_vitest_tests, rewrite_test_bridge_imports,
+    TEST_RUNTIME, clean_generated, copy_customizable, rewrite_test_bridge_imports, write_all,
 };
-use crate::{
-    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture, watch_dir,
-    write_codegen_output_recording,
-};
+use crate::{CodegenCtx, load_fixture, write_codegen_output};
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_web.json");
 const TSCONFIG_WEB_JSON: &str = include_str!("templates/tsconfig_web.json");
@@ -28,63 +21,44 @@ const VITEST_WEB_CONFIG: &str = include_str!("templates/vitest_web.config.ts");
 const VITEST_WORKERS_CONFIG: &str = include_str!("templates/vitest_workers.config.ts");
 const VITEST_INTEGRATION_CONFIG: &str = include_str!("templates/vitest_integration.config.ts");
 const WORKER_STARTUP_TEST: &str = include_str!("templates/worker_startup.test.ts");
-const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_WEB_SETUP";
 
-pub fn run_all_from_typescript_sources(relative_sources: &str) {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let sources_root = manifest_dir.join(relative_sources);
-    let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let fixtures = fixtures::discover_shared(&fixtures_root);
-    assert!(
-        !fixtures.is_empty(),
-        "no fixtures discovered under {}",
-        fixtures_root.display()
+/// Generate every Web and Workers fixture SDK. Called by the
+/// `typescript_web` subcommand of the `sdk_test_codegen` binary, which
+/// `crates/typescript_web/setup.sh` runs before `pnpm install`.
+///
+/// This crate owns no checked-in TypeScript tests: the canonical corpus lives
+/// in the sibling `crates/typescript` package, and each fixture's overlay is
+/// copied from there into local Web and Workers trees. Nothing is ever written
+/// back into the sibling.
+pub fn run_all(ctx: &CodegenCtx) {
+    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
+    assert_eq!(
+        discovered,
+        fixtures::SHARED,
+        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
+        ctx.fixtures_root.display()
     );
+
+    let sources_root = ctx
+        .crate_dir
+        .parent()
+        .unwrap_or_else(|| unreachable!("a generator crate is not under sdk_tests/crates"))
+        .join("typescript");
     assert!(
         sources_root.is_dir(),
         "canonical TypeScript test source not found at {}",
         sources_root.display()
     );
 
-    let mut diagnostics = BuildDiagnostics::new(&out_dir);
-    let mut fixture_tests = Vec::new();
-    for fixture in &fixtures {
+    for fixture in fixtures::SHARED {
         let custom = sources_root.join(fixture).join("customizable");
-        fixture_tests.push(codegen_fixture(
-            &fixtures_root,
-            fixture,
-            &manifest_dir,
-            &custom,
-            &mut diagnostics,
-        ));
-    }
-
-    write_fixtures_tests_rs(&out_dir, &fixture_tests);
-    diagnostics.finalize();
-
-    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
-    watch_dir(&fixtures_root);
-    for fixture in &fixtures {
-        watch_dir(&sources_root.join(fixture).join("customizable"));
+        codegen_fixture(&ctx.fixtures_root, fixture, &ctx.crate_dir, &custom);
     }
 }
 
-struct FixtureTests {
-    name: String,
-    has_web_tests: bool,
-    has_workers_tests: bool,
-}
-
-fn codegen_fixture(
-    fixtures_root: &Path,
-    fixture: &str,
-    manifest_dir: &Path,
-    custom: &Path,
-    diagnostics: &mut BuildDiagnostics,
-) -> FixtureTests {
+fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom: &Path) {
     let loaded = load_fixture(fixtures_root, fixture);
-    let generated = manifest_dir.join(fixture).join("generated");
+    let generated = crate_dir.join(fixture).join("generated");
     clean_generated(&generated);
     let web = generated.join("web");
     let workers = generated.join("workers");
@@ -96,8 +70,8 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output_recording(&web.join("baml_sdk"), output.clone(), fixture, diagnostics);
-    write_codegen_output_recording(&workers.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output(&web.join("baml_sdk"), output.clone(), fixture);
+    write_codegen_output(&workers.join("baml_sdk"), output, fixture);
 
     for runtime in [&web, &workers] {
         if custom.exists() {
@@ -171,91 +145,5 @@ export default {
             .to_string(),
         ),
     ];
-    for (relative, contents) in files {
-        if let Err(error) = fs::write(generated.join(relative), contents) {
-            diagnostics.record("package_json_write", fixture, error);
-        }
-    }
-
-    FixtureTests {
-        name: fixture.to_string(),
-        has_web_tests: has_vitest_tests(&web),
-        has_workers_tests: has_vitest_tests(&workers),
-    }
-}
-
-fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
-    let mut buffer = String::new();
-    buffer.push_str("// Generated by sdk_test_codegen::typescript_web::run_all_from_typescript_sources — do not edit.\n");
-    buffer.push_str("::sdk_test_harness_runner::build_diagnostics!();\n");
-    buffer.push_str(&format!(
-        "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
-    ));
-
-    for fixture in fixtures {
-        let name = &fixture.name;
-        buffer.push_str(&format!(
-            r#"
-mod {name} {{
-    fn cmd(command: &str) {{
-        ::sdk_test_harness_runner::run_test_cmd(
-            "{name}",
-            command,
-            "{CACHE_SUBDIR}",
-            "{CACHE_ENV_VAR}",
-        );
-    }}
-
-    #[test]
-    fn esm_web() {{
-        ::sdk_test_harness_runner::assert_typescript_web_generated_esm("{name}", "web");
-    }}
-
-    #[test]
-    fn esm_workers() {{
-        ::sdk_test_harness_runner::assert_typescript_web_generated_esm("{name}", "workers");
-    }}
-
-    #[test]
-    fn tsc_web() {{
-        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.web.json");
-    }}
-
-    #[test]
-    fn tsc_workers() {{
-        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.workers.json");
-    }}
-"#
-        ));
-        if fixture.has_web_tests {
-            buffer.push_str(
-                r#"
-    #[test]
-    fn vitest_web() {
-        cmd("pnpm exec vitest run --config vitest.web.config.ts");
-    }
-"#,
-            );
-        }
-        buffer.push_str(
-            r#"
-    #[test]
-    fn vitest_workers() {
-"#,
-        );
-        if fixture.has_workers_tests {
-            buffer.push_str(
-                r#"        cmd("pnpm exec vitest run --config vitest.workers.config.ts");
-"#,
-            );
-        }
-        buffer.push_str(
-            r#"        cmd("pnpm exec vitest run --config vitest.integration.config.ts");
-    }
-"#,
-        );
-        buffer.push_str("\n}\n");
-    }
-
-    fs::write(out_dir.join("typescript_web_tests.rs"), buffer).unwrap();
+    write_all(&generated, files);
 }

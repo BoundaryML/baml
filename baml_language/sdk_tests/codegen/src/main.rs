@@ -33,6 +33,8 @@ const GENERATORS: &[(&str, RunAll)] = &[
     ),
     ("rust", sdk_test_codegen::rust::run_all),
     ("swift", sdk_test_codegen::swift::run_all),
+    ("typescript", sdk_test_codegen::typescript::run_all),
+    ("typescript_web", sdk_test_codegen::typescript_web::run_all),
 ];
 
 const USAGE: &str = "\

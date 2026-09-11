@@ -35,7 +35,6 @@
 //!     └── generated/                              # codegen output, gitignored
 //! ```
 use std::{
-    fmt::{self, Display},
     fs,
     path::{Path, PathBuf},
 };
@@ -95,71 +94,6 @@ impl CodegenCtx {
     }
 }
 
-/// Emit one Cargo build-script line. Cargo consumes directives and
-/// warnings from stdout, so this intentionally writes there.
-#[allow(clippy::print_stdout)]
-pub(crate) fn emit_cargo_line(args: fmt::Arguments<'_>) {
-    println!("{args}");
-}
-
-/// Build-script-side soft-failure recorder, used by the generators still
-/// driven by a `build.rs` to capture env-dependent failures
-/// (missing `uv`/`pnpm`, codegen panics, `uv sync` / `pnpm install`
-/// non-zero exit, codegen file write failures) without aborting the
-/// build — so `cargo doc` / `cargo check` succeed on machines that
-/// don't have the SDK toolchains installed.
-///
-/// Records flow into `$OUT_DIR/build_diagnostics.txt`, which the
-/// emitted `mod build_diagnostics` test
-/// (`sdk_test_harness_runner::build_diagnostics!`) reads at `cargo test`
-/// time. Always call [`Self::finalize`] at the end of `run_all` —
-/// it writes the file unconditionally (zero-length on success) so a
-/// missing file means "build.rs did not run", which the test flags
-/// distinctly from "build.rs ran cleanly".
-pub struct BuildDiagnostics {
-    out_dir: PathBuf,
-    records: Vec<String>,
-}
-
-impl BuildDiagnostics {
-    pub fn new(out_dir: &Path) -> Self {
-        Self {
-            out_dir: out_dir.to_path_buf(),
-            records: Vec::new(),
-        }
-    }
-
-    /// Record a soft failure. `stage` is one of the documented values
-    /// (`codegen`, `uv_sync`, `pnpm_install`, `pyproject_write`,
-    /// `package_json_write`, `symlink_customizable`,
-    /// `copy_customizable`, `codegen_write`); `fixture` is the
-    /// fixture directory name. Also emits a `cargo:warning=` line so
-    /// `cargo build` users see an inline pointer to the diagnostics
-    /// test without having to run it.
-    pub fn record(&mut self, stage: &str, fixture: &str, msg: impl Display) {
-        self.records
-            .push(format!("stage: {stage}\nfixture: {fixture}\n{msg}"));
-        emit_cargo_line(format_args!(
-            "cargo:warning=sdk-test build recorded a `{stage}` failure for fixture `{fixture}` — see `cargo test build_diagnostics`"
-        ));
-    }
-
-    /// Write `$OUT_DIR/build_diagnostics.txt`. Always called from
-    /// `run_all`; writes zero bytes when there are no records so the
-    /// downstream test can tell "ran cleanly" apart from "build.rs
-    /// didn't run".
-    pub fn finalize(self) {
-        let path = self.out_dir.join("build_diagnostics.txt");
-        let body = self.records.join("\n---\n");
-        fs::write(&path, body).unwrap_or_else(|e| {
-            panic!(
-                "failed to write build_diagnostics.txt at {}: {e}",
-                path.display()
-            )
-        });
-    }
-}
-
 /// Install an SDK generator's complete output through the same filesystem
 /// transaction used by `baml generate`.
 ///
@@ -178,22 +112,6 @@ pub(crate) fn write_codegen_output<C>(
             "fixture `{fixture}`: failed to install generated output in {}: {error}",
             output_directory.display()
         );
-    }
-}
-
-/// [`write_codegen_output`] for generators still driven by a build script,
-/// where an install failure is recorded rather than raised so `cargo check`
-/// stays green. Delete alongside the last `crates/*/build.rs`.
-pub(crate) fn write_codegen_output_recording<C>(
-    output_directory: &Path,
-    output: impl IntoIterator<Item = (PathBuf, C)>,
-    fixture: &str,
-    diagnostics: &mut BuildDiagnostics,
-) where
-    C: AsRef<[u8]>,
-{
-    if let Err(error) = install(output_directory, output) {
-        diagnostics.record("codegen_write", fixture, error);
     }
 }
 
@@ -225,18 +143,6 @@ pub struct LoadedFixture {
     pub pool: SymbolPool,
     pub user_baml_files: Vec<UserBamlFile>,
     pub baml_bytecode: Vec<u8>,
-}
-
-/// Resolve the workspace-root-relative path to `sdk_tests/fixtures/`
-/// from a generator crate's `CARGO_MANIFEST_DIR`. Generator crates
-/// live at `<workspace>/sdk_tests/crates/<generator>/`, so the
-/// fixtures root is `manifest.parent().parent().join("fixtures")`.
-pub fn fixtures_root_from_manifest(manifest_dir: &Path) -> PathBuf {
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
-        .join("fixtures")
 }
 
 /// Discover .baml files for one fixture, gate on diagnostics, and
@@ -399,30 +305,4 @@ pub fn symlink_customizable(customizable_dir: &Path, dst_dir: &Path) {
             });
         }
     }
-}
-
-/// Emit `cargo:rerun-if-changed=` for every file under `dir`,
-/// recursively. Safe to call on a path that doesn't exist (no-op).
-pub fn watch_dir(dir: &Path) {
-    for path in walk_files(dir) {
-        emit_cargo_line(format_args!("cargo:rerun-if-changed={}", path.display()));
-    }
-}
-
-/// Recursively collect every file under `dir`. Returns an empty
-/// `Vec` if `dir` is missing — callers can use this without
-/// pre-checking existence.
-pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                out.push(path);
-            } else if path.is_dir() {
-                out.extend(walk_files(&path));
-            }
-        }
-    }
-    out
 }

@@ -19,6 +19,19 @@ $BridgeTypescript = Join-Path $WorkspaceRoot 'sdks\typescript\bridge_typescript'
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
+# Generate each fixture's trees first: nothing else produces them, and the
+# per-fixture `pnpm install` loop below silently skips any fixture whose
+# generated/ is missing.
+Write-Output "==> sdk_test_codegen typescript (generate fixture SDKs)"
+Push-Location $WorkspaceRoot
+try {
+    cargo run --quiet -p sdk_test_codegen -- typescript
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Pop-Location
+}
+
 $env:npm_config_store_dir = Join-Path $WorkspaceRoot 'target\pnpm-store'
 New-Item -ItemType Directory -Force -Path $env:npm_config_store_dir | Out-Null
 

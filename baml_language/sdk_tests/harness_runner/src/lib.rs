@@ -1,29 +1,25 @@
-//! Test-side runtime for the `sdk_tests/crates/<generator>/` crates.
-//! Wired in as `[dev-dependencies]` while the sibling
-//! `sdk_test_codegen` crate is wired in as
-//! `[build-dependencies]`.
+//! Test-side runtime for the `sdk_tests/crates/<generator>/` crates, wired in
+//! as their `[dev-dependencies]`.
 //!
-//! The scaffold emitted by
-//! `sdk_test_codegen::<generator>::run_all` is a sequence of
-//! macro / function invocations against this crate:
+//! Each generator crate declares its suite in source, by invoking that
+//! generator's `test_suite!` macro with its fixture rows:
 //!
 //! ```text
-//! // OUT_DIR/<generator>_tests.rs (emitted by sdk_test_codegen)
-//! ::sdk_test_harness_runner::build_diagnostics!();          // or: !(ignore = "…")
-//! ::sdk_test_harness_runner::setup_guard!("SDK_TEST_…_SETUP"); // asserts setup.sh ran
-//!
-//! mod docstrings_etc {
-//!     #[test] fn ruff()    { ::sdk_test_harness_runner::run_test_cmd(…); }
-//!     #[test] fn pyright() { ::sdk_test_harness_runner::run_test_cmd(…); }
-//!     // …
+//! // crates/python_pydantic2/src/lib.rs
+//! sdk_test_harness_runner::python_pydantic2::test_suite! {
+//!     fixture docstrings_etc;
+//!     fixture function_calls;
 //! }
 //! ```
 //!
-//! Each per-generator `<generator>::test_suite!` macro
-//! (`include!`s the scaffold) lives below, alongside
-//! [`build_diagnostics!`] (the shared diagnostics test),
-//! [`setup_guard!`] (asserts the crate's setup.sh ran this run), and
+//! That expands to one `mod <fixture>` per row, each holding the generator's
+//! toolchain checks. The per-generator macros live below, alongside
+//! [`setup_guard!`] (asserts the crate's setup.sh ran this run),
+//! [`fixture_manifest!`] (pins the rows against the corpus), and
 //! [`run_test_cmd`] (the toolchain-command runner).
+//!
+//! The rows are source rather than generated because `sdk_test_codegen` runs
+//! from `setup.sh`, which nextest fires *after* these test binaries are built.
 
 use std::{
     env, fs,
@@ -89,17 +85,22 @@ pub fn fixture_path(fixture: &str, subdir: &str) -> PathBuf {
         .join(subdir)
 }
 
-/// Whether `dir` holds any file with `extension`, at any depth.
-pub fn has_file_with_extension(dir: &Path, extension: &str) -> bool {
+/// Whether `dir` holds any file whose name ends with `suffix`, at any depth.
+///
+/// Suffix rather than extension: the TypeScript suites key off `.test.ts`,
+/// which is not an extension.
+pub fn has_file_with_suffix(dir: &Path, suffix: &str) -> bool {
     let Ok(entries) = fs::read_dir(dir) else {
         return false;
     };
     entries.flatten().any(|entry| {
         let path = entry.path();
         if path.is_dir() {
-            return has_file_with_extension(&path, extension);
+            return has_file_with_suffix(&path, suffix);
         }
-        path.extension().is_some_and(|found| found == extension)
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(suffix))
     })
 }
 
@@ -581,25 +582,6 @@ fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
     Ok(PathBuf::from(path))
 }
 
-/// Read `$OUT_DIR/build_diagnostics.txt` (the file
-/// [`sdk_test_codegen::BuildDiagnostics::finalize`] writes) and panic
-/// with the records if non-empty. Called from inside the
-/// `mod build_diagnostics { #[test] fn no_build_failures }` block
-/// the [`build_diagnostics!`] macro expands to — `out_dir` is
-/// `env!("OUT_DIR")` resolved at the macro's call site, so it
-/// points at the *generator crate's* OUT_DIR (where
-/// `sdk_test_codegen` wrote the file).
-#[doc(hidden)]
-pub fn __check_build_diagnostics(out_dir: &str) {
-    let path = format!("{out_dir}/build_diagnostics.txt");
-    let contents = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("{path}: {e} — did build.rs run?"));
-    if !contents.trim().is_empty() {
-        let count = contents.matches("\n---\n").count() + 1;
-        panic!("sdk-test build.rs recorded {count} diagnostic record(s):\n\n{contents}");
-    }
-}
-
 /// Panic unless the per-generator setup script ran *this* test run.
 ///
 /// Each `crates/<generator>/setup.sh` appends `<env_var>=1` to the
@@ -681,44 +663,6 @@ macro_rules! fixture_manifest {
             #[test]
             fn matches_corpus() {
                 $crate::fixtures::assert_shared_manifest(env!("CARGO_MANIFEST_DIR"), DECLARED);
-            }
-        }
-    };
-}
-
-/// Emit the shared `mod build_diagnostics { #[test] fn
-/// no_build_failures }` test that reads
-/// `$OUT_DIR/build_diagnostics.txt` and fails with the records.
-/// `sdk_test_codegen`'s scaffold emitter stamps one invocation per
-/// generator scaffold:
-///
-/// ```text
-/// // Default — fail loudly on any recorded diagnostic.
-/// ::sdk_test_harness_runner::build_diagnostics!();
-///
-/// // Skip while a target is temporarily disabled.
-/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "target temporarily disabled");
-/// ```
-///
-/// `env!("OUT_DIR")` inside the expansion resolves at the macro's
-/// call site (i.e. inside the generator crate's test compilation),
-/// so the path lines up with where `sdk_test_codegen` wrote the file.
-#[macro_export]
-macro_rules! build_diagnostics {
-    () => {
-        mod build_diagnostics {
-            #[test]
-            fn no_build_failures() {
-                $crate::__check_build_diagnostics(env!("OUT_DIR"));
-            }
-        }
-    };
-    (ignore = $reason:literal) => {
-        mod build_diagnostics {
-            #[test]
-            #[ignore = $reason]
-            fn no_build_failures() {
-                $crate::__check_build_diagnostics(env!("OUT_DIR"));
             }
         }
     };
@@ -844,9 +788,9 @@ pub mod java {
                     $crate::__java_gate!($junit, junit, {
                         // A fixture whose overlay has no `.java` sources has
                         // nothing for `gradle test` to compile or run.
-                        if !$crate::has_file_with_extension(
+                        if !$crate::has_file_with_suffix(
                             &$crate::fixture_path(stringify!($name), "customizable"),
-                            "java",
+                            ".java",
                         ) {
                             return;
                         }
@@ -1091,16 +1035,69 @@ pub mod rust {
 }
 
 /// Node TypeScript test-side glue. Invoked from
-/// `crates/typescript/src/lib.rs` as
-/// `sdk_test_harness_runner::typescript::test_suite!()`.
+/// `crates/typescript/src/lib.rs`.
 pub mod typescript {
-    /// `include!`s `OUT_DIR/typescript_tests.rs` — the
-    /// per-fixture scaffold emitted by
-    /// `sdk_test_codegen::typescript::run_all`.
+    /// Declare the Node suite: three checks per fixture, one bridge-wide
+    /// `attw` check, plus the shared setup guard and fixture-manifest oracle.
     #[macro_export]
     macro_rules! typescript_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/typescript_tests.rs"));
+        ( $( fixture $name:ident; )+ ) => {
+            $crate::setup_guard!("SDK_TEST_TYPESCRIPT_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            /// Not per-fixture: one check of the bridge package itself.
+            mod bridge_typescript {
+                #[test]
+                fn attw() {
+                    // Runs the bridge's own `attw` package script rather than
+                    // `pnpm exec attw`, so a local `pnpm attw` and this test
+                    // stay the same check — the script stages the pack without
+                    // the native addon (`typescript_src/attw-check.js` explains
+                    // why).
+                    $crate::run_workspace_cmd(
+                        "sdks/typescript/bridge_typescript",
+                        "pnpm run attw",
+                        "pnpm-store",
+                        "npm_config_store_dir",
+                    );
+                }
+            }
+
+            $(
+                mod $name {
+                    fn cmd(command: &str) {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            command,
+                            "pnpm-store",
+                            "npm_config_store_dir",
+                        );
+                    }
+
+                    #[test]
+                    fn esm_node() {
+                        $crate::assert_typescript_node_generated_esm(stringify!($name), "node");
+                    }
+
+                    #[test]
+                    fn tsc_node() {
+                        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.node.json");
+                    }
+
+                    #[test]
+                    fn vitest_node() {
+                        // A fixture whose overlay carries no `.test.ts` has
+                        // nothing for vitest to collect.
+                        if !$crate::has_file_with_suffix(
+                            &$crate::fixture_path(stringify!($name), "generated/node"),
+                            ".test.ts",
+                        ) {
+                            return;
+                        }
+                        cmd("pnpm exec vitest run --config vitest.node.config.ts");
+                    }
+                }
+            )+
         };
     }
 
@@ -1157,12 +1154,82 @@ pub mod go {
 /// Browser and Cloudflare Workers TypeScript test-side glue. Invoked from
 /// `crates/typescript_web/src/lib.rs`.
 pub mod typescript_web {
-    /// `include!`s `OUT_DIR/typescript_web_tests.rs`, emitted by
-    /// `sdk_test_codegen::typescript_web::run_all_from_typescript_sources`.
+    /// Declare the Web and Workers suite: six checks per fixture, plus the
+    /// shared setup guard and fixture-manifest oracle.
+    ///
+    /// This crate owns no checked-in TypeScript tests — `sdk_test_codegen`
+    /// copies the canonical corpus over from the sibling `crates/typescript`
+    /// package into local Web and Workers trees.
     #[macro_export]
     macro_rules! typescript_web_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/typescript_web_tests.rs"));
+        ( $( fixture $name:ident; )+ ) => {
+            $crate::setup_guard!("SDK_TEST_TYPESCRIPT_WEB_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    fn cmd(command: &str) {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            command,
+                            "pnpm-store",
+                            "npm_config_store_dir",
+                        );
+                    }
+
+                    /// Whether the named runtime tree carries any vitest file.
+                    fn has_tests(runtime: &str) -> bool {
+                        $crate::has_file_with_suffix(
+                            &$crate::fixture_path(
+                                stringify!($name),
+                                &format!("generated/{runtime}"),
+                            ),
+                            ".test.ts",
+                        )
+                    }
+
+                    #[test]
+                    fn esm_web() {
+                        $crate::assert_typescript_web_generated_esm(stringify!($name), "web");
+                    }
+
+                    #[test]
+                    fn esm_workers() {
+                        $crate::assert_typescript_web_generated_esm(stringify!($name), "workers");
+                    }
+
+                    #[test]
+                    fn tsc_web() {
+                        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.web.json");
+                    }
+
+                    #[test]
+                    fn tsc_workers() {
+                        cmd("node node_modules/typescript/bin/tsc --noEmit --project tsconfig.workers.json");
+                    }
+
+                    #[test]
+                    fn vitest_web() {
+                        // A fixture whose overlay carries no `.test.ts` has
+                        // nothing for vitest to collect.
+                        if !has_tests("web") {
+                            return;
+                        }
+                        cmd("pnpm exec vitest run --config vitest.web.config.ts");
+                    }
+
+                    #[test]
+                    fn vitest_workers() {
+                        if has_tests("workers") {
+                            cmd("pnpm exec vitest run --config vitest.workers.config.ts");
+                        }
+                        // The integration config drives the worker startup
+                        // smoke, which every fixture has whether or not it
+                        // carries a ported suite.
+                        cmd("pnpm exec vitest run --config vitest.integration.config.ts");
+                    }
+                }
+            )+
         };
     }
 

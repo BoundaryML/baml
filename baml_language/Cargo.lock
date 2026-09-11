@@ -6412,7 +6412,6 @@ dependencies = [
 name = "sdk_test_typescript"
 version = "0.1.0"
 dependencies = [
- "sdk_test_codegen",
  "sdk_test_harness_runner",
 ]
 
@@ -6420,7 +6419,6 @@ dependencies = [
 name = "sdk_test_typescript_web"
 version = "0.1.0"
 dependencies = [
- "sdk_test_codegen",
  "sdk_test_harness_runner",
 ]
 
