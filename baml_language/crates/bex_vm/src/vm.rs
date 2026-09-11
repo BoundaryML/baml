@@ -638,6 +638,45 @@ pub(crate) mod tests {
         (vm, native_ptr)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gc_polling_progress_survives_engine_handoffs() {
+        use bex_vm_types::{ConstValue, bytecode::Instruction};
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        // Every iteration hands control to the engine before the backedge.
+        // No single exec call reaches the polling interval on its own.
+        function.bytecode = Bytecode {
+            instructions: vec![
+                Instruction::LoadConst(0),
+                Instruction::LoadConst(1),
+                Instruction::SendEvent,
+                Instruction::Jump(-3),
+            ],
+            constants: vec![
+                ConstValue::Object(ObjectIndex::from_raw(1)),
+                ConstValue::Int(42),
+            ],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![
+            Object::Function(function),
+            Object::String("tick".into()),
+        ]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.set_entry_point(entry, &[]);
+        vm.early_yield = EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(true)), 3);
+
+        for _ in 0..3 {
+            assert!(matches!(vm.exec().unwrap(), VmExecState::Event { .. }));
+        }
+        assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
+    }
+
     #[test]
     fn runtime_cache_identity_unwraps_callable_allocations() {
         let (mut vm, function) = vm_with_native_entry();
@@ -7382,12 +7421,9 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // Re-arm the long-running-loop detector at every yield boundary so
-        // each `exec()` call starts with a fresh budget; a single `exec()`
-        // call yields back to the embedder eventually (e.g. via `Await`,
-        // `EarlyYield`, etc.), which is the right granularity for the
-        // counter to reset at.
-        self.early_yield.reset();
+        // Keep GC polling progress across engine handoffs. Returning from
+        // exec (for example, to spawn a child) does not necessarily release
+        // the heap permit. The checker resets its own counter when it polls.
 
         // BAML_KPERF: read PMCs around this exec() on the current worker thread.
         let kp = crate::kperf::enabled();

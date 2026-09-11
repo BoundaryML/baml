@@ -6761,6 +6761,17 @@ impl BexEngine {
                         future_ptr
                     };
                     thread.vm.stack.push(Value::object(future_ptr));
+
+                    // Spawn setup can yield to Tokio while retaining the
+                    // parent's heap permit. Cooperate only after the child
+                    // is registered and its future is rooted on our stack;
+                    // collection can now move both VMs' reachable objects.
+                    let gc_requested = self.heap.should_gc();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let gc_requested = gc_requested || self.park_requested.load(Ordering::Relaxed);
+                    if gc_requested {
+                        thread = self.gc_safepoint(thread).await;
+                    }
                 }
 
                 VmExecState::Await(future_id) => {
