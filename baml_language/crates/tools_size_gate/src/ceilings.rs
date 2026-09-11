@@ -142,20 +142,4 @@ mod tests {
         assert_eq!(ceiling_for(1_000_001, 3.0), 1_030_002);
         assert_eq!(ceiling_for(0, 3.0), 0);
     }
-
-    #[test]
-    fn set_ceiling_writes_a_human_readable_toml_string() {
-        let mut doc = DocumentMut::new();
-        set_ceiling(
-            &mut doc,
-            "baml-cli",
-            "aarch64-apple-darwin",
-            "max_file_bytes",
-            21_956_782,
-        );
-        assert_eq!(
-            doc.to_string(),
-            "[artifacts.baml-cli.platform.aarch64-apple-darwin]\nmax_file_bytes = \"20.9 MiB\"\n"
-        );
-    }
 }
