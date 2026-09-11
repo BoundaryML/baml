@@ -193,6 +193,10 @@ impl FutureManagerGuard<'_> {
         inner.active_futures.insert(
             id,
             FutureState {
+                _idle_work: inner
+                    .idle_gc
+                    .as_ref()
+                    .map(crate::idle_gc::IdleGc::start_work),
                 future: ptr,
                 origin,
             },
@@ -563,6 +567,7 @@ pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
     active_futures: HashMap<FutureId, FutureState>,
+    idle_gc: Option<Arc<crate::idle_gc::IdleGc>>,
 }
 impl FutureManagerInner {
     pub fn new(tlab: Tlab) -> Self {
@@ -570,6 +575,14 @@ impl FutureManagerInner {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
+            idle_gc: None,
+        }
+    }
+
+    pub(crate) fn with_idle_gc(tlab: Tlab, idle: Arc<crate::idle_gc::IdleGc>) -> Self {
+        Self {
+            idle_gc: Some(idle),
+            ..Self::new(tlab)
         }
     }
 
@@ -608,6 +621,8 @@ impl TlabHolder for FutureManagerInner {
 }
 
 struct FutureState {
+    // Mirrors registry ownership without making the timer inspect heap objects.
+    _idle_work: Option<crate::idle_gc::WorkGuard>,
     /// Heap pointer to the `Object::Future`. Rooted via `RootHaver` so
     /// the heap object survives even when no awaiter / producer stack
     /// holds it directly (fire-and-forget spawn before the producer task
