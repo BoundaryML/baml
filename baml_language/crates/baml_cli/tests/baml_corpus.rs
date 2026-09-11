@@ -1,8 +1,8 @@
 //! Execute the shared BAML runtime corpus with Cargo's prebuilt CLI.
 //!
-//! This test belongs to baml_cli so CARGO_BIN_EXE_baml-cli selects the exact
+//! This test belongs to `baml_cli` so `CARGO_BIN_EXE_baml-cli` selects the exact
 //! binary built by the outer invocation, including its profile and features.
-//! Compiler snapshots remain in baml_tests::corpus.
+//! Compiler snapshots remain in `baml_tests::corpus`.
 
 /// Execute `baml test`
 #[test]
