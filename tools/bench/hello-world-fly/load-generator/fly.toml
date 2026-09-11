@@ -1,0 +1,13 @@
+app = "baml-hw-0910-load"
+primary_region = "iad"
+[build]
+  dockerfile = "Dockerfile"
+[env]
+  DURATION_SECONDS = "0"
+[[vm]]
+  cpu_kind = "performance"
+  cpus = 8
+  memory = "16gb"
+
+[[restart]]
+  policy = "always"

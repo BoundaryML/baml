@@ -1,6 +1,6 @@
 # Local longevity harness
 
-Five hello-world handlers compare Node, Python, their local BAML bridges, and packed BAML under sustained load in native Linux arm64 containers. This harness was migrated from the September 10, 2026 local hello-world experiment in `baml-demos`; the independent Fly experiment is not part of this repository. Each measured container has a hard 1 CPU quota, 1 GiB memory limit, and no swap. Five containers run the stock Vegeta 12.13.0 executable directly and send **100 requests/second each**, continuously by default (500 RPS total).
+Five hello-world handlers compare Node, Python, their local BAML bridges, and packed BAML under sustained load in native Linux arm64 containers. This harness was migrated from the September 10, 2026 local hello-world experiment in `baml-demos`; the independent Fly experiment is now available alongside it in [tools/bench/hello-world-fly](../hello-world-fly/README.md). Each measured container has a hard 1 CPU quota, 1 GiB memory limit, and no swap. Five containers run the stock Vegeta 12.13.0 executable directly and send **100 requests/second each**, continuously by default (500 RPS total).
 
 `GET /` returns exactly `hello world` (11 bytes, no newline), `Content-Type: text/plain; charset=utf-8`, and `Cache-Control: no-store`. Both bridges await the deterministic BAML function on every request through their process-wide runtime. The native variant runs the executable produced by `baml pack main`. There are no LLM calls, response caches, per-request logs, forced collections, scheduled restarts, or autoscaling.
 
@@ -10,7 +10,7 @@ Prerequisites on macOS: Rust/rustup, Zig, `uv`, Node/npm, Docker with Compose, a
 
 ```sh
 # From the BAML repository root:
-cd tools/local-longevity
+cd tools/bench/hello-world-local
 
 # Dedicated Docker VM with capacity for the apps, generator, and monitoring.
 colima start baml-hello-world --cpu 10 --memory 16 --disk 40 --vm-type vz --activate=false
@@ -139,7 +139,7 @@ The completed ramp passed three-minute stages at 10, 20, and 40 RPS, then Docker
 
 ## Migration and retained local evidence
 
-The repository destination is `tools/local-longevity`; the Orca worktree is `local-longevity-test`. All 33,649 source files and symlinks (805,182,444 file bytes) were copied and verified by SHA-256, symlink target, and file mode before adapting source and documentation. `.build/`, generated SDKs, dependency trees, `.env`, `.env.10rps`, and historical `results/` remain available locally and ignored by Git. The inventory is `results/migration-inventory.json`; the original build fingerprint and artifact hashes remain in `.build/manifest.json`. No local env file or bulky build output belongs in the PR. Copied Python build-tool environments can contain absolute shebangs referencing the retained source; recreate `.build/build-tools` with `uv venv` and reinstall the pinned build tool when rebuilding after retiring that source.
+The repository destination is `tools/bench/hello-world-local`; the Orca worktree is `local-longevity-test`. All 33,649 source files and symlinks (805,182,444 file bytes) were copied and verified by SHA-256, symlink target, and file mode before adapting source and documentation. `.build/`, generated SDKs, dependency trees, `.env`, `.env.10rps`, and historical `results/` remain available locally and ignored by Git. The inventory is `results/migration-inventory.json`; the original build fingerprint and artifact hashes remain in `.build/manifest.json`. No local env file or bulky build output belongs in the PR. Copied Python build-tool environments can contain absolute shebangs referencing the retained source; recreate `.build/build-tools` with `uv venv` and reinstall the pinned build tool when rebuilding after retiring that source.
 
 The original `~/work-repos/baml-demos/2026-09-10-local-hello-world` directory was retained unchanged by the migration because both running projects still bind-mount its Prometheus and Grafana configurations. Keep it until an intentional stack recreation switches those mounts to this harness. Existing project names preserve the named Prometheus/Grafana volumes. No workload or monitoring container was restarted by the migration, and no volume was removed. Editing a destination dashboard does not update the retained source mount in a currently running container.
 

@@ -1,0 +1,149 @@
+{
+  "baml-al2023": {
+    "machine_id": "7844543c0011d8",
+    "state": "started",
+    "events": [
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789073334236
+      },
+      {
+        "type": "launch",
+        "status": "created",
+        "source": "user",
+        "timestamp": 1789073327574
+      },
+      {
+        "type": "launch",
+        "status": "pending",
+        "source": "flyd",
+        "timestamp": 1789073327369
+      }
+    ],
+    "checks": [
+      {
+        "name": "servicecheck-00-http-8080",
+        "status": "critical",
+        "output": "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+        "updated_at": "2026-09-10T20:57:29.475Z"
+      }
+    ]
+  },
+  "baml-debian": {
+    "machine_id": "8654d96a7056e8",
+    "state": "started",
+    "events": [
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789073849471
+      },
+      {
+        "type": "restart",
+        "status": "starting",
+        "source": "flyd",
+        "timestamp": 1789073848293
+      },
+      {
+        "type": "exit",
+        "status": "stopped",
+        "request": {
+          "exit_event": {
+            "exit_code": 137,
+            "guest_signal": -1,
+            "oom_killed": true,
+            "restarting": true,
+            "signal": -1,
+            "exited_at": "2026-09-10T20:57:27.993Z"
+          },
+          "restart_count": 1
+        },
+        "source": "flyd",
+        "timestamp": 1789073848183
+      },
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789073362176
+      },
+      {
+        "type": "launch",
+        "status": "created",
+        "source": "user",
+        "timestamp": 1789073358481
+      }
+    ],
+    "checks": [
+      {
+        "name": "servicecheck-00-http-8080",
+        "status": "passing",
+        "output": "hello world",
+        "updated_at": "2026-09-10T20:57:29.666Z"
+      }
+    ]
+  },
+  "baml-alpine": {
+    "machine_id": "82d1e69c0d1608",
+    "state": "started",
+    "events": [
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789073831476
+      },
+      {
+        "type": "restart",
+        "status": "starting",
+        "source": "flyd",
+        "timestamp": 1789073830288
+      },
+      {
+        "type": "exit",
+        "status": "stopped",
+        "request": {
+          "exit_event": {
+            "exit_code": 137,
+            "guest_signal": -1,
+            "oom_killed": true,
+            "restarting": true,
+            "signal": -1,
+            "exited_at": "2026-09-10T20:57:09.974Z"
+          },
+          "restart_count": 1
+        },
+        "source": "flyd",
+        "timestamp": 1789073830175
+      },
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789073394337
+      },
+      {
+        "type": "launch",
+        "status": "created",
+        "source": "user",
+        "timestamp": 1789073389768
+      }
+    ],
+    "checks": [
+      {
+        "name": "servicecheck-00-http-8080",
+        "status": "passing",
+        "output": "hello world",
+        "updated_at": "2026-09-10T20:57:11.71Z"
+      }
+    ]
+  }
+}
