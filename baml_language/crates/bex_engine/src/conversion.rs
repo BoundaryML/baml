@@ -1918,21 +1918,20 @@ impl BexEngine {
                 }
                 // `throws` is the callable's declared error contract `E`
                 // (`call_host_value<T, E>`). When the parameter pins no
-                // concrete error type the throws lowers to a bottom/unit
-                // shape: an omitted `throws` becomes `Never` (the function-type
-                // lowering's default) and a bare `-> void` throws becomes
-                // `Void`. Neither names an error the host is obligated to
-                // honor — and the host is foreign code that may surface a
-                // native exception regardless (materialized as
-                // `baml.errors.HostCallable`). Normalize both to
-                // `Unknown` so such a throw is accepted opaquely and an
-                // in-BAML `catch` can match it, rather than being rejected as a
-                // `HostContractViolation`. Concrete throws (e.g.
-                // `throws ParseError`) pass through unchanged and stay enforced.
+                // concrete error type the throws lowers to the unit shape
+                // `Void`, which names no error the host is obligated to honor
+                // — and the host is foreign code that may surface a native
+                // exception regardless (materialized as
+                // `baml.errors.HostCallable`). Normalize it to `Unknown` so
+                // such a throw is accepted opaquely and an in-BAML `catch` can
+                // match it, rather than being rejected as a
+                // `HostContractViolation`. Every declared contract passes
+                // through unchanged and stays enforced — including an explicit
+                // `throws never`, which promises BAML the callback cannot
+                // throw at all, so a native throw against it is a violation
+                // like any other off-contract throw.
                 let normalized_throws = match throws {
-                    RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
-                        RuntimeTy::Unknown { attr }
-                    }
+                    RuntimeTy::Void { attr } => RuntimeTy::Unknown { attr },
                     other => other,
                 };
                 // The VM heap stores the callable's signature as `RealizedTy`
@@ -1940,6 +1939,20 @@ impl BexEngine {
                 // function type is realized here; a non-realized position (an
                 // unfilled type variable) is a contract violation surfaced as a
                 // type mismatch rather than erased.
+                // Dispatch addresses an optional parameter by name
+                // (`CallLayout::from_modes`), so a declared function type that
+                // leaves one unnamed has no slot the host could fill.
+                if params.iter().any(|param| {
+                    matches!(param.mode, baml_type::FunctionParamMode::Optional)
+                        && param.name.is_none()
+                }) {
+                    return Err(EngineError::TypeMismatch {
+                        message:
+                            "host callable cannot be bound: its declared type has an optional \
+                                  parameter without a name"
+                                .to_string(),
+                    });
+                }
                 let realized_params = params
                     .iter()
                     .map(|param| {
@@ -2491,14 +2504,23 @@ pub(crate) fn union_runtime_ty(a: &RuntimeTy, b: &RuntimeTy) -> RuntimeTy {
 /// solves all arguments together with variance tracking); retained as a
 /// best-effort per-pair primitive exercised by the unit tests below.
 #[cfg(test)]
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: a per-pair primitive with no VM to supply facts"
+)]
 pub(crate) fn infer_bindings_runtime(
     formal: &RuntimeTy,
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> =
+    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty<baml_type::TypeName>> =
         rustc_hash::FxHashMap::default();
-    baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
+    baml_type_runtime::infer_value_bindings(
+        &Ty::from(formal),
+        &Ty::from(actual),
+        &mut bindings,
+        &baml_type::normalize::NoFacts,
+    );
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
         // narrow cannot fail; skip defensively rather than panic if it ever does.
@@ -2523,14 +2545,24 @@ pub(crate) fn infer_bindings_runtime(
 ///
 /// Contrast [`infer_bindings_runtime`], the per-argument best-effort merge kept
 /// for the self-receiver and callable-summary paths.
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: inference runs at the host entry boundary, before any VM exists to supply facts"
+)]
 pub(crate) fn infer_bindings_runtime_checked(
     pairs: &[(RuntimeTy, RuntimeTy)],
 ) -> Result<indexmap::IndexMap<String, RuntimeTy>, String> {
     let mut cons = baml_type_runtime::InferenceConstraints::new();
     for (formal, actual) in pairs {
-        cons.record(&Ty::from(formal), &Ty::from(actual));
+        cons.record(
+            &Ty::from(formal),
+            &Ty::from(actual),
+            &baml_type::normalize::NoFacts,
+        );
     }
-    let bindings = cons.solve().map_err(|e| e.message)?;
+    let bindings = cons
+        .solve(&baml_type::normalize::NoFacts)
+        .map_err(|e| e.message)?;
     let mut out = indexmap::IndexMap::new();
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the

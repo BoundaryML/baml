@@ -20,10 +20,7 @@
 //! }
 //! ```
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use baml_db::{Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
@@ -385,13 +382,14 @@ pub async fn try_call_by_name(
 /// instead of repeating the root bookkeeping. It is test support only —
 /// production code adds roots and files explicitly.
 pub trait TestDbExt {
-    /// Install the stdlib sources and add the `Workspace` root at `root` for
-    /// the reserved `user` package.
+    /// Install the stdlib sources (if not yet installed) and add an unnamed
+    /// `Workspace` root at `root` — the package the default spelling `user`
+    /// displays.
     ///
     /// # Panics
     ///
-    /// Panics if the database already has a `Workspace` root (or `root` is
-    /// otherwise rejected — see [`baml_db::SourceRootError`]).
+    /// Panics if `root` is rejected (see [`baml_db::SourceRootError`]), or if
+    /// a non-stdlib root was added before the stdlib.
     fn workspace(&mut self, root: &Path) -> SourceRoot;
 
     /// Add a source-bearing `Dependency` root for `package` at
@@ -409,6 +407,22 @@ pub trait TestDbExt {
     /// blob (see [`baml_db::SourceRootError`]).
     fn dependency(&mut self, package: &str) -> SourceRoot;
 
+    /// Mount a serialized `PackageInterface` as a source-less package reached
+    /// from the workspace root under `alias` — the runtime compiler's shape:
+    /// a `Dynamic` root at `<builtin>/<alias>` served from the blob, plus the
+    /// edge. Errors are the database's own ([`baml_db::SourceRootError`]).
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, baml_db::SourceRootError>;
+
+    /// [`Self::try_mount`], panicking on refusal.
+    fn mount(&mut self, alias: &str, blob: Vec<u8>) -> SourceRoot {
+        self.try_mount(alias, blob)
+            .unwrap_or_else(|err| panic!("cannot mount `{alias}`: {err}"))
+    }
+
     /// Add or update the file at `path`, owned by the live root whose path is
     /// the longest prefix of `path`; a path under no root (e.g. the bare
     /// `test.baml` most fixtures use) goes to the `Workspace` root.
@@ -423,26 +437,59 @@ pub trait TestDbExt {
 impl TestDbExt for ProjectDatabase {
     fn workspace(&mut self, root: &Path) -> SourceRoot {
         self.ensure_stdlib_sources();
-        self.add_source_root(SourceRootSpec {
-            path: root.to_path_buf(),
-            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: SourceRootKind::Workspace,
-        })
-        .unwrap_or_else(|err| {
-            panic!(
-                "cannot add the workspace source root at `{}`: {err}",
-                root.display()
-            )
-        })
+        self.add_source_root(SourceRootSpec::new(root, SourceRootKind::Workspace))
+            .unwrap_or_else(|err| {
+                panic!(
+                    "cannot add the workspace source root at `{}`: {err}",
+                    root.display()
+                )
+            })
     }
 
     fn dependency(&mut self, package: &str) -> SourceRoot {
-        self.add_source_root(SourceRootSpec {
-            path: PathBuf::from(format!("<builtin>/{package}")),
-            package: Name::new(package),
-            kind: SourceRootKind::Dependency,
-        })
-        .unwrap_or_else(|err| panic!("cannot add the dependency source root `{package}`: {err}"))
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::dependency(\"{package}\")` needs a workspace root to depend on it")
+        });
+        let root = self
+            .add_source_root(
+                SourceRootSpec::new(format!("<builtin>/{package}"), SourceRootKind::Dependency)
+                    .named(Name::new(package)),
+            )
+            .unwrap_or_else(|err| {
+                panic!("cannot add the dependency source root `{package}`: {err}")
+            });
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(package),
+                root,
+            },
+        )
+        .unwrap_or_else(|err| panic!("cannot depend on `{package}`: {err}"));
+        root
+    }
+
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, baml_db::SourceRootError> {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::mount(\"{alias}\")` needs a workspace root to mount into")
+        });
+        let root = self.add_source_root(
+            SourceRootSpec::new(format!("<builtin>/{alias}"), SourceRootKind::Dynamic)
+                .named(Name::new(alias))
+                .served_from(blob),
+        )?;
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(alias),
+                root,
+            },
+        )?;
+        Ok(root)
     }
 
     fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile {
@@ -577,7 +624,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_dropping_adapter_preserves_source_defaults() {
+    async fn narrowed_function_value_preserves_source_defaults() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -597,13 +644,13 @@ mod tests {
 
         assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
         engine_snapshot!(
-            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            "narrowed_function_value_preserves_source_defaults_bytecode",
             output.bytecode
         );
     }
 
     #[tokio::test]
-    async fn optional_adapter_reorders_named_optional_params() {
+    async fn narrowed_function_value_reorders_named_optionals() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -625,7 +672,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_concrete_call_argument() {
+    async fn narrowed_function_value_as_concrete_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -650,7 +697,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_generic_call_argument() {
+    async fn narrowed_function_value_as_generic_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {

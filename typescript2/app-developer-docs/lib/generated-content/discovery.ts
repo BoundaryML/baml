@@ -1,27 +1,13 @@
 import {
-  type GeneratedReleaseSnapshot,
-  type GeneratedReleaseSummary,
-  isPrereleaseVersion,
-  listGeneratedReleaseSummaries,
-  loadGeneratedReleaseSnapshot,
-} from '@/lib/generated-content/build-content';
-import {
-  findCliCommand,
-  flattenCliCommands,
-} from '@/lib/generated-content/cli-routes';
-import type {
-  CrossReference,
-  ReferencePageRow,
-} from '@/lib/generated-content/schemas';
+  listDocumentReleaseSummaries,
+  listDocumentVersionOptions,
+  listStoredRouteIndex,
+} from '@/lib/generated-content/document-store';
+import { isPrereleaseVersion } from '@/lib/generated-content/versions';
 import type { GeneratedSearchIndex, SearchEntry } from '@/lib/search';
 
-const declarationReferencesByPages = new WeakMap<
-  ReferencePageRow[],
-  CrossReference[]
->();
-
-function channelSuffix(channels: readonly string[]): string {
-  return channels.length > 0 ? ` · ${channels.join(', ')}` : '';
+function channelSuffix(aliases: readonly string[]): string {
+  return aliases.length > 0 ? ` · ${aliases.join(', ')}` : '';
 }
 
 export interface GeneratedVersionOption {
@@ -30,197 +16,61 @@ export interface GeneratedVersionOption {
   routeVersion: string;
 }
 
-export function generatedDeclarationTypeReferences(
-  pages: ReferencePageRow[],
-): readonly CrossReference[] {
-  const cached = declarationReferencesByPages.get(pages);
-  if (cached) return cached;
-
-  const references: CrossReference[] = [];
-  for (const page of pages) {
-    if (!('exported_id' in page.page_data)) continue;
-    references.push({
-      anchor: null,
-      exported_id: page.page_data.exported_id,
-      qualified_name: page.qualified_name,
-      route_path: page.route_path,
-    });
-  }
-  declarationReferencesByPages.set(pages, references);
-  return references;
-}
-
-type VersionDestination =
-  | { kind: 'cli-command'; commandPath: readonly string[] }
-  | { kind: 'cli-command-index' }
-  | { kind: 'cli-overview' }
-  | { kind: 'package'; routePath?: string };
-
 export async function listGeneratedVersionOptions(
-  destination: VersionDestination,
+  path: string,
 ): Promise<GeneratedVersionOption[]> {
-  const releases = await listGeneratedReleaseSummaries();
-  const options: GeneratedVersionOption[] = [];
-
-  for (const release of releases) {
-    const snapshot = await loadGeneratedReleaseSnapshot(release.routeVersion);
-    if (!snapshot) continue;
-    let suffix = '';
-    if (destination.kind === 'package') {
-      if (
-        destination.routePath &&
-        !snapshot.pages.some(
-          (page) => page.route_path === destination.routePath,
-        )
-      ) {
-        continue;
-      }
-      suffix = destination.routePath ? `/${destination.routePath}` : '';
-    } else if (destination.kind === 'cli-command') {
-      if (!findCliCommand(snapshot.cli.payload.root, destination.commandPath)) {
-        continue;
-      }
-      suffix = `/commands/${destination.commandPath.join('/')}`;
-    } else if (destination.kind === 'cli-command-index') {
-      suffix = '/commands';
-    }
-    const root = destination.kind === 'package' ? '/baml/packages' : '/cli';
-    options.push({
-      channels: release.channels,
-      href: `${root}/${release.routeVersion}${suffix}`,
-      routeVersion: release.routeVersion,
-    });
-  }
-
-  return options;
-}
-
-export function generatedRoutePaths(
-  snapshot: GeneratedReleaseSnapshot,
-): string[] {
-  const packageRoot = `/baml/packages/${snapshot.routeVersion}`;
-  const cliRoot = `/cli/${snapshot.routeVersion}`;
-  return [
-    packageRoot,
-    ...snapshot.pages.map((page) => `${packageRoot}/${page.route_path}`),
-    cliRoot,
-    `${cliRoot}/commands`,
-    ...flattenCliCommands(snapshot.cli.payload.root).map(
-      (command) => `${cliRoot}/commands/${command.command_path.join('/')}`,
-    ),
-  ];
-}
-
-export function generatedSearchEntries(
-  release: GeneratedReleaseSummary,
-  snapshot: GeneratedReleaseSnapshot,
-): SearchEntry[] {
-  const entries: SearchEntry[] = [];
-  const current = release.channels.length > 0;
-  const version = release.routeVersion;
-  const packageGroup = `Standard packages · ${version}${channelSuffix(release.channels)}`;
-  const cliGroup = `CLI · ${version}${channelSuffix(release.channels)}`;
-  const packageRoot = `/baml/packages/${version}`;
-  const cliRoot = `/cli/${version}`;
-
-  entries.push(
-    {
-      current,
-      group: packageGroup,
-      href: packageRoot,
-      label: `Standard packages ${version}`,
-      version,
-    },
-    {
-      current,
-      group: cliGroup,
-      href: cliRoot,
-      label: `BAML CLI ${version}`,
-      version,
-    },
-    {
-      current,
-      group: cliGroup,
-      href: `${cliRoot}/commands`,
-      label: `Command index ${version}`,
-      version,
-    },
-  );
-
-  for (const page of snapshot.pages) {
-    const href = `${packageRoot}/${page.route_path}`;
-    entries.push({
-      current,
-      group: packageGroup,
-      href,
-      keywords: `${page.page_kind} ${page.page_data.summary ?? ''}`,
-      label: page.qualified_name,
-      version,
-    });
-    if ('member_anchors' in page.page_data) {
-      for (const member of page.page_data.member_anchors) {
-        entries.push({
-          current,
-          group: packageGroup,
-          href: `${href}#${member.anchor}`,
-          keywords: member.member_kind,
-          label: `${page.qualified_name}.${member.label}`,
-          version,
-        });
-      }
-    }
-  }
-
-  for (const command of flattenCliCommands(snapshot.cli.payload.root)) {
-    entries.push({
-      current,
-      group: cliGroup,
-      href: `${cliRoot}/commands/${command.command_path.join('/')}`,
-      keywords: command.description ?? '',
-      label: `baml ${command.command_path.join(' ')}`,
-      version,
-    });
-  }
-
-  return entries;
+  return (await listDocumentVersionOptions(path)).map((option) => ({
+    channels: option.aliases,
+    href: option.href,
+    routeVersion: option.routeVersion,
+  }));
 }
 
 export async function listGeneratedSitemapRoutes(): Promise<
   { lastModified: Date; path: string }[]
 > {
-  const releases = await listGeneratedReleaseSummaries();
-  const routes: { lastModified: Date; path: string }[] = [];
-
-  for (const release of releases) {
-    if (isPrereleaseVersion(release.release.version)) continue;
-    const snapshot = await loadGeneratedReleaseSnapshot(release.routeVersion);
-    if (!snapshot) continue;
-    routes.push(
-      ...generatedRoutePaths(snapshot).map((path) => ({
-        lastModified: release.release.released_at,
-        path,
-      })),
-    );
-  }
-
-  return routes;
+  const routes = await listStoredRouteIndex();
+  return routes
+    .filter((route) => !isPrereleaseVersion(route.version))
+    .map((route) => ({
+      lastModified: new Date(route.route_metadata.releasedAt),
+      path: route.route_metadata.publicPath,
+    }));
 }
 
 export async function buildGeneratedSearchIndex(): Promise<GeneratedSearchIndex> {
-  const releases = await listGeneratedReleaseSummaries();
+  const [releases, routes] = await Promise.all([
+    listDocumentReleaseSummaries(),
+    listStoredRouteIndex(),
+  ]);
+  const aliasesByVersion = new Map(
+    releases.map((release) => [release.release.version, release.aliases]),
+  );
   const entries: SearchEntry[] = [];
 
-  for (const release of releases) {
-    const snapshot = await loadGeneratedReleaseSnapshot(release.routeVersion);
-    if (!snapshot) continue;
-    entries.push(...generatedSearchEntries(release, snapshot));
+  for (const route of routes) {
+    const aliases = aliasesByVersion.get(route.version) ?? [];
+    const current = aliases.length > 0;
+    const group = `${
+      route.route_metadata.surface === 'packages' ? 'Standard packages' : 'CLI'
+    } · ${route.route_metadata.routeVersion}${channelSuffix(aliases)}`;
+    for (const entry of route.route_metadata.searchEntries) {
+      entries.push({
+        current,
+        group,
+        href: `${route.route_metadata.publicPath}${entry.anchor ? `#${entry.anchor}` : ''}`,
+        keywords: entry.keywords,
+        label: entry.label,
+        version: route.route_metadata.routeVersion,
+      });
+    }
   }
 
   return {
     entries,
     versions: releases.map((release) => ({
-      channels: release.channels,
-      current: release.channels.length > 0,
+      channels: release.aliases,
+      current: release.aliases.length > 0,
       routeVersion: release.routeVersion,
     })),
   };

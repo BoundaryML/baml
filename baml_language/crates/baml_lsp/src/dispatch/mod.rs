@@ -34,19 +34,28 @@ use crate::{
     state::{GlobalState, OwnerEvent, Responder, SessionKey, SessionLifecycle},
 };
 
+macro_rules! lsp_request_type {
+    ("baml/stdlibSource") => {
+        $crate::dispatch::requests::StdlibSourceRequest
+    };
+    ($name:tt) => {
+        lsp_types::lsp_request!($name)
+    };
+}
+
 macro_rules! lsp_request_method {
     ($name:tt) => {
-        <lsp_types::lsp_request!($name) as lsp_types::request::Request>::METHOD
+        <lsp_request_type!($name) as lsp_types::request::Request>::METHOD
     };
 }
 macro_rules! lsp_request_params {
     ($name:tt) => {
-        <lsp_types::lsp_request!($name) as lsp_types::request::Request>::Params
+        <lsp_request_type!($name) as lsp_types::request::Request>::Params
     };
 }
 macro_rules! lsp_request_result {
     ($name:tt) => {
-        <lsp_types::lsp_request!($name) as lsp_types::request::Request>::Result
+        <lsp_request_type!($name) as lsp_types::request::Request>::Result
     };
 }
 macro_rules! lsp_notification_method {
@@ -244,6 +253,7 @@ define_request_tables! {
         "codeLens/resolve" => code_lens_resolve,
     }
     snapshot {
+        "baml/stdlibSource" => stdlib_source,
         "textDocument/formatting" => formatting,
         "textDocument/completion" => completion,
         "textDocument/hover" => hover,

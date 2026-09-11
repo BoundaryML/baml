@@ -9,9 +9,9 @@ source: crates/baml_tests/src/generated_tests.rs
 // (E0002) instead of silently adopting the alias's existential view.
 
 interface Tagged {
-    type Label = string
+    type Label = string;
 
-    function id(self) -> int throws never
+    function id(self) -> int throws never;
 }
 
 type TagAlias = Tagged;

@@ -3,8 +3,9 @@
 # Supports glob patterns (*, **)
 # Only long-term informational .md files should be listed here
 
-# Release history
+# Release documentation
 CHANGELOG.md
+RELEASING.md
 
 # Test documentation
 crates/baml_tests/BENCHMARKS.md

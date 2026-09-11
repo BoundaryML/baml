@@ -20,7 +20,7 @@ cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 cargo nextest run -p sdk_test_typescript_web function_calls::vitest_web
 cargo nextest run -p sdk_test_typescript_web function_calls::vitest_workers
-cargo nextest run -p sdk_test_rust function_calls::cargo_test
+cargo nextest run -p sdk_test_rust function_calls::nextest
 ```
 
 > SDK tests are designed to be run using `cargo nextest run` and will > fail in
@@ -47,8 +47,9 @@ cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 
 # rust: run tests matching a name filter (set CARGO_TARGET_DIR to reuse the
 # shared build cache the nextest-driven runs populate).
-cargo nextest run -p sdk_test_rust function_calls::cargo_test
-(cd sdk_tests/crates/rust/function_calls/generated && CARGO_TARGET_DIR=../../../../../target/sdk-rust-target cargo test optional_args)
+cargo nextest run -p sdk_test_rust function_calls::nextest
+CARGO_TARGET_DIR="$PWD/target/sdk-rust-target" cargo nextest run \
+  --manifest-path sdk_tests/crates/rust/function_calls/generated/Cargo.toml optional_args
 ```
 
 ### Rust port gating

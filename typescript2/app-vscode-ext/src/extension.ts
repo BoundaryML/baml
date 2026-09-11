@@ -1,5 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  STDLIB_SCHEME,
+  STDLIB_SOURCE_METHOD,
+  StdlibDocuments,
+  type StdlibSourceResult,
+} from '@b/pkg-lsp';
 import * as vscode from 'vscode';
 import {
   LanguageClient,
@@ -21,7 +27,7 @@ import { WebviewPanel } from './panels/WebviewPanel';
 //
 // The server multiplexes projects: it receives the window's workspace
 // folders, discovers every BAML project underneath them, and serves ALL
-// `.baml` documents — including materialized stdlib sources, which belong
+// `.baml` documents, including read-only stdlib documents, which belong
 // to no project and previously caused the extension to spawn a doomed
 // sibling server per stdlib directory (its `baml.openBamlPanel`
 // registration collided with the first client's and start() rejected).
@@ -30,13 +36,59 @@ import { WebviewPanel } from './panels/WebviewPanel';
 // window instead of one arbitrary project.
 
 let client: LanguageClient | undefined;
+/** The restart in flight, so a second request queues instead of racing. */
+let restarting: Promise<void> | undefined;
+let stdlibDocuments: StdlibDocuments;
+let stdlibConnection: vscode.Disposable | undefined;
 let clientStartFailed = false;
-let knownProjects: string[] = [];
+let knownProjects: ProjectEntry[] = [];
 let currentServerState: 'starting' | 'running' | 'stopped' | 'error' =
   'starting';
 let statusBarItem: vscode.StatusBarItem | undefined;
 let playgroundDir: string | undefined;
-let wrapperPath = 'baml';
+
+// ── The `baml` wrapper ───────────────────────────────────────────────────
+//
+// The extension never runs a toolchain binary directly: it runs the `baml`
+// wrapper, which picks the toolchain (`BAML_VERSION`, else the nearest
+// `baml.toml` `[toolchain]` pin above its working directory, else the
+// machine default) and execs it.
+
+type WrapperSource = 'BAML_CLI_PATH' | 'baml.cliPath' | 'PATH';
+
+interface Wrapper {
+  path: string;
+  source: WrapperSource;
+}
+
+/** Where the wrapper comes from, in precedence order. Resolved at every
+ * server start, so a changed setting takes effect on restart. */
+function resolveWrapper(): Wrapper {
+  const fromEnv = process.env.BAML_CLI_PATH;
+  if (fromEnv) {
+    return { path: fromEnv, source: 'BAML_CLI_PATH' };
+  }
+  const fromConfig = vscode.workspace
+    .getConfiguration('baml')
+    .get<string | null>('cliPath');
+  if (fromConfig) {
+    return { path: fromConfig, source: 'baml.cliPath' };
+  }
+  return { path: 'baml', source: 'PATH' };
+}
+
+let wrapper: Wrapper = { path: 'baml', source: 'PATH' };
+
+/**
+ * The server's working directory: the window's first workspace folder. One
+ * server serves the whole window, and the wrapper reads its toolchain pin by
+ * walking up from its cwd, so the first folder (VS Code's primary) is the
+ * pin that applies to every folder. Reordering folders takes effect on the
+ * next start; `BAML_VERSION` overrides any pin outright.
+ */
+function serverWorkingDirectory(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
 
 function getExtVersion(): string {
   return (
@@ -45,12 +97,34 @@ function getExtVersion(): string {
   );
 }
 
-/** Short display name: last path component (e.g. "/Users/x/repos/myapp/baml_src" → "myapp/baml_src") */
-function projectLabel(fullPath: string): string {
-  const normalized = path.normalize(fullPath);
+/** A project as the server lists it: its root path, and the name it declares
+ * in `[package].name` if it declares one. */
+interface ProjectEntry {
+  path: string;
+  name?: string;
+}
+
+/**
+ * How a project reads in the status bar.
+ *
+ * A package that names itself is shown by that name. Most do not, and the
+ * fallback is the directory, kept with its parent so two checkouts of one
+ * project stay apart.
+ */
+function projectLabel(project: ProjectEntry): string {
+  if (project.name) {
+    return project.name;
+  }
+  const normalized = path.normalize(project.path);
   const name = path.basename(normalized);
   const parent = path.basename(path.dirname(normalized));
-  return parent && parent !== name ? `${parent}/${name}` : name || fullPath;
+  return parent && parent !== name ? `${parent}/${name}` : name || project.path;
+}
+
+/** Escape text for trusted Markdown, so a path's brackets or asterisks
+ * cannot break the link that carries it. */
+function escapeMarkdown(text: string): string {
+  return text.replace(/[\\`*_[\]()<>]/g, '\\$&');
 }
 
 function buildStatusTooltip(
@@ -68,12 +142,14 @@ function buildStatusTooltip(
   md.appendMarkdown('---\n\n');
   md.appendMarkdown('[$(output) Open Logs](command:baml.openLogs)\n\n');
 
-  const projects = [...knownProjects].sort();
+  const projects = [...knownProjects].sort((left, right) =>
+    projectLabel(left).localeCompare(projectLabel(right)),
+  );
   if (projects.length > 0) {
     for (const project of projects) {
-      const encoded = encodeURIComponent(JSON.stringify(project));
+      const encoded = encodeURIComponent(JSON.stringify(project.path));
       md.appendMarkdown(
-        `[$(play) Open Playground — ${projectLabel(project)}](command:baml.openPlayground?${encoded})\n\n`,
+        `[$(play) Open Playground — ${escapeMarkdown(projectLabel(project))}](command:baml.openPlayground?${encoded})\n\n`,
       );
     }
   } else {
@@ -175,19 +251,20 @@ function openPlaygroundInBrowserTerminal(projectPath?: string): void {
   const terminal = vscode.window.createTerminal({
     name: 'BAML Playground',
     shellArgs: args,
-    shellPath: wrapperPath,
+    shellPath: wrapper.path,
     ...(cwd ? { cwd } : {}),
   });
   terminal.show(false);
 }
 
 function createClient(context: vscode.ExtensionContext): LanguageClient {
-  const firstFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  wrapper = resolveWrapper();
+  const cwd = serverWorkingDirectory();
   const serverOptions: ServerOptions = {
     args: ['lsp'],
-    command: wrapperPath,
+    command: wrapper.path,
     options: {
-      ...(firstFolder ? { cwd: firstFolder } : {}),
+      ...(cwd ? { cwd } : {}),
       env: {
         ...process.env,
         ...(playgroundDir ? { BAML_PLAYGROUND_DIR: playgroundDir } : {}),
@@ -198,11 +275,14 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
   const clientOptions: LanguageClientOptions = {
     // Every `.baml` document in the window — project files, files outside
     // any project (the server mints provisional roots for those), and
-    // materialized stdlib sources alike. No `workspaceFolder` pin: the
+    // read-only stdlib documents alike. No `workspaceFolder` pin: the
     // client library forwards ALL workspace folders in `initialize` and
     // `workspace/didChangeWorkspaceFolders`, and the server discovers
     // projects underneath them.
-    documentSelector: [{ language: 'baml', scheme: 'file' }],
+    documentSelector: [
+      { language: 'baml', scheme: 'file' },
+      { language: 'baml', scheme: STDLIB_SCHEME },
+    ],
     initializationOptions: {
       bamlClient: {
         capabilities: [
@@ -248,11 +328,21 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
         updateStatusBar('starting');
         break;
       case State.Running:
+        stdlibConnection?.dispose();
+        stdlibConnection = stdlibDocuments.connect((uri, token) =>
+          created.sendRequest<StdlibSourceResult>(
+            STDLIB_SOURCE_METHOD,
+            { uri },
+            token,
+          ),
+        );
         clientStartFailed = false;
         updateStatusBar('running');
         validateServerCompatibility(created);
         break;
       case State.Stopped:
+        stdlibConnection?.dispose();
+        stdlibConnection = undefined;
         knownProjects = [];
         updateStatusBar(clientStartFailed ? 'error' : 'stopped');
         break;
@@ -283,8 +373,13 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
 
   created.onNotification(
     'baml/listProjects',
-    (params: { projects: string[] }) => {
-      knownProjects = params.projects ?? [];
+    (params: { projects: (ProjectEntry | string)[] }) => {
+      // A server older than this extension lists bare paths. That skew is the
+      // designed arrangement, not an edge case: the wrapper exists so a
+      // project can pin an older toolchain than the editor is running.
+      knownProjects = (params.projects ?? []).map((project) =>
+        typeof project === 'string' ? { path: project } : project,
+      );
       refreshTooltip();
     },
   );
@@ -296,6 +391,10 @@ async function startClient(): Promise<void> {
   if (!client || client.state !== State.Stopped) {
     return;
   }
+  const cwd = serverWorkingDirectory();
+  client.outputChannel.appendLine(
+    `Starting \`${wrapper.path} lsp\` (${wrapper.source})${cwd ? ` in ${cwd}` : ''}`,
+  );
   try {
     await client.start();
     clientStartFailed = false;
@@ -304,6 +403,39 @@ async function startClient(): Promise<void> {
     updateStatusBar('error');
     console.error('Failed to start the BAML language server', error);
   }
+}
+
+/**
+ * Stop the running server and start a fresh client: the wrapper path and
+ * working directory are re-resolved, so a changed `baml.cliPath` or a
+ * reordered workspace takes effect. `LanguageClient.restart()` would reuse
+ * the options it was created with.
+ *
+ * Restarts queue behind one another. Two at once would each stop the client
+ * they saw and then each create a replacement, and the one that finished
+ * first would be left running with nothing referencing it: a live server that
+ * never stops, not even on deactivate, still handling notifications into
+ * shared state.
+ */
+function restartClient(context: vscode.ExtensionContext): Promise<void> {
+  const queued = (restarting ?? Promise.resolve())
+    // A failed restart must not poison the ones behind it.
+    .catch(() => undefined)
+    .then(async () => {
+      const current = client;
+      client = undefined;
+      if (current && current.state !== State.Stopped) {
+        await current.stop();
+      }
+      client = createClient(context);
+      await startClient();
+    });
+  restarting = queued;
+  return queued.finally(() => {
+    if (restarting === queued) {
+      restarting = undefined;
+    }
+  });
 }
 
 function validateServerCompatibility(client: LanguageClient) {
@@ -330,10 +462,9 @@ function validateServerCompatibility(client: LanguageClient) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  const config = vscode.workspace.getConfiguration('baml');
+  stdlibDocuments = new StdlibDocuments(vscode);
+  context.subscriptions.push(stdlibDocuments);
   playgroundDir = getPlaygroundDir(context);
-  wrapperPath =
-    process.env.BAML_CLI_PATH ?? config.get<string | null>('cliPath') ?? 'baml';
 
   statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -356,10 +487,25 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('baml.restartLanguageServer', async () => {
-      if (client) {
-        await client.restart();
+      await restartClient(context);
+      if (client?.state === State.Running) {
         vscode.window.showInformationMessage('BAML Language Server restarted.');
       }
+    }),
+  );
+
+  // A changed wrapper setting restarts the server on the new path; an
+  // environment override (`BAML_CLI_PATH`) makes the setting moot.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
+      if (!event.affectsConfiguration('baml.cliPath')) {
+        return;
+      }
+      const next = resolveWrapper();
+      if (next.path === wrapper.path && next.source === wrapper.source) {
+        return;
+      }
+      await restartClient(context);
     }),
   );
 

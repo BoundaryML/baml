@@ -109,7 +109,13 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 12: appended `PopJumpIfTrue`, `JumpIfFalseOrPop`,
 /// `JumpIfTrueOrPop`, and `JumpIfNotNullOrPop` to the instruction/opcode sets.
-pub const FORMAT_VERSION: u32 = 12;
+///
+/// Version 13: removed `RuntimeIsType` from the instruction/opcode sets, so
+/// every opcode declared after it renumbers, and dropped the type-argument
+/// count flag bit from call instructions.
+///
+/// Version 14: `Bytecode::call_layouts` records each call site's argument layout.
+pub const FORMAT_VERSION: u32 = 14;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -271,7 +277,7 @@ pub struct ManifestFile {
     /// them. Re-seeded into the next compile's database so unchanged files
     /// never re-walk their bodies just to answer "what does the package
     /// throw" — the package-level solve then runs from facts alone.
-    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
     /// Opaque borsh blob of the diagnostics `check_file` produced for this
     /// file on the compile that wrote the manifest (`borsh(Vec<CachedDiagnostic>)`,
     /// the typed form living in the CLI). Kept opaque here so `bex_cache` does
@@ -949,7 +955,7 @@ mod tests {
             defined_names: Vec<String>,
             referenced_names: Vec<String>,
             sig_referenced_names: Vec<String>,
-            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
             diagnostics: Vec<u8>,
         }
         #[derive(borsh::BorshSerialize)]

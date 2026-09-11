@@ -6,8 +6,7 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::package_interface};
+use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
@@ -93,11 +92,12 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
-    )
-    .clone();
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
+            .unwrap(),
+    );
     let exported = interface
         .functions
         .values_mut()
@@ -109,15 +109,10 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
     exported.linkability = ExternalLinkability::Linkable;
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -171,11 +166,12 @@ function forged_type_of<T>() -> reflect.Type {
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = package_interface(
+    let mut interface = export_interface(
         &dependency,
-        PackageId::new(&dependency, Name::new("dependency")),
-    )
-    .clone();
+        baml_compiler2_hir::package::spelling(&dependency)
+            .root(&Name::new("dependency"))
+            .unwrap(),
+    );
     let mut configured = 0;
     for exported in interface
         .functions
@@ -184,14 +180,14 @@ function forged_type_of<T>() -> reflect.Type {
     {
         let target = match exported.name.as_str() {
             "forged_log" => ExternalCallTarget::Free {
-                package: Name::new("log"),
-                namespace: Vec::new(),
-                name: Name::new("info"),
+                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
             },
             "forged_type_of" => ExternalCallTarget::Free {
-                package: Name::new("reflect"),
-                namespace: vec![Name::new("Type")],
-                name: Name::new("of"),
+                function: baml_type::TypeName::new(
+                    Name::new("reflect"),
+                    vec![Name::new("Type")],
+                    Name::new("of"),
+                ),
             },
             _ => continue,
         };
@@ -205,15 +201,10 @@ function forged_type_of<T>() -> reflect.Type {
     );
 
     let mut db = make_db();
-    db.set_mounted_packages(
-        [(
-            "dependency".to_string(),
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
-                .unwrap(),
-        )]
-        .into(),
-    )
-    .unwrap();
+    db.mount(
+        "dependency",
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface).unwrap(),
+    );
     let file = db.file(
         "test.baml",
         r#"
@@ -534,7 +525,7 @@ fn optional_named_reordered_args_evaluate_in_source_order() {
 }
 
 #[test]
-fn optional_dropping_adapter() {
+fn optional_dropping_function_value() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -549,7 +540,7 @@ fn optional_dropping_adapter() {
         }
         "#,
     );
-    mir_snapshot!("optional_dropping_adapter", render_mir(&db, file));
+    mir_snapshot!("optional_dropping_function_value", render_mir(&db, file));
 }
 
 #[test]
@@ -757,9 +748,9 @@ fn reflect_type_of_array_of_typevar() {
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
 }
 
-/// Runtime type syntax is consumed from hir_ty's durable plan: bind the
-/// lexical slot once, pass the stored runtime type operand to the generic call,
-/// retain its checked-call flag, and use the bound value for `is T`.
+/// A scoped runtime type is consumed from hir_ty's durable plan: bind the
+/// lexical slot once from the operand, then read the slot for the `let x: T`
+/// downcast, the generic call's type argument, and `is T`.
 #[test]
 fn runtime_type_plan_operations_are_explicit() {
     let mut db = make_db();
@@ -770,8 +761,10 @@ function accept<T>(value: T) -> T { value }
 
 function f(t: reflect.Type, value: unknown) -> bool {
     type T = unreflect(t)
-    let result = accept<unreflect(t)>(value)
-    result is T && result is unreflect(t)
+    match (value) {
+        let x: T => accept<T>(x) is T,
+        _ => false,
+    }
 }
 "#,
     );
@@ -782,8 +775,11 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
+/// A static right-hand side loads its template into the binding's slot; every
+/// later mention of the name reads that slot, including nested under a
+/// constructor (`Bound?`, `Bound[]`).
 #[test]
-fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
+fn static_type_binding_loads_its_template_into_the_slot() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -792,14 +788,14 @@ class Wrapper<T> { value T }
 
 function erase<T>() -> string { "ok" }
 
-function f(t: reflect.Type, value: unknown) -> bool {
-    type Bound = Wrapper<unreflect(t)>
-    let annotated: Wrapper<unreflect(t)>? = null
-    erase<Wrapper<unreflect(t)>>() == "ok"
+function f(value: unknown) -> bool {
+    type Bound = Wrapper<string>
+    let annotated: Bound? = null
+    erase<Bound>() == "ok"
         && annotated == null
-        && value is Wrapper<unreflect(t)>
+        && value is Bound
         && match value {
-            Wrapper<unreflect(t)> => true,
+            Bound => true,
             _ => false,
         }
 }
@@ -807,7 +803,7 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
-        "nested_runtime_type_atoms_bind_slots_before_loading_templates",
+        "static_type_binding_loads_its_template_into_the_slot",
         render_mir(&db, file)
     );
 }
@@ -824,21 +820,26 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "function accept<T>(value: T) -> T { value }",
     );
     baml_db::testing::assert_no_diagnostic_errors(&library);
-    let interface = baml_compiler2_hir_ty::package_interface::package_interface(
+    let interface = baml_compiler2_hir_ty::package_interface::export_interface(
         &library,
-        baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
+        baml_compiler2_hir::package::spelling(&library)
+            .root(&Name::new("app"))
+            .unwrap(),
     );
-    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize mounted interface");
 
     let mut db = make_db();
-    db.set_mounted_packages([("app".to_string(), blob)].into())
-        .unwrap();
+    db.mount("app", blob);
     let file = db.file(
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
-    app.accept<unreflect(t)>(value)
+    type T = unreflect(t)
+    match (value) {
+        let x: T => app.accept<T>(x),
+        _ => null,
+    }
 }
 "#,
     );

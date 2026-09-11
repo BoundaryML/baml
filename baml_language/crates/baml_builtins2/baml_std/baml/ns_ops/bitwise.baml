@@ -44,7 +44,7 @@ interface BitAnd<Rhs extends root.Concrete> requires root.Concrete {
     /// otherwise `bigint`.
     type Output extends root.Concrete;
     /// The bitwise AND of `self` and `rhs`.
-    function bit_and(self, rhs: Rhs) -> Self.Output throws never
+    function bit_and(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The bitwise OR operator, `self | rhs`.
@@ -61,7 +61,7 @@ interface BitOr<Rhs extends root.Concrete> requires root.Concrete {
     /// otherwise `bigint`.
     type Output extends root.Concrete;
     /// The bitwise OR of `self` and `rhs`.
-    function bit_or(self, rhs: Rhs) -> Self.Output throws never
+    function bit_or(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The bitwise XOR operator, `self ^ rhs`.
@@ -79,7 +79,7 @@ interface BitXor<Rhs extends root.Concrete> requires root.Concrete {
     /// otherwise `bigint`.
     type Output extends root.Concrete;
     /// The bitwise exclusive-OR of `self` and `rhs`.
-    function bit_xor(self, rhs: Rhs) -> Self.Output throws never
+    function bit_xor(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The left-shift operator, `self << rhs`.
@@ -104,7 +104,7 @@ interface ShiftLeft<Rhs extends root.Concrete> requires root.Concrete {
     /// the shift.
     type Output extends root.Concrete;
     /// Shifts `self` left by `rhs` bit positions.
-    function shl(self, rhs: Rhs) -> Self.Output throws never
+    function shl(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The right-shift operator, `self >> rhs`.
@@ -128,7 +128,7 @@ interface ShiftRight<Rhs extends root.Concrete> requires root.Concrete {
     /// the shift.
     type Output extends root.Concrete;
     /// Shifts `self` right by `rhs` bit positions.
-    function shr(self, rhs: Rhs) -> Self.Output throws never
+    function shr(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 // ==== int ====

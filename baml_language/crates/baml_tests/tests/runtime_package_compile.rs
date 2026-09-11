@@ -30,7 +30,8 @@ class ExtractedRecord {
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
-  let record = Extract@parse<unreflect(record_t.as_type())>(document_text)
+  type Record = unreflect(record_t.as_type())
+  let record = Extract@parse<Record>(document_text)
   json.to_string(record)
 }
 
@@ -39,7 +40,8 @@ function rendered_schema() -> string {
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  Extract@render_prompt<unreflect(record_t.as_type())>("sample document").text()
+  type Record = unreflect(record_t.as_type())
+  Extract@render_prompt<Record>("sample document").text()
 }
 
 function declaration_identity_properties() -> bool {
@@ -247,6 +249,82 @@ async fn method_bearing_interface_crosses_a_mount() {
 async fn mounted_method_stubs_do_not_shadow_their_owner() {
     let output = baml_test!(baml: MOUNTED_METHODS_SOURCE, entry: "mount_is_clean");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// A host interface whose declaration carries a generic parameter bound, a
+/// `requires` clause, and an associated type with a default, implemented by
+/// runtime-compiled source across a mount. The implementor omits the
+/// defaulted associated type, satisfies `requires` through a second
+/// `implements` block, and binds the bounded parameter to a marker class.
+const MOUNTED_INTERFACE_CONTRACT_SOURCE: &str = r####"
+interface Marker {}
+interface Named {
+  function name(self) -> string throws never
+}
+interface Counter<T extends Marker> requires Named {
+  type Value = int
+  function count(self, at: T) -> int throws never
+  function label(self, at: T) -> string throws never {
+    self.name() + "=" + self.count(at).to_string()
+  }
+}
+
+class Tag {
+  weight int
+  implements Marker {}
+}
+
+function compile_counter_plugin() -> reflect.Package {
+  reflect.Package.compile(
+    { "plugin.baml": `
+class Tally {
+  n int
+  implements app.Named {
+    function name(self) -> string throws never { "tally" }
+  }
+  implements app.Counter<app.Tag> {
+    function count(self, at: app.Tag) -> int throws never { self.n + at.weight }
+  }
+}
+
+function label_tally(n: int) -> string throws never {
+  Tally { n: n }.label(app.Tag { weight: 1 })
+}
+` },
+    packages = { "app": reflect.Package.current() },
+  )
+}
+
+function contract_mount_is_clean() -> bool {
+  compile_counter_plugin().diagnostics().length() == 0
+}
+
+function main() -> string {
+  let pkg = compile_counter_plugin()
+  let label = pkg.get_function<(int) -> string>("root.label_tally")
+    ?? throw "missing label_tally"
+  label(40)
+}
+"####;
+
+/// The mount's interface stub carries the declaration's whole contract
+/// (parameter bounds, `requires`, associated-type bounds and defaults), so a
+/// runtime-compiled implementor may rely on an associated-type default and
+/// the inherited `requires` interface, and the host's default method calls
+/// through it. A stub that dropped the default rejected the implementor for
+/// not binding `Value`.
+#[tokio::test]
+async fn mounted_interface_stub_keeps_its_contract() {
+    let output = baml_test!(
+        baml: MOUNTED_INTERFACE_CONTRACT_SOURCE,
+        entry: "contract_mount_is_clean"
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    let output = baml_test!(baml: MOUNTED_INTERFACE_CONTRACT_SOURCE);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("tally=41".into()))
+    );
 }
 
 /// `baml.ToString` is implemented for `reflect.Type` out-of-body in the
@@ -745,5 +823,40 @@ async fn alias_maps_are_order_independent_and_cannot_shadow_stdlib() {
 #[tokio::test]
 async fn package_tests_enumerate_invocable_zero_arg_functions() {
     let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "enumerated_test_runs");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// One package object mounted under two aliases is one package in the
+/// consumer's compile world: a type reached as `app.Twin` and as
+/// `z_last.Twin` is the same type, so crossing the two spellings in one
+/// signature type-checks, and the value flows through unchanged.
+const ALIAS_TWINS_SOURCE: &str = r####"
+class Twin {
+  x int
+}
+
+function main() -> bool {
+  let root_package = reflect.Package.current()
+  let generated = reflect.Package.compile(
+    { "main.baml": `
+function cross(t: app.Twin) -> z_last.Twin {
+  let same: z_last.Twin = t
+  same
+}
+` },
+    packages = { "app": root_package, "z_last": root_package },
+  )
+  if (generated.diagnostics().length() != 0) {
+    throw generated.diagnostics()[0].message
+  }
+  let cross = generated.get_function<(Twin) -> Twin>("root.cross")
+    ?? throw "missing root.cross"
+  cross(Twin { x: 7 }).x == 7
+}
+"####;
+
+#[tokio::test]
+async fn one_package_under_two_aliases_is_one_package() {
+    let output = baml_test!(baml: ALIAS_TWINS_SOURCE, entry: "main");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

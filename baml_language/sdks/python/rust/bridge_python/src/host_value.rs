@@ -13,11 +13,10 @@
 //! 1. Looks up the Python callable by `host_value_key`.
 //! 2. Decodes the `BamlOutboundValue` args into Python values via
 //!    `baml_bridge.proto._decode_value_holder` (already a list shape).
-//! 3. Invokes the callable. If the return is a coroutine, runs it to
+//! 3. Invokes the callable. If the return is awaitable, runs it to
 //!    completion on a fresh `asyncio` event loop. The dispatch runs on a
-//!    spawned tokio task (see [`host_dispatch_callback`]), so blocking that
-//!    task to drive the coroutine to completion does not stall the engine,
-//!    which concurrently awaits the call's completion.
+//!    Tokio blocking task (see [`host_dispatch_callback`]); the engine's
+//!    async workers remain free to run BAML calls made by the callback.
 //! 4. Encodes the result into `InboundValue` bytes via
 //!    `baml_bridge.proto.encode_call_args`-style serialization, then calls
 //!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
@@ -238,9 +237,11 @@ pub extern "C" fn host_dispatch_callback(
     };
 
     // We're called on a tokio worker from the engine's sysop dispatch (see
-    // `sys_native::host_dispatch::fire_dispatch`). Spawn a task so the
-    // dispatch callback returns promptly and the engine can continue
-    // making progress on other work while Python runs.
+    // `sys_native::host_dispatch::fire_dispatch`). Python may block, including
+    // while its callback awaits a reentrant BAML call. Use the blocking pool:
+    // blocking an async worker can strand newly spawned work in its local
+    // queue and deadlock the callback waiting for that work, and a nested
+    // `block_on` from an async worker panics outright.
     //
     // The Python encode/decode and the user callable invocation happen
     // inside this task with the GIL held. Async user callables are run
@@ -287,7 +288,7 @@ pub extern "C" fn host_dispatch_callback(
         );
         return;
     };
-    handle.spawn(async move {
+    handle.spawn_blocking(move || {
         // A Rust-level *panic* (not a `PyErr`) inside `dispatch_in_python`
         // would unwind out of this task and silently drop the in-flight
         // `call_id`, leaving the engine awaiting it forever (there is no
@@ -341,9 +342,10 @@ fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
         // own defaults apply.
         let result_obj = callable.call(py, &positional, Some(&kwargs))?;
 
-        // If the callable returned a coroutine (async function), run it to
-        // completion on a fresh asyncio loop. Sync callables fall through.
-        let final_result = run_if_coroutine(py, result_obj)?;
+        // If the callable returned an awaitable (a coroutine from an async
+        // function, or any `__await__`-bearing object), run it to completion
+        // on a fresh asyncio loop. Sync callables fall through.
+        let final_result = run_if_awaitable(py, result_obj)?;
 
         // Encode the result as an `InboundValue` via `baml_bridge.proto`.
         encode_result_inbound(py, final_result)
@@ -394,17 +396,25 @@ fn decode_args<'py>(
     Ok((positional, kwargs))
 }
 
-/// If `value` is a coroutine, run it to completion on a fresh asyncio loop
+/// If `value` is awaitable, run it to completion on a fresh asyncio loop
 /// and return the resolved result. Otherwise return `value` unchanged.
-fn run_if_coroutine(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
+///
+/// `inspect.isawaitable` rather than `asyncio.iscoroutine`: a callback may
+/// return a task-like object or a custom `__await__` wrapper, which
+/// `iscoroutine` rejects — such a value used to be encoded as a plain
+/// (unencodable) result instead of being awaited.
+fn run_if_awaitable(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
     let bound = value.bind(py);
     let asyncio = PyModule::import(py, "asyncio")?;
-    let is_coro: bool = asyncio.getattr("iscoroutine")?.call1((bound,))?.extract()?;
-    if !is_coro {
+    let is_awaitable: bool = PyModule::import(py, "inspect")?
+        .getattr("isawaitable")?
+        .call1((bound,))?
+        .extract()?;
+    if !is_awaitable {
         return Ok(value);
     }
     // Run the coroutine to completion on a new event loop in the current
-    // thread. The bridge is on a tokio worker — Python sees a fresh loop
+    // thread. The bridge is on the blocking pool — Python sees a fresh loop
     // dedicated to this dispatch only.
     let new_loop = asyncio.getattr("new_event_loop")?.call0()?;
     let set_event_loop = asyncio.getattr("set_event_loop")?;

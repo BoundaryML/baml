@@ -4,30 +4,30 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{DeclName, Freshness, FunctionParamTy, Literal, Name, Ty, TyAttr};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
 #[derive(Default)]
 struct Ctx {
-    aliases: HashMap<QualifiedTypeName, Ty>,
+    aliases: HashMap<DeclName, Ty>,
     /// `(concrete nominal head, interface head)` membership facts.
-    impls: Vec<(QualifiedTypeName, QualifiedTypeName)>,
+    impls: Vec<(DeclName, DeclName)>,
     /// `(primitive name, interface head)` membership facts (e.g. `int: Compare`).
-    prim_impls: Vec<(&'static str, QualifiedTypeName)>,
+    prim_impls: Vec<(&'static str, DeclName)>,
     /// `(interface head, required interface head)` direct requirements.
-    requires: Vec<(QualifiedTypeName, QualifiedTypeName)>,
+    requires: Vec<(DeclName, DeclName)>,
     /// Conjunction (`T: A + B`) bounds per type variable.
     var_bounds: HashMap<ParamTy, Vec<Ty>>,
-    enums: HashMap<QualifiedTypeName, Vec<Name>>,
+    enums: HashMap<DeclName, Vec<Name>>,
     /// Declared `extends` bounds per `(interface head, associated-type name)`.
-    assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
+    assoc_bounds: HashMap<(DeclName, Name), Vec<Ty>>,
     /// `(base, interface head, member) → reduced type` projection facts, for the
     /// `project` oracle. A `Vec` (not a map) because `Ty` is not `Hash`.
-    projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
+    projections: Vec<(Ty, DeclName, Name, Ty)>,
 }
 
-fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
+fn nominal_head(ty: &Ty) -> Option<DeclName> {
     match ty {
         Ty::Class(q, ..) | Ty::Interface(q, ..) | Ty::Enum(q, _) | Ty::EnumVariant(q, ..) => {
             Some(q.clone())
@@ -50,11 +50,11 @@ fn primitive_name(ty: &Ty) -> Option<&'static str> {
 impl TypeContext for Ctx {
     /// A name-based context represents a declaration by its own name, so this
     /// is the identity — no resolution step, and never `None`.
-    fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
-        Some(qtn.clone())
+    fn well_known(&self, head: WellKnownHead) -> Option<DeclName> {
+        well_known_decl(crate::test_roots::lang(), head)
     }
 
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+    fn alias_def(&self, name: &DeclName) -> Option<Ty> {
         self.aliases.get(name).cloned()
     }
 
@@ -86,7 +86,7 @@ impl TypeContext for Ctx {
         a == b || self.requires.iter().any(|(x, y)| x == a && y == b)
     }
 
-    fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, name: &DeclName) -> Option<Vec<Name>> {
         self.enums.get(name).cloned()
     }
 
@@ -117,8 +117,8 @@ impl TypeContext for Ctx {
 
 // ── constructors ─────────────────────────────────────────────────────────--
 
-fn qtn(s: &str) -> QualifiedTypeName {
-    QualifiedTypeName::local(Name::new(s))
+fn qtn(s: &str) -> DeclName {
+    crate::test_roots::local(Name::new(s))
 }
 fn class(s: &str) -> Ty {
     Ty::Class(qtn(s), Box::new([]), TyAttr::default())
@@ -192,7 +192,11 @@ fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
     };
 
     for kind in crate::type_kind::TypeKind::ALL {
-        let view = Ty::Class(kind.class_name(), Box::new([]), TyAttr::default());
+        let view = Ty::Class(
+            kind.class_decl(crate::test_roots::root("reflect")),
+            Box::new([]),
+            TyAttr::default(),
+        );
         assert!(
             !is_subtype(&view, &carrier, &ctx),
             "plain subtype entry admitted {kind:?} beneath the carrier"
@@ -1383,7 +1387,7 @@ fn equal_requires_singleton_with_unoverridable_eq() {
 
 fn any_class() -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
+        crate::test_roots::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
         Box::new([]),
         Box::new([]),
         TyAttr::default(),
@@ -1420,7 +1424,11 @@ fn any_class_admits_every_reflection_kind_view() {
     let ctx = Ctx::default();
     let target = any_class();
     for kind in crate::type_kind::TypeKind::ALL {
-        let view = Ty::Class(kind.class_name(), Box::new([]), TyAttr::default());
+        let view = Ty::Class(
+            kind.class_decl(crate::test_roots::root("reflect")),
+            Box::new([]),
+            TyAttr::default(),
+        );
         assert!(
             is_subtype(&view, &target, &ctx),
             "AnyClass rejected {kind:?}"
@@ -1435,7 +1443,7 @@ fn any_class_admits_every_reflection_kind_view() {
 /// `Returns`/`Throws` with `unknown`).
 fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
+        crate::test_roots::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
         Box::new([]),
         pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
         TyAttr::default(),
@@ -1754,7 +1762,7 @@ fn self_referential_bound_subtyping_terminates() {
     // calls TERMINATING is the test; the verdicts pin the co-inductive
     // semantics.
     let mut ctx = Ctx::default();
-    let foo = QualifiedTypeName::local(Name::new("Foo"));
+    let foo = crate::test_roots::local(Name::new("Foo"));
     let bound = Ty::Interface(
         foo,
         Box::new([Ty::union(vec![Ty::type_var("T"), Ty::int()])]),

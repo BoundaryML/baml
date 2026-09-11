@@ -9,7 +9,7 @@
 //! deadlines) is plain owner-only data: no locks, nothing to poison.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, atomic::AtomicUsize},
     time::Duration,
@@ -339,8 +339,6 @@ pub struct Applied {
     pub rejected: Vec<(SourceMutation, LspError)>,
     /// The root set changed (added/removed roots).
     pub roots_changed: bool,
-    /// A `Workspace` root was removed by this batch.
-    pub workspace_root_removed: bool,
 }
 
 /// A host's callback for applied source mutations (see
@@ -364,6 +362,11 @@ pub struct GlobalState {
     /// when discovery finds the enclosing project, removed when their last
     /// document closes.
     provisional_roots: HashSet<PathBuf>,
+    /// Folders the host process itself announced (`baml lsp --workspace`,
+    /// the roots `baml playground` was started on). Discovered like a
+    /// session's workspace folders and, unlike them, never withdrawn: they
+    /// cover their projects for the life of the process.
+    host_folders: Vec<PathBuf>,
     sessions: HashMap<SessionKey, SessionState>,
     live_snapshots: Arc<AtomicUsize>,
     executors: Executors,
@@ -410,6 +413,7 @@ impl GlobalState {
             open_documents: Arc::default(),
             root_state: HashMap::new(),
             provisional_roots: HashSet::new(),
+            host_folders: Vec::new(),
             sessions: HashMap::new(),
             live_snapshots: Arc::new(AtomicUsize::new(0)),
             executors,
@@ -711,6 +715,46 @@ impl GlobalState {
         self.provisional_roots.iter().map(PathBuf::as_path)
     }
 
+    // ── Folders ───────────────────────────────────────────────────────────
+
+    /// Announce a folder on the host's behalf and discover the projects
+    /// under it. Canonicalized like a session's folders; announcing a
+    /// folder twice discovers it once.
+    pub fn add_host_folder(&mut self, folder: &Path) {
+        let folder = paths::canonical_physical_path(folder);
+        if self.host_folders.contains(&folder) {
+            return;
+        }
+        tracing::info!(path = %folder.display(), "discovering host folder");
+        self.host_folders.push(folder.clone());
+        self.spawn_discovery(folder);
+    }
+
+    /// Whether a host folder or any session's workspace folder encloses
+    /// `path`.
+    pub fn folder_covers(&self, path: &Path) -> bool {
+        self.host_folders
+            .iter()
+            .chain(
+                self.sessions
+                    .values()
+                    .flat_map(|session| &session.workspace_folders),
+            )
+            .any(|folder| path.starts_with(folder))
+    }
+
+    /// Whether the `Workspace` root at `root_path` still has a reason to be
+    /// served once `closing` (a document about to close, if any) is no
+    /// longer open: another document under it is open, or a folder covers
+    /// it — unless it is provisional, which exists only for its documents.
+    /// The one rule behind folder withdrawal and `didClose`.
+    pub fn root_is_retained(&self, root_path: &Path, closing: Option<&Path>) -> bool {
+        let documents_open = self
+            .open_documents_under(root_path)
+            .any(|(open, _)| Some(open) != closing);
+        documents_open || (!self.is_provisional_root(root_path) && self.folder_covers(root_path))
+    }
+
     // ── Roots ─────────────────────────────────────────────────────────────
 
     pub fn root_state(&self, root: SourceRoot) -> Option<&RootState> {
@@ -719,37 +763,6 @@ impl GlobalState {
 
     pub fn root_state_mut(&mut self, root: SourceRoot) -> Option<&mut RootState> {
         self.root_state.get_mut(&root)
-    }
-
-    /// The single-workspace stopgap.
-    ///
-    /// The compiler is single-world until the world-viewpoint unit lands
-    /// (every workspace package is named `user`), so a server hosts one
-    /// `Workspace` root. Nothing else in this crate depends on that: roots,
-    /// fences, discovery and routing are all built for N. Removing this
-    /// function is the multi-package switch.
-    pub fn single_workspace_guard(
-        &self,
-        canonical_path: &Path,
-        kind: SourceRootKind,
-    ) -> Result<(), LspError> {
-        if kind != SourceRootKind::Workspace {
-            return Ok(());
-        }
-        // Consult the database, not the roots view: mid-batch (a provisional
-        // root removed and its discovered project added in one `apply`) the
-        // view is stale until the post-batch rebuild, and a guard reading it
-        // would reject the replacement root.
-        match self.db.workspace_root() {
-            Some(existing) if existing.path(&self.db) != canonical_path => {
-                Err(LspError::RequestFailed(format!(
-                    "this server already hosts the workspace at {}; one workspace per server until multi-package support lands (ignoring {})",
-                    existing.path(&self.db).display(),
-                    canonical_path.display()
-                )))
-            }
-            Some(_) | None => Ok(()),
-        }
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────
@@ -825,66 +838,10 @@ impl GlobalState {
         }
         // A removed root's markers must not outlive it in any editor.
         diagnostics::publish_cleared(self, &applied.cleared);
-        // The single-workspace stopgap can have refused a real project while
-        // a scratch document's provisional root held the slot (see
-        // `single_workspace_guard`). When the batch frees the slot, re-run
-        // discovery as a posted continuation so whatever was refused gets
-        // its chance; this hook is deleted together with the guard.
-        if applied.workspace_root_removed && self.db.workspace_root().is_none() {
-            self.handle.post(OwnerEvent::Call(Box::new(|state| {
-                state.rediscover_freed_workspace_slot();
-            })));
-        }
         if let Some(observer) = &self.source_observer {
             observer(&applied);
         }
         applied
-    }
-
-    /// The workspace slot just became free: re-run discovery for every
-    /// initialized session's folders, and re-serve open documents that are
-    /// under no root (their provisional mint lost the slot race earlier).
-    fn rediscover_freed_workspace_slot(&mut self) {
-        let folders: BTreeSet<PathBuf> = self
-            .initialized_sessions()
-            .flat_map(|(_, session)| session.workspace_folders.iter().cloned())
-            .collect();
-        for folder in folders {
-            self.spawn_discovery(folder);
-        }
-
-        let unserved: Vec<(PathBuf, OpenDocument)> = self
-            .open_documents
-            .iter()
-            .filter(|(path, _)| self.roots.root_for_path(path).is_none())
-            .map(|(path, doc)| (path.clone(), doc.clone()))
-            .collect();
-        for (path, doc) in unserved {
-            let Some(parent) = path.parent().map(Path::to_path_buf) else {
-                continue;
-            };
-            let applied = self.apply(vec![
-                SourceMutation::UpsertRoot {
-                    spec: crate::discovery::workspace_root_spec(parent.clone()),
-                    files: Vec::new(),
-                },
-                SourceMutation::SetOverlay {
-                    path,
-                    text: doc.text.to_string(),
-                    version: doc.version,
-                },
-            ]);
-            if applied.rejected.is_empty() {
-                self.mark_provisional_root(parent.clone());
-                self.spawn_discovery(parent);
-            } else {
-                // Another unserved document already claimed the slot; this
-                // one waits for the next free.
-                for (mutation, error) in &applied.rejected {
-                    tracing::debug!(?mutation, %error, "document still unserved after slot rescue");
-                }
-            }
-        }
     }
 
     fn apply_one(
@@ -898,7 +855,6 @@ impl GlobalState {
                 // insert in that form so a re-upsert under a different
                 // spelling (`/tmp` vs `/private/tmp`) matches its root.
                 let root_path = baml_db::canonicalize_lossy(&spec.path);
-                self.single_workspace_guard(&root_path, spec.kind)?;
                 let root = match self.db.source_root_for_path(&root_path) {
                     Some(existing) if existing.path(&self.db) == &root_path => existing,
                     _ => {
@@ -906,8 +862,10 @@ impl GlobalState {
                             .db
                             .add_source_root(SourceRootSpec {
                                 path: root_path.clone(),
-                                package: spec.package.clone(),
                                 kind: spec.kind,
+                                self_name: spec.self_name.clone(),
+                                interface: None,
+                                dependencies: Vec::new(),
                             })
                             .map_err(|e| LspError::RequestFailed(e.to_string()))?;
                         applied.roots_changed = true;
@@ -946,9 +904,6 @@ impl GlobalState {
                     applied
                         .cleared
                         .extend(state.fence.last_published().keys().cloned());
-                }
-                if root.kind(&self.db) == SourceRootKind::Workspace {
-                    applied.workspace_root_removed = true;
                 }
                 self.provisional_roots.remove(path);
                 self.db.remove_source_root(root);
@@ -1005,7 +960,10 @@ impl GlobalState {
             .map(|root| RootEntry {
                 root,
                 path: root.path(&self.db).clone(),
-                package: root.package(&self.db),
+                spelling: baml_db::baml_compiler2_hir::package::spelling(&self.db)
+                    .of(root)
+                    .clone(),
+                self_name: root.self_name(&self.db),
                 kind: root.kind(&self.db),
             })
             .collect();

@@ -4,6 +4,7 @@
 
 use baml_base::{Name, attr::TyAttrValue};
 use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
+use baml_type::DeclName;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
@@ -67,33 +68,28 @@ fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolK
 
 // ── Namespace-aware key resolution ──────────────────────────────────────────
 
-/// Resolve a path within a single package to its qualified key
-/// `[package_name, ...namespace, item_name]`.
+/// Resolve a path within a single package to the declaration it names.
 fn resolve_in_package(
     namespace: &[Name],
     item: &Name,
-    pkg_name: &Name,
     pkg_items: &PackageItems<'_>,
-) -> Option<Vec<Name>> {
-    pkg_items.lookup_type(namespace, item).map(|_| {
-        let mut key = vec![pkg_name.clone()];
-        key.extend_from_slice(namespace);
-        key.push(item.clone());
-        key
-    })
+) -> Option<DeclName> {
+    pkg_items
+        .lookup_type(namespace, item)
+        .map(|_| DeclName::in_root(pkg_items.root, namespace.to_vec(), item.clone()))
 }
 
-/// Resolve a PPIR type path to its qualified key `[package, ...ns, name]`.
-/// Handles direct lookup, `root.*` prefix, bare names in non-root namespaces,
-/// and cross-package references.
-fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>> {
+/// Resolve a PPIR type path to the declaration it names. Handles direct
+/// lookup, `root.*` prefix, bare names in non-root namespaces, and
+/// cross-package references.
+fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<DeclName> {
     if path.is_empty() {
         return None;
     }
     let item = path.last().unwrap();
     // 1. Direct lookup in current package
     let ns = &path[..path.len() - 1];
-    if let Some(key) = resolve_in_package(ns, item, ctx.package_name, ctx.package_items) {
+    if let Some(key) = resolve_in_package(ns, item, ctx.package_items) {
         return Some(key);
     }
     // 2. Handle `root.*` prefix
@@ -101,20 +97,13 @@ fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>
         let after_root = &path[1..];
         let root_item = after_root.last().unwrap();
         let root_ns = &after_root[..after_root.len() - 1];
-        if let Some(key) =
-            resolve_in_package(root_ns, root_item, ctx.package_name, ctx.package_items)
-        {
+        if let Some(key) = resolve_in_package(root_ns, root_item, ctx.package_items) {
             return Some(key);
         }
     }
     // 3. Bare name in current (non-root) namespace
     if path.len() == 1 && !ctx.namespace_path.is_empty() {
-        if let Some(key) = resolve_in_package(
-            ctx.namespace_path,
-            item,
-            ctx.package_name,
-            ctx.package_items,
-        ) {
+        if let Some(key) = resolve_in_package(ctx.namespace_path, item, ctx.package_items) {
             return Some(key);
         }
     }
@@ -124,7 +113,7 @@ fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>
             let after_pkg = &path[1..];
             let pkg_item = after_pkg.last().unwrap();
             let pkg_ns = &after_pkg[..after_pkg.len() - 1];
-            return resolve_in_package(pkg_ns, pkg_item, &path[0], foreign_items);
+            return resolve_in_package(pkg_ns, pkg_item, foreign_items);
         }
     }
     None
@@ -208,13 +197,14 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
 
 /// Shared context threaded through all stream-expansion functions.
 pub struct ExpandCtx<'ctx> {
-    pub package_name: &'ctx Name,
     pub namespace_path: &'ctx [Name],
     pub package_items: &'ctx PackageItems<'ctx>,
-    /// All packages' items keyed by package name, for cross-package type resolution.
+    /// The packages this package may spell by a leading path segment (itself
+    /// by its own name, dependencies by their edge names), for cross-package
+    /// type resolution.
     pub all_package_items: &'ctx FxHashMap<Name, &'ctx PackageItems<'ctx>>,
-    pub block_attrs: &'ctx FxHashMap<Vec<Name>, Vec<Name>>,
-    pub alias_bodies: &'ctx FxHashMap<Vec<Name>, PpirTy>,
+    pub block_attrs: &'ctx FxHashMap<DeclName, Vec<Name>>,
+    pub alias_bodies: &'ctx FxHashMap<DeclName, PpirTy>,
 }
 
 // ── Output Types ─────────────────────────────────────────────────────────────
@@ -515,11 +505,11 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                             if let Some(key) = resolve_qualified_key(path, ctx) {
                                 if let Some(body) = ctx.alias_bodies.get(&key) {
                                     // The alias body's paths are relative to the alias
-                                    // definition's namespace (key = [pkg, ...ns, name]).
-                                    // Recurse with the alias's namespace so that
-                                    // classify_type / resolve_qualified_key resolve
-                                    // the body's bare names correctly.
-                                    let alias_ns = key[1..key.len() - 1].to_vec();
+                                    // definition's namespace. Recurse with the alias's
+                                    // namespace so that classify_type /
+                                    // resolve_qualified_key resolve the body's bare
+                                    // names correctly.
+                                    let alias_ns = key.namespace().clone();
                                     let alias_ctx = ExpandCtx {
                                         namespace_path: &alias_ns,
                                         ..*ctx

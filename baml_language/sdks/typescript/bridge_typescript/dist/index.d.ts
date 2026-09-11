@@ -9,6 +9,7 @@ import { BamlRuntime, BamlCallContext, HostSpanManager, Collector as NativeColle
 export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
+export { _hostValueCount } from './host_value_registry.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
 export { BamlFunctionSpec } from './function_spec.js';

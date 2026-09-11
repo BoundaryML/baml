@@ -13,7 +13,7 @@ use super::support::{make_db, render_ppir, render_tir};
 use crate::engine::TestDbExt;
 
 #[test]
-fn nested_runtime_type_binding_render_preserves_operand_name() {
+fn type_binding_renders_both_right_hand_side_kinds() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -21,7 +21,8 @@ fn nested_runtime_type_binding_render_preserves_operand_name() {
 class Wrapper<T> { value T }
 
 function caller(t: reflect.Type) -> bool {
-    type T = Wrapper<unreflect(t)>
+    type R = unreflect(t)
+    type S = Wrapper<string>
     true
 }
 "#,
@@ -29,13 +30,21 @@ function caller(t: reflect.Type) -> bool {
 
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type T = Wrapper<unreflect(t)> : type"),
-        "typed rendering lost the nested operand:\n{tir}"
+        tir.contains("type R = unreflect(t) : reflect.Type"),
+        "typed rendering lost the runtime operand:\n{tir}"
+    );
+    assert!(
+        tir.contains("type S = Wrapper<string> : type"),
+        "typed rendering lost the static type:\n{tir}"
     );
     let ppir = render_ppir(&db, file);
     assert!(
-        ppir.contains("type T = user.Wrapper<unreflect(t)>"),
-        "HIR rendering lost the nested operand:\n{ppir}"
+        ppir.contains("type R = unreflect(t)"),
+        "HIR rendering lost the runtime operand:\n{ppir}"
+    );
+    assert!(
+        ppir.contains("type S = user.Wrapper<string>"),
+        "HIR rendering lost the static type:\n{ppir}"
     );
 }
 
@@ -484,7 +493,7 @@ function uses() -> int {
         let g = identity : (x: int) -> int throws never
         g(5) : int
       }
-      !! 141..149: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
+      !! 141..149: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (x: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
     }
     ");
 }

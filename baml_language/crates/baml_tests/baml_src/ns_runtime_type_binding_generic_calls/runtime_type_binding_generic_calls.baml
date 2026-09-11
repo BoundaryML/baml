@@ -1,17 +1,6 @@
-// Characterization net for generic calls made in the scope of a
-// `type T = unreflect(expr)` binding.
-//
-// BUG: this file pins CURRENT behavior, and the current behavior is wrong. Such
-// a call leaves its type slots unsolved, and `erase_infer` turns each into the
-// error sentinel with NO diagnostic — so the file compiles only because MIR
-// launders every `Error` to the top type, which also defeats the runtime
-// lowering guard everywhere else.
-//
-// The ruling: an unsolved inference variable owes a diagnostic whether its `_`
-// was written or implicit. These calls need type arguments they cannot get, so
-// the source below is ILLEGAL and should be rejected at compile time. When
-// unsolved variables are reported, this file becomes a diagnostic fixture
-// rather than a compiling one.
+// Generic calls made in the scope of a `type T = unreflect(expr)` binding.
+// `Bound` is a rigid parameter of the frame, so every callee slot it fills
+// solves statically and lowers as an ordinary type argument.
 
 function EmptyOf<T>() -> T[] {
     []
@@ -30,8 +19,7 @@ test "non-closure generic list ops over a runtime-bound element type" {
 }
 
 // The shape that ICEd. Inferring the stored lambda parameter also lets the
-// callback's `never` effect reach `Array.filter`'s `E` slot, so this now runs
-// through the runtime gate instead of only compiling.
+// callback's `never` effect reach `Array.filter`'s `E` slot.
 function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.class
         .new("BoundPredicate", { "value": reflect.Type.of<string>() })
@@ -80,11 +68,9 @@ test "method calls on a generic class receiver with a runtime-bound argument" {
         .new("BoundHeld", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
-    // The empty array must come from `EmptyOf<Bound>()`: a bare `[]` argument
-    // literal does not unify with the runtime-bound `T[]` in the runtime gate
-    // (rejected as E0001 "mismatched types"), the same class of unsolved-slot
-    // answer as the KNOWN GAP on `inferred_ty_to_template`.
-    let holder = Holder<Bound>.new(EmptyOf<Bound>());
+    // A bare `[]` argument solves its element slot from the declared `T[]`
+    // with `T = Bound`, exactly as it would for a static type argument.
+    let holder = Holder<Bound>.new([]);
 
     assert.equal(holder.count(), 0);
     // Pins the receiver's type argument, not just empty-list behavior: a

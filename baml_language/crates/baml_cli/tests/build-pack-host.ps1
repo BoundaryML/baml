@@ -4,6 +4,13 @@
 
 $ErrorActionPreference = "Stop"
 
+# CI builds tests AND both binaries together. The Rust helper validates the
+# host beside CARGO_BIN_EXE; do not replace it with a default-feature build.
+if ($env:BAML_PACK_HOST_PREBUILT -eq "1") {
+    Write-Host "==> using pack host from the outer Cargo build"
+    exit 0
+}
+
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 Set-Location $workspaceRoot
 

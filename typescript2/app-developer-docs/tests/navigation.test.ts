@@ -10,6 +10,21 @@ import {
   primaryNavigation,
   searchablePages,
 } from '../lib/navigation.ts';
+import createNextConfig from '../next.config.ts';
+
+test('the legacy changelog route redirects to website-owned release notes', async () => {
+  const redirects = await createNextConfig(
+    'phase-production-build',
+  ).redirects?.();
+
+  assert.deepEqual(redirects, [
+    {
+      destination: 'https://boundaryml.com/blog?tags=release',
+      permanent: true,
+      source: '/changelog',
+    },
+  ]);
+});
 
 test('every shell navigation destination has a concrete static route', async () => {
   const hrefs = new Set([
@@ -121,11 +136,78 @@ test('generated reference hubs, search, and sitemap share published release data
       readFile(resolve(process.cwd(), 'app/sitemap.ts'), 'utf8'),
     ]);
 
-  assert.match(packageHub, /listGeneratedReleaseSummaries/);
+  assert.match(packageHub, /listDocumentReleaseSummaries/);
   assert.doesNotMatch(packageHub, /const packages =/);
-  assert.match(cliHub, /listGeneratedReleaseSummaries/);
+  assert.match(cliHub, /listDocumentReleaseSummaries/);
   assert.match(cliContent, /<GeneratedReleaseCatalog \/>/);
   assert.match(searchMenu, /fetch\('\/search-index\.json'/);
   assert.match(searchRoute, /buildGeneratedSearchIndex/);
   assert.match(sitemap, /listGeneratedSitemapRoutes/);
+});
+
+test('generated references are live SSR without exhaustive static export', async () => {
+  const [
+    nextConfig,
+    packageRoute,
+    cliRoute,
+    pullRequestWorkflow,
+    releaseWorkflow,
+    engineReleaseWorkflow,
+  ] = await Promise.all([
+    readFile(resolve(process.cwd(), 'next.config.ts'), 'utf8'),
+    readFile(
+      resolve(process.cwd(), 'app/baml/packages/[version]/[[...fqn]]/page.tsx'),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), 'app/cli/[version]/[[...path]]/page.tsx'),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), '../../.github/workflows/developer-docs.yml'),
+      'utf8',
+    ),
+    readFile(
+      resolve(
+        process.cwd(),
+        '../../.github/workflows/release-baml-language.yml',
+      ),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), '../../.github/workflows/release.yml'),
+      'utf8',
+    ),
+  ]);
+
+  assert.doesNotMatch(nextConfig, /output:\s*['"]export['"]/);
+  for (const route of [packageRoute, cliRoute]) {
+    assert.match(route, /dynamic = 'force-dynamic'/);
+    assert.match(route, /cache\(readDocumentRoute\)/);
+    assert.doesNotMatch(route, /generateStaticParams/);
+    assert.doesNotMatch(route, /dynamicParams\s*=\s*false/);
+  }
+  assert.doesNotMatch(
+    pullRequestWorkflow,
+    /upload-artifact|download-artifact|\/out\b/,
+  );
+  assert.match(pullRequestWorkflow, /DB-backed SSR and HTTP contracts/);
+  assert.doesNotMatch(releaseWorkflow, /deploy-developer-docs|static export/);
+  assert.doesNotMatch(engineReleaseWorkflow, /publish-developer-docs/);
+  const publication = releaseWorkflow.indexOf(
+    'Publish the immutable documentation release',
+  );
+  const runtimeVerification = releaseWorkflow.indexOf(
+    'Verify the immutable release through the runtime reader',
+  );
+  const publicVerification = releaseWorkflow.indexOf(
+    'Verify the exact-version release through public SSR',
+  );
+  const promotion = releaseWorkflow.indexOf(
+    'Advance the documentation channel after verification',
+  );
+  assert.ok(publication >= 0);
+  assert.ok(runtimeVerification > publication);
+  assert.ok(publicVerification > runtimeVerification);
+  assert.ok(promotion > publicVerification);
 });

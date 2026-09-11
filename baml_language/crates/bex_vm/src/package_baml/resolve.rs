@@ -67,6 +67,9 @@ pub(crate) struct RuleMethodImpl<'r> {
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
     root_package: Option<bex_vm_types::HeapPtr>,
+    /// Rules a registration proposes but has not published. They take part
+    /// in every lookup this resolver makes and are visible nowhere else.
+    staged_rules: &'vm [RuntimeImplRule],
 }
 
 impl<'vm> ImplResolver<'vm> {
@@ -74,6 +77,48 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: None,
+            staged_rules: &[],
+        }
+    }
+
+    /// Resolve in the world a registration would create, without publishing
+    /// it: `rules` join the candidates of every lookup, including the nested
+    /// obligations a blanket rule's bounds raise. That is what lets a batch be
+    /// judged as a whole — a `Gate` witness in the batch activates
+    /// `implements<T extends Gate> Pick for T` for the receiver, and a `Pick`
+    /// witness in the same batch is then an overlap.
+    pub(crate) fn with_staged_rules(self, rules: &'vm [RuntimeImplRule]) -> Self {
+        Self {
+            staged_rules: rules,
+            ..self
+        }
+    }
+
+    /// Coherence for one `concrete: I<args>` goal: exactly one rule in this
+    /// resolver's world (staged rules included) applies. Associated bindings
+    /// are outputs of a match, so two rows differing only there still overlap.
+    pub(crate) fn check_sole_implementation(
+        self,
+        concrete: &RealizedTy,
+        interface: bex_vm_types::HeapPtr,
+        args: &[RealizedTy],
+    ) -> Result<(), String> {
+        let bex_vm_types::Object::Interface(declaration) = self.vm.get_object(interface) else {
+            return Err("registration target is not an interface".into());
+        };
+        let head = TypeHead::new(interface, declaration.type_tag);
+        let applicable = self
+            .rules_for(head)
+            .iter()
+            .filter(|rule| self.requested_rule_args(rule, concrete, args).is_some())
+            .count();
+        if applicable == 1 {
+            Ok(())
+        } else {
+            Err(format!(
+                "overlapping implementations of `{}` for `{concrete}`",
+                declaration.name.display_name()
+            ))
         }
     }
 
@@ -84,6 +129,7 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: Some(package),
+            staged_rules: &[],
         }
     }
 
@@ -137,8 +183,15 @@ impl<'vm> ImplResolver<'vm> {
                 packages.extend(runtime.dependencies.iter().copied());
             }
         }
+        // A rule can be reachable both through the static index and through
+        // a package that owns it (a witnessed runtime class's private owner
+        // is also the world its instances resolve in). Each rule is one
+        // candidate, so a coherence count over the candidates is exact.
+        let mut seen_rules = std::collections::HashSet::new();
         let mut rules = pointers
             .into_iter()
+            .chain(self.vm.dynamic_dispatch.rules_of(iface_ptr))
+            .filter(|rule_ptr| seen_rules.insert(*rule_ptr))
             .filter_map(|rule_ptr| {
                 self.vm
                     .get_object(rule_ptr)
@@ -147,16 +200,10 @@ impl<'vm> ImplResolver<'vm> {
             })
             .collect::<Vec<_>>();
         rules.extend(
-            self.vm
-                .dynamic_dispatch
-                .rules_of(iface_ptr)
-                .into_iter()
-                .filter_map(|rule_ptr| {
-                    self.vm
-                        .get_object(rule_ptr)
-                        .as_impl_rule()
-                        .map(RuntimeImplRuleCandidate::Borrowed)
-                }),
+            self.staged_rules
+                .iter()
+                .filter(|rule| rule.interface_head == iface_ptr)
+                .map(RuntimeImplRuleCandidate::Borrowed),
         );
         rules
     }

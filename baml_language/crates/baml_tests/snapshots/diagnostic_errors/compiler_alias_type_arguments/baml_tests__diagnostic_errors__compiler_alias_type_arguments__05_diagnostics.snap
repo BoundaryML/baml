@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0171
+
+  × type `image` expects 0 type argument(s), got 1
+   ╭─[main.baml:2:21]
+ 2 │ type InvalidImage = image<string>
+   ·                     ──────┬──────
+   ·                           ╰── invalid builtin type arguments
+   ╰────
+
+  [hir] E0171
+
+  × type `string` expects 0 type argument(s), got 1
+   ╭─[main.baml:3:22]
+ 3 │ type InvalidString = string<int>
+   ·                      ─────┬─────
+   ·                           ╰── invalid builtin type arguments
+   ╰────
+
+  [hir] E0171
+
+  × type `json` expects 0 type argument(s), got 1
+   ╭─[main.baml:4:20]
+ 4 │ type InvalidJson = json<string>
+   ·                    ──────┬─────
+   ·                          ╰── invalid builtin type arguments
+   ╰────
+
+  [hir] E0171
+
+  × type `map` expects 2 type argument(s), got 1
+   ╭─[main.baml:5:19]
+ 5 │ type InvalidMap = map<string>
+   ·                   ─────┬─────
+   ·                        ╰── invalid builtin type arguments
+   ╰────
+
+  [hir] E0171
+
+  × builtin type `image` does not accept associated-type bindings
+   ╭─[main.baml:6:33]
+ 6 │ type InvalidAssociatedBinding = image<Output=string>
+   ·                                 ──────────┬─────────
+   ·                                           ╰── invalid builtin type arguments
+   ╰────

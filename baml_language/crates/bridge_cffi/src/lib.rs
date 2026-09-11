@@ -138,7 +138,7 @@ pub mod handle;
 mod identity;
 
 pub use baml_to_host::{
-    call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
+    PreparedCall, error_to_outbound, invoke_prepared, prepare_call, result_to_outbound,
     unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;

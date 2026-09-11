@@ -85,3 +85,88 @@ test "explicit Agent accepts and swallows a throwing listener" {
     assert.equal(out.value.message, "hi");
     assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage", "FinalProduced"])
 }
+
+// ─── content blocks: constructors and the text projection ────────────────────
+
+// `new` wraps text in one block, `of` wraps bare values, `text()` joins the
+// text blocks with a `[kind]` placeholder per media block.
+function content_block_projections() -> string {
+    let png = root.llm_mock.media_png();
+    let user = ai.events.UserMessage.of(["look: ", png, " ok"]);
+    let plain = ai.events.UserMessage.new("hi");
+    let done = ai.events.ToolCompleted.new("t1", `{"k":1}`);
+    let shot = ai.events.ToolCompleted.of("t2", [png]);
+    [
+        user.text(),
+        user.content.length().to_string(),
+        user.metadata.keys().length().to_string(),
+        plain.text(),
+        done.text(),
+        shot.text(),
+        shot.content.length().to_string(),
+    ].join("|")
+}
+
+test "content_block_projections" {
+    assert.equal(content_block_projections(), `look: [image] ok|3|0|hi|{"k":1}|[image]|1`)
+}
+
+// `ai.wire.degrade_tool_media` is the Degrade every text-only-result client
+// lowers through: the media a result cannot carry leaves it and follows the
+// whole run of results as one user turn, the results stay contiguous, and a
+// media-only result keeps a placeholder instead of becoming empty. A kind the
+// client carries stays where it was.
+function degraded_journal_shape(carries: string[]) -> string {
+    let j = root.llm_mock.parallel_media_journal("x", root.llm_mock.media_mp3());
+    let labels: string[] = [];
+    for (let e in ai.wire.degrade_tool_media(j, carries).entries()) {
+        match (e) {
+            let a: ai.events.AssistantMessage => {
+                labels.push("assistant");
+                null
+            },
+            let c: ai.events.ToolCompleted => {
+                labels.push(`tool:${c.id}:${c.text()}:${c.content.length()}`);
+                null
+            },
+            let u: ai.events.UserMessage => {
+                labels.push(`user:${u.text()}:${u.content.length()}`);
+                null
+            },
+            _ => {
+                labels.push("other");
+                null
+            },
+        };
+    }
+    labels.join("|")
+}
+
+test "degrade_tool_media_attaches_after_the_run_of_results" {
+    assert.equal(
+        degraded_journal_shape([]),
+        `assistant|tool:call_media:[audio]:1|tool:call_text:sunny in SF:1|user:${root.llm_mock.degrade_note("capture")}[audio]:2`,
+    )
+}
+
+test "degrade_tool_media_keeps_carried_media_in_place" {
+    assert.equal(
+        degraded_journal_shape(["audio"]),
+        `assistant|tool:call_media:[audio]:1|tool:call_text:sunny in SF:1`,
+    )
+}
+
+// The Claude Code CLI folds the journal into one text prompt: every turn
+// renders through `text()`, media as a readable placeholder, in order.
+function claude_code_transcript_with_media() -> string {
+    claude_code.internal.transcript_text(
+        root.llm_mock.media_journal("claude-code/opus", root.llm_mock.media_png()),
+    )
+}
+
+test "claude_code_transcript_with_media" {
+    assert.contains(
+        claude_code_transcript_with_media(),
+        "tool result id=call_text is_error=false: sunny in SF\ntool result id=call_media is_error=false: captured:[image]\nuser: Screenshot after the tool ran:[image]",
+    )
+}

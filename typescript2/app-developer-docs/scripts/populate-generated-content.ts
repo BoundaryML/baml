@@ -1,5 +1,8 @@
-import { requireGeneratedContentDatabaseUrl } from '@/lib/generated-content/database';
-import { publishCompleteRelease } from '@/lib/generated-content/publisher';
+import { projectDocumentRelease } from '@/lib/generated-content/document-projector';
+import {
+  publishDocumentRelease,
+  requireGeneratedContentPublisherDatabaseUrl,
+} from '@/lib/generated-content/publisher';
 import { generateCompleteRelease } from '@/lib/generated-content/release-generator';
 import { channelSchema } from '@/lib/generated-content/schemas';
 import {
@@ -54,33 +57,22 @@ async function main(): Promise<void> {
     sourceCommit: requireOperatorValue(parsedArguments, 'source-commit'),
   });
 
+  const bundle = projectDocumentRelease(release);
   const generationSummary = {
-    channel_pointer_change: channel
+    alias_change: channel
       ? { channel, release_version: release.version }
       : null,
-    cli: {
-      artifact_schema_version: release.cli.artifactSchemaVersion,
-      command_count: countCliCommands(release.cli.payload.root),
-      payload_sha256: release.cli.payloadSha256,
-      source_sha256: release.cli.sourceSha256,
-      wrapper_version: release.wrapperVersion,
-    },
+    cli_command_count: countCliCommands(release.cli.payload.root),
+    content_schema_version: bundle.contentSchemaVersion,
     generated_at: release.generatedAt,
     generator_version: release.generatorVersion,
+    manifest_hash: bundle.manifestHash,
     mode: isDryRun ? 'dry-run' : 'publication',
-    packages: release.packages.map((packageInput) => ({
-      describe_format_version: packageInput.describeFormatVersion,
-      describe_sha256: packageInput.describeSha256,
-      package_name: packageInput.packageName,
-      projected_page_count: packageInput.pages.length,
-    })),
     released_at: release.releasedAt,
+    route_count: bundle.routes.length,
     source_commit: release.sourceCommit,
     target,
-    total_projected_pages: release.packages.reduce(
-      (total, packageInput) => total + packageInput.pages.length,
-      0,
-    ),
+    unique_snapshot_count: bundle.snapshots.size,
     version: release.version,
     writes_performed: !isDryRun,
   };
@@ -113,9 +105,9 @@ async function main(): Promise<void> {
     );
   }
 
-  const publication = await publishCompleteRelease(
-    requireGeneratedContentDatabaseUrl(),
-    release,
+  const publication = await publishDocumentRelease(
+    requireGeneratedContentPublisherDatabaseUrl(),
+    bundle,
     channel,
   );
   console.log(JSON.stringify({ ...generationSummary, publication }, null, 2));

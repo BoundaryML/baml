@@ -17,6 +17,7 @@ baml_version = { workspace = true }
 crossbeam-channel = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
+percent-encoding = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
@@ -29,11 +30,6 @@ web-time = { workspace = true }
 # touches the disk; wasm hosts supply their own `ProjectFs`.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ignore = { workspace = true }
-
-# `url` gates `Url::{from,to}_file_path` on unix/windows; the browser build
-# spells the conversion by hand.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-percent-encoding = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

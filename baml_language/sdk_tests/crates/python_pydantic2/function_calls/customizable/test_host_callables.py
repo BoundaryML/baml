@@ -12,13 +12,17 @@ encodes the result back to the engine.
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import weakref
+from typing import Any, Generator
 
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_bridge import flush_events
 from baml_sdk.baml import BamlError
+from baml_sdk.baml.sys import collect_garbage
 from baml_sdk.host_callable_tests import (
     Person,
     ValidationError,
@@ -26,6 +30,7 @@ from baml_sdk.host_callable_tests import (
     call_callback_with_optional_args_all_unset,
     call_callback_with_optional_args_partially_set,
     call_int_callback,
+    call_int_callback_async,
     call_repeatedly,
     call_with_callback,
     call_with_class_callback,
@@ -190,7 +195,7 @@ def test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_f
 
 
 def test_host_callables_throwing_async_callable_round_trips_original_python_exception():
-    """Async callables go through the same `run_if_coroutine` dispatch
+    """Async callables go through the same `run_if_awaitable` dispatch
     path; native exceptions raised inside the coroutine should round-trip
     by identity just like the sync case."""
     raised = ValueError("async nope")
@@ -226,19 +231,20 @@ def test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry():
     assert ei1.value is not ei2.value
 
 
-@pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic, so for now the callable leaks until the engine "
-    "collects.",
-    strict=False,
-)
 def test_host_callables_release_fires_on_drop_of_callable():
-    """After BAML finishes invoking the callable and the engine GCs the
+    """After BAML finishes invoking the callable and the engine collects the
     `Object::HostClosure` it allocated, the registered release callback
     removes the Python callable from the bridge's host-value table.
     Dropping the user's last reference then leaves the object
     unreachable for the cycle collector.
+
+    Keeping the default runtime installed must not keep dead callbacks
+    alive. A single BAML call rarely trips the engine's own GC heuristic,
+    so `baml.sys.collect_garbage` makes the ownership handoff
+    deterministic: its collection safepoint drains the queued host release
+    and the bridge drops its registry entry. `flush_events()` first clears
+    the event sink's argument-snapshot clone, which would otherwise keep
+    the closure reachable.
     """
 
     class CallableObj:
@@ -249,9 +255,16 @@ def test_host_callables_release_fires_on_drop_of_callable():
     wr = weakref.ref(cb)
     result = call_with_callback(callback=cb, x=3)
     assert result == "3"
-    del cb
+    del cb, result
+    flush_events()
+    collect_garbage()
+    flush_events()
     gc.collect()
-    assert wr() is None, "host callable should be released after BAML drops it"
+    assert wr() is None, (
+        "host callable should be released after BAML collected its HostClosure"
+    )
+    # The runtime is still usable after the release.
+    assert call_int_callback(callback=lambda x: x + 1, x=1) == 2
 
 
 def test_host_callables_lambda_round_trip():
@@ -263,7 +276,7 @@ def test_host_callables_lambda_round_trip():
 
 
 def test_host_callables_async_callable_runs_to_completion():
-    """Async callables are detected (via `asyncio.iscoroutine` on the
+    """Async callables are detected (via `inspect.isawaitable` on the
     return value) and run to completion on a fresh asyncio loop inside
     the dispatch thread."""
 
@@ -275,6 +288,56 @@ def test_host_callables_async_callable_runs_to_completion():
 
     result = call_with_callback(callback=cb, x=4)
     assert result == "async-4"
+
+
+# SDK_PARITY_LINT(skip): Python-specific dispatch — any `inspect.isawaitable` return is driven, not only coroutines
+def test_host_callables_callable_returning_non_coroutine_awaitable_is_awaited():
+    """Any awaitable return (`inspect.isawaitable`), not only a coroutine,
+    is driven to completion — a callback may hand back a task-like object
+    or a custom `__await__` wrapper rather than a bare coroutine."""
+
+    class Deferred:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def __await__(self) -> Generator[Any, None, str]:
+            yield from asyncio.sleep(0).__await__()
+            return self.value
+
+    def cb(x: int) -> Any:
+        return Deferred(f"deferred-{x}")
+
+    assert call_with_callback(callback=cb, x=5) == "deferred-5"
+
+
+# SDK_PARITY_LINT(skip): pins the Python bridge's blocking-pool callback dispatch (bridge_python host_value.rs)
+def test_host_callables_async_callable_can_await_a_reentrant_baml_call():
+    """An async callback that itself awaits a BAML call must not deadlock.
+
+    The dispatch runs the callback's private asyncio loop on a Tokio
+    *blocking* thread; blocking an async worker instead could strand the
+    reentrant call's freshly spawned work in that worker's local queue
+    while the callback waits for it.
+    """
+
+    async def cb(x: int) -> str:
+        inner = await call_int_callback_async(callback=lambda y: y * 2, x=x)
+        return f"outer-{inner}"
+
+    assert call_with_callback(callback=cb, x=21) == "outer-42"
+
+
+# SDK_PARITY_LINT(skip): pins the Python bridge's blocking-pool callback dispatch (bridge_python host_value.rs)
+def test_host_callables_sync_callable_can_make_a_reentrant_sync_baml_call():
+    """A sync callback may block on a nested BAML call: the dispatch thread
+    is a blocking-pool thread, never an async worker (where `block_on`
+    would panic)."""
+
+    def cb(x: int) -> str:
+        inner = call_int_callback(callback=lambda y: y + 1, x=x)
+        return f"outer-{inner}"
+
+    assert call_with_callback(callback=cb, x=1) == "outer-2"
 
 
 def test_host_callables_multiple_callable_keys_are_distinct():

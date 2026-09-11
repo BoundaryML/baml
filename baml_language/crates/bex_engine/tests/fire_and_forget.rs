@@ -422,6 +422,83 @@ async fn cancelled_shutdown_restores_the_running_state() {
 }
 
 #[tokio::test]
+async fn wait_until_idle_waits_for_spawned_work_and_keeps_admission_open() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    assert_ne!(engine.active_future_count().await, 0);
+
+    engine.wait_until_idle().await;
+    assert_eq!(engine.active_future_count().await, 0);
+
+    // Unlike `shutdown`, idleness is only observed: a later call is admitted.
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+}
+
+#[tokio::test]
+async fn wait_until_idle_waits_for_an_active_call() {
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move { call_main(&call_engine, true).await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    engine.wait_until_idle().await;
+    assert!(call.is_finished());
+    assert_eq!(call.await.unwrap().unwrap(), BexExternalValue::Int(1));
+    engine.shutdown().await;
+}
+
+#[tokio::test]
+async fn wait_until_idle_during_shutdown_returns_once_closed() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    let shutdown_engine = Arc::clone(&engine);
+    let shutdown = tokio::spawn(async move { shutdown_engine.shutdown().await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    engine.wait_until_idle().await;
+    assert!(shutdown.is_finished());
+    shutdown.await.unwrap();
+    assert_eq!(
+        call_main(&engine, true).await,
+        Err(EngineError::ShuttingDown)
+    );
+}
+
+#[tokio::test]
 async fn unhandled_grandchild_error_is_not_attached_to_parent_spawn() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
@@ -641,4 +718,56 @@ async fn combinator_observation_is_not_preempted_by_unrelated_await() {
         }
     "#;
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn reported_host_value_is_reclaimed_by_subsequent_collection() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use bex_resource_types::{HostValueArc, HostValueKind, host_release_dispatch};
+
+    const KEY: u64 = 9_100_001;
+    static RELEASES: AtomicUsize = AtomicUsize::new(0);
+    extern "C" fn released(key: u64) {
+        if key == KEY {
+            RELEASES.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    host_release_dispatch::install(released).unwrap();
+    let engine = make_engine(
+        r#"
+        function main<T>(value: T) -> int {
+            spawn { throw value; };
+            1
+        }
+    "#,
+    );
+    let reports = Arc::new(AtomicUsize::new(0));
+    let reports_for_handler = reports.clone();
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |_error| {
+        reports_for_handler.fetch_add(1, Ordering::SeqCst);
+    })));
+    let host = HostValueArc::new(KEY, HostValueKind::Opaque);
+    let weak = Arc::downgrade(&host);
+    let result = engine
+        .call_function(
+            "main",
+            vec![BexExternalValue::HostValue(host)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(result, BexExternalValue::Int(1));
+    wait_for_spawn_completion(&engine).await;
+    engine.collect_garbage(CollectionLevel::Major).await;
+    assert_eq!(reports.load(Ordering::SeqCst), 1);
+    // The reporting collection keeps an object-valued throw rooted while it
+    // materializes the notification. A subsequent collection reclaims that
+    // now-unrooted VM object; releasing the notification alone cannot free it.
+    engine.collect_garbage(CollectionLevel::Major).await;
+    assert!(weak.upgrade().is_none());
+    assert_eq!(RELEASES.load(Ordering::SeqCst), 1);
+    // No later call, explicit release, or runtime shutdown drives cleanup.
+    engine.shutdown().await;
 }

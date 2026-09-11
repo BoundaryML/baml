@@ -605,6 +605,9 @@ importers:
 
   app-vscode-ext:
     dependencies:
+      '@b/pkg-lsp':
+        specifier: workspace:*
+        version: link:../pkg-lsp
       vscode-languageclient:
         specifier: ^9.0.0
         version: 9.0.1
@@ -760,6 +763,9 @@ importers:
       '@b/bridge_wasm':
         specifier: link:../pkg-playground/wasm
         version: link:../pkg-playground/wasm
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
@@ -1157,6 +1163,9 @@ importers:
       '@b/pkg-grammar':
         specifier: workspace:*
         version: link:../pkg-grammar
+      '@b/pkg-lsp':
+        specifier: workspace:*
+        version: link:../pkg-lsp
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
@@ -1284,6 +1293,18 @@ importers:
       tree-sitter-cli:
         specifier: ^0.25.8
         version: 0.25.10
+
+  pkg-lsp:
+    devDependencies:
+      '@types/vscode':
+        specifier: ^1.63.0
+        version: 1.107.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@5.9.3))(tsx@4.22.4)(yaml@2.9.0)
 
   pkg-playground:
     dependencies:
@@ -6193,6 +6214,7 @@ packages:
   '@shikijs/primitive@4.4.3':
     resolution: {integrity: sha512-m0wBeLDQDeIxRdUmrCPdQqfuUamDwRL5isCfYbguKD6NiaKpVbsv+3J81DyIKgNW5h4WAIIr8T4EkgQrBBxvaQ==}
     engines: {node: '>=20'}
+
   '@shikijs/themes@3.23.0':
     resolution: {integrity: sha512-5qySYa1ZgAT18HR/ypENL9cUSGOeI2x+4IvYJu4JgVJdizn6kG4ia5Q1jDEOi7gTbN4RbuYtmHh0W3eccOrjMA==}
 
@@ -18836,6 +18858,7 @@ snapshots:
       '@shikijs/types': 4.4.3
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.5
+
   '@shikijs/themes@3.23.0':
     dependencies:
       '@shikijs/types': 3.23.0

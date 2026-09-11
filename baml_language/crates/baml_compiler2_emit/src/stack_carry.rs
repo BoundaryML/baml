@@ -1577,14 +1577,6 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn runtime_is_type(&mut self) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(2) {
-            return Err(());
-        }
-        self.sim.push();
-        Ok(())
-    }
-
     fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
         self.sim.push();
@@ -1758,10 +1750,10 @@ mod tests {
             span: None,
         });
         body.blocks[0].terminator = Some(Terminator::Call {
+            argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: None,
             destination: Place::Local(right),
             target: BlockId(1),

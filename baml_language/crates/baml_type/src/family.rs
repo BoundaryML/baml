@@ -12,9 +12,13 @@
 //!
 //! Every member is parameterized by `N`, the representation of a *nominal type
 //! head* — the name a `Class`, `Enum`, `Interface`, or `TypeAlias` refers to.
-//! It defaults to [`TypeName`], so `Ty` still means `Ty<TypeName>` wherever the
-//! compiler writes it bare; the parameter exists so the runtime can carry
-//! interned or heap-anchored heads instead, without a parallel type family.
+//! Each member declares the default its layer works in: the compile-time
+//! members (`Ty`, `LoweringTy`, `InferTy`, and the master's satellites) default
+//! to [`DeclName`], whose package is the declaring source root, so a bare `Ty`
+//! in the compiler is root-headed and cannot be spelled without a viewpoint;
+//! the wire members default to [`TypeName`], the name-based head an artifact
+//! carries. The parameter exists so the runtime can carry interned or
+//! heap-anchored heads instead, without a parallel type family.
 //! Note that `N` covers *heads only*: [`Name`] positions (a field, an enum
 //! variant, an associated-type binding) are member names, not type references,
 //! and stay concrete.
@@ -32,7 +36,9 @@
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
+use crate::{
+    DeclName, Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
+};
 
 ty_family! {
     axes { concrete, abstract, literal, never, typevar, projection, lower, infer, error, special, frame }
@@ -42,14 +48,14 @@ ty_family! {
     // carry the `Error` sentinel — a diagnosed failure is a legitimate final
     // answer — but not an inference hole: a `_` is a question, and finalized
     // types are answers. Holes live in `LoweringTy` only.
-    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, error, special],        child: Self }
+    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, error, special],        child: Self, head: DeclName }
     // The pre-inference lowering type: `Ty` plus the `_` hole (`Infer`). The
     // output vocabulary of pure type-expression lowering, consumed by the two
     // policy folds — signatures reject holes (`reject_holes`), inference
     // instantiates them as fresh table variables (`instantiate_holes`). The
     // widest plain member, so the hand-written renderer lives here and every
     // narrower member renders through its upcast.
-    type LoweringTy         { includes: [concrete, abstract, literal, never, typevar, projection, lower, error, special], child: Self }
+    type LoweringTy         { includes: [concrete, abstract, literal, never, typevar, projection, lower, error, special], child: Self, head: DeclName }
     type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],               child: Self }
     // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
     // excludes unresolved associated-type projections; unlike `RealizedTy`, it
@@ -77,7 +83,7 @@ ty_family! {
     // by construction. Excluded from the conversion matrix and walkers; its
     // boundary conversions (total interning, fallible finalization) are
     // hand-written in `interned.rs` alongside the pool.
-    type InferTy            { includes: [concrete, abstract, literal, never, typevar, projection, infer, error, special], child: interned(crate::interned::Ty) }
+    type InferTy            { includes: [concrete, abstract, literal, never, typevar, projection, infer, error, special], child: interned(crate::interned::Ty), head: DeclName }
 
     satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
@@ -419,8 +425,8 @@ mod tests {
     /// A deeply-nested type that is realized (no type variables) and has a
     /// concrete top-level variant, so it is representable in every member.
     /// Exercises `Map`/`List`/`Union`, the `Function` satellite +
-    /// `Vec<Option<_>>` bound, and the `Interface` `Vec<(Name, _)>` binding.
-    fn deep_concrete() -> Ty {
+    /// `Vec<Option<_>>` bound, and the `Interface<TypeName>` `Vec<(Name, _)>` binding.
+    fn deep_concrete() -> Ty<TypeName> {
         Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::Function {
@@ -615,8 +621,8 @@ mod tests {
     }
 
     /// A type variable nested inside a concrete container: representable in
-    /// `RuntimeTy` but not `RealizedTy`.
-    fn with_typevar() -> Ty {
+    /// `RuntimeTy<TypeName>` but not `RealizedTy<TypeName>`.
+    fn with_typevar() -> Ty<TypeName> {
         Ty::List(Box::new(Ty::type_var("T")), a())
     }
 
@@ -631,7 +637,7 @@ mod tests {
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
 
-        // RealizedTy ≤ RuntimeTy ≤ Ty (deep), by ref + owned move.
+        // RealizedTy<TypeName> ≤ RuntimeTy<TypeName> ≤ Ty<TypeName> (deep), by ref + owned move.
         assert_eq!(Ty::from(&rt), t);
         assert_eq!(Ty::from(rt.clone()), t);
         assert_eq!(RuntimeTy::from(&cg), rt);
@@ -641,12 +647,12 @@ mod tests {
         assert_eq!(RuntimeTy::from(&rz), rt);
         assert_eq!(RuntimeTy::from(rz.clone()), rt);
 
-        // ConcreteTy ≤ RuntimeTy ≤ Ty (ConcreteTy→RuntimeTy is shallow: same child).
+        // ConcreteTy<TypeName> ≤ RuntimeTy<TypeName> ≤ Ty<TypeName> (ConcreteTy<TypeName>→RuntimeTy<TypeName> is shallow: same child).
         assert_eq!(RuntimeTy::from(&ct), rt);
         assert_eq!(RuntimeTy::from(ct.clone()), rt);
         assert_eq!(Ty::from(&ct), t);
 
-        // ConcreteRealizedTy ≤ {ConcreteTy, RealizedTy, RuntimeTy, Ty}.
+        // ConcreteRealizedTy<TypeName> ≤ {ConcreteTy<TypeName>, RealizedTy<TypeName>, RuntimeTy<TypeName>, Ty<TypeName>}.
         assert_eq!(RealizedTy::from(&crz), rz);
         assert_eq!(ConcreteTy::from(&crz), ct);
         assert_eq!(ConcreteTy::from(crz.clone()), ct);
@@ -660,7 +666,7 @@ mod tests {
         assert_eq!(ConcreteRealizedTy::try_from(&t).unwrap(), crz);
     }
 
-    /// The finalized `Ty` ⊂ `LoweringTy` pair: widening is the zero-cost
+    /// The finalized `Ty<TypeName>` ⊂ `LoweringTy<TypeName>` pair: widening is the zero-cost
     /// reinterpretation (every answer is a valid question-stage value), and
     /// narrowing rejects a hole at any depth — the type-level form of "a
     /// finalized type is an answer, never a question".
@@ -671,14 +677,16 @@ mod tests {
         assert_eq!(t.as_lowering_ty(), &lt);
         assert_eq!(Ty::try_from(&lt).unwrap(), t);
 
-        let open: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: a() }), a());
+        let open: LoweringTy<TypeName> =
+            LoweringTy::List(Box::new(LoweringTy::Infer { attr: a() }), a());
         assert_eq!(Ty::try_from(&open), Err(NotTy { variant: "Infer" }));
         // An `Error` is a finalized answer, so it narrows fine.
-        let errored: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Error { attr: a() }), a());
+        let errored: LoweringTy<TypeName> =
+            LoweringTy::List(Box::new(LoweringTy::Error { attr: a() }), a());
         assert!(Ty::try_from(&errored).is_ok());
     }
 
-    /// `RealizedTy` deeply rejects type variables (by name); `RuntimeTy` keeps
+    /// `RealizedTy<TypeName>` deeply rejects type variables (by name); `RuntimeTy<TypeName>` keeps
     /// them.
     #[test]
     fn realized_rejects_type_variables() {
@@ -763,26 +771,35 @@ mod tests {
     /// than renumbering the tail.
     #[test]
     fn borsh_uses_explicit_discriminants() {
-        assert_eq!(tag::<Ty>(Ty::Int { attr: a() }), 0);
-        assert_eq!(tag::<Ty>(Ty::Media(MediaKind::Image, a())), 7);
+        assert_eq!(tag::<Ty<TypeName>>(Ty::Int { attr: a() }), 0);
+        assert_eq!(tag::<Ty<TypeName>>(Ty::Media(MediaKind::Image, a())), 7);
         assert_eq!(
-            tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
+            tag::<Ty<TypeName>>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
-        assert_eq!(tag::<LoweringTy>(LoweringTy::Infer { attr: a() }), 33);
         assert_eq!(
-            tag::<RuntimeTy>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
+            tag::<LoweringTy<TypeName>>(LoweringTy::Infer { attr: a() }),
+            33
+        );
+        assert_eq!(
+            tag::<RuntimeTy<TypeName>>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
             24
         );
         // Filtered family members use the same master tags rather than local
         // declaration-order indices.
-        assert_eq!(tag::<RealizedTy>(RealizedTy::Unknown { attr: a() }), 27);
         assert_eq!(
-            tag::<TyTemplate>(TyTemplate::TypeAlias(qtn("Alias"), a())),
+            tag::<RealizedTy<TypeName>>(RealizedTy::Unknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            tag::<TyTemplate<TypeName>>(TyTemplate::TypeAlias(qtn("Alias"), a())),
             24
         );
-        assert_eq!(tag::<TyTemplate>(TyTemplate::TypeArgRef(0)), 34);
-        assert_eq!(tag::<ConcreteTy>(ConcreteTy::Never { attr: a() }), 28);
+        assert_eq!(tag::<TyTemplate<TypeName>>(TyTemplate::TypeArgRef(0)), 34);
+        assert_eq!(
+            tag::<ConcreteTy<TypeName>>(ConcreteTy::Never { attr: a() }),
+            28
+        );
     }
 
     /// The leading byte of a `#[repr(C, u8)]` value is its discriminant. Reading
@@ -797,44 +814,53 @@ mod tests {
 
     #[test]
     fn in_memory_discriminants_are_consistent_across_members() {
-        // `Unknown` is master variant #27; `RealizedTy` drops the
+        // `Unknown` is master variant #27; `RealizedTy<TypeName>` drops the
         // `typevar` and `projection` variants before it, yet its tag stays 27.
-        assert_eq!(in_memory_tag::<Ty>(&Ty::Unknown { attr: a() }), 27);
         assert_eq!(
-            in_memory_tag::<RuntimeTy>(&RuntimeTy::Unknown { attr: a() }),
+            in_memory_tag::<Ty<TypeName>>(&Ty::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<CodegenTy>(&CodegenTy::Unknown { attr: a() }),
+            in_memory_tag::<RuntimeTy<TypeName>>(&RuntimeTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<RealizedTy>(&RealizedTy::Unknown { attr: a() }),
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Unknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<RealizedTy<TypeName>>(&RealizedTy::Unknown { attr: a() }),
             27
         );
         // `Never` (#28) is shared and tag-stable across the deep members.
-        assert_eq!(in_memory_tag::<Ty>(&Ty::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag::<Ty<TypeName>>(&Ty::Never { attr: a() }), 28);
         assert_eq!(
-            in_memory_tag::<CodegenTy>(&CodegenTy::Never { attr: a() }),
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Never { attr: a() }),
             28
         );
         assert_eq!(
-            in_memory_tag::<RealizedTy>(&RealizedTy::Never { attr: a() }),
+            in_memory_tag::<RealizedTy<TypeName>>(&RealizedTy::Never { attr: a() }),
             28
         );
         // A leaf concrete variant present in every member, shallow ones included.
-        assert_eq!(in_memory_tag::<Ty>(&Ty::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag::<CodegenTy>(&CodegenTy::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag::<Ty<TypeName>>(&Ty::Int { attr: a() }), 0);
         assert_eq!(
-            in_memory_tag::<ConcreteTy>(&ConcreteTy::Int { attr: a() }),
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Int { attr: a() }),
             0
         );
         assert_eq!(
-            in_memory_tag::<ConcreteRealizedTy>(&ConcreteRealizedTy::Int { attr: a() }),
+            in_memory_tag::<ConcreteTy<TypeName>>(&ConcreteTy::Int { attr: a() }),
+            0
+        );
+        assert_eq!(
+            in_memory_tag::<ConcreteRealizedTy<TypeName>>(&ConcreteRealizedTy::Int { attr: a() }),
             0
         );
         // The template-only frame leaf keeps its master tag.
-        assert_eq!(in_memory_tag::<TyTemplate>(&TyTemplate::TypeArgRef(0)), 34);
+        assert_eq!(
+            in_memory_tag::<TyTemplate<TypeName>>(&TyTemplate::TypeArgRef(0)),
+            34
+        );
     }
 
     /// The borrowed upcast (`RuntimeTy::as_ty`, `RealizedTy::as_runtime_ty`, …)
@@ -874,11 +900,11 @@ mod tests {
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
-        assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
-        assert_eq!(<&CodegenTy>::try_from(&t), Ok(&cg));
-        assert_eq!(<&CodegenTy>::try_from(&rt), Ok(&cg));
-        assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
-        assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
+        assert_eq!(<&RuntimeTy<TypeName>>::try_from(&t), Ok(&rt));
+        assert_eq!(<&CodegenTy<TypeName>>::try_from(&t), Ok(&cg));
+        assert_eq!(<&CodegenTy<TypeName>>::try_from(&rt), Ok(&cg));
+        assert_eq!(<&RealizedTy<TypeName>>::try_from(&t), Ok(&rz));
+        assert_eq!(<&RealizedTy<TypeName>>::try_from(&rt), Ok(&rz));
 
         // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
         assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
@@ -894,35 +920,35 @@ mod tests {
     /// discriminant.
     #[test]
     fn downcast_rejects_unrepresentable_at_depth() {
-        // `TypeVar` under a `List`: a valid `RuntimeTy` (keeps `typevar`), not a
-        // valid `RealizedTy` (drops it) — the error names the culprit.
+        // `TypeVar` under a `List`: a valid `RuntimeTy<TypeName>` (keeps `typevar`), not a
+        // valid `RealizedTy<TypeName>` (drops it) — the error names the culprit.
         let tv = with_typevar();
-        let tv_rt = <&RuntimeTy>::try_from(&tv).unwrap();
+        let tv_rt = <&RuntimeTy<TypeName>>::try_from(&tv).unwrap();
         assert_eq!(
-            <&RealizedTy>::try_from(&tv),
+            <&RealizedTy<TypeName>>::try_from(&tv),
             Err(NotRealizedTy { variant: "TypeVar" })
         );
         assert_eq!(
-            <&RealizedTy>::try_from(tv_rt),
+            <&RealizedTy<TypeName>>::try_from(tv_rt),
             Err(NotRealizedTy { variant: "TypeVar" })
         );
 
-        // A `tir`-only `Error` buried in a map value: not even a `RuntimeTy`.
+        // A `tir`-only `Error` buried in a map value: not even a `RuntimeTy<TypeName>`.
         let bad = Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::List(Box::new(Ty::Error { attr: a() }), a())),
             attr: a(),
         };
         assert_eq!(
-            <&RuntimeTy>::try_from(&bad),
+            <&RuntimeTy<TypeName>>::try_from(&bad),
             Err(NotRuntimeTy { variant: "Error" })
         );
         assert_eq!(
-            <&CodegenTy>::try_from(&bad),
+            <&CodegenTy<TypeName>>::try_from(&bad),
             Err(NotCodegenTy { variant: "Error" })
         );
         assert_eq!(
-            <&RealizedTy>::try_from(&bad),
+            <&RealizedTy<TypeName>>::try_from(&bad),
             Err(NotRealizedTy { variant: "Error" })
         );
         assert_eq!(

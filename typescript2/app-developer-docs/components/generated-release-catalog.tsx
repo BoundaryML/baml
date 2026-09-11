@@ -1,9 +1,6 @@
 import Link from 'next/link';
-
-import type {
-  GeneratedReleaseSnapshot,
-  GeneratedReleaseSummary,
-} from '@/lib/generated-content/build-content';
+import type { StoredDocumentRoute } from '@/lib/generated-content/document-ir';
+import type { DocumentReleaseSummary } from '@/lib/generated-content/document-store';
 
 type GeneratedProduct = 'cli' | 'packages';
 
@@ -22,10 +19,8 @@ function formatReleaseDate(date: Date): string {
   }).format(date);
 }
 
-function channelText(release: GeneratedReleaseSummary): string {
-  return release.channels.length > 0
-    ? release.channels.join(', ')
-    : 'historical';
+function channelText(release: DocumentReleaseSummary): string {
+  return release.aliases.length > 0 ? release.aliases.join(', ') : 'historical';
 }
 
 function ReleaseLink({
@@ -33,7 +28,7 @@ function ReleaseLink({
   release,
 }: {
   product: GeneratedProduct;
-  release: GeneratedReleaseSummary;
+  release: DocumentReleaseSummary;
 }) {
   const href = `${productRoot(product)}/${release.routeVersion}`;
   return (
@@ -56,9 +51,9 @@ export function GeneratedReleaseCatalog({
   product,
   releases,
 }: {
-  featured: GeneratedReleaseSnapshot | null;
+  featured: StoredDocumentRoute | null;
   product: GeneratedProduct;
-  releases: GeneratedReleaseSummary[];
+  releases: DocumentReleaseSummary[];
 }) {
   if (releases.length === 0) {
     return (
@@ -70,12 +65,12 @@ export function GeneratedReleaseCatalog({
   }
 
   const currentReleases = releases.filter(
-    (release) => release.channels.length > 0,
+    (release) => release.aliases.length > 0,
   );
   const displayedCurrentReleases =
     currentReleases.length > 0 ? currentReleases : releases.slice(0, 1);
   const hasStable = currentReleases.some((release) =>
-    release.channels.includes('stable'),
+    release.aliases.includes('stable'),
   );
 
   return (
@@ -97,35 +92,36 @@ export function GeneratedReleaseCatalog({
         ))}
       </ul>
 
-      {featured && product === 'packages' ? (
+      {featured?.content.blocks[0]?.type === 'packageIndex' &&
+      product === 'packages' ? (
         <>
           <h3>
-            Package catalog for <code>{featured.routeVersion}</code>
+            Package catalog for{' '}
+            <code>{featured.route_metadata.routeVersion}</code>
           </h3>
           <ul className="columns-2 sm:columns-3">
-            {featured.pages
-              .filter((page) => page.page_kind === 'package')
-              .map((page) => (
-                <li key={page.route_path}>
-                  <Link
-                    href={`/baml/packages/${featured.routeVersion}/${page.route_path}`}
-                  >
-                    <code>{page.qualified_name}</code>
-                  </Link>
-                </li>
-              ))}
+            {featured.content.blocks[0].packages.map((page) => (
+              <li key={page.route_path}>
+                <Link
+                  href={`/baml/packages/${featured.route_metadata.routeVersion}/${page.route_path}`}
+                >
+                  <code>{page.qualified_name}</code>
+                </Link>
+              </li>
+            ))}
           </ul>
         </>
       ) : null}
 
-      {featured && product === 'cli' ? (
+      {featured?.content.blocks[0]?.type === 'cliOverview' &&
+      product === 'cli' ? (
         <p>
           Browse the{' '}
-          <Link href={`/cli/${featured.routeVersion}`}>
-            {featured.routeVersion} CLI overview
+          <Link href={`/cli/${featured.route_metadata.routeVersion}`}>
+            {featured.route_metadata.routeVersion} CLI overview
           </Link>{' '}
           or open its{' '}
-          <Link href={`/cli/${featured.routeVersion}/commands`}>
+          <Link href={`/cli/${featured.route_metadata.routeVersion}/commands`}>
             complete command index
           </Link>
           .

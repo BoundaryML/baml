@@ -31,6 +31,8 @@ export {
 } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
+// Diagnostic for the SDK test suites (opt-in via BAML_BRIDGE_DIAGNOSTICS=1).
+export { _hostValueCount } from './host_value_registry.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';

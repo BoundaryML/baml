@@ -1,0 +1,101 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[throw_context.baml:2:12]
+ 2 │     throw ["wrong"];
+   ·            ───┬───
+   ·               ╰── expected `int`, found `"wrong"`
+   ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: int[]
+   ╭─[throw_context.baml:5:45]
+ 5 │ ╭─▶ function wrongEffect() -> void throws int[] {
+ 6 │ │       throw "wrong";
+ 7 │ ╰─▶ }
+   ╰────
+
+  [type] E0096
+
+  × declared throws is `int[]`, but this function may also throw `string`
+   ╭─[throw_context.baml:6:11]
+ 6 │     throw "wrong";
+   ·           ───────
+   ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: int[], string[]
+    ╭─[throw_context.baml:9:54]
+  9 │ ╭─▶ function ambiguous() -> void throws int[] | string[] {
+ 10 │ │       throw [];
+ 11 │ ╰─▶ }
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[throw_context.baml:10:11]
+ 10 │     throw [];
+    ·           ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[throw_context.baml:14:11]
+ 14 │     throw [];
+    ·           ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[throw_context.baml:18:11]
+ 18 │     throw [];
+    ·           ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[throw_context.baml:22:13]
+ 22 │     { throw []; } catch (e) {
+    ·             ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[throw_context.baml:28:27]
+ 28 │     let f = () -> { throw []; };
+    ·                           ──
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[throw_context.baml:33:23]
+ 33 │     throw map {value: "wrong"};
+    ·                       ───┬───
+    ·                          ╰── expected `int`, found `"wrong"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[throw_context.baml:37:19]
+ 37 │     throw {value: "wrong"};
+    ·                   ───┬───
+    ·                      ╰── expected `int`, found `"wrong"`
+    ╰────

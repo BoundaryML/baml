@@ -2111,7 +2111,7 @@ function f(xs: MaybeInts) -> int? { xs?.[0] }
 fn void_function_basic() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> void throws never {
       { : void
       }
@@ -2123,7 +2123,7 @@ fn void_function_basic() {
 fn void_function_bare_return() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { return; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> void throws never {
       { : never
         return
@@ -2139,7 +2139,7 @@ fn non_void_lambda_bare_return_is_rejected() {
         "test.baml",
         "function f() -> bool { let g = () -> int { return; }; true }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : true
         let g = : () -> int throws never
@@ -2153,7 +2153,7 @@ fn non_void_lambda_bare_return_is_rejected() {
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -2229,7 +2229,7 @@ fn lambda_return_mismatch_uses_lambda_contract() {
 fn void_function_return_value_error() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { return 42; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> void throws never {
       { : never
         return 42 : 42
@@ -2249,7 +2249,7 @@ function g() -> void { }
 function f() -> int { let x = g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.g() -> void throws never {
       { : void
       }
@@ -2274,7 +2274,7 @@ function g() -> void { }
 function f() -> int { g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.g() -> void throws never {
       { : void
       }

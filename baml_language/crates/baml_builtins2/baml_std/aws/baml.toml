@@ -1,2 +1,10 @@
 [package]
 name = "aws"
+# Implicitly available to every package (no `[dependencies]` entry needed):
+# the compiler's `"provider/model"` shorthand names this package.
+prelude = true
+
+[dependencies]
+baml = { path = "../baml" }
+ai = { path = "../ai" }
+anthropic = { path = "../anthropic" }

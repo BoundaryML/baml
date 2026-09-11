@@ -2,15 +2,8 @@ name: Developer Docs
 
 on:
   pull_request:
-    paths:
-      - "typescript2/app-developer-docs/**"
-      - "typescript2/pkg-grammar/**"
-      - "typescript2/package.json"
-      - "typescript2/pnpm-lock.yaml"
-      - "typescript2/pnpm-workspace.yaml"
-      - "baml_language/**"
-      - ".github/actions/setup-node2/**"
-      - ".github/workflows/developer-docs.yml"
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main, canary]
     paths:
@@ -20,8 +13,13 @@ on:
       - "typescript2/pnpm-lock.yaml"
       - "typescript2/pnpm-workspace.yaml"
       - "baml_language/**"
+      - ".envrc"
+      - "mise.toml"
+      - "tools/baml-sccache"
+      - ".github/actions/setup-mise/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
+      - ".github/workflows/release-baml-language.yml"
   workflow_dispatch:
 
 concurrency:
@@ -32,50 +30,94 @@ permissions:
   contents: read
 
 jobs:
-  quality:
-    name: Lint, unit tests, and type-check
+  determine-changes:
+    name: Determine documentation changes
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    outputs:
+      can-use-secrets: ${{ steps.changes.outputs.can-use-secrets }}
+      should-run: ${{ steps.changes.outputs.should-run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check documentation and runtime inputs
+        id: changes
+        env:
+          ACTOR: ${{ github.actor }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          can_use_secrets=true
+          if [[ "$EVENT_NAME" == "pull_request" ]] && \
+             { [[ "$HEAD_REPOSITORY" != "$REPOSITORY" ]] || [[ "$ACTOR" == "dependabot[bot]" ]]; }; then
+            can_use_secrets=false
+          fi
+          echo "can-use-secrets=$can_use_secrets" >> "$GITHUB_OUTPUT"
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          should_run=false
+          while IFS= read -r file; do
+            case "$file" in
+              typescript2/app-developer-docs/* | \
+              typescript2/pkg-grammar/* | \
+              typescript2/package.json | \
+              typescript2/pnpm-lock.yaml | \
+              typescript2/pnpm-workspace.yaml | \
+              baml_language/* | \
+              .envrc | \
+              mise.toml | \
+              tools/baml-sccache | \
+              .github/actions/setup-mise/* | \
+              .github/actions/setup-node2/* | \
+              .github/workflows/developer-docs.yml | \
+              .github/workflows/release-baml-language.yml)
+                should_run=true
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Lint, tests, type-check, and build
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
-
       - name: Lint
         run: pnpm --filter app-developer-docs lint
         working-directory: typescript2
-
       - name: Test
         run: pnpm --filter app-developer-docs test
         working-directory: typescript2
-
       - name: Type-check
         run: pnpm --filter app-developer-docs typecheck
         working-directory: typescript2
-
-  authored-content:
-    name: Authored content
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node2
-
-      - name: Validate MDX, structured content, and canonical sources
-        run: pnpm --filter app-developer-docs docs:authored:validate
+      - name: Build the SSR application
+        run: pnpm --filter app-developer-docs build
         working-directory: typescript2
 
-  route-validation:
-    name: Routes and contextual 404 contracts
+  authored-content:
+    name: Authored content and routes
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -83,140 +125,244 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
-
-      - name: Validate static and generated routes
+      - name: Validate authored content
+        run: pnpm --filter app-developer-docs docs:authored:validate
+        working-directory: typescript2
+      - name: Validate route and contextual 404 contracts
         run: pnpm --filter app-developer-docs docs:routes:validate
         working-directory: typescript2
 
   snippets:
     name: BAML snippets
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # .envrc supplies the R2 configuration, with a local cache for secretless PRs.
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      RUSTUP_MAX_RETRIES: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Install Rust toolchain
         working-directory: baml_language
         run: rustup show
-
-      - name: Cache compiler build
+      - name: Install sccache and direnv
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+      - name: Verify sccache
+        run: sccache --version
+      # Cache Cargo downloads only; .envrc routes compilation through R2 sccache.
+      - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: developer-docs-snippets-${{ hashFiles('typescript2/app-developer-docs/lib/snippets/**/*.ts', 'typescript2/app-developer-docs/scripts/validate-snippets.ts', 'typescript2/app-developer-docs/content/code/**') }}
           workspaces: "baml_language -> target"
-
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+      - name: Load .envrc with direnv
+        run: |
+          set -euo pipefail
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
       - name: Build the selected BAML CLI
         run: cargo build -p baml_cli --bin baml-cli
         working-directory: baml_language
-
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
-
       - name: Compile canonical documentation snippets
         env:
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
 
-  generated-content:
-    name: Generated content
+      - name: Execute book behavior and inferred-signature assertions
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:book:validate
+        working-directory: typescript2
+      - name: Check book interface package boundaries
+        run: cargo test -p baml_tests --test book_interfaces
+        working-directory: baml_language
+
+  database-integration:
+    name: Immutable document-store integration
+    needs: determine-changes
+    if: needs.determine-changes.outputs.should-run == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.18.1-nightly.20260901.a' }}
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: developer_docs_test
+          POSTGRES_PASSWORD: developer_docs
+          POSTGRES_USER: developer_docs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U developer_docs -d developer_docs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
-
-      - name: Validate generated schemas and projection contracts
-        run: pnpm --filter app-developer-docs docs:generated:validate
-        working-directory: typescript2
-
-      - name: Require the protected read-only database secret
+      - name: Exercise migrations, publication, deduplication, rollback, and SSR lookup
         env:
-          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-        run: test -n "$GENERATED_CONTENT_DATABASE_URL" || { echo "::error::GENERATED_CONTENT_DATABASE_URL is not configured"; exit 1; }
+          DEVELOPER_DOCS_TEST_DATABASE_URL: postgres://developer_docs:developer_docs@127.0.0.1:5432/developer_docs_test
+        run: pnpm exec tsx --test tests/document-store.integration.test.ts
+        working-directory: typescript2/app-developer-docs
 
-      - name: Verify the required immutable release
-        env:
-          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-        run: pnpm --filter app-developer-docs docs:db:verify --version "$GENERATED_CONTENT_VERSION"
-        working-directory: typescript2
-
-  complete-build:
-    name: Complete static build
+  production-path:
+    name: DB-backed SSR and HTTP contracts
+    needs: determine-changes
+    if: >-
+      needs.determine-changes.outputs.should-run == 'true' &&
+      needs.determine-changes.outputs.can-use-secrets == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
+      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.18.1-nightly.20260901.a' }}
       VERCEL_ENV: preview
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node2
-
-      - name: Require the protected read-only database secret
+      - name: Require the protected read-only runtime credential
         env:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
         run: test -n "$GENERATED_CONTENT_DATABASE_URL" || { echo "::error::GENERATED_CONTENT_DATABASE_URL is not configured"; exit 1; }
-
-      - name: Build static preview artifact
+      - name: Verify the immutable release through the runtime reader
         env:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+        run: pnpm --filter app-developer-docs docs:db:verify --version "$GENERATED_CONTENT_VERSION"
+        working-directory: typescript2
+      - name: Build the SSR application
         run: pnpm --filter app-developer-docs build
         working-directory: typescript2
-
-      - name: Verify preview is noindex
-        run: 'grep -q "Disallow: /" app-developer-docs/out/robots.txt'
-        working-directory: typescript2
-
-      - name: Verify the database secret is absent from the artifact
+      - name: Start the application
         env:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-        run: '! rg -F -l -- "$GENERATED_CONTENT_DATABASE_URL" app-developer-docs/out >/dev/null'
-        working-directory: typescript2
+          PORT: 4173
+        run: pnpm start > "$RUNNER_TEMP/developer-docs.log" 2>&1 &
+        working-directory: typescript2/app-developer-docs
+      - name: Verify representative exact-version pages, metadata, and 404s over HTTP
+        env:
+          VERSION: v${{ env.GENERATED_CONTENT_VERSION }}
+        run: |
+          set -euo pipefail
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then
+            echo "::error::developer docs server did not become ready"
+            exit 1
+          fi
+          curl --fail --silent --dump-header "$RUNNER_TEMP/package.headers" \
+            --output "$RUNNER_TEMP/package.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id"
+          grep -q "boundary.id" "$RUNNER_TEMP/package.html"
+          grep -qi '^cache-control:.*no-store' "$RUNNER_TEMP/package.headers"
+          curl --fail --silent --output "$RUNNER_TEMP/package-child.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id/current"
+          grep -q "boundary.id.current" "$RUNNER_TEMP/package-child.html"
+          curl --fail --silent --output "$RUNNER_TEMP/cli.html" \
+            "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add"
+          grep -q "baml generate add" "$RUNNER_TEMP/cli.html"
+          grep -q "noindex" "$RUNNER_TEMP/cli.html"
+          curl --silent --head --output "$RUNNER_TEMP/changelog.headers" \
+            "http://127.0.0.1:4173/changelog"
+          grep -q '^HTTP/1.1 308' "$RUNNER_TEMP/changelog.headers"
+          grep -qi '^location: https://boundaryml.com/blog?tags=release' "$RUNNER_TEMP/changelog.headers"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:4173/cli/$VERSION/commands/not-a-command")" = "404"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4173/cli/v0.0.0-missing)" = "404"
 
-      - name: Upload static preview artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: developer-docs-static-preview
-          path: typescript2/app-developer-docs/out
-          retention-days: 3
-
-  link-check:
-    name: Internal links and anchors
-    needs: complete-build
+  pre-merge-gate:
+    name: Developer Docs Pre-merge Gate
+    needs:
+      - determine-changes
+      - quality
+      - authored-content
+      - snippets
+      - database-integration
+      - production-path
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false
+      - name: Require affected documentation checks
+        env:
+          AUTHORED_CONTENT_RESULT: ${{ needs.authored-content.result }}
+          DATABASE_INTEGRATION_RESULT: ${{ needs.database-integration.result }}
+          DETERMINE_CHANGES_RESULT: ${{ needs.determine-changes.result }}
+          CAN_USE_SECRETS: ${{ needs.determine-changes.outputs.can-use-secrets }}
+          PRODUCTION_PATH_RESULT: ${{ needs.production-path.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SHOULD_RUN: ${{ needs.determine-changes.outputs.should-run }}
+          SNIPPETS_RESULT: ${{ needs.snippets.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$DETERMINE_CHANGES_RESULT" != "success" ]]; then
+            echo "::error::Could not determine whether documentation checks are required"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" == "false" ]]; then
+            echo "No documentation or BAML language runtime inputs changed"
+            exit 0
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "::error::Documentation change detection returned an invalid result"
+            exit 1
+          fi
+          if [[ "$CAN_USE_SECRETS" != "true" && "$CAN_USE_SECRETS" != "false" ]]; then
+            echo "::error::Pull-request trust detection returned an invalid result"
+            exit 1
+          fi
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node2
-
-      - name: Download static preview artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: developer-docs-static-preview
-          path: typescript2/app-developer-docs/out
-
-      - name: Validate internal routes and anchors
-        run: pnpm --filter app-developer-docs docs:links:validate
-        working-directory: typescript2
+          failed=false
+          for result in \
+            "$QUALITY_RESULT" \
+            "$AUTHORED_CONTENT_RESULT" \
+            "$SNIPPETS_RESULT" \
+            "$DATABASE_INTEGRATION_RESULT"; do
+            if [[ "$result" != "success" ]]; then
+              failed=true
+            fi
+          done
+          if [[ "$CAN_USE_SECRETS" == "true" && "$PRODUCTION_PATH_RESULT" != "success" ]]; then
+            failed=true
+          fi
+          if [[ "$CAN_USE_SECRETS" == "false" && "$PRODUCTION_PATH_RESULT" != "skipped" ]]; then
+            failed=true
+          fi
+          if [[ "$failed" == "true" ]]; then
+            echo "::error::One or more required Developer Docs jobs did not succeed"
+            exit 1
+          fi
+          echo "All required Developer Docs jobs succeeded"

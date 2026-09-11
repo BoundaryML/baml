@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@b/bridge_wasm": "link:../pkg-playground/wasm",
+    "@b/pkg-grammar": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@b/pkg-proto": "workspace:*",
     "@boundaryml/baml": "0.202.1",

@@ -122,9 +122,12 @@ pub unsafe extern "C" fn baml_handle_clone(key: u64, out_key: *mut u64) -> BamlC
 /// accept an `InvalidHandle` status.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_handle_release(key: u64) -> BamlCffiStatus {
-    match handle::release_handle(key) {
-        Ok(()) => BamlCffiStatus::Ok,
-        Err(error) => error.into(),
+    // The last release runs the entry's destructor (RustData / ADT resource
+    // cleanup). A panic there must not unwind across the C ABI.
+    match std::panic::catch_unwind(|| handle::release_handle(key)) {
+        Ok(Ok(())) => BamlCffiStatus::Ok,
+        Ok(Err(error)) => error.into(),
+        Err(_) => BamlCffiStatus::InternalError,
     }
 }
 
