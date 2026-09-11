@@ -62,6 +62,7 @@ mod accessor;
 pub(crate) mod card_table;
 mod chunked_vec;
 mod gc;
+pub mod gc_policy;
 mod gc_profile;
 mod heap;
 mod heap_debugger;
