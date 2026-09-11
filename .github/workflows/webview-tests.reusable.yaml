@@ -15,7 +15,7 @@ defaults:
     shell: bash
 
 env:
-  TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+  TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
 jobs:
   typecheck:
