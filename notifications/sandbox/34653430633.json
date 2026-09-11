@@ -17,9 +17,10 @@
       "scheduled_message_id": "Q0C25MQ9BG8"
     },
     {
-      "status": "pending",
+      "status": "sent",
       "post_at": 1789165321,
-      "text": "[Python tooling test: Friday 3pm Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to make sure the canary release has succeeded and the changelog is posted!"
+      "text": "[Python tooling test: Friday 3pm Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to make sure the canary release has succeeded and the changelog is posted!",
+      "scheduled_message_id": "Q0C1549S283"
     }
   ],
   "test_parent_ts": ""
