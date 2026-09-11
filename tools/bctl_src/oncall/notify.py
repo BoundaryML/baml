@@ -1,119 +1,132 @@
-"""Compose weekly handoff messages."""
+"""Thursday release handoff and Friday reminders, with durable send intents."""
 
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
-from typing import Any, Optional
+import re
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 from oncall.parser import ScheduleFile, ShiftLine
 
-
-@dataclass(frozen=True)
-class HandoffMessage:
-    channel: str
-    text: str
-    blocks: list[dict[str, Any]]
+PACIFIC = ZoneInfo("America/Los_Angeles")
+SANDBOX_CHANNEL = "C07UTQN7N1X"
 
 
 def _current_shift(sched: ScheduleFile, today: datetime.date) -> Optional[ShiftLine]:
-    shifts = sorted(sched.shifts, key=lambda s: s.date)
-    current: Optional[ShiftLine] = None
-    for s in shifts:
-        if s.date <= today:
-            current = s
-        else:
-            break
-    return current
+    return max((s for s in sched.shifts if s.date <= today), key=lambda s: s.date, default=None)
 
 
-def _fmt_date(d: datetime.date) -> str:
-    return f"{d.strftime('%a %b')} {d.day}"
+def notification_friday(reference: datetime.datetime) -> datetime.date:
+    """Use the original run's Pacific Thursday, including on later reruns."""
+    if reference.tzinfo is None:
+        raise RuntimeError("notification reference must include a timezone")
+    thursday = reference.astimezone(PACIFIC).date()
+    if thursday.weekday() != 3:
+        raise RuntimeError("start notifications on Thursday; rerun the original Thursday run to recover")
+    return thursday + datetime.timedelta(days=1)
 
 
-def compose_handoff(
-    sched: ScheduleFile,
-    today: datetime.date,
-    wc,
-) -> list[HandoffMessage]:
-    """Return Slack blocks and fallback text for the weekly handoff.
+def compose_handoff(sched: ScheduleFile, friday: datetime.date, wc) -> dict:
+    """Select the exact incoming Friday shift without changing the current shift."""
+    if friday.weekday() != 4:
+        raise RuntimeError("the incoming shift must start on Friday")
+    shift = next((s for s in sched.shifts if s.date == friday), None)
+    name = shift.assignments.get("oncall-releases") if shift else None
+    if not name or name not in sched.roster.by_rotation.get("oncall-releases", []):
+        raise RuntimeError(f"no valid incoming release oncaller for {friday}")
+    if wc is None:
+        mention = f"@{name}"
+    else:
+        from oncall.slack import email_for, lookup_user_id
 
-    If `wc` is None, no Slack user-id lookup happens and the @-mention is
-    rendered as the bare name (dry-run mode).
+        user_id = lookup_user_id(wc, email_for(name))
+        if not re.fullmatch(r"[UW][A-Z0-9]+", user_id):
+            raise RuntimeError("Slack lookup did not return a real user ID")
+        mention = f"<@{user_id}>"
+    return {
+        "version": 1,
+        "friday": friday.isoformat(),
+        "channel": sched.slack_config.notification_channel,
+        "mention": mention,
+        "parent": {
+            "status": "ready",
+            "text": f"Hey {mention}, you’re going to be oncall tomorrow! You’ll be in charge of putting out a canary release tomorrow and monitoring Discord over the weekend and next week. Your rotation runs Friday through Friday.",
+        },
+        "reminders": [
+            {
+                "status": "ready",
+                "post_at": int(datetime.datetime.combine(friday, datetime.time(hour), PACIFIC).timestamp()),
+                "text": f"Hey {mention}, {text}",
+            }
+            for hour, text in [
+                (9, "reminder to put out the canary release today!"),
+                (15, "reminder to make sure the canary release has succeeded and the changelog is posted!"),
+            ]
+        ],
+    }
+
+
+def validate_parent_window(friday: datetime.date, now: datetime.datetime) -> None:
+    """Reject early/late starts before pinning an assignee in durable state."""
+    local_now = now.astimezone(PACIFIC)
+    thursday = friday - datetime.timedelta(days=1)
+    if local_now.date() != thursday or local_now.hour < 17:
+        raise RuntimeError("a new parent can only be posted Thursday at/after 5pm Pacific")
+
+
+def deliver_handoff(wc, state: dict, save, *, now=None, sandbox: bool = False) -> None:
+    """Checkpoint before each Slack mutation; never replay an uncertain request.
+
+    `save` must durably compare-and-swap the journal before returning. A stale
+    writer must fail, including the first writer creating a week's journal.
     """
-    current = _current_shift(sched, today)
-    if current is None:
-        raise RuntimeError("no schedule line covers the current week")
-
-    sorted_shifts = sorted(sched.shifts, key=lambda s: s.date)
-    current_idx = sorted_shifts.index(current)
-
-    msgs: list[HandoffMessage] = []
-    for rot in sched.roster.rotations_in_order():
-        if rot not in current.assignments:
+    if sandbox and (
+        state["channel"] != SANDBOX_CHANNEL
+        or state["parent"].get("channel", SANDBOX_CHANNEL) != SANDBOX_CHANNEL
+    ):
+        raise RuntimeError("accelerated tests can only use #sam-sandbox")
+    now = now or (lambda: datetime.datetime.now(PACIFIC))
+    friday = datetime.date.fromisoformat(state["friday"])
+    if state.get("version") != 1:
+        raise RuntimeError("unsupported notification state version")
+    operations = [state["parent"], *state["reminders"]]
+    for operation in operations:
+        if operation["status"] not in {"ready", "sent"}:
             raise RuntimeError(
-                f"current week {current.date.isoformat()} has no assignee for rotation {rot!r}"
+                f"Uncertain Slack send for {friday}; reconcile the pending operation in "
+                "oncall/notification-state before retrying (see the oncall README)"
             )
-        incoming_name = current.assignments[rot]
-        if wc is None:
-            mention = f"@{incoming_name}"
-        else:
-            from oncall.slack import email_for, lookup_user_id
-
-            mention = f"<@{lookup_user_id(wc, email_for(incoming_name))}>"
-
-        prev_name: Optional[str] = None
-        for s in reversed(sorted_shifts[:current_idx]):
-            if rot in s.assignments:
-                prev_name = s.assignments[rot]
-                break
-
-        upcoming: list[ShiftLine] = []
-        for s in sorted_shifts[current_idx + 1 :]:
-            if rot in s.assignments:
-                upcoming.append(s)
-                if len(upcoming) >= 3:
-                    break
-
-        prev_clause = f" (prev oncall was {prev_name})" if prev_name is not None else ""
-        if upcoming:
-            upcoming_lines = "\n".join(
-                f"- {s.assignments[rot]} goes oncall {_fmt_date(s.date)}"
-                for s in upcoming
-            )
-            upcoming_text = f"Next oncallers:\n{upcoming_lines}"
-        else:
-            upcoming_text = ""
-
-        footer = "To swap shifts or update the roster, see <https://github.com/BoundaryML/baml/tree/canary/tools/bctl_src/oncall/README.md|the oncall README>."
-
-        sections = [
-            f"*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}",
-            "*1. Prep the next release*\n"
-            "> Prepare a PR to trigger the next BAML language canary release. See "
-            "<https://github.com/BoundaryML/baml/blob/canary/"
-            "baml_language/RELEASING.md|baml_language/RELEASING.md> for instructions.",
-            "*2. Prep the changelog, then review and clean it up before merging it*\n"
-            "> Prepare the changelog for the next BAML language canary release: see "
-            "<https://github.com/BoundaryML/baml/blob/canary/"
-            "docs/prepare-changelog.md|docs/prepare-changelog.md>",
-            "*3. Tell your agent to thank external contributors.* "
-            "`&lt;version&gt;.todo.md` will have instructions for your agent to handle this for you.\n"
-            "> The changelog is published. Find the newest `blog-release/&lt;version&gt;.todo.md` "
-            "and follow its instructions to thank all external contributors.",
-        ]
-        blocks: list[dict[str, Any]] = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": text}}
-            for text in sections
-        ]
-        context = ([upcoming_text] if upcoming_text else []) + [footer]
-        blocks.extend(
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
-            for text in context
+    parent = state["parent"]
+    if parent["status"] == "ready":
+        if not sandbox:
+            validate_parent_window(friday, now())
+        parent["status"] = "pending"
+        save(state)
+        response = wc.chat_postMessage(
+            channel=state["channel"], text=parent["text"],
+            unfurl_links=False, unfurl_media=False,
         )
-        body = "\n\n".join(sections + context)
-
-        msgs.append(
-            HandoffMessage(sched.slack_config.notification_channel, body, blocks)
+        if not response["ok"]:
+            raise RuntimeError("Slack rejected the parent; reconcile pending state before retrying")
+        # Preserve the actual channel ID and original parent timestamp as strings.
+        parent.update(status="sent", channel=response["channel"], ts=response["ts"])
+        save(state)
+    for reminder in state["reminders"]:
+        if reminder["status"] == "sent":
+            continue
+        if reminder["post_at"] <= now().timestamp():
+            raise RuntimeError("Friday reminder deadline passed; reconcile manually, do not send a late duplicate")
+        reminder["status"] = "pending"
+        save(state)
+        # Slack supports thread_ts, but metadata prevents scheduled delivery:
+        # https://docs.slack.dev/reference/methods/chat.scheduleMessage/
+        response = wc.chat_scheduleMessage(
+            channel=parent["channel"], thread_ts=parent["ts"],
+            post_at=reminder["post_at"], text=reminder["text"],
+            unfurl_links=False, unfurl_media=False,
         )
-    return msgs
+        if not response["ok"]:
+            raise RuntimeError("Slack rejected the reminder; reconcile pending state before retrying")
+        reminder.update(status="sent", scheduled_message_id=response["scheduled_message_id"])
+        save(state)
