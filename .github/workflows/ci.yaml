@@ -1012,7 +1012,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -1094,7 +1094,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -1133,7 +1133,7 @@ jobs:
         run: chmod -R +x baml_language/target/codspeed/walltime
 
       - name: "Run benchmarks (walltime)"
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v5
         # Benchmarks are advisory — never block a merge on a measurement blip.
         continue-on-error: true
         env:
