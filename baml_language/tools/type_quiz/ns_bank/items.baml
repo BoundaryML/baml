@@ -101,7 +101,14 @@ function draw_flow(
     let relation = root.algebra.decided(root.algebra.knowledge(d))
         ?? return null;
     let direction = root.engine.below(streams.right, 2);
-    let site_draw = root.engine.below(direction.next, sites.length());
+    // A pair that mentions a type variable can only be spelled where the
+    // probe's own function binds it, so the site is drawn from what this
+    // pair can actually be written at.
+    let usable = root.algebra.sites_for(sites, root.algebra.left_of(d), root.algebra.right_of(d));
+    if (usable.length() == 0) {
+        return null;
+    }
+    let site_draw = root.engine.below(direction.next, usable.length());
     let reserved = root.algebra.decls_of_all([root.algebra.left_of(d), root.algebra.right_of(d)]).map((decl) -> {
         root.algebra.decl_name(decl)
     });
@@ -109,7 +116,7 @@ function draw_flow(
         d,
         relation,
         reversed: direction.value == 1,
-        site: sites[site_draw.value],
+        site: usable[site_draw.value],
         names: site_names(site_draw.next, reserved),
     }
 }

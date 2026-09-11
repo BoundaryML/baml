@@ -26,3 +26,22 @@ binding, or field type. No E0068 is emitted.
 Contradiction: `Accepts`.
 
 Blocks: item `aliases/unguarded-cycle`.
+
+## CD-002: function types are rejected as implementation targets
+
+Spec, "Concrete Types": concrete types "include all primitives, all class
+types, all enum types, all function types, and a few special built-in types".
+Spec, "Interfaces": "Only concrete types may implement interfaces."
+
+Compiler (canary `0488221d0`, 2026-09-10):
+`implement Marker for (int) -> int throws never {}` is rejected with
+`E0138: cannot implement an interface for (int) -> int throws never — the
+target must be a single concrete type`. Every other concrete target in the
+same sweep is accepted: `int`, `string`, `int[]`, `map<string, int>`, an enum,
+and an alias of `int`. The non-concrete targets are rejected with the same
+code, correctly: an existential, a union, `int?`, and `unknown`.
+
+Contradiction: `Rejects`.
+
+Blocks: the concrete half of the implementation-target pool, which omits
+function types until this is settled.

@@ -218,20 +218,65 @@ class Iface {
     /// - `baml.panics.Unreachable` if the argument count differs from the
     ///   declaration's parameter count, or a pin names no associated type.
     function new(decl: IfaceDecl, args: Ty[], pins: Pin[]) -> Iface throws never {
-        if (args.length() != decl.params.length()) {
-            throw baml.panics.Unreachable {
-                message: `interface ${decl.name} takes ${decl.params.length()} type arguments, got ${args.length()}`,
-            }
-        }
-        let assoc = decl.assoc.map((a) -> {
-            a.name
-        });
-        for (let pin in pins) {
-            if (!assoc.includes(pin.name)) {
-                throw baml.panics.Unreachable { message: `interface ${decl.name} has no associated type ${pin.name}` }
-            }
-        }
+        applies(decl, args, pins);
         Iface { decl, args, pins }
+    }
+
+    /// An interface that takes nothing, as a type.
+    function of(decl: IfaceDecl) -> Iface throws never {
+        Iface.new(decl, [], [])
+    }
+}
+
+/// Whether `args` and `pins` apply to `decl`. Every use of an interface is
+/// checked through here, so an existential and an `implements` block cannot
+/// disagree about what applying one means.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the argument count differs from the
+///   declaration's parameter count, or a pin names no associated type.
+function applies(decl: IfaceDecl, args: Ty[], pins: Pin[]) -> void throws never {
+    if (args.length() != decl.params.length()) {
+        throw baml.panics.Unreachable {
+            message: `interface ${decl.name} takes ${decl.params.length()} type arguments, got ${args.length()}`,
+        }
+    }
+    let assoc = decl.assoc.map((a) -> {
+        a.name
+    });
+    for (let pin in pins) {
+        if (!assoc.includes(pin.name)) {
+            throw baml.panics.Unreachable { message: `interface ${decl.name} has no associated type ${pin.name}` }
+        }
+    }
+}
+
+/// An `implements` block: the interface a class implements, its type
+/// arguments, and the associated types the block fixes.
+///
+/// Implementation is nominal, so this is the only thing that makes its class
+/// an implementor. A class that shares an interface's shape and declares no
+/// block does not implement it.
+class Impl {
+    iface: IfaceDecl,
+    args: Ty[],
+    pins: Pin[],
+
+    /// An `implements` block for `decl` with `args` and `pins`.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.Unreachable` if the argument count differs from the
+    ///   declaration's parameter count, or a pin names no associated type.
+    function new(decl: IfaceDecl, args: Ty[], pins: Pin[]) -> Impl throws never {
+        applies(decl, args, pins);
+        Impl { iface: decl, args, pins }
+    }
+
+    /// An `implements` block for an interface that takes nothing.
+    function of(decl: IfaceDecl) -> Impl throws never {
+        Impl.new(decl, [], [])
     }
 }
 
@@ -244,11 +289,23 @@ class Alias {
 
 /// A type variable in scope: a generic parameter or `Self`. The generator
 /// that emits one is responsible for the enclosing declaration binding it.
+///
+/// A bound is spelled exactly as an existential of the same interface is
+/// (`Base`, `Lorem<int>`, `Holder<Held = string>`), because the language
+/// spells them the same way: what separates a universal from an existential
+/// is the position, not the syntax. An unbounded variable admits any type;
+/// a bounded one admits only concrete implementors.
 class Var {
     name: string,
+    bound: Iface?,
 
     function new(name: string) -> Var throws never {
-        Var { name }
+        Var { name, bound: null }
+    }
+
+    /// A variable its binder writes as `<name extends bound>`.
+    function bounded(name: string, bound: Iface) -> Var throws never {
+        Var { name, bound }
     }
 }
 
@@ -295,6 +352,60 @@ function children(ty: Ty) -> Ty[] throws never {
     }
 }
 
+/// Every type variable `tys` mention, in first-seen order, deduplicated by
+/// name. A variable's bound is searched too, so a binder list built from
+/// this one names everything the spelling needs.
+///
+/// A bound is not a child of the variable that carries it: `children` is
+/// spelling order at the use site, where a variable is spelled by its name
+/// alone, and the structural measures are written against that.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if two variables share a name and differ,
+///   which would ask one binder to declare two variables.
+function vars_of(tys: Ty[]) -> Var[] throws never {
+    let out: Var[] = [];
+    let seen: map<string, Var> = {};
+    for (let ty in tys) {
+        gather_vars(ty, out, seen);
+    }
+    out
+}
+
+function gather_vars(ty: Ty, out: Var[], seen: map<string, Var>) -> void throws never {
+    match (ty) {
+        let v: Var => {
+            match (seen.get(v.name)) {
+                let prior: Var => {
+                    if (prior != v) {
+                        throw baml.panics.Unreachable {
+                            message: `two different type variables named ${v.name} in one case`,
+                        }
+                    }
+                },
+                null => {
+                    seen.set(v.name, v);
+                    out.push(v);
+                    match (v.bound) {
+                        let i: Iface => gather_vars(i, out, seen),
+                        null => {},
+                    }
+                },
+            }
+        },
+        Prim | Never | Top | Lit | EnumLit | Union | Array | Map | Fn | Class | Enum | Iface | Alias => {},
+    }
+    for (let child in children(ty)) {
+        gather_vars(child, out, seen);
+    }
+}
+
+/// Whether `ty` mentions a type variable, and so needs a binder in scope.
+function mentions_var(ty: Ty) -> bool throws never {
+    vars_of([ty]).length() > 0
+}
+
 // ─── declarations ────────────────────────────────────────────────────────────
 
 class FieldDecl {
@@ -307,6 +418,8 @@ class ClassDecl {
     /// Generic parameter names, in order.
     params: string[],
     fields: FieldDecl[],
+    /// The interfaces this class implements, as in-body blocks.
+    impls: Impl[],
 }
 
 class EnumDecl {
@@ -324,6 +437,11 @@ class IfaceDecl {
     name: string,
     params: string[],
     assoc: AssocDecl[],
+    /// The interfaces an implementor must also implement: the declaration's
+    /// `requires` clause, which is spelled `bounds` here because `requires`
+    /// is a keyword. Each is an applied interface, carrying its own
+    /// arguments and pins.
+    bounds: Iface[],
 }
 
 /// An alias. A recursive one refers back to itself through `Alias`; build

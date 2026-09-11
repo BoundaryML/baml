@@ -657,7 +657,7 @@ function pairing_report() -> string throws never {
 }
 
 test "pairs: every foil is the same program a step away, answering the other way" {
-    assert.equal(pairing_report(), "cases=128 paired=44 items=11 of 32 mixed=[] faults=")
+    assert.equal(pairing_report(), "cases=148 paired=60 items=15 of 37 mixed=[] faults=")
 }
 
 // ─── how many ways an item can answer ────────────────────────────────────────
@@ -668,10 +668,11 @@ test "pairs: every foil is the same program a step away, answering the other way
 /// A fact that concludes an equivalence or an unrelated pair reads the same
 /// in both directions, so every case it makes answers the same way, and the
 /// shape of such a case tells a learner the answer without their having to
-/// reason about it. That is two thirds of the bank today; it is also why a
-/// sitting has to be given a schedule of wanted answers rather than left to
-/// the draw. Near misses — a case a step away from an equivalence that is
-/// therefore not one — would fix both, and this count is what would change.
+/// reason about it. The interface and generic facts are strict, so each
+/// answers both ways and brought this from two items in three down to three
+/// in five; the rest of it is the equivalence facts, which near misses — a
+/// case a step away from an equivalence and therefore not one — are what
+/// would fix. This count is what would change.
 function items_answering_report() -> string throws never {
     let counted = root.bank.items()
         .filter((item) -> {
@@ -705,7 +706,7 @@ function items_answering_report() -> string throws never {
     of.join(" ")
 }
 
-test "bank: two items in three answer the same way every time" {
-    assert.equal(items_answering_report(), "always=14 never=6 both=11")
+test "bank: three items in five answer the same way every time" {
+    assert.equal(items_answering_report(), "always=14 never=7 both=15")
 }
 

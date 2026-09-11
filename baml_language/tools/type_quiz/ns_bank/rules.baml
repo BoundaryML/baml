@@ -244,6 +244,59 @@ function unguarded_member_vacuous() -> root.engine.Rule throws never {
     )
 }
 
+// ─── interfaces and generics ─────────────────────────────────────────────────
+
+/// Why a concrete type fits where its interface is expected: the existential
+/// IS the union of the types that implement it.
+function implementor_below_existential() -> root.engine.Rule throws never {
+    rule(
+        "interfaces/implementor-below-existential",
+        section("Abstract Types"),
+        "Interface-types: represent the union of all concrete types that implement the interface's contract",
+    )
+}
+
+/// A `requires` clause narrows the set of implementors, so the existential of
+/// the requiring interface sits below the existential of the required one.
+function requires_widens_existential() -> root.engine.Rule throws never {
+    rule(
+        "interfaces/requires-widens-existential",
+        section("Generics on Functions"),
+        "the interface-existential type `dyn AdditiveIdentity` is a subtype of interface-existential `dyn baml.ops.Add` (all instances of types that implement `AdditiveIdentity` must implement `baml.ops.Add`)",
+    )
+}
+
+/// A bounded type variable stands for some implementor, so its values fit
+/// where the existential is expected. The converse does not hold, which is
+/// the half of this rule a learner is most likely to have backwards.
+function typevar_below_bound() -> root.engine.Rule throws never {
+    rule(
+        "generics/typevar-below-bound",
+        section("Interfaces"),
+        "Universal types: in BAML as bounded generics, `T extends I` says that this code should work for _all_ types `T` that implement `I`.",
+    )
+}
+
+/// Implementation is nominal: a declared block, not a matching shape, is what
+/// makes a type an implementor.
+function implements_is_nominal() -> root.engine.Rule throws never {
+    rule(
+        "interfaces/implements-is-nominal",
+        section("Interface Implementations"),
+        "a fully realized concrete type `C` implements a fully realized interface `I` if and only if there exists some `implements` block where some generic instantiation produces `I` and `C` for its interface and \"for\" targets, respectively",
+    )
+}
+
+/// A union of implementors fits where the existential is expected, without
+/// itself implementing anything.
+function union_below_existential() -> root.engine.Rule throws never {
+    rule(
+        "interfaces/union-below-existential",
+        section("Generics on Functions"),
+        "while a union may be a subtype of an interface-existential type if all members are, they are not an _implementor_ of the interface as only concrete types can implement interfaces",
+    )
+}
+
 function unguarded_cycle_rejected() -> root.engine.Rule throws never {
     composite(
         "aliases/unguarded-cycle-rejected",
@@ -283,5 +336,10 @@ function rules() -> root.engine.Rule[] throws never {
         partial_unfolding(),
         unguarded_member_vacuous(),
         unguarded_cycle_rejected(),
+        implementor_below_existential(),
+        requires_widens_existential(),
+        typevar_below_bound(),
+        implements_is_nominal(),
+        union_below_existential(),
     ]
 }

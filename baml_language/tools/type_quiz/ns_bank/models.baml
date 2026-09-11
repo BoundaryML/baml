@@ -164,6 +164,28 @@ function covariant_everywhere() -> root.algebra.Model throws never {
     }
 }
 
+/// An interface bound read as a type annotation: `S extends Base` is taken to
+/// mean `S` IS `Base`, so values pass in both directions.
+function bounds_are_types() -> root.algebra.Model throws never {
+    root.algebra.Model {
+        id: "bounds",
+        description: "You read `S extends Base` as saying that `S` is `Base`, so the two are interchangeable: a value typed by the bound goes into a slot typed by the variable as readily as the other way round. Only one direction holds — a variable stands for one implementor, and the interface stands for all of them.",
+        believes: { "generics/typevar-below-bound": equivalent },
+        transfers: {},
+    }
+}
+
+/// Implementation read as a shape rather than a declaration: whatever fits
+/// the contract implements it, declared or not.
+function structural_implements() -> root.algebra.Model throws never {
+    root.algebra.Model {
+        id: "structural",
+        description: "You expect a type to implement an interface whenever it satisfies the contract, the way a structurally-typed language works. In BAML implementation is nominal: only an `implements` block makes a type an implementor, so a class that asks for nothing and is asked for nothing still does not implement an empty interface.",
+        believes: { "interfaces/implements-is-nominal": subset },
+        transfers: {},
+    }
+}
+
 /// Either direction of a relation is accepted, as TypeScript's method
 /// parameters are.
 function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws never {
@@ -177,5 +199,5 @@ function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws n
 }
 
 function models() -> root.algebra.Model[] throws never {
-    [spelling(), typescript(), covariant_everywhere()]
+    [spelling(), typescript(), covariant_everywhere(), bounds_are_types(), structural_implements()]
 }

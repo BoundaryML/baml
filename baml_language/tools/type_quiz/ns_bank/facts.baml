@@ -74,21 +74,32 @@ function pick_literal(seed: root.engine.Seed) -> root.engine.Rolled<LiteralPair>
     root.engine.Rolled<LiteralPair> { value: pool[kind.value], next: kind.next }
 }
 
-function pick_type_name(seed: root.engine.Seed) -> root.engine.Rolled<string> throws never {
-    let picked = root.engine.pick_distinct(seed, type_names(), 1);
+/// A type name that is not one of `reserved`. Every draw says what it must
+/// avoid, so a declaration drawn beside others cannot take a name one of them
+/// already has — which the case assembly rejects as a generator bug.
+function pick_type_name(
+    seed: root.engine.Seed,
+    reserved: string[],
+) -> root.engine.Rolled<string> throws never {
+    let pool = type_names().filter((n) -> {
+        !reserved.includes(n)
+    });
+    let picked = root.engine.pick_distinct(seed, pool, 1);
     root.engine.Rolled<string> { value: picked.value[0], next: picked.next }
 }
 
-/// `class Name<T> { value: T }` with a seeded name.
+/// `class Name<T> { value: T }` with a seeded name, avoiding `reserved`.
 function box_decl(
     seed: root.engine.Seed,
+    reserved: string[],
 ) -> root.engine.Rolled<root.algebra.ClassDecl> throws never {
-    let n = pick_type_name(seed);
+    let n = pick_type_name(seed, reserved);
     root.engine.Rolled<root.algebra.ClassDecl> {
         value: root.algebra.ClassDecl {
             name: n.value,
             params: ["T"],
             fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Var.new("T") }],
+            impls: [],
         },
         next: n.next,
     }
@@ -102,7 +113,8 @@ function variant_names() -> string[] throws never {
 function pick_enum(
     seed: root.engine.Seed,
 ) -> root.engine.Rolled<root.algebra.EnumDecl> throws never {
-    let n = pick_type_name(seed);
+    let none: string[] = [];
+    let n = pick_type_name(seed, none);
     let count = root.engine.below(n.next, 2);
     let variants = root.engine.pick_distinct(count.next, variant_names(), 2 + count.value);
     root.engine.Rolled<root.algebra.EnumDecl> {
@@ -325,7 +337,8 @@ function union_associates(seed: root.engine.Seed) -> Derived throws never {
 
 function alias_is_transparent(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
-    let n = pick_type_name(l.next);
+    let none: string[] = [];
+    let n = pick_type_name(l.next, none);
     let decl = root.algebra.AliasDecl { name: n.value, body: l.value[0] };
     derived(
         root.algebra.pair(
@@ -361,7 +374,8 @@ function equirecursive(seed: root.engine.Seed) -> Derived throws never {
 
 function unfolds_once(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
-    let n = pick_type_name(l.next);
+    let none: string[] = [];
+    let n = pick_type_name(l.next, none);
     let decl = list_alias(n.value, l.value[0]);
     derived(
         root.algebra.pair(
@@ -426,11 +440,21 @@ function distinct_classes_same_shape(seed: root.engine.Seed) -> Derived throws n
     derived(
         root.algebra.pair(
             root.algebra.Class.new(
-                root.algebra.ClassDecl { name: names.value[0], params: [], fields: shape },
+                root.algebra.ClassDecl {
+                    name: names.value[0],
+                    params: [],
+                    fields: shape,
+                    impls: [],
+                },
                 [],
             ),
             root.algebra.Class.new(
-                root.algebra.ClassDecl { name: names.value[1], params: [], fields: shape },
+                root.algebra.ClassDecl {
+                    name: names.value[1],
+                    params: [],
+                    fields: shape,
+                    impls: [],
+                },
                 [],
             ),
             root.algebra.Relation.Unrelated,
@@ -440,7 +464,148 @@ function distinct_classes_same_shape(seed: root.engine.Seed) -> Derived throws n
     )
 }
 
+// ─── interfaces and generics ─────────────────────────────────────────────────
+
+/// An interface that asks for nothing.
+///
+/// The bank's interfaces declare no members, which the language admits. Every
+/// case here turns on WHICH types implement an interface and never on what it
+/// asks of them, so a method would be text a learner has to read past before
+/// reaching the question. Members arrive with the cases that are about them.
+function iface_decl(name: string) -> root.algebra.IfaceDecl throws never {
+    root.algebra.IfaceDecl { name, params: [], assoc: [], bounds: [] }
+}
+
+/// A one-field class, implementing `impls`.
+function thing_decl(
+    name: string,
+    field: string,
+    ty: root.algebra.Ty,
+    impls: root.algebra.Impl[],
+) -> root.algebra.ClassDecl throws never {
+    root.algebra.ClassDecl {
+        name,
+        params: [],
+        fields: [root.algebra.FieldDecl { name: field, ty }],
+        impls,
+    }
+}
+
+/// A class with an `implements` block, against the interface it implements:
+/// the existential stands for exactly the types that implement it, and this
+/// is one of them.
+function implementor_below_iface(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let iface = iface_decl(names.value[0]);
+    let cls = thing_decl(names.value[1], field.value[0], l.value[0], [root.algebra.Impl.of(iface)]);
+    derived(
+        root.algebra.pair(
+            root.algebra.Class.new(cls, []),
+            root.algebra.Iface.of(iface),
+            root.algebra.Relation.Sub,
+            implementor_below_existential(),
+        ),
+        l.next,
+    )
+}
+
+/// An interface that requires another, against the one it requires. Every
+/// implementor of the first implements the second, so the first existential
+/// stands for fewer types.
+function requires_widens(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let base = iface_decl(names.value[0]);
+    let extra = root.algebra.IfaceDecl {
+        name: names.value[1],
+        params: [],
+        assoc: [],
+        bounds: [root.algebra.Iface.of(base)],
+    };
+    derived(
+        root.algebra.pair(
+            root.algebra.Iface.of(extra),
+            root.algebra.Iface.of(base),
+            root.algebra.Relation.Sub,
+            requires_widens_existential(),
+        ),
+        names.next,
+    )
+}
+
+/// A type variable bounded by an interface, against that interface. The
+/// variable stands for one implementor, so its values fit the existential;
+/// the existential does not fit the variable, which is the half of this
+/// people most often have backwards.
+function typevar_below_its_bound(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 1);
+    let param = root.engine.pick_distinct(names.next, param_names(), 1);
+    let iface = iface_decl(names.value[0]);
+    derived(
+        root.algebra.pair(
+            root.algebra.Var.bounded(param.value[0], root.algebra.Iface.of(iface)),
+            root.algebra.Iface.of(iface),
+            root.algebra.Relation.Sub,
+            typevar_below_bound(),
+        ),
+        param.next,
+    )
+}
+
+/// A union of two implementors, against the interface both implement. The
+/// union fits where the existential is expected without being an implementor
+/// itself, and the existential does not fit the union: another package may
+/// implement the interface too.
+function union_of_implementors(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 3);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let iface = iface_decl(names.value[0]);
+    let block = [root.algebra.Impl.of(iface)];
+    let one = thing_decl(names.value[1], field.value[0], l.value[0], block);
+    let two = thing_decl(names.value[2], field.value[0], l.value[0], block);
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(
+                [root.algebra.Class.new(one, []), root.algebra.Class.new(two, [])],
+            ),
+            root.algebra.Iface.of(iface),
+            root.algebra.Relation.Sub,
+            union_below_existential(),
+        ),
+        l.next,
+    )
+}
+
+/// A class with no `implements` block, against an interface that asks for
+/// nothing: implementation is nominal, so an empty contract is still not
+/// satisfied by a type that never declared it.
+function non_implementor(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let no_impls: root.algebra.Impl[] = [];
+    let iface = iface_decl(names.value[0]);
+    let cls = thing_decl(names.value[1], field.value[0], l.value[0], no_impls);
+    derived(
+        root.algebra.pair(
+            root.algebra.Class.new(cls, []),
+            root.algebra.Iface.of(iface),
+            root.algebra.Relation.Unrelated,
+            implements_is_nominal(),
+        ),
+        l.next,
+    )
+}
+
 // ─── context facts ───────────────────────────────────────────────────────────
+
+/// The declarations a fact's pair already names, which a wrapper's own
+/// declaration must not collide with.
+function inner_names(d: root.algebra.Derivation) -> string[] throws never {
+    root.algebra.decl_names_of([root.algebra.left_of(d), root.algebra.right_of(d)])
+}
 
 /// A seeded strict-subtype pair from one of the pair-introducing facts, so
 /// context facts vary in what they wrap. Not a fact of its own.
@@ -448,14 +613,24 @@ function distinct_classes_same_shape(seed: root.engine.Seed) -> Derived throws n
 /// The generators are a pool the draw is bounded by, rather than match arms
 /// beside a written-out count that has to be kept in step with them.
 function strict_pair(seed: root.engine.Seed) -> Derived throws never {
-    let pool: ((root.engine.Seed) -> Derived throws never)[] = [never_bottom, unknown_top, union_member, union_subset, literal_subtype];
+    let pool: ((root.engine.Seed) -> Derived throws never)[] = [
+        never_bottom,
+        unknown_top,
+        union_member,
+        union_subset,
+        literal_subtype,
+        implementor_below_iface,
+        requires_widens,
+        typevar_below_its_bound,
+        union_of_implementors,
+    ];
     let choice = root.engine.below(seed, pool.length());
     pool[choice.value](choice.next)
 }
 
 function class_arg_invariant(seed: root.engine.Seed) -> Derived throws never {
     let inner = strict_pair(seed);
-    let b = box_decl(inner.next);
+    let b = box_decl(inner.next, inner_names(inner.value));
     derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
 
@@ -488,7 +663,7 @@ function error_covariant(seed: root.engine.Seed) -> Derived throws never {
 
 function box_of_bool(seed: root.engine.Seed) -> Derived throws never {
     let inner = bool_true_false(seed);
-    let b = box_decl(inner.next);
+    let b = box_decl(inner.next, inner_names(inner.value));
     derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
 
@@ -549,6 +724,11 @@ function facts() -> Fact[] throws never {
         fact("optional_superset", optional_superset),
         fact("positional_count", positional_count),
         fact("distinct_classes_same_shape", distinct_classes_same_shape),
+        fact("implementor_below_iface", implementor_below_iface),
+        fact("requires_widens", requires_widens),
+        fact("typevar_below_its_bound", typevar_below_its_bound),
+        fact("union_of_implementors", union_of_implementors),
+        fact("non_implementor", non_implementor),
         fact("class_arg_invariant", class_arg_invariant),
         fact("array_invariant", array_invariant),
         fact("map_value_invariant", map_value_invariant),

@@ -46,9 +46,52 @@ function around(head: string, expr: string, tail: string) -> Probe throws never 
     Probe { source: `${head}${expr}${tail}`, start, end: start + expr.to_utf8().length() }
 }
 
+/// Whether the target's spelling sits inside the probe's own function, where
+/// a type variable in it is the same variable the flowing value is typed by.
+/// At the other sites the target is declared elsewhere — a call's parameter,
+/// a class's field — so a variable there would be a second, unrelated one.
+function binds_target(site: SiteKind) -> bool throws never {
+    match (site) {
+        SiteKind.Let => true,
+        SiteKind.Return => true,
+        SiteKind.ArrayElement => true,
+        SiteKind.CallArgument => false,
+        SiteKind.Field => false,
+    }
+}
+
+/// The sites of `sites` that can carry this pair.
+///
+/// Both types are consulted, not just the target, because one draw is
+/// rendered in both directions at one site: a case's foil is its reverse, so
+/// a site that cannot take the pair one way must not be drawn for the other.
+function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] throws never {
+    if (!mentions_var(source) && !mentions_var(target)) {
+        sites
+    } else {
+        sites.filter((site) -> {
+            binds_target(site)
+        })
+    }
+}
+
 /// The probe for `site`, with the declarations `source` and `target` need.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `target` mentions a type variable at a site
+///   that declares the target outside the probe's function. `sites_for` is
+///   what keeps a generator from asking.
 function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Probe throws never {
+    if (mentions_var(target) && !binds_target(site)) {
+        throw baml.panics.Unreachable {
+            message: `${render(target)} mentions a type variable, and ${site_phrase(site)} declares it outside the probe`,
+        }
+    }
     let decls = render_decls(decls_of_all([source, target]));
+    // The probe's own function binds every variable the pair mentions, so
+    // both occurrences of one name are one variable.
+    let binders = render_binders(vars_of([source, target]));
     let s = render(source);
     let t = render(target);
     // Spelled through `render` so a union or function target keeps its
@@ -58,31 +101,35 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     match (site) {
         SiteKind.Let => {
             around(
-                `${decls}function ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.target}: ${t} = `,
+                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.target}: ${t} = `,
                 v,
                 `;\n}\n`,
             )
         },
         SiteKind.CallArgument => {
             around(
-                `${decls}function ${names.sink}(${names.target}: ${t}) -> void {\n}\n\nfunction ${names.function_name}(${v}: ${s}) -> void {\n    ${names.sink}(`,
+                `${decls}function ${names.sink}(${names.target}: ${t}) -> void {\n}\n\nfunction ${names.function_name}${binders}(${v}: ${s}) -> void {\n    ${names.sink}(`,
                 v,
                 `);\n}\n`,
             )
         },
         SiteKind.Return => {
-            around(`${decls}function ${names.function_name}(${v}: ${s}) -> ${t} `, `{\n    ${v}\n}`, `\n`)
+            around(
+                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> ${t} `,
+                `{\n    ${v}\n}`,
+                `\n`,
+            )
         },
         SiteKind.Field => {
             around(
-                `${decls}class ${names.holder} {\n    ${names.target}: ${t},\n}\n\nfunction ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.instance} = ${names.holder} { ${names.target}: `,
+                `${decls}class ${names.holder} {\n    ${names.target}: ${t},\n}\n\nfunction ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.instance} = ${names.holder} { ${names.target}: `,
                 v,
                 ` };\n}\n`,
             )
         },
         SiteKind.ArrayElement => {
             around(
-                `${decls}function ${names.function_name}(${v}: ${s}) -> void {\n    let ${names.target}: ${t_array} = [`,
+                `${decls}function ${names.function_name}${binders}(${v}: ${s}) -> void {\n    let ${names.target}: ${t_array} = [`,
                 v,
                 `];\n}\n`,
             )

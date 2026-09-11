@@ -16,8 +16,7 @@
 //! last place that engine belongs. Both paths link the same formatter, so
 //! neither can drift from `baml fmt`.
 
-use wasm_bindgen::JsError;
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 /// `source`, laid out as `baml fmt` lays it out.
 ///

@@ -10,6 +10,7 @@ function box_decl() -> root.algebra.ClassDecl throws never {
         name: "Box",
         params: ["T"],
         fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Var.new("T") }],
+        impls: [],
     }
 }
 
@@ -21,6 +22,7 @@ function pair_decl() -> root.algebra.ClassDecl throws never {
             root.algebra.FieldDecl { name: "left", ty: root.algebra.Prim.int() },
             root.algebra.FieldDecl { name: "right", ty: root.algebra.Prim.string() },
         ],
+        impls: [],
     }
 }
 
@@ -33,6 +35,7 @@ function iter_decl() -> root.algebra.IfaceDecl throws never {
         name: "Iter",
         params: [],
         assoc: [root.algebra.AssocDecl { name: "Item", default: root.algebra.Prim.int() }],
+        bounds: [],
     }
 }
 
@@ -41,6 +44,7 @@ function lorem_decl() -> root.algebra.IfaceDecl throws never {
         name: "Lorem",
         params: ["T"],
         assoc: [root.algebra.AssocDecl { name: "Out", default: null }],
+        bounds: [],
     }
 }
 
@@ -48,6 +52,31 @@ function rec_decl() -> root.algebra.AliasDecl throws never {
     root.algebra.AliasDecl.recursive("Rec", (self) -> {
         root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Array.new(self)])
     })
+}
+
+/// An interface that asks for nothing, as the bank's do.
+function marker_decl() -> root.algebra.IfaceDecl throws never {
+    root.algebra.IfaceDecl { name: "Marker", params: [], assoc: [], bounds: [] }
+}
+
+/// An interface that requires `Marker`, so its existential sits below it.
+function narrower_decl() -> root.algebra.IfaceDecl throws never {
+    root.algebra.IfaceDecl {
+        name: "Narrower",
+        params: [],
+        assoc: [],
+        bounds: [root.algebra.Iface.of(marker_decl())],
+    }
+}
+
+/// A class that implements `Marker`, in an in-body block.
+function implementor_decl() -> root.algebra.ClassDecl throws never {
+    root.algebra.ClassDecl {
+        name: "Implementor",
+        params: [],
+        fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Prim.int() }],
+        impls: [root.algebra.Impl.of(marker_decl())],
+    }
 }
 
 function id_decl() -> root.algebra.AliasDecl throws never {
@@ -189,6 +218,8 @@ function corpus() -> Corpus[] throws never {
         entry("generic class of fn", root.algebra.Class.new(box_decl(), [fn1()])),
         entry("enum", root.algebra.Enum.new(side_decl())),
         entry("enum literal", root.algebra.EnumLit.new(side_decl(), "Left")),
+        entry("interface requiring another", root.algebra.Iface.of(narrower_decl())),
+        entry("class implementing an interface", root.algebra.Class.new(implementor_decl(), [])),
         printed_as("interface", root.algebra.Iface.new(iter_decl(), [], []), "Iter<Item = int>"),
         entry(
             "interface pinned",
@@ -647,6 +678,36 @@ function flows() -> Flow[] throws never {
             compiles: true,
         },
         Flow {
+            name: "implementor into its interface",
+            source: root.algebra.Class.new(implementor_decl(), []),
+            target: root.algebra.Iface.of(marker_decl()),
+            compiles: true,
+        },
+        Flow {
+            name: "interface into its implementor",
+            source: root.algebra.Iface.of(marker_decl()),
+            target: root.algebra.Class.new(implementor_decl(), []),
+            compiles: false,
+        },
+        Flow {
+            name: "requiring interface into the one it requires",
+            source: root.algebra.Iface.of(narrower_decl()),
+            target: root.algebra.Iface.of(marker_decl()),
+            compiles: true,
+        },
+        Flow {
+            name: "bounded variable into its bound",
+            source: root.algebra.Var.bounded("S", root.algebra.Iface.of(marker_decl())),
+            target: root.algebra.Iface.of(marker_decl()),
+            compiles: true,
+        },
+        Flow {
+            name: "bound into the variable it bounds",
+            source: root.algebra.Iface.of(marker_decl()),
+            target: root.algebra.Var.bounded("S", root.algebra.Iface.of(marker_decl())),
+            compiles: false,
+        },
+        Flow {
             name: "multibyte literal into leaf",
             source: root.algebra.Lit.new("🐑"),
             target: root.algebra.Prim.int(),
@@ -659,6 +720,12 @@ function flows() -> Flow[] throws never {
             compiles: false,
         },
     ]
+}
+
+/// The sites `flow` can be spelled at: all of them, unless it names a type
+/// variable, which only the probe's own function can bind.
+function sites_of(flow: Flow) -> root.algebra.SiteKind[] throws never {
+    root.algebra.sites_for(root.algebra.all_sites(), flow.source, flow.target)
 }
 
 function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case throws never {
@@ -699,7 +766,7 @@ function expected_excerpt(
 function inexact_regions() -> string[] throws never {
     let names = site_names();
     flows().flat_map((flow) -> {
-        root.algebra.all_sites().filter_map((site) -> {
+        sites_of(flow).filter_map((site) -> {
             let p = root.algebra.probe(site, flow.source, flow.target, names);
             let excerpt = string.from_utf8(p.source.to_utf8().slice(p.start, p.end)) catch (e) {
                 baml.errors.InvalidArgument => "<not a character boundary>",
@@ -721,7 +788,7 @@ test "sites: every probe's region covers exactly the expression it claims" {
 /// rejection code and the region pinned.
 function site_disagreements() -> string[] throws never {
     flows().flat_map((flow) -> {
-        root.algebra.all_sites().filter_map((site) -> {
+        sites_of(flow).filter_map((site) -> {
             let outcome = root.engine.verify(site_case(site, flow));
             if (root.engine.agrees(outcome)) {
                 null
@@ -730,6 +797,26 @@ function site_disagreements() -> string[] throws never {
             }
         })
     })
+}
+
+/// Which sites each flow is asked at, so the two sweeps above cannot pass by
+/// asking nothing. A flow naming a type variable is asked at the three sites
+/// whose target sits inside the probe's own function and at neither of the
+/// two that declare it elsewhere, where the two occurrences of the name
+/// would be two different variables.
+function sites_asked() -> string throws never {
+    flows()
+        .map((flow) -> {
+            `${flow.name}=${sites_of(flow).length()}`
+        })
+        .join(" ")
+}
+
+test "sites: a flow naming a type variable is asked only where the probe binds it" {
+    assert.equal(
+        sites_asked(),
+        "identity=5 unrelated=5 member into union=5 union into member=5 literal into concrete=5 concrete into literal=5 never into leaf=5 leaf into never=5 leaf into unknown=5 unknown into leaf=5 alias into unfolding=5 unfolding into alias=5 covariant return=5 covariant return reversed=5 multibyte literal into its concrete type=5 implementor into its interface=5 interface into its implementor=5 requiring interface into the one it requires=5 bounded variable into its bound=3 bound into the variable it bounds=3 multibyte literal into leaf=5 leaf into multibyte literal=5",
+    )
 }
 
 test "sites: every site agrees with the algebra on every flow, code and region included" {

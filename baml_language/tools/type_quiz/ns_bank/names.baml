@@ -11,6 +11,13 @@ function function_names() -> string[] throws never {
     ["shuffle", "settle", "measure", "assemble", "route", "harvest", "tally", "polish"]
 }
 
+/// Names for a generated type parameter. `T` is left out: the bank's generic
+/// box declares its own `T`, and a case that binds one variable inside
+/// another's declaration reads as though the two were related.
+function param_names() -> string[] throws never {
+    ["S", "U", "V", "W"]
+}
+
 function binding_names() -> string[] throws never {
     [
         "value",

@@ -42,7 +42,33 @@ suite holds them to being the same characters in a different order, and to
 parting company only where the direction of the flow is named — so a learner
 shown both and asked which one compiles can read nothing off their surface.
 An equivalence or an unrelated pair reads the same in both directions and so
-has no foil, which is two thirds of the bank's items.
+has no foil. Fifteen of the bank's thirty-seven items pair; of the rest,
+fourteen always compile and seven never do.
+
+## What the bank covers
+
+Subtyping and its variance: the taxonomy, unions, literals, `never` and
+`unknown`, function parameters, returns and error types, aliases and
+recursion, and the invariance of every container.
+
+Interfaces and generics, as subtyping: a class fits where an interface it
+implements is expected, an interface that `requires` another fits where the
+required one is, a bounded type variable fits where its bound is, and a union
+of implementors fits where the interface is — while none of those hold the
+other way round, and a class that declares no `implements` block is unrelated
+to an interface however well it fits the shape. Each of those relations is
+strict, so each states a case that compiles and one that does not, and each
+carries a foil. They compose with the variance rules, so a case may be about
+a union of implementors inside a function's error type.
+
+The interfaces the bank declares have no members. Every case it makes turns
+on *which* types implement an interface and never on what the interface asks
+of them, so a method would be text a learner has to read past before reaching
+the question. What that leaves out — member resolution, `Self` and dispatch,
+coherence, valid implementation targets — is material for cases about
+legality rather than about flow, and is not built.
+
+## Interestingness
 
 A case is *interesting* when a plausible wrong intuition predicts the wrong
 verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
@@ -50,11 +76,11 @@ it disagrees with; replaying a case's derivation under the model gives the
 model's verdict, and a mismatch makes the case a trap for that model. The
 sampler scores candidates by traps, rule count, relation flips, and a hinged
 penalty on size, depth, and union width, with a soft penalty on single-rule
-cases every model agrees with. A session fixes each step's verdict from a
-seeded, balanced schedule before it looks at a candidate, re-drawing within a
-budget until one has that verdict, so how interesting a case looks never
-predicts its answer; the schedule is a uniform shuffle, so the
-step index and the previous answer predict nothing either. Only items the
+cases every model agrees with. A session fixes each step's verdict on an even
+coin before it looks at a candidate, re-drawing within a budget until one has
+that verdict, so how interesting a case looks never predicts its answer; the
+coins are independent, so neither the step index nor the previous answer
+predicts the next. Only items the
 compiler is verified to agree on are served, and the suite verifies every case
 a fixed session serves.
 

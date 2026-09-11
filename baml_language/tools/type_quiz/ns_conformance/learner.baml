@@ -322,14 +322,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=95 leading=typescript=12,covariant=-1,spelling=-3",
+        "suspected=none why=Budget commits_unsure=94 leading=bounds=10,spelling=9,structural=5,typescript=-11,covariant=-15",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=74,covariant=48,spelling=-41 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=80,covariant=49,bounds=20,structural=-13,spelling=-34 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -548,7 +548,7 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only parameter contravariance reaches three" {
     assert.equal(
         orders_report(),
-        `rules=25 of 26 by_order=[20, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
+        `rules=30 of 31 by_order=[25, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
     )
 }
 
@@ -631,6 +631,6 @@ function leaning_report() -> string throws never {
     `compiled=${percent_of(compiled, asked)} of=${asked}`
 }
 
-test "sitting: three questions in five ask about a case that compiles" {
-    assert.equal(leaning_report(), "compiled=59 of=165")
+test "sitting: eleven questions in twenty ask about a case that compiles" {
+    assert.equal(leaning_report(), "compiled=55 of=166")
 }

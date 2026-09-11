@@ -153,7 +153,29 @@ function render_class_decl(d: ClassDecl) -> string throws never {
             `    ${f.name}: ${render(f.ty)},\n`
         })
         .join("");
-    `class ${d.name}${render_params(d.params)} {\n${fields}}`
+    let impls = d.impls
+        .map((i) -> {
+            render_impl(i)
+        })
+        .join("");
+    `class ${d.name}${render_params(d.params)} {\n${fields}${impls}}`
+}
+
+/// An in-body `implements` block. Its associated-type pins are statements
+/// inside the block (`type Held = int`), not arguments in the angle-bracket
+/// list an existential spells them in.
+function render_impl(i: Impl) -> string throws never {
+    let head = `    implements ${i.iface.name}${render_args(i.args)}`;
+    if (i.pins.length() == 0) {
+        `${head} {}\n`
+    } else {
+        let pins = i.pins
+            .map((p) -> {
+                `        type ${p.name} = ${render(p.ty)}\n`
+            })
+            .join("");
+        `${head} {\n${pins}    }\n`
+    }
 }
 
 function render_enum_decl(d: EnumDecl) -> string throws never {
@@ -174,7 +196,44 @@ function render_iface_decl(d: IfaceDecl) -> string throws never {
             }
         })
         .join("");
-    `interface ${d.name}${render_params(d.params)} {\n${assoc}}`
+    `interface ${d.name}${render_params(d.params)}${render_requires(d.bounds)} {\n${assoc}}`
+}
+
+/// The `requires` clause, or nothing. Bounds are comma-separated: the
+/// language accepts neither `+` between them nor a repeated `requires`.
+function render_requires(bounds: Iface[]) -> string throws never {
+    if (bounds.length() == 0) {
+        ""
+    } else {
+        let names = bounds
+            .map((i) -> {
+                render_iface(i)
+            })
+            .join(", ");
+        ` requires ${names}`
+    }
+}
+
+/// The type parameters a declaration must bind to spell `vars`, as
+/// `<T extends Base, U>`, or nothing when there are none.
+function render_binders(vars: Var[]) -> string throws never {
+    if (vars.length() == 0) {
+        ""
+    } else {
+        let bound = vars
+            .map((v) -> {
+                render_binder(v)
+            })
+            .join(", ");
+        `<${bound}>`
+    }
+}
+
+function render_binder(v: Var) -> string throws never {
+    match (v.bound) {
+        let i: Iface => `${v.name} extends ${render_iface(i)}`,
+        null => v.name,
+    }
 }
 
 /// Every declaration `ty` refers to, transitively, in first-seen order.
@@ -208,7 +267,13 @@ function collect(ty: Ty, out: Decl[], seen: map<string, Decl>) -> void throws ne
         let e: Enum => visit(e.decl, out, seen),
         let i: Iface => visit(i.decl, out, seen),
         let a: Alias => visit(a.decl, out, seen),
-        Prim | Never | Top | Lit | Union | Array | Map | Fn | Var => {},
+        let v: Var => {
+            match (v.bound) {
+                let i: Iface => collect(i, out, seen),
+                null => {},
+            }
+        },
+        Prim | Never | Top | Lit | Union | Array | Map | Fn => {},
     }
     for (let child in children(ty)) {
         collect(child, out, seen);
@@ -231,9 +296,21 @@ function visit(decl: Decl, out: Decl[], seen: map<string, Decl>) -> void throws 
                     for (let f in d.fields) {
                         collect(f.ty, out, seen);
                     }
+                    for (let i in d.impls) {
+                        visit(i.iface, out, seen);
+                        for (let arg in i.args) {
+                            collect(arg, out, seen);
+                        }
+                        for (let pin in i.pins) {
+                            collect(pin.ty, out, seen);
+                        }
+                    }
                 },
                 EnumDecl => {},
                 let d: IfaceDecl => {
+                    for (let bound in d.bounds) {
+                        collect(bound, out, seen);
+                    }
                     for (let a in d.assoc) {
                         match (a.default) {
                             let t: Ty => collect(t, out, seen),
@@ -245,6 +322,14 @@ function visit(decl: Decl, out: Decl[], seen: map<string, Decl>) -> void throws 
             }
         },
     }
+}
+
+/// The names of every declaration `tys` refer to: what a further declaration
+/// drawn beside them must not be called.
+function decl_names_of(tys: Ty[]) -> string[] throws never {
+    decls_of_all(tys).map((decl) -> {
+        decl_name(decl)
+    })
 }
 
 /// Whether the alias refers back to itself through its body.
