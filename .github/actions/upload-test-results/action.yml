@@ -1,0 +1,66 @@
+name: "Upload test results to Trunk"
+description: >-
+  Enriches a JUnit report with source-file paths where its reporter cannot
+  emit them, then uploads it to one Flaky Tests collection. The upload gates
+  the job: with quarantining off it reports the test outcome, and with
+  quarantining on it lets Trunk clear failures it owns.
+
+inputs:
+  junit-path:
+    description: "Path to the JUnit report, relative to the repo root."
+    required: true
+  collection:
+    description: "Trunk test collection short ID. Each collection is a different grouping of tests, with its own monitors, quarantining settings, and ticketing settings."
+    required: true
+  normalize:
+    description: "Reporter fixup to apply before uploading: 'nextest', 'node-test', or 'none'."
+    required: false
+    default: "none"
+  cargo-manifest-path:
+    description: "Cargo.toml the nextest report came from. Required when normalize is 'nextest'."
+    required: false
+    default: ""
+  test-outcome:
+    description: "Outcome of the test step, so Trunk sees a failed run as failed."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Best-effort: a missing path costs attribution, not correctness.
+    - name: "Enrich the JUnit report"
+      continue-on-error: true
+      if: >-
+        inputs.normalize != 'none' && env.TRUNK_API_TOKEN != ''
+        && hashFiles(inputs.junit-path) != ''
+      shell: bash
+      run: |
+        "$(command -v python3 || command -v python)" \
+          .github/scripts/junit-normalize.py "${{ inputs.normalize }}" \
+          "${{ inputs.junit-path }}" \
+          --repo-root . \
+          --manifest-path "${{ inputs.cargo-manifest-path || 'Cargo.toml' }}"
+
+    # This sets the final exit code for the job. If there are no test files,
+    # previous-step-outcome is used. If there are test files, the pass or fail
+    # is determined by whether there are any unquarantined test failures. When
+    # quarantining is disabled, this matches the existing behavior of the
+    # tests' result.
+    - name: "Upload to Trunk"
+      if: env.TRUNK_API_TOKEN != ''
+      uses: trunk-io/analytics-uploader@v2
+      with:
+        junit-paths: ${{ inputs.junit-path }}
+        org-slug: boundaryml
+        test-collection-id: ${{ inputs.collection }}
+        previous-step-outcome: ${{ inputs.test-outcome }}
+        allow-missing-junit-files: false
+        repo-root: .
+
+    # Fork PRs have no token, so nothing above gated the result.
+    - name: "Fail on test failure when no upload gated it"
+      if: inputs.test-outcome == 'failure' && env.TRUNK_API_TOKEN == ''
+      shell: bash
+      run: |
+        echo "::error::tests failed and no Trunk token was available to gate the result"
+        exit 1

@@ -37,6 +37,9 @@ on:
         required: false
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
         required: false
+      # Absent on fork PRs; the upload action skips itself when unset.
+      TRUNK_API_TOKEN:
+        required: false
 
 # Jobs run PR-controlled code with read-only repository access.
 permissions:
@@ -65,6 +68,7 @@ env:
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_TEST_OPT_LEVEL: "1"
   RUSTUP_MAX_RETRIES: 10
+  TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
 
 jobs:
 
@@ -123,8 +127,21 @@ jobs:
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
+        id: cargo-test
+        continue-on-error: true
+        run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
+
+      - name: "Upload test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.cargo-test.outcome }}
 
       # Release leg: the profiler's value copy carries `debug_assert`-adjacent
       # logic whose behavior must not change when debug assertions are
@@ -229,9 +246,24 @@ jobs:
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
+        id: cargo-test
+        continue-on-error: true
+        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
         working-directory: baml_language
 
+      - name: "Upload test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.cargo-test.outcome }}
+
+      # Left on `cargo test` deliberately: nextest would fan these into
+      # separate processes. The trade is that this binary reports nothing.
       - name: "Run pack end-to-end tests"
         run: cargo test -p baml_cli --test pack_e2e
         working-directory: baml_language
@@ -450,10 +482,24 @@ jobs:
       # need `baml-pack-host` separately so their process-global OnceLocks
       # build and share it instead of relinking it for every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
+        id: cargo-test
+        continue-on-error: true
+        run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
+
+      # Must precede the `cargo clean` below, which takes target/nextest/ too.
+      - name: "Upload test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.cargo-test.outcome }}
 
       - name: "Free disk for CLI binary e2e tests"
         run: |
@@ -1144,14 +1190,40 @@ jobs:
         working-directory: baml_language
 
       - name: "Run sdk tests"
+        id: sdk-test
         if: matrix.sdk-label != 'csharp'
-        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        continue-on-error: true
+        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
+      - name: "Upload sdk test results to Trunk"
+        if: ${{ !cancelled() && matrix.sdk-label != 'csharp' }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/9AZXu27s
+          collection: 9AZXu27s
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.sdk-test.outcome }}
+
       - name: "Run C# sdk tests"
+        id: csharp-sdk-test
         if: matrix.sdk-label == 'csharp'
-        run: cargo nextest run -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
+        continue-on-error: true
+        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
+
+      - name: "Upload C# sdk test results to Trunk"
+        if: ${{ !cancelled() && matrix.sdk-label == 'csharp' }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/9AZXu27s
+          collection: 9AZXu27s
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.csharp-sdk-test.outcome }}
 
       # Record the content hashes the next run's backdate steps compare
       # against. Runs even on test failure: the bin/obj state saved by the
@@ -1186,9 +1258,22 @@ jobs:
       # (where the non-cacheable cdylib build ran as a silent nextest setup
       # script and stalled the Windows job).
       - name: "Run rust bridge tests"
+        id: bridge-test
         if: matrix.sdk-label == 'rust'
-        run: cargo nextest run -p baml_bridge --all-features
+        continue-on-error: true
+        run: cargo nextest run --profile ci -p baml_bridge --all-features
         working-directory: baml_language
+
+      - name: "Upload rust bridge results to Trunk"
+        if: ${{ !cancelled() && matrix.sdk-label == 'rust' }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/9AZXu27s
+          collection: 9AZXu27s
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.bridge-test.outcome }}
 
       - name: "Upload test results on failure"
         if: failure()
@@ -1549,9 +1634,25 @@ jobs:
       # x86_64 GNU job excludes both to avoid running them twice; keep its
       # `--exclude` list in sync with the package list here. The musl job separately runs `baml_cli`, including
       # `pack_e2e`, so both Linux libc variants exercise the ELF pack path.
+      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run snapshot tests"
+        id: snapshot-test
+        continue-on-error: true
+        env:
+          NEXTEST_PROFILE: ci
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli --all-features --unreferenced=reject
         working-directory: baml_language
+
+      - name: "Upload test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.snapshot-test.outcome }}
 
       - name: "Check for snapshot changes"
         run: |

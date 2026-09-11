@@ -29,6 +29,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+
 jobs:
   determine-changes:
     name: Determine documentation changes
@@ -105,7 +108,19 @@ jobs:
         run: pnpm --filter app-developer-docs lint
         working-directory: typescript2
       - name: Test
-        run: pnpm --filter app-developer-docs test
+        id: docs-tests
+        continue-on-error: true
+        run: pnpm --filter app-developer-docs test:ci
+
+      - name: Upload test results to Trunk
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: typescript2/app-developer-docs/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/aDqMrNXq
+          collection: aDqMrNXq
+          normalize: node-test
+          test-outcome: ${{ steps.docs-tests.outcome }}
         working-directory: typescript2
       - name: Type-check
         run: pnpm --filter app-developer-docs typecheck

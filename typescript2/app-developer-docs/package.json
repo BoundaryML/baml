@@ -50,9 +50,11 @@
     "postinstall": "fumadocs-mdx",
     "prebuild": "pnpm docs:grammar:build",
     "pretest": "pnpm docs:grammar:build",
+    "pretest:ci": "pnpm docs:grammar:build",
     "pretypecheck": "pnpm docs:grammar:build",
     "start": "next start",
     "test": "tsx --test tests/*.test.ts",
+    "test:ci": "tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=./junit.xml tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "type": "module",

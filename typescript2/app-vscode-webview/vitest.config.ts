@@ -5,6 +5,7 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
+const packageDir = 'typescript2/app-vscode-webview';
 
 export default defineConfig({
   define: {
@@ -22,7 +23,10 @@ export default defineConfig({
   // unresolvable from this project root ("Failed to resolve dependency"),
   // so only the app's own devDeps ride include.
   optimizeDeps: {
-    entries: ['src/**/*.browser.test.{ts,tsx}', 'vitest.setup.browser.ts'],
+    entries: [
+      resolve(projectRoot, 'src/**/*.browser.test.{ts,tsx}'),
+      resolve(projectRoot, 'vitest.setup.browser.ts'),
+    ],
     include: ['@testing-library/jest-dom/vitest', '@testing-library/react'],
   },
   plugins: [react()],
@@ -36,6 +40,19 @@ export default defineConfig({
     },
   },
   test: {
+    root: '../..',
+    reporters: process.env.CI
+      ? [
+          'default',
+          [
+            'junit',
+            {
+              addFileAttribute: true,
+              outputFile: `./${packageDir}/junit.xml`,
+            },
+          ],
+        ]
+      : ['default'],
     projects: [
       {
         extends: true,
@@ -45,11 +62,11 @@ export default defineConfig({
           },
           css: true,
           environment: 'jsdom',
-          exclude: ['src/**/*.browser.test.{ts,tsx}'],
+          exclude: [`${packageDir}/src/**/*.browser.test.{ts,tsx}`],
           globals: true,
-          include: ['src/**/*.test.{ts,tsx}'],
+          include: [`${packageDir}/src/**/*.test.{ts,tsx}`],
           name: 'unit',
-          setupFiles: ['./vitest.setup.ts'],
+          setupFiles: [resolve(projectRoot, 'vitest.setup.ts')],
         },
       },
       {
@@ -62,9 +79,9 @@ export default defineConfig({
             provider: playwright(),
           },
           globals: true,
-          include: ['src/**/*.browser.test.{ts,tsx}'],
+          include: [`${packageDir}/src/**/*.browser.test.{ts,tsx}`],
           name: 'browser',
-          setupFiles: ['./vitest.setup.browser.ts'],
+          setupFiles: [resolve(projectRoot, 'vitest.setup.browser.ts')],
         },
       },
     ],

@@ -275,3 +275,12 @@ setup = 'csharp_cdylib_unix'
 filter = 'package(=sdk_test_csharp)'
 platform = { host = 'cfg(windows)' }
 setup = 'csharp_cdylib_win'
+
+# JUnit reporting for Trunk Flaky Tests uploads. The test-groups and setup
+# scripts on profile.default above still apply: nextest resolves both against
+# the default profile for every named profile.
+#
+# No retries: retrying masks the flakes this reporting exists to find, and
+# quarantining is the intended replacement.
+[profile.ci.junit]
+path = "junit.xml"
