@@ -1,0 +1,201 @@
+{
+  "org": "boundary",
+  "variants": [
+    {
+      "variant": "node-baseline",
+      "base_tag": "node:20-alpine",
+      "app": "baml-hw-0910-node-baseline",
+      "url": "https://baml-hw-0910-node-baseline.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/node-baseline",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": null,
+      "base_digest": "sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb",
+      "machine_id": "e8204d2b305308",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-node-baseline",
+        "tag": "deployment-01M26GYAD4H7BK3MGTMTTA5P4J",
+        "digest": "sha256:529102f6da54d5b4b4d7fbd88bc4db22a859dee5015e64dcbbc82e368637c9a0"
+      },
+      "instance_id": "01M26GZWJ0YC6PY73G38FNR28R",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": null,
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:84c:ee37:e73a:2...\nx86_64\nNAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.23.4\nPRETTY_NAME=\"Alpine Linux v3.23\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\nv20.20.2\nmusl libc (x86_64)\nVersion 1.2.5\nDynamic Program Loader\nUsage: /lib/ld-musl-x86_64.so.1 [options] [--] pathname [args]\nError: ssh shell: Process exited with status 1\n"
+    },
+    {
+      "variant": "node-baml",
+      "base_tag": "node:20-alpine",
+      "app": "baml-hw-0910-node-baml",
+      "url": "https://baml-hw-0910-node-baml.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/node-baml",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": "0.18.1-nightly.20260908.a",
+      "base_digest": "sha256:afdf98210b07b586eb71fa22ba2e432e058e4cd1304d31ed60888755b8c865fb",
+      "machine_id": "080d69da292738",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-node-baml",
+        "tag": "deployment-01M26H4GXTHMC5Y8ZD3CS66SRN",
+        "digest": "sha256:590f18ca61ff9339e7f36473a99ec6282c8551d88c652925d9920162b9e75c44"
+      },
+      "instance_id": "01M26H6RT2XGY7DMFF1HN5ST44",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": "0.18.1-nightly.20260908.a",
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:84a:fda2:d016:2...\nx86_64\nNAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.23.4\nPRETTY_NAME=\"Alpine Linux v3.23\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\nv20.20.2\nbaml-bridge\nbaml-bridge-linux-x64-gnu\nbaml-bridge-linux-x64-musl\n"
+    },
+    {
+      "variant": "python-baseline",
+      "base_tag": "python:3.10-slim",
+      "app": "baml-hw-0910-python-baseline",
+      "url": "https://baml-hw-0910-python-baseline.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/python-baseline",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": null,
+      "base_digest": "sha256:8c97ebedc32fd60935cdf5992e935753e2a0f98231830028050e1e04bd3c13c2",
+      "machine_id": "2862642f434d18",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-python-baseline",
+        "tag": "deployment-01M26H4K5ETXFV18KA1F7RMV3C",
+        "digest": "sha256:7b34840b42a08b6387cc6147d9d0c05b62de1ef1fd080660f8bb2f117cc68101"
+      },
+      "instance_id": "01M26H55YYSHT58CR6TTGE8X0E",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": null,
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:84a:ee56:a9c7:2...\nx86_64\nPRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\nPython 3.10.21\nldd (Debian GLIBC 2.41-12+deb13u3) 2.41\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\nanyio==4.15.1\nclick==8.5.0\nexceptiongroup==1.3.1\nh11==0.16.0\nidna==3.19\npackaging==26.3\nstarlette==0.47.3\ntyping_extensions==4.16.0\nuvicorn==0.35.0\n"
+    },
+    {
+      "variant": "python-baml",
+      "base_tag": "python:3.10-slim",
+      "app": "baml-hw-0910-python-baml",
+      "url": "https://baml-hw-0910-python-baml.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/python-baml",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": "0.18.1-nightly.20260908.a",
+      "base_digest": "sha256:8c97ebedc32fd60935cdf5992e935753e2a0f98231830028050e1e04bd3c13c2",
+      "machine_id": "86599efe755658",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-python-baml",
+        "tag": "deployment-01M26H6VS8K8S96J9ERZ2R4JP6",
+        "digest": "sha256:fd8bbdeeed1ea75d2088476ff3043818071ea4c05b48bcd98f3e9924da8833e1"
+      },
+      "instance_id": "01M26H7EVS16NC8X2GWCYB93YR",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": "0.18.1.dev2026090800",
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:1d9:483e:f583:2...\nx86_64\nPRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\nPython 3.10.21\nldd (Debian GLIBC 2.41-12+deb13u3) 2.41\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\nannotated-types==0.8.0\nanyio==4.15.1\nbaml_bridge==0.18.1.dev2026090800\nclick==8.5.0\nexceptiongroup==1.3.1\nh11==0.16.0\nidna==3.19\npackaging==26.3\nprotobuf==7.36.1\npydantic==2.11.9\npydantic_core==2.33.2\nstarlette==0.47.3\ntyping-inspection==0.4.4\ntyping_extensions==4.16.0\nuvicorn==0.35.0\n"
+    },
+    {
+      "variant": "baml-amazonlinux",
+      "base_tag": "amazonlinux:2023",
+      "app": "baml-hw-0910-baml-al2023",
+      "url": "https://baml-hw-0910-baml-al2023.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/baml-amazonlinux",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": "0.18.1-nightly.20260908.a",
+      "base_digest": "sha256:fa946e513ed149232490479653141fa4c6cd1e71c70130525cf00a791477ed19",
+      "machine_id": "7844543c0011d8",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-baml-al2023",
+        "tag": "deployment-01M26H7SWC25YBGDMKC4JME24R",
+        "digest": "sha256:1a1810be40a0390b7945466305b2bb302b50ebd4447a7dbca470119f1cd1af25"
+      },
+      "instance_id": "01M26H91885Q6QVGAMHRK75XCN",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": null,
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:722:ffb8:e525:2...\nx86_64\nNAME=\"Amazon Linux\"\nVERSION=\"2023\"\nID=\"amzn\"\nID_LIKE=\"fedora\"\nVERSION_ID=\"2023\"\nPLATFORM_ID=\"platform:al2023\"\nPRETTY_NAME=\"Amazon Linux 2023.12.20260817\"\nANSI_COLOR=\"0;33\"\nCPE_NAME=\"cpe:2.3:o:amazon:amazon_linux:2023\"\nHOME_URL=\"https://aws.amazon.com/linux/amazon-linux-2023/\"\nDOCUMENTATION_URL=\"https://docs.aws.amazon.com/linux/\"\nSUPPORT_URL=\"https://aws.amazon.com/premiumsupport/\"\nBUG_REPORT_URL=\"https://github.com/amazonlinux/amazon-linux-2023\"\nVENDOR_NAME=\"AWS\"\nVENDOR_URL=\"https://aws.amazon.com/\"\nSUPPORT_END=\"2029-06-30\"\nldd (GNU libc) 2.34\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\n\tlinux-vdso.so.1 (0x00007f4feff78000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f4fee35d000)\n\tlibrt.so.1 => /lib64/librt.so.1 (0x00007f4fee358000)\n\tlibpthread.so.0 => /lib64/libpthread.so.0 (0x00007f4fee353000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007f4fee278000)\n\tlibdl.so.2 => /lib64/libdl.so.2 (0x00007f4fee271000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f4fee066000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f4feff7a000)\n9b91d68fcf962a094c18f4eae7b5cb7d8576b8a70ddd5df0a0a1c8a83660c741  /app/hello\n"
+    },
+    {
+      "variant": "baml-debian",
+      "base_tag": "debian:bookworm-slim",
+      "app": "baml-hw-0910-baml-debian",
+      "url": "https://baml-hw-0910-baml-debian.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/baml-debian",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": "0.18.1-nightly.20260908.a",
+      "base_digest": "sha256:5ae3c39ebd15e229dcedd5cee596b2497182493d41ff162e824ba13fc1b2b867",
+      "machine_id": "8654d96a7056e8",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-baml-debian",
+        "tag": "deployment-01M26H9GTNYMCCQW4SPEDYZWD9",
+        "digest": "sha256:930fda29a1d61e13c8748bfebbabcda5a5c0eab7cab669825f151dea26f4d301"
+      },
+      "instance_id": "01M26H9ZHB26QFARNYW2TQRG1V",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": null,
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:1fb:35b3:5840:2...\nx86_64\nPRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"12\"\nVERSION=\"12 (bookworm)\"\nVERSION_CODENAME=bookworm\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\nldd (Debian GLIBC 2.36-9+deb12u14) 2.36\nCopyright (C) 2022 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\n\tlinux-vdso.so.1 (0x00007f077f09b000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f077d48e000)\n\tlibrt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007f077d489000)\n\tlibpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f077d484000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f077d3a4000)\n\tlibdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f077d39f000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f077d1bb000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f077f09d000)\n9b91d68fcf962a094c18f4eae7b5cb7d8576b8a70ddd5df0a0a1c8a83660c741  /app/hello\n"
+    },
+    {
+      "variant": "baml-alpine",
+      "base_tag": "alpine:3.22",
+      "app": "baml-hw-0910-baml-alpine",
+      "url": "https://baml-hw-0910-baml-alpine.fly.dev/",
+      "source": "/Users/sam/work-repos/baml-demos/2026-09-10-fly-hello-world/baml-alpine",
+      "architecture": "linux/amd64",
+      "region": "iad",
+      "cpu_kind": "shared",
+      "cpus": 1,
+      "memory_mb": 1024,
+      "baml_version": "0.18.1-nightly.20260908.a",
+      "base_digest": "sha256:7c8cb692ae09657cbc4a3f3cbd0e8d5a2690ba38386aaaf252dbb060bf5eb2e6",
+      "machine_id": "82d1e69c0d1608",
+      "image_ref": {
+        "registry": "registry.fly.io",
+        "repository": "baml-hw-0910-baml-alpine",
+        "tag": "deployment-01M26HAECTXKTXCM8YA4DB8WX5",
+        "digest": "sha256:2f91fa2346eeabedbb27d6dcc402716acc1da757a9a8023e1632dde0786ced89"
+      },
+      "instance_id": "01M26HAY3QKC5N3RT242TTDCYK",
+      "restart_policy": {
+        "policy": "on-failure",
+        "max_retries": 10
+      },
+      "bridge_version": null,
+      "runtime_evidence": "Connecting to fdaa:9:11b0:a7b:200:8de4:7884:2...\nx86_64\nNAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.22.5\nPRETTY_NAME=\"Alpine Linux v3.22\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\n\t/lib/ld-musl-x86_64.so.1 (0x7fe6e5039000)\n5f281607842eb8516d880f47e1f91d8c2960ddc47910456129eb7253268f7805  /app/hello\nmusl libc (x86_64)\nVersion 1.2.5\nDynamic Program Loader\nUsage: /lib/ld-musl-x86_64.so.1 [options] [--] pathname [args]\nError: ssh shell: Process exited with status 1\n"
+    }
+  ]
+}

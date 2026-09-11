@@ -42,7 +42,7 @@ def copy_tree(source, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baml-source', type=Path,
-                        default=ROOT.parents[1] / 'baml_language',
+                        default=ROOT.parents[2] / 'baml_language',
                         help='BAML language workspace (default: this repository’s baml_language)')
     parser.add_argument('--skip-rust', action='store_true', help='Reuse existing release artifacts after a previous build')
     args = parser.parse_args()

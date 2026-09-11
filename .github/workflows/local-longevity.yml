@@ -3,12 +3,12 @@ name: Local longevity harness
 on:
   pull_request:
     paths:
-      - "tools/local-longevity/**"
+      - "tools/bench/hello-world-local/**"
       - ".github/workflows/local-longevity.yml"
   push:
     branches: [canary]
     paths:
-      - "tools/local-longevity/**"
+      - "tools/bench/hello-world-local/**"
       - ".github/workflows/local-longevity.yml"
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: tools/local-longevity
+        working-directory: tools/bench/hello-world-local
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4

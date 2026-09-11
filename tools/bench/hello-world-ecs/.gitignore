@@ -1,0 +1,13 @@
+artifacts/
+.env
+.env.*
+!.env.example
+**/.baml/
+**/baml_sdk/
+**/node_modules/
+**/dist/
+**/__pycache__/
+
+node_modules/
+cdk.out/
+cdk.context.json

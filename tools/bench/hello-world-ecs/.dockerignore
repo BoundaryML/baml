@@ -1,0 +1,12 @@
+**
+!apps/
+!apps/**
+!scripts/
+!scripts/install-baml.sh
+!load-generator/
+!load-generator/**
+**/.baml
+**/baml_sdk
+**/node_modules
+**/dist
+**/__pycache__
