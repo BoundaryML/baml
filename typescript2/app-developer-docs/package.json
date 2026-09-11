@@ -49,6 +49,7 @@
     "docs:routes:validate": "tsx --test tests/navigation.test.ts tests/generated-routes.test.ts",
     "docs:snippets:validate": "tsx scripts/validate-snippets.ts",
     "lint": "biome check . && tsx node_modules/oxlint/bin/oxlint --config .oxlintrc.json .",
+    "postbuild": "tsx scripts/validate-built-styles.ts",
     "postinstall": "fumadocs-mdx",
     "prebuild": "pnpm docs:grammar:build",
     "pretest": "pnpm docs:grammar:build",
