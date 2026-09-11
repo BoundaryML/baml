@@ -86,40 +86,10 @@ pub struct GcStats {
 }
 
 impl BexHeap {
-    /// Select the appropriate collection level based on current heap state.
-    ///
-    /// Returns `Some(level)` if GC should run, `None` if no collection is needed.
-    ///
-    /// Priority (highest first):
-    /// 1. **Major** — Gen2 size exceeds `gen2_collection_threshold`
-    /// 2. **Minor** — Gen1 size exceeds `gen1_collection_threshold`
-    /// 3. **Minor** — Allocation count since last GC >= 10,000 (Gen0 pressure)
-    /// 4. **None** — No collection needed
-    ///
-    /// Note: There is no Gen0-only collection; Gen0 allocation pressure triggers
-    /// a Minor GC (Gen0+Gen1) since that is the finest granularity available.
+    /// Automatic collections are full collections, requested by allocation spending.
+    /// This reads only atomics; moving collection still requires exclusive heap access.
     pub fn should_collect(&self) -> Option<CollectionLevel> {
-        // Check Gen2 first (highest priority — expensive to defer).
-        // SAFETY: Reading lengths at a check point; no mutation in progress.
-        let gen2_live = unsafe { self.gen2_ref().len() };
-        let gen2_threshold = self.gen2_collection_threshold();
-        if gen2_live > gen2_threshold {
-            return Some(CollectionLevel::Major);
-        }
-
-        // Check Gen1.
-        let gen1_live = unsafe { self.gen1_ref().len() };
-        let gen1_threshold = self.gen1_collection_threshold();
-        if gen1_live > gen1_threshold {
-            return Some(CollectionLevel::Minor);
-        }
-
-        // Check Gen0 allocation pressure (same threshold as legacy `should_gc`).
-        if self.allocs_since_gc() >= 10_000 {
-            return Some(CollectionLevel::Minor);
-        }
-
-        None
+        self.gc_policy.due().then_some(CollectionLevel::Major)
     }
 
     /// Run a full garbage collection with the given roots.
@@ -609,12 +579,10 @@ impl BexHeap {
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
-        // Update adaptive thresholds: all survivors are in Gen2 after a full GC.
-        self.update_thresholds_after_major(live_count);
+        self.gc_policy
+            .after_full(live_count.saturating_mul(size_of::<Object>()));
 
-        // Reset the Gen0 allocation counter — `should_collect` uses it to
-        // trigger pressure-based GC, and without the reset every subsequent
-        // check would re-trigger GC forever.
+        // Reset the actual-object counter used by GC profiling.
         self.reset_gc_counter();
 
         #[cfg(feature = "gc_profiling")]
@@ -1725,13 +1693,7 @@ impl BexHeap {
 
         self.update_handles(&forwarding);
 
-        // Update adaptive thresholds based on post-collection Gen1 and Gen2 sizes.
-        let current_gen2_live = unsafe { self.gen2_ref().len() };
-        self.update_thresholds_after_minor(new_gen1_count, current_gen2_live);
-
-        // Reset the Gen0 allocation counter. Without this, `should_collect`
-        // would re-trigger Minor GC on every check after the first 10_000
-        // allocations, because the counter would never go below the threshold.
+        // A minor collection does not satisfy the full-GC allocation budget.
         self.reset_gc_counter();
 
         #[cfg(feature = "gc_profiling")]
@@ -2109,31 +2071,6 @@ mod tests {
 
         // Intentionally pass no roots (caller forgot `collect_handle_roots`).
         let _ = unsafe { heap.collect_garbage(&[]) };
-    }
-
-    #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "allocates ~15k objects to drive GC heuristics; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
-    )]
-    fn test_gc_heuristics() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // Initially should not need GC
-        assert!(!heap.should_gc());
-
-        // Allocate many objects to trigger GC threshold
-        for i in 0..15_000 {
-            tlab.alloc_string(format!("obj{i}"));
-        }
-
-        // Should now recommend GC
-        assert!(heap.should_gc());
-
-        // Reset counter
-        heap.reset_gc_counter();
-        assert!(!heap.should_gc());
     }
 
     #[test]
@@ -3618,220 +3555,5 @@ mod tests {
             panic!("variant.enm not Enum")
         };
         assert_eq!(e.name.item_name().as_str(), "E");
-    }
-
-    // ========================================================================
-    // Phase 5: Generational Triggering Policy — should_collect() tests
-    // ========================================================================
-
-    /// Verify `should_collect` returns `None` when the heap is idle.
-    #[test]
-    fn test_should_collect_none_when_idle() {
-        let heap = BexHeap::new(vec![]);
-
-        // Fresh heap with no allocations — no collection needed.
-        assert_eq!(heap.should_collect(), None);
-    }
-
-    /// Verify `should_collect` returns `Some(Minor)` after 10,000+ allocations.
-    #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
-    )]
-    fn test_should_collect_minor_on_gen0_pressure() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // Allocate enough objects to cross the 10,000 threshold.
-        for i in 0..10_001 {
-            tlab.alloc_string(format!("obj{i}"));
-        }
-
-        assert_eq!(heap.should_collect(), Some(CollectionLevel::Minor));
-    }
-
-    /// Verify `should_collect` returns `Some(Minor)` when Gen1 exceeds its threshold.
-    #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
-    )]
-    fn test_should_collect_minor_on_gen1_pressure() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // Force a low Gen1 threshold so we can trigger it with a small number
-        // of objects.  We manually set the threshold to 5 via the public API.
-        // Since the threshold field is private we do it through
-        // `update_thresholds_after_minor(live_gen1=10, live_gen2=0)` which sets
-        // the threshold to max(10*2, 10_000) — that won't help.
-        //
-        // Instead, we run a Minor GC to move objects into Gen1, then lower the
-        // threshold by calling `update_thresholds_after_minor` with a small
-        // live_gen1 value to set the threshold to its floor (10_000), then
-        // directly verify the Gen1 path triggers once Gen1 grows beyond that.
-        //
-        // Practical approach: allocate 10_001 objects, run Minor GC to flush
-        // them into Gen1 (resetting allocs_since_gc), then verify that when
-        // Gen1 is large the threshold check fires.
-
-        // Step 1: Allocate 10_001 objects and run a Minor GC.
-        for i in 0..10_001 {
-            tlab.alloc_string(format!("root{i}"));
-        }
-        // At this point should_collect returns Minor due to alloc pressure.
-        assert_eq!(heap.should_collect(), Some(CollectionLevel::Minor));
-
-        // Run Minor GC to drain Gen0 into Gen1 (pass no roots so all are collected).
-        unsafe { heap.collect_garbage_minor(&[]) };
-        heap.reset_gc_counter();
-        tlab.invalidate();
-
-        // After GC, Gen1 has 0 live objects (none were rooted) and Gen0 is
-        // empty — alloc counter was reset. No collection should be needed yet.
-        assert_eq!(heap.should_collect(), None);
-
-        // Step 2: Manually drive Gen1 over threshold by setting the threshold
-        // to 0 via the helper. Use update_thresholds_after_minor(0, 0) which
-        // sets gen1_threshold = max(0*2, 10_000) = 10_000.
-        // We can't easily set the threshold to an arbitrary value without a
-        // test-only API, so test the threshold update logic instead — see the
-        // dedicated threshold-update test below.
-    }
-
-    /// Verify `should_collect` returns `Some(Major)` when Gen2 exceeds its threshold.
-    #[test]
-    fn test_should_collect_major_on_gen2_pressure() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // Lower the Gen2 threshold to a small value so we can trigger it.
-        // We do this by calling update_thresholds_after_major(5) which sets
-        // gen2_threshold = max(5*2, 50_000) = 50_000.  That's still large.
-        //
-        // Instead, use update_thresholds_after_major(0), which sets
-        // gen2_threshold = max(0*2, 50_000) = 50_000.  We'd need 50_001
-        // objects in Gen2.
-        //
-        // To keep the test fast, allocate objects, run Major GC to move them
-        // to Gen2, then verify that the Major trigger fires when Gen2 is large
-        // but less than the initial 50_000 threshold.  Full trigger can be
-        // verified via the threshold-update test.
-        //
-        // Practical: allocate 10_001 objects, run Major GC with roots to
-        // promote them to Gen2, reset counter.  Gen2 is now at N < 50_000.
-        // Then manually call update_thresholds_after_major(live_gen2) with
-        // live_gen2 = 0 to set threshold to floor 50_000 — still too big.
-        //
-        // Best approach for this test: observe that after a Major GC with N
-        // rooted objects, gen2 = N and threshold = max(2N, 50_000).  For
-        // threshold to fire on the next check we need gen2 > threshold, i.e.,
-        // N > max(2N, 50_000) which is impossible.
-        //
-        // So we cannot trigger the Major path through the normal allocation
-        // flow in a fast unit test without a test-only setter.  We test the
-        // threshold update logic instead.
-        //
-        // Verify that after enough Major GC cycles the threshold adapts.
-
-        // Allocate some objects and promote them to Gen2 via Major GC.
-        let obj = tlab.alloc_string("promoted".to_string());
-        let roots = vec![obj];
-        let (_, remapped, _) = unsafe { heap.collect_garbage(&roots) };
-        heap.reset_gc_counter();
-        tlab.invalidate();
-
-        // After Major GC: 1 live in Gen2, threshold = max(2, 50_000) = 50_000.
-        // Should not fire yet.
-        assert_eq!(heap.should_collect(), None);
-        let _ = remapped;
-    }
-
-    /// Verify threshold update logic: thresholds adapt after Minor and Major GC.
-    #[test]
-    fn test_threshold_updates_after_collections() {
-        let heap = BexHeap::new(vec![]);
-        let tlab = Tlab::new(Arc::clone(&heap));
-
-        // Initially both thresholds are at their floors.
-        assert_eq!(heap.gen1_collection_threshold(), 10_000);
-        assert_eq!(heap.gen2_collection_threshold(), 50_000);
-
-        // Simulate a Minor GC that left 1_000 live in Gen1 and 2_000 in Gen2.
-        heap.update_thresholds_after_minor(1_000, 2_000);
-
-        // Gen1 threshold: max(1_000 * 2, 10_000) = 10_000 (floor wins).
-        assert_eq!(heap.gen1_collection_threshold(), 10_000);
-        // Gen2 threshold: max(2_000 * 2, 50_000) = 50_000 (floor wins).
-        assert_eq!(heap.gen2_collection_threshold(), 50_000);
-
-        // Simulate a Minor GC with large live counts.
-        heap.update_thresholds_after_minor(20_000, 30_000);
-
-        // Gen1 threshold: max(20_000 * 2, 10_000) = 40_000.
-        assert_eq!(heap.gen1_collection_threshold(), 40_000);
-        // Gen2 threshold: max(30_000 * 2, 50_000) = 60_000.
-        assert_eq!(heap.gen2_collection_threshold(), 60_000);
-
-        // Simulate a Major GC that left 100_000 objects in Gen2.
-        heap.update_thresholds_after_major(100_000);
-
-        // Gen1 threshold reset to floor after Major GC.
-        assert_eq!(heap.gen1_collection_threshold(), 10_000);
-        // Gen2 threshold: max(100_000 * 2, 50_000) = 200_000.
-        assert_eq!(heap.gen2_collection_threshold(), 200_000);
-
-        // Simulate a Major GC that left 0 survivors (all dead).
-        heap.update_thresholds_after_major(0);
-
-        // Both thresholds return to their floors.
-        assert_eq!(heap.gen1_collection_threshold(), 10_000);
-        assert_eq!(heap.gen2_collection_threshold(), 50_000);
-
-        drop(tlab);
-    }
-
-    /// Verify that the `should_collect` Gen1 path triggers correctly once the
-    /// threshold has been lowered by post-collection adaptation.
-    #[test]
-    #[cfg_attr(
-        miri,
-        ignore = "allocates 10k+ objects to cross the GC threshold; runs for minutes under Miri and exercises collection policy, not unsafe memory paths"
-    )]
-    fn test_should_collect_minor_when_gen1_exceeds_adapted_threshold() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // Simulate that a previous Minor GC left only 1 object in Gen1, causing
-        // the threshold to adapt to max(1*2, 10_000) = 10_000.
-        heap.update_thresholds_after_minor(1, 0);
-
-        // Now actually move objects into Gen1 by running a Minor GC with roots.
-        // Each root object ends up in Gen1 after the Minor GC.
-        let mut roots = Vec::new();
-        for i in 0..10_001 {
-            roots.push(tlab.alloc_string(format!("obj{i}")));
-        }
-
-        // Alloc pressure alone triggers Minor first.
-        assert_eq!(heap.should_collect(), Some(CollectionLevel::Minor));
-
-        // Run Minor GC with all roots so they land in Gen1.
-        let (_, remapped, _) = unsafe { heap.collect_garbage_minor(&roots) };
-        heap.reset_gc_counter();
-        tlab.invalidate();
-
-        // After Minor GC: >10_000 objects in Gen1, new threshold = max(10_001*2, 10_000) = 20_002.
-        // Gen1 count (10_001) < threshold (20_002) — no trigger yet.
-        assert_eq!(heap.should_collect(), None);
-
-        // Manually set threshold to 5_000 (below Gen1 count of 10_001) to confirm
-        // the Gen1 pressure path fires.
-        heap.update_thresholds_after_minor(2_499, 0); // threshold = max(2_499*2, 10_000) = 10_000
-        // Gen1 is 10_001, threshold is 10_000 — Minor should fire.
-        assert_eq!(heap.should_collect(), Some(CollectionLevel::Minor));
-
-        drop(remapped);
     }
 }

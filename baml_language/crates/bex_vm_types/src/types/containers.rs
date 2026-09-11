@@ -4,6 +4,11 @@ use indexmap::IndexMap;
 
 use crate::{Value, lazy_biased_mutex::LazyBiasedMutex};
 
+pub trait AllocationAccount: Sync {
+    /// Charge allocation spending; this must never collect or acquire heap permits.
+    fn charge(&self, bytes: usize);
+}
+
 /// Heap-mutable structural container. Pairs a dynamic backing store with a
 /// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't corrupt
 /// internal container state such as a `Vec`'s `(ptr, len, cap)` triple or an
@@ -71,6 +76,8 @@ impl<T> LockedContainer<T> {
         LockedWriteGuard {
             data,
             _access: access,
+
+            accounting: None,
         }
     }
 
@@ -165,11 +172,49 @@ impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
     }
 }
 
+struct GrowthAccount<'a, T> {
+    account: &'a dyn AllocationAccount,
+    estimate: fn(&T) -> usize,
+    before: usize,
+}
+
 /// Write guard for a [`LockedContainer`]. Holds the container's
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
 pub struct LockedWriteGuard<'a, T> {
     data: &'a mut T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+
+    accounting: Option<GrowthAccount<'a, T>>,
+}
+
+impl<'a, T> LockedWriteGuard<'a, T> {
+    #[must_use]
+    pub fn with_allocation_accounting(
+        mut self,
+        account: &'a dyn AllocationAccount,
+        estimate: fn(&T) -> usize,
+    ) -> Self {
+        self.accounting = Some(GrowthAccount {
+            account,
+            estimate,
+            before: estimate(self.data),
+        });
+        self
+    }
+}
+
+impl<T> Drop for LockedWriteGuard<'_, T> {
+    fn drop(&mut self) {
+        if let Some(GrowthAccount {
+            account,
+            estimate,
+            before,
+        }) = &self.accounting
+        {
+            // Still under the container lock; charge only positive capacity growth.
+            account.charge(estimate(self.data).saturating_sub(*before));
+        }
+    }
 }
 
 impl<T> std::ops::Deref for LockedWriteGuard<'_, T> {

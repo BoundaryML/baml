@@ -1916,6 +1916,9 @@ impl BexVm {
             park_requested,
         );
 
+        let early_yield =
+            early_yield.with_gc_pressure(heap.gc_pressure(), bex_heap::gc_policy::POLL_INTERVAL);
+
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
@@ -2823,7 +2826,11 @@ impl BexVm {
     ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         match self.get_object(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
+            Object::Uint8Array(bytes) => {
+                let guard = bytes.lock_mut();
+                let guard = self.heap.account_container_growth(guard, Vec::capacity);
+                Ok(guard)
+            }
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -3613,7 +3620,13 @@ impl BexVm {
             });
         }
         match self.get_object(ptr) {
-            Object::Array(arr) => Ok(arr.lock_mut()),
+            Object::Array(arr) => {
+                let guard = arr.lock_mut();
+                let guard = self.heap.account_container_growth(guard, |v| {
+                    v.capacity().saturating_mul(size_of::<Value>())
+                });
+                Ok(guard)
+            }
             _ => unreachable!("type was just checked"),
         }
     }
@@ -3649,7 +3662,13 @@ impl BexVm {
             });
         }
         match self.get_object(index) {
-            Object::Map(map) => Ok(map.lock_mut()),
+            Object::Map(map) => {
+                let guard = map.lock_mut();
+                let guard = self.heap.account_container_growth(guard, |v| {
+                    bex_heap::gc_policy::map_capacity_bytes(v)
+                });
+                Ok(guard)
+            }
             _ => unreachable!("type was just checked"),
         }
     }
@@ -9986,7 +10005,11 @@ impl BexVm {
                     let store_result: Result<(), ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
-                                let mut guard = map.lock_mut();
+                                let guard = map.lock_mut();
+                                let guard = self.heap.account_container_growth(guard, |v| {
+                                    bex_heap::gc_policy::map_capacity_bytes(v)
+                                });
+                                let mut guard = guard;
                                 guard.insert(key, new_value);
                                 Ok(())
                             }

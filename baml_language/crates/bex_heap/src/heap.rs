@@ -30,12 +30,6 @@ use crate::{
     tlab::TlabChunk,
 };
 
-/// Minimum Gen1 live count before a Minor GC is triggered by Gen1 pressure.
-pub(crate) const GEN1_FLOOR: usize = 10_000;
-
-/// Minimum Gen2 live count before a Major GC is triggered by Gen2 pressure.
-pub(crate) const GEN2_FLOOR: usize = 50_000;
-
 /// Which generation of the heap an object lives in.
 ///
 /// The ordering `CompileTime < Gen0 < Gen1 < Gen2` is intentional: write barriers
@@ -79,12 +73,12 @@ impl Generation {
 /// For optimal memory locality, TLAB size should divide evenly into the chunk size:
 ///
 /// - `DEFAULT_CHUNK_SIZE = 4096` (storage chunks)
-/// - `DEFAULT_TLAB_SIZE = 1024` (TLAB allocation unit)
-/// - Result: 4 TLABs fit per storage chunk
+/// - `DEFAULT_TLAB_SIZE = 32` (TLAB allocation unit)
+/// - Result: 128 initial reservations fit per storage chunk
 ///
 /// This isn't strictly required (TLABs can span chunk boundaries), but aligned
 /// TLABs have better cache behavior since all objects in a TLAB are contiguous.
-pub const DEFAULT_TLAB_SIZE: usize = 1024;
+pub const DEFAULT_TLAB_SIZE: usize = crate::gc_policy::FIRST_TLAB_SLOTS;
 
 // Compile-time assertion that default TLAB size divides evenly into chunk size
 const _: () = assert!(
@@ -103,8 +97,10 @@ pub struct HeapStats {
     pub runtime_objects: usize,
     /// Number of active handles.
     pub active_handles: usize,
-    /// Number of TLAB chunks allocated.
+    /// Gen0 reservations in default-sized TLAB units (rounded up).
     pub tlab_chunks: usize,
+    /// Exact Gen0 reservations, including unused slots and debug canaries.
+    pub reserved_slots: usize,
 }
 
 /// Unified heap for the BEX virtual machine.
@@ -231,6 +227,8 @@ pub struct BexHeap {
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
+    pub(crate) max_tlab_size: usize,
+    pub(crate) gc_policy: crate::gc_policy::AllocationBudget,
 
     /// Lock for growing Gen0 (rare operation).
     ///
@@ -239,30 +237,8 @@ pub struct BexHeap {
     /// lock-free within a TLAB.
     growth_lock: Mutex<()>,
 
-    /// Allocations since last GC (for triggering heuristic).
+    /// Actual object allocations since last GC (profiling only).
     allocs_since_gc: AtomicUsize,
-
-    /// Number of live Gen1 objects after the last collection (minor or major).
-    ///
-    /// Used to compute the adaptive Gen1 collection threshold.
-    gen1_live_after_last_collection: AtomicUsize,
-
-    /// Number of live Gen2 objects after the last collection.
-    ///
-    /// Used to compute the adaptive Gen2 collection threshold.
-    gen2_live_after_last_collection: AtomicUsize,
-
-    /// Gen1 size threshold that triggers a Minor GC.
-    ///
-    /// Starts at 10,000 objects; updated after each collection to 2× the live
-    /// Gen1 count (floor 10,000).
-    gen1_collection_threshold: AtomicUsize,
-
-    /// Gen2 size threshold that triggers a Major GC.
-    ///
-    /// Starts at 50,000 objects; updated after each collection to 2× the live
-    /// Gen2 count (floor 50,000).
-    gen2_collection_threshold: AtomicUsize,
 
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
@@ -317,11 +293,7 @@ impl BexHeap {
     /// The provided objects become permanent (never garbage collected).
     /// Runtime allocations will start after these objects.
     pub fn new(compile_time_objects: Vec<Object>) -> Arc<Self> {
-        Self::with_tlab_size_and_debug(
-            compile_time_objects,
-            DEFAULT_TLAB_SIZE,
-            HeapDebuggerConfig::from_env(),
-        )
+        Self::build_unsealed_default(compile_time_objects).seal()
     }
 
     /// Create a new heap with custom TLAB size.
@@ -382,12 +354,10 @@ impl BexHeap {
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
             tlab_size,
+            max_tlab_size: tlab_size,
+            gc_policy: crate::gc_policy::AllocationBudget::new(),
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
-            gen1_live_after_last_collection: AtomicUsize::new(0),
-            gen2_live_after_last_collection: AtomicUsize::new(0),
-            gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
-            gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
@@ -395,11 +365,13 @@ impl BexHeap {
     /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
     /// config (the same defaults [`Self::new`] uses).
     pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
-        Self::build_unsealed(
+        let mut heap = Self::build_unsealed(
             compile_time_objects,
             DEFAULT_TLAB_SIZE,
             HeapDebuggerConfig::from_env(),
-        )
+        );
+        heap.max_tlab_size = crate::gc_policy::MAX_TLAB_SLOTS;
+        heap
     }
 
     /// Freeze the heap behind the shared `Arc`. After this the compile-time
@@ -938,15 +910,22 @@ impl BexHeap {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
+        self.alloc_tlab_chunk_sized(self.tlab_size)
+    }
+
+    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize) -> TlabChunk {
+        assert!(size > 0);
+        self.gc_policy
+            .charge(size.saturating_mul(size_of::<Object>()));
         self.debug_verify_tlab_canaries();
 
         let use_canary = self.debug_config().enabled;
         let canary_slots = if use_canary { 1 } else { 0 };
 
         // Atomically reserve a chunk range within Gen0
-        let step = self.tlab_size + canary_slots;
+        let step = size + canary_slots;
         let runtime_start = self.gen0_next_chunk.fetch_add(step, Ordering::SeqCst);
-        let runtime_end = runtime_start + self.tlab_size;
+        let runtime_end = runtime_start + size;
         let reserve_end = runtime_end + canary_slots;
 
         // The chunk-allocation policy mutex still serializes the
@@ -1034,15 +1013,13 @@ impl BexHeap {
             runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
+            reserved_slots: self.gen0_next_chunk.load(Ordering::Relaxed),
         }
     }
 
-    /// Check if GC should run based on allocation pressure (legacy, alloc-count only).
-    ///
-    /// Use [`BexHeap::should_collect`] for the full adaptive triggering policy.
+    /// Whether the heap has spent its allocation allowance since the last full GC.
     pub fn should_gc(&self) -> bool {
-        const GC_THRESHOLD: usize = 10_000; // Tune based on profiling
-        self.allocs_since_gc.load(Ordering::Relaxed) >= GC_THRESHOLD
+        self.gc_policy.due()
     }
 
     /// Reset the allocation counter after GC.
@@ -1056,52 +1033,9 @@ impl BexHeap {
     }
 
     /// Load the current allocation count since last GC.
+    #[cfg(feature = "gc_profiling")]
     pub(crate) fn allocs_since_gc(&self) -> usize {
         self.allocs_since_gc.load(Ordering::Relaxed)
-    }
-
-    /// Load the Gen1 collection threshold.
-    pub(crate) fn gen1_collection_threshold(&self) -> usize {
-        self.gen1_collection_threshold.load(Ordering::Relaxed)
-    }
-
-    /// Load the Gen2 collection threshold.
-    pub(crate) fn gen2_collection_threshold(&self) -> usize {
-        self.gen2_collection_threshold.load(Ordering::Relaxed)
-    }
-
-    /// Update thresholds after a Minor (Gen0+Gen1) collection.
-    ///
-    /// Sets the Gen1 threshold to `max(2 * live_gen1, GEN1_FLOOR)` and updates
-    /// Gen2 tracking if objects were promoted.
-    pub(crate) fn update_thresholds_after_minor(&self, live_gen1: usize, live_gen2: usize) {
-        self.gen1_live_after_last_collection
-            .store(live_gen1, Ordering::Relaxed);
-        self.gen1_collection_threshold
-            .store((live_gen1 * 2).max(GEN1_FLOOR), Ordering::Relaxed);
-
-        // Also update Gen2 tracking (objects may have been promoted to Gen2).
-        self.gen2_live_after_last_collection
-            .store(live_gen2, Ordering::Relaxed);
-        self.gen2_collection_threshold
-            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
-    }
-
-    /// Update thresholds after a Major (full) collection.
-    ///
-    /// All survivors are in Gen2. Resets Gen1 tracking to zero (Gen1 is empty
-    /// after a full GC) and sets Gen2 threshold to `max(2 * live_gen2, GEN2_FLOOR)`.
-    pub(crate) fn update_thresholds_after_major(&self, live_gen2: usize) {
-        // Gen1 is empty after a full GC.
-        self.gen1_live_after_last_collection
-            .store(0, Ordering::Relaxed);
-        self.gen1_collection_threshold
-            .store(GEN1_FLOOR, Ordering::Relaxed);
-
-        self.gen2_live_after_last_collection
-            .store(live_gen2, Ordering::Relaxed);
-        self.gen2_collection_threshold
-            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
     }
 
     /// Reset the Gen0 TLAB allocation pointer (called by GC after collection).
