@@ -15,7 +15,6 @@ defaults:
     shell: bash
 
 env:
-  TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
 jobs:
   typecheck:
@@ -134,6 +133,7 @@ jobs:
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
           test-outcome: ${{ steps.unit-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
   browser-tests:
     name: "Browser Tests (Playwright)"
@@ -197,3 +197,4 @@ jobs:
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
           test-outcome: ${{ steps.browser-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
