@@ -13,8 +13,12 @@ on:
     inputs:
       action:
         type: choice
-        options: [notify, fill-schedule]
+        options: [notify, fill-schedule, test-notify]
         default: fill-schedule
+      sandbox_parent_ts:
+        description: Existing #sam-sandbox thread for test-notify (no new parent)
+        type: string
+        default: '1789163124.808429'
 
 env:
   UV_FROZEN: '1'
@@ -86,6 +90,25 @@ jobs:
           # created_at stays fixed when rerunning on Friday or later.
           started_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
           ./tools/bctl oncall notify --post-to-slack --run-started-at "$started_at"
+
+  test-notify:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'test-notify'
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    permissions:
+      contents: write
+    concurrency:
+      group: oncall-sandbox-notifications
+      cancel-in-progress: false
+    env:
+      SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SANDBOX_PARENT_TS: ${{ inputs.sandbox_parent_ts }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Schedule accelerated sandbox replies through Python
+        run: ./tools/bctl oncall test-notify --parent-ts "$SANDBOX_PARENT_TS" --run-id "$GITHUB_RUN_ID"
 
   fill-schedule:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'fill-schedule')

@@ -12,9 +12,12 @@ BRANCH = "oncall/notification-state"
 
 
 class GitHubState:
-    def __init__(self, repository: str, friday: datetime.date):
+    def __init__(self, repository: str, friday: datetime.date, *, sandbox_run_id: str | None = None):
         self.root = f"repos/{repository}"
-        self.path = f"{self.root}/contents/notifications/{friday.isoformat()}.json"
+        if sandbox_run_id is not None and not sandbox_run_id.isdecimal():
+            raise RuntimeError("sandbox run ID must be a GitHub Actions numeric run ID")
+        key = f"sandbox/{sandbox_run_id}" if sandbox_run_id is not None else friday.isoformat()
+        self.path = f"{self.root}/contents/notifications/{key}.json"
         self.sha = None
 
     def _api(self, path, *, method="GET", body=None, missing_ok=False):

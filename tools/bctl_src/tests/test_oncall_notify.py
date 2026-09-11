@@ -274,3 +274,49 @@ def test_early_dispatch_does_not_pin_assignee_before_shift_swap(monkeypatch, sch
     slack.users_lookupByEmail.assert_called_once_with(email="sam@boundaryml.com")
     assert slack.chat_postMessage.call_count == 1
     assert slack.chat_scheduleMessage.call_count == 2
+
+
+def test_sandbox_cli_reuses_thread_and_isolated_journal(monkeypatch, schedule, slack):
+    from oncall.parser import emit
+
+    monkeypatch.setattr("oncall.cli._parse_or_die", lambda _: (emit(schedule), schedule))
+    monkeypatch.setenv("GITHUB_REPOSITORY", "BoundaryML/baml")
+
+    class FrozenDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return THURSDAY.astimezone(tz)
+
+    monkeypatch.setattr(dt, "datetime", FrozenDatetime)
+    journal = Mock()
+    journal.load.return_value = None
+    factory = Mock(return_value=journal)
+    monkeypatch.setattr("oncall.notification_state.GitHubState", factory)
+    monkeypatch.setattr("oncall.slack.client", Mock(return_value=slack))
+    runner = CliRunner()
+    result = runner.invoke(app, ["test-notify", "--parent-ts", "1789163124.808429", "--run-id", "12345"])
+    assert result.exit_code == 0, result.output
+    factory.assert_called_once_with("BoundaryML/baml", FRIDAY, sandbox_run_id="12345")
+    slack.chat_postMessage.assert_not_called()
+    for call, delay in zip(slack.chat_scheduleMessage.call_args_list, [90, 180]):
+        assert call.kwargs["channel"] == "C07UTQN7N1X"
+        assert call.kwargs["thread_ts"] == "1789163124.808429"
+        assert call.kwargs["post_at"] == int(THURSDAY.timestamp()) + delay
+        assert "<@UINCOMING>" in call.kwargs["text"]
+        assert "Python tooling test" in call.kwargs["text"]
+    journal.load.return_value = copy.deepcopy(journal.save.call_args.args[0])
+    retry = runner.invoke(app, ["test-notify", "--parent-ts", "1789163124.808429", "--run-id", "12345"])
+    assert retry.exit_code == 0, retry.output
+    assert slack.chat_scheduleMessage.call_count == 2
+    changed_thread = runner.invoke(app, ["test-notify", "--parent-ts", "999.123456", "--run-id", "12345"])
+    assert changed_thread.exit_code != 0
+    assert slack.chat_scheduleMessage.call_count == 2
+
+
+def test_sandbox_state_namespace_cannot_overwrite_production():
+    production = GitHubState("BoundaryML/baml", FRIDAY)
+    sandbox = GitHubState("BoundaryML/baml", FRIDAY, sandbox_run_id="12345")
+    assert production.path.endswith("notifications/2026-09-18.json")
+    assert sandbox.path.endswith("notifications/sandbox/12345.json")
+    with pytest.raises(RuntimeError, match="numeric run ID"):
+        GitHubState("BoundaryML/baml", FRIDAY, sandbox_run_id="../2026-09-18")

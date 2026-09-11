@@ -61,3 +61,9 @@ A `pending` operation indicates an uncertain send (including a killed runner or 
 3. Rerun the original Thursday workflow run. It resumes ready operations whose deadlines are still future, without reposting completed ones. A new Friday dispatch is rejected because it has no Thursday date anchor. If a deadline has passed, handle the missed reminder manually in the original thread and reconcile the journal before rerunning.
 
 For a network-free preview from any day, supply a Thursday timestamp, for example `./tools/bctl oncall notify --run-started-at 2026-09-18T00:00:00Z` (Thursday 5pm PDT). Run the focused suite with `uv run --directory tools --frozen pytest`.
+
+# Live sandbox test through Python
+
+Manually dispatch the existing oncall workflow with action `test-notify` and `sandbox_parent_ts` set to an existing thread in `#sam-sandbox` (`C07UTQN7N1X`). This runs `bctl oncall test-notify` using the existing bot secret in GitHub Actions. It schedules two labeled test replies through the same Python delivery function at approximately 90 and 180 seconds after startup, using the next Friday assignee's real Slack mention. It reuses the supplied parent and creates no new parent post. Production rotation dates and notification journals are unaffected.
+
+Tests are pinned to the sandbox channel and have separate `notifications/sandbox/<run-id>.json` journals. Rerun the same workflow run to reuse its journal and avoid duplicates; a new dispatch intentionally creates a new pair of test messages. The same pending-operation recovery rules apply. Check the actual sandbox thread after the accelerated delivery times to verify Slack delivered both messages as replies; scheduled-message IDs in the workflow log confirm queuing only. Sandbox-test failures are visible in their workflow job and do not trigger the production-channel failure alert.

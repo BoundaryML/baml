@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -149,6 +150,43 @@ def notify(
     except (RuntimeError, ValueError) as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
+
+
+@app.command(name="test-notify")
+def test_notify(
+    parent_ts: str = typer.Option(..., help="Existing #sam-sandbox parent thread timestamp"),
+    run_id: str = typer.Option(..., help="GitHub Actions run ID; reruns reuse the same test journal"),
+) -> None:
+    """Exercise Python's actual Slack scheduling path in an existing sandbox thread."""
+    from oncall.notification_state import GitHubState
+    from oncall.slack import client as slack_client
+
+    # This explicit test entry point can never send to the production channel.
+    channel = "C07UTQN7N1X"
+    if not re.fullmatch(r"[0-9]+\.[0-9]+", parent_ts):
+        raise typer.BadParameter("parent timestamp must be an exact Slack timestamp string")
+    repository = os.environ.get("GITHUB_REPOSITORY")
+    if not repository:
+        raise RuntimeError("GITHUB_REPOSITORY must be set for durable notification state")
+    now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+    friday = now.date() + datetime.timedelta(days=(4 - now.weekday()) % 7 or 7)
+    journal = GitHubState(repository, friday, sandbox_run_id=run_id)
+    state = journal.load()
+    wc = slack_client(retry_handlers=[])
+    if state is None:
+        _, sched = _parse_or_die(_schedule_path())
+        state = compose_handoff(sched, friday, wc)
+        state["channel"] = channel
+        state["parent"].update(status="sent", channel=channel, ts=parent_ts)
+        for reminder, delay, label in zip(state["reminders"], [90, 180], ["Friday 9am", "Friday 3pm"]):
+            reminder["post_at"] = int(now.timestamp()) + delay
+            reminder["text"] = f"[Python tooling test: {label} Pacific reminder; accelerated delivery]\n{reminder['text']}"
+        journal.save(state)
+    if state["channel"] != channel or state["parent"].get("channel") != channel or state["parent"].get("ts") != parent_ts:
+        raise RuntimeError("sandbox journal does not match the requested thread")
+    deliver_handoff(wc, state, journal.save)
+    for reminder in state["reminders"]:
+        typer.echo(f"Queued {reminder['scheduled_message_id']} at {reminder['post_at']} in {channel} thread {parent_ts}")
 
 
 @app.command(name="notify-failure")
