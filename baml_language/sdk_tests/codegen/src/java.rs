@@ -20,7 +20,7 @@ use std::{fs, path::Path};
 use sdk_test_harness_runner::fixtures;
 use sdkgen_java::NamingConvention;
 
-use crate::{CodegenCtx, copy_customizable, load_fixture, write_codegen_output};
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 /// Per-fixture build.gradle.kts — no placeholder; written verbatim.
 /// Configures `generated/` itself as the main source root (restricted
@@ -64,25 +64,6 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let generated = fixture_root.join("generated");
     let baml_sdk = generated.join("baml_sdk");
 
-    if generated.exists() {
-        for entry in fs::read_dir(&generated).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            // Keep Gradle's incremental state between builds; only the
-            // staged inputs are regenerated.
-            if matches!(
-                path.file_name().and_then(|name| name.to_str()),
-                Some(".gradle") | Some("build") | Some(".kotlin")
-            ) {
-                continue;
-            }
-            if path.is_dir() {
-                fs::remove_dir_all(&path).unwrap();
-            } else {
-                fs::remove_file(&path).unwrap();
-            }
-        }
-    }
     fs::create_dir_all(&baml_sdk).unwrap();
 
     // Run codegen directly — the emitter has landed, so a panic here is a
@@ -97,26 +78,16 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     );
     write_codegen_output(&baml_sdk, output, fixture);
 
-    let custom = fixture_root.join("customizable");
-    if custom.exists() {
-        // Copy (not symlink) into `generated/tests/` — the Gradle test
-        // source root. Copying keeps javac's view of the sources inside
-        // `generated/`, mirroring typescript_node's rationale. Recursive,
-        // because Java sources live in package directories (e.g.
-        // `roundtrip_tests/`, mirroring python_pydantic2's layout).
-        let tests_dir = generated.join("tests");
-        fs::create_dir_all(&tests_dir).unwrap();
-        copy_customizable(&custom, &tests_dir);
-    }
-
     let project_name = format!("sdk-tests-java-{}", fixture.replace('_', "-"));
-    let settings_gradle = SETTINGS_GRADLE_KTS_TEMPLATE.replace("__PROJECT_NAME__", &project_name);
-    for (name, contents) in [
-        ("settings.gradle.kts", settings_gradle.as_str()),
-        ("build.gradle.kts", BUILD_GRADLE_KTS),
-    ] {
-        let path = generated.join(name);
-        fs::write(&path, contents)
-            .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
-    }
+    let mut overlay = Overlay::new(&fixture_root);
+    // Copied (not symlinked) into the Gradle test source root: copying keeps
+    // javac's view of the sources inside `generated/`. Recursive, because Java
+    // sources live in package directories.
+    overlay.copy_tree(&fixture_root.join("customizable"), "tests");
+    overlay.file(
+        "settings.gradle.kts",
+        SETTINGS_GRADLE_KTS_TEMPLATE.replace("__PROJECT_NAME__", &project_name),
+    );
+    overlay.file("build.gradle.kts", BUILD_GRADLE_KTS);
+    overlay.install();
 }

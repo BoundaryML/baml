@@ -15,7 +15,7 @@ use std::{fs, path::Path};
 use sdk_test_harness_runner::fixtures;
 use sdkgen_swift::NamingConvention;
 
-use crate::{CodegenCtx, copy_customizable, load_fixture, write_codegen_output};
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 /// Per-fixture Package.swift. `__PACKAGE_NAME__` is substituted per
 /// fixture. Lives at `src/templates/Package.swift` so editors give it
@@ -47,26 +47,8 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let fixture_root = crate_dir.join(fixture);
     let generated = fixture_root.join("generated");
     let sources_baml = generated.join("Sources").join("Baml");
-    let tests_dir = generated.join("Tests").join("BamlTests");
 
-    // Wipe generated/ except SwiftPM's .build/ — preserving it keeps
-    // fixture rebuilds incremental (the same reason typescript_node
-    // preserves node_modules/).
-    if generated.exists() {
-        for entry in fs::read_dir(&generated).unwrap() {
-            let path = entry.unwrap().path();
-            if path.file_name().and_then(|name| name.to_str()) == Some(".build") {
-                continue;
-            }
-            if path.is_dir() {
-                fs::remove_dir_all(&path).unwrap();
-            } else {
-                fs::remove_file(&path).unwrap();
-            }
-        }
-    }
     fs::create_dir_all(&sources_baml).unwrap();
-    fs::create_dir_all(&tests_dir).unwrap();
 
     let output = sdkgen_swift::to_source_code_with_bytecode(
         &loaded.pool,
@@ -75,47 +57,26 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     );
     write_codegen_output(&sources_baml, output, fixture);
 
-    // Copy (not symlink) the test overlay: SwiftPM target membership is
-    // path-based and copies keep everything inside generated/.
-    let custom = fixture_root.join("customizable");
-    if custom.exists() {
-        copy_customizable(&custom, &tests_dir);
-    }
-
-    // A testTarget with zero sources fails `swift build --build-tests`,
-    // so fixtures without an overlay get a placeholder case.
-    if !has_swift_files(&tests_dir) {
-        let placeholder = "import XCTest\n\n\
+    let package_name = format!("sdk-tests-swift-{}", fixture.replace('_', "-"));
+    let mut overlay = Overlay::new(&fixture_root);
+    // Copied (not symlinked): SwiftPM target membership is path-based, so the
+    // sources have to live inside the package.
+    overlay.copy_tree(&fixture_root.join("customizable"), "Tests/BamlTests");
+    // A testTarget with zero sources fails `swift build --build-tests`, so a
+    // fixture without an overlay gets a placeholder case.
+    if !overlay.any_path_ends_with(".swift") {
+        overlay.file(
+            "Tests/BamlTests/Placeholder.swift",
+            "import XCTest\n\n\
              final class PlaceholderTests: XCTestCase {\n    \
              /// Keeps the BamlTests target non-empty until this fixture's\n    \
              /// customizable/ overlay lands.\n    \
-             func testScaffoldCompiles() {}\n}\n";
-        write(&tests_dir.join("Placeholder.swift"), placeholder);
+             func testScaffoldCompiles() {}\n}\n",
+        );
     }
-
-    let package_name = format!("sdk-tests-swift-{}", fixture.replace('_', "-"));
-    let package_swift = PACKAGE_SWIFT_TEMPLATE.replace("__PACKAGE_NAME__", &package_name);
-    write(&generated.join("Package.swift"), &package_swift);
-}
-
-fn write(path: &Path, contents: &str) {
-    fs::write(path, contents)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
-}
-
-fn has_swift_files(dir: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return false;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            if has_swift_files(&path) {
-                return true;
-            }
-        } else if path.extension().and_then(|ext| ext.to_str()) == Some("swift") {
-            return true;
-        }
-    }
-    false
+    overlay.file(
+        "Package.swift",
+        PACKAGE_SWIFT_TEMPLATE.replace("__PACKAGE_NAME__", &package_name),
+    );
+    overlay.install();
 }

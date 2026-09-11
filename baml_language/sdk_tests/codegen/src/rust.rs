@@ -33,7 +33,9 @@ use std::{env, fs, path::Path};
 use sdk_test_harness_runner::{fixtures, rust::GENERATED_EDITION};
 use sdkgen_rust::{NamingConvention, RustGenOptions};
 
-use crate::{CodegenCtx, load_fixture, symlink_customizable, write_codegen_output};
+use crate::{
+    CodegenCtx, load_fixture, symlink_customizable, write_codegen_output, write_if_changed,
+};
 
 /// Dependency spec wiring each fixture crate to the local `baml_bridge`
 /// sources. 5 ancestors up from `crates/rust/<F>/generated/Cargo.toml`:
@@ -192,18 +194,16 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let fixture_root = crate_dir.join(fixture);
     let generated = fixture_root.join("generated");
 
-    // The shared writer owns generated SDK files and removes stale ones.
-    // Clear only harness overlays; preserve Cargo.lock and the writer's
-    // ownership manifest across rebuilds.
-    if generated.exists() {
-        for overlay in ["customizable", "tests"] {
-            let path = generated.join(overlay);
-            if path.is_dir() {
-                fs::remove_dir_all(path).unwrap();
-            } else if path.exists() {
-                fs::remove_file(path).unwrap();
-            }
-        }
+    // Rust is the one target whose overlay lands *inside* the output writer's
+    // own tree, and the writer refuses to run over symlinks it does not own.
+    // So the links are cleared here and re-staged below, rather than being
+    // tracked by an `Overlay` like every other generator. That costs nothing:
+    // re-creating a symlink leaves the file it points at — and therefore what
+    // cargo fingerprints — untouched. `Cargo.lock`, `tests/` and the writer's
+    // ownership manifest all survive.
+    let customizable_link_root = generated.join("customizable");
+    if customizable_link_root.exists() {
+        fs::remove_dir_all(&customizable_link_root).unwrap();
     }
     let options = RustGenOptions {
         naming_convention: NamingConvention::PreserveCase,
@@ -243,15 +243,17 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     // its own integration-test target and compile gated-off ports.
     let custom = fixture_root.join("customizable");
     if custom.exists() {
-        let dst = generated.join("customizable");
-        fs::create_dir_all(&dst).unwrap();
-        symlink_customizable(&custom, &dst);
+        fs::create_dir_all(&customizable_link_root).unwrap();
+        symlink_customizable(&custom, &customizable_link_root);
     }
 
     let tests = generated.join("tests");
     fs::create_dir_all(&tests)
-        .and_then(|()| fs::write(tests.join("main.rs"), render_tests_main(fixture)))
-        .unwrap_or_else(|error| panic!("failed to write {}/main.rs: {error}", tests.display()));
+        .unwrap_or_else(|error| panic!("failed to create {}: {error}", tests.display()));
+    write_if_changed(
+        &tests.join("main.rs"),
+        render_tests_main(fixture).as_bytes(),
+    );
 }
 
 /// Render `tests/main.rs` — the single integration-test entry point and

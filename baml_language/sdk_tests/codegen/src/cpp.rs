@@ -13,7 +13,7 @@ use std::{fs, path::Path};
 
 use sdk_test_harness_runner::fixtures;
 
-use crate::{CodegenCtx, load_fixture, symlink_customizable, write_codegen_output};
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 /// Per-fixture compile-and-run driver, written to `<fixture>/generated/test.sh`.
 const TEST_SH_TEMPLATE: &str = include_str!("templates/cpp_test.sh");
@@ -43,10 +43,6 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let fixture_root = crate_dir.join(fixture);
     let generated = fixture_root.join("generated");
     let baml_sdk = generated.join("baml_sdk");
-
-    if generated.exists() {
-        fs::remove_dir_all(&generated).unwrap();
-    }
     fs::create_dir_all(&baml_sdk).unwrap();
 
     let pool = loaded.pool;
@@ -59,12 +55,10 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let output = sdkgen_cpp::to_source_code_with_bytecode(&pool, &user_baml_paths, &baml_bytecode);
     write_codegen_output(&baml_sdk, output, fixture);
 
-    let custom = fixture_root.join("customizable");
-    if custom.exists() {
-        symlink_customizable(&custom, &generated);
-    }
-
-    let test_sh = generated.join("test.sh");
-    fs::write(&test_sh, TEST_SH_TEMPLATE)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", test_sh.display()));
+    let mut overlay = Overlay::new(&fixture_root);
+    // Test sources live at `customizable/tests/*.cc`, mirrored into the
+    // generated tree so the CMake build sees one directory.
+    overlay.link_tree(&fixture_root.join("customizable"), "");
+    overlay.file("test.sh", TEST_SH_TEMPLATE);
+    overlay.install();
 }

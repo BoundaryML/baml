@@ -1,6 +1,9 @@
-# Generated content inside each sdk-test crate. The `generated/` tree
-# is build.rs output — never committed; regenerated on every build.
+# Generated content inside each sdk-test crate. The `generated/` tree is
+# `sdk_test_codegen` output — never committed; re-staged by setup.sh.
 **/generated/
+# Beside it, the record of what the codegen staged into that tree, so the next
+# run removes exactly what the last one left. Build state, not source.
+**/.baml-overlay
 **/.generated.baml-staging/
 **/.baml_sdk.baml-staging/
 **/.generated.baml-backup/

@@ -11,19 +11,17 @@
 //! Generator-specific entry points live in submodules like [`cpp`],
 //! [`python_pydantic2`] and [`typescript`].
 //!
-//! Two things drive those entry points, and which one a generator uses is
-//! visible in whether `crates/<generator>/` still has a `build.rs`:
-//!
-//! - the `sdk_test_codegen` binary (`src/main.rs`), run from a
-//!   generator crate's `setup.sh` before its tests; and
-//! - that `build.rs`, which additionally emits a per-fixture `#[test]`
-//!   scaffold to `OUT_DIR` and records soft failures through
-//!   [`BuildDiagnostics`].
-//!
-//! The build-script path is being retired: it makes every `cargo check` build
-//! this crate's whole compiler and sdkgen closure. Migrated generators declare
-//! their tests in source instead, via
+//! Every entry point is driven by the `sdk_test_codegen` binary
+//! (`src/main.rs`), which a generator crate's `setup.sh` runs before its tests.
+//! No generator has a `build.rs`: that path made every `cargo check` build this
+//! crate's whole compiler and sdkgen closure. Generator crates declare their
+//! tests in source instead, via
 //! `sdk_test_harness_runner::<generator>::test_suite!`.
+//!
+//! Two owners cover everything written into a fixture's `generated/` tree, so
+//! nothing has to be wiped to stay correct: [`write_codegen_output`] owns the
+//! emitted SDK subtree, and [`Overlay`] owns the ported-test overlay plus the
+//! per-fixture scaffolding. Both skip files whose bytes already match.
 //!
 //! Layout the helpers assume:
 //!
@@ -35,6 +33,7 @@
 //!     └── generated/                              # codegen output, gitignored
 //! ```
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -305,4 +304,252 @@ pub fn symlink_customizable(customizable_dir: &Path, dst_dir: &Path) {
             });
         }
     }
+}
+
+/// Everything a generator installs into a fixture's `generated/` tree that the
+/// codegen writer does not own: the `customizable/` overlay of ported tests,
+/// and the per-fixture scaffolding (`package.json`, `go.mod`, `Package.swift`,
+/// and friends).
+///
+/// Records what it staged in `<fixture>/.baml-overlay`, so the next run removes
+/// exactly what the previous one left and nothing else. Without such a record a
+/// generator has to wipe the tree to stay correct, which also destroys the
+/// output writer's byte-identical skip and hands every downstream toolchain a
+/// fresh set of mtimes.
+///
+/// The manifest lives beside `generated/` rather than inside it so it cannot
+/// collide with the output writer, which owns its own subtree and treats
+/// anything unfamiliar there as a file to preserve.
+pub struct Overlay {
+    /// The tree entries are staged into, i.e. `<fixture>/generated`.
+    root: PathBuf,
+    /// Where the record of the previous run lives.
+    manifest: PathBuf,
+    entries: BTreeMap<String, Entry>,
+}
+
+/// How one overlay entry is materialized.
+enum Entry {
+    /// A symlink back to `source`, so editing the original is picked up without
+    /// re-staging. Falls back to a copy where symlinks are unavailable
+    /// (Windows without Developer Mode).
+    Link(PathBuf),
+    /// Literal bytes — scaffolding, or a copied file whose content the
+    /// generator rewrote.
+    Content(Vec<u8>),
+}
+
+const OVERLAY_MANIFEST: &str = ".baml-overlay";
+
+impl Overlay {
+    /// Stage into `<fixture_root>/generated`, recording in
+    /// `<fixture_root>/.baml-overlay`.
+    pub fn new(fixture_root: &Path) -> Self {
+        Self {
+            root: fixture_root.join("generated"),
+            manifest: fixture_root.join(OVERLAY_MANIFEST),
+            entries: BTreeMap::new(),
+        }
+    }
+
+    /// Stage `contents` at `relative`, a path below the generated tree.
+    pub fn file(&mut self, relative: impl AsRef<Path>, contents: impl Into<Vec<u8>>) {
+        self.insert(relative.as_ref(), Entry::Content(contents.into()));
+    }
+
+    /// Stage every file under `source` at the same shape below `prefix`, as
+    /// symlinks. Missing `source` stages nothing.
+    pub fn link_tree(&mut self, source: &Path, prefix: impl AsRef<Path>) {
+        for (relative, path) in tree_files(source) {
+            self.insert(&prefix.as_ref().join(relative), Entry::Link(path));
+        }
+    }
+
+    /// Stage every file under `source` at the same shape below `prefix`, by
+    /// value. Used where a symlink would break the language's module
+    /// resolution or source-root rules.
+    pub fn copy_tree(&mut self, source: &Path, prefix: impl AsRef<Path>) {
+        for (relative, path) in tree_files(source) {
+            let contents = fs::read(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            self.insert(&prefix.as_ref().join(relative), Entry::Content(contents));
+        }
+    }
+
+    /// Rewrite staged content in place. Entries `rewrite` returns `None` for
+    /// are left alone; links are never visited, since their content belongs to
+    /// the file they point at.
+    pub fn rewrite_content(&mut self, rewrite: impl Fn(&str, &[u8]) -> Option<Vec<u8>>) {
+        for (relative, entry) in &mut self.entries {
+            if let Entry::Content(contents) = entry {
+                if let Some(rewritten) = rewrite(relative, contents) {
+                    *contents = rewritten;
+                }
+            }
+        }
+    }
+
+    /// Whether any staged path ends with `suffix`.
+    pub fn any_path_ends_with(&self, suffix: &str) -> bool {
+        self.entries.keys().any(|path| path.ends_with(suffix))
+    }
+
+    /// Remove what the previous run staged and this one does not, then
+    /// materialize every entry that differs from what is already on disk.
+    pub fn install(self) {
+        for stale in self.stale() {
+            let path = self.root.join(&stale);
+            if fs::symlink_metadata(&path).is_ok() {
+                fs::remove_file(&path).unwrap_or_else(|error| {
+                    panic!("failed to remove stale overlay {}: {error}", path.display())
+                });
+            }
+            prune_empty_parents(&self.root, &path);
+        }
+
+        for (relative, entry) in &self.entries {
+            let path = self.root.join(relative);
+            if entry.matches(&path) {
+                continue;
+            }
+            let parent = path
+                .parent()
+                .unwrap_or_else(|| unreachable!("an overlay path always has a parent"));
+            fs::create_dir_all(parent)
+                .unwrap_or_else(|error| panic!("failed to create {}: {error}", parent.display()));
+            entry.materialize(&path);
+        }
+
+        let listing = self
+            .entries
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join("\n");
+        write_if_changed(&self.manifest, format!("{listing}\n").as_bytes());
+    }
+
+    /// Paths the previous run staged that this one no longer does.
+    fn stale(&self) -> Vec<String> {
+        let Ok(previous) = fs::read_to_string(&self.manifest) else {
+            return Vec::new();
+        };
+        previous
+            .lines()
+            .filter(|line| !line.is_empty())
+            .filter(|line| !self.entries.contains_key(*line))
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn insert(&mut self, relative: &Path, entry: Entry) {
+        let key = relative
+            .to_str()
+            .unwrap_or_else(|| panic!("overlay path is not UTF-8: {}", relative.display()))
+            .replace('\\', "/");
+        let clash = self.entries.insert(key.clone(), entry);
+        assert!(clash.is_none(), "two overlay entries claim `{key}`");
+    }
+}
+
+impl Entry {
+    /// Whether `path` already holds exactly this entry.
+    fn matches(&self, path: &Path) -> bool {
+        match self {
+            // A copy fallback is as correct as a link, so accept either shape
+            // as long as the bytes agree.
+            Self::Link(source) => {
+                fs::read_link(path).is_ok_and(|target| target == *source)
+                    || matches_content_of(path, source)
+            }
+            Self::Content(contents) => {
+                fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+                    && fs::read(path).is_ok_and(|found| found == *contents)
+            }
+        }
+    }
+
+    fn materialize(&self, path: &Path) {
+        // Whatever is there is the wrong shape or the wrong bytes; a symlink in
+        // particular cannot be overwritten in place.
+        if fs::symlink_metadata(path).is_ok() {
+            let _ = fs::remove_file(path);
+        }
+        match self {
+            Self::Link(source) => {
+                #[cfg(unix)]
+                let linked = std::os::unix::fs::symlink(source, path);
+                #[cfg(windows)]
+                let linked = std::os::windows::fs::symlink_file(source, path);
+                if linked.is_err() {
+                    fs::copy(source, path).unwrap_or_else(|error| {
+                        panic!(
+                            "failed to link or copy {} to {}: {error}",
+                            source.display(),
+                            path.display()
+                        )
+                    });
+                }
+            }
+            Self::Content(contents) => fs::write(path, contents)
+                .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display())),
+        }
+    }
+}
+
+/// Whether `path` is a regular file holding the same bytes as `source`.
+fn matches_content_of(path: &Path, source: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+        && match (fs::read(path), fs::read(source)) {
+            (Ok(found), Ok(expected)) => found == expected,
+            _ => false,
+        }
+}
+
+/// Every file below `dir`, paired with its path relative to `dir`. An absent
+/// `dir` yields nothing.
+fn tree_files(dir: &Path) -> Vec<(PathBuf, PathBuf)> {
+    let mut found = Vec::new();
+    collect_tree_files(dir, Path::new(""), &mut found);
+    found.sort();
+    found
+}
+
+fn collect_tree_files(dir: &Path, prefix: &Path, out: &mut Vec<(PathBuf, PathBuf)>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let relative = prefix.join(entry.file_name());
+        if path.is_dir() {
+            collect_tree_files(&path, &relative, out);
+        } else if path.is_file() {
+            out.push((relative, path));
+        }
+    }
+}
+
+/// Remove directories left empty by a stale removal, stopping at `root`.
+fn prune_empty_parents(root: &Path, removed: &Path) {
+    let mut parent = removed.parent();
+    while let Some(dir) = parent {
+        if dir == root || !dir.starts_with(root) {
+            return;
+        }
+        if fs::remove_dir(dir).is_err() {
+            return;
+        }
+        parent = dir.parent();
+    }
+}
+
+/// Write `contents` only when they differ from what is already there, so an
+/// unchanged regeneration leaves the file's mtime alone.
+pub fn write_if_changed(path: &Path, contents: &[u8]) {
+    if fs::read(path).is_ok_and(|found| found == contents) {
+        return;
+    }
+    fs::write(path, contents)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
 }

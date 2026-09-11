@@ -9,10 +9,8 @@ use std::{fs, path::Path};
 use sdk_test_harness_runner::fixtures;
 use sdkgen_typescript_shared::{sdkgen_typescript::NamingConvention, sdkgen_typescript_web};
 
-use super::typescript::{
-    TEST_RUNTIME, clean_generated, copy_customizable, rewrite_test_bridge_imports, write_all,
-};
-use crate::{CodegenCtx, load_fixture, write_codegen_output};
+use super::typescript::TEST_RUNTIME;
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_web.json");
 const TSCONFIG_WEB_JSON: &str = include_str!("templates/tsconfig_web.json");
@@ -58,8 +56,8 @@ pub fn run_all(ctx: &CodegenCtx) {
 
 fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom: &Path) {
     let loaded = load_fixture(fixtures_root, fixture);
-    let generated = crate_dir.join(fixture).join("generated");
-    clean_generated(&generated);
+    let fixture_root = crate_dir.join(fixture);
+    let generated = fixture_root.join("generated");
     let web = generated.join("web");
     let workers = generated.join("workers");
     fs::create_dir_all(web.join("baml_sdk")).unwrap();
@@ -73,58 +71,59 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom
     write_codegen_output(&web.join("baml_sdk"), output.clone(), fixture);
     write_codegen_output(&workers.join("baml_sdk"), output, fixture);
 
-    for runtime in [&web, &workers] {
-        if custom.exists() {
-            copy_customizable(custom, runtime);
-        }
-        fs::write(runtime.join("test_runtime.ts"), TEST_RUNTIME).unwrap();
-        rewrite_test_bridge_imports(runtime);
+    let mut overlay = Overlay::new(&fixture_root);
+    for runtime in ["web", "workers"] {
+        overlay.copy_tree(custom, runtime);
+        overlay.file(format!("{runtime}/test_runtime.ts"), TEST_RUNTIME);
     }
+    // The corpus is written against the native bridge; the Web builds import
+    // the Wasm one. Only the overlay is rewritten — `baml_sdk/` belongs to the
+    // output writer and already emits the right specifier.
+    overlay.rewrite_content(|path, contents| {
+        if !path.ends_with(".ts") {
+            return None;
+        }
+        let source = std::str::from_utf8(contents).ok()?;
+        let rewritten = source.replace("@boundaryml/baml-bridge", "@boundaryml/baml-bridge-web");
+        (rewritten != source).then(|| rewritten.into_bytes())
+    });
 
     let package_name = format!("sdk-tests-typescript-web-{}", fixture.replace('_', "-"));
-    let files = [
-        (
-            "package.json",
-            PACKAGE_JSON_TEMPLATE.replace("__PACKAGE_NAME__", &package_name),
+    overlay.file(
+        "package.json",
+        PACKAGE_JSON_TEMPLATE.replace("__PACKAGE_NAME__", &package_name),
+    );
+    overlay.file("tsconfig.web.json", TSCONFIG_WEB_JSON);
+    overlay.file("tsconfig.workers.json", TSCONFIG_WORKERS_JSON);
+    overlay.file("vitest.web.config.ts", VITEST_WEB_CONFIG);
+    overlay.file("vitest.workers.config.ts", VITEST_WORKERS_CONFIG);
+    overlay.file("vitest.integration.config.ts", VITEST_INTEGRATION_CONFIG);
+    overlay.file(
+        "worker_startup.test.ts",
+        WORKER_STARTUP_TEST.replace(
+            "__EXPECTED_BODY__",
+            if fixture == "function_calls" {
+                "hello world"
+            } else {
+                "sdk-test-typescript-workers"
+            },
         ),
-        ("tsconfig.web.json", TSCONFIG_WEB_JSON.to_string()),
-        ("tsconfig.workers.json", TSCONFIG_WORKERS_JSON.to_string()),
-        ("vitest.web.config.ts", VITEST_WEB_CONFIG.to_string()),
-        (
-            "vitest.workers.config.ts",
-            VITEST_WORKERS_CONFIG.to_string(),
-        ),
-        (
-            "vitest.integration.config.ts",
-            VITEST_INTEGRATION_CONFIG.to_string(),
-        ),
-        (
-            "worker_startup.test.ts",
-            WORKER_STARTUP_TEST.replace(
-                "__EXPECTED_BODY__",
-                if fixture == "function_calls" {
-                    "hello world"
-                } else {
-                    "sdk-test-typescript-workers"
-                },
-            ),
-        ),
-        (
-            "wrangler.jsonc",
-            r#"{
+    );
+    overlay.file(
+        "wrangler.jsonc",
+        r#"{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sdk-test-typescript-workers",
   "main": "worker.js",
   "compatibility_date": "2026-07-15",
   "compatibility_flags": ["nodejs_compat"]
 }
-"#
-            .to_string(),
-        ),
-        (
-            "worker.js",
-            if fixture == "function_calls" {
-                r#"import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
+"#,
+    );
+    overlay.file(
+        "worker.js",
+        if fixture == "function_calls" {
+            r#"import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
 
 export default {
   fetch() {
@@ -132,8 +131,8 @@ export default {
   },
 };
 "#
-            } else {
-                r#"import "./workers/baml_sdk/index.js";
+        } else {
+            r#"import "./workers/baml_sdk/index.js";
 
 export default {
   fetch() {
@@ -141,9 +140,7 @@ export default {
   },
 };
 "#
-            }
-            .to_string(),
-        ),
-    ];
-    write_all(&generated, files);
+        },
+    );
+    overlay.install();
 }

@@ -7,7 +7,7 @@
 //! `baml_src`: it is built from a hand-constructed [`SymbolPool`] below,
 //! because the collisions it exercises are not expressible in BAML source.
 
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use baml_base::{Literal, Name as BaseName};
 use baml_codegen_types::{
@@ -18,7 +18,7 @@ use baml_codegen_types::{
 use baml_type::TyAttr;
 use sdk_test_harness_runner::fixtures;
 
-use crate::{CodegenCtx, copy_customizable, load_fixture, write_codegen_output};
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 const RUNTIME_GO_SUM: &str = include_str!("../../../sdks/go/baml_go/go.sum");
 
@@ -105,38 +105,21 @@ pub fn run_all(ctx: &CodegenCtx) {
 
 fn stage_output(crate_dir: &std::path::Path, fixture: &str, output: HashMap<PathBuf, String>) {
     let fixture_root = crate_dir.join(fixture);
+    let customizable = fixture_root.join("customizable");
     let generated = fixture_root.join("generated");
     let sdk = generated.join("baml_sdk");
-    if generated.exists() {
-        // Runtime calls and direct Go validation may create `.baml/` state and
-        // `target/` cache directories in the generated module. They are not
-        // generator output and can carry platform metadata or read-only cache
-        // entries, so preserve them while clearing files owned by staging.
-        for entry in fs::read_dir(&generated).unwrap() {
-            let entry = entry.unwrap();
-            if matches!(entry.file_name().to_str(), Some(".baml" | "target")) {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                fs::remove_dir_all(path).unwrap();
-            } else {
-                fs::remove_file(path).unwrap();
-            }
-        }
-    }
     write_codegen_output(&sdk, output, fixture);
 
-    let customizable = fixture_root.join("customizable");
-    if customizable.exists() {
-        copy_customizable(&customizable, &generated);
-    }
-    fs::write(
-        generated.join("go.mod"),
+    let mut overlay = Overlay::new(&fixture_root);
+    // Copied (not symlinked): Go resolves modules by path, and a symlink out of
+    // the module root confuses the toolchain.
+    overlay.copy_tree(&customizable, "");
+    overlay.file(
+        "go.mod",
         "module baml.local/sdk\n\ngo 1.23\n\nrequire github.com/boundaryml/baml-go v0.0.0\n\nrequire google.golang.org/protobuf v1.36.6 // indirect\n\nreplace github.com/boundaryml/baml-go => ../../../../../sdks/go/baml_go\n",
-    )
-    .unwrap();
-    fs::write(generated.join("go.sum"), RUNTIME_GO_SUM).unwrap();
+    );
+    overlay.file("go.sum", RUNTIME_GO_SUM);
+    overlay.install();
 }
 
 fn stage_package_edges(crate_dir: &std::path::Path) {

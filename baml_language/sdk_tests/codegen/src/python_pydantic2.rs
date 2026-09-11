@@ -16,7 +16,7 @@ use std::{fs, path::Path};
 use sdk_test_harness_runner::fixtures;
 use sdkgen_python_pydantic2::NamingConvention;
 
-use crate::{CodegenCtx, load_fixture, symlink_customizable, write_codegen_output};
+use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
 /// unique `name` substituted in for `__PYPROJECT_NAME__`. `baml_bridge`
@@ -56,9 +56,6 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     let generated = fixture_root.join("generated");
     let baml_sdk = generated.join("baml_sdk");
 
-    if generated.exists() {
-        fs::remove_dir_all(&generated).unwrap();
-    }
     fs::create_dir_all(&baml_sdk).unwrap();
 
     let output = sdkgen_python_pydantic2::to_source_code_with_bytecode(
@@ -68,14 +65,14 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     );
     write_codegen_output(&baml_sdk, output, fixture);
 
-    let custom = fixture_root.join("customizable");
-    if custom.exists() {
-        symlink_customizable(&custom, &generated);
-    }
-
     let pyproject_name = format!("sdk-tests-python-pydantic2-{}", fixture.replace('_', "-"));
-    let pyproject = PYPROJECT_TEMPLATE.replace("__PYPROJECT_NAME__", &pyproject_name);
-    let path = generated.join("pyproject.toml");
-    fs::write(&path, pyproject)
-        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
+    let mut overlay = Overlay::new(&fixture_root);
+    // Symlinked so editing a ported test is picked up without re-staging;
+    // nested dirs (`roundtrip_tests/`) mirror across so pytest discovers them.
+    overlay.link_tree(&fixture_root.join("customizable"), "");
+    overlay.file(
+        "pyproject.toml",
+        PYPROJECT_TEMPLATE.replace("__PYPROJECT_NAME__", &pyproject_name),
+    );
+    overlay.install();
 }
