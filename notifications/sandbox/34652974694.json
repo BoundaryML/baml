@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "friday": "2026-09-18",
+  "channel": "C07UTQN7N1X",
+  "mention": "<@U0436HGTNTU>",
+  "parent": {
+    "status": "sent",
+    "text": "Hey <@U0436HGTNTU>, you\u2019re going to be oncall tomorrow! You\u2019ll be in charge of putting out a canary release tomorrow and monitoring Discord over the weekend and next week. Your rotation runs Friday through Friday.",
+    "channel": "C07UTQN7N1X",
+    "ts": "1789163124.808429"
+  },
+  "reminders": [
+    {
+      "status": "ready",
+      "post_at": 1789164867,
+      "text": "[Python tooling test: Friday 9am Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to put out the canary release today!"
+    },
+    {
+      "status": "ready",
+      "post_at": 1789164957,
+      "text": "[Python tooling test: Friday 3pm Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to make sure the canary release has succeeded and the changelog is posted!"
+    }
+  ]
+}
