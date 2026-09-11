@@ -186,18 +186,14 @@ impl FutureManagerGuard<'_> {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = FutureId::from_usize(id);
 
+        let work_permit = inner.idle_gc.acquire_work_permit();
         let ptr = inner
             .tlab
             .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
-        inner.active_futures.insert(
-            id,
-            FutureState {
-                _idle_work: inner.idle_gc.start_work(),
-                future: ptr,
-                origin,
-            },
-        );
+        inner
+            .active_futures
+            .insert(id, FutureWork::new(work_permit, ptr, origin));
         (id, ptr)
     }
 
@@ -563,7 +559,7 @@ impl HeapPermit<FutureManagerInner> for FutureManagerGuard<'_> {
 pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
-    active_futures: HashMap<FutureId, FutureState>,
+    active_futures: HashMap<FutureId, FutureWork>,
     // Mandatory bookkeeping on both targets. Only the native build contains
     // the background worker; WASM consumes the state at call entry.
     idle_gc: Arc<crate::idle_gc::IdleGc>,
@@ -612,9 +608,10 @@ impl TlabHolder for FutureManagerInner {
     }
 }
 
-struct FutureState {
+/// Owns a future's registry entry and its work permit until removal.
+struct FutureWork {
     // Mirrors registry ownership without making the timer inspect heap objects.
-    _idle_work: crate::idle_gc::WorkGuard,
+    _work_permit: crate::idle_gc::WorkPermit,
     /// Heap pointer to the `Object::Future`. Rooted via `RootHaver` so
     /// the heap object survives even when no awaiter / producer stack
     /// holds it directly (fire-and-forget spawn before the producer task
@@ -627,7 +624,19 @@ struct FutureState {
     /// hot-loop budget.
     origin: std::sync::Arc<str>,
 }
-impl FutureState {
+impl FutureWork {
+    fn new(
+        work_permit: crate::idle_gc::WorkPermit,
+        future: HeapPtr,
+        origin: std::sync::Arc<str>,
+    ) -> Self {
+        Self {
+            _work_permit: work_permit,
+            future,
+            origin,
+        }
+    }
+
     /// Returns an immutable reference to the heap-allocated `Future`.
     ///
     /// The [`bex_vm_types::Future`] uses interior mutability (`AtomicU8` +
@@ -650,7 +659,7 @@ impl FutureState {
         }
     }
 }
-impl RootHaver for FutureState {
+impl RootHaver for FutureWork {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.future);
     }

@@ -72,15 +72,17 @@ pub(crate) struct IdleGc {
     wake: Arc<Notify>,
 }
 
-/// Counts a root call, a registry entry, or a child producer's entire lifetime.
-/// Registry and producer guards deliberately overlap: cancellation can settle
-/// the future while its producer is still unwinding or waiting for admission.
-pub(crate) struct WorkGuard {
+/// Owned by each root call, registered future, and spawned task until it ends.
+/// Future and task permits deliberately overlap: cancellation can settle the
+/// future while its producer is still unwinding or waiting for admission.
+/// This prevents idle cleanup; heap access still requires a heap permit.
+#[must_use = "work must own its permit until its entire lifecycle ends"]
+pub(crate) struct WorkPermit {
     idle: Arc<IdleGc>,
     idle_due_on_entry: bool,
 }
 
-impl Drop for WorkGuard {
+impl Drop for WorkPermit {
     fn drop(&mut self) {
         let mut s = self.idle.lock();
         s.work -= 1;
@@ -147,7 +149,7 @@ impl IdleGc {
         }
     }
 
-    pub(crate) fn start_work(self: &Arc<Self>) -> WorkGuard {
+    pub(crate) fn acquire_work_permit(self: &Arc<Self>) -> WorkPermit {
         let mut s = self.lock();
         self.refresh(&mut s);
         let idle_due_on_entry = s.work == 0
@@ -157,7 +159,7 @@ impl IdleGc {
         s.scheduling.disarm();
         drop(s);
         self.wake.notify_one();
-        WorkGuard {
+        WorkPermit {
             idle: Arc::clone(self),
             idle_due_on_entry,
         }
@@ -292,7 +294,7 @@ impl BexEngine {
         s.worker = Some(runtime.spawn(Arc::clone(&self.idle_gc).run(Arc::downgrade(self))));
     }
 
-    pub(crate) async fn collect_before_call(self: &Arc<Self>, work: &WorkGuard) {
+    pub(crate) async fn collect_before_call(self: &Arc<Self>, work: &WorkPermit) {
         let idle_due = cfg!(target_arch = "wasm32") && work.idle_due_on_entry;
         if !idle_due && !self.heap.should_gc() {
             return;
@@ -424,6 +426,56 @@ mod tests {
         settle().await;
     }
 
+    struct WorkDropProbe(Arc<IdleGc>);
+
+    impl Drop for WorkDropProbe {
+        fn drop(&mut self) {
+            assert_eq!(
+                self.0.lock().work,
+                1,
+                "task cleanup must still own its permit"
+            );
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn spawned_work_owns_permit_before_poll_and_through_cancellation() {
+        let heap = BexHeap::new(vec![]);
+        let idle = IdleGc::new(&heap);
+        for poll_first in [false, true] {
+            let probe = WorkDropProbe(Arc::clone(&idle));
+            let work = crate::SpawnedWork::new(idle.acquire_work_permit(), async move {
+                let _probe = probe;
+                std::future::pending::<()>().await;
+            });
+            let mut task = Box::pin(work.run());
+            assert_eq!(idle.lock().work, 1);
+            if poll_first {
+                assert!(futures::poll!(task.as_mut()).is_pending());
+            }
+            drop(task);
+            assert_eq!(idle.lock().work, 0);
+            assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn spawned_work_releases_permit_after_success_or_error_cleanup() {
+        let heap = BexHeap::new(vec![]);
+        let idle = IdleGc::new(&heap);
+        for outcome in [Ok(()), Err(())] {
+            let probe = WorkDropProbe(Arc::clone(&idle));
+            let work = crate::SpawnedWork::new(idle.acquire_work_permit(), async move {
+                let _probe = probe;
+                outcome?;
+                Ok(())
+            });
+            assert_eq!(work.run().await, outcome);
+            assert_eq!(idle.lock().work, 0);
+            assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+        }
+    }
+
     #[tokio::test(start_paused = true)]
     async fn burst_uses_one_worker_and_handle_release_rearms_cleanup() {
         let engine = engine();
@@ -510,7 +562,7 @@ mod tests {
                 .checking_gc
                 .load(std::sync::atomic::Ordering::Acquire)
         );
-        let work = engine.idle_gc.start_work();
+        let work = engine.idle_gc.acquire_work_permit();
         settle().await;
         assert!(
             !engine
@@ -531,7 +583,7 @@ mod tests {
         let engine = engine();
         drop(tiny(&engine).await);
         for outcome in 0..3 {
-            let producer = engine.idle_gc.start_work();
+            let producer = engine.idle_gc.acquire_work_permit();
             let permit = engine
                 .heap_permit_manager
                 .new_permit(())
@@ -645,18 +697,18 @@ mod tests {
     async fn completion_and_collection_cannot_rearm_suspended_or_closed_cleanup() {
         let heap = BexHeap::new(vec![]);
         let idle = IdleGc::new(&heap);
-        drop(idle.start_work());
+        drop(idle.acquire_work_permit());
         assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
 
         idle.suspend();
-        drop(idle.start_work());
+        drop(idle.acquire_work_permit());
         let collected = idle.cleanup_version();
         idle.collected(collected);
         assert_eq!(idle.lock().scheduling, Scheduling::Suspended);
         idle.resume();
         assert_eq!(idle.lock().scheduling, Scheduling::Disarmed);
 
-        drop(idle.start_work());
+        drop(idle.acquire_work_permit());
         idle.suspend();
         idle.resume();
         assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
@@ -664,7 +716,7 @@ mod tests {
         idle.close();
         idle.suspend();
         idle.resume();
-        drop(idle.start_work());
+        drop(idle.acquire_work_permit());
         idle.collected(collected);
         assert_eq!(idle.lock().scheduling, Scheduling::Closed);
         assert!(!idle.due());
@@ -675,11 +727,11 @@ mod tests {
         // No worker: model WASM's bookkeeping and next-entry decision.
         let heap = BexHeap::new(vec![]);
         let idle = IdleGc::new(&heap);
-        drop(idle.start_work());
+        drop(idle.acquire_work_permit());
         tokio::time::advance(IDLE_DELAY).await;
-        let entry = idle.start_work();
+        let entry = idle.acquire_work_permit();
         assert!(entry.idle_due_on_entry);
-        let overlapping = idle.start_work();
+        let overlapping = idle.acquire_work_permit();
         assert!(!overlapping.idle_due_on_entry);
     }
 }
