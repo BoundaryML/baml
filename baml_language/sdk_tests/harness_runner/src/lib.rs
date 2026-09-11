@@ -32,6 +32,8 @@ use std::{
     process::{Command, Output},
 };
 
+pub mod fixtures;
+
 /// Test-side helper. Runs `cmd` inside
 /// `<CARGO_MANIFEST_DIR>/<fixture>/generated/`, panicking on
 /// non-zero exit. Cargo sets `CARGO_MANIFEST_DIR` for the test
@@ -555,24 +557,25 @@ pub fn __check_build_diagnostics(out_dir: &str) {
 /// the weaker "are we under nextest at all" check (`NEXTEST=1` is set
 /// regardless of which scripts ran).
 ///
-/// Under plain `cargo test` the setup-script breadcrumb is unavailable, so the
-/// guard is a no-op and the generated fixture tests report any real setup
-/// problems themselves. Called from the `mod setup_guard { #[test] fn ran }`
-/// block the [`setup_guard!`] macro expands to.
+/// The breadcrumb is absent under plain `cargo test`, and that is a failure,
+/// not a pass: setup.sh is what generates each fixture's SDK, so without it
+/// these tests would run against a stale tree or none at all. Called from the
+/// `mod setup_guard { #[test] fn ran }` block the [`setup_guard!`] macro
+/// expands to.
 #[doc(hidden)]
 pub fn __check_setup_ran(env_var: &str) {
-    if env::var_os(env_var).is_some() || env::var_os("NEXTEST").is_none() {
+    if env::var_os(env_var).is_some() {
         return;
     }
 
     panic!(
         "sdk-test setup script did not run for this test run \
          (env var `{env_var}` is unset).\n\n\
-         These tests require their `crates/<generator>/setup.sh` (uv sync / \
-         pnpm install + native build) to have run first, which sets `{env_var}` \
-         via $NEXTEST_ENV.\n\n\
+         These tests require their `crates/<generator>/setup.sh` to have run \
+         first: it generates each fixture's SDK and installs the language \
+         toolchain, then sets `{env_var}` via $NEXTEST_ENV.\n\n\
          Fix: run the tests with `cargo nextest run` — it fires setup.sh \
-         automatically."
+         automatically. Plain `cargo test` cannot."
     );
 }
 
@@ -606,6 +609,25 @@ macro_rules! setup_guard {
             #[ignore = $reason]
             fn ran() {
                 $crate::__check_setup_ran($env);
+            }
+        }
+    };
+}
+
+/// Emit the `mod fixture_manifest { #[test] fn matches_corpus }` oracle that
+/// pins a generator crate's declared fixtures against
+/// [`fixtures::SHARED`] and the corpus on disk. Invoked once by each
+/// generator's `test_suite!` expansion, with that suite's fixture names.
+#[macro_export]
+macro_rules! fixture_manifest {
+    ( $( $name:ident ),+ $(,)? ) => {
+        mod fixture_manifest {
+            /// The fixtures this crate declares tests for.
+            const DECLARED: &[&str] = &[ $( stringify!($name) ),+ ];
+
+            #[test]
+            fn matches_corpus() {
+                $crate::fixtures::assert_shared_manifest(env!("CARGO_MANIFEST_DIR"), DECLARED);
             }
         }
     };
@@ -698,15 +720,53 @@ pub mod swift {
     pub use crate::swift_test_suite as test_suite;
 }
 
-/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as
-/// `sdk_test_harness_runner::cpp::test_suite!()`.
+/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs`.
 pub mod cpp {
-    /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
-    /// by `sdk_test_codegen::cpp::run_all`.
+    /// Declare the C++ suite: two toolchain checks per fixture, plus the
+    /// shared setup guard and fixture-manifest oracle.
+    ///
+    /// The fixture list is source rather than build-script output because
+    /// `sdk_test_codegen` runs from `setup.sh`, which nextest fires *after*
+    /// this crate's test binary is already compiled. `fixture_manifest!`
+    /// keeps the list honest.
+    ///
+    /// ```text
+    /// sdk_test_harness_runner::cpp::test_suite! {
+    ///     fixture docstrings_etc;
+    ///     fixture function_calls;
+    /// }
+    /// ```
     #[macro_export]
     macro_rules! cpp_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/cpp_tests.rs"));
+        ( $( fixture $name:ident; )+ ) => {
+            $crate::setup_guard!("SDK_TEST_CPP_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    fn cmd(command: &str) {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            command,
+                            "cpp-cache",
+                            "SDK_TEST_CPP_CACHE_DIR",
+                        );
+                    }
+
+                    #[test]
+                    fn compile() {
+                        cmd("bash test.sh compile");
+                    }
+
+                    /// Recompiles rather than reusing `compile`'s output:
+                    /// nextest runs each test in its own process, so the two
+                    /// cannot share state or assume an order.
+                    #[test]
+                    fn run() {
+                        cmd("bash test.sh run");
+                    }
+                }
+            )+
         };
     }
 

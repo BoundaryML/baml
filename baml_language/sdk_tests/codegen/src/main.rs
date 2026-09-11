@@ -22,7 +22,10 @@ type RunAll = fn(&CodegenCtx);
 /// A generator joins this table when its `build.rs` is deleted and its
 /// `setup.sh` starts invoking us instead; until then it is still driven by
 /// cargo and naming it here would run its codegen twice.
-const GENERATORS: &[(&str, RunAll)] = &[("csharp", sdk_test_codegen::csharp::run_all)];
+const GENERATORS: &[(&str, RunAll)] = &[
+    ("cpp", sdk_test_codegen::cpp::run_all),
+    ("csharp", sdk_test_codegen::csharp::run_all),
+];
 
 const USAGE: &str = "\
 usage: sdk_test_codegen <command>

@@ -17,7 +17,7 @@ use baml_type::TyAttr;
 
 use crate::{
     BuildDiagnostics, copy_customizable, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, watch_dir, write_codegen_output,
+    load_fixture, watch_dir, write_codegen_output_recording,
 };
 
 const SOURCE_FIXTURES: &[&str] = &[
@@ -151,7 +151,7 @@ fn stage_output(
             }
         }
     }
-    write_codegen_output(&sdk, output, fixture, diagnostics);
+    write_codegen_output_recording(&sdk, output, fixture, diagnostics);
 
     let customizable = fixture_root.join("customizable");
     if customizable.exists() {

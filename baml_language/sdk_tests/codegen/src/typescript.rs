@@ -11,9 +11,11 @@ use std::{
 
 use sdkgen_typescript_shared::sdkgen_typescript::{self, NamingConvention};
 
+use sdk_test_harness_runner::fixtures;
+
 use crate::{
-    BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, watch_dir, write_codegen_output,
+    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture, watch_dir,
+    write_codegen_output_recording,
 };
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_node.json");
@@ -29,7 +31,7 @@ pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let fixtures = discover_fixtures(&fixtures_root);
+    let fixtures = fixtures::discover_shared(&fixtures_root);
     assert!(
         !fixtures.is_empty(),
         "no fixtures discovered under {}",
@@ -82,7 +84,7 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output(&node.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output_recording(&node.join("baml_sdk"), output, fixture, diagnostics);
     if custom.exists() {
         copy_customizable(custom, &node);
     }

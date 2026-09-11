@@ -15,9 +15,11 @@ use super::typescript::{
     CACHE_ENV_VAR, CACHE_SUBDIR, TEST_RUNTIME, clean_generated, copy_customizable,
     has_vitest_tests, rewrite_test_bridge_imports,
 };
+use sdk_test_harness_runner::fixtures;
+
 use crate::{
-    BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, watch_dir, write_codegen_output,
+    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture, watch_dir,
+    write_codegen_output_recording,
 };
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_web.json");
@@ -34,7 +36,7 @@ pub fn run_all_from_typescript_sources(relative_sources: &str) {
     let sources_root = manifest_dir.join(relative_sources);
     let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let fixtures = discover_fixtures(&fixtures_root);
+    let fixtures = fixtures::discover_shared(&fixtures_root);
     assert!(
         !fixtures.is_empty(),
         "no fixtures discovered under {}",
@@ -95,8 +97,8 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output(&web.join("baml_sdk"), output.clone(), fixture, diagnostics);
-    write_codegen_output(&workers.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output_recording(&web.join("baml_sdk"), output.clone(), fixture, diagnostics);
+    write_codegen_output_recording(&workers.join("baml_sdk"), output, fixture, diagnostics);
 
     for runtime in [&web, &workers] {
         if custom.exists() {

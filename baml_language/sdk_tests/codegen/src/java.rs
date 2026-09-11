@@ -40,9 +40,11 @@ use std::{
 
 use sdkgen_java::NamingConvention;
 
+use sdk_test_harness_runner::fixtures;
+
 use crate::{
-    BuildDiagnostics, copy_customizable, discover_fixtures, emit_cargo_line,
-    fixtures_root_from_manifest, load_fixture, watch_dir, write_codegen_output,
+    BuildDiagnostics, copy_customizable, emit_cargo_line, fixtures_root_from_manifest,
+    load_fixture, watch_dir, write_codegen_output_recording,
 };
 
 /// Per-fixture build.gradle.kts — no placeholder; written verbatim.
@@ -122,7 +124,7 @@ pub fn run_all() {
 
     let mut diagnostics = BuildDiagnostics::new(&out_dir);
 
-    let fixtures = discover_fixtures(&fixtures_root);
+    let fixtures = fixtures::discover_shared(&fixtures_root);
     assert!(
         !fixtures.is_empty(),
         "no fixtures discovered under {}",
@@ -198,7 +200,7 @@ fn codegen_fixture(
         &baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output(&baml_sdk, output, fixture, diagnostics);
+    write_codegen_output_recording(&baml_sdk, output, fixture, diagnostics);
 
     let custom = fixture_root.join("customizable");
     if custom.exists() {

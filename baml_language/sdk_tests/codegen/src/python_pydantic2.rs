@@ -33,9 +33,11 @@ use std::{
 
 use sdkgen_python_pydantic2::NamingConvention;
 
+use sdk_test_harness_runner::fixtures;
+
 use crate::{
-    BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, symlink_customizable, watch_dir, write_codegen_output,
+    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture,
+    symlink_customizable, watch_dir, write_codegen_output_recording,
 };
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
@@ -69,7 +71,7 @@ pub fn run_all() {
 
     let mut diagnostics = BuildDiagnostics::new(&out_dir);
 
-    let fixtures = discover_fixtures(&fixtures_root);
+    let fixtures = fixtures::discover_shared(&fixtures_root);
     assert!(
         !fixtures.is_empty(),
         "no fixtures discovered under {}",
@@ -124,7 +126,7 @@ fn codegen_fixture(
         )
     }));
     match codegen_result {
-        Ok(output) => write_codegen_output(&baml_sdk, output, fixture, diagnostics),
+        Ok(output) => write_codegen_output_recording(&baml_sdk, output, fixture, diagnostics),
         Err(_) => {
             diagnostics.record(
                 "codegen",

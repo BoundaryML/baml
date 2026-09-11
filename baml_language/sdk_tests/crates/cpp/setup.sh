@@ -21,6 +21,11 @@ cd "$(dirname "$0")" # baml_language/sdk_tests/crates/cpp
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 
+# Generate each fixture's baml_sdk/ and test.sh first: nothing else produces
+# them, and every step below compiles against them.
+echo "==> sdk_test_codegen cpp (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- cpp)
+
 echo "==> cargo build -p bridge_cffi (dev cdylib for cpp sdk tests)"
 (cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http)
 

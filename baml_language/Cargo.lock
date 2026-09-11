@@ -6323,6 +6323,7 @@ dependencies = [
  "baml_version",
  "proc-macro2",
  "quote",
+ "sdk_test_harness_runner",
  "sdkgen_cpp",
  "sdkgen_csharp",
  "sdkgen_go",
@@ -6337,7 +6338,6 @@ dependencies = [
 name = "sdk_test_cpp"
 version = "0.1.0"
 dependencies = [
- "sdk_test_codegen",
  "sdk_test_harness_runner",
 ]
 

@@ -33,6 +33,10 @@ name = "sdk_test_codegen"
 path = "src/main.rs"
 
 [dependencies]
+# The shared fixture table lives in the runner so the codegen side and the
+# test side cannot disagree about the corpus. It is std-only, so this costs
+# one tiny unit and cannot cycle back.
+sdk_test_harness_runner = { path = "../harness_runner" }
 baml_artifact = { workspace = true }
 baml_version = { workspace = true }
 sdkgen_cpp = { workspace = true }

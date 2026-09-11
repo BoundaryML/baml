@@ -38,9 +38,11 @@ use std::{
 
 use sdkgen_swift::NamingConvention;
 
+use sdk_test_harness_runner::fixtures;
+
 use crate::{
-    BuildDiagnostics, copy_customizable, discover_fixtures, emit_cargo_line,
-    fixtures_root_from_manifest, load_fixture, watch_dir, write_codegen_output,
+    BuildDiagnostics, copy_customizable, emit_cargo_line, fixtures_root_from_manifest,
+    load_fixture, watch_dir, write_codegen_output_recording,
 };
 
 /// Per-fixture Package.swift. `__PACKAGE_NAME__` is substituted per
@@ -87,7 +89,7 @@ pub fn run_all() {
 
     let mut diagnostics = BuildDiagnostics::new(&out_dir);
 
-    let fixtures = discover_fixtures(&fixtures_root);
+    let fixtures = fixtures::discover_shared(&fixtures_root);
     assert!(
         !fixtures.is_empty(),
         "no fixtures discovered under {}",
@@ -152,7 +154,7 @@ fn codegen_fixture(
         )
     }));
     match codegen_result {
-        Ok(output) => write_codegen_output(&sources_baml, output, fixture, diagnostics),
+        Ok(output) => write_codegen_output_recording(&sources_baml, output, fixture, diagnostics),
         Err(_) => {
             diagnostics.record(
                 "codegen",

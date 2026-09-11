@@ -1,24 +1,29 @@
-//! Build-script-side infrastructure for the sdk-test crates under
-//! `sdk_tests/crates/`. Each generator crate (e.g.
-//! `crates/python_pydantic2/`) fans out over every fixture under
-//! `sdk_tests/fixtures/<fixture>/baml_src/` and produces one
-//! `crates/<generator>/<fixture>/generated/` tree per fixture.
+//! Codegen for the sdk-test crates under `sdk_tests/crates/`. Each generator
+//! fans out over the shared fixture corpus
+//! (`sdk_tests/fixtures/<fixture>/baml_src/`) and produces one
+//! `crates/<generator>/<fixture>/generated/` tree per fixture. C# is the
+//! exception: its fixtures are whole BAML projects living in-crate.
 //!
-//! This crate is generator-agnostic: it discovers fixtures, loads
-//! `.baml` source into a [`ProjectDatabase`], gates on diagnostics,
-//! symlinks/copies `customizable/` overlays into the generated tree,
-//! and emits a per-fixture `#[test]` scaffold to `OUT_DIR`. The
-//! scaffold is a sequence of macro / function invocations against
-//! `::sdk_test_harness_runner::*` — every emitted `#[test]` body,
-//! including the shared `build_diagnostics::no_build_failures`,
-//! lives in the sibling `sdk_test_harness_runner` crate.
+//! This crate is generator-agnostic: it loads `.baml` source into a
+//! [`ProjectDatabase`], gates on diagnostics, installs each generator's output
+//! through the same filesystem transaction `baml generate` uses, and stages the
+//! `customizable/` overlay of ported tests into the generated tree.
+//! Generator-specific entry points live in submodules like [`cpp`],
+//! [`python_pydantic2`] and [`typescript`].
 //!
-//! Generator-specific entry points live in submodules like
-//! [`python_pydantic2`], [`typescript`], and [`typescript_web`].
+//! Two things drive those entry points, and which one a generator uses is
+//! visible in whether `crates/<generator>/` still has a `build.rs`:
 //!
-//! The crate's `sdk_test_codegen` binary (`src/main.rs`) drives the same
-//! helpers from outside a build script — today for the bridge ABI probes,
-//! which need one fixture's compiled program and nothing else.
+//! - the `sdk_test_codegen` binary (`src/main.rs`), run from a
+//!   generator crate's `setup.sh` before its tests; and
+//! - that `build.rs`, which additionally emits a per-fixture `#[test]`
+//!   scaffold to `OUT_DIR` and records soft failures through
+//!   [`BuildDiagnostics`].
+//!
+//! The build-script path is being retired: it makes every `cargo check` build
+//! this crate's whole compiler and sdkgen closure. Migrated generators declare
+//! their tests in source instead, via
+//! `sdk_test_harness_runner::<generator>::test_suite!`.
 //!
 //! Layout the helpers assume:
 //!
@@ -26,10 +31,9 @@
 //! sdk_tests/
 //! ├── fixtures/<fixture>/baml_src/                # .baml only
 //! └── crates/<generator>/<fixture>/
-//!     ├── customizable/                           # *.py / *.ts, tracked
-//!     └── generated/                              # build output, gitignored
+//!     ├── customizable/                           # ported tests, tracked
+//!     └── generated/                              # codegen output, gitignored
 //! ```
-
 use std::{
     fmt::{self, Display},
     fs,
@@ -98,8 +102,8 @@ pub(crate) fn emit_cargo_line(args: fmt::Arguments<'_>) {
     println!("{args}");
 }
 
-/// Build-script-side soft-failure recorder. The two generator
-/// `run_all` entry points use this to capture env-dependent failures
+/// Build-script-side soft-failure recorder, used by the generators still
+/// driven by a `build.rs` to capture env-dependent failures
 /// (missing `uv`/`pnpm`, codegen panics, `uv sync` / `pnpm install`
 /// non-zero exit, codegen file write failures) without aborting the
 /// build — so `cargo doc` / `cargo check` succeed on machines that
@@ -158,12 +162,46 @@ impl BuildDiagnostics {
 
 /// Install an SDK generator's complete output through the same filesystem
 /// transaction used by `baml generate`.
+///
+/// Panics on failure: this runs from a generator crate's `setup.sh`, where a
+/// failed install must stop the run before the language toolchain builds
+/// against a half-installed tree.
 pub(crate) fn write_codegen_output<C>(
+    output_directory: &Path,
+    output: impl IntoIterator<Item = (PathBuf, C)>,
+    fixture: &str,
+) where
+    C: AsRef<[u8]>,
+{
+    if let Err(error) = install(output_directory, output) {
+        panic!(
+            "fixture `{fixture}`: failed to install generated output in {}: {error}",
+            output_directory.display()
+        );
+    }
+}
+
+/// [`write_codegen_output`] for generators still driven by a build script,
+/// where an install failure is recorded rather than raised so `cargo check`
+/// stays green. Delete alongside the last `crates/*/build.rs`.
+pub(crate) fn write_codegen_output_recording<C>(
     output_directory: &Path,
     output: impl IntoIterator<Item = (PathBuf, C)>,
     fixture: &str,
     diagnostics: &mut BuildDiagnostics,
 ) where
+    C: AsRef<[u8]>,
+{
+    if let Err(error) = install(output_directory, output) {
+        diagnostics.record("codegen_write", fixture, error);
+    }
+}
+
+fn install<C>(
+    output_directory: &Path,
+    output: impl IntoIterator<Item = (PathBuf, C)>,
+) -> Result<(), baml_codegen_types::OutputWriterError>
+where
     C: AsRef<[u8]>,
 {
     let files = output
@@ -172,9 +210,7 @@ pub(crate) fn write_codegen_output<C>(
             GeneratedOutputFile::new(relative_path, contents.as_ref().to_vec())
         })
         .collect();
-    if let Err(error) = write_generated_output(output_directory, files) {
-        diagnostics.record("codegen_write", fixture, error);
-    }
+    write_generated_output(output_directory, files).map(|_| ())
 }
 
 /// A user BAML source file as it should appear in the emitter's
@@ -201,39 +237,6 @@ pub fn fixtures_root_from_manifest(manifest_dir: &Path) -> PathBuf {
         .and_then(Path::parent)
         .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
         .join("fixtures")
-}
-
-/// Enumerate every `<fixtures_root>/<name>/` that contains a
-/// `baml_src/` subdirectory. Sorted so codegen output ordering is
-/// stable across builds.
-pub fn discover_fixtures(fixtures_root: &Path) -> Vec<String> {
-    let mut out = Vec::new();
-    let entries = fs::read_dir(fixtures_root).unwrap_or_else(|e| {
-        panic!(
-            "failed to read fixtures root {}: {e}",
-            fixtures_root.display()
-        )
-    });
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        if !path.join("baml_src").is_dir() {
-            continue;
-        }
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            // Port checkpoint: this fixture exercises the host-reflection
-            // extraction contract, which is restored in the later compiler
-            // slices. Keep it out of eager SDK build-script codegen until then.
-            if name == "host_reflect" {
-                continue;
-            }
-            out.push(name.to_string());
-        }
-    }
-    out.sort();
-    out
 }
 
 /// Discover .baml files for one fixture, gate on diagnostics, and
@@ -302,14 +305,17 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 }
 
-/// Recursively copy `customizable_dir` into `dst_dir`. Used by the Go and
-/// TypeScript targets: symlinks would force every parallel
-/// test process to either set `NODE_OPTIONS=--preserve-symlinks`
-/// (which breaks the pnpm CLI, itself a symlinked node script) or
-/// let node follow the symlink and resolve `node_modules` from
-/// `customizable/` (which has none). Copying sidesteps both;
-/// build.rs's `cargo:rerun-if-changed=` watch on `customizable/`
-/// re-stages on edit.
+/// Recursively copy `customizable_dir` into `dst_dir`. Used by the Go, Java,
+/// Swift and TypeScript targets: symlinks would force every parallel test
+/// process to either set `NODE_OPTIONS=--preserve-symlinks` (which breaks the
+/// pnpm CLI, itself a symlinked node script) or let node follow the symlink
+/// and resolve `node_modules` from `customizable/` (which has none). Copying
+/// sidesteps both.
+///
+/// Stages only what `customizable_dir` holds *now* and keeps no record of it,
+/// so a file deleted upstream leaves its copy behind. Callers are responsible
+/// for clearing the destination before re-staging — see [`symlink_customizable`]
+/// for the same contract.
 pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
     for entry in fs::read_dir(customizable_dir).unwrap() {
         let entry = entry.unwrap();
@@ -343,11 +349,16 @@ pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
     }
 }
 
-/// Symlink every file in `customizable_dir` into `dst_dir`. On
-/// Windows `symlink_file` requires Developer Mode or admin, so a
-/// failed symlink falls back to `fs::copy` — the cost is that local
-/// edits to `customizable/` aren't picked up without re-running
-/// build.rs (which `cargo:rerun-if-changed=` handles).
+/// Symlink every file in `customizable_dir` into `dst_dir`. Used by the C++,
+/// Python and Rust targets, so an edit to a ported test is picked up without
+/// re-staging. On Windows `symlink_file` requires Developer Mode or admin, so
+/// a failed symlink falls back to `fs::copy`, which gives up that property
+/// until the next re-stage.
+///
+/// Stages only what `customizable_dir` holds *now* and keeps no record of it,
+/// so a file deleted upstream leaves a live link behind — pointing at a path
+/// that no longer exists, or worse, still compiling. Callers are responsible
+/// for clearing the destination before re-staging.
 pub fn symlink_customizable(customizable_dir: &Path, dst_dir: &Path) {
     for entry in fs::read_dir(customizable_dir).unwrap() {
         let entry = entry.unwrap();
