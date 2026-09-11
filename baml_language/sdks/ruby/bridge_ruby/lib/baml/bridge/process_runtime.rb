@@ -16,11 +16,11 @@ module Baml
         @api = nil
         @result_callback = nil
         @result_events = Queue.new
-        @program_bytes = nil
+        @programs = {}
         @terminal_error = nil
       end
 
-      def initialize!(compiled_program_bytes)
+      def initialize!(compiled_program_bytes, runtime_key: nil)
         program = owned_program_bytes(compiled_program_bytes)
         ensure_not_forked!
 
@@ -34,22 +34,18 @@ module Baml
           ensure_not_forked!
           raise @terminal_error if @terminal_error
 
-          if @program_bytes
-            return nil if @program_bytes == program
-
-            raise ProgramConflictError,
-                  "This Ruby process already initialized a different generated BAML program"
-          end
+          cached = @programs.find { |key, contents| contents == program && (runtime_key.nil? || runtime_key == key) }
+          return cached.first if cached
 
           load_api!(candidate_path) unless @api
           begin
-            @api.initialize_runtime(program)
+            key = @api.initialize_runtime(program, runtime_key)
           rescue IncompatibleRuntimeError => error
             @terminal_error = error
             raise
           end
-          @program_bytes = program
-          nil
+          @programs[key] = program
+          key
         end
       end
 

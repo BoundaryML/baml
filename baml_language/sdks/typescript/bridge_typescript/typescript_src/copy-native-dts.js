@@ -14,9 +14,11 @@ fs.copyFileSync(
 
 for (const entry of fs.readdirSync(packageRoot)) {
   if (entry.startsWith('baml_node.') && entry.endsWith('.node')) {
-    fs.copyFileSync(
-      path.join(packageRoot, entry),
-      path.join(packageRoot, 'dist', entry),
-    );
+    // Replace the inode: overwriting a previously loaded Mach-O can leave
+    // macOS's cached code signature stale and kill the next Node process.
+    const destination = path.join(packageRoot, 'dist', entry);
+    const temporary = `${destination}.${process.pid}.tmp`;
+    fs.copyFileSync(path.join(packageRoot, entry), temporary);
+    fs.renameSync(temporary, destination);
   }
 }

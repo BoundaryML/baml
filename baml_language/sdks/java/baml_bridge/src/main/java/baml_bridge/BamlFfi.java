@@ -91,6 +91,7 @@ public final class BamlFfi {
      * Callables and thrown objects share one keyspace ({@link #HOST_VALUE_KEY}) so
      * keys never collide and a single {@link #hostRelease} clears either kind.
      */
+    private static final ConcurrentHashMap<Long, BamlProgram> HOST_PROGRAMS = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, Object> HOST_VALUES = new ConcurrentHashMap<>();
 
     /** Shared key source for {@link #HOST_VALUES}; starts at 1 (0 is reserved). */
@@ -180,6 +181,7 @@ public final class BamlFfi {
 
     /** Initialize the process-global runtime from serialized BAML bytecode. */
     static native void nativeInitFromBytecode(
+            long runtimeKey,
             byte[] bytecode,
             String embeddedBamlToml,
             String bridgeRuntimeVersion,
@@ -198,7 +200,7 @@ public final class BamlFfi {
      * {@code BamlOutboundResult} bytes (engine errors/panics ride inside those
      * bytes; a thrown {@code RuntimeException} means a JNI-glue failure).
      */
-    static native byte[] nativeCallSync(byte[] encodedCallFunctionArgs);
+    static native byte[] nativeCallSync(long runtimeKey, byte[] encodedCallFunctionArgs);
 
     /**
      * Run a BAML function asynchronously. Encodes the identical
@@ -210,10 +212,11 @@ public final class BamlFfi {
      * completion is routed even if the args fail to decode. A thrown
      * {@code RuntimeException} means a JNI-glue failure before hand-off.
      */
-    static native void nativeCallAsync(long callId, byte[] encodedCallFunctionArgs);
+    static native void nativeCallAsync(long runtimeKey, long callId, byte[] encodedCallFunctionArgs);
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
+    static native void nativeReleaseCallId(long callId);
 
     /**
      * Cancel an in-flight function call by its {@code call_id}
@@ -281,6 +284,7 @@ public final class BamlFfi {
     /** Initialize the runtime from embedded bytecode (idempotent; replaces). */
     public static void initFromBytecode(byte[] bytecode) {
         nativeInitFromBytecode(
+                BamlProgram.current().runtimeKey,
                 bytecode,
                 null,
                 BamlVersion.BRIDGE_RUNTIME_VERSION,
@@ -289,6 +293,7 @@ public final class BamlFfi {
 
     public static void initFromBytecode(byte[] bytecode, String embeddedBamlToml) {
         nativeInitFromBytecode(
+                BamlProgram.current().runtimeKey,
                 bytecode,
                 embeddedBamlToml,
                 BamlVersion.BRIDGE_RUNTIME_VERSION,
@@ -330,9 +335,12 @@ public final class BamlFfi {
             throw new IllegalArgumentException("function handle argument names and values differ in length");
         }
         long callId = newCallId();
-        byte[] request =
-                ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
-        return decodeResult(nativeCallSync(request), returnDesc);
+        try {
+            return handle.program.within(() -> {
+                byte[] request = ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
+                return decodeResult(nativeCallSync(handle.program.runtimeKey, request), returnDesc);
+            });
+        } finally { nativeReleaseCallId(callId); }
     }
 
     public static <T> T returnedClosure(
@@ -447,6 +455,8 @@ public final class BamlFfi {
             BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
+        BamlProgram program = BamlProgram.forArgs(args);
+        if (program != BamlProgram.current()) return program.within(() -> callSync(fqn, names, args, returnDesc, ctx, typeArgs));
         long callId = newCallId();
         if (ctx != null) {
             ctx.attach(callId);
@@ -455,9 +465,10 @@ public final class BamlFfi {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
                             fqn, names, args, callId, typeArgs);
-            byte[] response = nativeCallSync(request);
+            byte[] response = nativeCallSync(BamlProgram.current().runtimeKey, request);
             return decodeResult(response, returnDesc);
         } finally {
+            nativeReleaseCallId(callId);
             if (ctx != null) {
                 ctx.detach(callId);
             }
@@ -527,6 +538,8 @@ public final class BamlFfi {
             BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
+        BamlProgram program = BamlProgram.forArgs(args);
+        if (program != BamlProgram.current()) return program.within(() -> callAsync(fqn, names, args, returnDesc, ctx, typeArgs));
         long callId = newCallId();
         CompletableFuture<byte[]> raw = new CompletableFuture<>();
         PENDING.put(callId, raw);
@@ -538,7 +551,7 @@ public final class BamlFfi {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
                             fqn, names, args, callId, typeArgs);
-            nativeCallAsync(callId, request);
+            nativeCallAsync(program.runtimeKey, callId, request);
         } catch (Throwable t) {
             // Arg-encode / JNI-glue failure before the engine took ownership of
             // the call: it will never call completeCall for this id, so
@@ -549,6 +562,7 @@ public final class BamlFfi {
                 raw.completeExceptionally(t);
             }
         }
+        nativeReleaseCallId(callId);
         // Decode + settle the caller-visible future. `whenComplete` fires whether
         // `raw` was completed by the engine (completeCall) or by the catch above,
         // and runs immediately if `raw` is already done. `complete*` on an
@@ -563,7 +577,7 @@ public final class BamlFfi {
                         result.completeExceptionally(err);
                     } else {
                         try {
-                            result.complete(decodeResult(bytes, returnDesc));
+                            result.complete(program.within(() -> decodeResult(bytes, returnDesc)));
                         } catch (Throwable t) {
                             result.completeExceptionally(mapAsyncFailure(t));
                         }
@@ -710,6 +724,7 @@ public final class BamlFfi {
      */
     public static long registerHostCallable(Object callable) {
         long key = HOST_VALUE_KEY.getAndIncrement();
+        HOST_PROGRAMS.put(key, BamlProgram.current());
         HOST_VALUES.put(key, callable);
         return key;
     }
@@ -744,6 +759,7 @@ public final class BamlFfi {
      */
     static void hostRelease(long key) {
         HOST_VALUES.remove(key);
+        HOST_PROGRAMS.remove(key);
     }
 
     /**
@@ -778,6 +794,10 @@ public final class BamlFfi {
      * descriptor types the encode of the result.
      */
     private static void runHostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
+        var program = HOST_PROGRAMS.getOrDefault(hostValueKey, BamlProgram.current());
+        try (var scope = program.enter()) { runHostDispatchScoped(hostValueKey, callId, bamlToHostCall, program); }
+    }
+    private static void runHostDispatchScoped(long hostValueKey, long callId, byte[] bamlToHostCall, BamlProgram program) {
         Object registered = HOST_VALUES.get(hostValueKey);
         if (registered == null) {
             // The engine dispatched a key the bridge no longer holds — a bridge
@@ -808,10 +828,12 @@ public final class BamlFfi {
         if (result instanceof CompletableFuture<?> future) {
             future.whenComplete(
                     (value, err) -> {
+                        try (var scope = program.enter()) {
                         if (err != null) {
                             completeHostError(callId, unwrapCompletion(err));
                         } else {
                             completeHostSuccess(callId, value, returnDesc);
+                        }
                         }
                     });
         } else {

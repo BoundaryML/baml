@@ -10,8 +10,8 @@ module Baml
     @process_runtime = ProcessRuntime.new
 
     class << self
-      def initialize!(compiled_program_bytes)
-        @process_runtime.initialize!(compiled_program_bytes)
+      def initialize!(compiled_program_bytes, runtime_key: nil)
+        @process_runtime.initialize!(compiled_program_bytes, runtime_key: runtime_key)
       end
     end
 

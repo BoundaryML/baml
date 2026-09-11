@@ -1,9 +1,10 @@
+import { getRuntime, getTypeMap, withTypeMap } from './typemap.js';
 // stream.ts — pure-TS analog of sdks/python/src/baml_bridge/_stream.py.
 //
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
 // `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`
 // (handle_type ADT_TAGGED_HEAP_HANDLE). next/final round-trip through
-// getRuntime().callFunction* against methods on the class FQN carried by
+// (this._typeMap.runtime ?? getRuntime()).callFunction* against methods on the class FQN carried by
 // that tagged handle.
 //
 // The runtime exports this under its `BamlStream` name; codegen aliases it as
@@ -14,7 +15,7 @@
 // send the authored FQN with the Stream boundary operation; the engine resolves
 // PPIR's private `Fn@stream`. The wrapper exposes both sync and async pulls.
 
-import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { BamlHandle, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { supportsSyncStreamPulls } from './platform.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 
@@ -23,6 +24,10 @@ function newFunctionCall(): bigint {
 }
 
 export class BamlStream<TStream, TFinal> {
+    private readonly _typeMap = getTypeMap();
+    private _encodeCallArgs(...args: Parameters<typeof encodeCallArgs>) { return withTypeMap(this._typeMap, () => encodeCallArgs(...args)); }
+    private _decodeCallResult(...args: Parameters<typeof decodeCallResult>) { return withTypeMap(this._typeMap, () => decodeCallResult(...args)); }
+
     private _handle: BamlHandle;
     private _classFqn: string;
 
@@ -61,15 +66,15 @@ export class BamlStream<TStream, TFinal> {
         if (!supportsSyncStreamPulls) {
             throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
         }
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
+        const rt = this._typeMap.runtime ?? getRuntime();
+        const argsProto = this._encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
         const resultBytes = rt.callFunctionSync(argsProto, null, null);
-        return decodeCallResult(resultBytes);
+        return this._decodeCallResult(resultBytes);
     }
     private async _callAsync(fqn: string): Promise<unknown> {
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
+        const rt = this._typeMap.runtime ?? getRuntime();
+        const argsProto = this._encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
         const resultBytes = await rt.callFunction(argsProto, null, null);
-        return decodeCallResult(resultBytes);
+        return this._decodeCallResult(resultBytes);
     }
 }

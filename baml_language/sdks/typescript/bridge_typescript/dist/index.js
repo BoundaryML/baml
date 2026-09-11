@@ -5,8 +5,9 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import { typeMapForRuntime, withTypeMap } from './typemap.js';
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
-import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, } from './native.js';
+import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, releaseFunctionCall as nativeReleaseFunctionCall, } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
@@ -35,18 +36,22 @@ export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
  * singleton reachable via `getRuntime()`).
  */
 export function initializeRuntime(srcDir, files) {
-    BamlRuntime.initializeRuntime(srcDir, files);
+    return BamlRuntime.initializeRuntime(srcDir, files);
 }
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml) {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml, runtimeKey) {
+    return BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml, runtimeKey);
 }
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
+}
+/** Release an allocated ID when no call will be dispatched. */
+export function releaseFunctionCall(callId) {
+    nativeReleaseFunctionCall(callId.toString());
 }
 export function cancelFunctionCall(callId) {
     return nativeCancelFunctionCall(callId.toString());
@@ -109,8 +114,9 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
+    const typeMap = typeMapForRuntime(rt);
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
+    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { syncMode: true, callId, functionName }));
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -126,15 +132,16 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
         catch (err) {
             throw wrapNativeError(err);
         }
-        return new FunctionResult(decodeCallResult(resultBytes));
+        return new FunctionResult(withTypeMap(typeMap, () => decodeCallResult(resultBytes)));
     }
     finally {
         callCtxBinding.detach();
     }
 }
 export async function callFunction(rt, functionName, kwargs, ctx, collectors, callCtx) {
+    const typeMap = typeMapForRuntime(rt);
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
+    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { callId, functionName }));
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -150,7 +157,7 @@ export async function callFunction(rt, functionName, kwargs, ctx, collectors, ca
         catch (err) {
             throw wrapNativeError(err);
         }
-        return new FunctionResult(decodeCallResult(resultBytes));
+        return new FunctionResult(withTypeMap(typeMap, () => decodeCallResult(resultBytes)));
     }
     finally {
         callCtxBinding.detach();

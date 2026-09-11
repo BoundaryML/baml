@@ -5,9 +5,11 @@ import Foundation
 /// `BamlInboundValue` for the visibility rationale).
 public struct BamlOutboundValue: Sendable {
     let raw: BamlBridge_Cffi_V1_BamlOutboundValue
+    let runtime: BamlRuntime
 
-    init(_ raw: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    init(_ raw: BamlBridge_Cffi_V1_BamlOutboundValue, runtime: BamlRuntime = .shared) {
         self.raw = raw
+        self.runtime = runtime
     }
 
     /// Union wrappers unwrap for non-union decode paths (Python
@@ -232,7 +234,7 @@ extension Optional: BamlDecodable where Wrapped: BamlDecodable {
         let raw = value.normalized
         switch raw.value {
         case nil, .nullValue: return nil
-        default: return try Wrapped._bamlDecode(BamlOutboundValue(raw))
+        default: return try Wrapped._bamlDecode(BamlOutboundValue(raw, runtime: value.runtime))
         }
     }
 }
@@ -244,7 +246,7 @@ extension Array: BamlDecodable where Element: BamlDecodable {
             throw BamlDecodeError.typeMismatch(expected: "Array", got: wireArmName(raw))
         }
         // `item_type` metadata is deliberately ignored, like Python.
-        return try list.items.map { try Element._bamlDecode(BamlOutboundValue($0)) }
+        return try list.items.map { try Element._bamlDecode(BamlOutboundValue($0, runtime: value.runtime)) }
     }
 }
 
@@ -256,7 +258,7 @@ extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
         }
         var out: [String: Value] = [:]
         for entry in mapValue.entries {
-            out[entry.key] = try Value._bamlDecode(BamlOutboundValue(entry.value))
+            out[entry.key] = try Value._bamlDecode(BamlOutboundValue(entry.value, runtime: value.runtime))
         }
         return out
     }
@@ -267,10 +269,11 @@ extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
 /// properties come back `nil` and required ones throw `typeMismatch`).
 public struct BamlClassFields: Sendable {
     let fields: [String: BamlBridge_Cffi_V1_BamlOutboundValue]
+    let runtime: BamlRuntime
 
     public func _baml<T: BamlDecodable>(_ name: String) throws -> T {
         try T._bamlDecode(
-            BamlOutboundValue(fields[name] ?? BamlBridge_Cffi_V1_BamlOutboundValue())
+            BamlOutboundValue(fields[name] ?? BamlBridge_Cffi_V1_BamlOutboundValue(), runtime: runtime)
         )
     }
 }
@@ -290,7 +293,7 @@ extension BamlOutboundValue {
         for entry in cls.fields {
             out[entry.key] = entry.value
         }
-        return BamlClassFields(fields: out)
+        return BamlClassFields(fields: out, runtime: runtime)
     }
 
     /// Interpret this value as an enum and return its variant name.
@@ -331,15 +334,15 @@ private func parseHexBigintFittingInt(_ hex: String) -> Int? {
 /// throw the error/panic arm. Mirrors Python's `decode_call_result`
 /// (the TypeMismatch → native-TypeError special case and host-callable
 /// rehydration arrive with the error phase).
-func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
+func unwrapEnvelope(_ data: Data, runtime: BamlRuntime = .shared) throws -> BamlOutboundValue {
     let envelope = try BamlBridge_Cffi_V1_BamlOutboundResult(serializedBytes: data)
     switch envelope.result {
     case nil:
         // Absent oneof decodes as the default ok value (= null), same
         // as Python.
-        return BamlOutboundValue(BamlBridge_Cffi_V1_BamlOutboundValue())
+        return BamlOutboundValue(BamlBridge_Cffi_V1_BamlOutboundValue(), runtime: runtime)
     case .ok(let value):
-        return BamlOutboundValue(value)
+        return BamlOutboundValue(value, runtime: runtime)
     case .error(let error):
         // Same-process host-callable rehydration: a Swift error thrown
         // inside a passed-in callback comes back as the ORIGINAL error
@@ -348,7 +351,7 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         if let original = rehydrateHostError(error.value) {
             throw original
         }
-        throw bamlError(from: error.value, trace: error.trace)
+        throw bamlError(from: error.value, trace: error.trace, runtime: runtime)
     case .panic(let panic):
         if panic.isExitPanic {
             // (The pre-V1 ABI had a flush_events() hook here; event
@@ -360,21 +363,22 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
             message: message,
             className: className,
             bamlTrace: panic.trace,
-            payload: BamlOutboundValue(panic.value)
+            payload: BamlOutboundValue(panic.value, runtime: runtime)
         )
     }
 }
 
 private func bamlError(
     from value: BamlBridge_Cffi_V1_BamlOutboundValue,
-    trace: [String]
+    trace: [String],
+    runtime: BamlRuntime
 ) -> BamlError {
     let (message, className) = describeThrownValue(value)
     return BamlError(
         message: message,
         className: className,
         bamlTrace: trace,
-        payload: BamlOutboundValue(value)
+        payload: BamlOutboundValue(value, runtime: runtime)
     )
 }
 

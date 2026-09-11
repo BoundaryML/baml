@@ -5,6 +5,7 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import { type BamlTypeMap } from './typemap.js';
 export type Mode = 'sync' | 'async';
 /** Sentinel for "argument not supplied" so optional kwargs can be skipped. */
 export declare const UNSET: unique symbol;
@@ -24,7 +25,10 @@ export interface GenericParams {
  * that maps positional args to kwargs, encodes, calls the runtime, and decodes.
  * `sync` returns the decoded value; `async` returns a `Promise` of it.
  */
-export declare function defineFunction(bamlFqn: string, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined, generics?: GenericParams | undefined): (...args: unknown[]) => unknown;
+export declare function defineFunction(target: string | {
+    name: string;
+    typeMap: () => BamlTypeMap;
+}, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined, generics?: GenericParams | undefined): (...args: unknown[]) => unknown;
 /**
  * Receiver-binding factory for instance methods. `paramNames[0]` is always
  * `"self"`. Codegen emits the binding as a class-field initializer
@@ -32,7 +36,10 @@ export declare function defineFunction(bamlFqn: string, mode: Mode, requiredPara
  * captures the instance at construction time; the synthetic `self` param never
  * appears in the surface type.
  */
-export declare function defineInstanceFunction(bamlFqn: string, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined, generics?: GenericParams | undefined): {
+export declare function defineInstanceFunction(target: string | {
+    name: string;
+    typeMap: () => BamlTypeMap;
+}, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined, generics?: GenericParams | undefined): {
     bind(self: unknown): (...args: unknown[]) => unknown;
 };
 //# sourceMappingURL=define_function.d.ts.map

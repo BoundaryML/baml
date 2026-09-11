@@ -8,12 +8,14 @@
 // `baml_sdk/...` path). The root `index.ts` calls `setTypeMap(_TYPE_MAP)` at
 // import time; resolution is lazy and memoized on first lookup.
 
+import { getRuntime as nativeGetRuntime, type BamlRuntime } from './native.js';
 import { BamlError } from './errors.js';
 
 /** A deferred resolver for a generated class / enum / type alias. */
 export type LazyEntry = () => unknown;
 
 export class BamlTypeMap {
+    runtime?: BamlRuntime;
     private classLazy = new Map<string, LazyEntry>();
     private enumLazy = new Map<string, LazyEntry>();
     private aliasLazy = new Map<string, LazyEntry>();
@@ -112,9 +114,36 @@ export class BamlTypeMap {
 }
 
 let _TYPE_MAP = new BamlTypeMap();
-export function setTypeMap(m: BamlTypeMap): void {
-    _TYPE_MAP = m;
+let activeTypeMap: BamlTypeMap | undefined;
+const programTypeMaps = new Map<bigint, BamlTypeMap>();
+export function setTypeMap(m: BamlTypeMap, runtime?: BamlRuntime): void {
+    m.runtime = runtime;
+    if (runtime) {
+        // Explicit generated factories retain their own map. Raw bridge helpers
+        // use the first import's nominal types for this content registration.
+        if (!programTypeMaps.has(runtime.runtimeKey)) programTypeMaps.set(runtime.runtimeKey, m);
+    } else {
+        _TYPE_MAP = m;
+    }
 }
 export function getTypeMap(): BamlTypeMap {
-    return _TYPE_MAP;
+    return activeTypeMap ?? (programTypeMaps.size === 1 ? programTypeMaps.values().next().value! : _TYPE_MAP);
+}
+
+/** Only synchronous encode/decode sections use ambient context. Never hold it across await. */
+export function withTypeMap<T>(m: BamlTypeMap, fn: () => T): T {
+    const previous = activeTypeMap;
+    activeTypeMap = m;
+    try { return fn(); } finally { activeTypeMap = previous; }
+}
+export function getRuntime(): BamlRuntime { return getTypeMap().runtime ?? nativeGetRuntime(); }
+
+/** Bind a runtime without changing the SDK's shared nominal type definitions. */
+export function typeMapForRuntime(runtime: BamlRuntime): BamlTypeMap {
+    const base = activeTypeMap?.runtime?.runtimeKey === runtime.runtimeKey
+        ? activeTypeMap : programTypeMaps.get(runtime.runtimeKey) ?? getTypeMap();
+    if (base.runtime?.runtimeKey === runtime.runtimeKey) return base;
+    const bound: BamlTypeMap = Object.create(base);
+    bound.runtime = runtime;
+    return bound;
 }

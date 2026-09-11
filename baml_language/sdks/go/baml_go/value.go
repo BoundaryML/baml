@@ -125,7 +125,8 @@ func (BAMLType) MarshalJSON() ([]byte, error) {
 }
 
 type resultOwner struct {
-	keys []uint64
+	runtimeKey uint64
+	keys       []uint64
 }
 
 type PrimitiveType int

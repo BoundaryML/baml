@@ -1,0 +1,15 @@
+[package]
+name = "baml_program_identity"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+baml_artifact.workspace = true
+baml_base.workspace = true
+bex_vm_types.workspace = true
+borsh.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

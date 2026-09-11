@@ -59,7 +59,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
-	const size_t required_size = offsetof(BamlApiV1, initialize_runtime_from_bytecode_with_metadata) + sizeof(api->initialize_runtime_from_bytecode_with_metadata);
+	const size_t required_size = offsetof(BamlApiV1, release_function_call) + sizeof(api->release_function_call);
 	if (api->struct_size < required_size) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
 		FreeLibrary(handle);
@@ -68,7 +68,7 @@ static const char *baml_open_library(const wchar_t *path) {
 	if (api->version == NULL || api->initialize_runtime_from_bytecode == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
-		api->cancel_function_call == NULL ||
+		api->cancel_function_call == NULL || api->release_function_call == NULL ||
 		api->register_host_dispatch_callback == NULL ||
 		api->register_host_release_callback == NULL ||
 		api->complete_host_call == NULL || api->handle_clone == NULL ||
@@ -79,7 +79,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		api->register_bridge == NULL ||
 		api->register_unhandled_spawn_error_callback == NULL ||
 		api->shutdown_runtime == NULL ||
-		api->initialize_runtime_from_bytecode_with_metadata == NULL) {
+		api->initialize_runtime_from_bytecode_with_metadata == NULL || api->create_runtime == NULL || api->unregister_runtime == NULL || api->register_program == NULL || api->call_function_for_runtime == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		FreeLibrary(handle);
 		return baml_loader_error;
@@ -120,6 +120,7 @@ static void baml_register_go_callback(void) {
 static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->register_unhandled_spawn_error_callback(baml_go_unhandled_spawn_error_callback); }
 static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
+static void baml_release_function_call(uint64_t id) { baml_api->release_function_call(id); }
 static void baml_call_function(const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
 static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) { baml_api->complete_host_call(call_id, is_error, (const int8_t *)content, length); }
@@ -132,6 +133,15 @@ static uint32_t baml_media_url_go(uint64_t key, int32_t handle_type, BamlBuffer 
 static uint32_t baml_media_file_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_file(key, handle_type, out); }
 static uint32_t baml_media_base64_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_base64(key, handle_type, out); }
 static uint32_t baml_media_mime_type_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_mime_type(key, handle_type, out); }
+
+static BamlBuffer baml_create_runtime(const uint8_t *bytes, size_t length, uint64_t *key) { return baml_api->create_runtime(bytes, length, key); }
+static BamlBuffer baml_unregister_runtime(uint64_t key) { return baml_api->unregister_runtime(key); }
+static BamlBuffer baml_register_program(uint64_t key, const uint8_t *bytes, size_t length, const char *metadata) {
+  return baml_api->register_program(key, bytes, length, metadata);
+}
+static void baml_call_keyed(uint64_t key, const uint8_t *bytes, size_t length, uint32_t callback) {
+  baml_api->call_function_for_runtime(key, bytes, length, callback);
+}
 */
 import "C"
 
@@ -226,8 +236,9 @@ func nativeShutdown() error {
 	return fmt.Errorf("shutdown BAML runtime: %s", C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len)))
 }
 
-func nativeRegisterCallback()       { C.baml_register_go_callback() }
-func nativeNewFunctionCall() uint64 { return uint64(C.baml_new_function_call()) }
+func nativeRegisterCallback()             { C.baml_register_go_callback() }
+func nativeNewFunctionCall() uint64       { return uint64(C.baml_new_function_call()) }
+func nativeReleaseFunctionCall(id uint64) { C.baml_release_function_call(C.uint64_t(id)) }
 
 func nativeCall(encoded []byte, callbackID uint32) {
 	var encodedPointer *C.uint8_t
@@ -366,4 +377,51 @@ func bamlGoHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, content *C.u
 //export bamlGoHostRelease
 func bamlGoHostRelease(hostValueKey C.uint64_t) {
 	unregisterHostValue(uint64(hostValueKey))
+}
+
+func nativeRegisterProgram(key uint64, bytes []byte, metadata string) error {
+	var pointer *C.uint8_t
+	if len(bytes) > 0 {
+		pointer = (*C.uint8_t)(unsafe.Pointer(&bytes[0]))
+	}
+	var manifest *C.char
+	if metadata != "" {
+		manifest = C.CString(metadata)
+		defer C.free(unsafe.Pointer(manifest))
+	}
+	status := C.baml_register_program(C.uint64_t(key), pointer, C.size_t(len(bytes)), manifest)
+	defer C.baml_free_buffer(status)
+	if status.len == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s", C.GoBytes(unsafe.Pointer(status.ptr), C.int(status.len)))
+}
+func nativeCallKeyed(key uint64, bytes []byte, callbackID uint32) {
+	var pointer *C.uint8_t
+	if len(bytes) > 0 {
+		pointer = (*C.uint8_t)(unsafe.Pointer(&bytes[0]))
+	}
+	C.baml_call_keyed(C.uint64_t(key), pointer, C.size_t(len(bytes)), C.uint32_t(callbackID))
+}
+
+func nativeCreateRuntime(bytes []byte) (uint64, error) {
+	var pointer *C.uint8_t
+	if len(bytes) > 0 {
+		pointer = (*C.uint8_t)(unsafe.Pointer(&bytes[0]))
+	}
+	var key C.uint64_t
+	status := C.baml_create_runtime(pointer, C.size_t(len(bytes)), &key)
+	defer C.baml_free_buffer(status)
+	if status.len != 0 {
+		return 0, fmt.Errorf("%s", C.GoBytes(unsafe.Pointer(status.ptr), C.int(status.len)))
+	}
+	return uint64(key), nil
+}
+func nativeUnregisterRuntime(key uint64) error {
+	status := C.baml_unregister_runtime(C.uint64_t(key))
+	defer C.baml_free_buffer(status)
+	if status.len != 0 {
+		return fmt.Errorf("%s", C.GoBytes(unsafe.Pointer(status.ptr), C.int(status.len)))
+	}
+	return nil
 }

@@ -5,9 +5,11 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import { type BamlRuntime } from './native.js';
 /** A deferred resolver for a generated class / enum / type alias. */
 export type LazyEntry = () => unknown;
 export declare class BamlTypeMap {
+    runtime?: BamlRuntime;
     private classLazy;
     private enumLazy;
     private aliasLazy;
@@ -32,6 +34,11 @@ export declare class BamlTypeMap {
     jsTypeToBamlType(ctor: unknown): string;
     warm(): void;
 }
-export declare function setTypeMap(m: BamlTypeMap): void;
+export declare function setTypeMap(m: BamlTypeMap, runtime?: BamlRuntime): void;
 export declare function getTypeMap(): BamlTypeMap;
+/** Only synchronous encode/decode sections use ambient context. Never hold it across await. */
+export declare function withTypeMap<T>(m: BamlTypeMap, fn: () => T): T;
+export declare function getRuntime(): BamlRuntime;
+/** Bind a runtime without changing the SDK's shared nominal type definitions. */
+export declare function typeMapForRuntime(runtime: BamlRuntime): BamlTypeMap;
 //# sourceMappingURL=typemap.d.ts.map

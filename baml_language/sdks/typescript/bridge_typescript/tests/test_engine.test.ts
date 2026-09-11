@@ -78,9 +78,9 @@ describe('Basics', () => {
     });
 
     test('getRuntime returns initialized runtime', () => {
-        // initializeRuntime sets the process-global singleton; getRuntime fetches it.
-        makeRuntime(BAML_SOURCE);
-        const rt = getRuntime();
+        const registered = makeRuntime(BAML_SOURCE);
+        const rt = getRuntime(registered.runtimeKey);
+        expect(rt.runtimeKey).toBe(registered.runtimeKey);
         expect(callFunctionSync(rt, 'ReturnOne', {}).result()).toBe(1);
     });
 });

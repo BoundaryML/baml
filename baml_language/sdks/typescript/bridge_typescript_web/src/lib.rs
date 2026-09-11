@@ -72,3 +72,9 @@ pub fn get_bridge_runtime_version() -> String {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = flushEvents)]
 pub fn flush_events() {}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = releaseFunctionCall)]
+pub fn release_function_call(call_id: u64) {
+    bridge_cffi::release_function_call_id(call_id);
+}

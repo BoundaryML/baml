@@ -607,15 +607,17 @@ fn write_preamble_ts(
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
         out.push_str(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n",
+            "const _RUNTIME = initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML, _inlinedbaml.PROGRAM_KEY);\n",
         );
-        out.push_str("setTypeMap(_TYPE_MAP);\n");
+        out.push_str("setTypeMap(_TYPE_MAP, _RUNTIME);\n");
         if !kids.is_empty() {
             out.push('\n');
             write_child_reexports(out, kids, callable_child_aliases);
         }
     } else {
         out.push_str(&runtime_import_line(state, &[], runtime_package));
+        let prefix = "../".repeat(body.leaf.segments.len());
+        let _ = writeln!(out, "import {{ _TYPE_MAP }} from \"{prefix}_typemap.js\";");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         write_child_reexports(out, kids, callable_child_aliases);
     }
@@ -871,7 +873,7 @@ fn render_method_binding_ts(
             state.uses_define_function = true;
             let _ = writeln!(
                 out,
-                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig};",
+                "  static {} = defineFunction({{ name: \"{}\", typeMap: () => _TYPE_MAP }}, \"{}\", {required_params_lit}{tail}) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -881,7 +883,7 @@ fn render_method_binding_ts(
             state.uses_define_instance = true;
             let _ = writeln!(
                 out,
-                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{tail}).bind(this) as {sig};",
+                "  {} = defineInstanceFunction({{ name: \"{}\", typeMap: () => _TYPE_MAP }}, \"{}\", {required_params_lit}{tail}).bind(this) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -930,7 +932,7 @@ fn render_function_ts(
     // Free functions bind only their own `<...>` params (no generic receiver).
     let tail = factory_tail(&optional_arg, &f.generic_params, &[]);
     let mut factory = format!(
-        "defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig}",
+        "defineFunction({{ name: \"{}\", typeMap: () => _TYPE_MAP }}, \"{}\", {required_params_lit}{tail}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );
@@ -1216,8 +1218,8 @@ mod tests {
         assert!(ts.contains(
             "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
         ));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract = defineFunction({ name: \"user.lorem.extract\", typeMap: () => _TYPE_MAP }, \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
+        assert!(ts.contains("export const extract_async = defineFunction({ name: \"user.lorem.extract\", typeMap: () => _TYPE_MAP }, \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
     }
 
     #[test]
@@ -1314,7 +1316,7 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains(
-            "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
+            "defineFunction({ name: \"user.lorem.extract\", typeMap: () => _TYPE_MAP }, \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
         ));
         assert!(ts.contains(
             "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => string;"
@@ -1428,11 +1430,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction({ name: \"boundary.id\", typeMap: () => _TYPE_MAP }, \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
+                "export const id_async = defineFunction({ name: \"boundary.id\", typeMap: () => _TYPE_MAP }, \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
             )
         );
     }
@@ -1455,9 +1457,9 @@ mod tests {
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            "const _RUNTIME = initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML, _inlinedbaml.PROGRAM_KEY);"
         ));
-        assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
+        assert!(ts.contains("setTypeMap(_TYPE_MAP, _RUNTIME);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
         assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));

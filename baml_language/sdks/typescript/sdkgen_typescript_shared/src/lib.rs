@@ -344,6 +344,9 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
     out.push_str("  return bytes;\n");
     out.push_str("}\n\n");
     out.push_str("export const BYTECODE = decodeBytecode(BYTECODE_BASE64);\n");
+    let key = baml_program_identity::program_key(bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(bytecode));
+    let _ = writeln!(out, "export const PROGRAM_KEY = {key}n;");
     let manifest = embedded_baml_toml
         .map(ts_string)
         .unwrap_or_else(|| "undefined".to_string());
@@ -474,9 +477,9 @@ mod tests {
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
         assert!(root.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML, _inlinedbaml.PROGRAM_KEY);"
         ));
-        assert!(root.contains("setTypeMap(_TYPE_MAP);"));
+        assert!(root.contains("setTypeMap(_TYPE_MAP, _RUNTIME);"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
         assert!(!root.contains("BAML_PLACEHOLDER"));
@@ -512,10 +515,10 @@ mod tests {
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains(
-            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"])"
+            "export const extract_resume = defineFunction({ name: \"user.lorem.extract_resume\", typeMap: () => _TYPE_MAP }, \"sync\", [\"x\"])"
         ));
         assert!(leaf.contains(
-            "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
+            "export const extract_resume_async = defineFunction({ name: \"user.lorem.extract_resume\", typeMap: () => _TYPE_MAP }, \"async\", [\"x\"])"
         ));
     }
 

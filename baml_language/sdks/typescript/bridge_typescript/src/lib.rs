@@ -65,6 +65,15 @@ pub fn new_function_call() -> String {
     bridge_cffi::new_function_call_id().to_string()
 }
 
+#[napi(js_name = "releaseFunctionCall")]
+pub fn release_function_call(call_id: String) -> napi::Result<()> {
+    let id = call_id
+        .parse::<u64>()
+        .map_err(|_| napi::Error::from_reason("callId must be a decimal uint64 string"))?;
+    bridge_cffi::release_function_call_id(id);
+    Ok(())
+}
+
 #[napi(js_name = "cancelFunctionCall")]
 pub fn cancel_function_call(call_id: String) -> napi::Result<bool> {
     let id = call_id.parse::<u64>().map_err(|_| {

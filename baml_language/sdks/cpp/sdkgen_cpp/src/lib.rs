@@ -1937,7 +1937,8 @@ fn render_body(
     let _ = writeln!(
         buf,
         "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
-         std::move({args}));",
+         std::move({args}), ::baml_sdk::{detail}::runtime_key());",
+        detail = GeneratorIdent::DetailNamespace.token(),
         ret = f.ret,
         fqn = f.call_fqn,
     );
@@ -1971,7 +1972,11 @@ fn render_header(
         "// Lazily initializes the process-global runtime from the embedded\n\
          // BAML sources (see src/_inlinedbaml.cc). Every binding calls this.\n",
     );
-    let _ = writeln!(buf, "void {}();", GeneratorIdent::EnsureRuntime.token());
+    let _ = writeln!(
+        buf,
+        "void {}();\nuint64_t runtime_key();",
+        GeneratorIdent::EnsureRuntime.token()
+    );
     let _ = writeln!(buf, "}}  // namespace {detail}");
 
     // Forward declarations for the structs (`using` declarations cannot be
@@ -2431,6 +2436,9 @@ fn render_inlinedbaml(
         }
         buf.push_str("    ;\n");
     }
+    let key = baml_program_identity::program_key(baml_bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(baml_bytecode));
+    let _ = writeln!(buf, "uint64_t runtime_key() {{ return {key}ULL; }}");
     let _ = writeln!(buf, "\nvoid {}() {{", GeneratorIdent::EnsureRuntime.token());
     // The canonical version stamped at generation time: register_bridge
     // requires exact equality with the loaded runtime.
@@ -2460,6 +2468,12 @@ fn render_inlinedbaml(
             "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
         );
     }
+    let legacy = format!(
+        "::baml::initialize_runtime_from_bytecode(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
+        baml_version::CANONICAL_VERSION
+    );
+    buf = buf.replace(&legacy, "::baml::register_program(runtime_key(), reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size());");
+    buf = buf.replace("::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);", "::baml::register_program(runtime_key(), reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(), kEmbeddedBamlToml);");
     let _ = writeln!(buf, "}}  // namespace {detail}");
     buf.push_str("}  // namespace baml_sdk\n");
     buf
@@ -2484,7 +2498,7 @@ mod bytecode_escape_tests {
         );
 
         assert!(output.contains("const char kEmbeddedBamlToml[]"));
-        assert!(output.contains("initialize_runtime_from_bytecode_with_metadata("));
+        assert!(output.contains("register_program("));
         assert!(output.contains("kEmbeddedBamlToml);"));
     }
 

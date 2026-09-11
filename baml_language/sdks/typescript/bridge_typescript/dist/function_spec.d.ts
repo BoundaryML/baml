@@ -17,6 +17,9 @@ export interface BamlFunctionSpecBuildRequestOptions {
 }
 /** An opaque, bound LLM recipe owned by the engine that created it. */
 export declare class BamlFunctionSpec<TOut> {
+    private readonly _typeMap;
+    private _encodeCallArgs;
+    private _decodeCallResult;
     private readonly handle;
     constructor(handle: BamlHandle);
     /** Internal: construct a FunctionSpec proxy from a tagged heap handle. */

@@ -400,7 +400,7 @@ pub fn assert_typescript_web_generated_esm(fixture: &str, runtime_dir: &str) {
         .unwrap_or_else(|e| panic!("{fixture}: read generated SDK root: {e}"));
     assert!(
         root.contains(
-            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML)"
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML, _inlinedbaml.PROGRAM_KEY)"
         ),
         "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode and metadata"
     );

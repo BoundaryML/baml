@@ -49,6 +49,7 @@ public final class BamlHandle implements AutoCloseable {
     public static final int HOST_VALUE_CALLABLE = 15;
     public static final int HOST_VALUE_OPAQUE = 16;
 
+    final BamlProgram program = BamlProgram.current();
     private final long key;
     private final int handleType;
     /** Root class identity carried by an outbound tagged handle's {@code ty}. */

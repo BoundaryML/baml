@@ -66,7 +66,7 @@ pub(crate) fn render_typemap_module(
     out.push('\n');
 
     out.push_str(
-        "_TYPE_MAP = BamlTypeMap.from_lazy_entries(\n    \
+        "_TYPE_MAP = BamlTypeMap.from_lazy_entries(\n    sdk_module=__package__,\n    \
          classes=_CLASS_ENTRIES,\n    \
          enums=_ENUM_ENTRIES,\n    \
          type_aliases=_ALIAS_ENTRIES,\n)\n",

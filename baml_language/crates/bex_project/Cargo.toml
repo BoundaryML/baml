@@ -34,6 +34,7 @@ baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_path = { workspace = true }
+baml_program_identity.workspace = true
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_engine = { workspace = true }

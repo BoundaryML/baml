@@ -7,43 +7,13 @@ namespace Baml.Runtime;
 internal static class ProgramRegistrar
 {
     private static readonly Lock Sync = new();
-    private static string? registeredFingerprint;
-    private static ProgramNativeState? registeredState;
-    private static ExceptionDispatchInfo? initializationFailure;
-
-    internal static ProgramNativeState Register(
-        ReadOnlySpan<byte> bytecode,
-        string fingerprint,
-        string? embeddedBamlToml)
+    internal static ProgramNativeState Register(ReadOnlySpan<byte> bytecode, string fingerprint, string? embeddedBamlToml, ulong? requestedKey)
     {
         lock (Sync)
         {
-            if (registeredFingerprint is not null
-                && !StringComparer.Ordinal.Equals(registeredFingerprint, fingerprint))
-            {
-                throw new BamlProgramConflictException(
-                    "This process already registered a different generated BAML program. Restart the process to replace it.");
-            }
-
-            initializationFailure?.Throw();
-            if (registeredState is not null)
-            {
-                return registeredState;
-            }
-
-            registeredFingerprint = fingerprint;
-            try
-            {
-                NativeApi api = NativeApi.Instance;
-                api.InitializeRuntime(bytecode, embeddedBamlToml);
-                registeredState = new ProgramNativeState(api, fingerprint);
-                return registeredState;
-            }
-            catch (Exception error)
-            {
-                initializationFailure = ExceptionDispatchInfo.Capture(error);
-                throw;
-            }
+            NativeApi api = NativeApi.Instance;
+            ulong key = api.RegisterProgram(bytecode, embeddedBamlToml, requestedKey);
+            return new ProgramNativeState(api.ForRuntime(key), fingerprint);
         }
     }
 }

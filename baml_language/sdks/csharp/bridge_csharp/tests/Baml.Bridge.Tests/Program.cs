@@ -1239,7 +1239,7 @@ internal static unsafe class Program
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
         Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 layout changed");
+        Require(sizeof(BamlApiV1) == 248, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -2724,6 +2724,7 @@ internal static unsafe class Program
         RegisterCallback = &RegisterResult,
         CallFunction = &Call,
         NewFunctionCall = &NewCall,
+        ReleaseFunctionCall = &ReleaseCall,
         CancelFunctionCall = &Cancel,
         RegisterHostDispatchCallback = &RegisterHostDispatch,
         RegisterHostReleaseCallback = &RegisterHostRelease,
@@ -2869,6 +2870,9 @@ internal static unsafe class Program
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ulong NewCall() => checked((ulong)Interlocked.Increment(ref nextFakeCallId));
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void ReleaseCall(ulong callId) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int Cancel(ulong id)

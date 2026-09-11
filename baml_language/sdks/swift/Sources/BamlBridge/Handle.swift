@@ -8,6 +8,7 @@ import Foundation
 /// fresh key for the wire so this instance stays independently
 /// droppable (Python's `_clone_key_for_wire` semantics).
 public final class BamlHandle: @unchecked Sendable {
+    let runtime: BamlRuntime
     let key: UInt64
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
     /// Root class identity carried by an outbound tagged handle's `ty`.
@@ -20,8 +21,10 @@ public final class BamlHandle: @unchecked Sendable {
         key: UInt64,
         handleType: BamlBridge_Cffi_V1_BamlHandleType,
         classFQN: String? = nil,
-        portableMedia: BamlBridge_Cffi_V1_BamlValueMedia? = nil
+        portableMedia: BamlBridge_Cffi_V1_BamlValueMedia? = nil,
+        runtime: BamlRuntime = .shared
     ) {
+        self.runtime = runtime
         self.key = key
         self.handleType = handleType
         self.classFQN = classFQN
@@ -102,7 +105,8 @@ extension BamlHandle: BamlDecodable {
             key: handle.key,
             handleType: handle.handleType,
             classFQN: classFQN,
-            portableMedia: portableMedia
+            portableMedia: portableMedia,
+            runtime: value.runtime
         )
     }
 }
@@ -131,7 +135,7 @@ public final class BamlFunctionHandle: @unchecked Sendable {
         else {
             throw BamlDecodeError.typeMismatch(expected: "function", got: wireArmName(raw))
         }
-        let handle = BamlHandle(key: outbound.key, handleType: outbound.handleType)
+        let handle = BamlHandle(key: outbound.key, handleType: outbound.handleType, runtime: value.runtime)
         guard outbound.hasTy,
               case .function(let functionType)? = outbound.ty.ty
         else {
@@ -152,6 +156,6 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     public func callRaw(
         args: [(String, (any BamlEncodable)?)],
     ) async throws -> BamlOutboundValue {
-        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
+        try await handle.runtime.callHandleRaw(handle.key, args: args)
     }
 }

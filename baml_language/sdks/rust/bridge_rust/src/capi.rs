@@ -41,6 +41,11 @@ pub(crate) struct Buffer {
 /// bridge calls today; entries are added alongside the features that use
 /// them.
 pub(crate) struct Api {
+    pub(crate) create_runtime: unsafe extern "C" fn(*const u8, usize, *mut u64) -> Buffer,
+    pub(crate) unregister_runtime: unsafe extern "C" fn(u64) -> Buffer,
+    pub(crate) register_program:
+        unsafe extern "C" fn(u64, *const u8, usize, *const c_char) -> Buffer,
+    pub(crate) call_function_for_runtime: unsafe extern "C" fn(u64, *const u8, usize, u32),
     pub(crate) create_baml_runtime:
         unsafe extern "C" fn(*const c_char, *const c_char) -> *const c_void,
     /// Returns a status buffer: empty on success, otherwise a UTF-8 error
@@ -168,6 +173,12 @@ struct BamlApiV1 {
     shutdown_runtime: Option<unsafe extern "C" fn() -> Buffer>,
     initialize_runtime_from_bytecode_with_metadata:
         Option<unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer>,
+    register_program: Option<unsafe extern "C" fn(u64, *const u8, usize, *const c_char) -> Buffer>,
+    create_runtime: Option<unsafe extern "C" fn(*const u8, usize, *mut u64) -> Buffer>,
+    unregister_runtime: Option<unsafe extern "C" fn(u64) -> Buffer>,
+    call_function_for_runtime: Option<unsafe extern "C" fn(u64, *const u8, usize, u32)>,
+    program_key: Option<unsafe extern "C" fn(*const u8, usize, *mut u64) -> Buffer>,
+    release_function_call: Option<unsafe extern "C" fn(u64)>,
 }
 
 #[repr(C)]
@@ -285,6 +296,14 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
 
     let api = Api {
+        create_runtime: required_slot(table.create_runtime, "create_runtime", &path)?,
+        unregister_runtime: required_slot(table.unregister_runtime, "unregister_runtime", &path)?,
+        register_program: required_slot(table.register_program, "register_program", &path)?,
+        call_function_for_runtime: required_slot(
+            table.call_function_for_runtime,
+            "call_function_for_runtime",
+            &path,
+        )?,
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
         initialize_runtime_from_bytecode,

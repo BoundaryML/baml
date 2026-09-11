@@ -49,6 +49,7 @@ const packageRootExports = [
   "lowerTypeToWireTy",
   "newFunctionCall",
   "reflectType",
+  "releaseFunctionCall",
   "setTypeMap",
   "wrapNativeError",
 ] as const;

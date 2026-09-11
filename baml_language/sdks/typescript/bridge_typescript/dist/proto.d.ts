@@ -49,6 +49,9 @@ export interface BamlPromptMessage {
  */
 export declare class BamlPrompt {
     private readonly wire;
+    private readonly _typeMap;
+    private _encodeCallArgs;
+    private _decodeCallResult;
     private constructor();
     static _fromWire(wire: baml_bridge.cffi.v1.IBamlValuePromptAst): BamlPrompt;
     _wireCopy(): baml_bridge.cffi.v1.IBamlValuePromptAst;
@@ -77,11 +80,9 @@ export declare class BamlPrompt {
  * host-value table and is normally released only when the engine GCs the
  * `HostClosure` it allocated and fires the C release callback (a GC-timed
  * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * Dispatch registrations retain their JavaScript function but do not pin the
+ * event loop. Pending native calls and the shutdown hook own execution lifetime.
+ * Encode failures still roll back registrations the engine never received.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
 /**

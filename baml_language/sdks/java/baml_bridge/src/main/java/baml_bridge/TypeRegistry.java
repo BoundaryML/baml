@@ -54,15 +54,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * registration is idempotent (first registration of an FQN wins).
  */
 public final class TypeRegistry {
+    static final class Maps {
     // Forward index (decode): BAML FQN -> entry.
-    private static final ConcurrentHashMap<String, ClassEntry> classesByFqn = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, EnumEntry> enumsByFqn = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, ClassEntry> classesByFqn = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, EnumEntry> enumsByFqn = new ConcurrentHashMap<>();
 
     // Reverse index (encode): generated Java binary name -> entry. Keyed by the
     // registered class name string (not the loaded Class), so encode resolves a
     // host object's type without ever loading it via Class.forName.
-    private static final ConcurrentHashMap<String, ClassEntry> classesByJavaName = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, EnumEntry> enumsByJavaName = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, ClassEntry> classesByJavaName = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, EnumEntry> enumsByJavaName = new ConcurrentHashMap<>();
 
     // Unions. Forward index (decode): keyed structurally by the union's arm set
     // normalized to a sorted, distinct {@code List<BamlType>} ({@code List.equals}
@@ -72,10 +73,35 @@ public final class TypeRegistry {
     // whose {@code self_type} arrives as the alias node. Reverse index (encode):
     // each generated union RECORD binary name -> a reflective unwrapper for its
     // single {@code value()} accessor.
-    private static final ConcurrentHashMap<List<BamlType>, UnionEntry> unionsByArms = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, UnionEntry> unionsByFqn = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
+    final ConcurrentHashMap<List<BamlType>, UnionEntry> unionsByArms = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, UnionEntry> unionsByFqn = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
             new ConcurrentHashMap<>();
+
+    }
+    private static Maps maps() { return BamlProgram.current().types; }
+
+    // Host class tokens may be constructed before entering a call's program scope.
+    // Only immutable nominal identities are shared here, keyed by the actual loader.
+    // Values contain strings, so the weak keys do not retain unloaded SDK loaders.
+    private static final Map<ClassLoader, Map<String, String[]>> CLASS_FIELDS = new java.util.WeakHashMap<>();
+    private static final Map<ClassLoader, Map<String, String>> CLASS_IDENTITIES = new java.util.WeakHashMap<>();
+    private static final Map<ClassLoader, Map<String, String>> ENUM_IDENTITIES = new java.util.WeakHashMap<>();
+
+    private static synchronized void registerIdentity(
+            Map<ClassLoader, Map<String, String>> identities, String javaName, String fqn) {
+        var names = identities.computeIfAbsent(BamlProgram.current().loader, ignored -> new HashMap<>());
+        var previous = names.putIfAbsent(javaName, fqn);
+        if (previous != null && !previous.equals(fqn)) {
+            throw new IllegalArgumentException("Conflicting BAML identity for Java class " + javaName);
+        }
+    }
+
+    private static synchronized String identityFor(
+            Map<ClassLoader, Map<String, String>> identities, Class<?> type) {
+        var names = identities.get(type.getClassLoader());
+        return names == null ? null : names.get(type.getName());
+    }
 
     static {
         // Runtime-owned stdlib types the emitter deliberately does NOT generate
@@ -126,9 +152,13 @@ public final class TypeRegistry {
                     "class field descriptor length mismatch for " + bamlFqn + ": "
                             + fieldOrder.length + " fields vs " + fieldDescs.length + " descriptors");
         }
+        registerIdentity(CLASS_IDENTITIES, javaClassName, bamlFqn);
+        synchronized (TypeRegistry.class) {
+            CLASS_FIELDS.computeIfAbsent(BamlProgram.current().loader, ignored -> new HashMap<>()).putIfAbsent(javaClassName, fieldOrder.clone());
+        }
         ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs);
-        if (classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
-            classesByJavaName.putIfAbsent(javaClassName, entry);
+        if (maps().classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
+            maps().classesByJavaName.putIfAbsent(javaClassName, entry);
         }
     }
 
@@ -145,9 +175,10 @@ public final class TypeRegistry {
                     "enum arrays length mismatch for " + bamlFqn + ": "
                             + javaConstants.length + " constants vs " + wireNames.length + " wire names");
         }
+        registerIdentity(ENUM_IDENTITIES, javaClassName, bamlFqn);
         EnumEntry entry = new EnumEntry(bamlFqn, javaClassName, javaConstants, wireNames);
-        if (enumsByFqn.putIfAbsent(bamlFqn, entry) == null) {
-            enumsByJavaName.putIfAbsent(javaClassName, entry);
+        if (maps().enumsByFqn.putIfAbsent(bamlFqn, entry) == null) {
+            maps().enumsByJavaName.putIfAbsent(javaClassName, entry);
         }
     }
 
@@ -168,7 +199,7 @@ public final class TypeRegistry {
     public static void registerUnion(
             String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
         UnionEntry entry = newUnionEntry(sealedInterfaceName, armTokens, recordNames);
-        putUnion(unionsByArms, armKey(List.of(armTokens)), entry);
+        putUnion(maps().unionsByArms, armKey(List.of(armTokens)), entry);
     }
 
     /** Normalize an arm collection to the registry key: sorted (structural order) + distinct. */
@@ -186,7 +217,7 @@ public final class TypeRegistry {
     public static void registerUnionAlias(
             String aliasFqn, String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
         UnionEntry entry = newUnionEntry(sealedInterfaceName, armTokens, recordNames);
-        putUnion(unionsByFqn, aliasFqn, entry);
+        putUnion(maps().unionsByFqn, aliasFqn, entry);
     }
 
     /** Build a {@link UnionEntry} and register its records (unconditional — encode must unwrap any). */
@@ -201,7 +232,7 @@ public final class TypeRegistry {
         // ANY registered record class, independent of which registration wins a key.
         for (int i = 0; i < recordNames.length; i++) {
             String recordName = recordNames[i];
-            unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName, i));
+            maps().unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName, i));
         }
         return new UnionEntry(sealedInterfaceName, armTokens, recordNames);
     }
@@ -233,13 +264,18 @@ public final class TypeRegistry {
      * can fall back to a plain field map.
      */
     public static Object constructClass(String bamlFqn, Map<String, Object> fields) {
-        ClassEntry entry = classesByFqn.get(bamlFqn);
+        if (bamlFqn.equals(baml_sdk.ai.stream.Done.FQN) && !maps().classesByFqn.containsKey(bamlFqn)) registerClass(bamlFqn, "baml_sdk.ai.stream.Done", new String[0]);
+        ClassEntry entry = maps().classesByFqn.get(bamlFqn);
         return entry == null ? null : entry.instantiate(fields);
     }
 
     /** Whether {@code bamlFqn} resolves to a registered generated class. */
     public static boolean isClass(String bamlFqn) {
-        return classesByFqn.containsKey(bamlFqn);
+        if (bamlFqn.equals(baml_sdk.ai.stream.Done.FQN)
+                && !maps().classesByFqn.containsKey(bamlFqn)) {
+            registerClass(bamlFqn, "baml_sdk.ai.stream.Done", new String[0]);
+        }
+        return maps().classesByFqn.containsKey(bamlFqn);
     }
 
     /**
@@ -248,7 +284,7 @@ public final class TypeRegistry {
      * descriptor that names a recursive alias to {@link #constructUnionForFqn}.
      */
     public static boolean isUnionKey(String fqn) {
-        return unionsByFqn.containsKey(fqn);
+        return maps().unionsByFqn.containsKey(fqn);
     }
 
     /**
@@ -257,7 +293,8 @@ public final class TypeRegistry {
      * {@link #classFieldDescs}.
      */
     public static String[] classFieldOrder(String bamlFqn) {
-        ClassEntry entry = classesByFqn.get(bamlFqn);
+        if (bamlFqn.equals(baml_sdk.ai.stream.Done.FQN) && !maps().classesByFqn.containsKey(bamlFqn)) registerClass(bamlFqn, "baml_sdk.ai.stream.Done", new String[0]);
+        ClassEntry entry = maps().classesByFqn.get(bamlFqn);
         return entry == null ? null : entry.fieldOrder;
     }
 
@@ -269,7 +306,8 @@ public final class TypeRegistry {
      * wire-driven).
      */
     public static BamlType[] classFieldDescs(String bamlFqn) {
-        ClassEntry entry = classesByFqn.get(bamlFqn);
+        if (bamlFqn.equals(baml_sdk.ai.stream.Done.FQN) && !maps().classesByFqn.containsKey(bamlFqn)) registerClass(bamlFqn, "baml_sdk.ai.stream.Done", new String[0]);
+        ClassEntry entry = maps().classesByFqn.get(bamlFqn);
         return entry == null ? null : entry.fieldDescs;
     }
 
@@ -280,7 +318,7 @@ public final class TypeRegistry {
      * string.
      */
     public static Object resolveEnum(String bamlFqn, String wireName) {
-        EnumEntry entry = enumsByFqn.get(bamlFqn);
+        EnumEntry entry = maps().enumsByFqn.get(bamlFqn);
         return entry == null ? null : entry.constantFor(wireName);
     }
 
@@ -296,14 +334,14 @@ public final class TypeRegistry {
      * registered).
      */
     public static Object constructUnionForArms(List<BamlType> arms, byte[] valueBytes, Object inner) {
-        UnionEntry entry = unionsByArms.get(armKey(arms));
+        UnionEntry entry = maps().unionsByArms.get(armKey(arms));
         return entry == null ? null : entry.instantiate(valueBytes, inner);
     }
 
     /** Construct the registered wrapper for the selected canonical arm type. */
     public static Object constructUnionForArmsSelected(
             List<BamlType> arms, BamlType selectedType, Object inner) {
-        UnionEntry entry = unionsByArms.get(armKey(arms));
+        UnionEntry entry = maps().unionsByArms.get(armKey(arms));
         return entry == null ? null : entry.instantiateSelected(selectedType, inner);
     }
 
@@ -313,20 +351,20 @@ public final class TypeRegistry {
      * arrived as the alias node). Otherwise as {@link #constructUnionForArms}.
      */
     public static Object constructUnionForFqn(String fqn, byte[] valueBytes, Object inner) {
-        UnionEntry entry = unionsByFqn.get(fqn);
+        UnionEntry entry = maps().unionsByFqn.get(fqn);
         return entry == null ? null : entry.instantiate(valueBytes, inner);
     }
 
     /** Construct a named registered union wrapper for the selected arm type. */
     public static Object constructUnionForFqnSelected(
             String fqn, BamlType selectedType, Object inner) {
-        UnionEntry entry = unionsByFqn.get(fqn);
+        UnionEntry entry = maps().unionsByFqn.get(fqn);
         return entry == null ? null : entry.instantiateSelected(selectedType, inner);
     }
 
     /** Construct a named alias union by its canonical selected index. */
     public static Object constructUnionForFqnAtIndex(String fqn, int index, Object inner) {
-        UnionEntry entry = unionsByFqn.get(fqn);
+        UnionEntry entry = maps().unionsByFqn.get(fqn);
         return entry == null ? null : entry.instantiateAt(index, inner);
     }
 
@@ -338,7 +376,7 @@ public final class TypeRegistry {
      * items must reify too).
      */
     public static BamlType unionArmTokenForFqn(String fqn, byte[] valueBytes) {
-        UnionEntry entry = unionsByFqn.get(fqn);
+        UnionEntry entry = maps().unionsByFqn.get(fqn);
         if (entry == null) {
             return null;
         }
@@ -350,7 +388,7 @@ public final class TypeRegistry {
 
     /** Whether {@code obj}'s class is a registered generated union wrapper record. */
     public static boolean isUnionRecord(Object obj) {
-        return unionRecordsByJavaName.containsKey(obj.getClass().getName());
+        return maps().unionRecordsByJavaName.containsKey(obj.getClass().getName());
     }
 
     /**
@@ -359,7 +397,7 @@ public final class TypeRegistry {
      * non-record object throws.
      */
     public static Object unionRecordInner(Object obj) {
-        UnionRecordEntry entry = unionRecordsByJavaName.get(obj.getClass().getName());
+        UnionRecordEntry entry = maps().unionRecordsByJavaName.get(obj.getClass().getName());
         if (entry == null) {
             throw new IllegalStateException("not a registered union record: " + obj.getClass().getName());
         }
@@ -368,7 +406,7 @@ public final class TypeRegistry {
 
     /** The record's declaration-order arm index, or {@code -1} when unregistered. */
     public static int unionRecordArmIndex(Object obj) {
-        UnionRecordEntry entry = unionRecordsByJavaName.get(obj.getClass().getName());
+        UnionRecordEntry entry = maps().unionRecordsByJavaName.get(obj.getClass().getName());
         return entry == null ? -1 : entry.armIndex;
     }
 
@@ -376,8 +414,24 @@ public final class TypeRegistry {
      * The class-value wire payload for a host object, or {@code null} when the
      * object's class is not a registered generated class.
      */
+    static Object[] argumentFields(Object obj) {
+        String[] fields;
+        synchronized (TypeRegistry.class) {
+            var names = CLASS_FIELDS.get(obj.getClass().getClassLoader());
+            fields = names == null ? null : names.get(obj.getClass().getName());
+        }
+        if (fields == null) return new Object[0];
+        Object[] values = new Object[fields.length];
+        try {
+            for (int i = 0; i < fields.length; i++) values[i] = obj.getClass().getMethod(fields[i]).invoke(obj);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("Cannot inspect BAML argument fields", e);
+        }
+        return values;
+    }
+
     public static ClassWire classWire(Object obj) {
-        ClassEntry entry = classesByJavaName.get(obj.getClass().getName());
+        ClassEntry entry = maps().classesByJavaName.get(obj.getClass().getName());
         return entry == null ? null : entry.encode(obj);
     }
 
@@ -388,7 +442,7 @@ public final class TypeRegistry {
     public static EnumWire enumWire(Enum<?> constant) {
         // getDeclaringClass (not getClass): a constant with a body is an anonymous
         // subclass, but registration keys on the enum type itself.
-        EnumEntry entry = enumsByJavaName.get(constant.getDeclaringClass().getName());
+        EnumEntry entry = maps().enumsByJavaName.get(constant.getDeclaringClass().getName());
         if (entry == null) {
             return null;
         }
@@ -406,8 +460,7 @@ public final class TypeRegistry {
      * class token's FQN without loading anything.
      */
     public static String classFqnForJavaClass(Class<?> javaClass) {
-        ClassEntry entry = classesByJavaName.get(javaClass.getName());
-        return entry == null ? null : entry.bamlFqn;
+        return identityFor(CLASS_IDENTITIES, javaClass);
     }
 
     /**
@@ -416,8 +469,7 @@ public final class TypeRegistry {
      * registered enum. The enum counterpart of {@link #classFqnForJavaClass}.
      */
     public static String enumFqnForJavaClass(Class<?> javaClass) {
-        EnumEntry entry = enumsByJavaName.get(javaClass.getName());
-        return entry == null ? null : entry.bamlFqn;
+        return identityFor(ENUM_IDENTITIES, javaClass);
     }
 
     // -- reified type-argument side-table ------------------------------------
@@ -573,7 +625,7 @@ public final class TypeRegistry {
             Class<?> c = resolved;
             if (c == null) {
                 try {
-                    c = Class.forName(javaClassName);
+                    c = Class.forName(javaClassName, true, BamlProgram.current().loader);
                 } catch (ClassNotFoundException e) {
                     throw new IllegalStateException(
                             "generated class not found on the classpath: " + javaClassName, e);
@@ -701,7 +753,7 @@ public final class TypeRegistry {
             if (m == null) {
                 Class<?> cls;
                 try {
-                    cls = Class.forName(javaClassName);
+                    cls = Class.forName(javaClassName, true, BamlProgram.current().loader);
                 } catch (ClassNotFoundException e) {
                     throw new IllegalStateException(
                             "generated enum not found on the classpath: " + javaClassName, e);
@@ -819,7 +871,7 @@ public final class TypeRegistry {
         private static Constructor<?> resolveConstructor(String recordName) {
             Class<?> cls;
             try {
-                cls = Class.forName(recordName);
+                cls = Class.forName(recordName, true, BamlProgram.current().loader);
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(
                         "generated union record not found on the classpath: " + recordName, e);

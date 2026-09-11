@@ -20,16 +20,28 @@
 namespace baml {
 namespace detail {
 
+struct call_id_reservation {
+  uint64_t id;
+  ~call_id_reservation() { api().release_function_call(id); }
+};
+
 // ThrownU is the function's declared `throws` set as a baml::variant (void
 // when the function declares none): the error arm then surfaces as
 // thrown<ThrownU> instead of an untyped error.
 template <typename Ret, typename ThrownU = void>
-future<Ret, ThrownU> start_call(const std::string& fqn, args_encoder&& args) {
+future<Ret, ThrownU> start_call(const std::string& fqn, args_encoder&& args,
+                                uint64_t runtime_key = 0) {
   call_registry::started started = call_registry::instance().begin();
   const uint64_t engine_call_id = api().new_function_call();
+  const call_id_reservation reservation{engine_call_id};
   const std::string encoded = args.finish(engine_call_id, fqn);
-  api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
-                      encoded.size(), started.correlation_id);
+  if (runtime_key)
+    api().call_function_for_runtime(
+        runtime_key, reinterpret_cast<const uint8_t*>(encoded.data()),
+        encoded.size(), started.correlation_id);
+  else
+    api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
+                        encoded.size(), started.correlation_id);
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);
 }
 
@@ -38,6 +50,7 @@ future<Ret, ThrownU> start_handle_call(uint64_t handle_key,
                                        args_encoder&& args) {
   call_registry::started started = call_registry::instance().begin();
   const uint64_t engine_call_id = api().new_function_call();
+  const call_id_reservation reservation{engine_call_id};
   const std::string encoded = args.finish(engine_call_id, handle_key);
   api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
@@ -45,8 +58,9 @@ future<Ret, ThrownU> start_handle_call(uint64_t handle_key,
 }
 
 template <typename Ret, typename ThrownU = void>
-Ret call_sync(const std::string& fqn, args_encoder&& args) {
-  return start_call<Ret, ThrownU>(fqn, std::move(args)).get();
+Ret call_sync(const std::string& fqn, args_encoder&& args,
+              uint64_t runtime_key = 0) {
+  return start_call<Ret, ThrownU>(fqn, std::move(args), runtime_key).get();
 }
 
 template <typename Ret, typename ThrownU>

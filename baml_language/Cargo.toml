@@ -73,6 +73,7 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+baml_program_identity = { path = "crates/baml_program_identity" }
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }

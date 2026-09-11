@@ -1,16 +1,14 @@
-"""Process-global FQN → Python class registry (25a2 §4.1).
-
-The typemap is codegen-emitted: each SDK ships a `baml_sdk/_typemap.py`
-that constructs a `BamlTypeMap` from three literal dicts of
-`FQN → (module_path, attr_name)` lazy entries, and the SDK's root
-`__init__.py` installs it via `set_type_map(_TYPE_MAP)`. Resolution
-happens on first `get_class(fqn)` call via `importlib.import_module +
-getattr`, then memoizes.
-"""
+"""SDK-local type maps, scoped across calls and captured by runtime capabilities."""
 
 from __future__ import annotations
 import importlib
-from typing import Dict, Tuple, Type
+import contextvars
+import functools
+import inspect
+import threading
+import weakref
+from contextlib import contextmanager
+from typing import Dict, Optional, Tuple, Type
 
 from .errors import BamlError
 
@@ -36,6 +34,8 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
 
 class BamlTypeMap:
     __slots__ = (
+        "__weakref__",
+        "runtime",
         # Lazy entries — codegen-emitted, resolved on first lookup.
         "_class_lazy",
         "_enum_lazy",
@@ -52,6 +52,7 @@ class BamlTypeMap:
     )
 
     def __init__(self) -> None:
+        self.runtime = None
         self._class_lazy: Dict[str, _LazyEntry] = {}
         self._enum_lazy: Dict[str, _LazyEntry] = {}
         self._alias_lazy: Dict[str, _LazyEntry] = {}
@@ -70,7 +71,12 @@ class BamlTypeMap:
         classes: Dict[str, _LazyEntry],
         enums: Dict[str, _LazyEntry],
         type_aliases: Dict[str, _LazyEntry],
+        sdk_module: str | None = None,
     ) -> "BamlTypeMap":
+        if sdk_module:
+            def rebase(entries):
+                return {fqn: (sdk_module + module[len("baml_sdk"):], attr) for fqn, (module, attr) in entries.items()}
+            classes, enums, type_aliases = rebase(classes), rebase(enums), rebase(type_aliases)
         m = cls()
         m._class_lazy = dict(classes)
         m._enum_lazy = dict(enums)
@@ -170,12 +176,108 @@ class BamlTypeMap:
 
 
 _TYPE_MAP = BamlTypeMap()
+_SDK_MAP_LOCK = threading.RLock()
+_ACTIVE_MAP: contextvars.ContextVar[Optional[BamlTypeMap]] = contextvars.ContextVar("baml_type_map", default=None)
+_SDK_MAPS: Dict[str, BamlTypeMap] = {}
+_PROGRAM_MAPS: Dict[int, BamlTypeMap] = {}
 
 
-def set_type_map(m: BamlTypeMap) -> None:
+def set_type_map(m: BamlTypeMap, runtime=None, sdk_module: str | None = None) -> None:
     global _TYPE_MAP
-    _TYPE_MAP = m
+    m.runtime = runtime
+    if runtime is not None:
+        # Each SDK import has its own wrapper even when native contents dedupe.
+        # A weak reference avoids a runtime -> map -> runtime ownership cycle.
+        runtime._sdk_type_map = weakref.ref(m)
+    if sdk_module is None:
+        _TYPE_MAP = m
+    else:
+        with _SDK_MAP_LOCK:
+            _SDK_MAPS[sdk_module] = m
+            if runtime is not None:
+                _PROGRAM_MAPS.setdefault(runtime.runtime_key, m)
 
 
 def get_type_map() -> BamlTypeMap:
-    return _TYPE_MAP
+    active = _ACTIVE_MAP.get()
+    if active is not None:
+        return active
+    with _SDK_MAP_LOCK:
+        if len(_SDK_MAPS) == 1:
+            return next(iter(_SDK_MAPS.values()))
+        return _TYPE_MAP
+
+
+def type_map_for_module(module: str | None) -> BamlTypeMap:
+    with _SDK_MAP_LOCK:
+        matches = [name for name in _SDK_MAPS if module and (module == name or module.startswith(name + "."))]
+        return _SDK_MAPS[max(matches, key=len)] if matches else get_type_map()
+
+
+@contextmanager
+def type_map_scope(type_map: BamlTypeMap):
+    token = _ACTIVE_MAP.set(type_map)
+    try:
+        yield
+    finally:
+        _ACTIVE_MAP.reset(token)
+
+
+def bind_type_map(call, resolve):
+    """Resolve lazily for generated imports; preserve scope across async suspension."""
+    if inspect.iscoroutinefunction(call):
+        @functools.wraps(call)
+        async def async_call(*args, **kwargs):
+            with type_map_scope(resolve()):
+                return await call(*args, **kwargs)
+        return async_call
+    @functools.wraps(call)
+    def sync_call(*args, **kwargs):
+        with type_map_scope(resolve()):
+            return call(*args, **kwargs)
+    return sync_call
+
+
+def runtime_bound(call):
+    if inspect.iscoroutinefunction(call):
+        @functools.wraps(call)
+        async def async_call(self, *args, **kwargs):
+            with type_map_scope(self._type_map):
+                return await call(self, *args, **kwargs)
+        return async_call
+    @functools.wraps(call)
+    def sync_call(self, *args, **kwargs):
+        with type_map_scope(self._type_map):
+            return call(self, *args, **kwargs)
+    return sync_call
+
+
+def runtime_argument_bound(call):
+    """Bind raw runtime helpers before encoding callbacks or decoding capabilities."""
+    def resolve(runtime):
+        import copy
+        local_ref = getattr(runtime, "_sdk_type_map", None)
+        local = local_ref() if local_ref is not None else None
+        if local is not None:
+            return local
+        base = get_type_map()
+        if base.runtime is not None and base.runtime.runtime_key == runtime.runtime_key:
+            return base
+        with _SDK_MAP_LOCK:
+            registered = _PROGRAM_MAPS.get(runtime.runtime_key)
+        if registered is not None:
+            return registered
+        bound = copy.copy(base)
+        bound.runtime = runtime
+        return bound
+    if inspect.iscoroutinefunction(call):
+        @functools.wraps(call)
+        async def async_call(runtime, *args, **kwargs):
+            with type_map_scope(resolve(runtime)):
+                return await call(runtime, *args, **kwargs)
+        return async_call
+    @functools.wraps(call)
+    def sync_call(runtime, *args, **kwargs):
+        with type_map_scope(resolve(runtime)):
+            return call(runtime, *args, **kwargs)
+    return sync_call

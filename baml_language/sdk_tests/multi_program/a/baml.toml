@@ -1,0 +1,12 @@
+[package]
+name = "multi"
+
+[generator.python]
+output_type = "python/pydantic"
+output_dir = "python"
+naming_convention = "preserve-case"
+
+[generator.typescript]
+output_type = "typescript/node"
+output_dir = "typescript"
+naming_convention = "preserve-case"

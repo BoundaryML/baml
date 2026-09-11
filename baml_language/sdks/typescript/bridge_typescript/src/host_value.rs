@@ -30,16 +30,10 @@
 //! `ThreadsafeFunction`'s `Drop` releases the underlying JS reference, which
 //! lets the user's callable become GC-eligible.
 //!
-//! Release is therefore GC/drain-driven: the entry — and its strong
-//! (`weak::<false>`) tsfn ref, which pins the libuv loop — lives until the
-//! engine collects or drops the owning `Object::HostClosure` and the deferred
-//! release is drained (`host_release_dispatch::drain`, run at GC safepoints
-//! and after each call). A callable that is never collected before the
-//! process tears down keeps its ref, which is why the Node test suite runs
-//! jest with `forceExit`. A teardown-time drain (releasing every still-live
-//! host value when a runtime is dropped) would close that gap but depends on
-//! heap-teardown semantics owned by the engine/heap layer; it is left to that
-//! layer rather than worked around here.
+//! Release is GC/drain-driven. The registry retains each JavaScript function,
+//! but its dispatch reference does not keep the event loop alive. Native call
+//! promises keep in-flight calls alive, and the beforeExit hook shuts down
+//! registered engines and drains background BAML work.
 
 use std::{
     collections::HashMap,
@@ -76,7 +70,7 @@ type DispatchArgs = FnArgs<(u32, Buffer)>;
 /// - `Weak = false` / `MaxQueueSize = DISPATCH_QUEUE_SIZE`: a strong ref with a
 ///   bounded queue (see [`DISPATCH_QUEUE_SIZE`]).
 type DispatchTsfn =
-    ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false, false, DISPATCH_QUEUE_SIZE>;
+    ThreadsafeFunction<DispatchArgs, (), DispatchArgs, Status, false, true, DISPATCH_QUEUE_SIZE>;
 
 /// Upper bound on queued, not-yet-delivered host-call dispatches per callable.
 ///
@@ -130,7 +124,7 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
     let tsfn: DispatchTsfn = callable
         .build_threadsafe_function()
         .callee_handled::<false>()
-        .weak::<false>()
+        .weak::<true>()
         // Bound the queue (napi's default is unbounded); see DISPATCH_QUEUE_SIZE.
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
@@ -162,7 +156,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 /// Remove and drop the registry entry for `host_value_key` (if present).
 ///
 /// Dropping the `ThreadsafeFunction` releases the underlying napi reference
-/// (and its strong `weak::<false>` libuv ref), allowing the user's JS
+/// (while its libuv reference is weak), allowing the user's JS
 /// callable to become GC-eligible and unpinning the event loop. Shared by the
 /// engine-driven release path ([`host_release_callback`]) and the encoder's
 /// rollback path ([`release_host_callable`]).
@@ -291,10 +285,9 @@ pub fn mint_host_value_key() -> HandleKey {
 /// and the TS-side map entry would be torn down with the process
 /// anyway.
 ///
-/// Note this is the inverse of `register_host_callable`'s dispatch tsfn,
-/// which is `weak::<false>()` — that one pins the loop because a hung
-/// host callback awaiting completion *must* keep the loop alive so the
-/// JS callback can actually run.
+/// Dispatch callbacks also use weak libuv references. Pending native call
+/// promises keep the loop alive; the beforeExit shutdown hook drains spawned
+/// BAML work. Idle program registrations must not prevent that hook from running.
 ///
 /// Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
 /// exactly once at SDK module init, before any host call is dispatched.
@@ -321,7 +314,7 @@ pub fn register_host_value_release_callback(
 /// registers a callable for an early kwarg and then fails to encode a later
 /// kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
 /// (and so never releases) that key. Without this, the registry entry — and
-/// its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
+/// its retained JavaScript function reference —
 /// would leak for the life of the process. The encoder calls this for every
 /// key it registered during a failed encode.
 #[napi(js_name = "releaseHostCallable")]

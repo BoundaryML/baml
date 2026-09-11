@@ -5,15 +5,17 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from .typemap import get_type_map, runtime_bound
 from .baml_py import BamlPyHandle
 
 
 class BamlRuntimeValue:
     """Identity-preserving live value with explicit data projection."""
 
-    __slots__ = ("_handle",)
+    __slots__ = ("_type_map", "_handle",)
 
     def __init__(self, handle: BamlPyHandle) -> None:
+        self._type_map = get_type_map()
         self._handle = handle
 
     @classmethod
@@ -23,6 +25,7 @@ class BamlRuntimeValue:
     def _to_pyhandle(self) -> BamlPyHandle:
         return self._handle
 
+    @runtime_bound
     def to_data(self) -> Any:
         from . import get_runtime
         from .baml_py import new_function_call
@@ -35,6 +38,7 @@ class BamlRuntimeValue:
         )
         return decode_call_result(get_runtime().call_function_sync(encoded, None, None))
 
+    @runtime_bound
     async def to_data_async(self) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call

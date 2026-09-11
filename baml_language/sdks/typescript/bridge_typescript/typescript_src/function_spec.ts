@@ -1,6 +1,7 @@
+import { getRuntime, getTypeMap, withTypeMap } from './typemap.js';
 // Host proxy for a live ai.FunctionSpec<Out> value.
 
-import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { BamlHandle, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { decodeCallResult, encodeCallArgs } from './proto.js';
 import type { BamlPrompt } from './proto.js';
 import type { BamlType } from './wire_ty.js';
@@ -26,6 +27,10 @@ function suppliedOptions(options: object | undefined): Record<string, unknown> {
 
 /** An opaque, bound LLM recipe owned by the engine that created it. */
 export class BamlFunctionSpec<TOut> {
+    private readonly _typeMap = getTypeMap();
+    private _encodeCallArgs(...args: Parameters<typeof encodeCallArgs>) { return withTypeMap(this._typeMap, () => encodeCallArgs(...args)); }
+    private _decodeCallResult(...args: Parameters<typeof decodeCallResult>) { return withTypeMap(this._typeMap, () => decodeCallResult(...args)); }
+
     private readonly handle: BamlHandle;
 
     constructor(handle: BamlHandle) {
@@ -124,22 +129,22 @@ export class BamlFunctionSpec<TOut> {
     }
 
     private _callSync(fqn: string, kwargs: Record<string, unknown> = {}): unknown {
-        const argsProto = encodeCallArgs(
+        const argsProto = this._encodeCallArgs(
             { self: this, ...kwargs },
             { syncMode: true, callId: newFunctionCall(), functionName: fqn },
         );
-        return decodeCallResult(getRuntime().callFunctionSync(argsProto, null, null));
+        return this._decodeCallResult((this._typeMap.runtime ?? getRuntime()).callFunctionSync(argsProto, null, null));
     }
 
     private async _callAsync(
         fqn: string,
         kwargs: Record<string, unknown> = {},
     ): Promise<unknown> {
-        const argsProto = encodeCallArgs(
+        const argsProto = this._encodeCallArgs(
             { self: this, ...kwargs },
             { callId: newFunctionCall(), functionName: fqn },
         );
-        return decodeCallResult(await getRuntime().callFunction(argsProto, null, null));
+        return this._decodeCallResult(await (this._typeMap.runtime ?? getRuntime()).callFunction(argsProto, null, null));
     }
 
     toString(): string {

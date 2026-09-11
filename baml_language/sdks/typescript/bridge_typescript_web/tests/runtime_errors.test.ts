@@ -66,12 +66,12 @@ describe("Web runtime and setup errors", () => {
     expect(() => BamlRuntime.initializeRuntimeFromBytecode(new Uint8Array([1, 2, 3]))).toThrow(/Failed to deserialize BAML bytecode/);
   });
 
-  it("initializes from sources and replaces the singleton atomically", async () => {
-    BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_A });
-    expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-a");
+  it("keeps dynamic registrations independent across in-flight calls", async () => {
+    const runtimeA = BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_A });
+    expect(callFunctionSync(runtimeA, "PhaseSevenValue", {}).result()).toBe("runtime-a");
 
     expect(() => BamlRuntime.initializeRuntime(".", { "broken.baml": "this is not BAML" })).toThrow(BamlClientError);
-    expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-a");
+    expect(callFunctionSync(runtimeA, "PhaseSevenValue", {}).result()).toBe("runtime-a");
 
     let resolveOldCall!: (value: string) => void;
     let markDispatched!: () => void;
@@ -80,14 +80,16 @@ describe("Web runtime and setup errors", () => {
       resolveOldCall = resolve;
       markDispatched();
     })) as unknown as () => string;
-    const oldCall = callFunction(getRuntime(), "PhaseSevenWait", { callback });
-    await dispatched;
+    const oldCall = callFunction(runtimeA, "PhaseSevenWait", { callback });
+    await Promise.race([dispatched, oldCall.then(() => { throw new Error("call finished before callback dispatch"); })]);
 
-    BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_C });
+    const runtimeC = BamlRuntime.initializeRuntime(".", { "main.baml": SOURCE_C });
+    expect(runtimeA.runtimeKey).not.toBe(runtimeC.runtimeKey);
+    runtimeA.close();
     resolveOldCall("old-runtime-finished");
     await expect(oldCall.then((result) => result.result())).resolves.toBe("old-runtime-finished");
-    expect(callFunctionSync(getRuntime(), "PhaseSevenValue", {}).result()).toBe("runtime-c");
-  }, 20_000);
+    expect(callFunctionSync(runtimeC, "PhaseSevenValue", {}).result()).toBe("runtime-c");
+  }, 60_000);
 });
 
 describe("Web structured call errors", () => {

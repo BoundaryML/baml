@@ -94,10 +94,15 @@ struct ActiveCallRoute {
     runtime: Weak<dyn Bex>,
 }
 
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
+enum CallRouteState {
+    Pending { cancelled: bool, dispatched: bool },
+    Active(Arc<ActiveCallRoute>),
+}
+
+static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, CallRouteState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
+fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, CallRouteState>> {
     ACTIVE_CALL_RUNTIMES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -111,9 +116,7 @@ pub(crate) struct ActiveCallRouteGuard {
 impl Drop for ActiveCallRouteGuard {
     fn drop(&mut self) {
         let mut routes = active_call_runtimes();
-        if routes
-            .get(&self.call_id)
-            .is_some_and(|current| Arc::ptr_eq(current, &self.route))
+        if matches!(routes.get(&self.call_id), Some(CallRouteState::Active(current)) if Arc::ptr_eq(current, &self.route))
         {
             routes.remove(&self.call_id);
         }
@@ -123,12 +126,113 @@ impl Drop for ActiveCallRouteGuard {
 pub(crate) fn register_active_call_runtime(
     call_id: u64,
     runtime: &Arc<dyn Bex>,
-) -> ActiveCallRouteGuard {
+) -> Result<ActiveCallRouteGuard, BridgeError> {
     let route = Arc::new(ActiveCallRoute {
         runtime: Arc::downgrade(runtime),
     });
-    active_call_runtimes().insert(call_id, Arc::clone(&route));
-    ActiveCallRouteGuard { call_id, route }
+    let mut routes = active_call_runtimes();
+    match routes.get(&call_id) {
+        Some(CallRouteState::Active(_)) => return Err(BridgeError::DuplicateCallId(call_id)),
+        Some(CallRouteState::Pending {
+            cancelled: true, ..
+        }) => {
+            // Cancellation may arrive before async dispatch resolves its runtime.
+            // Apply it only to the originating engine once that engine is known.
+            runtime.cancel_function_call(bex_project::CallId(call_id))?;
+        }
+        Some(CallRouteState::Pending {
+            cancelled: false, ..
+        })
+        | None => {}
+    }
+    routes.insert(call_id, CallRouteState::Active(Arc::clone(&route)));
+    Ok(ActiveCallRouteGuard { call_id, route })
+}
+
+/// Resolve a call before consuming inbound handles. Heap capabilities retain their
+/// originating runtime, and combining capabilities from different engines is rejected.
+pub fn runtime_for_call(
+    key: Option<u64>,
+    args: &bridge_ctypes::baml_bridge::cffi::CallFunctionArgs,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::{
+        InboundValue, call_function_args::CallTarget, inbound_value::Value,
+    };
+    fn collect(value: &InboundValue, keys: &mut Vec<u64>) {
+        match &value.value {
+            Some(Value::Handle(handle)) => {
+                use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
+                if !matches!(
+                    handle.handle_type(),
+                    BamlHandleType::HostValueCallable | BamlHandleType::HostValueOpaque
+                ) {
+                    keys.push(handle.key);
+                }
+            }
+            Some(Value::ListValue(list)) => {
+                for value in &list.values {
+                    collect(value, keys);
+                }
+            }
+            Some(Value::MapValue(map)) => {
+                for entry in &map.entries {
+                    if let Some(value) = &entry.value {
+                        collect(value, keys);
+                    }
+                }
+            }
+            Some(Value::ClassValue(class)) => {
+                for entry in &class.fields {
+                    if let Some(value) = &entry.value {
+                        collect(value, keys);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut handles = Vec::new();
+    if let Some(CallTarget::FunctionHandle(handle)) = args.call_target {
+        handles.push(handle);
+    }
+    for entry in &args.kwargs {
+        if let Some(value) = &entry.value {
+            collect(value, &mut handles);
+        }
+    }
+    let mut origin = None;
+    for handle in handles {
+        if let Some(owner) = bridge_ctypes::HANDLE_TABLE.runtime_owner(handle) {
+            if key.is_some_and(|key| key != owner.key)
+                || origin
+                    .as_ref()
+                    .is_some_and(|prior: &bridge_ctypes::RuntimeOwner| prior.key != owner.key)
+            {
+                return Err(BridgeError::Startup(
+                    "BAML call contains a handle from another runtime".into(),
+                ));
+            }
+            origin = Some(owner);
+        }
+    }
+    // An explicit key must still be registered. Legacy capability calls may use
+    // their retained owner after unregister, without reviving a named registration.
+    if let Some(key) = key {
+        return get_runtime_by_key(key);
+    }
+    origin
+        .map(|owner| Ok(owner.runtime))
+        .unwrap_or_else(get_runtime)
+}
+
+pub fn runtime_for_encoded_call(
+    key: impl Into<Option<u64>>,
+    bytes: &[u8],
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    use prost::Message;
+    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(bytes)
+        .map_err(bridge_ctypes::CtypesError::from)?;
+    runtime_for_call(key.into(), &args)
 }
 
 pub mod baml_to_host;
@@ -136,7 +240,8 @@ pub mod buffer;
 pub mod error;
 pub mod handle;
 mod identity;
-
+mod runtime_owner;
+mod runtime_registry;
 pub use baml_to_host::{
     call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
     unhandled_spawn_error_to_outbound,
@@ -148,13 +253,9 @@ pub use identity::{
     BridgeInfo, BridgeLanguage, ensure_version_compatible, register_bridge, registered_bridge,
 };
 pub use platform::*;
+pub use runtime_registry::{get_runtime, get_runtime_by_key, runtime_key, unregister_runtime};
 
-/// Get a clone of the target's global runtime, or error if not initialized.
-pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    platform::get_runtime()
-}
-
-/// Initialize the global runtime from serialized BAML bytecode.
+/// Create an independent dynamic runtime from serialized BAML bytecode.
 ///
 /// The payload is a versioned artifact containing `bex_vm_types::Program`.
 /// Validation, decoding, and engine construction live behind
@@ -162,6 +263,17 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 /// surface rather than reaching into bex internals. Artifact validation runs
 /// even when the optional generated `baml.toml` metadata is absent.
 pub fn initialize_runtime_from_bytecode_with_sys_ops(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = build_runtime_from_bytecode(bytecode, embedded_baml_toml, sys_ops)?;
+    let runtime = runtime_owner::own_dynamic(runtime);
+    runtime_registry::insert_dynamic(runtime.clone())?;
+    Ok(runtime)
+}
+
+fn build_runtime_from_bytecode(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
@@ -182,7 +294,6 @@ pub fn initialize_runtime_from_bytecode_with_sys_ops(
         ))
     })?;
     install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }
 
@@ -292,11 +403,9 @@ fn format_version_skew(generated: &str, bridge: &BridgeInfo) -> String {
     )
 }
 
-/// Initialize the global runtime from an in-memory BAML source map.
+/// Create an independent dynamic runtime from an in-memory BAML source map.
 ///
-/// The candidate runtime is fully compiled before the process-global slot is
-/// replaced, so a path or compilation failure leaves the previous runtime
-/// usable. The memory filesystem supplies a platform-neutral project root;
+/// Compilation failure leaves existing registrations untouched. The memory filesystem supplies a platform-neutral project root;
 /// source contents continue to enter through `bex_project::new`'s source map.
 pub fn initialize_runtime_from_files_with_sys_ops(
     root_path: &str,
@@ -347,7 +456,8 @@ pub fn initialize_runtime_from_files_with_sys_ops(
 
     let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
     install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
+    let runtime = runtime_owner::own_dynamic(runtime);
+    runtime_registry::insert_dynamic(runtime.clone())?;
     Ok(runtime)
 }
 
@@ -366,9 +476,10 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
 fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
 pub async fn shutdown_runtime() -> Result<(), BridgeError> {
-    if let Some(runtime) = platform::take_runtime()? {
+    for runtime in runtime_registry::take_all()? {
         runtime.shutdown().await;
     }
+    active_call_runtimes().clear();
     Ok(())
 }
 
@@ -387,9 +498,101 @@ pub fn initialize_runtime_from_bytecode(
     )
 }
 
+/// Register generated bytecode under its deterministic program identity.
+/// Independently configured instances must use the dynamic constructors instead.
+pub fn register_runtime_from_bytecode_with_sys_ops(
+    key: u64,
+    bytecode: &[u8],
+    metadata: Option<&str>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let bridge = validate_bytecode_startup_preconditions(bytecode.is_empty())?;
+    if let Some(metadata) = metadata {
+        validate_generated_metadata(metadata, bridge)?;
+    }
+    let canonical = bex_project::canonical_program_bytes(bytecode)?;
+    runtime_registry::register_generated(key, canonical, || {
+        build_runtime_from_bytecode(bytecode, metadata, sys_ops)
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn register_runtime_from_bytecode(
+    key: u64,
+    bytecode: &[u8],
+    metadata: Option<&str>,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    use sys_native::SysOpsExt as _;
+    register_runtime_from_bytecode_with_sys_ops(key, bytecode, metadata, sys_ops::SysOps::native())
+}
+
 /// Allocate a new process-unique function-call ID.
 pub fn new_function_call_id() -> u64 {
-    bex_project::CallId::next().0
+    let id = bex_project::CallId::next().0;
+    active_call_runtimes().insert(
+        id,
+        CallRouteState::Pending {
+            cancelled: false,
+            dispatched: false,
+        },
+    );
+    id
+}
+
+/// Release an allocated call ID that will not be dispatched. Active calls retain
+/// their own guard; releasing their caller's reservation does not cancel them.
+pub fn release_function_call_id(id: u64) {
+    let mut routes = active_call_runtimes();
+    if matches!(
+        routes.get(&id),
+        Some(CallRouteState::Pending {
+            dispatched: false,
+            ..
+        })
+    ) {
+        routes.remove(&id);
+    }
+}
+
+/// Own the reservation while preparing/dispatching encoded arguments. Failed
+/// preparation and abandoned async futures release the reservation automatically.
+pub struct FunctionCallReservation {
+    id: u64,
+    owns_pending: bool,
+}
+impl FunctionCallReservation {
+    pub fn new(id: u64) -> Self {
+        let owns_pending = match active_call_runtimes().get_mut(&id) {
+            Some(CallRouteState::Pending { dispatched, .. }) if !*dispatched => {
+                *dispatched = true;
+                true
+            }
+            _ => false,
+        };
+        Self { id, owns_pending }
+    }
+    pub fn from_encoded(bytes: &[u8]) -> Self {
+        use prost::Message;
+        Self::new(
+            bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(bytes)
+                .map_or(0, |args| args.call_id),
+        )
+    }
+}
+impl Drop for FunctionCallReservation {
+    fn drop(&mut self) {
+        if self.owns_pending {
+            let mut routes = active_call_runtimes();
+            if matches!(routes.get(&self.id), Some(CallRouteState::Pending { .. })) {
+                routes.remove(&self.id);
+            }
+        }
+    }
+}
+
+/// Release a call ID that will never be dispatched. Safe after completion too.
+pub extern "C" fn release_function_call(id: u64) {
+    release_function_call_id(id);
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
@@ -401,23 +604,25 @@ pub fn function_call_context_builder(
 
 /// Cancel an in-flight function call by ID.
 ///
-/// Returns true on success, false if the runtime is not initialized.
+/// Cancellation before dispatch is retained until the originating runtime is known.
+/// Returns false for unknown, released, or completed IDs, or cancellation failure.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
     }
-    let originating_runtime = active_call_runtimes()
-        .get(&id)
-        .and_then(|route| route.runtime.upgrade());
-    originating_runtime
-        .map(Ok)
-        .unwrap_or_else(get_runtime)
-        .and_then(|runtime| {
+    let mut routes = active_call_runtimes();
+    match routes.get_mut(&id) {
+        Some(CallRouteState::Active(route)) => route.runtime.upgrade().is_some_and(|runtime| {
             runtime
                 .cancel_function_call(bex_project::CallId(id))
-                .map_err(BridgeError::from)
-        })
-        .is_ok()
+                .is_ok()
+        }),
+        Some(CallRouteState::Pending { cancelled, .. }) => {
+            *cancelled = true;
+            true
+        }
+        None => false,
+    }
 }
 
 /// Allocate a new process-unique function-call ID.
@@ -428,7 +633,7 @@ pub extern "C" fn new_function_call() -> u64 {
 
 /// Cancel an in-flight function call.
 ///
-/// Returns 0 on success, 1 if the call ID is unknown or already completed.
+/// Returns 0 when cancellation is accepted, including before dispatch, or 1 on failure.
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u64) -> i32 {
     if cancel_function_call_by_id(id) { 0 } else { 1 }

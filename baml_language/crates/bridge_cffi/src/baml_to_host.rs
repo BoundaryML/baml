@@ -325,8 +325,14 @@ pub async fn call_and_encode(
     args: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let options = match crate::runtime_key(&runtime) {
+        Ok(key) => CffiHandleTableOptions::for_wire().with_runtime(key, runtime.clone()),
+        Err(_) => CffiHandleTableOptions::for_wire(),
+    };
+    let _route = match crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime) {
+        Ok(route) => route,
+        Err(error) => return error_to_outbound(error),
+    };
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()
@@ -414,8 +420,14 @@ pub async fn call_handle_and_encode(
         }
     };
 
-    let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let options = match crate::runtime_key(&runtime) {
+        Ok(key) => CffiHandleTableOptions::for_wire().with_runtime(key, runtime.clone()),
+        Err(_) => CffiHandleTableOptions::for_wire(),
+    };
+    let _route = match crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime) {
+        Ok(route) => route,
+        Err(error) => return error_to_outbound(error),
+    };
     let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
         .catch_unwind()
         .await;

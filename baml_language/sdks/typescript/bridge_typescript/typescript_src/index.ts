@@ -1,3 +1,4 @@
+import { typeMapForRuntime, withTypeMap } from './typemap.js';
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 
 import {
@@ -12,6 +13,7 @@ import {
     LLMCall,
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
+    releaseFunctionCall as nativeReleaseFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
@@ -56,16 +58,16 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
  * singleton reachable via `getRuntime()`).
  */
-export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-    BamlRuntime.initializeRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>): BamlRuntime {
+    return BamlRuntime.initializeRuntime(srcDir, files);
 }
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
+export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime {
+    return BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml, runtimeKey);
 }
 export {
     BamlAbortError,
@@ -79,6 +81,11 @@ export {
 
 export function newFunctionCall(): bigint {
     return BigInt(nativeNewFunctionCall());
+}
+
+/** Release an allocated ID when no call will be dispatched. */
+export function releaseFunctionCall(callId: bigint): void {
+    nativeReleaseFunctionCall(callId.toString());
 }
 
 export function cancelFunctionCall(callId: bigint): boolean {
@@ -156,8 +163,9 @@ export function callFunctionSync(
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
+    const typeMap = typeMapForRuntime(rt);
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
+    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { syncMode: true, callId, functionName }));
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -172,7 +180,7 @@ export function callFunctionSync(
         } catch (err) {
             throw wrapNativeError(err);
         }
-        return new FunctionResult(decodeCallResult(resultBytes));
+        return new FunctionResult(withTypeMap(typeMap, () => decodeCallResult(resultBytes)));
     } finally {
         callCtxBinding.detach();
     }
@@ -186,8 +194,9 @@ export async function callFunction(
     collectors?: Collector[],
     callCtx?: BamlCallContext,
 ): Promise<FunctionResult> {
+    const typeMap = typeMapForRuntime(rt);
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
+    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { callId, functionName }));
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -202,7 +211,7 @@ export async function callFunction(
         } catch (err) {
             throw wrapNativeError(err);
         }
-        return new FunctionResult(decodeCallResult(resultBytes));
+        return new FunctionResult(withTypeMap(typeMap, () => decodeCallResult(resultBytes)));
     } finally {
         callCtxBinding.detach();
     }

@@ -51,7 +51,7 @@ func (function Function) Call(ctx context.Context, args map[string]Input) (Value
 	if function.key == 0 || function.owner == nil {
 		return Value{}, errors.New("call BAML function: invalid or released function handle")
 	}
-	value, err := callHandle(ctx, function.key, args)
+	value, err := callHandle(WithRuntime(ctx, function.owner.runtimeKey), function.key, args)
 	runtime.KeepAlive(function.owner)
 	return value, err
 }

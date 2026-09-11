@@ -164,6 +164,12 @@ func (spec FunctionSpec[TOut]) ClientID(ctx context.Context) (string, error) {
 
 func liveHandleInput(key uint64, handleType cffi.BamlHandleType, owner *resultOwner) Input {
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		if owner != nil && owner.runtimeKey != 0 {
+			if transaction.runtimeKey != 0 && transaction.runtimeKey != owner.runtimeKey {
+				return nil, fmt.Errorf("BAML handles belong to different runtimes")
+			}
+			transaction.runtimeKey = owner.runtimeKey
+		}
 		cloned, err := cloneInboundHandle(key)
 		runtime.KeepAlive(owner)
 		if err != nil {

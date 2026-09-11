@@ -137,7 +137,9 @@ pub fn external_to_outbound(
             }
             let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = options
+                .table
+                .insert_for_runtime(table_value, options.runtime_owner.clone());
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
@@ -207,7 +209,9 @@ pub fn external_to_outbound(
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
             })?;
             let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
+            let key = options
+                .table
+                .insert_for_runtime(table_value, options.runtime_owner.clone());
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,

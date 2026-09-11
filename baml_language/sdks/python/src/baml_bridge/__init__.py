@@ -33,6 +33,7 @@ from .baml_py import (
     get_toolchain_version,
     get_version,
     new_function_call,
+    release_function_call,
     register_unhandled_spawn_error_callback,
     shutdown_runtime,
 )
@@ -57,6 +58,7 @@ from .proto import (
 from .typemap import (
     BamlTypeMap,
     set_type_map,
+    runtime_argument_bound,
     get_type_map,
 )
 
@@ -164,10 +166,12 @@ class Collector(_RustCollector):
 # ---------------------------------------------------------------------------
 
 
-def get_runtime() -> BamlRuntime:
+def get_runtime(runtime_key: int | None = None) -> BamlRuntime:
     """Return the process-global `BamlRuntime` singleton, or raise
     `BamlError` if `BamlRuntime.initialize_runtime(...)` has not run yet."""
-    return _rust_get_runtime()
+    if runtime_key is not None:
+        return _rust_get_runtime(runtime_key)
+    return get_type_map().runtime or _rust_get_runtime()
 
 
 _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
@@ -206,6 +210,7 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
+@runtime_argument_bound
 def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
@@ -217,6 +222,7 @@ def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ct
     return FunctionResult(decode_call_result(result_bytes))
 
 
+@runtime_argument_bound
 async def call_function(
     rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None
 ):
@@ -491,6 +497,8 @@ def define_function(
     # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
     # the engine stores user functions under the same form (see
     # `12a-namespace-rules.md §5`); no translation step needed.
+    from .typemap import bind_type_map, type_map_for_module
+
     required_names = list(required_param_names)
     optional_names = list(optional_param_names or [])
     type_param_names = list(type_params or [])
@@ -545,7 +553,7 @@ def define_function(
             return decode_call_result(result_bytes)
 
         _set_binding_metadata(_sync)
-        return _maybe_generic_callable(_sync, type_param_names)
+        return _maybe_generic_callable(bind_type_map(_sync, lambda: type_map_for_module(binding_module)), type_param_names)
     elif mode == "async":
 
         async def _async(*args: Any, **kwargs: Any) -> Any:
@@ -589,7 +597,7 @@ def define_function(
             return _decode_call_result_async(result_bytes)
 
         _set_binding_metadata(_async)
-        return _maybe_generic_callable(_async, type_param_names)
+        return _maybe_generic_callable(bind_type_map(_async, lambda: type_map_for_module(binding_module)), type_param_names)
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
 
@@ -620,6 +628,7 @@ __all__ = [
     "get_runtime",
     "get_version",
     "new_function_call",
+    "release_function_call",
     "cancel_function_call",
     "encode_call_args",
     "decode_call_result",

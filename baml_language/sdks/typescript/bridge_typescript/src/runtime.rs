@@ -1,9 +1,6 @@
 //! BamlRuntime napi class.
 //!
-//! A zero-sized handle: the single source of truth for the `Arc<dyn Bex>`
-//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_runtime()`
-//! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
-//! longer caches its own clone.
+//! Each handle routes through its uint64 registration in the process-wide CFFI registry.
 
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
@@ -27,42 +24,65 @@ struct DecodedCallArgs {
     type_defs: indexmap::IndexMap<String, bex_project::PortableTypeDef>,
 }
 
-/// The main BAML runtime. A zero-sized handle (see module docs).
+/// A handle to one uint64 runtime registration in the shared CFFI library.
 #[napi]
-pub struct BamlRuntime {}
+pub struct BamlRuntime {
+    key: u64,
+}
 
 #[napi]
 impl BamlRuntime {
-    /// Initialize the process-global runtime from in-memory BAML source
-    /// files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
-    /// a second call replaces the prior runtime; the result is also reachable
-    /// via the module-level `getRuntime()`. Renamed from `fromFiles` for
-    /// parity with `bridge_python`'s sole `initialize_runtime` constructor and
-    /// the `initializeRuntime(...)` import the spec docs use.
+    #[napi(getter)]
+    pub fn runtime_key(&self) -> BigInt {
+        self.key.into()
+    }
+
+    /// Close a dynamic registration. Generated SDK registrations are process-owned
+    /// and return an error, preserving all imports that share that program key.
+    #[napi]
+    pub fn close(&self) -> napi::Result<()> {
+        bridge_cffi::unregister_runtime(self.key)
+            .map(|_| ())
+            .map_err(bridge_error_to_napi)
+    }
+
+    /// Create an independent dynamic registration from BAML source files.
     #[napi(factory, js_name = "initializeRuntime")]
     pub fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> napi::Result<Self> {
-        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
-        // singleton; we don't keep our own copy.
+        // CFFI owns the registration; this handle owns its routing key.
         match bridge_cffi::initialize_runtime(&root_path, files) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+            Ok(bex) => Ok(BamlRuntime {
+                key: bridge_cffi::runtime_key(&bex).map_err(bridge_error_to_napi)?,
+            }),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
 
-    /// Initialize the process-global runtime from precompiled BAML bytecode.
+    /// Create a dynamic runtime, or register a generated uint64 identity, from precompiled BAML bytecode.
     #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
     pub fn initialize_runtime_from_bytecode(
         bytecode: Buffer,
         embedded_baml_toml: Option<String>,
+        runtime_key: Option<BigInt>,
     ) -> napi::Result<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(
-            bytecode.as_ref(),
-            embedded_baml_toml.as_deref(),
-        ) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+        let result = match runtime_key {
+            Some(key) => bridge_cffi::register_runtime_from_bytecode(
+                checked_key(key)?,
+                bytecode.as_ref(),
+                embedded_baml_toml.as_deref(),
+            ),
+            None => bridge_cffi::initialize_runtime_from_bytecode(
+                bytecode.as_ref(),
+                embedded_baml_toml.as_deref(),
+            ),
+        };
+        match result {
+            Ok(bex) => Ok(BamlRuntime {
+                key: bridge_cffi::runtime_key(&bex).map_err(bridge_error_to_napi)?,
+            }),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
@@ -75,14 +95,16 @@ impl BamlRuntime {
         ctx: Option<&HostSpanManager>,
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<Buffer> {
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::runtime_for_encoded_call(self.key, args_proto.as_ref())?;
             let decoded = decode_args(args_proto.as_ref())?;
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, decoded, rt))
         })();
         let _ = (&ctx, &collectors);
 
+        let _reservation = reservation;
         let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
@@ -127,8 +149,9 @@ impl BamlRuntime {
         ctx: Option<&HostSpanManager>,
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::runtime_for_encoded_call(self.key, args_proto.as_ref())?;
             let decoded = decode_args(args_proto.as_ref())?;
             Ok((runtime, decoded))
         })();
@@ -137,6 +160,7 @@ impl BamlRuntime {
         // Same shared call_and_encode as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
+            let _reservation = reservation;
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
@@ -159,20 +183,23 @@ impl BamlRuntime {
     }
 }
 
-/// Return the process-global `BamlRuntime`, or a `BamlError`-shaped
-/// `napi::Error` if `initializeRuntime` has not run yet. The handle is
-/// zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
-/// `bridge_python`'s module-level `get_runtime()`.
+/// Resolve an explicit uint64 registration, or the only registered runtime.
 #[napi(js_name = "getRuntime")]
-pub fn get_runtime() -> napi::Result<BamlRuntime> {
-    bridge_cffi::get_runtime().map_err(|e| match e {
+pub fn get_runtime(runtime_key: Option<BigInt>) -> napi::Result<BamlRuntime> {
+    let selected = match runtime_key {
+        Some(key) => bridge_cffi::get_runtime_by_key(checked_key(key)?),
+        None => bridge_cffi::get_runtime(),
+    };
+    let runtime = selected.map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
             napi::Status::GenericFailure,
             "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",
         ),
         other => bridge_error_to_napi(other),
     })?;
-    Ok(BamlRuntime {})
+    Ok(BamlRuntime {
+        key: bridge_cffi::runtime_key(&runtime).map_err(bridge_error_to_napi)?,
+    })
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.
@@ -205,4 +232,14 @@ fn decode_args(
         type_args: type_args.type_args,
         type_defs: type_args.type_defs,
     })
+}
+
+fn checked_key(key: BigInt) -> napi::Result<u64> {
+    let (negative, value, lossless) = key.get_u64();
+    if negative || !lossless {
+        return Err(napi::Error::from_reason(
+            "runtime key must be a uint64 bigint",
+        ));
+    }
+    Ok(value)
 }
