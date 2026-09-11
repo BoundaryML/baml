@@ -111,7 +111,7 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      # `baml_tests` and `baml_cli` already run on linux
+      # `baml_tests`, `baml_cli`, and `baml_pack_host` already run on linux
       # with `--all-features` in the dedicated `snapshot-tests` job, so this
       # job neither builds nor runs them — their test binaries are also the
       # heaviest links in the workspace. (A nextest `-E` filter would only
@@ -119,11 +119,11 @@ jobs:
       # too.) The `sdk_test_*` crates need uv and run in the dedicated
       # `sdk-tests` matrix below.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       # Release leg: the profiler's value copy carries `debug_assert`-adjacent
@@ -225,16 +225,16 @@ jobs:
       # needs a separate target-specific OpenSSL build. Default features match
       # the rustls-based musl artifacts we ship.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
+        # The runtime corpus moved from the excluded baml_tests package into
+        # baml_cli; keep its existing ownership in the snapshot job.
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
         working-directory: baml_language
-
-      - name: "Run pack end-to-end tests"
-        run: cargo test -p baml_cli --test pack_e2e
-        working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
 
       - name: "Upload test results on failure"
         if: failure()
@@ -447,10 +447,10 @@ jobs:
       # Profiling-specific test binaries opt in explicitly; keeping
       # BAML_PROFILE off for the general suite avoids filling the Windows
       # runner with incidental `.bamlprof` files. Run the two binaries that
-      # need `baml-pack-host` separately so their process-global OnceLocks
-      # build and share it instead of relinking it for every nextest case.
+      # drive CLI binary e2e separately after the disk cleanup below. The
+      # runtime corpus remains in its existing Linux snapshot job.
       - name: "Run tests"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
@@ -464,11 +464,18 @@ jobs:
           cargo clean
         working-directory: baml_language
 
+      - name: "Build CLI binary e2e tests and pack host (windows)"
+        # Include the normal host executable and both integration targets in
+        # one feature graph. No nested default-feature Cargo build is needed.
+        run: cargo build -p baml_cli -p baml_pack_host --bins --test pack_e2e --test exit_code_e2e --all-features
+        working-directory: baml_language
+
       - name: "Run CLI binary e2e tests (windows)"
-        run: cargo test -p baml_cli --test pack_e2e --test exit_code_e2e --all-features
+        run: cargo nextest run -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
+          BAML_PACK_HOST_PREBUILT: "1"
 
       - name: "Show sccache stats"
         if: always()
@@ -1501,7 +1508,7 @@ jobs:
           if-no-files-found: ignore
 
   snapshot-tests:
-    name: "snapshot tests"
+    name: "Compiler, CLI, and snapshot tests"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
@@ -1541,17 +1548,22 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Build tests with --timings"
-        run: cargo test --no-run -p baml_tests -p baml_cli --all-features --timings
+      - name: "Build tests and CLI binaries with --timings"
+        # --bins includes the normal baml-pack-host executable, not just its
+        # unit-test harness. --tests unifies the test/dev-dependency features
+        # in the same build as both executables. Keep these packages/features
+        # identical to the nextest invocation below.
+        run: cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features --timings
         working-directory: baml_language
 
-      # This job provides glibc coverage of `baml_tests` and `baml_cli`. The
-      # x86_64 GNU job excludes both to avoid running them twice; keep its
-      # `--exclude` list in sync with the package list here. The musl job separately runs `baml_cli`, including
-      # `pack_e2e`, so both Linux libc variants exercise the ELF pack path.
+      # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
+      # Keep the GNU job's --exclude list in sync. The musl job also runs
+      # pack_e2e, so both Linux libc variants exercise the ELF pack path.
       - name: "Run snapshot tests"
-        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli --all-features --unreferenced=reject
+        run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
 
       - name: "Check for snapshot changes"
         run: |

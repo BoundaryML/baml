@@ -75,27 +75,170 @@ impl SyntaxNodeExt for SyntaxNode {
 
 /// Get the text range of a node, excluding leading/trailing trivia.
 pub fn trimmed_range(node: &SyntaxNode) -> TextRange {
-    let first_non_trivia = node.descendants_with_tokens().find(|element| {
-        element
-            .as_token()
-            .map(|t| !t.kind().is_trivia())
-            .unwrap_or(false)
-    });
-
-    let last_non_trivia = node
-        .descendants_with_tokens()
-        .filter(|element| {
-            element
-                .as_token()
-                .map(|t| !t.kind().is_trivia())
-                .unwrap_or(false)
-        })
-        .last();
-
-    match (first_non_trivia, last_non_trivia) {
+    match (boundary_token(node, false), boundary_token(node, true)) {
         (Some(first), Some(last)) => {
             TextRange::new(first.text_range().start(), last.text_range().end())
         }
         _ => node.text_range(),
+    }
+}
+
+/// Search from either edge, skipping empty/trivia-only children without
+/// visiting the interior once a significant token is found. Walk parent links
+/// rather than recurse so deeply nested recovery trees don't consume the stack.
+fn boundary_token(node: &SyntaxNode, from_end: bool) -> Option<SyntaxToken> {
+    let edge = |node: &SyntaxNode| {
+        if from_end {
+            node.last_child_or_token()
+        } else {
+            node.first_child_or_token()
+        }
+    };
+    let mut current = edge(node)?;
+    loop {
+        match &current {
+            NodeOrToken::Token(token) if !token.kind().is_trivia() => {
+                return Some(token.clone());
+            }
+            NodeOrToken::Node(child) => {
+                if let Some(child) = edge(child) {
+                    current = child;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        loop {
+            let sibling = if from_end {
+                current.prev_sibling_or_token()
+            } else {
+                current.next_sibling_or_token()
+            };
+            if let Some(sibling) = sibling {
+                current = sibling;
+                break;
+            }
+            let parent = current.parent()?;
+            if parent == *node {
+                return None;
+            }
+            current = parent.into();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SyntaxTreeBuilder;
+
+    // Original full descendant scan is the equivalence oracle.
+    fn scanned_range(node: &SyntaxNode) -> TextRange {
+        let mut tokens = node.non_trivia_tokens();
+        match tokens.next() {
+            Some(first) => {
+                let last = tokens.last().unwrap_or_else(|| first.clone());
+                TextRange::new(first.text_range().start(), last.text_range().end())
+            }
+            None => node.text_range(),
+        }
+    }
+
+    fn tree(build: impl FnOnce(&mut SyntaxTreeBuilder)) -> SyntaxNode {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(SyntaxKind::SOURCE_FILE);
+        build(&mut builder);
+        builder.finish_node();
+        let root = SyntaxNode::new_root(builder.finish());
+        for node in root.descendants() {
+            assert_eq!(node.span_range(), scanned_range(&node), "{node:?}");
+        }
+        root
+    }
+
+    #[test]
+    fn trimmed_range_comments_and_nested_boundaries() {
+        let root = tree(|b| {
+            b.token(SyntaxKind::LINE_COMMENT, "// before");
+            b.nl();
+            b.start_node(SyntaxKind::TYPE_EXPR);
+            b.ws("  ");
+            b.token(SyntaxKind::WORD, "héllo");
+            b.token(SyntaxKind::BLOCK_COMMENT, "/* inside */");
+            b.token(SyntaxKind::WORD, "world");
+            b.ws(" ");
+            b.finish_node();
+            b.token(SyntaxKind::BLOCK_COMMENT, "/* after */");
+        });
+        assert_eq!(root.span_range(), TextRange::new(12.into(), 35.into()));
+    }
+
+    #[test]
+    fn trimmed_range_empty_and_trivia_only_subtrees() {
+        let root = tree(|b| {
+            b.token(SyntaxKind::WORD, "outside");
+            b.start_node(SyntaxKind::ERROR);
+            b.start_node(SyntaxKind::ERROR);
+            b.finish_node();
+            b.ws("   ");
+            b.token(SyntaxKind::LINE_COMMENT, "// comment");
+            b.nl();
+            b.finish_node();
+            b.token(SyntaxKind::WORD, "also_outside");
+        });
+        let child = root.first_child().unwrap();
+        assert_eq!(child.span_range(), child.text_range());
+        let empty = child.first_child().unwrap();
+        assert_eq!(empty.span_range(), TextRange::empty(7.into()));
+        let empty_root = tree(|_| {});
+        assert_eq!(empty_root.span_range(), empty_root.text_range());
+    }
+
+    #[test]
+    fn trimmed_range_recovery_and_zero_width_tokens() {
+        let root = tree(|b| {
+            // Empty recovery children and trivia-only siblings at both edges.
+            for word in ["", "?"] {
+                b.start_node(SyntaxKind::ERROR);
+                b.start_node(SyntaxKind::ERROR);
+                b.finish_node();
+                b.token(SyntaxKind::ERROR_TOKEN, word);
+                b.finish_node();
+                b.start_node(SyntaxKind::ERROR);
+                b.ws(" ");
+                b.finish_node();
+            }
+            // HEADER_COMMENT is intentionally not is_trivia(): preserve that.
+            b.token(SyntaxKind::HEADER_COMMENT, "//# heading");
+            b.start_node(SyntaxKind::ERROR);
+            b.finish_node();
+        });
+        assert_eq!(root.span_range(), root.text_range());
+    }
+
+    #[test]
+    fn trimmed_range_matches_scan_across_tree_shapes() {
+        fn populate(b: &mut SyntaxTreeBuilder, seed: &mut u32, depth: usize) {
+            *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let count = (*seed >> 16) % 6;
+            for _ in 0..count {
+                *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                match (*seed >> 16) % 6 {
+                    0 if depth > 0 => {
+                        b.start_node(SyntaxKind::ERROR);
+                        populate(b, seed, depth - 1);
+                        b.finish_node();
+                    }
+                    1 => b.ws("  "),
+                    2 => b.token(SyntaxKind::BLOCK_COMMENT, "/* c */"),
+                    3 => b.token(SyntaxKind::WORD, "λ"),
+                    4 => b.token(SyntaxKind::ERROR_TOKEN, ""),
+                    _ => b.token(SyntaxKind::WORD, "word"),
+                }
+            }
+        }
+        for mut seed in 0..256 {
+            tree(|b| populate(b, &mut seed, 6));
+        }
     }
 }

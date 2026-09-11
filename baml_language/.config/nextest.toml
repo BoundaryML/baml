@@ -27,6 +27,13 @@ java-gradle-serial = { max-threads = 1 }
 # matrix (isolated via --artifacts-path).
 typescript-web-workers = { max-threads = 1 }
 
+# These tests use a private four-worker Rayon pool for independent compiler
+# databases. Reserve matching slots instead of treating them as single-core.
+# Keep aligned with FIXTURE_WORKERS in type_spec/fixtures.rs.
+[[profile.default.overrides]]
+filter = 'package(=baml_tests) & test(/^type_spec::fixtures::(conforming_fixtures|bounded_pool_preserves_order_and_results)$/)'
+threads-required = 4
+
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
@@ -123,7 +130,9 @@ setup = 'rust_bridge_engine_win'
 # Build it once before nextest fans the individual cases out into separate
 # processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
 # test helper validates the prebuilt sibling instead of recursively invoking
-# Cargo once per case. Plain `cargo test` retains its one-process fallback.
+# Cargo once per case. CI prebuilds both binaries in its outer Cargo invocation
+# and sets BAML_PACK_HOST_PREBUILT=1, making setup a no-build pass-through.
+# Plain `cargo test` retains its one-process fallback.
 [scripts.setup.baml_pack_host_unix]
 command = './crates/baml_cli/tests/build-pack-host.sh'
 

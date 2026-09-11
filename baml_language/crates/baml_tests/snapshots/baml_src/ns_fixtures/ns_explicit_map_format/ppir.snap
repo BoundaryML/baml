@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/corpus.rs
----
-=== PPIR ===
-function user.fixtures.explicit_map_format.maps() -> map<string, int>[]  [expr] {
-  {  } [map {  }, map {  }, map { "key": 1 }, map { "key": 2 }]
-}
