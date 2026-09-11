@@ -1,7 +1,8 @@
 // Items: what turns a fact into a case a learner sees.
 
-/// The diagnostic a rejected flow produces at `site`. Compiler surface, so
-/// bank data; today every site reports the same mismatch code.
+/// The diagnostic a rejected case produces at `site`. Compiler surface, so
+/// bank data; every flow site reports the same mismatch code, and overlapping
+/// implementations have their own.
 function rejection_code(site: root.algebra.SiteKind) -> string throws never {
     match (site) {
         root.algebra.SiteKind.Let => "E0001",
@@ -9,6 +10,7 @@ function rejection_code(site: root.algebra.SiteKind) -> string throws never {
         root.algebra.SiteKind.Return => "E0001",
         root.algebra.SiteKind.Field => "E0001",
         root.algebra.SiteKind.ArrayElement => "E0001",
+        root.algebra.SiteKind.Coherence => "E0132",
     }
 }
 
@@ -57,24 +59,64 @@ function in_direction(
     }
 }
 
-/// The flow rule at this case: which type meets which slot, at which site,
-/// and what follows.
-function flow_claim(
+/// The rule a site contributes: what the construct does with the relation
+/// the fact established. It is the last claim of every case, and the one
+/// thing in a trace that is not the type-system content being asked about.
+function site_rule(site: root.algebra.SiteKind) -> root.engine.Rule throws never {
+    match (site) {
+        root.algebra.SiteKind.Let
+            | root.algebra.SiteKind.CallArgument
+            | root.algebra.SiteKind.Return
+            | root.algebra.SiteKind.Field
+            | root.algebra.SiteKind.ArrayElement =>
+        {
+            flow_requires_subtype()
+        },
+        root.algebra.SiteKind.Coherence => coherence_at_most_one(),
+    }
+}
+
+/// Whether `name` is a rule some site contributes. Read off the sites
+/// themselves, so a new site's rule cannot be left out of the reckoning.
+function is_site_rule(name: string) -> bool throws never {
+    root.algebra.all_sites().some((site) -> {
+        site_rule(site).name == name
+    })
+}
+
+/// The site's own rule at this case: which type met which slot and what
+/// follows, or what two `implements` blocks make of the pair.
+function site_claim(
     site: root.algebra.SiteKind,
     flow: Oriented,
     compiles: bool,
 ) -> root.engine.Claim throws never {
     let s = `\`${root.algebra.render(flow.source)}\``;
     let t = `\`${root.algebra.render(flow.target)}\``;
-    let outcome = if (compiles) {
-        "holds, so the program compiles"
-    } else {
-        "does not hold, so the program is rejected"
+    let instance = match (site) {
+        root.algebra.SiteKind.Coherence => {
+            let same = if (compiles) {
+                "are not the same type, so the two blocks cannot both apply to one type and the program compiles"
+            } else {
+                "are the same type, so the second block implements what the first already did and the program is rejected"
+            };
+            `${root.algebra.site_phrase(site)}, one for ${s} and one for ${t}: they ${same}`
+        },
+        root.algebra.SiteKind.Let
+            | root.algebra.SiteKind.CallArgument
+            | root.algebra.SiteKind.Return
+            | root.algebra.SiteKind.Field
+            | root.algebra.SiteKind.ArrayElement =>
+        {
+            let outcome = if (compiles) {
+                "holds, so the program compiles"
+            } else {
+                "does not hold, so the program is rejected"
+            };
+            `at ${root.algebra.site_phrase(site)}, a value of type ${s} meets a slot of type ${t}: ${s} <: ${t} ${outcome}`
+        },
     };
-    root.engine.Claim {
-        rule: flow_requires_subtype(),
-        instance: `at ${root.algebra.site_phrase(site)}, a value of type ${s} meets a slot of type ${t}: ${s} <: ${t} ${outcome}`,
-    }
+    root.engine.Claim { rule: site_rule(site), instance }
 }
 
 /// What a seed settles before either direction of a case is rendered.
@@ -129,19 +171,24 @@ class Flowed {
     compiles: bool,
 }
 
-/// Whether a relation reads differently in the two directions, so the two
-/// programs a fact renders answer differently and can be put side by side.
-/// It looks only at the relation: an equivalence and an unrelated pair read
-/// the same both ways.
-function pairs(relation: root.algebra.Relation) -> bool throws never {
-    root.algebra.flows(relation) != root.algebra.flows(root.algebra.mirror(relation))
+/// Whether a fact drawn at this site renders two programs that answer
+/// differently, so it can be put side by side.
+///
+/// At a directed site an equivalence and an unrelated pair read the same
+/// both ways, so only a strict relation pairs. At an undirected site nothing
+/// does: the reverse draw is the same program with its parts the other way
+/// up, and the same answer.
+function pairs(site: root.algebra.SiteKind, relation: root.algebra.Relation) -> bool throws never {
+    root.algebra.directed(site)
+        && root.algebra.compiles_when(site, relation)
+            != root.algebra.compiles_when(site, root.algebra.mirror(relation))
 }
 
 /// The pair of `drawn` flowing one way at its site, as a case.
 function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
     let flow = orient(drawn.d, drawn.relation, reversed);
     let probe = root.algebra.probe(drawn.site, flow.source, flow.target, drawn.names);
-    let compiles = root.algebra.flows(flow.relation);
+    let compiles = root.algebra.compiles_when(drawn.site, flow.relation);
     let file = "case.baml";
     let key: root.engine.Verdict = if (compiles) {
         root.engine.Compiles { tests: [] }
@@ -152,7 +199,7 @@ function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
             at: root.engine.Region { file, start: probe.start, end: probe.end },
         }
     };
-    let trace = root.algebra.claims(drawn.d).concat([flow_claim(drawn.site, flow, compiles)]);
+    let trace = root.algebra.claims(drawn.d).concat([site_claim(drawn.site, flow, compiles)]);
     Flowed {
         flow,
         case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
@@ -249,7 +296,7 @@ class FlowItem {
             // strict fact, and only a strict fact, has a second program to
             // offer. That the two do answer differently is held to by the
             // suite, which reads it off the two keys.
-            if (!pairs(drawn.relation)) {
+            if (!pairs(drawn.site, drawn.relation)) {
                 return null;
             }
             let chosen = flowed(drawn, drawn.reversed);

@@ -45,6 +45,20 @@ function flow_requires_subtype() -> root.engine.Rule throws never {
     )
 }
 
+/// The principle two `implements` blocks rest on: one type, one
+/// implementation, so two blocks whose targets are the same type are a
+/// conflict however differently they are spelled.
+function coherence_at_most_one() -> root.engine.Rule throws never {
+    composite(
+        "interfaces/coherence-at-most-one",
+        section("Interface Coherence"),
+        "BAML largely follows Rust's proven sound trait coherence rules to enforce that any given type has at most one implementation of any given interface",
+        [
+            "The coherence problem asks the question: given two `implements` blocks, is there any overlap? That is, is there any realized type that both can apply an implementation of the same interface to?",
+        ],
+    )
+}
+
 // ─── taxonomy ────────────────────────────────────────────────────────────────
 
 function concrete_types_atomic() -> root.engine.Rule throws never {
@@ -310,6 +324,7 @@ function unguarded_cycle_rejected() -> root.engine.Rule throws never {
 function rules() -> root.engine.Rule[] throws never {
     [
         flow_requires_subtype(),
+        coherence_at_most_one(),
         concrete_types_atomic(),
         literal_subtype_of_concrete(),
         never_omitted_from_unions(),

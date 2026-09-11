@@ -661,8 +661,39 @@ function error_covariant(seed: root.engine.Seed) -> Derived throws never {
     derived(root.algebra.in_fn_error(inner.value, r.value[0], fn_error_covariant()), r.next)
 }
 
-function box_of_bool(seed: root.engine.Seed) -> Derived throws never {
-    let inner = bool_true_false(seed);
+/// A seeded pair the spec calls one type, from one of the facts that conclude
+/// an equivalence. Not a fact of its own.
+///
+/// The generators are a pool the draw is bounded by, as `strict_pair`'s are.
+function equivalent_pair(seed: root.engine.Seed) -> Derived throws never {
+    let pool: ((root.engine.Seed) -> Derived throws never)[] = [
+        identity,
+        bool_true_false,
+        enum_variants,
+        literal_absorbed_fact,
+        unknown_absorbs_fact,
+        never_omitted,
+        union_commutes,
+        union_associates,
+        alias_is_transparent,
+        equirecursive,
+        unfolds_once,
+        unguarded_member_is_vacuous,
+    ];
+    let choice = root.engine.below(seed, pool.length());
+    pool[choice.value](choice.next)
+}
+
+/// Two types the spec calls one type, as the argument of a generic class.
+///
+/// Invariance carries an equivalence through, so the two class types are one
+/// type as well. That matters twice over: a flow site accepts it in both
+/// directions, and a class type may be named by an `implements` block where
+/// a union or a literal may not, so this is what carries the equivalence
+/// facts to the site where being one type is the objection rather than the
+/// permission.
+function class_arg_of_equivalence(seed: root.engine.Seed) -> Derived throws never {
+    let inner = equivalent_pair(seed);
     let b = box_decl(inner.next, inner_names(inner.value));
     derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
@@ -735,7 +766,7 @@ function facts() -> Fact[] throws never {
         fact("param_contravariant", param_contravariant),
         fact("return_covariant", return_covariant),
         fact("error_covariant", error_covariant),
-        fact("box_of_bool", box_of_bool),
+        fact("class_arg_of_equivalence", class_arg_of_equivalence),
         fact("double_contravariance", double_contravariance),
         fact("array_of_unfolded_alias", array_of_unfolded_alias),
         fact("bottom_beside_member", bottom_beside_member),
@@ -745,5 +776,5 @@ function facts() -> Fact[] throws never {
 /// Helpers that share a fact's signature but are not facts. The registry
 /// check excludes them by name.
 function fact_helpers() -> string[] throws never {
-    ["strict_pair"]
+    ["strict_pair", "equivalent_pair"]
 }

@@ -8,7 +8,6 @@
 /// disagrees with is not one a learner can be asked about, so it has no
 /// place in what we expect them to master.
 function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
-    let flow = flow_requires_subtype().name;
     let servable = items().filter((item) -> {
         item.status() is root.engine.Verified
     });
@@ -23,14 +22,14 @@ function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
                         claim.rule.name
                     })
                     .filter((name) -> {
-                        name != flow
+                        !is_site_rule(name)
                     });
                 own
             })
             .collect()
     });
     rules().filter_map((rule) -> {
-        if (rule.name == flow) {
+        if (is_site_rule(rule.name)) {
             return null;
         }
         let orders = traces.filter_map((trace) -> {

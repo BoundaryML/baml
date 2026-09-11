@@ -579,16 +579,20 @@ function site_names() -> root.algebra.SiteNames throws never {
         sink: "sink",
         instance: "instance",
         holder: "Holder",
+        contract: "Contract",
     }
 }
 
 /// A flow the algebra has an opinion about, and the verdict that opinion
 /// implies.
+/// A pair the algebra has an opinion about. What follows from the relation is
+/// the site's, not the fixture's: a flow site takes a subtype, and two
+/// `implements` blocks are rejected for an equivalence.
 class Flow {
     name: string,
     source: root.algebra.Ty,
     target: root.algebra.Ty,
-    compiles: bool,
+    relation: root.algebra.Relation,
 }
 
 function flows() -> Flow[] throws never {
@@ -601,123 +605,150 @@ function flows() -> Flow[] throws never {
             name: "identity",
             source: root.algebra.Prim.int(),
             target: root.algebra.Prim.int(),
-            compiles: true,
+            relation: root.algebra.Relation.Equiv,
         },
         Flow {
             name: "unrelated",
             source: root.algebra.Prim.string(),
             target: root.algebra.Prim.int(),
-            compiles: false,
+            relation: root.algebra.Relation.Unrelated,
         },
         Flow {
             name: "member into union",
             source: root.algebra.Prim.int(),
             target: int_or_string(),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "union into member",
             source: int_or_string(),
             target: root.algebra.Prim.int(),
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "literal into concrete",
             source: root.algebra.Lit.new(1),
             target: root.algebra.Prim.int(),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "concrete into literal",
             source: root.algebra.Prim.int(),
             target: root.algebra.Lit.new(1),
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "never into leaf",
             source: root.algebra.Never {  },
             target: root.algebra.Prim.int(),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "leaf into never",
             source: root.algebra.Prim.int(),
             target: root.algebra.Never {  },
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "leaf into unknown",
             source: root.algebra.Prim.int(),
             target: root.algebra.Top {  },
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "unknown into leaf",
             source: root.algebra.Top {  },
             target: root.algebra.Prim.int(),
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
-        Flow { name: "alias into unfolding", source: rec, target: unfolded, compiles: true },
-        Flow { name: "unfolding into alias", source: unfolded, target: rec, compiles: true },
+        Flow {
+            name: "alias into unfolding",
+            source: rec,
+            target: unfolded,
+            relation: root.algebra.Relation.Equiv,
+        },
+        Flow {
+            name: "unfolding into alias",
+            source: unfolded,
+            target: rec,
+            relation: root.algebra.Relation.Equiv,
+        },
         Flow {
             name: "covariant return",
             source: returns_int,
             target: returns_union,
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "covariant return reversed",
             source: returns_union,
             target: returns_int,
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "multibyte literal into its concrete type",
             source: root.algebra.Lit.new("🐑"),
             target: root.algebra.Prim.string(),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
+        },
+        Flow {
+            // Concrete both sides, so this pair reaches the coherence site,
+            // where being the same type is what the compiler objects to.
+            name: "generic of equivalent arguments",
+            source: root.algebra.Class.new(box_decl(), [int_or_string()]),
+            target: root.algebra.Class.new(
+                box_decl(),
+                [root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.int()])],
+            ),
+            relation: root.algebra.Relation.Equiv,
+        },
+        Flow {
+            name: "generic of distinct arguments",
+            source: root.algebra.Class.new(box_decl(), [root.algebra.Prim.int()]),
+            target: root.algebra.Class.new(box_decl(), [root.algebra.Prim.string()]),
+            relation: root.algebra.Relation.Unrelated,
         },
         Flow {
             name: "implementor into its interface",
             source: root.algebra.Class.new(implementor_decl(), []),
             target: root.algebra.Iface.of(marker_decl()),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "interface into its implementor",
             source: root.algebra.Iface.of(marker_decl()),
             target: root.algebra.Class.new(implementor_decl(), []),
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "requiring interface into the one it requires",
             source: root.algebra.Iface.of(narrower_decl()),
             target: root.algebra.Iface.of(marker_decl()),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "bounded variable into its bound",
             source: root.algebra.Var.bounded("S", root.algebra.Iface.of(marker_decl())),
             target: root.algebra.Iface.of(marker_decl()),
-            compiles: true,
+            relation: root.algebra.Relation.Sub,
         },
         Flow {
             name: "bound into the variable it bounds",
             source: root.algebra.Iface.of(marker_decl()),
             target: root.algebra.Var.bounded("S", root.algebra.Iface.of(marker_decl())),
-            compiles: false,
+            relation: root.algebra.Relation.Super,
         },
         Flow {
             name: "multibyte literal into leaf",
             source: root.algebra.Lit.new("🐑"),
             target: root.algebra.Prim.int(),
-            compiles: false,
+            relation: root.algebra.Relation.Unrelated,
         },
         Flow {
             name: "leaf into multibyte literal",
             source: root.algebra.Prim.int(),
             target: root.algebra.Lit.new("🐑"),
-            compiles: false,
+            relation: root.algebra.Relation.Unrelated,
         },
     ]
 }
@@ -731,11 +762,11 @@ function sites_of(flow: Flow) -> root.algebra.SiteKind[] throws never {
 function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case throws never {
     let p = root.algebra.probe(site, flow.source, flow.target, site_names());
     let file = "case.baml";
-    let key: root.engine.Verdict = if (flow.compiles) {
+    let key: root.engine.Verdict = if (root.algebra.compiles_when(site, flow.relation)) {
         root.engine.Compiles { tests: [] }
     } else {
         root.engine.Rejected {
-            code: "E0001",
+            code: root.bank.rejection_code(site),
             more: [],
             at: root.engine.Region { file, start: p.start, end: p.end },
         }
@@ -743,14 +774,19 @@ function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case 
     root.engine.Case { files: root.engine.one_file(file, p.source), key, trace: [] }
 }
 
-/// What a probe's region must cover at `site`: the flowing expression, or
-/// the whole body at the `Return` site.
+/// What a probe's region must cover at `site`: the flowing expression, the
+/// whole body at the `Return` site, or the second of the two `implements`
+/// blocks, which is the one the compiler reports as conflicting.
 function expected_excerpt(
     site: root.algebra.SiteKind,
+    flow: Flow,
     names: root.algebra.SiteNames,
 ) -> string throws never {
     match (site) {
         root.algebra.SiteKind.Return => `{\n    ${names.value}\n}`,
+        root.algebra.SiteKind.Coherence => {
+            `implement ${names.contract} for ${root.algebra.render(flow.target)} {}`
+        },
         root.algebra.SiteKind.Let
             | root.algebra.SiteKind.CallArgument
             | root.algebra.SiteKind.Field
@@ -771,7 +807,7 @@ function inexact_regions() -> string[] throws never {
             let excerpt = string.from_utf8(p.source.to_utf8().slice(p.start, p.end)) catch (e) {
                 baml.errors.InvalidArgument => "<not a character boundary>",
             };
-            if (excerpt == expected_excerpt(site, names)) {
+            if (excerpt == expected_excerpt(site, flow, names)) {
                 null
             } else {
                 `${flow.name} at ${site}: region covers ${excerpt}`
@@ -800,10 +836,13 @@ function site_disagreements() -> string[] throws never {
 }
 
 /// Which sites each flow is asked at, so the two sweeps above cannot pass by
-/// asking nothing. A flow naming a type variable is asked at the three sites
-/// whose target sits inside the probe's own function and at neither of the
-/// two that declare it elsewhere, where the two occurrences of the name
-/// would be two different variables.
+/// asking nothing. Three answers appear. Six is a pair of concrete types,
+/// which can be implementation targets as well as flow. Five is a pair that
+/// cannot: a union, a literal, an interface, `never`, `unknown`, or a
+/// recursive alias is no target, so the coherence site drops out. Three is a
+/// pair naming a type variable, which only the sites whose target sits
+/// inside the probe's own function can spell — at the other two the name
+/// would be declared elsewhere and be a second, unrelated variable.
 function sites_asked() -> string throws never {
     flows()
         .map((flow) -> {
@@ -812,10 +851,10 @@ function sites_asked() -> string throws never {
         .join(" ")
 }
 
-test "sites: a flow naming a type variable is asked only where the probe binds it" {
+test "sites: a flow is asked at every site that can spell it, and nowhere else" {
     assert.equal(
         sites_asked(),
-        "identity=5 unrelated=5 member into union=5 union into member=5 literal into concrete=5 concrete into literal=5 never into leaf=5 leaf into never=5 leaf into unknown=5 unknown into leaf=5 alias into unfolding=5 unfolding into alias=5 covariant return=5 covariant return reversed=5 multibyte literal into its concrete type=5 implementor into its interface=5 interface into its implementor=5 requiring interface into the one it requires=5 bounded variable into its bound=3 bound into the variable it bounds=3 multibyte literal into leaf=5 leaf into multibyte literal=5",
+        "identity=6 unrelated=6 member into union=5 union into member=5 literal into concrete=5 concrete into literal=5 never into leaf=5 leaf into never=5 leaf into unknown=5 unknown into leaf=5 alias into unfolding=5 unfolding into alias=5 covariant return=5 covariant return reversed=5 multibyte literal into its concrete type=5 generic of equivalent arguments=6 generic of distinct arguments=6 implementor into its interface=5 interface into its implementor=5 requiring interface into the one it requires=5 bounded variable into its bound=3 bound into the variable it bounds=3 multibyte literal into leaf=5 leaf into multibyte literal=5",
     )
 }
 

@@ -314,11 +314,10 @@ function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? thro
 }
 
 /// The rules a posed question holds as the tracer reads them: its trace,
-/// inner rule first, without the flow rule every probe ends in.
+/// inner rule first, without the rule the site itself contributed.
 function tracer_rules(posed: root.engine.Posed) -> string[] throws never {
-    let flow = root.bank.flow_requires_subtype().name;
     root.engine.rules_of(posed).filter((name) -> {
-        name != flow
+        !root.bank.is_site_rule(name)
     })
 }
 

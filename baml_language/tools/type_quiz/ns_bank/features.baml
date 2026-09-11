@@ -11,14 +11,13 @@ function features_of(
     tys: root.algebra.Ty[],
     traps: string[],
 ) -> map<string, float> throws never {
-    let flow = flow_requires_subtype().name;
     let none: string[] = [];
     let own = trace
         .map((claim) -> {
             claim.rule.name
         })
         .filter((name) -> {
-            name != flow
+            !is_site_rule(name)
         })
         .reduce(
             (acc, name) -> {

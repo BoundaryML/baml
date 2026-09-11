@@ -89,7 +89,8 @@ async function question(page) {
     expect(
       source.includes('function') ||
         source.includes('class') ||
-        source.includes('type '),
+        source.includes('type ') ||
+        source.includes('implement '),
       `a program does not look like BAML source: ${source.slice(0, 120)}`,
     );
   }

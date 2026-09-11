@@ -216,14 +216,26 @@ function hundredths(x: float) -> int throws never {
     }
 }
 
+function strict_knobs(knobs: root.engine.Knobs) -> root.engine.Knobs throws never {
+    root.engine.Knobs { ...knobs, strict: true, budget: 200 }
+}
+
 /// A strict sitting asks for every rule; a loose one stops on the overall
 /// picture. The expert should be done sooner under loose than strict, and
 /// both well within the budget.
 function coverage_report() -> string throws never {
     let knobs = root.engine.default_knobs();
     let loose = sit(expert, knobs, 3);
-    let strict = sit(expert, root.engine.Knobs { ...knobs, strict: true, budget: 200 }, 3);
-    `loose_first=${loose.profile.step <= strict.profile.step} loose_done=${loose.standing.why} strict_done=${strict.standing.why}`
+    let strict = sit(expert, strict_knobs(knobs), 3);
+    // How many rules the strict sitting left short of the bar, so the run
+    // cannot pass by certifying an empty set.
+    let uncertified = strict.profile.skills
+        .filter((skill) -> {
+            root.engine.logistic(root.engine.floor_of(strict.profile, strict_knobs(knobs), skill))
+                < knobs.target
+        })
+        .length();
+    `loose_first=${loose.profile.step <= strict.profile.step} loose_done=${loose.standing.why} loose_steps=${loose.profile.step} strict_done=${strict.standing.why} strict_steps=${strict.profile.step} uncertified=${uncertified} rules=${strict.profile.skills.length()}`
 }
 
 /// Every model's z-score in tenths, highest first.
@@ -305,7 +317,10 @@ test "learner: a learner who never commits is never certified" {
 }
 
 test "learner: strict coverage costs more questions than an overall picture" {
-    assert.equal(coverage_report(), "loose_first=true loose_done=Mastered strict_done=Mastered")
+    assert.equal(
+        coverage_report(),
+        "loose_first=true loose_done=Mastered loose_steps=50 strict_done=Mastered strict_steps=92 uncertified=0 rules=30",
+    )
 }
 
 /// Noise names no model: a learner answering by a bit unrelated to the case
@@ -322,14 +337,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=94 leading=bounds=10,spelling=9,structural=5,typescript=-11,covariant=-15",
+        "suspected=none why=Budget commits_unsure=95 leading=spelling=22,typescript=-1,bounds=-1,structural=-2,covariant=-6",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=80,covariant=49,bounds=20,structural=-13,spelling=-34 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=81,covariant=49,bounds=35,structural=30,spelling=-12 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -548,7 +563,7 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only parameter contravariance reaches three" {
     assert.equal(
         orders_report(),
-        `rules=30 of 31 by_order=[25, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
+        `rules=30 of 32 by_order=[25, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
     )
 }
 
@@ -631,6 +646,6 @@ function leaning_report() -> string throws never {
     `compiled=${percent_of(compiled, asked)} of=${asked}`
 }
 
-test "sitting: eleven questions in twenty ask about a case that compiles" {
-    assert.equal(leaning_report(), "compiled=55 of=166")
+test "sitting: the answer a question asks about is close to an even split" {
+    assert.equal(leaning_report(), "compiled=49 of=172")
 }

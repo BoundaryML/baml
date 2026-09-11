@@ -375,10 +375,9 @@ test "rules: reflection sees the generators" {
 // ─── every rule can be drilled ───────────────────────────────────────────────
 
 /// The rules of each case the bank produces over the first four seeds of
-/// every item, with the flow rule every probe ends in dropped: what is left
-/// is the type-system content of the case.
+/// every item, with the rule its site contributed dropped: what is left is
+/// the type-system content of the case.
 function own_traces() -> string[][] throws never {
-    let flow = root.bank.flow_requires_subtype().name;
     root.bank.items().flat_map((item) -> {
         let id = item.id();
         baml.iter.Range.new(0, 4)
@@ -390,7 +389,7 @@ function own_traces() -> string[][] throws never {
                         claim.rule.name
                     })
                     .filter((name) -> {
-                        name != flow
+                        !root.bank.is_site_rule(name)
                     });
                 own
             })
@@ -423,9 +422,8 @@ function shortest_conclusion(rule: string, traces: string[][]) -> int? throws ne
 /// through longer derivations could never be put to a learner on its own.
 function rules_without_a_short_case() -> string[] throws never {
     let traces = own_traces();
-    let flow = root.bank.flow_requires_subtype().name;
     root.bank.rules().filter_map((rule) -> {
-        if (rule.name == flow) {
+        if (root.bank.is_site_rule(rule.name)) {
             return null;
         }
         match (shortest_conclusion(rule.name, traces)) {
@@ -668,11 +666,13 @@ test "pairs: every foil is the same program a step away, answering the other way
 /// A fact that concludes an equivalence or an unrelated pair reads the same
 /// in both directions, so every case it makes answers the same way, and the
 /// shape of such a case tells a learner the answer without their having to
-/// reason about it. The interface and generic facts are strict, so each
-/// answers both ways and brought this from two items in three down to three
-/// in five; the rest of it is the equivalence facts, which near misses — a
-/// case a step away from an equivalence and therefore not one — are what
-/// would fix. This count is what would change.
+/// reason about it. Two things have narrowed it. The interface and generic
+/// facts are strict, so each answers both ways; and the coherence site asks
+/// the equivalence facts the other question, where being the same type is
+/// what the compiler objects to, so a fact that always compiled as a flow is
+/// rejected as a pair of `implements` blocks. Two items in five still answer
+/// one way, and near misses — a case a step away from an equivalence and
+/// therefore not one — are what would narrow it further.
 function items_answering_report() -> string throws never {
     let counted = root.bank.items()
         .filter((item) -> {
@@ -706,7 +706,52 @@ function items_answering_report() -> string throws never {
     of.join(" ")
 }
 
-test "bank: three items in five answer the same way every time" {
-    assert.equal(items_answering_report(), "always=14 never=7 both=15")
+// ─── which sites the bank reaches ────────────────────────────────────────────
+
+/// How many of the bank's cases are put at each kind of site, over the first
+/// eight seeds of every servable item, counted by the rule the site
+/// contributed — which is the last claim of every case and is what names the
+/// site in the explanation.
+///
+/// A site nothing reaches is a site that is not being tested. The coherence
+/// site is reachable only for a pair of types an `implements` block may name,
+/// which rules out a union, a literal, an interface, `never`, `unknown` and a
+/// recursive alias, so it takes the smaller share.
+function sites_reached_report() -> string throws never {
+    let concluded = root.bank.items()
+        .filter((item) -> {
+            item.status() is root.engine.Verified
+        })
+        .flat_map((item) -> {
+            let id = item.id();
+            baml.iter.Range.new(0, 8)
+                .filter_map((i) -> {
+                    let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
+                        ?? return null;
+                    let last = candidate.case.trace.at(-1)
+                        ?? return null;
+                    last.rule.name
+                })
+                .collect()
+        });
+    let coherence = concluded
+        .filter((name) -> {
+            name == root.bank.coherence_at_most_one().name
+        })
+        .length();
+    let flow = concluded
+        .filter((name) -> {
+            name == root.bank.flow_requires_subtype().name
+        })
+        .length();
+    `coherence=${coherence} flow=${flow} other=${concluded.length() - coherence - flow}`
+}
+
+test "bank: the coherence site takes the smaller share of the bank's cases" {
+    assert.equal(sites_reached_report(), "coherence=13 flow=275 other=0")
+}
+
+test "bank: two items in five answer the same way every time" {
+    assert.equal(items_answering_report(), "always=10 never=4 both=22")
 }
 

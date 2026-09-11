@@ -401,6 +401,36 @@ function gather_vars(ty: Ty, out: Var[], seen: map<string, Var>) -> void throws 
     }
 }
 
+/// Whether an `implements` block may name `ty` as the type it implements for.
+///
+/// The spec's rule is that only concrete types may implement an interface,
+/// which the Taxonomy defines as the primitives, classes, enums, function
+/// types and a few builtins. Two of those are held out because the compiler
+/// and the spec disagree about them today, both recorded rather than guessed:
+/// a function type is concrete but rejected (CD-002), and `never` is accepted
+/// though it belongs to none of the three groups (G-004). A type variable is
+/// held out for a different reason: `implement<T> I for T {}` is a blanket
+/// implementation, a construct of its own rather than a target. An
+/// interface-existential is abstract, so it is no more a target than a union
+/// is.
+///
+/// An alias stands for its body, so it is a target exactly when its body is
+/// one. A recursive alias never is: its body is a union or a container of
+/// itself, and asking would not terminate.
+function is_target(ty: Ty) -> bool throws never {
+    match (ty) {
+        Prim | Class | Enum | Array | Map => true,
+        Lit | EnumLit | Union | Top | Never | Fn | Var | Iface => false,
+        let a: Alias => {
+            if (is_recursive(a.decl)) {
+                false
+            } else {
+                is_target(a.decl.body)
+            }
+        },
+    }
+}
+
 /// Whether `ty` mentions a type variable, and so needs a binder in scope.
 function mentions_var(ty: Ty) -> bool throws never {
     vars_of([ty]).length() > 0

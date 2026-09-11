@@ -48,7 +48,7 @@ function site_names(
         type_names().filter((n) -> {
             !reserved.includes(n)
         }),
-        1,
+        2,
     );
     root.algebra.SiteNames {
         function_name: fns.value[0],
@@ -57,5 +57,6 @@ function site_names(
         target: bindings.value[1],
         instance: bindings.value[2],
         holder: holders.value[0],
+        contract: holders.value[1],
     }
 }

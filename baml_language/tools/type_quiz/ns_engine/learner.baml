@@ -63,6 +63,10 @@ class Skill {
     /// answer carries about this rule and grows a little with every
     /// observation, so a rule left alone becomes uncertain again.
     variance: float,
+    /// The floor when this sitting last made progress, which is what the next
+    /// answer's gain is measured against. Null until the first answer: there
+    /// is nothing to compare a first floor with.
+    marked: float?,
     /// The highest order answered correctly; zero when never.
     highest_right: int,
     /// Consecutive answers that were wrong or withheld. Drives teaching.
@@ -251,6 +255,7 @@ function fresh(rules: RuleOrder[], models: string[]) -> Profile throws never {
                 order: r.highest,
                 offset: 0.0,
                 variance: prior_rule_variance(),
+                marked: null,
                 highest_right: 0,
                 wrong_streak: 0,
                 seen: 0,
@@ -555,7 +560,7 @@ function times_in(rules: string[], rule: string) -> float throws never {
 /// The profile after `seen`. A pure function: the old profile is untouched.
 function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile throws never {
     let before = profile.skills.map((skill) -> {
-        profile.ability + skill.offset
+        floor_of(profile, knobs, skill)
     });
     let commit_rate = commits(profile, knobs);
     let q = knowing(profile, knobs, seen.rules, seen.traps.length());
@@ -675,28 +680,55 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         quiet: 0,
     };
     let after = next.skills.map((skill) -> {
-        next.ability + skill.offset
+        floor_of(next, knobs, skill)
     });
     let committed = seen.verdict != null;
+    // Progress is whatever certifying a rule turns on: its FLOOR, and the
+    // deepest order it has been applied right at. Two things this is not.
+    // It is not the estimate, because a learner whose estimates have
+    // converged while their uncertainty is still falling is still on their
+    // way. And it is not the gain from ONE answer: with thirty rules to lift,
+    // every answer's share of the work is smaller than the hair we would
+    // notice, so a per-step threshold reads steady progress as a stall. The
+    // gain is measured against the floor as of the last time we saw progress,
+    // so it is the whole quiet stretch that has to have achieved nothing.
     let gained = baml.iter.Range.new(0, after.length()).some((i) -> {
         // Through a function: a method call whose receiver reads a captured
         // local bound from an earlier closure call miscompiles (README,
         // compiler issue 9).
-        rose(before[i], after[i]) || (committed && first_met(profile.skills[i], next.skills[i]))
+        climbed(profile.skills[i], after[i])
+            || deepened(profile.skills[i], next.skills[i])
+            || (committed && first_met(profile.skills[i], next.skills[i]))
     });
-    Profile {
-        ...next,
-        quiet: if (gained) {
-            0
-        } else {
-            profile.quiet + 1
-        },
+    if (gained) {
+        Profile {
+            ...next,
+            skills: baml.iter.Range.new(0, after.length())
+                .map((i) -> {
+                    Skill { ...next.skills[i], marked: after[i] }
+                })
+                .collect(),
+            quiet: 0,
+        }
+    } else {
+        Profile { ...next, quiet: profile.quiet + 1 }
     }
 }
 
-/// Whether an estimate rose by more than a hair.
-function rose(before: float, after: float) -> bool throws never {
-    after - before > 0.02
+/// Whether `floor` stands more than a hair above where it was when this
+/// sitting last made progress. An unmarked rule has nothing to stand above,
+/// so the first answer of a sitting always counts.
+function climbed(skill: Skill, floor: float) -> bool throws never {
+    match (skill.marked) {
+        let marked: float => floor - marked > 0.02,
+        null => true,
+    }
+}
+
+/// Whether the rule has now been applied right at an order it had not been
+/// before, which is the other half of what certifying it asks.
+function deepened(before: Skill, after: Skill) -> bool throws never {
+    after.highest_right > before.highest_right
 }
 
 /// Whether a rule bore blame for the first time.
