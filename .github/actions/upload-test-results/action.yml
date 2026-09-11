@@ -31,7 +31,7 @@ runs:
     - name: "Enrich the JUnit report"
       continue-on-error: true
       if: >-
-        inputs.normalize != 'none' && env.TRUNK_API_TOKEN != ''
+        inputs.normalize != 'none' && env.TRUNK_ORG_TOKEN != ''
         && hashFiles(inputs.junit-path) != ''
       shell: bash
       run: |
@@ -47,11 +47,12 @@ runs:
     # quarantining is disabled, this matches the existing behavior of the
     # tests' result.
     - name: "Upload to Trunk"
-      if: env.TRUNK_API_TOKEN != ''
+      if: env.TRUNK_ORG_TOKEN != ''
       uses: trunk-io/analytics-uploader@v2
       with:
         junit-paths: ${{ inputs.junit-path }}
         org-slug: boundaryml
+        token: ${{ env.TRUNK_ORG_TOKEN }}
         test-collection-id: ${{ inputs.collection }}
         previous-step-outcome: ${{ inputs.test-outcome }}
         allow-missing-junit-files: false
@@ -59,7 +60,7 @@ runs:
 
     # Fork PRs have no token, so nothing above gated the result.
     - name: "Fail on test failure when no upload gated it"
-      if: inputs.test-outcome == 'failure' && env.TRUNK_API_TOKEN == ''
+      if: inputs.test-outcome == 'failure' && env.TRUNK_ORG_TOKEN == ''
       shell: bash
       run: |
         echo "::error::tests failed and no Trunk token was available to gate the result"

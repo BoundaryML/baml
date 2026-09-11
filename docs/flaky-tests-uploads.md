@@ -5,10 +5,10 @@ so intermittent failures are tracked per test rather than per red job.
 
 ## Setup
 
-Uploads are inert until the `TRUNK_API_TOKEN` repository secret exists (Trunk →
-Settings → Manage Organization → Organization API Token). The org slug
-(`boundaryml`) and the collection short IDs are hard-coded in the workflows,
-each next to a link to that collection in the web app.
+Uploads are gated on the `TRUNK_ORG_TOKEN` repository secret; every upload
+step skips itself when it is unset, which is what keeps fork PRs out. The org
+slug (`boundaryml`) and the collection short IDs are hard-coded in the
+workflows, each next to a link to that collection in the web app.
 
 ## Collections
 
