@@ -96,7 +96,7 @@ function functions.add(a: int, b: int) -> int {
     return
 }
 
-function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int) -> int {
+function functions.call_twice(f: (int, int) -> int throws unknown, x: int, y: int) -> int {
     load_var2 2 3
     load_var f
     call_indirect

@@ -2341,3 +2341,36 @@ async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
         "leak should be attributed to the spawning function"
     );
 }
+
+/// `throws never` is a declared contract, not an absent one: a callback that
+/// promises it cannot throw must not have a native exception laundered into
+/// an accepted `unknown` throw.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_never_host_callback_rejects_native_throw() {
+    let source = r#"
+        function invoke(f: () -> int throws never) -> int throws never {
+            f()
+        }
+    "#;
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "ValueError".to_string(),
+        message: "unexpected native exception".to_string(),
+    });
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(arc)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_host_contract_violation_panic(&result);
+}

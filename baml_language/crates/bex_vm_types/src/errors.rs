@@ -288,6 +288,12 @@ pub enum VmInternalError {
     /// rather than erased to `unknown`.
     #[error("could not realize type template: {message}")]
     TypeSubstitution { message: String },
+
+    /// A call site's value slots cannot be laid over the callee's parameter
+    /// list. The checker guarantees the fit for every checked call, so this is
+    /// a compiler/VM inconsistency or a native passing the wrong arguments.
+    #[error("call arguments do not fit the callee: {0}")]
+    CallLayout(baml_type::LayoutMismatch),
 }
 
 /// Any kind of virtual machine error.

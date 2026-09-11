@@ -15,7 +15,7 @@ function fixtures.patterns_new.bare_type_arm(v: int | string) -> int {
     return
 }
 
-function fixtures.patterns_new.call_int_callback(cb: (int) -> int throws never) -> int {
+function fixtures.patterns_new.call_int_callback(cb: (int) -> int throws unknown) -> int {
     load_const 10
     load_var cb
     call_indirect
@@ -123,7 +123,7 @@ function fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool
     return
 }
 
-function fixtures.patterns_new.fn_pattern(cb: (int) -> int throws never) -> int {
+function fixtures.patterns_new.fn_pattern(cb: (int) -> int throws unknown) -> int {
     load_const 0
     load_var cb
     call_indirect

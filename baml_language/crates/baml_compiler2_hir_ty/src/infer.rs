@@ -351,22 +351,6 @@ fn syntactic_union(members: &[Ty]) -> Ty {
     }
 }
 
-/// TIR's `function_params_runtime_compatible`, verbatim: same arity,
-/// same modes, and OPTIONAL parameters keep their names (named at the
-/// call site and in the runtime's defaulted-slot filling); required
-/// parameters may rename freely.
-fn function_params_runtime_compatible(
-    source: &[baml_type::interned::InferFunctionParamTy],
-    target: &[baml_type::interned::InferFunctionParamTy],
-) -> bool {
-    source.len() == target.len()
-        && source.iter().zip(target).all(|(source, target)| {
-            source.mode == target.mode
-                && (source.mode == baml_type::FunctionParamMode::Required
-                    || source.name == target.name)
-        })
-}
-
 /// Reduction budget for the finalize-time projection pass: bounds a
 /// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
 /// discipline as the canonical walk's fuel. Any real chain is far
@@ -497,11 +481,6 @@ pub struct Adjustment<T = baml_type::Ty> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Adjust {
-    /// The optional-parameter adapter: a function value satisfies its
-    /// expectation by SUBTYPING but not by RUNTIME SHAPE (arity, mode,
-    /// or optional-parameter names drift), so lowering synthesizes an
-    /// adapter closure (TIR's `function_coercion_for` rule).
-    FunctionAdapter,
     /// A condition position holding a non-`bool` value (B-1563): lowering
     /// synthesizes the truthiness test (`null`/`false`/zero/empty are
     /// falsy) so the branch itself stays strict-bool.
@@ -521,6 +500,10 @@ pub struct CallPlan<T = baml_type::Ty> {
     /// Required parameters with no argument get no entry (the arity
     /// diagnostic is S17's).
     pub bindings: Vec<ParamBinding>,
+    /// The value slots the arguments were matched against (a bound receiver
+    /// excluded): the shape the call site pushes, which dispatch maps onto
+    /// the executing callee's own parameter list.
+    pub argument_layout: baml_type::CallLayout,
     /// The callee's solved generic instantiation in declared De Bruijn
     /// order (owner frame prefix + own suffix). Recorded raw at the
     /// instantiation site; ground after writeback.
@@ -556,6 +539,7 @@ impl<T> Default for CallPlan<T> {
     fn default() -> Self {
         CallPlan {
             bindings: Vec::new(),
+            argument_layout: baml_type::CallLayout::default(),
             type_args: Vec::new(),
             own_offset: 0,
             explicit: false,
@@ -1163,7 +1147,7 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// rebuilding a synthetic parameter from syntax.
     pub type_bindings: FxHashMap<StmtId, ScopedTypeBinding<T>>,
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
-    /// S16: MIR synthesizes the recorded adapters instead of re-deciding.
+    /// S16: MIR synthesizes the recorded coercions instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
     /// Callee expressions the walk resolved through a LANGUAGE-SUGAR
     /// tier (`to_string`/`to_json`/`from_json` lang-item desugars).
@@ -2033,7 +2017,6 @@ impl<'db> InferenceContext<'db> {
                 self.provisional_checks
                     .push((expr, expected.clone(), ty.clone()));
             }
-            self.record_checked_function_adapter(expr, &ty, expected);
         }
         ty
     }
@@ -2121,142 +2104,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// rustc/r-a record coercions as per-expression adjustments consumed
-    /// structurally at MIR lowering; every checked position funnels
-    /// through `check_expr`, so this one probe covers TIR's five
-    /// recording sites. Fires only on an ACCEPTED check whose value and
-    /// expectation are both function-shaped but runtime-incompatible
-    /// (TIR's `function_coercion_for`): lowering must synthesize an
-    /// adapter closure. Target selection runs only after the subtype check
-    /// succeeds and uses the actual function to disambiguate union arms.
-    fn record_checked_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
-        let Some(adapter_expected) = self.function_adapter_target(got, expected) else {
-            return;
-        };
-        self.record_function_adapter(expr, got, &adapter_expected);
-    }
-
-    /// The concrete target an accepted function value must implement at
-    /// runtime. Direct function expectations are already unambiguous. For a
-    /// union, select only a single concrete function arm that the actual
-    /// function semantically satisfies; erased or competing arms must not make
-    /// adapter lowering guess.
-    fn function_adapter_target(&mut self, actual: &Ty, expected: &Ty) -> Option<Ty> {
-        let actual = self.table.resolve_completely(actual);
-        let actual = self.expand_alias_ty(&actual);
-        if !matches!(actual.kind(), InferTy::Function { .. }) {
-            return None;
-        }
-
-        let expected = self.table.resolve_completely(expected);
-        let expected = self.expand_alias_ty(&expected);
-        match expected.kind() {
-            InferTy::Function { .. } => Some(expected),
-            InferTy::Union(..) => {
-                fn collect(
-                    this: &mut InferenceContext<'_>,
-                    actual: &Ty,
-                    ty: &Ty,
-                    compatible: &mut Vec<Ty>,
-                    fuel: u8,
-                ) -> bool {
-                    if fuel == 0 {
-                        return false;
-                    }
-                    let candidate = this.expand_alias_ty(ty);
-                    match candidate.kind() {
-                        InferTy::Function { .. } => {
-                            if this.function_adapter_candidate_compatible(actual, &candidate) {
-                                compatible.push(candidate);
-                            }
-                            true
-                        }
-                        InferTy::Union(members, _) => {
-                            let members = members.to_vec();
-                            members.iter().all(|member| {
-                                collect(this, actual, member, compatible, fuel.saturating_sub(1))
-                            })
-                        }
-                        InferTy::TypeAlias(..) => false,
-                        _ => true,
-                    }
-                }
-
-                let mut compatible = Vec::new();
-                if !collect(self, &actual, &expected, &mut compatible, 16) {
-                    return None;
-                }
-                let [target] = compatible.as_slice() else {
-                    return None;
-                };
-                Some(target.clone())
-            }
-            _ => None,
-        }
-    }
-
-    /// Tests a union's function arm without committing any additional
-    /// inference. Ground pairs can use the semantic oracle directly. An
-    /// accepted generic function may still carry inference variables here,
-    /// so probe the ordinary subtype relation and discard the attempt.
-    fn function_adapter_candidate_compatible(&mut self, actual: &Ty, candidate: &Ty) -> bool {
-        if !actual.has_infer() && !candidate.has_infer() {
-            return self.cached_subtype(actual, candidate);
-        }
-
-        let (
-            InferTy::Function {
-                params: actual_params,
-                ret: actual_ret,
-                throws: actual_throws,
-                ..
-            },
-            InferTy::Function {
-                params: candidate_params,
-                ret: candidate_ret,
-                throws: candidate_throws,
-                ..
-            },
-        ) = (actual.kind(), candidate.kind())
-        else {
-            return false;
-        };
-        let actual_required: Vec<_> = actual_params
-            .iter()
-            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
-            .collect();
-        let candidate_required: Vec<_> = candidate_params
-            .iter()
-            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
-            .collect();
-        if actual_required.len() != candidate_required.len() {
-            return false;
-        }
-
-        let probe = self.probe();
-        let mut compatible = true;
-        for (actual, candidate) in actual_required.iter().zip(candidate_required.iter()) {
-            compatible &= self.sub(&candidate.ty, &actual.ty);
-        }
-        for candidate in candidate_params
-            .iter()
-            .filter(|param| param.mode == baml_type::FunctionParamMode::Optional)
-        {
-            let Some(actual) = actual_params.iter().find(|actual| {
-                actual.mode == baml_type::FunctionParamMode::Optional
-                    && actual.name == candidate.name
-            }) else {
-                compatible = false;
-                break;
-            };
-            compatible &= self.sub(&candidate.ty, &actual.ty);
-        }
-        compatible &= self.sub(actual_ret, candidate_ret);
-        compatible &= self.sub(actual_throws, candidate_throws);
-        self.rollback_probe(probe);
-        compatible
-    }
-
     /// Opens a speculative probe: relate freely, then discard the whole
     /// attempt with [`InferenceContext::rollback_probe`]. See
     /// [`ProbeCheckpoint`].
@@ -2292,29 +2139,6 @@ impl<'db> InferenceContext<'db> {
              and the map is keyed rather than journalled, so the entry would outlive it"
         );
         self.table.rollback_to(probe.table);
-    }
-
-    fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
-        let got = self.table.resolve_completely(got);
-        let got = self.expand_alias_ty(&got);
-        let InferTy::Function { params: source, .. } = got.kind() else {
-            return;
-        };
-        let target_fn = self.table.resolve_completely(expected);
-        let target_fn = self.expand_alias_ty(&target_fn);
-        let InferTy::Function { params: target, .. } = target_fn.kind() else {
-            return;
-        };
-        if function_params_runtime_compatible(source, target) {
-            return;
-        }
-        self.result.expr_adjustments.insert(
-            expr,
-            Box::new([Adjustment {
-                kind: Adjust::FunctionAdapter,
-                target: target_fn.clone(),
-            }]),
-        );
     }
 
     fn infer_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Expectation) -> Ty {
@@ -3298,10 +3122,6 @@ impl<'db> InferenceContext<'db> {
             let fits = self.sub(value, &context);
             self.obligation_anchor = saved_anchor;
             if fits {
-                // The value takes the context's type, so the ordinary
-                // checking road never relates the two; a function-typed
-                // value still needs its adapter recorded here.
-                self.record_checked_function_adapter(at, value, &context);
                 return context;
             }
         }
@@ -5913,6 +5733,8 @@ impl<'db> InferenceContext<'db> {
             })
             .collect();
         let plan = self.result.call_plans.entry(call).or_default();
+        plan.argument_layout =
+            baml_type::CallLayout::from_modes(params.iter().map(|p| (p.name.clone(), p.mode)));
         plan.bindings = bindings;
         plan.runtime_id = runtime_id;
         ret
@@ -13666,6 +13488,7 @@ impl<'db> InferenceContext<'db> {
     fn materialize_call_plan(&mut self, plan: CallPlan<Ty>) -> CallPlan {
         let CallPlan {
             bindings,
+            argument_layout,
             type_args,
             own_offset,
             explicit,
@@ -13675,6 +13498,7 @@ impl<'db> InferenceContext<'db> {
         } = plan;
         CallPlan {
             bindings,
+            argument_layout,
             type_args: type_args.iter().map(|ty| self.materialize_ty(ty)).collect(),
             own_offset,
             explicit,

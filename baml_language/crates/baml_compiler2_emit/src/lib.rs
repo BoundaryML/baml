@@ -4998,17 +4998,29 @@ fn compute_function_metadata<'db>(
         attr: baml_type::TyAttr::default(),
     };
 
+    // Runtime parameter templates come from the ELABORATED signature — the one
+    // the checker types calls against. Only the effect differs from the raw
+    // spelling: a callback parameter with an omitted `throws` is opened to a
+    // synthetic effect parameter that each call site instantiates, which
+    // `tir2_to_template` erases to `unknown` (an open contract the host
+    // boundary accepts opaquely), whereas the raw lowering falls back to
+    // `never` — the spelling of an EXPLICIT `throws never`, a closed contract
+    // the boundary enforces. Display keeps the raw spelling the user wrote.
+    let elaborated = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+    debug_assert_eq!(elaborated.params.len(), func.params.len());
     let mut param_types = Vec::with_capacity(func.params.len());
     let mut display_param_types = Vec::with_capacity(func.params.len());
-    for param in &func.params {
-        let resolved = if let Some(id) = param.type_ref {
-            Some(resolve_display_tir(func_store, id))
-        } else if param.name.as_str() == "self" {
-            self_param_ty()
-        } else {
-            None
-        };
-        if let Some(tir_ty) = resolved {
+    for (param, elaborated_param) in func.params.iter().zip(&elaborated.params) {
+        if let Some(id) = param.type_ref {
+            display_param_types.push(resolve_display_tir(func_store, id).render_with(&vp));
+            param_types.push(to_template(&resolve_display_tir(
+                &elaborated.type_refs,
+                elaborated_param.type_ref,
+            )));
+        } else if let Some(tir_ty) = (param.name.as_str() == "self")
+            .then(self_param_ty)
+            .flatten()
+        {
             display_param_types.push(tir_ty.render_with(&vp));
             param_types.push(to_template(&tir_ty));
         } else {

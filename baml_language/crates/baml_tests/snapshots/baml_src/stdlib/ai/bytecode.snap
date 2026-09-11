@@ -1216,7 +1216,7 @@ function ai.Agent._validated_schema_attempts(self: ai.Agent) -> int {
     throw
 }
 
-function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.Agent {
+function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> ai.Agent {
     load_var max_steps
     load_const <omitted>
     cmp_op ==
@@ -1426,7 +1426,7 @@ function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, client: ai.Cli
     return
 }
 
-function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
+function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -3138,7 +3138,7 @@ function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
     return
 }
 
-function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref, providers: (string, string) -> ai.Client | null throws never, prefixes: string[]) -> ai.Client {
+function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref, providers: (string, string) -> ai.Client | null throws unknown, prefixes: string[]) -> ai.Client {
     load_var selector
     store_var _4
     load_var _4
@@ -3915,7 +3915,7 @@ function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.event
     return
 }
 
-function ai.internal._from_shorthand(shorthand: string, providers: (string, string) -> ai.Client | null throws never, prefixes: string[]) -> ai.Client {
+function ai.internal._from_shorthand(shorthand: string, providers: (string, string) -> ai.Client | null throws unknown, prefixes: string[]) -> ai.Client {
     load_var shorthand
     load_const "/"
     call baml.String.index_of
@@ -6153,7 +6153,7 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     return
 }
 
-function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError {
+function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws unknown) -> (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError {
     load_var ?1
     make_cell
     store_var ?1
@@ -6943,7 +6943,7 @@ function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[] {
     return
 }
 
-function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0, #1> {
+function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws unknown) | null) -> ai.stream.Stream<#0, #1> {
     load_var ?9
     make_cell
     store_var ?9

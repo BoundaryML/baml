@@ -1171,6 +1171,40 @@ struct ThrowContext {
     cause: Value,
 }
 
+/// The parameter list a callable value executes with; see
+/// [`BexVm::callee_params`].
+enum CalleeParams<'a> {
+    Function(&'a Function),
+    Host(&'a bex_vm_types::HostClosure),
+}
+
+impl CalleeParams<'_> {
+    fn arity(&self) -> usize {
+        match self {
+            Self::Function(function) => function.arity,
+            Self::Host(host) => host.arity,
+        }
+    }
+
+    fn layout(&self) -> baml_type::CallLayout {
+        match self {
+            Self::Function(function) => function.argument_layout(),
+            Self::Host(host) => baml_type::CallLayout::from_modes(
+                host.params
+                    .iter()
+                    .map(|param| (param.name.clone(), param.mode)),
+            ),
+        }
+    }
+
+    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+        match self {
+            Self::Function(function) => function.argument_layout_is(layout),
+            Self::Host(_) => self.layout() == *layout,
+        }
+    }
+}
+
 pub struct BexVm {
     /// Call stack.
     ///
@@ -2981,11 +3015,12 @@ impl BexVm {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
                 params: (*hc.params).clone().into(),
-                // A host callable's declared bottom/unit throws is normalized to
+                // A host callable's undeclared (unit) throws is normalized to
                 // `unknown` when the closure is bound (see the engine's
-                // conversion): foreign code may surface a native exception no
-                // matter what it declares, so its error contract is opaque
-                // rather than empty. Nothing here can be `void`.
+                // conversion): foreign code may surface a native exception, so
+                // an unstated error contract is opaque rather than empty. A
+                // declared contract — `never` included — is kept and enforced.
+                // Nothing here can be `void`.
                 throws: (*hc.throws_ty).clone(),
                 ret: (*hc.ret_ty).clone(),
                 // Host closures are FFI-constructed; they carry no docs.
@@ -5729,6 +5764,75 @@ impl BexVm {
         }
     }
 
+    /// The parameter list a callable value executes with: the `Function`
+    /// behind a closure, bound method or generic wrapper, or a host closure's
+    /// declared parameters.
+    fn callee_params(&self, callee: HeapPtr) -> Result<CalleeParams<'_>, VmInternalError> {
+        let function = match self.get_object(callee) {
+            Object::Function(function) => return Ok(CalleeParams::Function(function)),
+            Object::HostClosure(host) => return Ok(CalleeParams::Host(host)),
+            Object::Closure(closure) => closure.function,
+            Object::BoundMethod(method) => method.function,
+            Object::GenericFunction(generic) => self.generic_function_authored_ptr(generic)?,
+            other => {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::Callable.into(),
+                    got: ObjectType::of(other).into(),
+                });
+            }
+        };
+        match self.get_object(function) {
+            Object::Function(function) => Ok(CalleeParams::Function(function)),
+            other => Err(VmInternalError::TypeError {
+                expected: FunctionType::Callable.into(),
+                got: ObjectType::of(other).into(),
+            }),
+        }
+    }
+
+    /// The layout the compiler recorded for the call instruction at `pc`.
+    /// A site without one already pushes the callee's own slots.
+    fn recorded_call_layout(
+        function: &'static Function,
+        pc: usize,
+    ) -> Option<&'static baml_type::CallLayout> {
+        function.bytecode.compact.as_ref()?.call_layouts.get(&pc)
+    }
+
+    /// Reshape the values on top of the stack from the slots `caller` pushed
+    /// to the slots `callee` reads (see [`baml_type::CallLayout::map_to`]):
+    /// required values keep their order, supplied optionals move to the
+    /// callee's slot of the same name, and optionals the caller never
+    /// mentioned receive the omission sentinel. Returns the callee's value
+    /// count. Type arguments and the caller's locals below the value lane
+    /// are untouched.
+    fn remap_call_arguments(
+        &mut self,
+        caller: &baml_type::CallLayout,
+        callee: HeapPtr,
+    ) -> Result<usize, VmInternalError> {
+        let params = self.callee_params(callee)?;
+        if params.layout_is(caller) {
+            return Ok(caller.len());
+        }
+        let target = params.layout();
+        let mapping = caller
+            .map_to(&target)
+            .map_err(VmInternalError::CallLayout)?;
+        let offset = self
+            .stack
+            .len()
+            .checked_sub(caller.len())
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(caller.len()))?;
+        let values: Vec<Value> = self.stack.drain(StackIndex::from_raw(offset)..).collect();
+        self.stack.extend(
+            mapping
+                .into_iter()
+                .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| values[index])),
+        );
+        Ok(target.len())
+    }
+
     /// Prepare a `YieldToCall`-style invocation: if `callee` is a
     /// `BoundMethod`, insert the receiver at the front of `args`. The returned
     /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
@@ -5737,14 +5841,33 @@ impl BexVm {
     /// `reflect.Type.of<T>()` inside generic methods invoked indirectly).
     /// `execute_call_from_locals_offset` and `load_function` both unwrap the
     /// `BoundMethod` to its inner `Function` for dispatch.
-    fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
-        let obj = self.get_object(callee);
-        if let Object::BoundMethod(bm) = obj {
-            let receiver = bm.receiver;
+    ///
+    /// A native yields either the callee's complete frame (`reflect.call_any`
+    /// fills every slot, omitted optionals included) or only the required
+    /// values in order (the higher-order builtins). An argument list as long
+    /// as the callee's parameter list is the complete frame; a shorter one is
+    /// laid over the callee's required slots, so a bound method with extra
+    /// optionals is callable as a narrower function value.
+    fn resolve_bound_method_callee(
+        &self,
+        callee: HeapPtr,
+        args: &mut Vec<Value>,
+    ) -> Result<HeapPtr, VmInternalError> {
+        if let Object::BoundMethod(bm) = self.get_object(callee) {
             // Prepend receiver so the inner function sees [self, arg1, ..., argN].
-            args.insert(0, receiver);
+            args.insert(0, bm.receiver);
         }
-        callee
+        let params = self.callee_params(callee)?;
+        if args.len() != params.arity() {
+            let mapping = baml_type::CallLayout::positional(args.len())
+                .map_to(&params.layout())
+                .map_err(VmInternalError::CallLayout)?;
+            *args = mapping
+                .into_iter()
+                .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
+                .collect();
+        }
+        Ok(callee)
     }
 
     /// The class-level type arguments to curry into a bound method whose
@@ -6764,7 +6887,7 @@ impl BexVm {
 
                         // If callee is a BoundMethod, insert receiver into args.
                         let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
+                            self.resolve_bound_method_callee(callee, &mut callback_args)?;
 
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
@@ -7573,7 +7696,7 @@ impl BexVm {
                         }));
 
                         let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args);
+                            self.resolve_bound_method_callee(callee, &mut callback_args)?;
                         let arg_count = callback_args.len();
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
@@ -8311,6 +8434,10 @@ impl BexVm {
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.load_global_in(function.runtime_package, callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let arg_count = match Self::recorded_call_layout(function, self.cur_pc) {
+                        Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                        None => arg_count,
+                    };
 
                     let args_offset = self.stack.len().checked_sub(arg_count + ntypeargs).ok_or(
                         VmInternalError::NotEnoughItemsOnStack(arg_count + ntypeargs),
@@ -8402,10 +8529,11 @@ impl BexVm {
                     // `Self` is the receiver's runtime concrete type; coherence makes
                     // `(Self, iface<args>)` resolve to at most one impl. Off that rule
                     // the method resolves through `rule_method_impl` (the provided
-                    // row, or the interface's default on a miss). `nargs` equals the
-                    // method's arity — the interface fixes the parameter count, so
-                    // every impl agrees. The rule borrows `self`; scope it so the
-                    // borrow ends before the `&mut self` call below.
+                    // row, or the interface's default on a miss). `nargs` is the
+                    // interface method's slot count; the resolved impl may declare
+                    // extra optionals, so its value lane is remapped below. The
+                    // rule borrows `self`; scope it so the borrow ends before the
+                    // `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
                     let cache_key = if function.runtime_package.is_null() {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
@@ -8511,6 +8639,10 @@ impl BexVm {
                         }
                         (callee, frame)
                     };
+                    let nargs = match Self::recorded_call_layout(function, self.cur_pc) {
+                        Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                        None => nargs,
+                    };
                     // The receiver's class-level slots need no exact carrier:
                     // the resolver realizes them off `Self` as head-carrying
                     // types, so `reflect.Type.of<T>()` in an impl or default-method
@@ -8589,6 +8721,10 @@ impl BexVm {
                         // for the args-layout rationale.
                         let arity = host_closure.arity;
                         let _popped_callee = self.stack.ensure_pop();
+                        let arity = match Self::recorded_call_layout(function, self.cur_pc) {
+                            Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                            None => arity,
+                        };
                         // Defense-in-depth: see `Instruction::CallIndirect`
                         // above — a `HostClosure` has no inner `Object::Function`
                         // to cross-check `arity` against, so assert the operand
@@ -8632,15 +8768,26 @@ impl BexVm {
                             full_arity >= 1,
                             "BoundMethod's inner function must have self parameter"
                         );
-                        let visible_arity = full_arity.saturating_sub(1);
                         let receiver = bm.receiver;
                         let _popped = self.stack.ensure_pop();
+                        // The site pushed the method's visible slots; the
+                        // receiver joins them as the leading required slot.
+                        let recorded = Self::recorded_call_layout(function, self.cur_pc);
+                        let pushed = recorded.map_or(full_arity - 1, baml_type::CallLayout::len);
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(visible_arity)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
+                            .checked_sub(pushed)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(pushed))?;
                         self.stack.insert(args_offset, receiver);
+                        let full_arity = match recorded {
+                            Some(layout) => {
+                                let mut caller = layout.clone();
+                                caller.0.insert(0, None);
+                                self.remap_call_arguments(&caller, callee_ptr)?
+                            }
+                            None => full_arity,
+                        };
                         let locals_offset = StackIndex::from_raw(args_offset);
                         // Pass the BoundMethod pointer (not its inner function) so
                         // `execute_call_from_locals_offset` seeds the receiver's
@@ -8661,12 +8808,16 @@ impl BexVm {
                         }
                     } else {
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                        let _popped_callee = self.stack.ensure_pop();
+                        let arg_count = match Self::recorded_call_layout(function, self.cur_pc) {
+                            Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                            None => arg_count,
+                        };
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(arg_count + 1)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count + 1))?;
-                        let _popped_callee = self.stack.ensure_pop();
+                            .checked_sub(arg_count)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                         let locals_offset = StackIndex::from_raw(args_offset);
                         if let Some(state) = self.execute_call_from_locals_offset(
                             callee_ptr,

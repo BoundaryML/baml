@@ -445,6 +445,10 @@ pub enum Terminator<'db> {
 
     /// Call a function.
     Call {
+        /// The value slots this site was checked against, leading type
+        /// arguments excluded. `None` only for compiler-synthesized calls,
+        /// whose operands are already in the callee's own layout.
+        argument_layout: Option<baml_type::CallLayout>,
         /// The function to call.
         callee: Operand<'db>,
         /// Arguments to pass.
@@ -484,6 +488,9 @@ pub enum Terminator<'db> {
     /// materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
+        /// The value slots this site was checked against (receiver included,
+        /// type arguments excluded); see [`Terminator::Call::argument_layout`].
+        argument_layout: Option<baml_type::CallLayout>,
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType`. Non-generic today (`baml.ops.Equals`/`Compare`); a
         /// parameterized interface bakes its arguments into the template.
