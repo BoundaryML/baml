@@ -8,8 +8,21 @@ Set-Location $PSScriptRoot  # baml_language\sdk_tests\crates\java
 
 $WorkspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 
+# Generate each fixture's baml_sdk/, tests/ and Gradle files first: nothing
+# else produces them, and every Gradle invocation below builds against them.
+Write-Output "==> sdk_test_codegen java (generate fixture SDKs)"
+Push-Location $WorkspaceRoot
+try {
+    cargo run --quiet -p sdk_test_codegen -- java
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Pop-Location
+}
+
 # Shared Gradle home under target/ — keep in sync with CACHE_SUBDIR /
-# CACHE_ENV_VAR in codegen/src/java.rs.
+# CACHE_ENV_VAR in the java test_suite! macro
+# (sdk_tests/harness_runner/src/lib.rs).
 $env:GRADLE_USER_HOME = Join-Path $WorkspaceRoot "target\gradle-home"
 New-Item -ItemType Directory -Force -Path $env:GRADLE_USER_HOME | Out-Null
 

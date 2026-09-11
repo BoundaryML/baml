@@ -78,6 +78,31 @@ pub fn run_test_cmd_allowing_exit_codes(
     );
 }
 
+/// `<generator crate>/<fixture>/<subdir>`, for tests that need to look at a
+/// fixture's inputs rather than run a toolchain against its output.
+///
+/// Resolves against `CARGO_MANIFEST_DIR`, which cargo sets for the test
+/// binary at run time, so callers need not thread the crate root through.
+pub fn fixture_path(fixture: &str, subdir: &str) -> PathBuf {
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"))
+        .join(fixture)
+        .join(subdir)
+}
+
+/// Whether `dir` holds any file with `extension`, at any depth.
+pub fn has_file_with_extension(dir: &Path, extension: &str) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            return has_file_with_extension(&path, extension);
+        }
+        path.extension().is_some_and(|found| found == extension)
+    })
+}
+
 /// The engine cdylib the generated SDKs load at run time.
 ///
 /// A test binary lives in `<target>/<profile>/deps/`, so the sibling
@@ -760,16 +785,80 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
-/// Java generator's test-side glue. Invoked from
-/// `crates/java/src/lib.rs` as
-/// `sdk_test_harness_runner::java::test_suite!()`.
+/// Expand one gated Java check. `macro_rules!` cannot expand to an attribute
+/// position, so the gate has to emit the whole item.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __java_gate {
+    (on, $name:ident, $body:block) => {
+        #[test]
+        fn $name() $body
+    };
+    (later, $name:ident, $body:block) => {
+        #[test]
+        #[ignore = "generated Java API not complete enough for this fixture yet \
+                    — un-ignore as capabilities land"]
+        fn $name() $body
+    };
+}
+
+/// Java generator's test-side glue. Invoked from `crates/java/src/lib.rs`.
 pub mod java {
-    /// `include!`s `OUT_DIR/java_tests.rs` — the per-fixture scaffold
-    /// emitted by `sdk_test_codegen::java::run_all`.
+    /// Declare the Java suite: a `javac` and a `junit` gate per fixture, plus
+    /// the shared setup guard and fixture-manifest oracle.
+    ///
+    /// Each gate is marked `on` or `later`. `later` emits the test `#[ignore]`d
+    /// — the generated API is not complete enough for that fixture yet, and
+    /// un-ignoring is the signal that its parity tests are expected to pass.
+    /// A green `junit` requires a green `javac`: the `test` task compiles the
+    /// test sources first.
+    ///
+    /// ```text
+    /// fixture type_shapes      { javac: on,    junit: on    }
+    /// fixture unsupported_only { javac: later, junit: later }
+    /// ```
     #[macro_export]
     macro_rules! java_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/java_tests.rs"));
+        ( $( fixture $name:ident { javac: $javac:ident, junit: $junit:ident } )+ ) => {
+            $crate::setup_guard!("SDK_TEST_JAVA_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    const CACHE_SUBDIR: &str = "gradle-home";
+                    const CACHE_ENV_VAR: &str = "GRADLE_USER_HOME";
+
+                    fn cmd(command: &str) {
+                        $crate::run_test_cmd(
+                            stringify!($name),
+                            command,
+                            CACHE_SUBDIR,
+                            CACHE_ENV_VAR,
+                        );
+                    }
+
+                    $crate::__java_gate!($javac, javac, {
+                        cmd("gradle --no-daemon --console=plain compileTestJava");
+                    });
+
+                    $crate::__java_gate!($junit, junit, {
+                        // A fixture whose overlay has no `.java` sources has
+                        // nothing for `gradle test` to compile or run.
+                        if !$crate::has_file_with_extension(
+                            &$crate::fixture_path(stringify!($name), "customizable"),
+                            "java",
+                        ) {
+                            return;
+                        }
+                        $crate::run_java_test_cmd(
+                            stringify!($name),
+                            "gradle --no-daemon --console=plain test",
+                            CACHE_SUBDIR,
+                            CACHE_ENV_VAR,
+                        );
+                    });
+                }
+            )+
         };
     }
 

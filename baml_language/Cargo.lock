@@ -6367,7 +6367,6 @@ version = "0.1.0"
 name = "sdk_test_java"
 version = "0.1.0"
 dependencies = [
- "sdk_test_codegen",
  "sdk_test_harness_runner",
 ]
 

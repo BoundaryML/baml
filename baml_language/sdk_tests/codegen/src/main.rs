@@ -26,6 +26,7 @@ const GENERATORS: &[(&str, RunAll)] = &[
     ("cpp", sdk_test_codegen::cpp::run_all),
     ("csharp", sdk_test_codegen::csharp::run_all),
     ("go", sdk_test_codegen::go::run_all),
+    ("java", sdk_test_codegen::java::run_all),
     (
         "python_pydantic2",
         sdk_test_codegen::python_pydantic2::run_all,
