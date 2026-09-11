@@ -42,9 +42,9 @@ Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'
     if (Test-Path $generated) {
         # Never run cargo without the generated manifest: cargo discovers
-        # manifests upward, so a missing Cargo.toml (codegen failure) would
-        # silently turn this into a workspace-wide build. The failure itself
-        # surfaces via the build_diagnostics test.
+        # manifests upward, so a missing Cargo.toml would silently turn this
+        # into a workspace-wide build. Codegen above aborts the script on
+        # failure, so reaching here without one means the tree was removed.
         $manifest = Join-Path $generated 'Cargo.toml'
         if (-not (Test-Path $manifest)) {
             Write-Host "==> skipping $($_.Name)/generated (no Cargo.toml - codegen failed?)"

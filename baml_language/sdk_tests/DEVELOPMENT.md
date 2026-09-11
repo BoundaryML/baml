@@ -1,53 +1,61 @@
 # BAML Codegen SDK Test Development
 
-Codegen runs in each crate's `build.rs` via the full
-`baml_project::build_symbol_pool` pipeline (parse -> HIR -> TIR ->
-`SymbolPool` -> emitter), mirroring the path `baml-cli generate`
-takes end-to-end. Toolchain install/native-build is kept OUT of
-build.rs for both targets and lives in a per-crate `setup.sh`
-(Unix) / `setup.ps1` (Windows): python_pydantic2's per-fixture
-`uv sync --reinstall-package baml_bridge` lives in
-[`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
-(the `--reinstall-package` forces the maturin rebuild of
-baml_bridge's `.so` that a plain `uv sync` skips on incremental Rust
-edits). The TypeScript setup is split by runtime family:
-[`crates/typescript/setup.sh`](./crates/typescript/setup.sh) builds only the
-native bridge, while
-[`crates/typescript_web/setup.sh`](./crates/typescript_web/setup.sh) builds
-the Web/Wasm bridge and installs Chromium; rust's serial per-fixture
-`cargo test --no-run` pre-warm of the shared `target/sdk-rust-target` build
-dir lives in [`crates/rust/setup.sh`](./crates/rust/setup.sh).
-`cargo nextest run` fires the matching setup script automatically
-via platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script
-bindings in
-[`baml_language/.config/nextest.toml`](../.config/nextest.toml).
+Each generator crate compiles the shared fixture corpus through the full
+compiler pipeline (parse -> HIR -> TIR -> `SymbolPool` -> emitter), mirroring
+the path `baml generate` takes end-to-end, and installs the result as a real
+SDK the host language's toolchain then builds and tests.
 
-Build-script failures (missing tool, codegen panic, install
-non-zero exit, codegen file write errors) are recorded to
-`$OUT_DIR/build_diagnostics.txt` rather than aborted, and surface
-as a `build_diagnostics::no_build_failures` test (see
-[Soft-fail build.rs](#soft-fail-buildrs) below). Each build also
-emits a `#[test]` scaffold under `OUT_DIR` with one test per
-toolchain check per fixture, producing a `cargo test` matrix of
-`(fixture x check)` per crate.
+That codegen runs from the crate's `setup.sh` (Unix) / `setup.ps1` (Windows),
+alongside the toolchain install. **No generator has a `build.rs`.** Nothing
+under `sdk_tests/` is generated during an ordinary `cargo build`, `cargo check`
+or `cargo clippy`.
 
-The shared infrastructure is split into two crates so the heavy
-codegen + project-loading deps only land where they're needed:
+`cargo nextest run` fires the matching setup script automatically via
+platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script bindings in
+[`baml_language/.config/nextest.toml`](../.config/nextest.toml). Plain
+`cargo test` does not, and the `setup_guard::ran` test fails when it hasn't —
+see [setup.sh guard](#setupsh-guard-setup_guardran).
 
-- **`sdk_test_codegen`** (`[build-dependencies]`) holds the build.rs
-  logic -- fixture discovery, codegen, install, scaffold emission,
-  `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_shared`,
-  `sdkgen_rust`, `baml_db`, `baml_ide`, `baml_codegen_types`.
-- **`sdk_test_harness_runner`** (`[dev-dependencies]`) holds every emitted
-  test's runtime side -- `run_test_cmd` / `run_test_cmd_with_env`,
-  the per-generator `<generator>::test_suite!()` macros that
-  `include!` each OUT_DIR scaffold, and the shared
-  `build_diagnostics!` macro that emits the
-  `mod build_diagnostics { #[test] fn no_build_failures }` block.
-  Only `std` deps. The scaffold emitted by `sdk_test_codegen` is just
-  a sequence of macro / function invocations against
-  `::sdk_test_harness_runner::*` -- every generated `#[test]` body, including
-  `no_build_failures`, lives in `sdk_test_harness_runner`.
+## Why codegen is not a build script
+
+A build script's dependencies are *built*, never merely checked, so a
+`[build-dependencies]` edge on the codegen crate pulled its whole compiler and
+sdkgen closure into every `cargo check` of the workspace — 26 crates compiled
+to object code, plus nine build-script executions, on every edit to any
+compiler crate. Running codegen from `setup.sh` instead removes both, and
+removes the invalidation channel entirely: a compiler edit can no longer
+trigger SDK regeneration, because nothing regenerates during a build.
+
+The cost is that the set of `#[test]`s can no longer be generated. Setup
+scripts run *after* nextest has compiled the test binaries, so a scaffold
+written at setup time would be too late to compile. Each generator crate
+therefore declares its fixtures in source — see below.
+
+## The two owners
+
+Everything written into a fixture's `generated/` tree has exactly one owner, so
+nothing has to be wiped to stay correct:
+
+- **`write_codegen_output`** owns the emitted SDK subtree, through the same
+  filesystem transaction `baml generate` uses. It removes files it previously
+  owned and no longer emits, and skips the install outright when the tree
+  already matches byte-for-byte.
+- **`Overlay`** owns everything else the generator writes: the `customizable/`
+  overlay of ported tests, and the per-fixture scaffolding (`package.json`,
+  `go.mod`, `Package.swift`, …). It records what it staged in
+  `<fixture>/.baml-overlay` so the next run removes exactly what the last one
+  left, and materializes only entries whose bytes differ.
+
+The practical consequence: **an unchanged regeneration touches zero files.**
+Downstream toolchains — cargo, uv, pnpm, gradle, SwiftPM, MSBuild — all key
+their own caches on mtime, so a wipe-and-restage would invalidate every one of
+them on every run.
+
+Rust is the single exception, documented in `codegen/src/rust.rs`: its overlay
+lands *inside* the output writer's own tree, and the writer refuses to run over
+symlinks it does not own, so those links are cleared and re-staged each run.
+That costs nothing — re-creating a symlink leaves the file it points at, and
+therefore what cargo fingerprints, untouched.
 
 ## Directory Structure
 
@@ -56,207 +64,163 @@ sdk_tests/
 |-- codegen/                              # codegen crate (heavy deps: sdkgen_*, baml_db, baml_ide, ...)
 |   |-- Cargo.toml                        # name = "sdk_test_codegen"; lib + bin
 |   `-- src/
-|       |-- lib.rs                        # generator-agnostic helpers + BuildDiagnostics
-|       |-- main.rs                       # `sdk_test_codegen` CLI (emit-bytecode, for the ABI probes)
-|       |-- python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
-|       |-- rust.rs                       # rust codegen + scaffold emit + TEST_MODS port gating
-|       |-- typescript.rs                 # Node codegen + Node scaffold emit
-|       `-- typescript_web.rs             # Web codegen + Chromium/workerd scaffold emit from canonical TypeScript tests
+|       |-- lib.rs                        # CodegenCtx, load_fixture, write_codegen_output, Overlay
+|       |-- main.rs                       # the `sdk_test_codegen` CLI; GENERATORS table
+|       |-- <generator>.rs                # one per target: run_all(&CodegenCtx)
+|       `-- templates/                    # per-fixture scaffolding, as real files
 |-- harness_runner/                       # test-side crate (std only)
 |   |-- Cargo.toml                        # name = "sdk_test_harness_runner"
 |   `-- src/
-|       `-- lib.rs                        # run_test_cmd + build_diagnostics! macro
-|                                         #   + per-generator <gen>::test_suite!() macros
-|-- fixtures/                             # generator-agnostic input only -- baml_src/ and nothing else
-`-- crates/                               # one crate per generator target; per-fixture content nested inside
-    |-- python_pydantic2/
-    |   |-- Cargo.toml                    # name = "sdk_test_python_pydantic2"
-    |   |                                 # [build-dependencies] sdk_test_codegen
-    |   |                                 # [dev-dependencies]   sdk_test_harness_runner
-    |   |-- build.rs                      # one-liner -> sdk_test_codegen::python_pydantic2::run_all()
-    |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
-    |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
-    |-- typescript/
-    |   |-- Cargo.toml                    # name = "sdk_test_typescript"
-    |   |                                 # [build-dependencies] sdk_test_codegen
-    |   |                                 # [dev-dependencies]   sdk_test_harness_runner
-    |   |-- build.rs                      # one-liner -> sdk_test_codegen::typescript::run_all()
-    |   |-- setup.sh                      # build the native bridge + install packages (Unix)
-    |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript::test_suite!()
-    |-- typescript_web/
-    |   |-- Cargo.toml                    # name = "sdk_test_typescript_web"
-    |   |-- build.rs                      # reads ../typescript/*/customizable; emits only local generated trees
-    |   |-- setup.sh                      # build Web/Wasm bridge + install packages/Chromium (Unix)
-    |   |-- setup.ps1                     # Windows equivalent
-    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_web::test_suite!()
-    `-- rust/
-        |-- Cargo.toml                    # name = "sdk_test_rust"
-        |                                 # [build-dependencies] sdk_test_codegen
-        |                                 # [dev-dependencies]   sdk_test_harness_runner
-        |-- build.rs                      # one-liner -> sdk_test_codegen::rust::run_all()
-        |-- setup.sh                      # serial `cargo test --no-run` pre-warm of target/sdk-rust-target (Unix)
+|       |-- lib.rs                        # run_test_cmd + per-generator test_suite!() macros
+|       `-- fixtures.rs                   # SHARED corpus table + the manifest oracle
+|-- fixtures/<fixture>/baml_src/          # generator-agnostic input only -- .baml and nothing else
+`-- crates/                               # one crate per generator target
+    `-- <generator>/
+        |-- Cargo.toml                    # [dev-dependencies] sdk_test_harness_runner -- no build-deps
+        |-- setup.sh                      # runs `sdk_test_codegen <generator>`, then the toolchain
         |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-        `-- src/lib.rs                    # invokes sdk_test_harness_runner::rust::test_suite!()
+        |-- src/lib.rs                    # declares the suite: test_suite! { fixture <name>; ... }
+        `-- <fixture>/
+            |-- customizable/             # ported tests, tracked
+            |-- .baml-overlay             # what the last run staged, gitignored
+            `-- generated/                # codegen output, gitignored
 ```
+
+C# is the exception to the corpus layout: its fixtures are whole BAML projects
+living in-crate (`crates/csharp/<fixture>/baml.toml` + `baml_src/` + a
+hand-written `Program.cs` consumer), so it reads nothing from `fixtures/`.
 
 ## How It Works
 
-1. **`crates/<generator>/build.rs`** calls
-   `sdk_test_codegen::<generator>::run_all()`, which:
-   - Scans `sdk_tests/fixtures/*/baml_src/` to discover the fixture
-     set.
-   - For each fixture: loads `.baml` files into a `ProjectDatabase`,
-     gates on `Severity::Error` diagnostics, builds the codegen
-     `SymbolPool`, calls the target's `to_source_code(...)`, and
-     writes the result to the target runtime directories under `crates/<generator>/<fixture>/generated/`.
-   - Symlinks each file in
-     `crates/<generator>/<fixture>/customizable/` into
-     `crates/<generator>/<fixture>/generated/` (python) -- or
-     copies (`typescript` and `typescript_web`, because Node.js follows
-     symlinks during module resolution and can break out of the generated
-     dir's `node_modules`; the Web crate reads its complete test corpus from
-     the sibling `typescript` crate and never writes into it). The rust
-     target symlinks into `generated/customizable/` (NOT `generated/tests/`,
-     where cargo would auto-discover every file as its own test target) and
-     writes the `generated/tests/main.rs` gate file that decides which ported
-     files compile (see the `TEST_MODS` table in `codegen/src/rust.rs`).
-   - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
-     (or `package.json` + per-runtime TypeScript/Vitest configs for
-     `typescript`) with the per-fixture package name. The rust
-     target's `generated/Cargo.toml` instead comes from `sdkgen_rust`
-     itself (the generated SDK is a complete Cargo crate); the harness
-     injects the per-fixture package name, the `bridge_rust` path
-     dep, and the test-suite `[dev-dependencies]` via
-     `RustGenOptions`.
-   - For BOTH targets: the toolchain install is OUT of build.rs and
-     lives in `crates/<generator>/setup.sh` (Unix) or `setup.ps1`
-     (Windows) -- the two are equivalent, same steps in each
-     platform's host shell. `cargo nextest run` fires the right one
-     via two platform-filtered (`cfg(unix)` / `cfg(windows)`)
-     setup-script bindings; plain `cargo test` won't pass.
-   - For python_pydantic2: the setup script runs `uv sync
-     --reinstall-package baml_bridge` inside each generated dir.
-     uv's editable install of `baml_bridge` (declared in
-     `[tool.uv.sources]`) triggers the maturin build of
-     `bridge_python`. `--reinstall-package` is required because a
-     plain `uv sync` is a no-op on incremental Rust edits -- uv
-     doesn't track the Rust sources behind the editable install,
-     so the `.so` would stay stale.
-   - For Node TypeScript: `sdk_test_typescript` builds only
-     `bridge_typescript`, installs Node-only fixture manifests, and runs
-     `esm_node`, `tsc_node`, `vitest_node`, and `attw`.
-   - For Web TypeScript: `sdk_test_typescript_web` builds only `bridge_typescript_web`, copies the canonical sibling tests into local generated Web/Workers trees, installs Chromium, and runs the Web and Workers ESM, TypeScript, and Vitest checks.
-   - For rust: the setup script runs a serial `cargo test --no-run`
-     per fixture into the shared `target/sdk-rust-target` build dir
-     (threaded to the tests as `CARGO_TARGET_DIR`), so the
-     bridge_rust -> BEX runtime stack compiles once before nextest
-     fans the per-fixture `cargo clippy` / `cargo test` invocations
-     out in parallel against a warm cache.
-   - Emits `OUT_DIR/<generator>_tests.rs` -- a generated source file
-     containing a `::sdk_test_harness_runner::build_diagnostics!(...)` macro
-     invocation at the top followed by one `mod <fixture> { ... }`
-     per fixture, with each `#[test]` body just calling
-     `::sdk_test_harness_runner::run_test_cmd(...)`. The emitter writes
-     macro / function invocations only -- no test logic.
-   - Emits `cargo:rerun-if-changed=` for every BAML and
-     customizable file.
-2. **`crates/<generator>/src/lib.rs`** invokes
-   `sdk_test_harness_runner::<generator>::test_suite!()`, a macro that
-   expands to `include!(concat!(env!("OUT_DIR"),
-   "/<generator>_tests.rs"))` -- pulling in the scaffold emitted by
-   the build script. The `test_suite!()` macro plus the
-   `build_diagnostics!` macro and `run_test_cmd` referenced from
-   inside the scaffold all live in `sdk_test_harness_runner` so the
-   generator crate's `[dev-dependencies]` slot can pull them in
-   without dragging the codegen deps along.
-3. The per-fixture `#[test]` fns all call
-   `sdk_test_harness_runner::run_test_cmd(fixture, cmd, cache_subdir,
+1. **`crates/<generator>/setup.sh`** runs
+   `cargo run -p sdk_test_codegen -- <generator>` first, then the toolchain
+   steps. Codegen must come first: every later step builds against the
+   generated tree, and each script's per-fixture loop silently skips a fixture
+   whose `generated/` is missing.
+
+2. **`sdk_test_codegen::<generator>::run_all(&CodegenCtx)`** then, per fixture:
+   - loads the `.baml` files into a `ProjectDatabase` and gates on
+     `Severity::Error` diagnostics;
+   - builds the codegen `SymbolPool` and calls the target's
+     `to_source_code_with_bytecode(...)`;
+   - installs that output via `write_codegen_output`; and
+   - stages the `customizable/` overlay plus the per-fixture scaffolding
+     through an `Overlay`.
+
+   `CodegenCtx` carries the two roots (`fixtures_root`, `crate_dir`), so
+   generators never consult `CARGO_MANIFEST_DIR` themselves — inside the driver
+   that would name the driver's own directory.
+
+   Overlays are symlinked where the language tolerates it (C++, Python, Rust),
+   so editing a ported test is picked up without re-staging, and copied where it
+   does not: Node follows symlinks during module resolution and would resolve
+   `node_modules` from `customizable/`, which has none; Gradle and SwiftPM
+   resolve target membership by path.
+
+3. **`crates/<generator>/src/lib.rs`** declares the suite:
+
+   ```rust
+   #[cfg(test)]
+   sdk_test_harness_runner::cpp::test_suite! {
+       fixture docstrings_etc;
+       fixture function_calls;
+       fixture llm_functions;
+       fixture type_shapes;
+       fixture unsupported_only;
+   }
+   ```
+
+   That expands to one `mod <fixture>` per row holding the generator's
+   toolchain checks, plus `setup_guard::ran` and
+   `fixture_manifest::matches_corpus`. Some generators take richer rows — Java
+   marks each gate `on` or `later`, Swift takes an optional
+   `later "<reason>"`, Go distinguishes `fixture` from `synthetic` — see each
+   macro's docs.
+
+4. **The fixture rows are pinned.** `fixture_manifest!` emits a test asserting
+   that a crate's declared rows, the `fixtures::SHARED` table, and the corpus on
+   disk all agree. Adding a fixture is `mkdir fixtures/<name>/baml_src/` plus a
+   row in `fixtures::SHARED` and in each `crates/*/src/lib.rs`; miss one and
+   that test fails, naming the file to edit. `sdk_test_codegen` asserts the same
+   thing at startup, so drift aborts the setup script rather than waiting for a
+   test.
+
+5. **The per-fixture tests** call `run_test_cmd(fixture, cmd, cache_subdir,
    cache_env_var)`, which `cd`s into
-   `<CARGO_MANIFEST_DIR>/<fixture>/generated/` (i.e.
-   `sdk_tests/crates/<generator>/<fixture>/generated/`), threads
-   the toolchain cache env var (`UV_CACHE_DIR` /
-   `npm_config_store_dir`), and spawns `cmd`. The `uv` invocation
-   falls back to `mise which uv` if `uv` isn't on PATH.
+   `sdk_tests/crates/<generator>/<fixture>/generated/`, threads the toolchain
+   cache env var (`UV_CACHE_DIR`, `npm_config_store_dir`, `GRADLE_USER_HOME`,
+   `CARGO_TARGET_DIR`), and spawns `cmd`. The `uv` invocation falls back to
+   `mise which uv` if `uv` isn't on PATH.
 
-### Soft-fail build.rs
+### Failures are loud
 
-`uv` / `pnpm` aren't required to *build* the workspace -- only to
-*test* the SDK targets. Both targets' `build.rs` only does codegen
-+ scaffold emit (no `uv` / `pnpm`), so the soft-fail set is just
-`to_source_code` panics and codegen file write errors recorded to
-`$OUT_DIR/build_diagnostics.txt` (build.rs exits 0 instead of
-aborting). `uv sync` / `pnpm install` failures hard-fail in the
-respective `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
-to a `mod build_diagnostics { #[test] fn no_build_failures }` that
-reads the file and fails with the records. `sdk_test_codegen`'s
-scaffold emitter stamps one invocation per generator scaffold.
+There is no soft-fail path. A codegen panic, a failed install, or a fixture
+with `Severity::Error` diagnostics aborts the driver, which fails `setup.sh`
+under `set -e`, which nextest reports as a `SETUP FAIL` with the panic message
+attached.
 
-Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm` installed; `cargo nextest run` surfaces the same failures it would have hit before, just routed through a test rather than build.rs.
+This used to be routed through a `$OUT_DIR/build_diagnostics.txt` record and a
+`build_diagnostics::no_build_failures` test, so that `cargo check` stayed green
+on a machine without the SDK toolchains. Codegen no longer runs during `cargo
+check`, so that reason is gone.
 
 ### setup.sh guard (`setup_guard::ran`)
 
-Because the toolchain install now lives in `setup.sh` (run by
-`cargo nextest run`, not by `build.rs`), nextest runs need a per-run
-check that the matching setup script actually fired. Each generator
-scaffold emits a
-`mod setup_guard { #[test] fn ran }` test (via
-`::sdk_test_harness_runner::setup_guard!("SDK_TEST_<GEN>_SETUP")`)
-that asserts the setup script ran *this* run.
+Since `setup.sh` is what generates each fixture's SDK *and* installs the
+toolchain, a run where it did not fire would test a stale tree or none at all.
+Each suite emits a `mod setup_guard { #[test] fn ran }` that fails unless the
+script ran **this** run.
 
-**Breadcrumb format.** At the end of each run, the generator's setup
-script (`setup.sh` / `setup.ps1`) appends a single line to the file
-named by nextest's `$NEXTEST_ENV` env var:
+**Breadcrumb format.** At the end of each run, the generator's setup script
+appends a single line to the file named by nextest's `$NEXTEST_ENV`:
 
 ```text
 SDK_TEST_<GEN>_SETUP=1
 ```
 
-`<GEN>` is the upper-cased generator key:
-`SDK_TEST_PYTHON_PYDANTIC2_SETUP=1` for python_pydantic2 and
-`SDK_TEST_TYPESCRIPT_SETUP=1` for TypeScript. The
-canonical name is the `SETUP_ENV_VAR` const in each
-`codegen/src/<generator>.rs` (the setup scripts and the
-emitted `setup_guard!(...)` invocation must agree on it). nextest
-reads that file after the setup script and injects the var into the
-matched tests' processes for that run only, so presence of the var
-proves the script ran *this* invocation.
+`<GEN>` is the upper-cased generator key — `SDK_TEST_PYTHON_PYDANTIC2_SETUP=1`,
+`SDK_TEST_TYPESCRIPT_SETUP=1`. The canonical name is the literal in that
+generator's `test_suite!` macro in `harness_runner/src/lib.rs`; the setup
+scripts must agree with it. nextest reads that file after the setup script and
+injects the var into the matched tests' processes for that run only, so
+presence of the var proves the script ran *this* invocation.
 
-It's deliberately an env var via `$NEXTEST_ENV`, not a file marker:
-a file would persist across runs and false-pass after the `.so` /
-`node_modules` went stale, and checking `NEXTEST=1` alone would only
-prove "under nextest", not "this script ran". Under plain
-`cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
-the breadcrumb; the generated fixture tests are still free to fail if the local setup is missing or stale.
+It is deliberately an env var via `$NEXTEST_ENV` rather than a file marker: a
+file would persist across runs and false-pass after the `.so` / `node_modules`
+went stale, and checking `NEXTEST=1` alone would only prove "under nextest",
+not "this script ran". Plain `cargo test` sets neither, so the guard fails
+there — that is the intended answer, not a gap.
 
-Hard panics are retained for repo/author bugs: missing `fixtures/`
-directory, fixtures with zero `.baml` files, `.baml` files with
-`Severity::Error` diagnostics, unset `CARGO_MANIFEST_DIR` /
-`OUT_DIR`. See `sdk_test_codegen::BuildDiagnostics` for the split.
+Swift is `#[cfg(target_os = "macos")]`-gated: its nextest binding is host-gated,
+so off-macOS no setup script runs and the fixture tests are `#[ignore]`d to
+match. Its `fixture_manifest` test stays live on every host, since it only reads
+the corpus.
 
 ## Adding a Generator Target
 
-1. Add `sdk_tests/codegen/src/<target>.rs` with `run_all()`
-   (codegen + pyproject/package.json template + `OUT_DIR` scaffold
-   emission, threading a `BuildDiagnostics` through). Toolchain
-   install stays OUT of build.rs -- put it in
-   `crates/<target>/setup.sh` and add a nextest setup-script
-   binding in `.config/nextest.toml` filtered to the crate. The
-   scaffold emitter stamps
-   `::sdk_test_harness_runner::build_diagnostics!(...)` at the top and one
-   `mod <fixture> { #[test] ... ::sdk_test_harness_runner::run_test_cmd(...) }`
-   per fixture -- no test bodies authored here.
-2. Add a `pub mod <target> { ... #[macro_export] macro_rules!
-   <target>_test_suite { ... } pub use crate::<target>_test_suite
-   as test_suite; }` block to `sdk_tests/harness_runner/src/lib.rs`
-   so the generator crate can invoke it as
-   `sdk_test_harness_runner::<target>::test_suite!()`. The macro body is
-   just `include!(concat!(env!("OUT_DIR"), "/<target>_tests.rs"))`.
-3. Add `sdk_tests/crates/<target>/{Cargo.toml,build.rs,src/lib.rs,setup.sh}`
-   following `crates/python_pydantic2/`'s shape. `Cargo.toml` wires
-   `sdk_test_codegen` as `[build-dependencies]` and `sdk_test_harness_runner`
-   as `[dev-dependencies]`.
-4. For each existing fixture that should run under this target,
-   drop a `sdk_tests/crates/<target>/<fixture>/customizable/`
-   directory containing the host-language tests.
+1. Add `sdk_tests/codegen/src/<target>.rs` with
+   `pub fn run_all(ctx: &CodegenCtx)`: iterate `fixtures::SHARED`, install
+   codegen output through `write_codegen_output`, and stage the overlay and
+   scaffolding through an `Overlay`. Assert the corpus matches `SHARED` first.
+
+2. Register it in the `GENERATORS` table in `sdk_tests/codegen/src/main.rs`.
+
+3. Add a `pub mod <target>` to `sdk_tests/harness_runner/src/lib.rs` holding a
+   `#[macro_export] macro_rules! <target>_test_suite` that takes
+   `fixture <name>;` rows, re-exported as `test_suite`. It should emit
+   `setup_guard!`, `fixture_manifest!`, and one `mod <fixture>` per row. Test
+   bodies live here, not in the codegen crate.
+
+4. Add `sdk_tests/crates/<target>/{Cargo.toml,src/lib.rs,setup.sh,setup.ps1}`,
+   following `crates/cpp/`'s shape. `Cargo.toml` wires
+   `sdk_test_harness_runner` as a `[dev-dependencies]` and has **no**
+   `[build-dependencies]` and no `build.rs`. `setup.sh` runs
+   `cargo run -p sdk_test_codegen -- <target>` before anything else, and
+   appends its `SDK_TEST_<GEN>_SETUP=1` breadcrumb to `$NEXTEST_ENV` at the end.
+
+5. Add a platform-filtered setup-script binding for the crate in
+   `.config/nextest.toml`.
+
+6. For each fixture that should run under this target, drop a
+   `sdk_tests/crates/<target>/<fixture>/customizable/` directory containing the
+   host-language tests.

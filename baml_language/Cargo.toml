@@ -13,31 +13,24 @@ members = [
   "sdks/python/rust/*",
   "sdks/swift/rust/*",
   "sdks/rust/*",
+  # SDK codegen, as a normal binary rather than a build script: as a
+  # `[build-dependencies]` its compiler and sdkgen closure was *built*, not
+  # merely checked, by every `cargo check` of the workspace. Each generator
+  # crate below runs it from its own `setup.sh`, so a workspace build
+  # generates nothing and needs no SDK toolchain installed.
   "sdk_tests/codegen",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
-  # `sdk_tests/crates/java` follows typescript_node's soft-fail model
-  # (see below); its per-fixture tests are `#[ignore]`d while
-  # `sdkgen_java` is a stub.
   "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
   "sdk_tests/crates/ruby_sorbet",
-  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
-  # (sdkgen_swift is early); the swift toolchain tests themselves are
-  # macOS-only and setup.sh (xcframework assembly) is bound in
-  # .config/nextest.toml for macOS hosts.
+  # Swift's toolchain tests are macOS-only, and its setup.sh (codegen +
+  # xcframework assembly) is bound in .config/nextest.toml for macOS hosts
+  # alone — so CI, which drops every macOS matrix entry, does not run them.
   "sdk_tests/crates/swift",
   "sdk_tests/crates/go",
-  # `sdk_tests/crates/typescript`'s build.rs runs codegen +
-  # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
-  # if pnpm is missing or install fails (see
-  # `sdk_tests/codegen/src/lib.rs::BuildDiagnostics` —
-  # package name `sdk_test_codegen`), so a workspace
-  # `cargo build` / `cargo doc` succeeds without pnpm installed.
-  # The failures surface via `cargo test`'s
-  # `build_diagnostics::no_build_failures` test.
   "sdk_tests/crates/typescript",
   "sdk_tests/crates/typescript_web",
   "sdk_tests/crates/rust",

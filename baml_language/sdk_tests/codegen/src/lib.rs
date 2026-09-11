@@ -19,7 +19,7 @@
 //! `sdk_test_harness_runner::<generator>::test_suite!`.
 //!
 //! Two owners cover everything written into a fixture's `generated/` tree, so
-//! nothing has to be wiped to stay correct: [`write_codegen_output`] owns the
+//! nothing has to be wiped to stay correct: `write_codegen_output` owns the
 //! emitted SDK subtree, and [`Overlay`] owns the ported-test overlay plus the
 //! per-fixture scaffolding. Both skip files whose bytes already match.
 //!
@@ -33,8 +33,9 @@
 //!     └── generated/                              # codegen output, gitignored
 //! ```
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -397,8 +398,27 @@ impl Overlay {
     /// Remove what the previous run staged and this one does not, then
     /// materialize every entry that differs from what is already on disk.
     pub fn install(self) {
-        for stale in self.stale() {
-            let path = self.root.join(&stale);
+        let previous = self.previous();
+
+        // Write-ahead. Record the union of what the last run staged and what
+        // this one will *before* touching the tree, so the manifest is always
+        // a superset of the overlay-owned files on disk. Recording only at the
+        // end would strand anything created before an interrupted run: absent
+        // from the manifest, a later run could never recognize it as stale.
+        // Over-recording is harmless — a path listed but not present is simply
+        // skipped when it is removed.
+        self.write_manifest(
+            previous
+                .iter()
+                .map(String::as_str)
+                .chain(self.entries.keys().map(String::as_str)),
+        );
+
+        for stale in previous
+            .iter()
+            .filter(|path| !self.entries.contains_key(path.as_str()))
+        {
+            let path = self.root.join(stale);
             if fs::symlink_metadata(&path).is_ok() {
                 fs::remove_file(&path).unwrap_or_else(|error| {
                     panic!("failed to remove stale overlay {}: {error}", path.display())
@@ -420,26 +440,38 @@ impl Overlay {
             entry.materialize(&path);
         }
 
-        let listing = self
-            .entries
-            .keys()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join("\n");
-        write_if_changed(&self.manifest, format!("{listing}\n").as_bytes());
+        self.write_manifest(self.entries.keys().map(String::as_str));
     }
 
-    /// Paths the previous run staged that this one no longer does.
-    fn stale(&self) -> Vec<String> {
-        let Ok(previous) = fs::read_to_string(&self.manifest) else {
-            return Vec::new();
-        };
-        previous
-            .lines()
-            .filter(|line| !line.is_empty())
-            .filter(|line| !self.entries.contains_key(*line))
-            .map(str::to_string)
-            .collect()
+    /// Paths the previous run recorded as staged.
+    fn previous(&self) -> Vec<String> {
+        match fs::read_to_string(&self.manifest) {
+            Ok(listing) => listing
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(str::to_string)
+                .collect(),
+            // No manifest is a first run. An unreadable one is not: treating it
+            // as empty would forfeit stale removal and strand every file the
+            // last run staged.
+            Err(error) if error.kind() == ErrorKind::NotFound => Vec::new(),
+            Err(error) => panic!(
+                "failed to read overlay manifest {}: {error}",
+                self.manifest.display()
+            ),
+        }
+    }
+
+    /// Record `paths` as this overlay's ownership, de-duplicated and sorted.
+    fn write_manifest<'a>(&self, paths: impl Iterator<Item = &'a str>) {
+        let listing = paths
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        write_if_changed(
+            &self.manifest,
+            format!("{}\n", listing.join("\n")).as_bytes(),
+        );
     }
 
     fn insert(&mut self, relative: &Path, entry: Entry) {
@@ -516,10 +548,19 @@ fn tree_files(dir: &Path) -> Vec<(PathBuf, PathBuf)> {
 }
 
 fn collect_tree_files(dir: &Path, prefix: &Path, out: &mut Vec<(PathBuf, PathBuf)>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // A generator may stage an overlay whose source does not exist. Any
+        // other failure must not be read as an empty tree: `install` treats
+        // whatever it does not see as stale and deletes it, so a swallowed
+        // error would silently remove the fixture's ported tests.
+        Err(error) if error.kind() == ErrorKind::NotFound => return,
+        Err(error) => panic!("failed to read overlay source {}: {error}", dir.display()),
     };
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|error| {
+            panic!("failed to read an entry of {}: {error}", dir.display())
+        });
         let path = entry.path();
         let relative = prefix.join(entry.file_name());
         if path.is_dir() {

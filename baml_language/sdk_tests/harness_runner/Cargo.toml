@@ -1,23 +1,20 @@
 # Test-side runtime + macros for the `sdk_tests/crates/<generator>/`
-# crates. Used as `[dev-dependencies]` by each generator crate, while
-# the sibling `sdk_test_codegen` crate is used as
-# `[build-dependencies]`.
+# crates, wired in as their `[dev-dependencies]`.
 #
 # Holds:
 #   - `run_test_cmd` / `run_test_cmd_with_env` — runtime helpers
 #     called from every per-fixture `#[test]` body.
-#   - `build_diagnostics!` — macro that expands to the shared
-#     `mod build_diagnostics { #[test] fn no_build_failures }` block
-#     that reads `$OUT_DIR/build_diagnostics.txt` written by
-#     `sdk_test_codegen`'s `BuildDiagnostics::finalize`.
-#   - `python_pydantic2::test_suite!` / `typescript::test_suite!` /
-#     `typescript_web::test_suite!`
-#     — one per generator; each just `include!`s the OUT_DIR scaffold
-#     emitted by `sdk_test_codegen::<generator>::run_all`.
+#   - `<generator>::test_suite!` — one per generator; each takes the
+#     crate's `fixture <name>;` rows and expands to a `mod <fixture>`
+#     per row holding that generator's toolchain checks.
+#   - `setup_guard!` — asserts the crate's setup.sh ran this run.
+#   - `fixtures` + `fixture_manifest!` — the shared corpus table and
+#     the oracle pinning each crate's rows against it.
 #
-# Std-only deps so it can ride along in `[dev-dependencies]` without
-# dragging sdkgen_python_pydantic2 / sdkgen_typescript_shared / baml_project onto the
-# test-binary compile path.
+# Std-only deps, so it can ride along in `[dev-dependencies]` without
+# dragging the sdkgen crates or the compiler onto the test-binary
+# compile path. `sdk_test_codegen` depends on it too, for the one
+# fixture table both sides must agree on.
 #
 # Package named `sdk_test_*` so cargo-stow's
 # `ignore_crates = ["sdk_test_*"]` rule (see baml_language/stow.toml)

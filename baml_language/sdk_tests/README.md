@@ -223,6 +223,8 @@ pnpm test:workers
    `sdk_tests/crates/typescript/<name>/customizable/main.test.ts`.
 3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python, `cargo nextest run -p sdk_test_typescript <name>::` for Node TypeScript, and `cargo nextest run -p sdk_test_typescript_web <name>::` for browser and Workers.
 
-No code edits needed in `build.rs` or `src/lib.rs` -- the fixture
-list is discovered at build time from `sdk_tests/fixtures/` and
-emitted into the generated test scaffold.
+Adding a fixture also means adding a row: to
+`fixtures::SHARED` in `harness_runner/src/fixtures.rs`, and to the
+`test_suite! { ... }` block in each `crates/*/src/lib.rs` that should
+run it. The `fixture_manifest::matches_corpus` test fails until every
+one of them agrees with what is on disk, and names the file to edit.

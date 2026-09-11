@@ -51,9 +51,9 @@ mkdir -p "$CARGO_TARGET_DIR"
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
     # Never run cargo without the generated manifest: cargo discovers
-    # manifests upward, so a missing Cargo.toml (codegen failure) would
-    # silently turn this into a workspace-wide build. The failure itself
-    # surfaces via the build_diagnostics test.
+    # manifests upward, so a missing Cargo.toml would silently turn this into
+    # a workspace-wide build. Codegen above aborts the script on failure, so
+    # reaching here without one means the tree was removed out from under us.
     if [[ ! -f "$fixture_dir/Cargo.toml" ]]; then
         echo "==> skipping $fixture_dir (no Cargo.toml — codegen failed?)"
         continue

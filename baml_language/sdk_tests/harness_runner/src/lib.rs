@@ -90,10 +90,19 @@ pub fn fixture_path(fixture: &str, subdir: &str) -> PathBuf {
 /// Suffix rather than extension: the TypeScript suites key off `.test.ts`,
 /// which is not an extension.
 pub fn has_file_with_suffix(dir: &Path, suffix: &str) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return false;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // A fixture legitimately may have no overlay directory at all. Any
+        // other failure must not be reported as "no tests here": callers use
+        // this to decide whether to run a suite, so a swallowed error would
+        // skip it and report green.
+        Err(error) if error.kind() == ErrorKind::NotFound => return false,
+        Err(error) => panic!("failed to read {}: {error}", dir.display()),
     };
-    entries.flatten().any(|entry| {
+    entries.into_iter().any(|entry| {
+        let entry = entry.unwrap_or_else(|error| {
+            panic!("failed to read an entry of {}: {error}", dir.display())
+        });
         let path = entry.path();
         if path.is_dir() {
             return has_file_with_suffix(&path, suffix);
@@ -651,7 +660,7 @@ macro_rules! setup_guard {
 
 /// Emit the `mod fixture_manifest { #[test] fn matches_corpus }` oracle that
 /// pins a generator crate's declared fixtures against
-/// [`fixtures::SHARED`] and the corpus on disk. Invoked once by each
+/// [`crate::fixtures::SHARED`] and the corpus on disk. Invoked once by each
 /// generator's `test_suite!` expansion, with that suite's fixture names.
 #[macro_export]
 macro_rules! fixture_manifest {
@@ -1110,7 +1119,7 @@ pub mod go {
     /// setup guard and fixture-manifest oracle.
     ///
     /// Takes two row kinds. `fixture` rows come from the shared corpus and are
-    /// the ones checked against [`fixtures::SHARED`]; a `synthetic` row has no
+    /// the ones checked against [`crate::fixtures::SHARED`]; a `synthetic` row has no
     /// `baml_src` and is staged from a hand-built `SymbolPool` by
     /// `sdk_test_codegen::go`, so it sits outside that check by construction.
     ///
