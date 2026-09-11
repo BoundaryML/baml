@@ -14,6 +14,9 @@ pub enum CtypesError {
     #[error("Invalid handle key: {0}")]
     InvalidHandleKey(u64),
 
+    #[error("Host value key {0} does not match its registered kind")]
+    InvalidHostValueKind(u64),
+
     #[error("Map entry missing key")]
     MapEntryMissingKey,
 

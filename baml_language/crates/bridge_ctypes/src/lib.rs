@@ -33,6 +33,6 @@ pub use ty_decode::{
 pub use ty_encode::{portable_type_def_to_proto, runtime_ty_to_proto_ty};
 pub use utils::DecodeFromBuffer;
 pub use value_decode::{
-    inbound_to_external, kwargs_to_bex_values, playground_run_args_to_bex_values,
+    InboundTransfer, inbound_to_external, kwargs_to_bex_values, playground_run_args_to_bex_values,
 };
 pub use value_encode::{artifact_safe_outbound_bytes, build_to_host_call, external_to_outbound};

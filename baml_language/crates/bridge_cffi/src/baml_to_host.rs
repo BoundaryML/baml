@@ -3,8 +3,8 @@
 //! `BamlOutboundResult` envelope.
 //!
 //! The whole classify-and-encode lives here, in the bridge — not in bex.
-//! Both the C-ABI entry point (`call_function` in `lib.rs`) and the PyO3 path
-//! (`bridge_python`'s `runtime.rs`) call [`call_and_encode`], so the
+//! Every adapter (the C ABI, Wasm, PyO3, napi, JNI) calls [`prepare_call`] and
+//! then [`invoke_prepared`], so argument decoding, target pinning, the
 //! `catch_unwind` → `SdkPanic` boundary and the error/panic routing are
 //! defined exactly once. Every result — ok value, thrown error, panic, and
 //! pre-call host-boundary failure — leaves the bridge as one envelope; there is
@@ -24,9 +24,10 @@ use bex_project::{
     UnhandledSpawnError,
 };
 use bridge_ctypes::{
-    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE, InboundTransfer,
     baml_bridge::cffi::{
-        BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
+        BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, CallFunctionArgs,
+        baml_outbound_result, call_function_args::CallTarget,
     },
     external_to_outbound,
 };
@@ -319,7 +320,82 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
     .encode_to_vec()
 }
 
-/// Call a BAML function and encode the result as `BamlOutboundResult` bytes.
+/// A decoded `CallFunctionArgs` whose target is already pinned.
+///
+/// Every adapter yields to an executor between decoding a call and running
+/// it. The SDK may release the callable's handle-table key in that gap, so a
+/// handle target is resolved to its heap [`Handle`](bex_project::Handle) here,
+/// while the key is known to be live, and the prepared call keeps that pin
+/// until the engine has run it.
+pub struct PreparedCall {
+    target: PreparedTarget,
+    args: BexArgs,
+    context: FunctionCallContext,
+}
+
+enum PreparedTarget {
+    Named(String),
+    Callable(bex_project::Handle),
+}
+
+/// Decode `CallFunctionArgs` bytes into a [`PreparedCall`].
+///
+/// The argument batch is captured before anything is validated, so a rejected
+/// envelope still consumes every handle lease it named.
+pub fn prepare_call(bytes: &[u8]) -> Result<PreparedCall, BridgeError> {
+    let call = CallFunctionArgs::decode(bytes).map_err(bridge_ctypes::CtypesError::from)?;
+    let inputs = InboundTransfer::capture_kwargs(&call.kwargs, &HANDLE_TABLE);
+    if call.call_id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
+    let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
+    if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
+        return Err(BridgeError::FunctionHandleTypeArgs);
+    }
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
+    let context = crate::function_call_context_builder(bex_project::CallId(call.call_id))
+        .with_type_args(type_args.type_args)
+        .with_type_defs(type_args.type_defs)
+        .build();
+    let kwargs = inputs.decode_kwargs(call.kwargs)?;
+
+    let (target, args) = match target {
+        CallTarget::FunctionName(name) => (PreparedTarget::Named(name), kwargs.into()),
+        CallTarget::FunctionHandle(key) => {
+            let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
+                BridgeError::Internal("callable handle is no longer live".to_string())
+            })?;
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::Callable,
+                ty: bex_project::RuntimeTy::Function { params, .. },
+                heap_handle,
+            }) = &*entry
+            else {
+                return Err(BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ));
+            };
+            let params = params.iter().enumerate().map(|(index, parameter)| {
+                (
+                    parameter
+                        .name
+                        .as_ref()
+                        .map_or_else(|| format!("arg{index}"), ToString::to_string),
+                    parameter.is_required(),
+                )
+            });
+            let args = partition_callable_args(key, params, kwargs.into_iter().collect())?;
+            (PreparedTarget::Callable(heap_handle.clone()), args)
+        }
+    };
+    Ok(PreparedCall {
+        target,
+        args,
+        context,
+    })
+}
+
+/// Run a [`PreparedCall`] and encode the result as `BamlOutboundResult` bytes.
 ///
 /// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
 /// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
@@ -328,18 +404,22 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
 /// point keeps its own outer `catch_unwind` for that (encoding via
 /// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
 /// `PanicException`.
-pub async fn call_and_encode(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
+pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
 
-    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
-        .catch_unwind()
-        .await;
+    let caught = AssertUnwindSafe(async move {
+        match call.target {
+            PreparedTarget::Named(name) => {
+                runtime.call_function(&name, call.args, call.context).await
+            }
+            PreparedTarget::Callable(handle) => {
+                runtime.call_callable(handle, call.args, call.context).await
+            }
+        }
+    })
+    .catch_unwind()
+    .await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
@@ -376,65 +456,6 @@ fn partition_callable_args(
     }
     optional.extend(supplied);
     Ok(BexArgs { required, optional })
-}
-
-/// Invoke an engine-owned callable referenced by an ordinary handle-table key
-/// and encode the result through the same envelope path as a named call.
-pub async fn call_handle_and_encode(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    BexArgs { required, optional }: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    let mut supplied = required;
-    supplied.extend(optional);
-    let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
-        Some(entry) => match &*entry {
-            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
-                kind: bex_project::TaggedHeapHandleKind::Callable,
-                ty: bex_project::RuntimeTy::Function { params, .. },
-                heap_handle,
-            }) => {
-                let params = params.iter().enumerate().map(|(index, parameter)| {
-                    (
-                        parameter
-                            .name
-                            .as_ref()
-                            .map_or_else(|| format!("arg{index}"), ToString::to_string),
-                        parameter.is_required(),
-                    )
-                });
-                let args = match partition_callable_args(handle_key, params, supplied) {
-                    Ok(args) => args,
-                    Err(err) => return error_to_outbound(err),
-                };
-                (heap_handle.clone(), args)
-            }
-            _ => {
-                return error_to_outbound(BridgeError::Internal(
-                    "handle does not reference a BAML callable".to_string(),
-                ));
-            }
-        },
-        None => {
-            return error_to_outbound(BridgeError::Internal(
-                "callable handle is no longer live".to_string(),
-            ));
-        }
-    };
-
-    let options = CffiHandleTableOptions::for_wire();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
-        .catch_unwind()
-        .await;
-    let result = match caught {
-        Ok(call_result) => result_to_outbound(call_result, &options),
-        Err(panic_info) => BamlOutboundResult {
-            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
-        },
-    };
-    result.encode_to_vec()
 }
 
 #[cfg(test)]
