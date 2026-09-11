@@ -8,6 +8,9 @@ use crate::{Value, lazy_biased_mutex::LazyBiasedMutex};
 pub trait AllocationAccount: Sync {
     /// Charge allocation spending; this must never collect or acquire heap permits.
     fn charge(&self, bytes: usize);
+    fn charge_growth(&self, bytes: usize) {
+        self.charge(bytes);
+    }
 }
 
 /// Heap-mutable structural container. Pairs a dynamic backing store with a
@@ -216,7 +219,7 @@ impl<T> Drop for LockedWriteGuard<'_, T> {
         }) = &self.accounting
         {
             // Still under the container lock; charge only positive capacity growth.
-            account.charge(estimate(self.data).saturating_sub(*before));
+            account.charge_growth(estimate(self.data).saturating_sub(*before));
         }
     }
 }

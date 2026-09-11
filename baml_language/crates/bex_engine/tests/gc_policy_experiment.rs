@@ -92,9 +92,26 @@ fn runtime_policy(engine: &BexEngine) -> serde_json::Value {
     #[cfg(feature = "gc_policy_experiments")]
     {
         use bex_heap::gc_experiment::GcExperimentConfig;
-        assert!(matches!(name.as_str(), "full" | "mixed"));
+        assert!(matches!(name.as_str(), "full" | "mixed" | "adaptive"));
         let config = GcExperimentConfig {
-            young_budget: (name == "mixed")
+            adaptive: (name == "adaptive").then(|| bex_heap::gc_adaptive::AdaptiveConfig {
+                gen1_budget_floor: setting("GC_GEN1_MIB", 16).checked_mul(MIB).unwrap(),
+                growth_percent: setting("GC_GROWTH_PERCENT", 25),
+                survival_backoff: setting("GC_SURVIVAL_BACKOFF", 0),
+                survival_early_probe: setting("GC_EARLY_PROBE", 0) == 1,
+                large_payload_threshold: match setting("GC_LARGE_PAYLOAD_KIB", 0) {
+                    0 => None,
+                    n => Some(n.checked_mul(1024).unwrap()),
+                },
+                gen1_mode: match std::env::var("GC_GEN1_MODE").as_deref().unwrap_or("minor") {
+                    "minor" => bex_heap::gc_adaptive::Gen1Mode::Minor,
+                    "full" => bex_heap::gc_adaptive::Gen1Mode::Full,
+                    "cost" => bex_heap::gc_adaptive::Gen1Mode::CompareReclamation,
+                    other => panic!("unknown Gen1 action: {other}"),
+                },
+                gc_time_percent: setting("GC_TIME_PERCENT", 5),
+            }),
+            young_budget: (name == "mixed" || name == "adaptive")
                 .then(|| setting("GC_YOUNG_MIB", 8).checked_mul(MIB).unwrap()),
             full_budget_floor: setting("GC_FULL_MIB", 64).checked_mul(MIB).unwrap(),
             live_multiplier: setting("GC_LIVE_MULTIPLIER", 1),
@@ -111,7 +128,7 @@ fn runtime_policy(engine: &BexEngine) -> serde_json::Value {
             poll_interval: u64::try_from(setting("GC_POLL", 4096)).unwrap(),
         };
         engine.heap().configure_gc_experiment(config);
-        serde_json::json!({"name":name,"young_budget":config.young_budget,
+        serde_json::json!({"name":name,"young_budget":config.young_budget,"adaptive":config.adaptive.map(|a| serde_json::json!({"gen1_budget_floor":a.gen1_budget_floor,"gc_time_percent":a.gc_time_percent,"growth_percent":a.growth_percent,"survival_backoff":a.survival_backoff,"survival_early_probe":a.survival_early_probe,"large_payload_threshold":a.large_payload_threshold,"gen1_mode":format!("{:?}",a.gen1_mode)})),
             "live_basis":if config.live_budget_uses_slots {"slots"} else {"accounted"},
             "full_budget_floor":config.full_budget_floor,"live_multiplier":config.live_multiplier,"first_chunk":config.first_chunk,
             "max_chunk":config.max_chunk,"poll_interval":config.poll_interval})
@@ -369,6 +386,7 @@ fn compare_gc_policy() {
             "scalar" => (12_000, 123, "Identity", true),
             "tiny" => (12_000, 123, "Make", true),
             "churn" | "cache" => (1_024, 4_096, "Churn", true),
+            "phase_change" => (4_096, 2_048, "Batch", false),
             "retained" | "burst" | "burst_idle" => (1_024, 2_048, "Batch", false),
             "payload" => (2_048, 65_536, "Payload", false),
             _ => panic!("unknown workload: {workload}"),
@@ -386,7 +404,7 @@ fn compare_gc_policy() {
         for _ in 0..warmup {
             engine.call_function(function, make_args(), context(), copy_result).await.unwrap();
         }
-        let cache = if workload == "cache" {
+        let cache = if workload == "cache" || workload == "phase_change" {
             Some(engine.call_function("Batch", vec![BexExternalValue::Int(cache_n)], context(), false).await.unwrap())
         } else { None };
         let warmup_gc = engine.collect_garbage(CollectionLevel::Major).await;
@@ -402,6 +420,7 @@ fn compare_gc_policy() {
         let mut peak_rss = initial_rss;
         let mut peak_slots = engine.heap_stats().runtime_objects;
         let mut snapshots = vec![];
+        let mut phase_transition = None;
         #[cfg(feature = "gc_profiling")]
         cycle_audit.take();
         let cpu_start = process_usage().map(|p| p.0);
@@ -409,6 +428,12 @@ fn compare_gc_policy() {
         let start = Instant::now();
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
+            let phase_churn = workload == "phase_change" && call >= calls / 4;
+            if workload == "phase_change" && call == calls / 4 {
+                kept.clear();
+                phase_transition = Some(serde_json::json!({"calls":call, "elapsed_seconds":start.elapsed().as_secs_f64(),
+                    "cpu_seconds":cpu_start.zip(process_usage()).map(|(a,b)|b.0.saturating_sub(a).as_secs_f64())}));
+            }
             let stats = engine.heap_stats();
             let nursery_slots = stats.reserved_slots;
             let nursery_bytes = nursery_slots * slot_size;
@@ -420,13 +445,13 @@ fn compare_gc_policy() {
                 gc_ms.push(gc_start.elapsed().as_secs_f64() * 1000.0);
                 cycles.push((call, start.elapsed().as_secs_f64(), result.clone(), nursery_bytes, policy.budget));
                 match level {
-                    CollectionLevel::Minor => minor_count += 1,
+                    CollectionLevel::Nursery | CollectionLevel::Minor => minor_count += 1,
                     CollectionLevel::Major => major_count += 1,
                 }
                 policy.after_gc(level, nursery_bytes, result.promoted_to_gen1 * slot_size,
                     engine.heap_stats().runtime_objects * slot_size);
             }
-            let result = engine.call_function(function, make_args(), context(), copy_result).await.unwrap();
+            let result = engine.call_function(if phase_churn {"Churn"} else {function}, make_args(), context(), copy_result || phase_churn).await.unwrap();
             match workload.as_str() {
                 "scalar" => assert_eq!(result, BexExternalValue::Int(n)),
                 "tiny" => match result {
@@ -434,9 +459,10 @@ fn compare_gc_policy() {
                     _ => panic!("wrong return shape"),
                 },
                 "churn" | "cache" | "compute" => assert_eq!(result, BexExternalValue::Int(n * (n-1) / 2)),
+                "phase_change" if phase_churn => assert_eq!(result, BexExternalValue::Int(n * (n-1) / 2)),
                 _ => {
                     assert!(matches!(result, BexExternalValue::Handle(_)));
-                    if workload == "retained" || workload == "payload" || workload == "burst_idle" || call < calls / 2 {
+                    if workload == "retained" || workload == "phase_change" || workload == "payload" || workload == "burst_idle" || call < calls / 2 {
                         kept.push_back(result);
                         if kept.len() > retain { kept.pop_front(); }
                     }
@@ -468,7 +494,7 @@ fn compare_gc_policy() {
         if let Some(records) = &measured_records {
             assert_eq!(records.iter().filter(|r| r["reason"] == "explicit").count(), cycles.len());
             gc_ms = records.iter().map(|r| r["total_ms"].as_f64().unwrap()).collect();
-            minor_count = records.iter().filter(|r| r["level"] == "Minor").count();
+            minor_count = records.iter().filter(|r| r["level"] == "Minor" || r["level"] == "Nursery").count();
             major_count = records.iter().filter(|r| r["level"] == "Major").count();
             for r in records {
                 let slots: u64 = ["before_gen0", "before_gen1", "before_gen2"].iter().map(|k| r[k].as_u64().unwrap()).sum();
@@ -517,6 +543,9 @@ fn compare_gc_policy() {
                     "at_seconds":r["at_seconds"],"trigger":r["reason"],"level":r["level"],
                     "copied_objects":r["copied_objects"],"reclaimed_slots":r["reclaimed_slots"],
                     "profile":event_profile(r),
+                    "promoted_gen1":r["promoted_gen1"],"promoted_gen2":r["promoted_gen2"],
+                    "policy_after":{"full_budget":r["full_budget_after"],"gen0_budget":r["gen0_budget_after"],
+                        "gen1_budget":r["gen1_budget_after"],"old_spent":r["old_spent_after"]},
                 })).collect();
             }
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
@@ -537,7 +566,7 @@ fn compare_gc_policy() {
             "peak_slot_mib":peak_slots as f64*slot_size as f64/MIB as f64,
             "end_slot_mib":end_slots as f64*slot_size as f64/MIB as f64,
             "initial_rss_mib":rss_mib(initial_rss), "peak_sampled_rss_mib":rss_mib(peak_rss),
-            "end_rss_mib":rss_mib(end_rss), "retained_handles_verified":kept.len(), "snapshots":snapshots,
+            "end_rss_mib":rss_mib(end_rss), "retained_handles_verified":kept.len(), "snapshots":snapshots,"phase_transition":phase_transition,
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
@@ -656,6 +685,126 @@ fn profile_concurrent_gc() {
             "elapsed_seconds":start.elapsed().as_secs_f64(),"explicit_collections":events.len(),
             "call_p50_ms":percentile(&latencies,0.5),"call_p99_ms":percentile(&latencies,0.99)})
         );
+        engine.shutdown().await;
+    });
+}
+
+/// Actual runtime-trigger policy with many independent callers. Each fresh
+/// process installs its own subscriber on every runtime worker via the global
+/// dispatcher, so automatic collections are captured whichever VM triggers GC.
+#[cfg(feature = "gc_profiling")]
+#[test]
+#[ignore = "manual concurrent runtime-policy experiment"]
+fn compare_concurrent_runtime_policy() {
+    let audit = cycle_audit::Cycles::default();
+    tracing::subscriber::set_global_default(audit.clone()).unwrap();
+    let program = baml_db::testing::compile_source(SOURCE);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
+        let runtime_settings = runtime_policy(&engine);
+        assert_ne!(runtime_settings["name"], "off");
+        assert_eq!(std::env::var("GC_POLICY").as_deref(), Ok("current"));
+        let workload = std::env::var("GC_WORKLOAD").unwrap_or_else(|_| "churn".into());
+        assert!(matches!(workload.as_str(), "churn" | "retained" | "cache"));
+        let workers = setting("GC_WORKERS", 8);
+        let calls = setting("GC_CALLS", 128);
+        assert!(workers > 0 && calls > 0);
+        let retain = setting("GC_RETAIN", 32);
+        let n = i64::try_from(setting("GC_N", 2048)).unwrap();
+        let cache_n = i64::try_from(setting("GC_CACHE_N", 262_144)).unwrap();
+        let cache = if workload == "cache" {
+            Some(engine.call_function("Batch", vec![BexExternalValue::Int(cache_n)], context(), false).await.unwrap())
+        } else { None };
+        engine.collect_garbage(CollectionLevel::Major).await;
+        audit.take();
+        let initial_rss = rss_bytes();
+        let charge_start = runtime_spending(&engine);
+        let cpu_start = process_usage().unwrap().0;
+        let start = Instant::now();
+        let mut tasks = Vec::new();
+        for _ in 0..workers {
+            let engine = engine.clone();
+            let keep_results = workload == "retained";
+            tasks.push(tokio::spawn(async move {
+                let mut latencies = Vec::new();
+                let mut kept = VecDeque::new();
+                for _ in 0..calls {
+                    let at = Instant::now();
+                    let result = engine.call_function(if keep_results { "Batch" } else { "AsyncBatch" },
+                        vec![BexExternalValue::Int(n)], context(), !keep_results).await.unwrap();
+                    latencies.push(at.elapsed().as_secs_f64() * 1000.0);
+                    if keep_results {
+                        assert!(matches!(result, BexExternalValue::Handle(_)));
+                        kept.push_back(result);
+                        if kept.len() > retain { kept.pop_front(); }
+                    } else {
+                        assert_eq!(result, BexExternalValue::Int(n * (n - 1) / 2));
+                    }
+                    tokio::task::yield_now().await;
+                }
+                (latencies, kept)
+            }));
+        }
+        let mut latencies = Vec::new();
+        let mut kept = VecDeque::new();
+        tokio::time::timeout(std::time::Duration::from_secs(120), async {
+            for task in tasks {
+                let (times, values) = task.await.unwrap();
+                latencies.extend(times);
+                kept.extend(values);
+            }
+        }).await.expect("concurrent runtime policy stalled");
+        let elapsed_seconds = start.elapsed().as_secs_f64();
+        let usage = process_usage().unwrap();
+        let process_cpu_seconds = usage.0.saturating_sub(cpu_start).as_secs_f64();
+        let records = audit.take();
+        let end_rss = rss_bytes();
+        let charged = runtime_spending(&engine).zip(charge_start).map(|(a,b)| a.saturating_sub(b));
+        let gc_heap_cpu_seconds: f64 = records.iter().map(|r| {
+            let ms = r["heap_cpu_ms"].as_f64().unwrap(); assert!(ms >= 0.0); ms / 1000.0
+        }).sum();
+        let gc_times: Vec<_> = records.iter().map(|r| r["total_ms"].as_f64().unwrap()).collect();
+        let cleanup_cpu = process_usage().unwrap().0;
+        let cleanup_start = Instant::now();
+        engine.collect_garbage(CollectionLevel::Major).await;
+        let cleanup_seconds = cleanup_start.elapsed().as_secs_f64();
+        let cleanup_cpu_seconds = process_usage().unwrap().0.saturating_sub(cleanup_cpu).as_secs_f64();
+        let cleanup_rss = rss_bytes();
+        for value in kept {
+            assert_eq!(engine.call_function("CheckBatch", vec![value], context(), true).await.unwrap(),
+                BexExternalValue::Int(n * (n - 1) / 2));
+        }
+        if let Some(cache) = cache {
+            assert_eq!(engine.call_function("CheckBatch", vec![cache], context(), true).await.unwrap(),
+                BexExternalValue::Int(cache_n * (cache_n - 1) / 2));
+        }
+        if let Ok(path) = std::env::var("GC_TRACE") {
+            let events: Vec<_> = records.iter().map(|r| serde_json::json!({
+                "at_seconds":r["at_seconds"],"trigger":r["reason"],"level":r["level"],
+                "copied_objects":r["copied_objects"],"reclaimed_slots":r["reclaimed_slots"],
+                "profile":event_profile(r),
+            })).collect();
+            std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
+        }
+        println!("GC_POLICY_RESULT {}", serde_json::json!({
+            "workload":format!("concurrent_{workload}"),"workers":workers,"calls":workers*calls,
+            "policy":"current","runtime_settings":runtime_settings,"elapsed_seconds":elapsed_seconds,
+            "process_cpu_seconds":process_cpu_seconds,"gc_heap_cpu_seconds":gc_heap_cpu_seconds,
+            "non_gc_heap_cpu_seconds":process_cpu_seconds-gc_heap_cpu_seconds,
+            "process_lifetime_peak_rss_mib":usage.1 as f64 / MIB as f64,
+            "initial_rss_mib":rss_mib(initial_rss),"end_rss_mib":rss_mib(end_rss),
+            "cleanup_seconds":cleanup_seconds,"cleanup_cpu_seconds":cleanup_cpu_seconds,
+            "cpu_with_cleanup_seconds":process_cpu_seconds+cleanup_cpu_seconds,
+            "after_cleanup_rss_mib":rss_mib(cleanup_rss),"charged_bytes":charged,
+            "gc_ms_max":percentile(&gc_times,1.0),"gc_ms_total":gc_times.iter().sum::<f64>(),
+            "call_p50_ms":percentile(&latencies,0.5),"call_p99_ms":percentile(&latencies,0.99),
+            "call_ms_max":percentile(&latencies,1.0),"automatic_collections":records.len(),
+        }));
         engine.shutdown().await;
     });
 }

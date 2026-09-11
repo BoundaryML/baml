@@ -170,6 +170,8 @@ pub struct BexHeap {
     /// A card is marked dirty when a write barrier detects that a Gen2 object
     /// holds a reference to a Gen0 or Gen1 object. Used during partial collections.
     pub(crate) gen2_cards: UnsafeCell<CardTable>,
+    /// Gen1 → Gen0 references for nursery-only collection.
+    pub(crate) gen1_cards: UnsafeCell<CardTable>,
 
     /// Handle table for external/FFI boundary.
     ///
@@ -379,6 +381,7 @@ impl BexHeap {
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
+            gen1_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
@@ -819,29 +822,22 @@ impl BexHeap {
         unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
     }
 
-    /// Mark the card dirty for the card containing `container_ptr` in Gen2.
-    ///
-    /// Called from write barriers when a Gen2 object receives a reference to a
-    /// younger-generation object. Gen1 doesn't need card tracking because its
-    /// cross-generation references are discovered during Minor GC via the
-    /// promotion-time card-marking sweep in `collect_garbage_minor`.
-    ///
-    /// Safe to call concurrently from multiple VMs. Writes use a relaxed
-    /// atomic store; no `&mut` borrow on the card table is taken. Capacity
-    /// growth happens separately, at GC safepoints, since Gen2 can only grow
-    /// during GC.
+    /// Mark a Gen1 or Gen2 container's card after a cross-generation write.
+    /// Both spaces grow only while all mutators are parked. Marks are atomic;
+    /// card-table capacity changes happen exclusively during collection.
     #[inline]
     pub fn mark_card_for_ptr(&self, container_ptr: HeapPtr) {
         let raw_ptr = container_ptr.as_ptr() as *const Object;
-        // SAFETY: Only reads `gen2` chunk layout and stores into the atomic
-        // card table. Gen2 grows only at GC safepoints, so no concurrent write
-        // can invalidate either access.
+        // SAFETY: generation layouts are stable while mutators execute.
         unsafe {
-            if let Some((chunk_idx, offset)) =
-                Self::locate_in_chunked_vec(&*self.gen2.get(), raw_ptr)
-            {
-                let cards = &*self.gen2_cards.get();
-                cards.mark_dirty_by_offset(chunk_idx, offset);
+            for (space, cards) in [
+                (&*self.gen2.get(), &*self.gen2_cards.get()),
+                (&*self.gen1.get(), &*self.gen1_cards.get()),
+            ] {
+                if let Some((chunk_idx, offset)) = Self::locate_in_chunked_vec(space, raw_ptr) {
+                    cards.mark_dirty_by_offset(chunk_idx, offset);
+                    return;
+                }
             }
         }
     }

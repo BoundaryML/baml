@@ -84,3 +84,6 @@ pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
 pub use tlab::{Tlab, TlabHolder};
+
+#[cfg(feature = "gc_policy_experiments")]
+pub mod gc_adaptive;

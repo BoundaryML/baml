@@ -3498,6 +3498,22 @@ impl BexEngine {
             stats.profile.post_gc = finished_at - released_at;
             stats.profile.total = finished_at - cycle_start;
             let p = &stats.profile;
+            #[cfg(feature = "gc_policy_experiments")]
+            let policy_after = stats.policy_after;
+            #[cfg(not(feature = "gc_policy_experiments"))]
+            let policy_budgets = [0usize; 6];
+            #[cfg(feature = "gc_policy_experiments")]
+            let policy_budgets = policy_after.map_or([0; 6], |p| {
+                let a = p.adaptive;
+                [
+                    p.full_budget,
+                    a.map_or(0, |a| a.gen0_budget),
+                    a.map_or(0, |a| a.gen1_budget),
+                    a.map_or(0, |a| a.old_spent),
+                    a.map_or(0, |a| usize::from(a.prefer_full)),
+                    a.map_or(0, |a| a.full_only_remaining),
+                ]
+            });
             tracing::debug!(target: "bex_gc", reason = reason, level = ?level,
                 profile = ?p,
                 prepare_ms = p.prepare.as_secs_f64() * 1000.0,
@@ -3520,6 +3536,14 @@ impl BexEngine {
                 after_gen0 = p.after.generation_slots[0],
                 after_gen1 = p.after.generation_slots[1],
                 after_gen2 = p.after.generation_slots[2],
+                full_budget_after = policy_budgets[0],
+                gen0_budget_after = policy_budgets[1],
+                gen1_budget_after = policy_budgets[2],
+                old_spent_after = policy_budgets[3],
+                prefer_full_after = policy_budgets[4],
+                full_only_remaining = policy_budgets[5],
+                promoted_gen1 = stats.promoted_to_gen1,
+                promoted_gen2 = stats.promoted_to_gen2,
                 actual_new_objects = p.before.new_objects,
                 copied_objects = stats.live_count,
                 reclaimed_slots = stats.collected_count,

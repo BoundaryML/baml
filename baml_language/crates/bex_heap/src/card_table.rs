@@ -120,6 +120,16 @@ impl CardTable {
         }
     }
 
+    /// Visit dirty cards and keep only those still containing young references.
+    /// Requires exclusive access at a GC safepoint, like `clear`.
+    pub(crate) fn retain_dirty_cards(&mut self, mut retain: impl FnMut(usize) -> bool) {
+        for (index, slot) in self.cards.iter_mut().enumerate() {
+            if *slot.get_mut() != 0 && !retain(index) {
+                *slot.get_mut() = 0;
+            }
+        }
+    }
+
     /// Iterate over all dirty card indices.
     pub fn dirty_card_indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.cards

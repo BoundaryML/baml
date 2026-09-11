@@ -143,3 +143,36 @@ async fn gc_does_not_rerun_cleanup_already_done_explicitly() {
         .unwrap();
     assert_eq!(expect_strings(&after), vec!["cleaned"]);
 }
+
+#[tokio::test]
+async fn nursery_finalizes_only_gen0_and_preserves_finalizer_references() {
+    let engine = engine();
+    let log = engine
+        .call_function("make_log", vec![], ctx(), false)
+        .await
+        .unwrap();
+    let older = engine
+        .call_function("make_resource", vec![log.clone()], ctx(), false)
+        .await
+        .unwrap();
+    engine.collect_garbage(CollectionLevel::Nursery).await;
+    drop(older); // This object is in Gen1; Gen0-only GC must not finalize it.
+    let young = engine
+        .call_function("make_resource", vec![log.clone()], ctx(), false)
+        .await
+        .unwrap();
+    drop(young);
+    engine.collect_garbage(CollectionLevel::Nursery).await;
+    let after = engine
+        .call_function("read_log", vec![log.clone()], ctx(), true)
+        .await
+        .unwrap();
+    assert_eq!(expect_strings(&after), vec!["cleaned"]);
+    engine.collect_garbage(CollectionLevel::Minor).await;
+    let after = engine
+        .call_function("read_log", vec![log], ctx(), true)
+        .await
+        .unwrap();
+    assert_eq!(expect_strings(&after), vec!["cleaned", "cleaned"]);
+    engine.shutdown().await;
+}

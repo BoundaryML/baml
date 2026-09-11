@@ -138,7 +138,7 @@ impl Tlab {
         #[cfg(feature = "gc_policy_experiments")]
         if self.heap.gc_experiment().is_some() {
             self.heap
-                .charge_gc_bytes(crate::gc_experiment::payload_bytes(&obj));
+                .charge_gc_payload_bytes(crate::gc_experiment::payload_bytes(&obj));
         }
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();

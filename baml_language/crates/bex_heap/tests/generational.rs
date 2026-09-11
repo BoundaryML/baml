@@ -11,7 +11,7 @@ use baml_type::{Name, QualifiedTypeName, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
-    Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
+    Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy, Value,
     types::{
         InterfaceDef, LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage,
         TypeAliasDef, TypeValue,
@@ -655,13 +655,10 @@ fn test_clean_card_does_not_root_gen0_objects() {
 /// A dirty card on a Gen2 object that holds no young references must not
 /// spuriously keep a later Gen0 allocation alive on the next Minor GC.
 ///
-/// Minor GC does **not** proactively clear the Gen2 card table — only Major
-/// GC does ([`gc.rs:206`]) — so a synthetically-marked card survives across
-/// Minor GCs. That is still correct as long as the card scan only promotes
-/// things that are actually referenced from the card's objects; this test
-/// pins that behaviour.
+/// A partial collection removes the stale mark once scanning proves that
+/// the card contains no young references.
 #[test]
-fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
+fn test_stale_dirty_card_is_cleared_without_rooting_unrelated_objects() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
@@ -689,20 +686,17 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
         unsafe { heap.collect_garbage_generational(&[roots1[0]], CollectionLevel::Minor) };
     tlab.invalidate();
 
-    // The synthetic dirty card persists (Minor GC doesn't clear the table),
-    // which is still correct: next Minor GC will re-scan it and find nothing.
+    // The synthetic mark is no longer needed and must not cause more scans.
     assert_eq!(
         heap.gen2_dirty_card_count(),
-        1,
-        "Minor GC does not clear the Gen2 card table — the mark persists",
+        0,
+        "a card with no young references should become clean",
     );
 
     // Allocate a brand-new Gen0 object that nothing references.
     let _orphan2 = tlab.alloc_string("orphan2".to_string());
 
-    // Second minor GC: the old dirty card's Gen2 object does NOT reference
-    // orphan2, so orphan2 must be collected despite the dirty card being
-    // scanned again.
+    // Second minor GC: no older object references orphan2, so it is collected.
     let (stats, _, _) =
         unsafe { heap.collect_garbage_generational(&[roots2[0]], CollectionLevel::Minor) };
     tlab.invalidate();
@@ -985,8 +979,8 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
     assert_eq!(heap.generation_of(a_g1), Generation::Gen1);
 
     // T2: Allocate B in Gen0, then mutate A (Gen1) to reference B.
-    // The standard write barrier fires but is a no-op: mark_card_for_ptr is
-    // only implemented for Gen2 containers. So no card is dirty.
+    // Deliberately bypass the write barrier here: the following Gen0+Gen1
+    // collection must still discover this edge while tracing Gen1.
     let b_g0 = tlab.alloc_string("B_contents".to_string());
     assert_eq!(heap.generation_of(b_g0), Generation::Gen0);
     unsafe {
@@ -1294,32 +1288,38 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         owner: package_ptr,
     })));
 
-    // Root only the interface across two moves and a compaction.
-    let (_, roots, _) =
-        unsafe { heap.collect_garbage_generational(&[iface_ptr], CollectionLevel::Minor) };
-    let (_, roots, _) =
-        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-    let (stats, roots, _) =
-        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
-
-    assert_eq!(
-        stats.live_count, 3,
-        "interface, owner package and default body must all survive"
-    );
+    // Check each forwarding step. A later allocation may reuse the original
+    // address after its source chunk was freed; comparing against that stale
+    // address after three collections is not a valid movement assertion.
+    let mut roots = vec![iface_ptr];
+    let mut expected_body = body_ptr;
+    let mut expected_owner = package_ptr;
+    for level in [
+        CollectionLevel::Minor,
+        CollectionLevel::Minor,
+        CollectionLevel::Major,
+    ] {
+        let (stats, next_roots, forwarding) =
+            unsafe { heap.collect_garbage_generational(&roots, level) };
+        assert_eq!(stats.live_count, 3);
+        let next_body = forwarding[&expected_body];
+        let next_owner = forwarding[&expected_owner];
+        assert_ne!(next_body, expected_body);
+        assert_ne!(next_owner, expected_owner);
+        expected_body = next_body;
+        expected_owner = next_owner;
+        roots = next_roots;
+    }
     let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
         panic!("root was not the interface")
     };
-    assert_ne!(
-        iface.owner, package_ptr,
-        "package moved; owner must be repointed"
-    );
+    assert_eq!(iface.owner, expected_owner);
     assert!(matches!(unsafe { iface.owner.get() }, Object::Package(_)));
-    let bound = iface.methods[0].default_fn;
-    assert_ne!(
-        bound, body_ptr,
-        "default body moved; default_fn must be repointed"
-    );
-    assert!(matches!(unsafe { bound.get() }, Object::String(_)));
+    assert_eq!(iface.methods[0].default_fn, expected_body);
+    let Object::String(body) = (unsafe { expected_body.get() }) else {
+        panic!("body was not forwarded")
+    };
+    assert_eq!(body.as_str(), "default body");
 }
 
 /// A runtime-declared alias back-references its owning package; the collector
@@ -1420,4 +1420,131 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         panic!("forwarded head does not point at the class")
     };
     assert_eq!(class.type_tag, type_tag, "identity survives the move");
+}
+
+/// A Gen0 collection must leave both older generations in place, find Gen0
+/// references through either card table, and reset Gen1 cards for later writes.
+#[test]
+fn nursery_preserves_gen1_and_gen2_mutations_across_repeated_collections() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(heap.clone());
+    let old = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::NULL]);
+    let (_, roots, _) = unsafe { heap.collect_garbage(&[old]) };
+    tlab.invalidate();
+    let old = roots[0];
+    let middle = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::NULL]);
+    let (_, roots, _) = unsafe { heap.collect_garbage_nursery(&[old, middle]) };
+    tlab.invalidate();
+    let middle = roots[1];
+    assert_eq!(heap.generation_of(middle), Generation::Gen1);
+    for n in 0..20 {
+        for container in [old, middle] {
+            let child = tlab.alloc_string(format!("child-{n}"));
+            heap.write_barrier(container, Value::object(child));
+            let Object::Array(a) = (unsafe { container.get() }) else {
+                unreachable!()
+            };
+            a.lock_mut()[0] = Value::object(child);
+        }
+        tlab.alloc_string("unreachable");
+        let (stats, roots, _) = unsafe { heap.collect_garbage_nursery(&[old, middle]) };
+        tlab.invalidate();
+        assert_eq!(roots, [old, middle]);
+        assert_eq!(stats.promoted_to_gen1, 2);
+        assert_eq!(stats.promoted_to_gen2, 0);
+        for container in roots {
+            let Object::Array(a) = (unsafe { container.get() }) else {
+                unreachable!()
+            };
+            let child = a.get(0).unwrap().as_object_ptr().unwrap();
+            assert_eq!(heap.generation_of(child), Generation::Gen1);
+            let Object::String(s) = (unsafe { child.get() }) else {
+                unreachable!()
+            };
+            assert_eq!(s.as_str(), format!("child-{n}"));
+        }
+    }
+    // Gen1 collected only when explicitly requested; then full GC can reclaim
+    // everything once the root handles have been released.
+    let (stats, roots, _) = unsafe { heap.collect_garbage_minor(&[old, middle]) };
+    assert!(stats.collected_count > 0);
+    assert_eq!(heap.generation_of(roots[1]), Generation::Gen2);
+    let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
+    assert_eq!(stats.live_count, 0);
+}
+
+#[test]
+fn nursery_preserves_cycles_and_exported_handles_without_promoting_gen1_again() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(heap.clone());
+    let a = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::NULL]);
+    let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(a)]);
+    let Object::Array(arr) = (unsafe { a.get() }) else {
+        unreachable!()
+    };
+    arr.lock_mut()[0] = Value::object(b);
+    let handle = heap.create_handle(a);
+    let (stats, _, _) = unsafe { heap.collect_garbage_nursery(&heap.collect_handle_roots()) };
+    tlab.invalidate();
+    assert_eq!(stats.promoted_to_gen1, 2);
+    let stable = heap.collect_handle_roots()[0];
+    for _ in 0..3 {
+        tlab.alloc_string("garbage");
+        let (stats, roots, _) =
+            unsafe { heap.collect_garbage_nursery(&heap.collect_handle_roots()) };
+        tlab.invalidate();
+        assert_eq!(roots, [stable]);
+        assert_eq!(stats.live_count, 0); // No objects needed copying.
+    }
+    drop(handle);
+    let (stats, _, _) = unsafe { heap.collect_garbage_minor(&[]) };
+    assert_eq!(stats.live_count, 0);
+}
+
+#[test]
+fn gen1_future_settlement_keeps_gen0_success_and_error_payloads_alive() {
+    use bex_vm_types::{
+        FutureRead,
+        types::{CancellationToken, Future, FutureId},
+    };
+    for error in [false, true] {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(heap.clone());
+        let ptr = tlab.alloc_future(Future::pending(
+            FutureId::from_usize(1),
+            RealizedTy::unknown(),
+            RealizedTy::unknown(),
+            CancellationToken::new(),
+        ));
+        let (_, roots, _) = unsafe { heap.collect_garbage_nursery(&[ptr]) };
+        tlab.invalidate();
+        let future_ptr = roots[0];
+        let payload = tlab.alloc_string("settled payload");
+        let Object::Future(future) = (unsafe { future_ptr.get() }) else {
+            unreachable!()
+        };
+        assert!(unsafe {
+            if error {
+                future.settle_error(heap.as_ref(), future_ptr, Value::object(payload), vec![])
+            } else {
+                future.settle_ready(heap.as_ref(), future_ptr, Value::object(payload))
+            }
+        });
+        let (_, roots, _) = unsafe { heap.collect_garbage_nursery(&[future_ptr]) };
+        assert_eq!(roots[0], future_ptr);
+        let Object::Future(future) = (unsafe { roots[0].get() }) else {
+            unreachable!()
+        };
+        let value = match future.read() {
+            FutureRead::Ready(value) if !error => value,
+            FutureRead::Error(value) if error => value,
+            other => panic!("unexpected future: {other:?}"),
+        };
+        let ptr = value.as_object_ptr().unwrap();
+        assert_eq!(heap.generation_of(ptr), Generation::Gen1);
+        let Object::String(text) = (unsafe { ptr.get() }) else {
+            unreachable!()
+        };
+        assert_eq!(text.as_str(), "settled payload");
+    }
 }

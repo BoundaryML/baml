@@ -39,7 +39,7 @@ def main():
     if any(value is not None and value <= 0 for value in [args.budget_mib, args.cache_n, args.calls]):
         parser.error('budget-mib, cache-n and calls must be positive')
     policies = {name: getattr(args, f'{name}_policy') for name in ['baseline', 'candidate']}
-    runtime_keys = {'GC_RUNTIME_POLICY', 'GC_YOUNG_MIB', 'GC_FULL_MIB', 'GC_LIVE_MULTIPLIER', 'GC_LIVE_BASIS', 'GC_FIRST_CHUNK', 'GC_MAX_CHUNK', 'GC_POLL'}
+    runtime_keys = {'GC_EARLY_PROBE', 'GC_SURVIVAL_BACKOFF', 'GC_RUNTIME_POLICY', 'GC_GROWTH_PERCENT', 'GC_LARGE_PAYLOAD_KIB', 'GC_GEN1_MODE', 'GC_GEN1_MIB', 'GC_TIME_PERCENT', 'GC_YOUNG_MIB', 'GC_FULL_MIB', 'GC_LIVE_MULTIPLIER', 'GC_LIVE_BASIS', 'GC_FIRST_CHUNK', 'GC_MAX_CHUNK', 'GC_POLL'}
     overrides = {}
     for name in ['baseline', 'candidate']:
         settings = {}
@@ -76,6 +76,10 @@ def main():
         ('concurrent', 'full32', dict(GC_WORKERS=8, GC_CALLS=100, GC_N=512)),
     ]
     extended = [
+        ('phase_change', 'current', dict(GC_WORKLOAD='phase_change', GC_CALLS=4096, GC_N=2048, GC_CACHE_N=262144)),
+        ('runtime_concurrent_churn', 'current', dict(GC_WORKLOAD='churn', GC_WORKERS=8, GC_CALLS=128, GC_N=2048)),
+        ('runtime_concurrent_retained', 'current', dict(GC_WORKLOAD='retained', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_RETAIN=32)),
+        ('runtime_concurrent_cache', 'current', dict(GC_WORKLOAD='cache', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_CACHE_N=262144)),
         ('continuous_100k', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=100000, GC_WARMUP=512)),
         ('cache', 'full_live', dict(GC_WORKLOAD='cache', GC_CALLS=1024, GC_N=4096, GC_CACHE_N=262144)),
         ('burst_idle', 'full32', dict(GC_WORKLOAD='burst_idle', GC_CALLS=512, GC_N=2048, GC_IDLE_MS=1000)),
@@ -132,7 +136,8 @@ def main():
             rng.shuffle(order)
             for variant in order:
                 name = f'{repeat}-{case}-{variant}'
-                test = 'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy'
+                test = ('compare_concurrent_runtime_policy' if case.startswith('runtime_concurrent_') else
+                        'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy')
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})
@@ -170,6 +175,20 @@ def main():
                     for key, (field, scale) in config_fields.items():
                         if key in overrides[variant] and result.get('runtime_settings', {}).get(field) != int(overrides[variant][key]) * scale:
                             raise RuntimeError(f'{name}: runtime setting {key} unsupported or not applied')
+                    for key, field, scale in [('GC_GEN1_MIB', 'gen1_budget_floor', 1048576), ('GC_TIME_PERCENT', 'gc_time_percent', 1), ('GC_GROWTH_PERCENT', 'growth_percent', 1), ('GC_SURVIVAL_BACKOFF', 'survival_backoff', 1)]:
+                        if key in overrides[variant] and (result.get('runtime_settings', {}).get('adaptive') or {}).get(field) != int(overrides[variant][key]) * scale:
+                            raise RuntimeError(f'{name}: adaptive setting {key} unsupported or not applied')
+                    if 'GC_EARLY_PROBE' in overrides[variant]:
+                        if (result.get('runtime_settings', {}).get('adaptive') or {}).get('survival_early_probe') != (int(overrides[variant]['GC_EARLY_PROBE']) == 1):
+                            raise RuntimeError(f'{name}: early probe setting unsupported or not applied')
+                    if 'GC_LARGE_PAYLOAD_KIB' in overrides[variant]:
+                        expected = int(overrides[variant]['GC_LARGE_PAYLOAD_KIB']) * 1024 or None
+                        if (result.get('runtime_settings', {}).get('adaptive') or {}).get('large_payload_threshold') != expected:
+                            raise RuntimeError(f'{name}: large payload setting unsupported or not applied')
+                    if 'GC_GEN1_MODE' in overrides[variant]:
+                        expected = {'minor':'Minor', 'full':'Full', 'cost':'CompareReclamation'}[overrides[variant]['GC_GEN1_MODE']]
+                        if (result.get('runtime_settings', {}).get('adaptive') or {}).get('gen1_mode') != expected:
+                            raise RuntimeError(f'{name}: Gen1 action unsupported or not applied')
                     if 'GC_LIVE_BASIS' in overrides[variant] and result.get('runtime_settings', {}).get('live_basis') != overrides[variant]['GC_LIVE_BASIS']:
                         raise RuntimeError(f'{name}: runtime live basis unsupported or not applied')
                     if result['policy'] != requested_policy:

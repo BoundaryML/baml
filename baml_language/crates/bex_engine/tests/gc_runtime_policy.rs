@@ -9,6 +9,7 @@ use sys_native::SysOpsExt;
 const SOURCE: &str = r#"
 class Node { value int }
 function Tiny(n: int) -> Node { Node { value: n } }
+function Read(node: Node) -> int { node.value }
 function Churn(n: int) -> int {
     let i = 0;
     let total = 0;
@@ -60,6 +61,7 @@ fn engine_with_basis(
         .unwrap(),
     );
     engine.heap().configure_gc_experiment(GcExperimentConfig {
+        adaptive: None,
         young_budget,
         full_budget_floor,
         live_multiplier: 1,
@@ -314,6 +316,95 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
             .snapshot()
             .collections
             > before
+    );
+    engine.shutdown().await;
+}
+
+fn adaptive_engine() -> Arc<BexEngine> {
+    let engine = Arc::new(
+        BexEngine::new(
+            baml_db::testing::compile_source(SOURCE),
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+        )
+        .unwrap(),
+    );
+    engine.heap().configure_gc_experiment(GcExperimentConfig {
+        adaptive: Some(bex_heap::gc_adaptive::AdaptiveConfig {
+            gen1_budget_floor: 16 * 1024,
+            growth_percent: 25,
+            gen1_mode: bex_heap::gc_adaptive::Gen1Mode::Minor,
+            large_payload_threshold: None,
+            survival_backoff: 0,
+            survival_early_probe: false,
+            gc_time_percent: 5,
+        }),
+        young_budget: Some(8 * 1024),
+        full_budget_floor: 32 * 1024,
+        live_multiplier: 2,
+        live_budget_uses_slots: false,
+        first_chunk: 32,
+        max_chunk: 1024,
+        poll_interval: 64,
+    });
+    engine
+}
+
+#[tokio::test]
+async fn adaptive_policy_uses_all_three_scopes_and_preserves_exported_results() {
+    let engine = adaptive_engine();
+    let mut kept = Vec::new();
+    for n in 0..1500 {
+        kept.push(call(&engine, "Tiny", vec![Ext::Int(n)], false).await);
+    }
+    let snapshot = engine
+        .heap()
+        .gc_experiment()
+        .unwrap()
+        .snapshot()
+        .adaptive
+        .unwrap();
+    assert!(snapshot.collections.iter().all(|n| *n > 0), "{snapshot:?}");
+    for (n, value) in kept.iter().enumerate().step_by(31) {
+        assert_eq!(
+            call(&engine, "Read", vec![value.clone()], true).await,
+            Ext::Int(i64::try_from(n).unwrap())
+        );
+    }
+    drop(kept);
+    engine.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn adaptive_policy_cooperates_with_many_short_lived_vms() {
+    let engine = adaptive_engine();
+    let mut tasks = Vec::new();
+    for _ in 0..8 {
+        let engine = engine.clone();
+        tasks.push(tokio::spawn(async move {
+            for _ in 0..16 {
+                assert_eq!(
+                    call(&engine, "Async", vec![Ext::Int(1024)], true).await,
+                    Ext::Int(1024)
+                );
+            }
+        }));
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        for task in tasks {
+            task.await.unwrap();
+        }
+    })
+    .await
+    .expect("adaptive collections must not deadlock");
+    assert!(
+        engine
+            .heap()
+            .gc_experiment()
+            .unwrap()
+            .snapshot()
+            .collections
+            > 1
     );
     engine.shutdown().await;
 }

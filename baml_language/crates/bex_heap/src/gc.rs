@@ -39,6 +39,50 @@ use crate::{
     heap::Generation,
 };
 
+/// Source-space membership for one stop-the-world partial collection.
+/// Only classify original references before fixup: destination chunks appended
+/// during copying are deliberately absent. This avoids scanning every old-heap
+/// chunk for every traced edge. Mutators keep using the synchronized heap lookup.
+struct SourceGenerations(Vec<(usize, usize, Generation)>);
+
+impl SourceGenerations {
+    /// SAFETY: all mutators are parked; source chunks stay allocated until fixup.
+    unsafe fn new(heap: &BexHeap) -> Self {
+        let mut ranges = Vec::new();
+        for (space, generation) in [
+            (unsafe { heap.gen1_ref() }, Generation::Gen1),
+            (unsafe { heap.gen2_ref() }, Generation::Gen2),
+        ] {
+            for chunk in 0..space.num_chunks() {
+                // SAFETY: chunk exists and remains stable throughout tracing.
+                let start = unsafe { space.chunk_start_ptr(chunk) }.addr();
+                ranges.push((
+                    start,
+                    start + ChunkedVec::<Object>::CHUNK_SIZE * size_of::<Object>(),
+                    generation,
+                ));
+            }
+        }
+        ranges.sort_unstable_by_key(|r| r.0);
+        Self(ranges)
+    }
+
+    fn generation_of(&self, heap: &BexHeap, ptr: HeapPtr) -> Generation {
+        if heap.is_compile_time_ptr(ptr) {
+            return Generation::CompileTime;
+        }
+        let address = ptr.as_ptr().addr();
+        let index = self.0.partition_point(|r| r.0 <= address);
+        if let Some(index) = index.checked_sub(1) {
+            let (_, end, generation) = self.0[index];
+            if address < end {
+                return generation;
+            }
+        }
+        Generation::Gen0
+    }
+}
+
 /// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
 /// the held value is an object reference. Pending / Cancelled / InternalError
 /// futures hold no reachable outgoing references; this returns `None` for
@@ -57,10 +101,13 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
 /// Which generation level to collect.
 ///
 /// - `Minor`: Traces Gen0 + Gen1; Gen0 survivors → new Gen1 (via inactive swap),
-///   Gen1 survivors → Gen2. There is no Gen0-only collection.
+///   Gen1 survivors → Gen2.
+/// - `Nursery`: Traces Gen0 only; survivors append to Gen1.
 /// - `Major`: Full GC — traces all generations, survivors → Gen2 via inactive swap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectionLevel {
+    /// Gen0 only; Gen1 and Gen2 remain in place.
+    Nursery,
     /// Minor collection: Gen0 + Gen1.
     Minor,
     /// Full collection: Gen0 + Gen1 + Gen2.
@@ -70,6 +117,8 @@ pub enum CollectionLevel {
 /// Result of a garbage collection cycle.
 #[derive(Debug, Clone)]
 pub struct GcStats {
+    #[cfg(feature = "gc_policy_experiments")]
+    pub policy_after: Option<crate::gc_experiment::GcExperimentSnapshot>,
     /// Objects marked as live (copied).
     pub live_count: usize,
     /// Slots reclaimed (including unused TLAB reservations), not an object-death count.
@@ -96,8 +145,8 @@ impl BexHeap {
     /// 3. **Minor** — Allocation count since last GC >= 10,000 (Gen0 pressure)
     /// 4. **None** — No collection needed
     ///
-    /// Note: There is no Gen0-only collection; Gen0 allocation pressure triggers
-    /// a Minor GC (Gen0+Gen1) since that is the finest granularity available.
+    /// The production policy uses Minor for Gen0 pressure. An opt-in experiment
+    /// can replace this selection and request Gen0-only collection as well.
     pub fn should_collect(&self) -> Option<CollectionLevel> {
         #[cfg(feature = "gc_policy_experiments")]
         if let Some(policy) = self.gc_experiment() {
@@ -259,6 +308,42 @@ impl BexHeap {
         }
     }
 
+    /// Trace a partial collection, preserving older objects in place.
+    /// SAFETY: exclusive heap access, before reclaiming either young space.
+    unsafe fn trace_partial(
+        &self,
+        mut worklist: Vec<HeapPtr>,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+        promoted_to_gen2: &mut usize,
+        nursery_only: bool,
+        generations: &SourceGenerations,
+    ) {
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            let destination = match generations.generation_of(self, old_ptr) {
+                Generation::Gen0 => Some(if nursery_only {
+                    &self.gen1
+                } else {
+                    &self.inactive
+                }),
+                Generation::Gen1 if !nursery_only => {
+                    *promoted_to_gen2 += 1;
+                    Some(&self.gen2)
+                }
+                _ => None,
+            };
+            if let Some(space) = destination {
+                let new_ptr = self.copy_object_to_space(space, old_ptr, forwarding);
+                // SAFETY: the destination object was just initialized.
+                self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
+            } else {
+                forwarding.insert(old_ptr, old_ptr);
+            }
+        }
+    }
+
     /// BEP-042 (minor GC): like [`keepalive_finalizers_major`], but only the
     /// young generations are collected, so only dead young instances are
     /// finalized. The closure copy is generation-aware (Gen0→new Gen1,
@@ -269,35 +354,28 @@ impl BexHeap {
         &self,
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
         promoted_to_gen2: &mut usize,
+        nursery_only: bool,
+        generations: &SourceGenerations,
     ) {
-        let seeds =
-            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
+        let seeds = unsafe {
+            self.scan_dead_finalizers(
+                forwarding,
+                &[self.gen0_ref(), self.gen1_ref()][..if nursery_only { 1 } else { 2 }],
+            )
+        };
         if seeds.is_empty() {
             return;
         }
-        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            match self.generation_of(old_ptr) {
-                Generation::CompileTime | Generation::Gen2 => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
-                    // SAFETY: just written; pointer valid.
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
-                    // SAFETY: just written; pointer valid.
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                    *promoted_to_gen2 += 1;
-                }
-            }
+        let worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        // SAFETY: caller holds exclusive access before reclamation.
+        unsafe {
+            self.trace_partial(
+                worklist,
+                forwarding,
+                promoted_to_gen2,
+                nursery_only,
+                generations,
+            );
         }
         for (old_ptr, cleanup_fn) in seeds {
             self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
@@ -402,32 +480,28 @@ impl BexHeap {
         &self,
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
         promoted_to_gen2: &mut usize,
+        nursery_only: bool,
+        generations: &SourceGenerations,
     ) {
         let errors = unsafe {
-            self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen1_ref()])
+            self.scan_unhandled_spawn_errors(
+                forwarding,
+                &[self.gen0_ref(), self.gen1_ref()][..if nursery_only { 1 } else { 2 }],
+            )
         };
-        let mut worklist: Vec<HeapPtr> = errors
+        let worklist: Vec<HeapPtr> = errors
             .iter()
             .filter_map(|error| error.value.as_object_ptr())
             .collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            match self.generation_of(old_ptr) {
-                Generation::CompileTime | Generation::Gen2 => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
-                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
-                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
-                    *promoted_to_gen2 += 1;
-                }
-            }
+        // SAFETY: caller holds exclusive access before reclamation.
+        unsafe {
+            self.trace_partial(
+                worklist,
+                forwarding,
+                promoted_to_gen2,
+                nursery_only,
+                generations,
+            );
         }
         for error in errors {
             let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
@@ -445,6 +519,8 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        #[cfg(feature = "gc_policy_experiments")]
+        let experiment_start = self.gc_experiment().map(|_| web_time::Instant::now());
         #[cfg(feature = "gc_profiling")]
         let mut clock = crate::gc_profile::GcClock::new();
         #[cfg(feature = "gc_profiling")]
@@ -559,6 +635,27 @@ impl BexHeap {
         let live_count = unsafe { self.inactive_ref().len() };
         let collected_count = old_count.saturating_sub(live_count);
 
+        #[cfg(feature = "gc_policy_experiments")]
+        let full_young_survived = self.gc_experiment().and_then(|policy| {
+            policy
+                .config
+                .adaptive
+                .filter(|a| a.survival_early_probe && a.survival_backoff > 0)
+                .map(|_| {
+                    // SAFETY: source spaces still exist and all mutators are parked.
+                    // Classify original addresses, read payload only at destinations.
+                    let sources = unsafe { SourceGenerations::new(self) };
+                    forwarding
+                        .iter()
+                        .filter(|(old, _)| sources.generation_of(self, **old) == Generation::Gen0)
+                        .fold(0usize, |bytes, (_, new)| {
+                            bytes.saturating_add(size_of::<Object>()).saturating_add(
+                                crate::gc_experiment::payload_bytes(unsafe { new.get() }),
+                            )
+                        })
+                })
+        });
+
         // Swap inactive ↔ Gen2; clear Gen0 and Gen1.
         // After the swap: survivors are in Gen2, old-space debris is in inactive.
         // SAFETY: GC safepoint; exclusive access to all four spaces.
@@ -578,6 +675,7 @@ impl BexHeap {
         // needing to resize the table from a shared `&self` path.
         // SAFETY: GC safepoint; no concurrent card-table access.
         unsafe {
+            (*self.gen1_cards.get()).clear();
             let cards = &mut *self.gen2_cards.get();
             cards.clear();
             cards.ensure_capacity_for_chunks((*self.gen2.get()).num_chunks());
@@ -617,7 +715,13 @@ impl BexHeap {
         self.update_thresholds_after_major(live_count);
         #[cfg(feature = "gc_policy_experiments")]
         unsafe {
-            self.finish_gc_experiment(CollectionLevel::Major);
+            self.finish_gc_experiment(
+                CollectionLevel::Major,
+                [0, live_count],
+                experiment_start,
+                collected_count,
+                full_young_survived,
+            );
         }
 
         // Reset the Gen0 allocation counter — `should_collect` uses it to
@@ -637,6 +741,8 @@ impl BexHeap {
             profile.heap_total = clock.elapsed();
         }
         let stats = GcStats {
+            #[cfg(feature = "gc_policy_experiments")]
+            policy_after: self.gc_experiment().map(|p| p.snapshot()),
             live_count,
             collected_count,
             #[cfg(feature = "gc_profiling")]
@@ -1235,19 +1341,22 @@ impl BexHeap {
         new_ptr
     }
 
-    /// Scan dirty cards in `space`/`card_table` and push any references to
-    /// objects in `target_generations` onto `worklist`.
+    /// Scan dirty cards and push Gen0/Gen1 references onto `worklist`. Cards
+    /// without young references can skip fixup and future partial collections.
+    /// Gen2 -> Gen1 edges must retain their card even during Gen0-only GC.
     ///
     /// # Safety
     ///
     /// Must be called at a GC safepoint.
     unsafe fn scan_dirty_cards_for_young_roots(
         &self,
-        card_table: &crate::card_table::CardTable,
+        card_table: &mut crate::card_table::CardTable,
         space: &ChunkedVec<Object>,
         worklist: &mut Vec<HeapPtr>,
+        generations: &SourceGenerations,
     ) {
-        for card_index in card_table.dirty_card_indices() {
+        card_table.retain_dirty_cards(|card_index| {
+            let before = worklist.len();
             let chunk_idx = card_index / CARDS_PER_CHUNK;
             let card_offset_in_chunk = (card_index % CARDS_PER_CHUNK) * CARD_SIZE;
 
@@ -1256,9 +1365,10 @@ impl BexHeap {
 
             for i in start..end {
                 let obj = space.get(i);
-                self.collect_young_references(obj, worklist);
+                self.collect_young_references(obj, worklist, generations);
             }
-        }
+            worklist.len() != before
+        });
     }
 
     /// Walk dirty cards in `card_table`/`space` and rewrite any `Value::Object`
@@ -1307,7 +1417,12 @@ impl BexHeap {
 
     /// Like `add_references_to_worklist`, but only enqueues pointers whose
     /// generation is one of [`Generation::Gen0`] or [`Generation::Gen1`].
-    fn collect_young_references(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
+    fn collect_young_references(
+        &self,
+        obj: &Object,
+        worklist: &mut Vec<HeapPtr>,
+        generations: &SourceGenerations,
+    ) {
         match obj {
             // SAFETY: GC traversal under STW; no mutator can race.
             Object::Array(arr) => {
@@ -1315,7 +1430,7 @@ impl BexHeap {
                 worklist.extend(
                     data.iter()
                         .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
             }
             Object::Map(map) => {
@@ -1323,22 +1438,22 @@ impl BexHeap {
                 worklist.extend(
                     data.values()
                         .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
             }
             Object::Instance(inst) => {
-                if self.generation_of(inst.class).is_young() {
+                if generations.generation_of(self, inst.class).is_young() {
                     worklist.push(inst.class);
                 }
                 worklist.extend(
                     inst.fields
                         .iter()
                         .filter_map(|slot| slot.load().as_object_ptr())
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
             }
             Object::Closure(closure) => {
-                if self.generation_of(closure.function).is_young() {
+                if generations.generation_of(self, closure.function).is_young() {
                     worklist.push(closure.function);
                 }
                 worklist.extend(
@@ -1346,50 +1461,50 @@ impl BexHeap {
                         .captures
                         .iter()
                         .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
             }
             Object::BoundMethod(method) => {
-                if self.generation_of(method.function).is_young() {
+                if generations.generation_of(self, method.function).is_young() {
                     worklist.push(method.function);
                 }
                 if let Some(ptr) = method.receiver.as_object_ptr()
-                    && self.generation_of(ptr).is_young()
+                    && generations.generation_of(self, ptr).is_young()
                 {
                     worklist.push(ptr);
                 }
             }
             Object::Cell(cell) => {
                 if let Some(ptr) = cell.load().as_object_ptr()
-                    && self.generation_of(ptr).is_young()
+                    && generations.generation_of(self, ptr).is_young()
                 {
                     worklist.push(ptr);
                 }
             }
             Object::Variant(var) => {
-                if self.generation_of(var.enm).is_young() {
+                if generations.generation_of(self, var.enm).is_young() {
                     worklist.push(var.enm);
                 }
             }
             Object::Future(fut) => {
                 if let Some(ptr) = future_object_ref(fut)
-                    && self.generation_of(ptr).is_young()
+                    && generations.generation_of(self, ptr).is_young()
                 {
                     worklist.push(ptr);
                 }
             }
             Object::UnscheduledFuture(future) => {
                 if let Some(name_ptr) = future.name
-                    && self.generation_of(name_ptr).is_young()
+                    && generations.generation_of(self, name_ptr).is_young()
                 {
                     worklist.push(name_ptr);
                 }
                 if let Some(config_ptr) = future.config
-                    && self.generation_of(config_ptr).is_young()
+                    && generations.generation_of(self, config_ptr).is_young()
                 {
                     worklist.push(config_ptr);
                 }
-                if self.generation_of(future.closure).is_young() {
+                if generations.generation_of(self, future.closure).is_young() {
                     worklist.push(future.closure);
                 }
             }
@@ -1403,7 +1518,8 @@ impl BexHeap {
                     .chain(package.type_aliases.values())
                     .chain(package.mounted_types.values())
                     .copied();
-                worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
+                worklist
+                    .extend(refs.filter(|ptr| generations.generation_of(self, *ptr).is_young()));
                 worklist.extend(
                     package
                         .impl_rules
@@ -1411,10 +1527,10 @@ impl BexHeap {
                         .flat_map(|(interface, rules)| {
                             std::iter::once(*interface).chain(rules.iter().copied())
                         })
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
                 if let Some(ptr) = package.test_init
-                    && self.generation_of(ptr).is_young()
+                    && generations.generation_of(self, ptr).is_young()
                 {
                     worklist.push(ptr);
                 }
@@ -1430,10 +1546,10 @@ impl BexHeap {
                                 .chain(runtime.dependencies.iter())
                                 .chain(runtime.dependency_names.values())
                                 .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                                .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                         );
                         if let Some(ptr) = runtime.init
-                            && self.generation_of(ptr).is_young()
+                            && generations.generation_of(self, ptr).is_young()
                         {
                             worklist.push(ptr);
                         }
@@ -1442,14 +1558,16 @@ impl BexHeap {
                                 .globals
                                 .iter()
                                 .filter_map(|slot| slot.load().as_object_ptr())
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                                .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                         );
                     }
                 }
             }
             Object::Function(function) => {
                 if !function.runtime_package.as_ptr().is_null()
-                    && self.generation_of(function.runtime_package).is_young()
+                    && generations
+                        .generation_of(self, function.runtime_package)
+                        .is_young()
                 {
                     worklist.push(function.runtime_package);
                 }
@@ -1460,25 +1578,31 @@ impl BexHeap {
                             .resolved_constants
                             .iter()
                             .filter_map(Value::as_object_ptr)
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                            .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                     );
                 }
             }
             Object::GenericFunction(function) => {
                 if !function.runtime_package.as_ptr().is_null()
-                    && self.generation_of(function.runtime_package).is_young()
+                    && generations
+                        .generation_of(self, function.runtime_package)
+                        .is_young()
                 {
                     worklist.push(function.runtime_package);
                 }
             }
             // Owner back-edges; heads are scanned for every object kind below.
             Object::Class(class) => {
-                if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
+                if !class.owner.as_ptr().is_null()
+                    && generations.generation_of(self, class.owner).is_young()
+                {
                     worklist.push(class.owner);
                 }
             }
             Object::Enum(enm) => {
-                if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
+                if !enm.owner.as_ptr().is_null()
+                    && generations.generation_of(self, enm.owner).is_young()
+                {
                     worklist.push(enm.owner);
                 }
             }
@@ -1488,19 +1612,22 @@ impl BexHeap {
             // `HostClosure` carries no heap references.
             Object::HostClosure(_) => {}
             Object::ImplRule(rule) => {
-                if self.generation_of(rule.interface_head).is_young() {
+                if generations
+                    .generation_of(self, rule.interface_head)
+                    .is_young()
+                {
                     worklist.push(rule.interface_head);
                 }
                 worklist.extend(
                     rule.methods
                         .values()
                         .map(|method| method.fqn)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        .filter(|ptr| generations.generation_of(self, *ptr).is_young()),
                 );
             }
             Object::Interface(interface) => {
                 if !interface.owner.as_ptr().is_null()
-                    && self.generation_of(interface.owner).is_young()
+                    && generations.generation_of(self, interface.owner).is_young()
                 {
                     worklist.push(interface.owner);
                 }
@@ -1510,12 +1637,15 @@ impl BexHeap {
                         .iter()
                         .map(|method| method.default_fn)
                         .filter(|ptr| {
-                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
+                            !ptr.as_ptr().is_null()
+                                && generations.generation_of(self, *ptr).is_young()
                         }),
                 );
             }
             Object::TypeAlias(alias) => {
-                if !alias.owner.as_ptr().is_null() && self.generation_of(alias.owner).is_young() {
+                if !alias.owner.as_ptr().is_null()
+                    && generations.generation_of(self, alias.owner).is_young()
+                {
                     worklist.push(alias.owner);
                 }
             }
@@ -1531,7 +1661,7 @@ impl BexHeap {
         }
 
         bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
-            if head.is_resolved() && self.generation_of(head.ptr()).is_young() {
+            if head.is_resolved() && generations.generation_of(self, head.ptr()).is_young() {
                 worklist.push(head.ptr());
             }
         });
@@ -1557,6 +1687,33 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: caller guarantees all mutators are parked.
+        unsafe { self.collect_garbage_partial(roots, false) }
+    }
+
+    /// Collect Gen0 only, appending survivors to Gen1.
+    /// # Safety
+    /// Caller must hold exclusive access with all VMs parked.
+    pub unsafe fn collect_garbage_nursery(
+        &self,
+        roots: &[HeapPtr],
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: caller guarantees all mutators are parked.
+        unsafe { self.collect_garbage_partial(roots, true) }
+    }
+
+    unsafe fn collect_garbage_partial(
+        &self,
+        roots: &[HeapPtr],
+        nursery_only: bool,
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        let level = if nursery_only {
+            CollectionLevel::Nursery
+        } else {
+            CollectionLevel::Minor
+        };
+        #[cfg(feature = "gc_policy_experiments")]
+        let experiment_start = self.gc_experiment().map(|_| web_time::Instant::now());
         #[cfg(feature = "gc_profiling")]
         let mut clock = crate::gc_profile::GcClock::new();
         #[cfg(feature = "gc_profiling")]
@@ -1568,6 +1725,7 @@ impl BexHeap {
         };
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
+        self.debug_verify_tlab_canaries();
         self.bump_epoch();
 
         let gen0_count = unsafe { self.gen0_ref().len() };
@@ -1582,17 +1740,32 @@ impl BexHeap {
             self.inactive_mut().clear();
         }
 
+        // SAFETY: source generations remain intact until the reclaim phase.
+        let generations = unsafe { SourceGenerations::new(self) };
+
         // Build worklist: roots + cross-generation references from Gen2 dirty cards.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
         // SAFETY: GC safepoint; we have exclusive access to the card table and Gen2.
         unsafe {
             self.scan_dirty_cards_for_young_roots(
-                &*self.gen2_cards.get(),
+                &mut *self.gen2_cards.get(),
                 self.gen2_ref(),
                 &mut worklist,
+                &generations,
             );
         }
 
+        if nursery_only {
+            // SAFETY: Gen1 stays in place; its dirty cards supply Gen0 roots.
+            unsafe {
+                self.scan_dirty_cards_for_young_roots(
+                    &mut *self.gen1_cards.get(),
+                    self.gen1_ref(),
+                    &mut worklist,
+                    &generations,
+                );
+            }
+        }
         let mut promoted_to_gen2 = 0usize;
 
         #[cfg(feature = "gc_profiling")]
@@ -1600,35 +1773,15 @@ impl BexHeap {
             profile.prepare = clock.lap();
         }
 
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-
-            let generation = self.generation_of(old_ptr);
-            match generation {
-                Generation::CompileTime => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    // Gen0 survivors → new Gen1 (inactive).
-                    let new_ptr =
-                        self.copy_object_to_space(&self.inactive, old_ptr, &mut forwarding);
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    // Gen1 survivors → promote to Gen2.
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, &mut forwarding);
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                    promoted_to_gen2 += 1;
-                }
-                Generation::Gen2 => {
-                    // Outside collected generations — identity-map.
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-            }
+        // SAFETY: all mutators are parked and source spaces remain intact.
+        unsafe {
+            self.trace_partial(
+                worklist,
+                &mut forwarding,
+                &mut promoted_to_gen2,
+                nursery_only,
+                &generations,
+            );
         }
 
         #[cfg(feature = "gc_profiling")]
@@ -1639,7 +1792,12 @@ impl BexHeap {
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
-            self.keepalive_unhandled_spawn_errors_minor(&mut forwarding, &mut promoted_to_gen2);
+            self.keepalive_unhandled_spawn_errors_minor(
+                &mut forwarding,
+                &mut promoted_to_gen2,
+                nursery_only,
+                &generations,
+            );
         }
 
         // BEP-042: keep alive dead young instances with a `cleanup` finalizer
@@ -1648,7 +1806,12 @@ impl BexHeap {
         // covered by the same fixup/promotion-barrier passes below.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
-            self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
+            self.keepalive_finalizers_minor(
+                &mut forwarding,
+                &mut promoted_to_gen2,
+                nursery_only,
+                &generations,
+            );
         }
 
         #[cfg(feature = "gc_profiling")]
@@ -1664,7 +1827,17 @@ impl BexHeap {
         //   forwarding map, otherwise they hold stale pointers.
         // SAFETY: All live objects moved; no VMs executing.
         unsafe {
-            self.fixup_references_in_space(&self.inactive, &forwarding);
+            if nursery_only {
+                self.fixup_promoted_objects_from(&self.gen1, gen1_count, &forwarding);
+                self.fixup_dirty_cards_in_range(
+                    &*self.gen1_cards.get(),
+                    &self.gen1,
+                    0..gen1_count,
+                    &forwarding,
+                );
+            } else {
+                self.fixup_references_in_space(&self.inactive, &forwarding);
+            }
             self.fixup_promoted_objects_from(&self.gen2, gen2_len_before, &forwarding);
             self.fixup_dirty_cards_in_range(
                 &*self.gen2_cards.get(),
@@ -1696,9 +1869,14 @@ impl BexHeap {
             let gen2_len_after = gen2.len();
             (*self.gen2_cards.get()).ensure_capacity_for_chunks(gen2.num_chunks());
             for i in gen2_len_before..gen2_len_after {
-                let raw_ptr = gen2.get_ptr(i);
-                let ptr = self.make_heap_ptr(raw_ptr);
-                self.mark_card_for_ptr(ptr);
+                // We already know the object's storage index. The mutator
+                // barrier searches chunks to locate an arbitrary pointer;
+                // doing that for every promoted object makes this pass grow
+                // with both the number of promotions and the old heap size.
+                (*self.gen2_cards.get()).mark_dirty_by_offset(
+                    i / ChunkedVec::<Object>::CHUNK_SIZE,
+                    i % ChunkedVec::<Object>::CHUNK_SIZE,
+                );
             }
         }
 
@@ -1710,7 +1888,13 @@ impl BexHeap {
         // Swap inactive ↔ Gen1; clear Gen0.
         // SAFETY: GC safepoint; exclusive access to all spaces.
         unsafe {
-            std::ptr::swap(self.gen1.get(), self.inactive.get());
+            if !nursery_only {
+                std::ptr::swap(self.gen1.get(), self.inactive.get());
+            }
+            // No Gen0 objects remain, so no Gen1 → Gen0 edges remain.
+            let cards = &mut *self.gen1_cards.get();
+            cards.clear();
+            cards.ensure_capacity_for_chunks(self.gen1_ref().num_chunks());
             self.gen0_mut().clear();
         }
         self.reset_next_chunk(0);
@@ -1724,8 +1908,13 @@ impl BexHeap {
         }
 
         let new_gen1_count = unsafe { self.gen1_ref().len() };
-        let total_live = new_gen1_count + promoted_to_gen2;
-        let total_before = gen0_count + gen1_count;
+        let promoted_to_gen1 = if nursery_only {
+            new_gen1_count - gen1_count
+        } else {
+            new_gen1_count
+        };
+        let total_live = promoted_to_gen1 + promoted_to_gen2;
+        let total_before = gen0_count + if nursery_only { 0 } else { gen1_count };
 
         let remapped_roots = roots
             .iter()
@@ -1739,7 +1928,13 @@ impl BexHeap {
         self.update_thresholds_after_minor(new_gen1_count, current_gen2_live);
         #[cfg(feature = "gc_policy_experiments")]
         unsafe {
-            self.finish_gc_experiment(CollectionLevel::Minor);
+            self.finish_gc_experiment(
+                level,
+                [promoted_to_gen1, promoted_to_gen2],
+                experiment_start,
+                total_before.saturating_sub(total_live),
+                None,
+            );
         }
 
         // Reset the Gen0 allocation counter. Without this, `should_collect`
@@ -1759,12 +1954,14 @@ impl BexHeap {
             profile.heap_total = clock.elapsed();
         }
         let stats = GcStats {
+            #[cfg(feature = "gc_policy_experiments")]
+            policy_after: self.gc_experiment().map(|p| p.snapshot()),
             live_count: total_live,
             collected_count: total_before.saturating_sub(total_live),
             #[cfg(feature = "gc_profiling")]
             profile,
-            level: CollectionLevel::Minor,
-            promoted_to_gen1: new_gen1_count,
+            level,
+            promoted_to_gen1,
             promoted_to_gen2,
         };
 
@@ -1785,6 +1982,7 @@ impl BexHeap {
         level: CollectionLevel,
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         match level {
+            CollectionLevel::Nursery => unsafe { self.collect_garbage_nursery(roots) },
             CollectionLevel::Minor => unsafe { self.collect_garbage_minor(roots) },
             CollectionLevel::Major => unsafe { self.collect_garbage(roots) },
         }
@@ -1802,9 +2000,92 @@ mod tests {
     use crate::Tlab;
 
     #[test]
+    fn cards_clear_when_no_young_edges_remain_and_rearm_on_later_writes() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(heap.clone());
+        let parent = tlab.alloc_array(RealizedTy::unknown(), vec![Value::NULL; 4096]);
+        // SAFETY: standalone heap, complete root set, no concurrent mutators.
+        let (_, roots, _) = unsafe { heap.collect_garbage(&[parent]) };
+        tlab.invalidate();
+        let parent = roots[0];
+        let dirty = || unsafe { (&*heap.gen2_cards.get()).is_dirty(0) };
+        heap.conservative_write_barrier(parent);
+        assert!(dirty());
+        // A primitive-only array needs neither forwarding nor future scans.
+        unsafe {
+            heap.collect_garbage_nursery(&[parent]);
+        }
+        tlab.invalidate();
+        assert!(!dirty());
+        for i in 0..2 {
+            let child = tlab.alloc_string(format!("child-{i}"));
+            heap.write_barrier(parent, Value::object(child));
+            let Object::Array(array) = (unsafe { parent.get() }) else {
+                unreachable!()
+            };
+            array.lock_mut()[0] = Value::object(child);
+            assert!(dirty());
+            // The first nursery moves the child to Gen1. The second must keep
+            // its Gen2->Gen1 card, even though Gen1 is not being collected.
+            for _ in 0..2 {
+                unsafe {
+                    heap.collect_garbage_nursery(&[parent]);
+                }
+                tlab.invalidate();
+                assert!(dirty());
+            }
+            unsafe {
+                heap.collect_garbage_minor(&[parent]);
+            }
+            tlab.invalidate();
+            let child = array.get(0).unwrap().as_object_ptr().unwrap();
+            assert_eq!(heap.generation_of(child), Generation::Gen2);
+            let Object::String(text) = (unsafe { child.get() }) else {
+                unreachable!()
+            };
+            assert_eq!(text.as_str(), format!("child-{i}"));
+            // Only old-to-old references remain. A later mutation must be
+            // able to mark this same card again on the next loop iteration.
+            unsafe {
+                heap.collect_garbage_nursery(&[parent]);
+            }
+            tlab.invalidate();
+            assert!(!dirty());
+        }
+    }
+
+    #[test]
+    fn source_generation_index_matches_heap_across_chunk_boundaries() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(heap.clone());
+        let count = ChunkedVec::<Object>::CHUNK_SIZE * 2 + 1;
+        let roots: Vec<_> = (0..count).map(|_| tlab.alloc_float(1.0)).collect();
+        let (_, old, _) = unsafe { heap.collect_garbage(&roots) };
+        tlab.invalidate();
+        let roots: Vec<_> = (0..count).map(|_| tlab.alloc_float(2.0)).collect();
+        let (_, middle, _) = unsafe { heap.collect_garbage_nursery(&roots) };
+        tlab.invalidate();
+        let young: Vec<_> = (0..count).map(|_| tlab.alloc_float(3.0)).collect();
+        let index = unsafe { SourceGenerations::new(&heap) };
+        for (generation, pointers) in [
+            (Generation::Gen2, old),
+            (Generation::Gen1, middle),
+            (Generation::Gen0, young),
+        ] {
+            for ptr in pointers {
+                assert_eq!(index.generation_of(&heap, ptr), generation);
+            }
+        }
+    }
+
+    #[test]
     fn unhandled_error_scan_covers_chunk_edges_and_preserves_observation() {
         use bex_vm_types::types::{CancellationToken, FutureId};
-        for level in [CollectionLevel::Minor, CollectionLevel::Major] {
+        for level in [
+            CollectionLevel::Nursery,
+            CollectionLevel::Minor,
+            CollectionLevel::Major,
+        ] {
             let heap = BexHeap::with_tlab_size(vec![], 1);
             let mut tlab = Tlab::new(heap.clone());
             for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
