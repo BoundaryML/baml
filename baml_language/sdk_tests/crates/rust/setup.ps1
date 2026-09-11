@@ -14,9 +14,18 @@ $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 # target dir - before the fixture CARGO_TARGET_DIR assignment below -
 # which is where the emitted tests look for it (next to their own
 # binary, so ambient CARGO_TARGET_DIR/profile agree by construction).
-Write-Host "==> cargo build -p bridge_cffi (engine cdylib)"
 Push-Location $WorkspaceRoot
 try {
+    # Generate each fixture's crate first: nothing else produces it, and the
+    # pre-warm loop below silently skips any fixture whose generated/ is
+    # missing. Must stay ABOVE the CARGO_TARGET_DIR assignment - otherwise the
+    # driver would build into the fixtures' target dir and recompile the whole
+    # compiler there.
+    Write-Host "==> sdk_test_codegen rust (generate fixture crates)"
+    cargo run --quiet -p sdk_test_codegen -- rust
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    Write-Host "==> cargo build -p bridge_cffi (engine cdylib)"
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {

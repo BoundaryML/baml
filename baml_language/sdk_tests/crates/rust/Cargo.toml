@@ -16,8 +16,6 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[build-dependencies]
-sdk_test_codegen = { path = "../../codegen" }
 
 [dev-dependencies]
 sdk_test_harness_runner = { path = "../../harness_runner" }

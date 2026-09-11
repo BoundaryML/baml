@@ -1,13 +1,10 @@
-//! Rust sdk-test target — build-script side. Mirrors `python_pydantic2`.
+//! Rust sdk-test codegen.
 //!
-//! [`run_all`] is called from `crates/rust/build.rs`. It discovers every
-//! fixture under `sdk_tests/fixtures/`, codegens each into
+//! [`run_all`] codegens every shared fixture into
 //! `crates/rust/<fixture>/generated/` (a standalone Cargo crate emitted by
 //! `sdkgen_rust` — manifest at the root, sources under `src/`), symlinks
-//! `crates/rust/<fixture>/customizable/*` into `generated/customizable/`,
-//! writes the `generated/tests/main.rs` gate file, and emits
-//! `OUT_DIR/rust_tests.rs` — the per-fixture `#[test]` scaffold the
-//! `sdk_test_harness_runner::rust::test_suite!()` macro `include!`s.
+//! `crates/rust/<fixture>/customizable/*` into `generated/customizable/`, and
+//! writes the `generated/tests/main.rs` gate file.
 //!
 //! ## Test gating
 //!
@@ -26,40 +23,17 @@
 //!
 //! Each fixture crate path-depends on `baml_bridge` and therefore compiles
 //! the BEX runtime stack. All fixtures share one cargo build directory —
-//! `<workspace>/target/sdk-rust-target` — threaded through the emitted
-//! tests as `CARGO_TARGET_DIR` (the same `run_test_cmd` plumbing python
-//! uses for `UV_CACHE_DIR`), so that stack compiles once, not per fixture.
+//! `<workspace>/target/sdk-rust-target` — threaded through the tests as
+//! `CARGO_TARGET_DIR` (the same `run_test_cmd` plumbing python uses for
+//! `UV_CACHE_DIR`), so that stack compiles once, not per fixture.
 //! `crates/rust/setup.sh` pre-warms it serially before nextest fans out.
 
-use std::{
-    env, fs, panic,
-    path::{Path, PathBuf},
-};
+use std::{env, fs, path::Path};
 
-use sdk_test_harness_runner::fixtures;
+use sdk_test_harness_runner::{fixtures, rust::GENERATED_EDITION};
 use sdkgen_rust::{NamingConvention, RustGenOptions};
 
-use crate::{
-    BuildDiagnostics, emit_cargo_line, fixtures_root_from_manifest, load_fixture,
-    symlink_customizable, watch_dir, write_codegen_output_recording,
-};
-
-/// Shared cargo build dir for ALL fixture crates, as a subdir of
-/// `<workspace>/target/`. Kept out of the workspace's own build dir to
-/// avoid file-lock contention with developer / rust-analyzer builds and
-/// fingerprint interleaving with workspace feature unification.
-const CACHE_SUBDIR: &str = "sdk-rust-target";
-const CACHE_ENV_VAR: &str = "CARGO_TARGET_DIR";
-
-/// Env var the setup scripts write to `$NEXTEST_ENV` and the emitted
-/// `setup_guard::ran` test checks for. Must stay in sync with both
-/// `crates/rust/setup.sh` and `setup.ps1`.
-const SETUP_ENV_VAR: &str = "SDK_TEST_RUST_SETUP";
-
-/// Edition stamped into every generated fixture crate — also the
-/// `--edition` the scaffold's `rustfmt` gate passes, so keep the two uses
-/// flowing from this one const.
-const GENERATED_EDITION: &str = "2024";
+use crate::{CodegenCtx, load_fixture, symlink_customizable, write_codegen_output};
 
 /// Dependency spec wiring each fixture crate to the local `baml_bridge`
 /// sources. 5 ancestors up from `crates/rust/<F>/generated/Cargo.toml`:
@@ -190,54 +164,32 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ("type_shapes", "roundtrip_tests/test_void.rs", Gate::Now),
 ];
 
-/// Entry point for `crates/rust/build.rs`. Drives codegen across every
-/// fixture and emits the per-fixture test scaffold to OUT_DIR.
-pub fn run_all() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let fixtures_root = fixtures_root_from_manifest(&manifest_dir);
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    let mut diagnostics = BuildDiagnostics::new(&out_dir);
-
-    let fixtures = fixtures::discover_shared(&fixtures_root);
-    assert!(
-        !fixtures.is_empty(),
-        "no fixtures discovered under {}",
-        fixtures_root.display()
+/// Generate every Rust fixture SDK. Called by the `rust` subcommand of the
+/// `sdk_test_codegen` binary, which `crates/rust/setup.sh` runs before its
+/// per-fixture `cargo test --no-run` pre-warm.
+///
+/// Codegen failures abort rather than being recorded: this only runs when
+/// someone is running the Rust suite, so a panic here should stop the setup
+/// script outright instead of surfacing later as a separate test.
+pub fn run_all(ctx: &CodegenCtx) {
+    let discovered = fixtures::discover_shared(&ctx.fixtures_root);
+    assert_eq!(
+        discovered,
+        fixtures::SHARED,
+        "the fixture corpus at {} has drifted from `fixtures::SHARED`",
+        ctx.fixtures_root.display()
     );
-
-    for fixture in &fixtures {
-        codegen_fixture(&fixtures_root, fixture, &manifest_dir, &mut diagnostics);
-    }
-
-    // Toolchain pre-warm (`cargo test --no-run` per fixture) is NOT run
-    // here — it lives in `crates/rust/setup.sh`, fired by `cargo nextest
-    // run` (see module docs), so `cargo check` / `cargo doc` of the
-    // workspace never build the fixture crates.
-    write_fixtures_tests_rs(&out_dir, &fixtures);
-    diagnostics.finalize();
-
-    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
-    emit_cargo_line(format_args!(
-        "cargo:rerun-if-env-changed=SDKGEN_SKIP_REASONS"
-    ));
-    watch_dir(&fixtures_root);
-    for fixture in &fixtures {
-        watch_dir(&manifest_dir.join(fixture).join("customizable"));
+    for fixture in fixtures::SHARED {
+        codegen_fixture(&ctx.fixtures_root, fixture, &ctx.crate_dir);
     }
 }
 
-fn codegen_fixture(
-    fixtures_root: &Path,
-    fixture: &str,
-    manifest_dir: &Path,
-    diagnostics: &mut BuildDiagnostics,
-) {
+fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
     // `load_fixture` panics on .baml compile errors / missing baml_src /
     // empty fixture — those are author bugs in our repo, not env issues,
     // so the hard failure is kept (same policy as python_pydantic2).
     let loaded = load_fixture(fixtures_root, fixture);
-    let fixture_root = manifest_dir.join(fixture);
+    let fixture_root = crate_dir.join(fixture);
     let generated = fixture_root.join("generated");
 
     // The shared writer owns generated SDK files and removes stale ones.
@@ -262,53 +214,29 @@ fn codegen_fixture(
     };
     let pool = loaded.pool;
     let baml_bytecode = loaded.baml_bytecode;
-    let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        sdkgen_rust::to_source_code_with_bytecode(&pool, &baml_bytecode, &options)
-    }));
-    match codegen_result {
-        Ok(output) => {
-            // Skipped symbols are the expected state while the generator's
-            // type coverage grows, so summarize instead of one warning per
-            // symbol (stdlib pools alone would produce dozens per fixture).
-            if !output.warnings.is_empty() {
-                emit_cargo_line(format_args!(
-                    "cargo:warning=sdkgen_rust skipped {} unsupported symbol(s) in fixture `{fixture}`",
-                    output.warnings.len()
-                ));
-                if env::var("SDKGEN_SKIP_REASONS").is_ok() {
-                    for warning in &output.warnings {
-                        emit_cargo_line(format_args!(
-                            "cargo:warning=  skip {}: {}",
-                            warning.fqn, warning.reason
-                        ));
-                    }
-                }
+    let output = sdkgen_rust::to_source_code_with_bytecode(&pool, &baml_bytecode, &options);
+    // Skipped symbols are the expected state while the generator's type
+    // coverage grows, so summarize instead of one line per symbol (stdlib
+    // pools alone would produce dozens per fixture).
+    if !output.warnings.is_empty() {
+        eprintln!(
+            "warning: sdkgen_rust skipped {} unsupported symbol(s) in fixture `{fixture}`",
+            output.warnings.len()
+        );
+        if env::var_os("SDKGEN_SKIP_REASONS").is_some() {
+            for warning in &output.warnings {
+                eprintln!("  skip {}: {}", warning.fqn, warning.reason);
             }
-            write_codegen_output_recording(
-                &generated,
-                output
-                    .files
-                    .into_iter()
-                    .map(|(path, content)| (path, content.into_bytes())),
-                fixture,
-                diagnostics,
-            );
-        }
-        Err(payload) => {
-            // Surface the panic message: a codegen panic with an opaque
-            // record is only diagnosable by re-running codegen by hand.
-            let message = payload
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| payload.downcast_ref::<&str>().copied())
-                .unwrap_or("<non-string panic payload>");
-            diagnostics.record(
-                "codegen",
-                fixture,
-                format!("sdkgen_rust::to_source_code_with_bytecode panicked: {message}"),
-            );
         }
     }
+    write_codegen_output(
+        &generated,
+        output
+            .files
+            .into_iter()
+            .map(|(path, content)| (path, content.into_bytes())),
+        fixture,
+    );
 
     // Overlay ported tests: customizable/ → generated/customizable/. They
     // are NOT placed under tests/ — cargo would auto-discover each file as
@@ -316,29 +244,14 @@ fn codegen_fixture(
     let custom = fixture_root.join("customizable");
     if custom.exists() {
         let dst = generated.join("customizable");
-        let symlink_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            fs::create_dir_all(&dst).unwrap();
-            symlink_customizable(&custom, &dst);
-        }));
-        if symlink_result.is_err() {
-            diagnostics.record(
-                "symlink_customizable",
-                fixture,
-                format!(
-                    "symlink_customizable({}, {}) panicked",
-                    custom.display(),
-                    dst.display()
-                ),
-            );
-        }
+        fs::create_dir_all(&dst).unwrap();
+        symlink_customizable(&custom, &dst);
     }
 
     let tests = generated.join("tests");
-    if let Err(e) = fs::create_dir_all(&tests)
+    fs::create_dir_all(&tests)
         .and_then(|()| fs::write(tests.join("main.rs"), render_tests_main(fixture)))
-    {
-        diagnostics.record("tests_main_write", fixture, format!("write main.rs: {e}"));
-    }
+        .unwrap_or_else(|error| panic!("failed to write {}/main.rs: {error}", tests.display()));
 }
 
 /// Render `tests/main.rs` — the single integration-test entry point and
@@ -385,119 +298,4 @@ fn render_tests_main(fixture: &str) -> String {
     }
     header.push('\n');
     sdkgen_rust::render_rust_file(&header, items)
-}
-
-/// Emit `OUT_DIR/rust_tests.rs` — a sequence of
-/// `::sdk_test_harness_runner::*` invocations. No test bodies authored
-/// here; `build_diagnostics!` and `run_test_cmd` live in
-/// `sdk_test_harness_runner`.
-///
-/// Per fixture: `fmt` checks the hand-ported test files reachable from
-/// `tests/main.rs` (rustfmt follows the enabled `mod` declarations;
-/// generated `src/` is intentionally not rustfmt-checked — the emitter's
-/// pretty-printer is its canonical format), `clippy` lints the generated
-/// library, and `cargo_test` compiles and runs the enabled ports.
-/// `cargo_test` alone gets `BAML_LIBRARY_PATH`: `baml_bridge` is
-/// dylib-only, so the fixture's tests load the engine cdylib at run time
-/// (built by the setup script; fmt/clippy never execute the engine).
-fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
-    let header = "// Generated by sdk_test_codegen::rust::run_all — do not edit.\n\n";
-    let mut items = quote::quote! {
-        ::sdk_test_harness_runner::build_diagnostics!();
-        ::sdk_test_harness_runner::setup_guard!(#SETUP_ENV_VAR);
-
-        /// The engine cdylib the generated SDKs load at run time. This
-        /// test binary lives in `<target>/<profile>/deps/`, so the
-        /// sibling `<target>/<profile>/` is where `cargo build -p
-        /// bridge_cffi` put the library — regardless of CARGO_TARGET_DIR
-        /// or profile.
-        fn engine_library() -> ::std::path::PathBuf {
-            let exe = ::std::env::current_exe().expect("current test binary path");
-            let profile_dir = exe
-                .parent()
-                .and_then(::std::path::Path::parent)
-                .expect("test binary not under <target>/<profile>/deps");
-            let name = if cfg!(target_os = "windows") {
-                "bridge_cffi.dll"
-            } else if cfg!(target_os = "macos") {
-                "libbridge_cffi.dylib"
-            } else {
-                "libbridge_cffi.so"
-            };
-            let path = profile_dir.join(name);
-            assert!(
-                path.is_file(),
-                "engine library not found at {} — run `cargo build -p bridge_cffi` first \
-                 (the nextest setup script does this automatically)",
-                path.display()
-            );
-            path
-        }
-    };
-    for fixture in fixtures {
-        let mod_ident = proc_macro2::Ident::new(fixture, proc_macro2::Span::call_site());
-        let fmt_cmd = format!("rustfmt --edition {GENERATED_EDITION} --check tests/main.rs");
-        items.extend(quote::quote! {
-            mod #mod_ident {
-                fn cmd_env(c: &str, extra_env: &[(&str, &str)]) {
-                    // Never spawn cargo without the generated manifest in
-                    // place: cargo discovers manifests *upward*, so in its
-                    // absence a fixture-level `cargo test` would silently
-                    // become a workspace-wide one — re-entering this very
-                    // test suite and forking cargo processes without bound.
-                    // (The `--manifest-path Cargo.toml` pin on the commands
-                    // below is the second layer of the same defense.)
-                    let manifest = ::std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join(#fixture)
-                        .join("generated")
-                        .join("Cargo.toml");
-                    assert!(
-                        manifest.exists(),
-                        "{} is missing — codegen failed for this fixture \
-                         (see the build_diagnostics test); refusing to run \
-                         cargo without it",
-                        manifest.display(),
-                    );
-                    ::sdk_test_harness_runner::run_test_cmd_with_env(
-                        #fixture,
-                        c,
-                        #CACHE_SUBDIR,
-                        #CACHE_ENV_VAR,
-                        extra_env,
-                    );
-                }
-
-                fn cmd(c: &str) {
-                    cmd_env(c, &[]);
-                }
-
-                #[test]
-                fn fmt() {
-                    cmd(#fmt_cmd);
-                }
-
-                #[test]
-                fn clippy() {
-                    cmd("cargo clippy --manifest-path Cargo.toml -- -D warnings");
-                }
-
-                #[test]
-                fn cargo_test() {
-                    let engine = super::engine_library();
-                    cmd_env(
-                        "cargo test --manifest-path Cargo.toml",
-                        &[
-                            (
-                                "BAML_LIBRARY_PATH",
-                                engine.to_str().expect("engine path is valid UTF-8"),
-                            ),
-                            ("BAML_LIBRARY_DISABLE_DOWNLOAD", "true"),
-                        ],
-                    );
-                }
-            }
-        });
-    }
-    let target = out_dir.join("rust_tests.rs");
-    fs::write(&target, sdkgen_rust::render_rust_file(header, items)).unwrap();
 }

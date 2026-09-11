@@ -78,6 +78,34 @@ pub fn run_test_cmd_allowing_exit_codes(
     );
 }
 
+/// The engine cdylib the generated SDKs load at run time.
+///
+/// A test binary lives in `<target>/<profile>/deps/`, so the sibling
+/// `<target>/<profile>/` is where `cargo build -p bridge_cffi` put the
+/// library — regardless of `CARGO_TARGET_DIR` or profile.
+pub fn engine_library() -> PathBuf {
+    let exe = env::current_exe().expect("current test binary path");
+    let profile_dir = exe
+        .parent()
+        .and_then(Path::parent)
+        .expect("test binary not under <target>/<profile>/deps");
+    let name = if cfg!(target_os = "windows") {
+        "bridge_cffi.dll"
+    } else if cfg!(target_os = "macos") {
+        "libbridge_cffi.dylib"
+    } else {
+        "libbridge_cffi.so"
+    };
+    let path = profile_dir.join(name);
+    assert!(
+        path.is_file(),
+        "engine library not found at {} — run `cargo build -p bridge_cffi` first \
+         (the nextest setup script does this automatically)",
+        path.display()
+    );
+    path
+}
+
 /// Run the Go toolchain against one generated fixture. Prefer the repository's
 /// mise-managed Go binary so a globally installed `go` cannot accidentally use
 /// a different GOROOT than the pinned compiler.
@@ -817,16 +845,95 @@ pub mod cpp {
     pub use crate::cpp_test_suite as test_suite;
 }
 
-/// Rust generator's test-side glue. Invoked from
-/// `crates/rust/src/lib.rs` as
-/// `sdk_test_harness_runner::rust::test_suite!()`.
+/// Rust generator's test-side glue. Invoked from `crates/rust/src/lib.rs`.
 pub mod rust {
-    /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
-    /// emitted by `sdk_test_codegen::rust::run_all`.
+    /// Edition stamped into every generated fixture crate, and the `--edition`
+    /// its `rustfmt` gate passes. `sdk_test_codegen::rust` reads the same
+    /// const when it writes each `Cargo.toml`, so the two cannot diverge.
+    pub const GENERATED_EDITION: &str = "2024";
+
+    /// Declare the Rust suite: three toolchain checks per fixture, plus the
+    /// shared setup guard and fixture-manifest oracle.
+    ///
+    /// `fmt` checks the hand-ported test files reachable from `tests/main.rs`
+    /// (rustfmt follows the enabled `mod` declarations; generated `src/` is
+    /// intentionally not checked — the emitter's pretty-printer is its
+    /// canonical format), `clippy` lints the generated library, and
+    /// `cargo_test` compiles and runs the enabled ports. Only `cargo_test`
+    /// gets `BAML_LIBRARY_PATH`: `baml_bridge` is dylib-only, so the fixture's
+    /// tests load the engine cdylib at run time, while fmt and clippy never
+    /// execute it.
     #[macro_export]
     macro_rules! rust_test_suite {
-        () => {
-            include!(concat!(env!("OUT_DIR"), "/rust_tests.rs"));
+        ( $( fixture $name:ident; )+ ) => {
+            $crate::setup_guard!("SDK_TEST_RUST_SETUP");
+            $crate::fixture_manifest!( $( $name ),+ );
+
+            $(
+                mod $name {
+                    const CACHE_SUBDIR: &str = "sdk-rust-target";
+                    const CACHE_ENV_VAR: &str = "CARGO_TARGET_DIR";
+
+                    fn cmd_env(command: &str, extra_env: &[(&str, &str)]) {
+                        // Never spawn cargo without the generated manifest in
+                        // place: cargo discovers manifests *upward*, so in its
+                        // absence a fixture-level `cargo test` would silently
+                        // become a workspace-wide one — re-entering this very
+                        // test suite and forking cargo processes without bound.
+                        // (The `--manifest-path Cargo.toml` pin on the commands
+                        // below is the second layer of the same defense.)
+                        let manifest = ::std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                            .join(stringify!($name))
+                            .join("generated")
+                            .join("Cargo.toml");
+                        assert!(
+                            manifest.exists(),
+                            "{} is missing — `sdk_test_codegen rust` did not generate \
+                             this fixture; refusing to run cargo without it",
+                            manifest.display(),
+                        );
+                        $crate::run_test_cmd_with_env(
+                            stringify!($name),
+                            command,
+                            CACHE_SUBDIR,
+                            CACHE_ENV_VAR,
+                            extra_env,
+                        );
+                    }
+
+                    fn cmd(command: &str) {
+                        cmd_env(command, &[]);
+                    }
+
+                    #[test]
+                    fn fmt() {
+                        cmd(&format!(
+                            "rustfmt --edition {} --check tests/main.rs",
+                            $crate::rust::GENERATED_EDITION,
+                        ));
+                    }
+
+                    #[test]
+                    fn clippy() {
+                        cmd("cargo clippy --manifest-path Cargo.toml -- -D warnings");
+                    }
+
+                    #[test]
+                    fn cargo_test() {
+                        let engine = $crate::engine_library();
+                        cmd_env(
+                            "cargo test --manifest-path Cargo.toml",
+                            &[
+                                (
+                                    "BAML_LIBRARY_PATH",
+                                    engine.to_str().expect("engine path is valid UTF-8"),
+                                ),
+                                ("BAML_LIBRARY_DISABLE_DOWNLOAD", "true"),
+                            ],
+                        );
+                    }
+                }
+            )+
         };
     }
 

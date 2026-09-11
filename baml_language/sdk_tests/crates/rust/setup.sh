@@ -32,6 +32,13 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 # target dir — before the fixture CARGO_TARGET_DIR export below — which
 # is where the emitted tests look for it (next to their own binary, so
 # ambient CARGO_TARGET_DIR/profile agree by construction).
+# Generate each fixture's crate first: nothing else produces it, and the
+# pre-warm loop below silently skips any fixture whose generated/ is missing.
+# Must stay ABOVE the CARGO_TARGET_DIR export — otherwise the driver would
+# build into the fixtures' target dir and recompile the whole compiler there.
+echo "==> sdk_test_codegen rust (generate fixture crates)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- rust)
+
 echo "==> cargo build -p bridge_cffi (engine cdylib)"
 (cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi)
 
