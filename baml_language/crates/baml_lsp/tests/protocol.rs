@@ -1546,6 +1546,52 @@ function pick(s: Status) -> Status throws never {
     );
 }
 
+/// An interface method and its implementations are one name, and they
+/// routinely live in different files — so the edit crosses file boundaries
+/// and `WorkspaceEdit.changes` must carry one entry per URI. This is the
+/// protocol half the ide-layer tests cannot see.
+#[test]
+fn rename_spans_every_file_an_interface_is_implemented_in() {
+    const IFACE: &str = "interface Shows {\n    function show(self) -> string throws never\n}\n";
+    const IMPL: &str = "class B { v: int }\n\n                        implement Shows for B {\n                            function show(self) -> string throws never { \"b\" }\n}\n\n                        function call(b: B) -> string throws never { b.show() }\n";
+
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    harness.fs.write(harness.ws.join("iface.baml"), IFACE);
+    harness.fs.write(harness.ws.join("impl.baml"), IMPL);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let iface_uri = harness.uri("iface.baml");
+    let impl_uri = harness.uri("impl.baml");
+    harness.open(SessionKey(1), &iface_uri, 1, IFACE);
+    harness.settle();
+
+    let edit = harness
+        .request(
+            SessionKey(1),
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": iface_uri },
+                "position": position_params(&iface_uri, pos_of(IFACE, "show(self)"))["position"],
+                "newName": "render",
+            }),
+        )
+        .expect("an interface method renames");
+
+    let changes = &edit["changes"];
+    assert_eq!(
+        changes[iface_uri.as_str()].as_array().map(Vec::len),
+        Some(1),
+        "the interface's own declaration: {changes:#?}"
+    );
+    assert_eq!(
+        changes[impl_uri.as_str()].as_array().map(Vec::len),
+        Some(2),
+        "the other file's override AND its call: {changes:#?}"
+    );
+}
+
 /// Stdlib sources are served as read-only editor documents, so F2 inside one
 /// is a position a reader can actually reach — and must be refused, because
 /// the declaration is not theirs to rewrite. The refusal names the symbol, so

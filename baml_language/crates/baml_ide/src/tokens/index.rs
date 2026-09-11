@@ -195,17 +195,21 @@ fn index_function(
                 }
             }
 
-            // `a.b` and `a?.b` (null chaining) — classify the member name from
-            // the inference. Interface members (casts, `Self` methods) record
-            // a resolution like any other member, so an unresolved one is a real
-            // unknown (e.g. a typo) and stays neutral.
-            Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. } => {
-                if let Some(res) = inference.member_resolutions.get(&expr_id) {
-                    record(
-                        index,
-                        source_map.member_access_member_span(expr_id),
-                        classify::classify_member(res),
-                    );
+            // `a.b`, `a?.b` (null chaining), and `(A as I).b` (interface
+            // projection) — classify the member name from the inference.
+            // Interface members (casts, `Self` methods) record a resolution
+            // like any other member, so an unresolved one is a real unknown
+            // (e.g. a typo) and stays neutral.
+            Expr::MemberAccess { .. }
+            | Expr::OptionalMemberAccess { .. }
+            | Expr::QualifiedPath { .. } => {
+                // The recorded member-NAME span, not the fallback: painting a
+                // whole `(A as I).b` with the member's kind would colour the
+                // receiver too.
+                if let Some(span) = source_map.member_name_span(expr_id)
+                    && let Some(res) = inference.member_resolutions.get(&expr_id)
+                {
+                    record(index, span, classify::classify_member(res));
                 }
             }
 

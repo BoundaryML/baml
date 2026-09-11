@@ -632,7 +632,11 @@ pub struct AstSourceMap {
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
-    /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    /// For `MemberAccess` and `QualifiedPath` expressions, the span of just
+    /// the member name (after the dot). Both name one member of one
+    /// receiver, differing only in how the receiver is written, so both
+    /// record it here — an editor asking "what name is at this offset"
+    /// must not have to know which spelling produced it.
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
@@ -721,12 +725,22 @@ impl AstSourceMap {
         Self::span_at(&self.expr_spans, id)
     }
 
-    /// Look up the member-name span for a `MemberAccess` expression.
+    /// The member-name span recorded for `id`, or `None` when this
+    /// expression names no member.
+    ///
+    /// Prefer this over [`Self::member_access_member_span`] wherever the
+    /// answer must be a NAME — a rename or a reference highlight. The
+    /// fallback that accessor applies is the whole expression, which is
+    /// never a name.
+    pub fn member_name_span(&self, id: ExprId) -> Option<TextRange> {
+        self.member_access_member_spans.get(&id).copied()
+    }
+
+    /// Look up the member-name span for a `MemberAccess` or `QualifiedPath`
+    /// expression.
     /// Returns the full expression span as fallback if no member span was recorded.
     pub fn member_access_member_span(&self, id: ExprId) -> TextRange {
-        self.member_access_member_spans
-            .get(&id)
-            .copied()
+        self.member_name_span(id)
             .unwrap_or_else(|| self.expr_span(id))
     }
 
