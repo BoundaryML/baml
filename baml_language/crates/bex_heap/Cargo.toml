@@ -16,6 +16,7 @@ num-bigint = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
+tracing = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -24,5 +25,5 @@ tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
 
 [features]
 default = [  ]
-gc_profiling = [ "dep:web-time" ]
+gc_profiling = [ "dep:tracing", "dep:web-time" ]
 heap_debug = [ "bex_vm_types/heap_debug" ]

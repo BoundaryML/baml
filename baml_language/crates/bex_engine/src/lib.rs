@@ -3350,18 +3350,14 @@ impl BexEngine {
         level: bex_heap::CollectionLevel,
         reason: &'static str,
     ) -> bex_heap::GcStats {
-        #[cfg(not(feature = "gc_profiling"))]
-        let _ = reason;
-        #[cfg(feature = "gc_profiling")]
-        let cycle_start = web_time::Instant::now();
+        let mut cycle = bex_heap::GcCycleProfiler::start();
         #[cfg(not(target_arch = "wasm32"))]
         let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
         let mut heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        #[cfg(feature = "gc_profiling")]
-        let parked_at = web_time::Instant::now();
+        cycle.parked();
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -3375,16 +3371,13 @@ impl BexEngine {
             heap_guard.num_permits(),
         );
 
-        #[cfg(feature = "gc_profiling")]
-        let roots_scanned_at = web_time::Instant::now();
+        cycle.roots_scanned();
 
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
-        #[allow(unused_mut)]
         let (mut stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
 
-        #[cfg(feature = "gc_profiling")]
-        let heap_done_at = web_time::Instant::now();
+        cycle.heap_done();
 
         // Bug H, check 1 (heap_debug only): every pointer the GC was told
         // about (`all_roots`) must end up in the forwarding map. If a
@@ -3454,8 +3447,7 @@ impl BexEngine {
             .extend(unhandled_spawn_errors);
 
         drop(heap_guard);
-        #[cfg(feature = "gc_profiling")]
-        let released_at = web_time::Instant::now();
+        cycle.released();
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
@@ -3480,18 +3472,7 @@ impl BexEngine {
         // moving them mid-drain.
         self.drain_finalizers().await;
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            let finished_at = web_time::Instant::now();
-            stats.profile.park_wait = parked_at - cycle_start;
-            stats.profile.root_scan = roots_scanned_at - parked_at;
-            stats.profile.holder_fixup = released_at - heap_done_at;
-            stats.profile.pause = released_at - parked_at;
-            stats.profile.post_gc = finished_at - released_at;
-            stats.profile.total = finished_at - cycle_start;
-            tracing::debug!(target: "bex_gc", reason = reason, level = ?level,
-                profile = ?stats.profile, "GC cycle");
-        }
+        cycle.finish(&mut stats, reason);
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,

@@ -80,8 +80,7 @@ pub struct GcStats {
     pub promoted_to_gen1: usize,
     /// Objects promoted from Gen1 to Gen2 during this cycle.
     pub promoted_to_gen2: usize,
-    /// Optional detailed diagnostics, captured only in profiling builds.
-    #[cfg(feature = "gc_profiling")]
+    /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
     pub profile: crate::GcProfile,
 }
 
@@ -441,15 +440,8 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
-        #[cfg(feature = "gc_profiling")]
-        let mut clock = crate::gc_profile::GcClock::new();
-        #[cfg(feature = "gc_profiling")]
-        let mut profile = crate::GcProfile {
-            // SAFETY: collection caller guarantees exclusive access.
-            before: unsafe { crate::GcHeapSnapshot::capture(self) },
-            roots: roots.len(),
-            ..Default::default()
-        };
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         // Track old -> new pointer mappings (forwarding pointers)
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
@@ -472,10 +464,7 @@ impl BexHeap {
         // BFS from roots — copy every reachable object into inactive.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.prepare = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
         while let Some(old_ptr) = worklist.pop() {
             // Skip already-forwarded objects.
@@ -515,10 +504,7 @@ impl BexHeap {
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.trace = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
 
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
@@ -535,10 +521,7 @@ impl BexHeap {
             self.keepalive_finalizers_major(&mut forwarding);
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.keepalive = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
         // Patch all intra-heap pointers in the inactive space to their new locations.
         // SAFETY: All live objects have been copied; no VMs are executing.
@@ -546,10 +529,7 @@ impl BexHeap {
             self.fixup_references_in_inactive(&forwarding);
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.fixup = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: GC runs at safepoints.
         let live_count = unsafe { self.inactive_ref().len() };
@@ -595,10 +575,7 @@ impl BexHeap {
             self.debug_assert_post_major_no_dead_refs();
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.reclaim = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
         // Remap each root to its new location (or keep it if it was compile-time).
         let remapped_roots: Vec<HeapPtr> = roots
@@ -617,20 +594,13 @@ impl BexHeap {
         // check would re-trigger GC forever.
         self.reset_gc_counter();
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.bookkeeping = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.after = unsafe { crate::GcHeapSnapshot::capture(self) };
-            profile.heap_total = clock.elapsed();
-        }
+        // SAFETY: exclusive heap access is still held.
+        let profile = unsafe { profile.finish(self) };
         let stats = GcStats {
             live_count,
             collected_count,
-            #[cfg(feature = "gc_profiling")]
             profile,
             level: CollectionLevel::Major,
             promoted_to_gen1: 0,
@@ -1546,15 +1516,8 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
-        #[cfg(feature = "gc_profiling")]
-        let mut clock = crate::gc_profile::GcClock::new();
-        #[cfg(feature = "gc_profiling")]
-        let mut profile = crate::GcProfile {
-            // SAFETY: collection caller guarantees exclusive access.
-            before: unsafe { crate::GcHeapSnapshot::capture(self) },
-            roots: roots.len(),
-            ..Default::default()
-        };
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
         self.bump_epoch();
@@ -1584,10 +1547,7 @@ impl BexHeap {
 
         let mut promoted_to_gen2 = 0usize;
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.prepare = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
@@ -1620,10 +1580,7 @@ impl BexHeap {
             }
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.trace = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
 
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
@@ -1640,10 +1597,7 @@ impl BexHeap {
             self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.keepalive = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
         // Fix up references:
         // - Full fixup for inactive (new Gen1 — all objects are freshly copied).
@@ -1691,10 +1645,7 @@ impl BexHeap {
             }
         }
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.fixup = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // Swap inactive ↔ Gen1; clear Gen0.
         // SAFETY: GC safepoint; exclusive access to all spaces.
@@ -1707,10 +1658,7 @@ impl BexHeap {
         // Poison/clear the old Gen1 (now in inactive).
         self.finalize_inactive_space();
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.reclaim = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
         let new_gen1_count = unsafe { self.gen1_ref().len() };
         let total_live = new_gen1_count + promoted_to_gen2;
@@ -1732,20 +1680,13 @@ impl BexHeap {
         // allocations, because the counter would never go below the threshold.
         self.reset_gc_counter();
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.bookkeeping = clock.lap();
-        }
+        profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
 
-        #[cfg(feature = "gc_profiling")]
-        {
-            profile.after = unsafe { crate::GcHeapSnapshot::capture(self) };
-            profile.heap_total = clock.elapsed();
-        }
+        // SAFETY: exclusive heap access is still held.
+        let profile = unsafe { profile.finish(self) };
         let stats = GcStats {
             live_count: total_live,
             collected_count: total_before.saturating_sub(total_live),
-            #[cfg(feature = "gc_profiling")]
             profile,
             level: CollectionLevel::Minor,
             promoted_to_gen1: new_gen1_count,
