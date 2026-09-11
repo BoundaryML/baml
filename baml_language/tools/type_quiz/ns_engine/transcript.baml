@@ -35,7 +35,12 @@ class Prompt {
     /// which keeps 53. A `bigint` crosses whole, so the state a page hands
     /// back is the state it was given.
     seed: bigint,
-    files: map<string, string>,
+    /// The program to judge, or the first of two to choose between.
+    program: map<string, string>,
+    /// The second program, present exactly when the question is which of the
+    /// two the compiler accepts. What a learner is asked therefore follows
+    /// from what they are shown, and the two cannot disagree.
+    against: map<string, string>?,
 }
 
 /// A case as it was put to a learner, with where it came from so the same
@@ -45,20 +50,38 @@ class Question {
     /// The stream state the case was drawn from. `Seed { state }` regenerates
     /// it exactly.
     seed: int,
-    case: Case,
+    /// What was shown, and thereby what was asked.
+    posed: Posed,
 }
 
 /// What a learner is shown, from a question they have not answered yet.
 function prompt_of(question: Question) -> Prompt throws never {
-    Prompt { item: question.item, seed: question.seed * 1n, files: question.case.files }
+    let item = question.item;
+    let seed = question.seed * 1n;
+    match (question.posed) {
+        let case: Case => Prompt { item, seed, program: case.files, against: null },
+        let choice: Choice => {
+            Prompt { item, seed, program: choice.first().files, against: choice.second().files }
+        },
+    }
 }
 
-/// What the learner said. `verdict` is absent when they said they were not
+/// Which of the two programs shown the learner said the compiler accepts.
+class Chose {
+    /// The second of the two, rather than the first.
+    second: bool,
+}
+
+/// What a learner committed to: a verdict on the one program they were
+/// shown, or a choice between the two they were.
+type Said = VerdictKind | Chose;
+
+/// What the learner said. `said` is absent when they said they were not
 /// sure, which is an answer in its own right: it is what makes a committed
 /// answer worth believing. `reasoning` is empty in simple mode, which asks for
 /// none.
 class Answer {
-    verdict: VerdictKind?,
+    said: Said?,
     reasoning: string,
 }
 
@@ -133,26 +156,56 @@ function marker_word(reasoning: Reasoning) -> string throws never {
 }
 
 /// Judge `answer` against `question`. A function of the two and of nothing
-/// else: the verdict is decided by the key, never by what the learner wrote.
+/// else: whether the answer is right is decided by the key, never by what
+/// the learner wrote.
 function judge(
     question: Question,
     answer: Answer,
     reasoning: Reasoning?,
 ) -> Judgement throws never {
-    let verdict_correct = match (answer.verdict) {
-        let verdict: VerdictKind => verdict == verdict_kind(question.case.key),
+    let verdict_correct = match (answer.said) {
+        let verdict: VerdictKind => matches_verdict(question.posed, verdict),
+        let chose: Chose => matches_choice(question.posed, chose),
         null => null,
     };
     Judgement { verdict_correct, reasoning }
+}
+
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the question showed two programs. What a
+///   learner may say follows from what they were shown, so an answer of the
+///   other kind is a defect in whatever asked them rather than something to
+///   absorb.
+function matches_verdict(posed: Posed, verdict: VerdictKind) -> bool throws never {
+    match (posed) {
+        let case: Case => verdict == verdict_kind(case.key),
+        Choice => {
+            throw baml.panics.Unreachable { message: "a verdict was given for a question that showed two programs" }
+        },
+    }
+}
+
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the question showed one program, as
+///   `matches_verdict`.
+function matches_choice(posed: Posed, chose: Chose) -> bool throws never {
+    match (posed) {
+        Case => {
+            throw baml.panics.Unreachable { message: "a choice was given for a question that showed one program" }
+        },
+        let choice: Choice => chose.second == choice.second_compiles(),
+    }
 }
 
 // ─── reading a sitting back ──────────────────────────────────────────────────
 
 class Score {
     asked: int,
-    /// Answers that gave a verdict; the rest abstained.
+    /// Answers the learner committed to; the rest abstained.
     committed: int,
-    verdicts_right: int,
+    answers_right: int,
     sound: int,
     partial: int,
     wrong: int,
@@ -184,7 +237,7 @@ function tally(transcript: Transcript) -> Score throws never {
                 exchange.judgement.verdict_correct != null
             })
             .length(),
-        verdicts_right: transcript.exchanges
+        answers_right: transcript.exchanges
             .filter((exchange) -> {
                 exchange.judgement.verdict_correct == true
             })

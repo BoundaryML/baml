@@ -5,12 +5,15 @@ import type { Save, Slot } from './saves';
 
 export function Home({
   slots,
+  ready,
   onNew,
   onResume,
   onExport,
   onReset,
 }: {
   slots: Slot[];
+  /** Whether the formatter has loaded; every case is laid out by it. */
+  ready: boolean;
   onNew: (slot: number) => void;
   onResume: (slot: number, save: Save) => void;
   onExport: (save: Save) => void;
@@ -21,6 +24,7 @@ export function Home({
     <section className="home">
       <p className="blurb">
         A sitting is saved after every answer, so leave and come back whenever.
+        {!ready && ' Loading the formatter…'}
       </p>
       {cards.map((card) => (
         <SlotCard
@@ -30,6 +34,7 @@ export function Home({
           onNew={onNew}
           onReset={onReset}
           onResume={onResume}
+          ready={ready}
           slot={card.slot}
         />
       ))}
@@ -48,6 +53,7 @@ function describe(save: Save): string {
 function SlotCard({
   slot,
   held,
+  ready,
   onNew,
   onResume,
   onExport,
@@ -55,6 +61,7 @@ function SlotCard({
 }: {
   slot: number;
   held: Slot;
+  ready: boolean;
   onNew: (slot: number) => void;
   onResume: (slot: number, save: Save) => void;
   onExport: (save: Save) => void;
@@ -92,7 +99,7 @@ function SlotCard({
           <h3>{title}</h3>
           <p>Empty.</p>
           <div className="choices">
-            <button onClick={() => onNew(slot)} type="button">
+            <button disabled={!ready} onClick={() => onNew(slot)} type="button">
               New sitting
             </button>
           </div>
@@ -104,7 +111,11 @@ function SlotCard({
           <h3>{title}</h3>
           <p>{describe(held.save)}</p>
           <div className="choices">
-            <button onClick={() => onResume(slot, held.save)} type="button">
+            <button
+              disabled={!ready}
+              onClick={() => onResume(slot, held.save)}
+              type="button"
+            >
               Continue
             </button>
             <button

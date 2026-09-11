@@ -65,8 +65,9 @@ function prompt_at(seed: int, length: int, index: int) -> root.engine.Prompt? th
 /// Every field is a bool or a string, and deliberately so: see the note at the
 /// top of this file on what an enum becomes on its way in.
 class Given {
-    /// What the learner said the compiler does: `compiles`, `rejected`, or
-    /// `unsure` when they would not commit.
+    /// What the learner said. Of one program: `compiles` or `rejected`. Of
+    /// two put side by side: `first` or `second`, naming the one they say
+    /// the compiler accepts. Either way `unsure` when they would not commit.
     said: string,
     /// What they said it turns on. Empty when they were not asked.
     reasoning: string,
@@ -75,17 +76,23 @@ class Given {
     mark: string,
 }
 
-/// `given.said` as the engine's verdict, or `null` when the learner abstained.
+/// `given.said` as what the engine reads, or `null` when the learner
+/// abstained. Whether the word suits the question they were asked is the
+/// judge's to say, not this function's.
 ///
 /// # Panics
 ///
 /// - `baml.panics.Unreachable` if the word is not one this surface offers, for
 ///   the same reason as `marked_given`.
-function verdict_given(given: Given) -> root.engine.VerdictKind? throws never {
+function said_given(given: Given) -> root.engine.Said? throws never {
     if (given.said == "compiles") {
         root.engine.VerdictKind.Compiles
     } else if (given.said == "rejected") {
         root.engine.VerdictKind.Rejected
+    } else if (given.said == "first") {
+        root.engine.Chose { second: false }
+    } else if (given.said == "second") {
+        root.engine.Chose { second: true }
     } else if (given.said == "unsure") {
         null
     } else {
@@ -135,7 +142,7 @@ function exchange_of(
     question: root.engine.Question,
     given: Given,
 ) -> root.engine.Exchange throws never {
-    let answer = root.engine.Answer { verdict: verdict_given(given), reasoning: given.reasoning };
+    let answer = root.engine.Answer { said: said_given(given), reasoning: given.reasoning };
     root.engine.Exchange {
         question,
         answer,
@@ -182,10 +189,21 @@ function sitting_score(
 
 /// What the compiler says about the `index`-th case, in its own words. For
 /// showing beside the derivation once the learner has answered.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the question put two programs side by side.
+///   A sitting planned from a seed alone puts one at a time, and this is the
+///   surface for such a sitting.
 function compiler_report(seed: int, length: int, index: int) -> root.engine.Reported? throws never {
     let question = question_at(seed, length, index)
         ?? return null;
-    root.engine.report(question.case)
+    match (question.posed) {
+        let case: root.engine.Case => root.engine.report(case),
+        root.engine.Choice => {
+            throw baml.panics.Unreachable { message: "a sitting planned from a seed alone puts one program at a time" }
+        },
+    }
 }
 
 /// A finished sitting as the JSON a learner takes away. `review` reads back
@@ -208,13 +226,15 @@ function review(path: string) -> string throws never {
 
 function read_back(transcript: root.engine.Transcript) -> string throws never {
     let score = root.engine.tally(transcript);
-    let stale = transcript.exchanges.filter_map((exchange) -> {
-        let outcome = root.engine.verify(exchange.question.case);
-        if (root.engine.agrees(outcome)) {
-            null
-        } else {
-            `  ${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
-        }
+    let stale = transcript.exchanges.flat_map((exchange) -> {
+        root.engine.cases_of(exchange.question.posed).filter_map((case) -> {
+            let outcome = root.engine.verify(case);
+            if (root.engine.agrees(outcome)) {
+                null
+            } else {
+                `  ${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
+            }
+        })
     });
     let standing = if (stale.length() == 0) {
         "every case still behaves as recorded"
@@ -225,7 +245,7 @@ function read_back(transcript: root.engine.Transcript) -> string throws never {
         let learned: root.engine.Learned => concluded(learned),
         null => "",
     };
-    `${score.verdicts_right} of ${score.asked} verdicts right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}${learned}`
+    `${score.answers_right} of ${score.asked} answers right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}${learned}`
 }
 
 /// What the model concluded about the learner, as a line of the review.
@@ -268,6 +288,21 @@ function state_of(seed: bigint) -> int throws never {
     }
 }
 
+/// The item called `item`.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the bank has no such item. A page only
+///   hands back what it was given, so a name the bank does not know is a
+///   defect in the page, or a sitting saved against a bank that has since
+///   moved on, and neither is something to absorb.
+function item_named(item: string) -> root.engine.Item throws never {
+    bank_items().find((candidate) -> {
+        candidate.id() == item
+    })
+        ?? throw baml.panics.Unreachable { message: `no item called ${item}` }
+}
+
 /// The case behind a prompt, generated again from its item and seed, or
 /// `null` when no such item exists.
 function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? throws never {
@@ -278,17 +313,13 @@ function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? thro
     root.engine.generate(found, root.engine.Seed { state: state_of(seed) })
 }
 
-/// The rules a case holds as the tracer reads them: its trace, inner rule
-/// first, without the flow rule every probe ends in.
-function tracer_rules(candidate: root.engine.Candidate) -> string[] throws never {
+/// The rules a posed question holds as the tracer reads them: its trace,
+/// inner rule first, without the flow rule every probe ends in.
+function tracer_rules(posed: root.engine.Posed) -> string[] throws never {
     let flow = root.bank.flow_requires_subtype().name;
-    candidate.case.trace
-        .map((claim) -> {
-            claim.rule.name
-        })
-        .filter((name) -> {
-            name != flow
-        })
+    root.engine.rules_of(posed).filter((name) -> {
+        name != flow
+    })
 }
 
 /// The next case to put to a learner, and the rule to teach before it when
@@ -315,19 +346,20 @@ function next_prompt(
     let reads = root.engine
         .batch(verified, streams.left, root.bank.default_weights(), root.bank.default_budget())
         .map((scored) -> {
-            root.engine.Read { scored, rules: tracer_rules(scored.candidate) }
+            root.engine.Read { scored, rules: tracer_rules(scored.candidate.case) }
         });
     let chosen = root.engine.choose(profile, knobs, reads, streams.right)
         ?? return null;
+    let put = put_at(knobs, chosen.scored.item, chosen.scored.seed.state * 1n);
     let question = root.engine.Question {
         item: chosen.scored.item,
         seed: chosen.scored.seed.state,
-        case: chosen.scored.candidate.case,
+        posed: put.posed,
     };
     // The stuck rule is taught only before a case that turns on it: the
     // selection leans toward such a case but does not insist, and the spec's
     // words on one rule shown before a case about another would mislead.
-    let held = tracer_rules(chosen.scored.candidate);
+    let held = tracer_rules(put.posed);
     let teach = match (root.engine.to_teach(profile)) {
         let name: string => {
             root.bank.rules().find((rule) -> {
@@ -352,30 +384,75 @@ function case_at(item: string, seed: bigint) -> root.engine.Candidate throws nev
         ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` }
 }
 
-function question_for(
+/// How the case at `item` and `seed` is put under `knobs`: what a learner
+/// would be shown and asked.
+///
+/// The answer travels with it, so this is for something that already holds
+/// the key — a test, or a tool reading a sitting back. What a page is handed
+/// is a `Prompt`, which carries neither.
+///
+/// # Panics
+///
+/// - As `case_at`.
+function put_at(
+    knobs: root.engine.Knobs,
     item: string,
     seed: bigint,
-    candidate: root.engine.Candidate,
-) -> root.engine.Question throws never {
-    root.engine.Question { item, seed: state_of(seed), case: candidate.case }
+) -> root.engine.Put throws never {
+    let found = item_named(item);
+    let state = root.engine.Seed { state: state_of(seed) };
+    let candidate = root.engine.generate(found, state)
+        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` };
+    root.engine.put(
+        candidate,
+        () -> {
+            // Through the free function: an interface method on a value the
+            // closure captured dies at emit time (README, compiler issue 1).
+            root.engine.foil_of(found, state)
+        },
+        knobs,
+        root.engine.pose_seed(state_of(seed)),
+    )
 }
 
-function observe_candidate(
+/// A case put to a learner and their answer judged against it. Everything
+/// that follows from an answer follows from this one value, so how the case
+/// was put, what it traps, and whether the answer was right cannot come
+/// apart from each other.
+class Judged {
+    put: root.engine.Put,
+    exchange: root.engine.Exchange,
+}
+
+/// The case at `item` and `seed`, put as the knobs say and judged.
+///
+/// # Panics
+///
+/// - As `case_at`.
+function judged(
+    knobs: root.engine.Knobs,
+    item: string,
+    seed: bigint,
+    given: Given,
+) -> Judged throws never {
+    let put = put_at(knobs, item, seed);
+    let question = root.engine.Question { item, seed: state_of(seed), posed: put.posed };
+    Judged { put, exchange: exchange_of(question, given) }
+}
+
+function observe_judged(
     profile: root.engine.Profile,
     knobs: root.engine.Knobs,
-    candidate: root.engine.Candidate,
-    given: Given,
+    judgement: Judged,
 ) -> root.engine.Profile throws never {
-    let verdict = match (verdict_given(given)) {
-        let said: root.engine.VerdictKind => {
-            said == root.engine.verdict_kind(candidate.case.key)
-        },
-        null => null,
-    };
     root.engine.observe(
         profile,
         knobs,
-        root.engine.Observed { rules: tracer_rules(candidate), traps: candidate.traps, verdict },
+        root.engine.Observed {
+            rules: tracer_rules(judgement.put.posed),
+            traps: judgement.put.traps,
+            verdict: judgement.exchange.judgement.verdict_correct,
+        },
     )
 }
 
@@ -391,7 +468,7 @@ function observe_answer(
     seed: bigint,
     given: Given,
 ) -> root.engine.Profile throws never {
-    observe_candidate(profile, knobs, case_at(item, seed), given)
+    observe_judged(profile, knobs, judged(knobs, item, seed, given))
 }
 
 // ─── what a page keeps ───────────────────────────────────────────────────────
@@ -415,14 +492,15 @@ class Taken {
 class Answered {
     profile: root.engine.Profile,
     exchange: root.engine.Exchange,
-    /// What the compiler itself says about the case, in its own words.
-    reported: root.engine.Reported,
+    /// Every program the question showed, with what the compiler makes of
+    /// it, what they have in common and what tells them apart.
+    revealed: root.engine.Revealed,
     /// What the answer was worth under the knobs' bar.
     points: int,
 }
 
 /// Answer the case at `item` and `seed`: the profile that follows, the
-/// exchange to show, the compiler's own words, and the points.
+/// exchange to show, the reveal, and the points.
 ///
 /// # Panics
 ///
@@ -434,13 +512,12 @@ function answer_case(
     seed: bigint,
     given: Given,
 ) -> Answered throws never {
-    let candidate = case_at(item, seed);
-    let exchange = exchange_of(question_for(item, seed, candidate), given);
+    let judgement = judged(knobs, item, seed, given);
     Answered {
-        profile: observe_candidate(profile, knobs, candidate, given),
-        exchange,
-        reported: root.engine.report(candidate.case),
-        points: root.engine.points_for(knobs, exchange.judgement.verdict_correct),
+        profile: observe_judged(profile, knobs, judgement),
+        exchange: judgement.exchange,
+        revealed: root.engine.reveal(judgement.put.posed),
+        points: root.engine.points_for(knobs, judgement.exchange.judgement.verdict_correct),
     }
 }
 
@@ -478,7 +555,7 @@ function adaptive_sitting(
         mode: mode_of(full),
         seed: session,
         exchanges: taken.map((t) -> {
-            exchange_of(question_for(t.item, t.seed, case_at(t.item, t.seed)), t.given)
+            judged(knobs, t.item, t.seed, t.given).exchange
         }),
         learner: root.engine.Learned { knobs, profile: replay(knobs, taken) },
     }

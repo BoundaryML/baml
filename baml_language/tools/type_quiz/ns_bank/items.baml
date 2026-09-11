@@ -77,6 +77,128 @@ function flow_claim(
     }
 }
 
+/// What a seed settles before either direction of a case is rendered.
+///
+/// Both directions are spelled from one of these, so they can differ in
+/// nothing but the swap: the names in particular are drawn from the pair
+/// itself rather than from the direction it flows in.
+class Drawn {
+    d: root.algebra.Derivation,
+    relation: root.algebra.Relation,
+    /// Which way this seed flows the pair.
+    reversed: bool,
+    site: root.algebra.SiteKind,
+    names: root.algebra.SiteNames,
+}
+
+function draw_flow(
+    fact: Fact,
+    sites: root.algebra.SiteKind[],
+    seed: root.engine.Seed,
+) -> Drawn? throws never {
+    let streams = root.engine.split(seed);
+    let d = fact.generate(streams.left).value;
+    let relation = root.algebra.decided(root.algebra.knowledge(d))
+        ?? return null;
+    let direction = root.engine.below(streams.right, 2);
+    let site_draw = root.engine.below(direction.next, sites.length());
+    let reserved = root.algebra.decls_of_all([root.algebra.left_of(d), root.algebra.right_of(d)]).map((decl) -> {
+        root.algebra.decl_name(decl)
+    });
+    Drawn {
+        d,
+        relation,
+        reversed: direction.value == 1,
+        site: sites[site_draw.value],
+        names: site_names(site_draw.next, reserved),
+    }
+}
+
+/// One direction of a fact at a site: the program it renders, what the
+/// compiler must say about it, and why.
+class Flowed {
+    flow: Oriented,
+    case: root.engine.Case,
+    compiles: bool,
+}
+
+/// Whether a relation reads differently in the two directions, so the two
+/// programs a fact renders answer differently and can be put side by side.
+/// It looks only at the relation: an equivalence and an unrelated pair read
+/// the same both ways.
+function pairs(relation: root.algebra.Relation) -> bool throws never {
+    root.algebra.flows(relation) != root.algebra.flows(root.algebra.mirror(relation))
+}
+
+/// The pair of `drawn` flowing one way at its site, as a case.
+function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
+    let flow = orient(drawn.d, drawn.relation, reversed);
+    let probe = root.algebra.probe(drawn.site, flow.source, flow.target, drawn.names);
+    let compiles = root.algebra.flows(flow.relation);
+    let file = "case.baml";
+    let key: root.engine.Verdict = if (compiles) {
+        root.engine.Compiles { tests: [] }
+    } else {
+        root.engine.Rejected {
+            code: rejection_code(drawn.site),
+            more: [],
+            at: root.engine.Region { file, start: probe.start, end: probe.end },
+        }
+    };
+    let trace = root.algebra.claims(drawn.d).concat([flow_claim(drawn.site, flow, compiles)]);
+    Flowed {
+        flow,
+        case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
+        compiles,
+    }
+}
+
+/// The naive models that read one program's verdict the other way.
+function flow_traps(d: root.algebra.Derivation, one: Flowed) -> string[] throws never {
+    models().filter_map((model) -> {
+        let believed = root.algebra.decided(root.algebra.under(d, model))
+            ?? return null;
+        if (root.algebra.flows(in_direction(believed, one.flow)) != one.compiles) {
+            model.id
+        } else {
+            null
+        }
+    })
+}
+
+/// What differs between the two directions of one fact, in the learner's
+/// terms. It says which two types swap places and not which way round the
+/// compiler wants them: that is the question.
+function flow_difference(site: root.algebra.SiteKind, one: Flowed) -> string throws never {
+    let a = `\`${root.algebra.render(one.flow.source)}\``;
+    let b = `\`${root.algebra.render(one.flow.target)}\``;
+    `the same program twice with the two types swapped: at ${root.algebra.site_phrase(site)}, one of them lets a value of type ${a} meet a slot of type ${b}, and the other a value of type ${b} meet a slot of type ${a}`
+}
+
+/// The naive models that would pick the wrong one of two directions.
+///
+/// A model picks the direction its own beliefs let flow. Where its beliefs
+/// let both flow, or neither, it has no pick to be wrong about: a choice
+/// does not trap a model that a single program does, and crediting it would
+/// hold a learner's answer against a belief that could not have produced it.
+function choice_traps(
+    d: root.algebra.Derivation,
+    one: Flowed,
+    other: Flowed,
+) -> string[] throws never {
+    models().filter_map((model) -> {
+        let believed = root.algebra.decided(root.algebra.under(d, model))
+            ?? return null;
+        let flows_one = root.algebra.flows(in_direction(believed, one.flow));
+        let flows_other = root.algebra.flows(in_direction(believed, other.flow));
+        if (flows_one == flows_other || flows_one == one.compiles) {
+            null
+        } else {
+            model.id
+        }
+    })
+}
+
 /// A fact exercised at a flow site. Half the seeds flow the pair forwards
 /// and half backwards, so a strict-subtype fact yields a compiling case as
 /// often as a rejected one and the shape never gives the verdict away. The
@@ -97,44 +219,38 @@ class FlowItem {
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
-            let streams = root.engine.split(seed);
-            let d = self.fact.generate(streams.left).value;
-            let relation = root.algebra.decided(root.algebra.knowledge(d))
+            let drawn = draw_flow(self.fact, self.sites, seed)
                 ?? return null;
-            let direction = root.engine.below(streams.right, 2);
-            let flow = orient(d, relation, direction.value == 1);
-            let site_draw = root.engine.below(direction.next, self.sites.length());
-            let site = self.sites[site_draw.value];
-            let reserved = root.algebra.decls_of_all([flow.source, flow.target]).map((decl) -> {
-                root.algebra.decl_name(decl)
-            });
-            let names = site_names(site_draw.next, reserved);
-            let probe = root.algebra.probe(site, flow.source, flow.target, names);
-            let compiles = root.algebra.flows(flow.relation);
-            let file = "case.baml";
-            let key: root.engine.Verdict = if (compiles) {
-                root.engine.Compiles { tests: [] }
-            } else {
-                root.engine.Rejected {
-                    code: rejection_code(site),
-                    more: [],
-                    at: root.engine.Region { file, start: probe.start, end: probe.end },
-                }
-            };
-            let traps = models().filter_map((model) -> {
-                let believed = root.algebra.decided(root.algebra.under(d, model))
-                    ?? return null;
-                if (root.algebra.flows(in_direction(believed, flow)) != compiles) {
-                    model.id
-                } else {
-                    null
-                }
-            });
-            let trace = root.algebra.claims(d).concat([flow_claim(site, flow, compiles)]);
+            let chosen = flowed(drawn, drawn.reversed);
+            let traps = flow_traps(drawn.d, chosen);
             root.engine.Candidate {
-                case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
-                features: features_of(trace, root.algebra.flips(d), [flow.source, flow.target], traps),
+                case: chosen.case,
+                features: features_of(
+                    chosen.case.trace,
+                    root.algebra.flips(drawn.d),
+                    [chosen.flow.source, chosen.flow.target],
+                    traps,
+                ),
                 traps,
+            }
+        }
+
+        function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
+            let drawn = draw_flow(self.fact, self.sites, seed)
+                ?? return null;
+            // Exactly one direction of a strict relation compiles, so a
+            // strict fact, and only a strict fact, has a second program to
+            // offer. That the two do answer differently is held to by the
+            // suite, which reads it off the two keys.
+            if (!pairs(drawn.relation)) {
+                return null;
+            }
+            let chosen = flowed(drawn, drawn.reversed);
+            let other = flowed(drawn, !drawn.reversed);
+            root.engine.Foil {
+                case: other.case,
+                difference: flow_difference(drawn.site, chosen),
+                traps: choice_traps(drawn.d, chosen, other),
             }
         }
     }
@@ -201,6 +317,13 @@ class UnguardedCycleItem {
                 features: features_of(trace, 0, [ty], []),
                 traps: [],
             }
+        }
+
+        /// A cycle has no neighbouring program that compiles: what would
+        /// have to change to make one is the whole of what the case is
+        /// about.
+        function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
+            null
         }
     }
 }

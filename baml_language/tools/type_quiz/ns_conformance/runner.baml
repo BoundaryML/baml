@@ -11,6 +11,22 @@ function length_used() -> int throws never {
     8
 }
 
+/// The one program a question puts. A sitting planned from a seed alone has
+/// no learner to put choices to, so every question of one is a single
+/// program, and this says so rather than picking one of two.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the question put two programs.
+function only(question: root.engine.Question) -> root.engine.Case throws never {
+    match (question.posed) {
+        let case: root.engine.Case => case,
+        root.engine.Choice => {
+            throw baml.panics.Unreachable { message: "a sitting planned from a seed alone puts one program at a time" }
+        },
+    }
+}
+
 function planned() -> root.engine.Question[] throws never {
     baml.iter.Range.new(0, length_used())
         .filter_map((i) -> {
@@ -53,7 +69,7 @@ function unverified_items_asked() -> string[] throws never {
 /// What a learner is shown must be what the compiler says.
 function unverified_questions() -> string[] throws never {
     planned().filter_map((question) -> {
-        let outcome = root.engine.verify(question.case);
+        let outcome = root.engine.verify(only(question));
         if (root.engine.agrees(outcome)) {
             null
         } else {
@@ -73,7 +89,7 @@ function unreproducible_questions() -> string[] throws never {
             ?? return `${question.item}: no such item`;
         let regenerated = root.engine.generate(item, root.engine.Seed { state: question.seed })
             ?? return `${question.item}: seed ${question.seed} generates nothing`;
-        if (regenerated.case == question.case) {
+        if (root.engine.cases_of(question.posed) == [regenerated.case]) {
             null
         } else {
             `${question.item}: seed ${question.seed} regenerates a different case`
@@ -107,7 +123,8 @@ function prompts_are_bare() -> string throws never {
     let matching = baml.iter.Range.new(0, questions.length()).every((i) -> {
         match (root.prompt_at(seed_used(), length_used(), i)) {
             let prompt: root.engine.Prompt => {
-                prompt.files == questions[i].case.files
+                prompt.program == only(questions[i]).files
+                    && prompt.against == null
                     && prompt.item == questions[i].item
                     && prompt.seed == questions[i].seed * 1n
             },
@@ -122,13 +139,13 @@ function prompts_are_bare() -> string throws never {
 }
 
 test "prompt: the program and where it came from, and nothing else" {
-    assert.equal(prompts_are_bare(), `matching=true fields=["item", "seed", "files"]`)
+    assert.equal(prompts_are_bare(), `matching=true fields=["item", "seed", "program", "against"]`)
 }
 
 // ─── answering ───────────────────────────────────────────────────────────────
 
 function compiles_by_key(question: root.engine.Question) -> bool throws never {
-    root.engine.verdict_kind(question.case.key) == root.engine.VerdictKind.Compiles
+    root.engine.verdict_kind(only(question).key) == root.engine.VerdictKind.Compiles
 }
 
 function said(compiles: bool, reasoning: string, mark: string) -> root.Given throws never {
@@ -176,7 +193,7 @@ function answering_report() -> string throws never {
     let past_end = root.answer_at(seed_used(), length_used(), length_used(), said(true, "", "")) == null;
     let abstained = match (root.answer_at(seed_used(), length_used(), 0, unsure())) {
         let exchange: root.engine.Exchange => {
-            exchange.judgement.verdict_correct == null && exchange.answer.verdict == null
+            exchange.judgement.verdict_correct == null && exchange.answer.said == null
         },
         null => false,
     };
@@ -226,7 +243,7 @@ function misquoted_compiler() -> string[] throws never {
             let reported = root.compiler_report(seed_used(), length_used(), i)
                 ?? return `${i}: nothing reported`;
             let question = questions[i];
-            match (question.case.key) {
+            match (only(question).key) {
                 let rejected: root.engine.Rejected => {
                     if (reported.compiles) {
                         `${question.item}: keyed rejected, compiler accepted it`
@@ -266,12 +283,12 @@ function question_with(key: root.engine.Verdict) -> root.engine.Question throws 
     root.engine.Question {
         item: "synthetic",
         seed: 1,
-        case: root.engine.Case { files: root.engine.one_file("case.baml", ""), key, trace: [] },
+        posed: root.engine.Case { files: root.engine.one_file("case.baml", ""), key, trace: [] },
     }
 }
 
 function answered(verdict: root.engine.VerdictKind) -> root.engine.Answer throws never {
-    root.engine.Answer { verdict, reasoning: "" }
+    root.engine.Answer { said: verdict, reasoning: "" }
 }
 
 function judging_is_the_key() -> bool throws never {
@@ -285,7 +302,7 @@ function judging_is_the_key() -> bool throws never {
     );
     let said_compiles = answered(root.engine.VerdictKind.Compiles);
     let said_rejected = answered(root.engine.VerdictKind.Rejected);
-    let no_verdict = root.engine.Answer { verdict: null, reasoning: "" };
+    let no_verdict = root.engine.Answer { said: null, reasoning: "" };
     root.engine.judge(compiles, said_compiles, null).verdict_correct == true
         && root.engine.judge(compiles, said_rejected, null).verdict_correct == false
         && root.engine.judge(rejected, said_compiles, null).verdict_correct == false
@@ -323,7 +340,7 @@ function every_shape() -> root.engine.Transcript throws never {
         seed: 7,
         exchanges: marks.map((mark) -> {
             let answer = root.engine.Answer {
-                verdict: root.engine.VerdictKind.Rejected,
+                said: root.engine.VerdictKind.Rejected,
                 reasoning: "the classes are distinct",
             };
             root.engine.Exchange {
@@ -464,7 +481,7 @@ test "review: a missing file is reported, not thrown" {
 
 function tally_report() -> string throws never {
     let score = root.engine.tally(every_shape());
-    `asked=${score.asked} committed=${score.committed} right=${score.verdicts_right} sound=${score.sound} partial=${score.partial} wrong=${score.wrong} unmarked=${score.unmarked}`
+    `asked=${score.asked} committed=${score.committed} right=${score.answers_right} sound=${score.sound} partial=${score.partial} wrong=${score.wrong} unmarked=${score.unmarked}`
 }
 
 test "transcript: a sitting counts up" {

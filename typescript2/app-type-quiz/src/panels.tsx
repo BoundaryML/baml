@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { highlight } from './highlight';
 import { segments } from './prose';
-import type { Exchange, Points, Reported, Rule } from './quiz';
+import type { Claim, Points, Reported, Rule, Verdicted } from './quiz';
 
 export function Code({ source }: { source: string }) {
   const html = useMemo(() => highlight(source), [source]);
@@ -33,10 +33,13 @@ export function Prose({ text }: { text: string }) {
   );
 }
 
-export function Claims({ exchange }: { exchange: Exchange }) {
+export function Claims({ claims }: { claims: Claim[] }) {
+  if (claims.length === 0) {
+    return null;
+  }
   return (
     <ol className="claims">
-      {exchange.question.case.trace.map((claim, at) => (
+      {claims.map((claim, at) => (
         <li key={`${claim.rule.name}-${at}`}>
           <span className="instance">
             <Prose text={claim.instance} />
@@ -45,6 +48,46 @@ export function Claims({ exchange }: { exchange: Exchange }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/**
+ * One program of a question. Before an answer it is bare, and labelled only
+ * when it is one of two, since a lone program needs no name to be referred
+ * to. After one it carries what the compiler made of it and what that turns
+ * on, which for two programs is the part where they differ.
+ */
+export function Program({
+  files,
+  label,
+  verdicted,
+}: {
+  files: { name: string; source: string }[];
+  label: string | null;
+  verdicted: Verdicted | null;
+}) {
+  return (
+    <section className="program">
+      {label !== null && (
+        <p className="label">
+          {label}
+          {verdicted !== null && (
+            <span className={verdicted.compiles ? 'right' : 'wrong'}>
+              {verdicted.compiles ? ' — compiles' : ' — rejected'}
+            </span>
+          )}
+        </p>
+      )}
+      {files.map((file) => (
+        <Code key={file.name} source={file.source} />
+      ))}
+      {verdicted !== null && (
+        <>
+          <Claims claims={verdicted.claims} />
+          <CompilerSays reported={verdicted.reported} />
+        </>
+      )}
+    </section>
   );
 }
 

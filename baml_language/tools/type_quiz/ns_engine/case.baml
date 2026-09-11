@@ -131,6 +131,111 @@ class Candidate {
     traps: string[],
 }
 
+/// A case's opposite: the same program with the one thing that decides its
+/// verdict changed, so the compiler answers the other way.
+///
+/// Put beside the program it came from, a foil makes a question whose whole
+/// answer is that one difference. Everything else about the two is the same,
+/// so nothing on the surface can be read for the answer, and a learner who
+/// knows a rule but not which way it runs cannot be right by luck.
+class Foil {
+    case: Case,
+    /// What differs between the two, in the learner's terms.
+    difference: string,
+    /// The naive models that would pick the wrong one of the two. A model
+    /// whose beliefs accept both programs, or neither, makes no pick at all,
+    /// so the choice does not trap it even where one of the programs on its
+    /// own does.
+    traps: string[],
+}
+
+/// Two programs that differ in one thing, exactly one of which the compiler
+/// accepts, shown in the order `compiles_first` gives.
+///
+/// The two are named by their verdicts rather than by their positions, so a
+/// choice whose programs answer the same way is unrepresentable. Which is
+/// shown first is a separate, seeded fact, and the right answer follows from
+/// the two together rather than travelling beside them.
+class Choice {
+    compiles: Case,
+    rejected: Case,
+    difference: string,
+    traps: string[],
+    compiles_first: bool,
+
+    /// The program shown first.
+    function first(self) -> Case throws never {
+        if (self.compiles_first) {
+            self.compiles
+        } else {
+            self.rejected
+        }
+    }
+
+    /// The program shown second.
+    function second(self) -> Case throws never {
+        if (self.compiles_first) {
+            self.rejected
+        } else {
+            self.compiles
+        }
+    }
+
+    /// Both, in the order they are shown.
+    function shown(self) -> Case[] throws never {
+        [self.first(), self.second()]
+    }
+
+    /// Whether the one the compiler accepts is the second of the two.
+    function second_compiles(self) -> bool throws never {
+        !self.compiles_first
+    }
+}
+
+/// What a learner is put in front of: one program, asked whether the
+/// compiler accepts it, or two that differ in one thing, asked which of them
+/// it accepts.
+type Posed = Case | Choice;
+
+/// The programs of a posed question, in the order they are shown.
+function cases_of(posed: Posed) -> Case[] throws never {
+    match (posed) {
+        let case: Case => [case],
+        let choice: Choice => choice.shown(),
+    }
+}
+
+/// Every rule a posed question turns on, in the order its explanation
+/// reaches them.
+///
+/// What the programs of a question agree on: a single program's whole
+/// explanation, and for two put side by side the part they share, which is
+/// what a learner must read correctly before the difference between them can
+/// decide anything. A rule that a case reaches twice is listed twice, which
+/// is what makes a case of it deeper than one that reaches it once.
+function rules_of(posed: Posed) -> string[] throws never {
+    shared_claims(
+        cases_of(posed).map((case) -> {
+            case.trace
+        }),
+    )
+        .map((claim) -> {
+            claim.rule.name
+        })
+}
+
+/// The longest run of claims every trace begins with.
+function shared_claims(traces: Claim[][]) -> Claim[] throws never {
+    let first = traces.at(0)
+        ?? return [];
+    let differs = baml.iter.Range.new(0, first.length()).find((i) -> {
+        !traces.every((trace) -> {
+            trace.length() > i && trace[i] == first[i]
+        })
+    });
+    first.slice(0, differs ?? first.length())
+}
+
 /// The compiler agrees with the spec on this item.
 class Verified {
 }
@@ -174,4 +279,13 @@ interface Item {
     /// The case for `seed`, or `null` when the derivation ends without a
     /// known judgment. Must be a pure function of `seed`.
     function generate(self, seed: Seed) -> Candidate? throws never
+
+    /// The foil of the case for `seed`, or `null` when this item has none to
+    /// offer there. A pure function of `seed`, as `generate` is.
+    ///
+    /// Held apart from `generate` rather than carried on the candidate
+    /// because a foil is a second whole program and most of them would never
+    /// be seen: a sitting draws candidates by the handful and puts one, and
+    /// puts that one as a choice only sometimes.
+    function foil(self, seed: Seed) -> Foil? throws never
 }

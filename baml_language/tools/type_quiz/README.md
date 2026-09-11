@@ -35,6 +35,15 @@ each rule instantiated at the case's types, is the explanation; its last claim
 names which type met which slot. Every item is generated across several seeds
 and checked against the compiler on every run.
 
+Where the relation a fact states is strict, the same fact flowing the other
+way is a program the compiler answers the other way about, and the item
+carries it as a *foil*. The two are the same program bar the swap — the
+suite holds them to being the same characters in a different order, and to
+parting company only where the direction of the flow is named — so a learner
+shown both and asked which one compiles can read nothing off their surface.
+An equivalence or an unrelated pair reads the same in both directions and so
+has no foil, which is two thirds of the bank's items.
+
 A case is *interesting* when a plausible wrong intuition predicts the wrong
 verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
 it disagrees with; replaying a case's derivation under the model gives the
@@ -68,6 +77,7 @@ those whenever it is wanted.
 |---|---|
 | `fresh_profile()` | a learner the model knows nothing about, over every rule the bank can conclude a case with |
 | `next_prompt(profile, knobs, session, step)` | the case to ask next, and the rule to teach before it when the case turns on one the learner is stuck on |
+| `put_at(knobs, item, seed)` | how a case is put: what a learner is shown and asked. It carries the answer, so it is for a test or a tool that already holds the key |
 | `answer_case(profile, knobs, item, seed, given)` | the profile after an answer, the exchange to show, the compiler's own words, and the points |
 | `replay(knobs, taken)` | the profile a list of answers leads to, from nothing: how a saved sitting is resumed |
 | `adaptive_json(session, full, knobs, taken)` | the sitting as the JSON a learner takes away, with what the model concluded riding along |
@@ -76,8 +86,10 @@ those whenever it is wanted.
 | `sitting_length`, `prompt_at`, `answer_at`, `compiler_report`, `sitting_json` | a sitting planned by seed alone, with no learner model, which the conformance suite drives |
 | `review(path)` | read a downloaded sitting back and re-check its cases |
 
-A prompt deliberately holds the program and where it came from, and neither
-the key nor the derivation. Because a case can be generated again from its
+A prompt holds one program, or two when the question is which of them the
+compiler accepts, along with where they came from — and neither the key nor
+the derivation. What a learner may say follows from what they are shown, so
+the two can never disagree. Because a case can be generated again from its
 item and seed, the answer never has to be in front of the learner to be
 available when they answer. The seed crosses as a `bigint`: a stream state
 uses 63 bits, and an `int` reaches a page through a JavaScript number, which
@@ -94,8 +106,10 @@ tracing with partial pooling (one global ability, a per-rule deviation that
 shrinks toward it), an abstained answer as evidence in its own right, points
 derived from the bar at which a learner is asked to commit, difficulty from
 the rule orders the bank derives, suspicion of each naive model measured as a
-z-score against the learner's own estimate, teaching at a stall, and a stop
-rule that is one of mastered, budget, or stalled. Every tunable is a field of
+z-score against the learner's own estimate, teaching at a stall, a rate at
+which a case that has a foil is put as a choice between its two programs
+rather than as a verdict on one, and a stop rule that is one of mastered,
+budget, or stalled. Every tunable is a field of
 `Knobs`. The scripted learners in `ns_conformance/learner.baml` are what the
 model is held to: an expert is certified within budget and calibrated, a
 learner who never commits is never certified, a learner who reasons as

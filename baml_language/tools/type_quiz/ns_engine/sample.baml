@@ -294,6 +294,13 @@ function turn(
     }
 }
 
+/// `item`'s foil at `seed`. Through a function for the same reason as
+/// `generate`: an interface method on a captured existential dies at emit
+/// time (README, compiler issue 1).
+function foil_of(item: Item, seed: Seed) -> Foil? throws never {
+    item.foil(seed)
+}
+
 /// `budget.draws` candidates from each of `budget.per_step` items drawn
 /// from `seed` with replacement; nothing when there are no items.
 function batch(

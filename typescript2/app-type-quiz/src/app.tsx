@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatSource, loadFormatter } from './format';
 import { Home } from './home';
-import {
-  Claims,
-  Code,
-  CompilerSays,
-  PointsRule,
-  signed,
-  Teach,
-} from './panels';
+import { Claims, PointsRule, Program, Prose, signed, Teach } from './panels';
 import {
   type Answered,
   answerCase,
@@ -21,7 +14,9 @@ import {
   type Next,
   nextPrompt,
   type Profile,
+  type Prompt,
   pointsOf,
+  type Revealed,
   replay,
   type Said,
   type Standing,
@@ -29,7 +24,9 @@ import {
   type Taken,
   taken,
   transcriptJson,
+  type Verdicted,
   Why,
+  wordsFor,
 } from './quiz';
 import { Readout } from './readout';
 import {
@@ -59,10 +56,31 @@ interface Live {
   profile: Profile;
 }
 
-/** A file of a case, laid out by the formatter. */
-interface Shown {
-  name: string;
-  source: string;
+/** One program of a question: its files, laid out by the formatter. */
+type Shown = { name: string; source: string }[];
+
+/** The programs a prompt shows, in the order it shows them. */
+function shownOf(prompt: Prompt): Shown[] {
+  const programs = [prompt.program];
+  if (prompt.against !== null) {
+    programs.push(prompt.against);
+  }
+  return programs.map((files) =>
+    Object.entries(files).map(([name, source]) => ({
+      name,
+      source: formatSource(source),
+    })),
+  );
+}
+
+/**
+ * What each program is called when there are two to tell apart. A lone
+ * program needs no name: nothing has to be said to refer to it.
+ */
+const LABELS = ['First', 'Second'];
+
+function labelOf(at: number, count: number): string | null {
+  return count > 1 ? (LABELS[at] ?? `Program ${at + 1}`) : null;
 }
 
 /** Where the page has got to. */
@@ -84,6 +102,19 @@ type Phase =
 type Posed = Extract<Phase, { kind: 'asking' | 'revealed' }>;
 
 const storage = window.localStorage;
+
+/**
+ * The session a new sitting is drawn from. `?session=N` fixes it, so a
+ * sitting can be asked for again exactly: the same session and the same
+ * answers ask the same questions in the same order.
+ */
+function newSession(): number {
+  const asked = new URLSearchParams(window.location.search).get('session');
+  const given = asked === null ? Number.NaN : Number(asked);
+  return Number.isSafeInteger(given) && given >= 0
+    ? given
+    : Math.floor(Math.random() * 2 ** 31);
+}
 
 function savedAnswer(kept: Taken): SavedAnswer {
   const { said } = kept.given;
@@ -149,11 +180,7 @@ function advance(live: Live): Phase {
   if (next === null) {
     return { kind: 'done', live, standing, starved: true };
   }
-  const shown = Object.entries(next.prompt.files).map(([name, source]) => ({
-    name,
-    source: formatSource(source),
-  }));
-  return { kind: 'asking', live, next, shown };
+  return { kind: 'asking', live, next, shown: shownOf(next.prompt) };
 }
 
 function download(name: string, json: string): void {
@@ -178,24 +205,13 @@ function Reveal({
   onKeep: (mark: string) => void;
   onLeave: () => void;
 }) {
-  const judged = answered.exchange.judgement.verdict_correct;
-  const [word, tone] =
-    judged === true
-      ? ['Right.', 'right']
-      : judged === false
-        ? ['Wrong.', 'wrong']
-        : ['You held back.', 'held'];
+  // The shared claims only, and only when there is more than one program to
+  // share them: with one, they were shown under it.
+  const shared =
+    answered.revealed.programs.length > 1 ? answered.revealed.shared : [];
   return (
     <div className="reveal">
-      <p className={tone}>
-        {word}{' '}
-        {answered.reported.compiles
-          ? 'It compiles.'
-          : 'The compiler rejects it.'}
-        <span className="points">{signed(answered.points)}</span>
-      </p>
-      <Claims exchange={answered.exchange} />
-      <CompilerSays reported={answered.reported} />
+      <Claims claims={shared} />
       {full ? (
         <div className="choices">
           <span className="ask">Your reasoning was</span>
@@ -229,6 +245,55 @@ function Reveal({
   );
 }
 
+/**
+ * A program's verdict as the reveal shows it. With one program there is
+ * nothing to hold apart, so everything it turns on sits under it; with two,
+ * what they share is shown once, below both.
+ */
+function verdictedAt(
+  revealed: Revealed | null,
+  at: number,
+  programs: number,
+): Verdicted | null {
+  if (revealed === null) {
+    return null;
+  }
+  const shown = revealed.programs[at];
+  return programs > 1 ? shown : { ...shown, claims: revealed.shared };
+}
+
+/**
+ * How the answer was marked, and what it was worth. Above the programs
+ * rather than below them: it is the answer to what was just clicked, and
+ * everything under each program is the working.
+ */
+function Mark({ answered }: { answered: Answered }) {
+  const judged = answered.exchange.judgement.verdict_correct;
+  const [word, tone] =
+    judged === true
+      ? ['Right.', 'right']
+      : judged === false
+        ? ['Wrong.', 'wrong']
+        : ['You held back.', 'held'];
+  return (
+    <p className={`mark ${tone}`}>
+      {word} {outcome(answered.revealed)}
+      <span className="points">{signed(answered.points)}</span>
+    </p>
+  );
+}
+
+/** What the compiler did, in a sentence, however many programs were shown. */
+function outcome(revealed: Revealed): string {
+  const compiles = revealed.programs.findIndex((program) => program.compiles);
+  if (revealed.programs.length < 2) {
+    return compiles === 0 ? 'It compiles.' : 'The compiler rejects it.';
+  }
+  return compiles === 0
+    ? 'The compiler accepts the first.'
+    : 'The compiler accepts the second.';
+}
+
 function Question({
   phase,
   reasoning,
@@ -253,22 +318,41 @@ function Question({
   const progress = live.knobs.practice
     ? `Case ${asked} of ${live.knobs.budget}`
     : `Case ${asked}`;
-  // The two verdicts swap places from case to case, keyed by the case, so
-  // the same button cannot be pressed without reading.
-  const verdicts: [Said, string][] = [
-    ['compiles', 'It compiles'],
-    ['rejected', 'It is rejected'],
-  ];
+  // The two answers swap places from case to case, keyed by the case, so the
+  // same button cannot be pressed without reading. For two programs the
+  // words name the programs, whose own order is already drawn, so they stay
+  // in the order the programs are in.
+  const words = wordsFor(shown.length);
   const ordered =
-    next.prompt.seed % 2n === 1n ? [verdicts[1], verdicts[0]] : verdicts;
+    shown.length === 1 && next.prompt.seed % 2n === 1n
+      ? [words[1], words[0]]
+      : words;
+  const revealed = phase.kind === 'revealed' ? phase.answered.revealed : null;
   return (
     <section className="question">
       <p className="progress">{progress}</p>
+      {shown.length > 1 && phase.kind === 'asking' && (
+        <p className="ask">
+          One of these two the compiler accepts and the other it rejects. Which
+          is which?
+        </p>
+      )}
       {phase.kind === 'asking' && next.teach !== null && (
         <Teach rule={next.teach} />
       )}
-      {shown.map((file) => (
-        <Code key={file.name} source={file.source} />
+      {phase.kind === 'revealed' && <Mark answered={phase.answered} />}
+      {revealed !== null && revealed.difference !== '' && (
+        <p className="difference">
+          <Prose text={revealed.difference} />.
+        </p>
+      )}
+      {shown.map((files, at) => (
+        <Program
+          files={files}
+          key={files[0]?.source ?? at}
+          label={labelOf(at, shown.length)}
+          verdicted={verdictedAt(revealed, at, shown.length)}
+        />
       ))}
       {phase.kind === 'asking' && (
         <>
@@ -357,7 +441,7 @@ export default function App() {
           history: [],
           knobs: knobsFrom(chosen.knobs),
           profile: freshProfile(),
-          session: Math.floor(Math.random() * 2 ** 31),
+          session: newSession(),
           slot,
         };
         store(live);
@@ -486,6 +570,7 @@ export default function App() {
           onNew={(slot) => setPhase({ kind: 'setup', slot })}
           onReset={reset}
           onResume={resume}
+          ready={ready}
           slots={slots}
         />
       )}

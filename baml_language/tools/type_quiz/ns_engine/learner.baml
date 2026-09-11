@@ -79,11 +79,17 @@ class Profile {
     right: int,
     skills: Skill[],
     suspicions: Suspicion[],
-    /// Consecutive observations in which no rule's estimate rose by more
-    /// than a hair: the learner is gaining ground nowhere. The estimate, not
-    /// the floor: shrinking uncertainty raises a floor even on bad news, and
-    /// a learner who withholds on everything would otherwise never be called
-    /// stuck.
+    /// Consecutive observations that taught us nothing: no rule's estimate
+    /// rose by more than a hair, and no rule was met for the first time by
+    /// an answer the learner committed to.
+    ///
+    /// The estimate rather than the floor, because shrinking uncertainty
+    /// raises a floor even on bad news. First sight of a rule counts,
+    /// because reaching a rule nobody had been asked about is progress even
+    /// for a learner who answers everything right and so has no estimate
+    /// left to raise. Only on a committed answer, because a learner who
+    /// withholds on everything would otherwise be credited with progress for
+    /// meeting rules they said nothing about, and never be called stuck.
     quiet: int,
 }
 
@@ -114,6 +120,18 @@ class Knobs {
     rest: int,
     /// A mastered rule is rechecked after this many steps.
     recheck: int,
+    /// How often a case that has a foil is put as a choice between the two
+    /// programs rather than as a verdict on the one.
+    ///
+    /// Only a strict relation has a second program to offer, which is a
+    /// third of the bank's cases, so the share of a whole sitting spent on
+    /// choices is about half of this. Half of what can be a choice is the
+    /// default because a choice is the one question whose two programs have
+    /// the same size, shape and rule count: nothing on their surface
+    /// correlates with the answer, which is not true of a program judged
+    /// alone. How much better they teach is a question for real transcripts
+    /// rather than for a number chosen here.
+    contrast: float,
     /// Stop at the budget and nowhere else: a fixed number of cases,
     /// adapting all the way. Practice, as against certification.
     practice: bool,
@@ -138,6 +156,7 @@ function default_knobs() -> Knobs throws never {
         aim: 0.8,
         rest: 3,
         recheck: 15,
+        contrast: 0.5,
         practice: false,
         suspect: 3.0,
         clear: 1.0,
@@ -440,11 +459,12 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
     let after = next.skills.map((skill) -> {
         next.ability + skill.offset
     });
+    let committed = seen.verdict != null;
     let gained = baml.iter.Range.new(0, after.length()).some((i) -> {
         // Through a function: a method call whose receiver reads a captured
         // local bound from an earlier closure call miscompiles (README,
         // compiler issue 9).
-        rose(before[i], after[i])
+        rose(before[i], after[i]) || (committed && first_met(profile.skills[i], next.skills[i]))
     });
     Profile {
         ...next,
@@ -459,6 +479,11 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
 /// Whether an estimate rose by more than a hair.
 function rose(before: float, after: float) -> bool throws never {
     after - before > 0.02
+}
+
+/// Whether a rule bore blame for the first time.
+function first_met(before: Skill, after: Skill) -> bool throws never {
+    before.seen == 0 && after.seen > 0
 }
 
 // ─── where a sitting stands ──────────────────────────────────────────────────

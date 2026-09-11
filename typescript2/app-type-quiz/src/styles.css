@@ -182,14 +182,21 @@ pre.case code {
   margin-bottom: 0.5rem;
 }
 
-.reveal .right {
+.mark {
+  margin: 0 0 0.9rem;
   font-weight: 600;
+}
+
+.mark.right {
   color: var(--right);
 }
 
-.reveal .wrong {
-  font-weight: 600;
+.mark.wrong {
   color: var(--wrong);
+}
+
+.mark.held {
+  color: var(--accent);
 }
 
 .claims {
@@ -386,11 +393,6 @@ button.leave {
 
 /* ─── the reveal ─── */
 
-.reveal .held {
-  font-weight: 600;
-  color: var(--accent);
-}
-
 .points {
   margin-left: 0.6rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -421,4 +423,35 @@ button.leave {
 
 .readout code {
   font-size: 0.85em;
+}
+
+/* ─── a question's programs ─── */
+
+.program + .program {
+  margin-top: 1.2rem;
+}
+
+.program .label {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.program .label .right,
+.program .label .wrong {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.difference {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+
+p.ask {
+  margin: 0 0 0.9rem;
 }

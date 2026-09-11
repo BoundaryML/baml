@@ -66,6 +66,16 @@ until nothing has moved for a while, so nobody is left grinding. **Practice**
 asks a fixed number of cases and adapts all the way through. Both use the same
 model, described in `baml_language/tools/type_quiz/ns_engine/learner.baml`.
 
+Most cases show one program and take one of three answers: it compiles, it is
+rejected, or not sure. Some show **two programs side by side**, exactly one of
+which the compiler accepts, and ask which — the same three answers, with the
+first two naming a program. The two differ in one thing and nothing else, so
+their size, shape and rule count are identical and nothing on their surface
+correlates with the answer, which is not true of a program judged alone. Only
+a case that turns on a strict relation has a second program to show, about a
+third of them, and how often those are shown that way is a knob under
+Tuning.
+
 Every case takes one of three answers: it compiles, it is rejected, or not
 sure. Not sure is a real answer and the one that makes the other two worth
 believing: a committed answer from a learner who holds back when unsure
@@ -82,6 +92,10 @@ reading.
 
 When a rule has been missed twice running and the next case turns on it, the
 spec's own words on that rule are shown before the case.
+
+A sitting can be asked for by name: `?session=N` fixes the session a new
+sitting is drawn from, and the same session answered the same way asks the
+same questions in the same order.
 
 At the end the readout gives mastery (how many rules, and which are least
 certain), calibration (how often the committed answers were right against the

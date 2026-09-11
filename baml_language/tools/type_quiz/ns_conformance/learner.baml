@@ -7,50 +7,97 @@
 
 // ─── scripted learners ───────────────────────────────────────────────────────
 
-/// A learner is a rule for answering a case whose key it can see: `null` to
-/// withhold, otherwise whether it says the case compiles.
-type Learner = (root.engine.Candidate) -> bool? throws never;
+/// A learner is a rule for answering a question whose key it can see: the
+/// word it would say.
+///
+/// A learner answers the question it is asked rather than the program it is
+/// shown, because the two are not the same question: a program alone is
+/// asked for its verdict, and two side by side for which of them the
+/// compiler accepts. `right_word` and `wrong_word` say what those words are,
+/// so each learner below is the one sentence that describes it.
+type Learner = (root.engine.Put) -> string throws never;
 
-function key_compiles(candidate: root.engine.Candidate) -> bool throws never {
-    root.engine.verdict_kind(candidate.case.key) == root.engine.VerdictKind.Compiles
+function key_compiles(case: root.engine.Case) -> bool throws never {
+    root.engine.verdict_kind(case.key) == root.engine.VerdictKind.Compiles
 }
 
-function expert(candidate: root.engine.Candidate) -> bool? throws never {
-    key_compiles(candidate)
+/// The answer that is right, in the words the question takes.
+function right_word(put: root.engine.Put) -> string throws never {
+    match (put.posed) {
+        let case: root.engine.Case => {
+            if (key_compiles(case)) {
+                "compiles"
+            } else {
+                "rejected"
+            }
+        },
+        let choice: root.engine.Choice => {
+            if (choice.second_compiles()) {
+                "second"
+            } else {
+                "first"
+            }
+        },
+    }
 }
 
-function silent(candidate: root.engine.Candidate) -> bool? throws never {
-    null
+/// The other answer: the one committed answer that is wrong.
+function wrong_word(put: root.engine.Put) -> string throws never {
+    match (put.posed) {
+        let case: root.engine.Case => {
+            if (key_compiles(case)) {
+                "rejected"
+            } else {
+                "compiles"
+            }
+        },
+        let choice: root.engine.Choice => {
+            if (choice.second_compiles()) {
+                "first"
+            } else {
+                "second"
+            }
+        },
+    }
 }
 
-/// Answers exactly as the TypeScript model would: right unless the case is a
-/// trap for it.
-function typescripter(candidate: root.engine.Candidate) -> bool? throws never {
-    if (candidate.traps.includes("typescript")) {
-        !key_compiles(candidate)
+function expert(put: root.engine.Put) -> string throws never {
+    right_word(put)
+}
+
+function silent(put: root.engine.Put) -> string throws never {
+    "unsure"
+}
+
+/// Answers exactly as the TypeScript model would: right unless the question
+/// traps it.
+function typescripter(put: root.engine.Put) -> string throws never {
+    if (put.traps.includes("typescript")) {
+        wrong_word(put)
     } else {
-        key_compiles(candidate)
+        right_word(put)
     }
 }
 
 /// Answers by a bit that has nothing to do with the question: whether the
-/// case's source has an even number of bytes.
-function parity(candidate: root.engine.Candidate) -> bool? throws never {
-    let bytes = candidate.case.files.get("case.baml")?.length() ?? 0;
-    bytes % 2 == 0
+/// first program shown has an even number of bytes.
+function parity(put: root.engine.Put) -> string throws never {
+    let shown = root.engine.cases_of(put.posed);
+    let bytes = shown.at(0)?.files?.get("case.baml")?.length() ?? 0;
+    if (bytes % 2 == 0) {
+        right_word(put)
+    } else {
+        wrong_word(put)
+    }
 }
 
-/// Knows the axioms cold and nothing about variance: right on one-rule cases,
-/// withholds on the rest.
-function beginner(candidate: root.engine.Candidate) -> bool? throws never {
-    let flow = root.bank.flow_requires_subtype().name;
-    let own = candidate.case.trace.filter((claim) -> {
-        claim.rule.name != flow
-    });
-    if (own.length() <= 1) {
-        key_compiles(candidate)
+/// Knows the axioms cold and nothing about variance: right on one-rule
+/// questions, withholds on the rest.
+function beginner(put: root.engine.Put) -> string throws never {
+    if (root.tracer_rules(put.posed).length() <= 1) {
+        right_word(put)
     } else {
-        null
+        "unsure"
     }
 }
 
@@ -66,11 +113,13 @@ class Sat {
     /// cases did not turn on the rule taught.
     taught: int,
     taught_off_point: int,
+    /// How many questions put two programs side by side.
+    choices: int,
 }
 
 function sit(learner: Learner, knobs: root.engine.Knobs, session: int) -> Sat throws never {
     let start = root.fresh_profile();
-    sit_from(learner, knobs, session, start, 0, [], 0, 0)
+    sit_from(learner, knobs, session, start, 0, [], 0, 0, 0)
 }
 
 function sit_from(
@@ -82,21 +131,26 @@ function sit_from(
     taken: root.Taken[],
     taught: int,
     taught_off_point: int,
+    choices: int,
 ) -> Sat throws never {
     let served = taken.map((t) -> {
         t.item
     });
     let standing = root.engine.standing(profile, knobs);
     if (standing.why != root.engine.Why.Continue) {
-        return Sat { profile, standing, served, taken, taught, taught_off_point };
+        return Sat { profile, standing, served, taken, taught, taught_off_point, choices };
     }
     let next = root.next_prompt(profile, knobs, session, step)
-        ?? return Sat { profile, standing, served, taken, taught, taught_off_point };
-    let candidate = root.candidate_of(next.prompt.item, next.prompt.seed)
-        ?? return Sat { profile, standing, served, taken, taught, taught_off_point };
+        ?? return Sat { profile, standing, served, taken, taught, taught_off_point, choices };
+    let put = root.put_at(knobs, next.prompt.item, next.prompt.seed);
+    let chosen_now = if (put.posed is root.engine.Choice) {
+        1
+    } else {
+        0
+    };
     let off_point = match (next.teach) {
         let rule: root.engine.Rule => {
-            if (root.tracer_rules(candidate).includes(rule.name)) {
+            if (root.tracer_rules(put.posed).includes(rule.name)) {
                 0
             } else {
                 1
@@ -109,17 +163,7 @@ function sit_from(
     } else {
         0
     };
-    let said = match (learner(candidate)) {
-        let says_compiles: bool => {
-            if (says_compiles) {
-                "compiles"
-            } else {
-                "rejected"
-            }
-        },
-        null => "unsure",
-    };
-    let given = root.Given { said, reasoning: "", mark: "" };
+    let given = root.Given { said: learner(put), reasoning: "", mark: "" };
     let after = root.observe_answer(profile, knobs, next.prompt.item, next.prompt.seed, given);
     let kept = root.Taken { item: next.prompt.item, seed: next.prompt.seed, given };
     sit_from(
@@ -131,6 +175,7 @@ function sit_from(
         taken.concat([kept]),
         taught + taught_now,
         taught_off_point + off_point,
+        choices + chosen_now,
     )
 }
 
@@ -191,11 +236,12 @@ function tenths(x: float) -> int throws never {
 /// The standing names the model, and it stands well clear of the covariant
 /// model, which TypeScript's beliefs include and so is partly supported too.
 /// A learner who keeps missing the same rules is taught, and every rule
-/// taught is one the case before which it is taught turns on.
+/// taught is one the case before which it is taught turns on. A sitting long
+/// enough to certify anyone puts both kinds of question.
 function typescripter_report() -> string throws never {
     let sat = sit(typescripter, root.engine.default_knobs(), 4);
     let named = sat.standing.suspected ?? "none";
-    `suspected=${named} leading=${leading(sat.profile)} taught=${sat.taught > 0} on_point=${sat.taught_off_point == 0}`
+    `suspected=${named} leading=${leading(sat.profile)} taught=${sat.taught > 0} on_point=${sat.taught_off_point == 0} both_kinds=${sat.choices > 0 && sat.choices < sat.profile.step}`
 }
 
 /// The beginner is certified on nothing above order one, and the rules left
@@ -231,7 +277,9 @@ test "learner: strict coverage costs more questions than an overall picture" {
 }
 
 /// Noise names no model: a learner answering by a bit unrelated to the case
-/// is suspected of reasoning as none of them does, whatever the scores.
+/// is suspected of reasoning as none of them does. Every model sits within
+/// half a standard deviation of chance, which is what a suspicion measured
+/// against the learner's own estimate is for.
 function parity_report() -> string throws never {
     let sat = sit(parity, root.engine.default_knobs(), 10);
     `suspected=${sat.standing.suspected ?? "none"} why=${sat.standing.why} leading=${leading(sat.profile)}`
@@ -240,14 +288,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget leading=spelling=14,typescript=-12,covariant=-15",
+        "suspected=none why=Budget leading=spelling=-1,covariant=-2,typescript=-4",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=50,covariant=30,spelling=-45 taught=true on_point=true",
+        "suspected=typescript leading=typescript=53,covariant=28,spelling=-40 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -342,10 +390,12 @@ function answered_report() -> string throws never {
         ?? return "nothing to ask";
     let item = next.prompt.item;
     let seed = next.prompt.seed;
-    let candidate = root.candidate_of(item, seed)
-        ?? return "no such case";
-    let compiles = key_compiles(candidate);
-    let answers = [said(compiles, "", ""), said(!compiles, "", ""), unsure()];
+    let put = root.put_at(knobs, item, seed);
+    let answers = [
+        root.Given { said: right_word(put), reasoning: "", mark: "" },
+        root.Given { said: wrong_word(put), reasoning: "", mark: "" },
+        root.Given { said: "unsure", reasoning: "", mark: "" },
+    ];
     let answered = answers.map((given) -> {
         root.answer_case(profile, knobs, item, seed, given)
     });
@@ -358,8 +408,12 @@ function answered_report() -> string throws never {
     let profiles = baml.iter.Range.new(0, answers.length()).every((i) -> {
         answered[i].profile == root.observe_answer(profile, knobs, item, seed, answers[i])
     });
+    // Each shown program's verdict, read from the key, against the same
+    // program's verdict as the compiler reports it: two routes to one fact.
     let compiler = answered.every((a) -> {
-        a.reported.compiles == compiles
+        a.revealed.programs.every((program) -> {
+            program.compiles == program.reported.compiles
+        })
     });
     `marks=${marks} points=${points} profiles=${profiles} compiler=${compiler}`
 }
@@ -367,7 +421,10 @@ function answered_report() -> string throws never {
 /// The JSON an adaptive sitting downloads is what `review` reads back, the
 /// model's conclusions ride along, and the review says what it concluded.
 function adaptive_round_trip() -> string throws never {
-    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 6 };
+    // Every case that can be put as a choice is, so the round trip covers a
+    // question of two programs as well as one of a single program: a
+    // transcript has always held the second and never the first.
+    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 12, contrast: 1.0 };
     let sat = sit(typescripter, knobs, 9);
     let expected = root.adaptive_sitting(9, false, knobs, sat.taken);
     let text = root.adaptive_json(9, false, knobs, sat.taken);
@@ -389,7 +446,15 @@ function adaptive_round_trip() -> string throws never {
     let concluded = reviewed.includes("every case still behaves as recorded")
         && reviewed.includes("mastered")
         && reviewed.includes("ended Budget");
-    `same=${back == expected} exchanges=${expected.exchanges.length()} learned=${expected.learner?.profile == sat.profile} reviewed=${concluded}`
+    // A sitting of six at the default rate holds at least one question of
+    // two programs, so the round trip covers both kinds of question rather
+    // than only the one a transcript has always held.
+    let choices = expected.exchanges
+        .filter((exchange) -> {
+            exchange.question.posed is root.engine.Choice
+        })
+        .length();
+    `same=${back == expected} exchanges=${expected.exchanges.length()} choices=${choices > 0} learned=${expected.learner?.profile == sat.profile} reviewed=${concluded}`
 }
 
 test "page: the profile is exactly what the answers replay to" {
@@ -404,7 +469,10 @@ test "page: one answer worked out at once agrees with each part on its own" {
 }
 
 test "page: an adaptive sitting downloads, reads back, and reviews with what it concluded" {
-    assert.equal(adaptive_round_trip(), "same=true exchanges=6 learned=true reviewed=true")
+    assert.equal(
+        adaptive_round_trip(),
+        "same=true exchanges=12 choices=true learned=true reviewed=true",
+    )
 }
 
 test "profile: survives JSON" {
@@ -448,4 +516,87 @@ test "orders: every servable rule has one, and only parameter contravariance rea
         orders_report(),
         `rules=25 of 26 by_order=[20, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
     )
+}
+
+// ─── how often each answer comes up ──────────────────────────────────────────
+//
+// A sitting asks about three cases in five that compile, so a learner who
+// always says so is right more often than not. It is not the selection's
+// doing and the selection cannot mend it: most of the bank's items answer
+// one way for every case they make (see the bank suite), so the mix of
+// answers IS the mix of items, and forcing the answers even would force the
+// items uneven — measured, insisting enough to move the share at all costs
+// a scripted expert its certification and a beginner every axiom it had.
+// The fix is a bank whose facts do not each answer one way: near misses, in
+// §12 of the plan. This records where it stands until then.
+
+/// Whether the question put at `t` asked for a verdict, and if so whether
+/// its answer was that the program compiles.
+function compiles_of(knobs: root.engine.Knobs, t: root.Taken) -> bool? throws never {
+    match (root.put_at(knobs, t.item, t.seed).posed) {
+        let case: root.engine.Case => {
+            root.engine.verdict_kind(case.key) == root.engine.VerdictKind.Compiles
+        },
+        root.engine.Choice => null,
+    }
+}
+
+/// Of the first sixteen questions of a sitting that asked for a verdict, how
+/// many compiled and how many there were.
+///
+/// The sitting is stopped at the window, since running each to its own end
+/// would cost several times as much for nothing.
+function opening(learner: Learner, session: int, window: int) -> int[] throws never {
+    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), practice: true, budget: window };
+    let verdicts = sit(learner, knobs, session).taken.filter_map((t) -> {
+        compiles_of(knobs, t)
+    });
+    let compiled = verdicts
+        .filter((v) -> {
+            v
+        })
+        .length();
+    [compiled, verdicts.length()]
+}
+
+/// `part` of `whole` as a whole percentage.
+///
+/// Through a function because the arithmetic reads locals bound from earlier
+/// closure calls, and a method call on one of those reads the wrong slot
+/// (README, compiler issue 9).
+function percent_of(part: int, whole: int) -> int throws never {
+    if (whole == 0) {
+        return 0;
+    }
+    (part * 100.0 / (whole * 1.0)).iround() catch (e) {
+        baml.errors.InvalidArgument => 0,
+    }
+}
+
+/// How many of the opening questions compiled, pooled over three learners
+/// and four sessions, in hundredths.
+function leaning_report() -> string throws never {
+    let learners: Learner[] = [expert, beginner, typescripter];
+    let counted = learners.flat_map((learner) -> {
+        [11, 12, 13, 14].map((session) -> {
+            opening(learner, session, 16)
+        })
+    });
+    let compiled = counted.reduce(
+        (acc, c) -> {
+            acc + c[0]
+        },
+        0,
+    );
+    let asked = counted.reduce(
+        (acc, c) -> {
+            acc + c[1]
+        },
+        0,
+    );
+    `compiled=${percent_of(compiled, asked)} of=${asked}`
+}
+
+test "sitting: three questions in five ask about a case that compiles" {
+    assert.equal(leaning_report(), "compiled=62 of=169")
 }

@@ -530,3 +530,182 @@ function illegal_names() -> string[] throws never {
 test "names: every pool entry is a legal identifier of its kind" {
     assert.equal(illegal_names().join("\n"), "")
 }
+
+// ─── two programs a step apart ───────────────────────────────────────────────
+//
+// A foil is the same program with the one thing that decides its verdict
+// changed, which is a strong claim and a cheap one to break. Each half of it
+// is held to the bank: the two answer differently, they are the same
+// characters in a different order, and their explanations part company only
+// where the direction of the flow is named. That the compiler agrees with
+// both keys is the item sweep's business, which verifies a foil as it
+// verifies a case.
+
+function source_of(case: root.engine.Case) -> string throws never {
+    case.files.get("case.baml")
+        ?? throw baml.panics.Unreachable { message: "every flow case is one file named case.baml" }
+}
+
+/// The characters of `source`, in order and without brackets, so two
+/// programs can be compared without regard to where their parts sit.
+///
+/// Brackets are dropped because the renderer parenthesises a union standing
+/// in an element position, so exchanging a union with a leaf moves a pair of
+/// parentheses as well as the two types: measured, that is the whole of the
+/// difference, and every name, keyword and type is the same in both.
+function letters(source: string) -> int[] throws never {
+    source.to_utf8()
+        .to_array()
+        .filter((byte) -> {
+            byte != 40 && byte != 41
+        })
+        .sort_by_key((byte) -> {
+            byte
+        })
+}
+
+/// The ways in which a candidate and its foil are not two programs a step
+/// apart. Empty when they are.
+function pairing_faults(
+    candidate: root.engine.Candidate,
+    foil: root.engine.Foil,
+) -> string[] throws never {
+    let case = candidate.case;
+    let same_answer: string[] = if (root.engine.verdict_kind(case.key) == root.engine.verdict_kind(foil.case.key)) {
+        ["both programs answer the same way"]
+    } else {
+        []
+    };
+    let rewritten: string[] = if (letters(source_of(case)) != letters(source_of(foil.case))) {
+        [
+            `the two programs are not the same characters:\n${source_of(case)}\nagainst\n${source_of(foil.case)}`,
+        ]
+    } else {
+        []
+    };
+    let shared = root.engine.shared_claims([case.trace, foil.case.trace]);
+    let parting: string[] = if (shared.length() != case.trace.length() - 1) {
+        [`their explanations part at claim ${shared.length()} of ${case.trace.length()}`]
+    } else {
+        []
+    };
+    same_answer.concat(rewritten).concat(parting)
+}
+
+/// One seed of one item: whether it offered a foil, and what is wrong with
+/// the pair if it did.
+class Pairing {
+    item: string,
+    paired: bool,
+    faults: string[],
+}
+
+function pairings(seeds: int) -> Pairing[] throws never {
+    root.bank.items().flat_map((item) -> {
+        let id = item.id();
+        baml.iter.Range.new(0, seeds)
+            .filter_map((i) -> {
+                let seed = root.engine.seed_for(id, i);
+                let candidate = root.engine.generate(item, seed)
+                    ?? return null;
+                match (root.engine.foil_of(item, seed)) {
+                    let foil: root.engine.Foil => {
+                        Pairing { item: id, paired: true, faults: pairing_faults(candidate, foil) }
+                    },
+                    null => Pairing { item: id, paired: false, faults: [] },
+                }
+            })
+            .collect()
+    })
+}
+
+/// Over four seeds of every item: how many cases came with a foil, every
+/// way in which one was not a minimal pair, and any item that offered one at
+/// some seeds and not others.
+///
+/// Whether a fact has a second program to offer is decided by the rule it
+/// applies and not by the types drawn for it — a strict relation reads one
+/// way forwards and the other backwards, an equivalence or an unrelated pair
+/// the same both ways — so an item that pairs at all pairs at every seed,
+/// and one that pairs at some has a conclusion that moves with its draw.
+function pairing_report() -> string throws never {
+    let found = pairings(4);
+    let paired = found
+        .filter((p) -> {
+            p.paired
+        })
+        .length();
+    let faults = found.flat_map((p) -> {
+        p.faults.map((fault) -> {
+            `${p.item}: ${fault}`
+        })
+    });
+    let ids = root.bank.items().map((item) -> {
+        item.id()
+    });
+    let pairing = ids.filter((id) -> {
+        found.some((p) -> {
+            p.item == id && p.paired
+        })
+    });
+    let mixed = pairing.filter((id) -> {
+        found.some((p) -> {
+            p.item == id && !p.paired
+        })
+    });
+    `cases=${found.length()} paired=${paired} items=${pairing.length()} of ${ids.length()} mixed=${mixed} faults=${faults.join(", ")}`
+}
+
+test "pairs: every foil is the same program a step away, answering the other way" {
+    assert.equal(pairing_report(), "cases=128 paired=44 items=11 of 32 mixed=[] faults=")
+}
+
+// ─── how many ways an item can answer ────────────────────────────────────────
+
+/// How many of the bank's items always compile, never compile, and do both,
+/// over the first eight seeds of each.
+///
+/// A fact that concludes an equivalence or an unrelated pair reads the same
+/// in both directions, so every case it makes answers the same way, and the
+/// shape of such a case tells a learner the answer without their having to
+/// reason about it. That is two thirds of the bank today; it is also why a
+/// sitting has to be given a schedule of wanted answers rather than left to
+/// the draw. Near misses — a case a step away from an equivalence that is
+/// therefore not one — would fix both, and this count is what would change.
+function items_answering_report() -> string throws never {
+    let counted = root.bank.items()
+        .filter((item) -> {
+            item.status() is root.engine.Verified
+        })
+        .map((item) -> {
+            let id = item.id();
+            let produced = baml.iter.Range.new(0, 8)
+                .filter_map((i) -> {
+                    root.engine.generate(item, root.engine.seed_for(id, i))
+                })
+                .collect();
+            let compiled = produced
+                .filter((candidate) -> {
+                    root.engine.verdict_kind(candidate.case.key) == root.engine.VerdictKind.Compiles
+                })
+                .length();
+            if (compiled == 0) {
+                "never"
+            } else if (compiled == produced.length()) {
+                "always"
+            } else {
+                "both"
+            }
+        });
+    let of = ["always", "never", "both"].map((kind) -> {
+        `${kind}=${counted.filter((c) -> {
+            c == kind
+        }).length()}`
+    });
+    of.join(" ")
+}
+
+test "bank: two items in three answer the same way every time" {
+    assert.equal(items_answering_report(), "always=14 never=6 both=11")
+}
+

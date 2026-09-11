@@ -21,6 +21,18 @@ const BARS = [0.5, 0.67, 0.75, 0.8];
 /** Certainties a rule may be required to reach. */
 const TARGETS = [0.75, 0.85, 0.95];
 
+/**
+ * How often a case that can be shown beside its opposite is. Only a case
+ * that turns on a strict relation has an opposite, which is about a third of
+ * them, so the share of a whole sitting shown this way is about half of
+ * whatever is chosen here.
+ */
+const CONTRASTS: [number, string][] = [
+  [0, 'Never'],
+  [0.5, 'Half the time'],
+  [1, 'Whenever the case allows'],
+];
+
 export function Setup({
   ready,
   onStart,
@@ -38,10 +50,12 @@ export function Setup({
   const [strict, setStrict] = useState(defaults.strict);
   const [target, setTarget] = useState(defaults.target);
   const [budget, setBudget] = useState(defaults.budget);
+  const [contrast, setContrast] = useState(defaults.contrast);
   const knobs: KnobValues = {
     ...defaults,
     bar,
     budget: practice ? count : budget,
+    contrast,
     practice,
     strict,
     target,
@@ -102,6 +116,19 @@ export function Setup({
           </select>
         </label>
         <PointsRule points={pointsOf(knobsFrom(knobs))} />
+        <label>
+          Show two programs at once and ask which one compiles
+          <select
+            onChange={(e) => setContrast(Number(e.target.value))}
+            value={String(contrast)}
+          >
+            {CONTRASTS.map(([rate, label]) => (
+              <option key={rate} value={String(rate)}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="check">
           <input
             checked={strict}

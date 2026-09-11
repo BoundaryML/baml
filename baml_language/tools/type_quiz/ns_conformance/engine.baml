@@ -509,9 +509,17 @@ function nondeterministic_items() -> string[] throws never {
     })
 }
 
+/// Two seeds of every item, each of which puts both of the item's programs
+/// to the compiler where it has two.
+///
+/// Two rather than four because a seed now costs two compilations instead of
+/// one, and it buys more: the direction a case flows is a coin flip per
+/// seed, so four seeds left an item's other direction unchecked about one
+/// time in eight, while a foil is the other direction by construction and is
+/// checked every time.
 function nonconforming_items() -> string[] throws never {
     root.bank.items().filter_map((item) -> {
-        let report = root.engine.verify_item(item, 4);
+        let report = root.engine.verify_item(item, 2);
         if (root.engine.conforms(item.status(), report)) {
             null
         } else {
@@ -559,3 +567,285 @@ test "items: ids are unique" {
 test "rules: names are unique" {
     assert.equal(duplicate_rule_names().join("\n"), "")
 }
+
+// ─── how a case is put ───────────────────────────────────────────────────────
+//
+// A candidate with a foil can be put two ways, and which way is a draw
+// against a knob. What must hold either way: the pair really contrasts, the
+// order of the two carries nothing, and an answer is judged against the
+// question that was asked rather than the program that was shown.
+
+function claim_of(name: string) -> root.engine.Claim throws never {
+    root.engine.Claim {
+        rule: root.engine.Rule {
+            name,
+            spec: root.engine.Section { heading: "Taxonomy" },
+            quote: "a quote",
+            more: [],
+        },
+        instance: `an instance of ${name}`,
+    }
+}
+
+/// A case with a trace, so a pair can be told to part where it should.
+function traced(compiles: bool, source: string, names: string[]) -> root.engine.Case throws never {
+    root.engine.Case {
+        files: root.engine.one_file("case.baml", source),
+        key: if (compiles) {
+            root.engine.Compiles { tests: [] }
+        } else {
+            root.engine.Rejected {
+                code: "E0001",
+                more: [],
+                at: root.engine.Region { file: "case.baml", start: 0, end: 1 },
+            }
+        },
+        trace: names.map((name) -> {
+            claim_of(name)
+        }),
+    }
+}
+
+/// A candidate whose item has a second program to offer.
+function paired(compiles: bool) -> root.engine.Candidate throws never {
+    root.engine.Candidate {
+        case: traced(compiles, "one", ["axiom", "one-way"]),
+        features: {},
+        traps: ["spelling"],
+    }
+}
+
+/// The foil that answers the other way.
+function opposing(compiles: bool) -> root.engine.Foil throws never {
+    root.engine.Foil {
+        case: traced(!compiles, "two", ["axiom", "other-way"]),
+        difference: "the two types swap places",
+        traps: ["typescript"],
+    }
+}
+
+/// A foil that answers the same way: not a pair at all.
+function agreeing() -> root.engine.Foil throws never {
+    root.engine.Foil {
+        case: traced(true, "two", ["axiom", "other-way"]),
+        difference: "nothing that matters",
+        traps: [],
+    }
+}
+
+function put_with(
+    foil: root.engine.Foil?,
+    knobs: root.engine.Knobs,
+    seed: root.engine.Seed,
+) -> root.engine.Put throws never {
+    root.engine.put(
+        paired(true),
+        () -> {
+            foil
+        },
+        knobs,
+        seed,
+    )
+}
+
+/// How often the foil is asked for over a sweep at a rate of a third, and
+/// how many choices came of it. Building one means rendering a second whole
+/// program, and most candidates are drawn only to be thrown away, so the two
+/// numbers must agree.
+function builds_only_when_needed() -> string throws never {
+    let asked: map<string, int> = { "count": 0 };
+    let choices = baml.iter.Range.new(0, 200)
+        .filter((i) -> {
+            let put = root.engine.put(
+                paired(true),
+                () -> {
+                    let _ = asked.set("count", (asked.get("count") ?? 0) + 1);
+                    opposing(true)
+                },
+                knobs_at(0.35),
+                root.engine.seed_for("share", i),
+            );
+            is_choice(put)
+        })
+        .count();
+    `${asked.get("count") ?? 0} for ${choices}`
+}
+
+function knobs_at(contrast: float) -> root.engine.Knobs throws never {
+    root.engine.Knobs { ...root.engine.default_knobs(), contrast }
+}
+
+function is_choice(put: root.engine.Put) -> bool throws never {
+    put.posed is root.engine.Choice
+}
+
+/// Over a sweep of seeds: how often each kind of candidate is put as a
+/// choice, and whether putting one twice puts it the same way.
+function putting_report() -> string throws never {
+    let seeds = baml.iter.Range.new(0, 200)
+        .map((i) -> {
+            root.engine.seed_for("putting", i)
+        })
+        .collect();
+    let never_ = seeds
+        .filter((seed) -> {
+            is_choice(put_with(opposing(true), knobs_at(0.0), seed))
+        })
+        .length();
+    let always = seeds
+        .filter((seed) -> {
+            is_choice(put_with(opposing(true), knobs_at(1.0), seed))
+        })
+        .length();
+    let unpaired = seeds
+        .filter((seed) -> {
+            is_choice(put_with(null, knobs_at(1.0), seed))
+        })
+        .length();
+    let same_way = seeds
+        .filter((seed) -> {
+            is_choice(put_with(agreeing(), knobs_at(1.0), seed))
+        })
+        .length();
+    let stable = seeds.every((seed) -> {
+        put_with(opposing(true), root.engine.default_knobs(), seed)
+            == put_with(opposing(true), root.engine.default_knobs(), seed)
+    });
+    // A foil is built only when the draw calls for one, so a candidate put
+    // as a verdict never asks its item for a second program.
+    `never=${never_} always=${always} unpaired=${unpaired} agreeing_foil=${same_way} stable=${stable} asked=${builds_only_when_needed()}`
+}
+
+/// The knob is the share: at 0.35, 68 of 200 draws are choices.
+function contrast_share() -> string throws never {
+    let choices = baml.iter.Range.new(0, 200)
+        .filter((i) -> {
+            is_choice(put_with(opposing(true), knobs_at(0.35), root.engine.seed_for("share", i)))
+        })
+        .count();
+    `choices=${choices}`
+}
+
+/// Which of the two is shown first is the only thing `compiles_first` says,
+/// and both halves of the question follow from it.
+function order_report() -> string throws never {
+    let first = root.engine.contrast(paired(true).case, opposing(true), true)
+        ?? return "no choice";
+    let second = root.engine.contrast(paired(true).case, opposing(true), false)
+        ?? return "no choice";
+    let sources = [first, second].map((choice) -> {
+        root.engine.cases_of(choice).map((case) -> {
+            case.files.get("case.baml") ?? "?"
+        })
+    });
+    `shown=${sources} second_compiles=${[first.second_compiles(), second.second_compiles()]}`
+}
+
+/// A question of two programs turns on what they agree about, and its reveal
+/// keeps that apart from what tells them apart.
+function shared_report() -> string throws never {
+    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
+        ?? return "no choice";
+    let revealed = root.engine.reveal(choice);
+    let alone = root.engine.reveal(paired(true).case);
+    `rules=${root.engine.rules_of(choice)} tails=${revealed.programs.map((p) -> {
+        p.claims.length()
+    })} difference=${revealed.difference != ""} alone_rules=${root.engine.rules_of(paired(true).case)} alone_tail=${alone.programs[0].claims.length()}`
+}
+
+test "put: the knob decides, a candidate without a pair is never a choice, and putting is stable" {
+    assert.equal(
+        putting_report(),
+        "never=0 always=200 unpaired=0 agreeing_foil=0 stable=true asked=68 for 68",
+    )
+}
+
+test "put: the knob is the share of the draws it takes" {
+    assert.equal(contrast_share(), "choices=68")
+}
+
+test "choice: the order of the two is all that `compiles_first` decides" {
+    assert.equal(
+        order_report(),
+        `shown=[["one", "two"], ["two", "one"]] second_compiles=[false, true]`,
+    )
+}
+
+test "choice: a question turns on what its programs agree about" {
+    assert.equal(
+        shared_report(),
+        `rules=["axiom"] tails=[1, 1] difference=true alone_rules=["axiom", "one-way"] alone_tail=0`,
+    )
+}
+
+// ─── judging what was asked ──────────────────────────────────────────────────
+
+function choice_question() -> root.engine.Question throws never {
+    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
+        ?? return question_of_case();
+    root.engine.Question { item: "synthetic", seed: 1, posed: choice }
+}
+
+function question_of_case() -> root.engine.Question throws never {
+    root.engine.Question { item: "synthetic", seed: 1, posed: paired(true).case }
+}
+
+function chose(second: bool) -> root.engine.Answer throws never {
+    root.engine.Answer { said: root.engine.Chose { second }, reasoning: "" }
+}
+
+/// A judgement in a word, since it has three outcomes and not two.
+function judged_word(verdict_correct: bool?) -> string throws never {
+    match (verdict_correct) {
+        let right: bool => {
+            if (right) {
+                "right"
+            } else {
+                "wrong"
+            }
+        },
+        null => "withheld",
+    }
+}
+
+/// The first of the two compiles, so saying the first is right and saying
+/// the second is wrong; withholding is neither.
+function judging_a_choice() -> string throws never {
+    let question = choice_question();
+    let no_answer = root.engine.Answer { said: null, reasoning: "" };
+    let marks = [chose(false), chose(true), no_answer].map((answer) -> {
+        judged_word(root.engine.judge(question, answer, null).verdict_correct)
+    });
+    `marks=${marks}`
+}
+
+/// An answer of the wrong kind for the question is a defect in whatever
+/// asked it, and says so rather than being read as an answer.
+function crossed_answers() -> string throws never {
+    let verdict_on_choice = {
+        let judgement = root.engine.judge(
+            choice_question(),
+            root.engine.Answer { said: root.engine.VerdictKind.Compiles, reasoning: "" },
+            null,
+        );
+        judged_word(judgement.verdict_correct)
+    } catch (e) {
+        baml.panics.Panic => "panicked",
+    };
+    let choice_on_verdict = {
+        let judgement = root.engine.judge(question_of_case(), chose(true), null);
+        judged_word(judgement.verdict_correct)
+    } catch (e) {
+        baml.panics.Panic => "panicked",
+    };
+    `verdict_on_choice=${verdict_on_choice} choice_on_verdict=${choice_on_verdict}`
+}
+
+test "judge: a choice is right when it names the program the compiler accepts" {
+    assert.equal(judging_a_choice(), `marks=["right", "wrong", "withheld"]`)
+}
+
+test "judge: an answer of the wrong kind for the question is refused" {
+    assert.equal(crossed_answers(), "verdict_on_choice=panicked choice_on_verdict=panicked")
+}
+

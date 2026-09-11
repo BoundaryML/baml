@@ -244,14 +244,31 @@ class Checked {
     outcome: Outcome,
 }
 
+/// An item is what the compiler says at `seed` only if every program it can
+/// put a learner in front of there is. A foil is shown and marked exactly as
+/// its case is, so its key is a claim about the compiler exactly as its
+/// case's is.
+function verify_at(item: Item, seed: Seed) -> Outcome? throws never {
+    let candidate = generate(item, seed)
+        ?? return null;
+    let outcome = verify(candidate.case);
+    if (!agrees(outcome)) {
+        return outcome;
+    }
+    match (foil_of(item, seed)) {
+        let foil: Foil => verify(foil.case),
+        null => Agrees {  },
+    }
+}
+
 /// Generate and verify `count` seeds of `item`.
 function verify_item(item: Item, count: int) -> ItemReport throws never {
     let id = item.id();
     let checked: Checked[] = baml.iter.Range.new(0, count)
         .filter_map((i) -> {
-            let candidate = generate(item, seed_for(id, i))
+            let outcome = verify_at(item, seed_for(id, i))
                 ?? return null;
-            Checked { index: i, outcome: verify(candidate.case) }
+            Checked { index: i, outcome }
         })
         .collect();
     ItemReport {

@@ -31,19 +31,45 @@ import {
 
 export { engine };
 export type { Answered, Given, Next, Taken };
+export type Claim = engine.Claim;
 export type Exchange = engine.Exchange;
 export type Knobs = engine.Knobs;
 export type Points = engine.Points;
 export type Profile = engine.Profile;
 export type Prompt = engine.Prompt;
 export type Reported = engine.Reported;
+export type Revealed = engine.Revealed;
 export type Rule = engine.Rule;
+export type Verdicted = engine.Verdicted;
 export type Standing = engine.Standing;
 export const Why = engine.Why;
 
-/** What a learner said the compiler does, or that they would not commit. */
-export type Said = 'compiles' | 'rejected' | 'unsure';
-const SAIDS: readonly string[] = ['compiles', 'rejected', 'unsure'];
+/**
+ * What a learner said: of one program, whether the compiler accepts it; of
+ * two side by side, which of them it accepts. Either way, that they would not
+ * commit.
+ */
+export type Said = 'compiles' | 'rejected' | 'first' | 'second' | 'unsure';
+const SAIDS: readonly string[] = [
+  'compiles',
+  'rejected',
+  'first',
+  'second',
+  'unsure',
+];
+
+/** The words a question showing `programs` programs takes. */
+export function wordsFor(programs: number): [Said, string][] {
+  return programs > 1
+    ? [
+        ['first', 'The first'],
+        ['second', 'The second'],
+      ]
+    : [
+        ['compiles', 'It compiles'],
+        ['rejected', 'It is rejected'],
+      ];
+}
 
 export function isSaid(value: unknown): value is Said {
   return typeof value === 'string' && SAIDS.includes(value);

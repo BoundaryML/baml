@@ -10,13 +10,19 @@
 // is what a person runs and it is the stricter of the two: only it enforces
 // which paths outside the app root may be served, and the bridge's
 // WebAssembly is one of them.
+//
+// The sitting is asked for by session, so it is the same sitting every run:
+// the same questions in the same order, of both kinds, and a failure here is
+// a change in the quiz rather than a roll of the dice.
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const PORT = 4321;
-const URL = `http://localhost:${PORT}/`;
+const SESSION = 7;
+const CASES = 8;
+const URL = `http://localhost:${PORT}/?session=${SESSION}`;
 const WAIT = { timeout: 120000 };
 
 function startServer() {
@@ -66,54 +72,6 @@ async function progress(page, wanted) {
   );
 }
 
-/**
- * Check a reveal against itself. The mark and the outcome are worked out
- * separately -- the mark by judging the answer against the case's key, the
- * outcome by asking the compiler -- so their agreement is what catches a
- * boundary that quietly loses the answer, which is how every answer once
- * read wrong. The points must follow the mark under the rule shown.
- */
-async function checkReveal(page, said, rule) {
-  await page.waitForSelector('.reveal', WAIT);
-  const verdict = await text(page, '.reveal p');
-  const compiled = verdict.includes('It compiles.');
-  expect(
-    compiled || verdict.includes('The compiler rejects it.'),
-    `the reveal does not say what the compiler did: ${verdict}`,
-  );
-  const points = await text(page, '.reveal .points');
-  if (said === 'unsure') {
-    expect(
-      verdict.startsWith('You held back.'),
-      `held back, but the reveal says: ${verdict}`,
-    );
-    expect(points === rule.unsure, `held back, but the points read ${points}`);
-  } else {
-    const marked = verdict.startsWith('Right.');
-    expect(
-      marked || verdict.startsWith('Wrong.'),
-      `the reveal does not mark the answer: ${verdict}`,
-    );
-    const agreed = (said === 'compiles') === compiled;
-    expect(
-      marked === agreed,
-      `answered "${said}" and the case ${compiled ? 'compiles' : 'does not'}, but the reveal says: ${verdict}`,
-    );
-    const wanted = marked ? rule.right : rule.wrong;
-    expect(
-      points === wanted,
-      `marked ${verdict} but the points read ${points}`,
-    );
-  }
-  const claims = await page.locator('.claims li').count();
-  expect(claims > 0, 'the reveal shows no claims');
-  const spans = await page.locator('.claims code').count();
-  expect(spans > 0, 'no type in the claims is set as code');
-  const literal = await text(page, '.claims');
-  expect(!literal.includes('`'), `a backtick reached the page: ${literal}`);
-  return { claims, verdict };
-}
-
 /** The points rule as shown, so every reveal is checked against it. */
 async function ruleShown(page) {
   const line = await text(page, '.rule-line');
@@ -122,26 +80,121 @@ async function ruleShown(page) {
   return { right: found[1], unsure: found[3], wrong: found[2] };
 }
 
-async function checkCase(page) {
+/** The question on screen: how many programs, and what may be said about them. */
+async function question(page) {
   await page.waitForSelector('pre.case', WAIT);
-  const source = await text(page, 'pre.case');
-  expect(
-    source.includes('function') ||
-      source.includes('class') ||
-      source.includes('type '),
-    `the case does not look like BAML source: ${source.slice(0, 120)}`,
-  );
+  const programs = await page.locator('.program').count();
+  expect(programs > 0, 'the question shows no program');
+  for (const source of await page.locator('pre.case').allTextContents()) {
+    expect(
+      source.includes('function') ||
+        source.includes('class') ||
+        source.includes('type '),
+      `a program does not look like BAML source: ${source.slice(0, 120)}`,
+    );
+  }
   expect(
     await page.locator('pre.case .hljs-keyword').first().isVisible(),
-    'the case is not highlighted: no token spans',
+    'the programs are not highlighted: no token spans',
   );
-  const buttons = await page
-    .locator('.question .choices button')
-    .allTextContents();
-  const offered = new Set(buttons.map((b) => b.trim()));
-  for (const wanted of ['It compiles', 'It is rejected', 'Not sure']) {
-    expect(offered.has(wanted), `no "${wanted}" button among ${buttons}`);
+  const buttons = (
+    await page.locator('.question .choices button').allTextContents()
+  ).map((b) => b.trim());
+  const wanted =
+    programs > 1
+      ? ['The first', 'The second']
+      : ['It compiles', 'It is rejected'];
+  for (const word of [...wanted, 'Not sure']) {
+    expect(buttons.includes(word), `no "${word}" button among ${buttons}`);
   }
+  return { buttons: wanted, programs };
+}
+
+/**
+ * Check a reveal against itself. The mark and the outcome are worked out
+ * separately -- the mark by judging the answer against the case's key, the
+ * outcome by asking the compiler -- so their agreement is what catches a
+ * boundary that quietly loses the answer, which is how every answer once
+ * read wrong. The points must follow the mark under the rule shown.
+ */
+async function reveal(page, asked, said, rule) {
+  await page.waitForSelector('.reveal', WAIT);
+  const verdict = await text(page, '.mark');
+  const points = await text(page, '.mark .points');
+
+  // Which program the compiler accepts, said two ways: the sentence, and the
+  // label on each program. For one program the label is not shown, so the
+  // sentence stands alone.
+  const labels = await page.locator('.program .label').allTextContents();
+  let accepted = null;
+  if (asked.programs > 1) {
+    expect(
+      labels.length === asked.programs,
+      `${asked.programs} programs but ${labels.length} labelled`,
+    );
+    const compiling = labels.filter((l) => l.includes('compiles'));
+    expect(
+      compiling.length === 1,
+      `exactly one of two programs should compile, but the labels read ${labels}`,
+    );
+    accepted = labels.findIndex((l) => l.includes('compiles'));
+    const named = accepted === 0 ? 'the first' : 'the second';
+    expect(
+      verdict.includes(`accepts ${named}`),
+      `the labels say ${named} compiles, but the reveal says: ${verdict}`,
+    );
+    // The compiler's own words appear under the one it rejects.
+    const panels = await page.locator('.program .compiler').allTextContents();
+    expect(
+      panels.length === 2,
+      `both programs should carry what the compiler said, got ${panels.length}`,
+    );
+    expect(
+      panels[1 - accepted].includes('E0'),
+      `the rejected program carries no diagnostic: ${panels[1 - accepted]}`,
+    );
+  } else {
+    accepted = verdict.includes('It compiles.') ? 0 : -1;
+    expect(
+      verdict.includes('It compiles.') ||
+        verdict.includes('The compiler rejects it.'),
+      `the reveal does not say what the compiler did: ${verdict}`,
+    );
+  }
+
+  if (said === 'Not sure') {
+    expect(
+      verdict.startsWith('You held back.'),
+      `held back, but the reveal says: ${verdict}`,
+    );
+    expect(points === rule.unsure, `held back, but the points read ${points}`);
+    return;
+  }
+  const marked = verdict.startsWith('Right.');
+  expect(
+    marked || verdict.startsWith('Wrong.'),
+    `the reveal does not mark the answer: ${verdict}`,
+  );
+  // `accepted` is the index of the program the compiler accepts, or -1 when
+  // the one program shown is rejected; the buttons are in the same order.
+  const chose = asked.buttons.indexOf(said);
+  const agreed =
+    asked.programs > 1
+      ? chose === accepted
+      : (chose === 0) === (accepted === 0);
+  expect(
+    marked === agreed,
+    `answered "${said}" and the compiler accepts ${accepted}, but the reveal says: ${verdict}`,
+  );
+  const wanted = marked ? rule.right : rule.wrong;
+  expect(points === wanted, `marked ${verdict} but the points read ${points}`);
+
+  const claims = await page.locator('.claims li').count();
+  expect(claims > 0, 'the reveal shows no claims');
+  const spans = await page.locator('.claims code').count();
+  expect(spans > 0, 'no type in the claims is set as code');
+  const literal = await text(page, '.question');
+  expect(!literal.includes('`'), `a backtick reached the page: ${literal}`);
 }
 
 const server = await startServer();
@@ -160,7 +213,8 @@ try {
 
   await page.goto(URL, { waitUntil: 'load' });
 
-  // Three empty slots; start a practice sitting of three in the first.
+  // Three empty slots; start a practice sitting in the first, with every
+  // case that can be shown beside its opposite shown that way.
   await page.waitForSelector('button:has-text("New sitting")', WAIT);
   expect(
     (await page.locator('.slot').count()) === 3,
@@ -168,49 +222,66 @@ try {
   );
   await page.locator('button:has-text("New sitting")').first().click();
   await page.click('label:has-text("Practice") input[type=radio]');
-  await page.fill('label:has-text("Practice") input.count', '3');
+  await page.fill('label:has-text("Practice") input.count', String(CASES));
+  await page.click('details summary');
+  await page.selectOption(
+    'label:has-text("Show two programs") select',
+    String(1),
+  );
   // The button says "Loading…" until the formatter has instantiated.
   await page.waitForSelector('button:has-text("Start")', WAIT);
   await page.click('button:has-text("Start")');
 
-  await progress(page, 'Case 1 of 3');
-  await checkCase(page);
-  const rule = await ruleShown(page);
-  expect(
-    rule.right === '+4' && rule.wrong === '−12' && rule.unsure === '0',
-    `the default bar of 75% should read +4 / −12 / 0, not ${JSON.stringify(rule)}`,
-  );
+  const seen = { choices: 0, held: 0, verdicts: 0 };
+  let rule = null;
+  for (let at = 1; at <= CASES; at++) {
+    await progress(page, `Case ${at} of ${CASES}`);
+    const asked = await question(page);
+    const shown = await ruleShown(page);
+    if (rule === null) {
+      rule = shown;
+      expect(
+        rule.right === '+4' && rule.wrong === '−12' && rule.unsure === '0',
+        `the default bar of 75% should read +4 / −12 / 0, not ${JSON.stringify(rule)}`,
+      );
+    }
+    if (asked.programs > 1) {
+      seen.choices += 1;
+    } else {
+      seen.verdicts += 1;
+    }
+    // Hold back on the third, to see an abstention through to the transcript.
+    const said = at === 3 ? 'Not sure' : asked.buttons[0];
+    if (at === 3) {
+      seen.held += 1;
+    }
+    await page.click(`.question .choices button:text-is("${said}")`);
+    await reveal(page, asked, said, shown);
 
-  await page.click('button:has-text("It compiles")');
-  const first = await checkReveal(page, 'compiles', rule);
-  await page.click('button:has-text("Next")');
+    // Leave mid-sitting and come back once: the slot holds what was
+    // answered and the next case is offered again from where it stood.
+    if (at === CASES - 1) {
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('button:has-text("Continue")', WAIT);
+      const held = await text(page, '.slot');
+      expect(
+        held.includes(`${at} answered`),
+        `after ${at} answers the slot says: ${held}`,
+      );
+      expect(
+        held.includes(`practice, ${CASES} cases`),
+        `the slot does not say what it holds: ${held}`,
+      );
+      await page.click('button:has-text("Continue")');
+    } else {
+      await page.click('button:has-text("Next")');
+    }
+  }
 
-  await progress(page, 'Case 2 of 3');
-  await checkCase(page);
-  await page.click('button:has-text("Not sure")');
-  await checkReveal(page, 'unsure', rule);
-  await page.click('button:has-text("Next")');
-  await progress(page, 'Case 3 of 3');
-
-  // Leave mid-sitting and come back: the slot holds two answers and the
-  // third case is offered again from where the sitting stood.
-  await page.reload({ waitUntil: 'load' });
-  await page.waitForSelector('button:has-text("Continue")', WAIT);
-  const held = await text(page, '.slot');
   expect(
-    held.includes('2 answered'),
-    `the slot does not hold the sitting: ${held}`,
+    seen.choices > 0 && seen.verdicts > 0,
+    `a sitting of ${CASES} should ask both kinds of question, got ${JSON.stringify(seen)}`,
   );
-  expect(
-    held.includes('practice, 3 cases'),
-    `the slot does not say what it holds: ${held}`,
-  );
-  await page.click('button:has-text("Continue")');
-  await progress(page, 'Case 3 of 3');
-  await checkCase(page);
-  await page.click('button:has-text("It is rejected")');
-  await checkReveal(page, 'rejected', rule);
-  await page.click('button:has-text("Next")');
 
   // The readout, and the download it comes with.
   await page.waitForSelector('.done', WAIT);
@@ -220,7 +291,7 @@ try {
     `the readout is missing mastery or calibration: ${readout}`,
   );
   expect(
-    readout.includes('3 cases you asked for'),
+    readout.includes(`${CASES} cases you asked for`),
     `the readout does not say why the sitting ended: ${readout}`,
   );
   const [download] = await Promise.all([
@@ -229,17 +300,25 @@ try {
   ]);
   const transcript = JSON.parse(await readFile(await download.path(), 'utf8'));
   expect(
-    Array.isArray(transcript.exchanges) && transcript.exchanges.length === 3,
-    `the transcript does not hold three exchanges: ${JSON.stringify(transcript).slice(0, 200)}`,
+    Array.isArray(transcript.exchanges) &&
+      transcript.exchanges.length === CASES,
+    `the transcript does not hold ${CASES} exchanges: ${JSON.stringify(transcript).slice(0, 200)}`,
   );
   expect(
     transcript.learner !== null && transcript.learner.knobs.practice === true,
     'the transcript does not carry what the model concluded',
   );
-  const verdicts = transcript.exchanges.map((e) => e.answer.verdict);
+  const held = transcript.exchanges.filter((e) => e.answer.said === null);
   expect(
-    verdicts[0] !== null && verdicts[1] === null && verdicts[2] !== null,
-    `the transcript does not record the abstention: ${JSON.stringify(verdicts)}`,
+    held.length === seen.held,
+    `${seen.held} answers were held back but the transcript records ${held.length}`,
+  );
+  const chosen = transcript.exchanges.filter(
+    (e) => e.question.posed.compiles !== undefined,
+  );
+  expect(
+    chosen.length === seen.choices,
+    `${seen.choices} questions showed two programs but the transcript records ${chosen.length}`,
   );
 
   // A mastery sitting shows no meter: the case number, and no total.
@@ -249,7 +328,7 @@ try {
   await page.waitForSelector('button:has-text("Start")', WAIT);
   await page.click('button:has-text("Start")');
   await progress(page, 'Case 1');
-  await checkCase(page);
+  await question(page);
   await page.click('button:has-text("Leave")');
   await page.waitForSelector('button:has-text("New sitting")', WAIT);
   const second = await text(page, '.slot >> nth=1');
@@ -259,7 +338,7 @@ try {
   );
 
   console.log(
-    `smoke: a practice sitting of 3 was sat across a reload, "${first.verdict}" with ${first.claims} claims, the download carries the learner, and a mastery sitting shows no total`,
+    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, and a mastery sitting shows no total`,
   );
 } catch (error) {
   failure = error;
