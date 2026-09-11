@@ -4,8 +4,10 @@
   "channel": "C07UTQN7N1X",
   "mention": "<@U0436HGTNTU>",
   "parent": {
-    "status": "pending",
-    "text": "[Python tooling test: Thursday 5pm Pacific parent; accelerated delivery]\nHey <@U0436HGTNTU>, you\u2019re going to be oncall tomorrow! You\u2019ll be in charge of putting out a canary release tomorrow and monitoring Discord over the weekend and next week. Your rotation runs Friday through Friday."
+    "status": "sent",
+    "text": "[Python tooling test: Thursday 5pm Pacific parent; accelerated delivery]\nHey <@U0436HGTNTU>, you\u2019re going to be oncall tomorrow! You\u2019ll be in charge of putting out a canary release tomorrow and monitoring Discord over the weekend and next week. Your rotation runs Friday through Friday.",
+    "channel": "C07UTQN7N1X",
+    "ts": "1789165145.261609"
   },
   "reminders": [
     {
