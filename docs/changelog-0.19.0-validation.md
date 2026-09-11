@@ -100,7 +100,7 @@ The #4759 claim is scoped to static O2 bytecode instruction counts, not measured
 
 Loaded the unchanged website get-posts.ts from the child checkout using Node 22.23.2 type stripping and temporary dependencies outside the repository. Both documents have a boolean isPublished: false, are absent from getPosts(), and return null from getPost(slug). The same loader returns 49 other posts as a control. Both bodies compile as MDX with remark-gfm. This is a loader and content-parser check, not a complete Next.js production build or visual rendering test.
 
-Structural checks verify the exact 97 inventory SHAs, 41 retained PRs, 51 effect IDs classified exactly once, every effect included once in aggregation, at most three PRs per aggregate entry, valid pinned-source paths, corresponding PR references in the draft, local review links, balanced fences, and Python example syntax. Markdown prose uses editor wrapping rather than injected hard line breaks. `git diff --check` and the applicable prek hooks passed.
+Structural checks verify the exact 97 inventory SHAs, 41 retained PRs, 51 effect IDs classified exactly once, every effect included once in aggregation, at most three PRs per aggregate entry, valid pinned-source paths, local review links, balanced fences, and Python example syntax. Markdown prose uses editor wrapping rather than injected hard line breaks. `git diff --check` and the applicable prek hooks passed.
 
 ## Limits and publication gates
 
