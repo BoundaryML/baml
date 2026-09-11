@@ -28,8 +28,9 @@ async fn self_recursive_employee_renders_and_parses() {
             ))
             employee.field("manager", pending.optional())
             let employee_t = employee.build()
-            let prompt = Extract@render_prompt<unreflect(employee_t.as_type())>().text()
-            let value = Extract@parse<unreflect(employee_t.as_type())>(
+            type Employee = unreflect(employee_t.as_type())
+            let prompt = Extract@render_prompt<Employee>().text()
+            let value = Extract@parse<Employee>(
                 `{"full_name":"Ada","manager":{"full_name":"Grace","manager":null}}`,
             )
             let manager = reflect.class.get_field<unknown>(value, "manager")
@@ -125,8 +126,11 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
             }
 
             let unresolved = reflect.class.builder("UnbuiltTenant")
-            let erased: unknown = unresolved.type()
-            let pending_error = Extract@render_prompt<unreflect(erased)>() catch (e) {
+            let pending = unresolved.type()
+            let pending_error = {
+                type Pending = unreflect(pending)
+                Extract@render_prompt<Pending>()
+            } catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].message
             }
 
@@ -195,13 +199,14 @@ async fn pending_type_is_not_a_static_subtype_of_type() {
 
 #[tokio::test]
 #[should_panic(expected = "[E0001]")]
-async fn unreflect_runtime_escape_does_not_accept_ordinary_values() {
+async fn a_type_binding_operand_must_be_a_type_value() {
     let _ = baml_test!(
         r#"
         function generic<T>() -> bool { true }
 
         function main() -> bool {
-            generic<unreflect(42)>()
+            type Bad = unreflect(42)
+            generic<Bad>()
         }
         "#
     );
@@ -269,7 +274,8 @@ async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
                 next.meta(alias = "child", description = "Recursive child"),
             )
             let built = node.build().as_type()
-            Extract@render_prompt<unreflect(built)>().text()
+            type Built = unreflect(built)
+            Extract@render_prompt<Built>().text()
         }
         "##
     );

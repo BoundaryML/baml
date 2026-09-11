@@ -181,7 +181,14 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
-                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
+                IntrinsicOp::BindType(slot) => {
+                    write!(f, "bind_type({slot}")?;
+                    for arg in args {
+                        write!(f, ", ")?;
+                        write_operand(f, arg)?;
+                    }
+                    return write!(f, ");");
+                }
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -261,7 +268,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -289,9 +295,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -304,7 +307,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -331,9 +333,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -566,16 +565,6 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {})", type_tag_name(*tag))
         }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            write!(f, "runtime_is_type(")?;
-            write_operand(f, operand)?;
-            write!(f, ", ")?;
-            write_operand(f, type_value)?;
-            write!(f, ")")
-        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -741,8 +730,8 @@ mod tests {
         let terminator = Terminator::Call {
             callee: local_copy(1),
             args: Vec::new(),
+            argument_layout: None,
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -758,6 +747,7 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
+            argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
                 Box::new([]),
@@ -766,7 +756,6 @@ mod tests {
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),

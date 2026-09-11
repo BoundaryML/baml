@@ -43,7 +43,7 @@ use baml_compiler_diagnostics::{
     ParseError, ToDiagnostic, runtime_type,
 };
 use baml_compiler2_hir::{file_semantic_index, package::PackageItems, scope::ScopeKind};
-use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+use baml_compiler2_hir_ty::diagnostics::{ScopedTypeEscapeKind, TirTypeError};
 use baml_type::{DeclName, Ty, TyRenderStrategy};
 use text_size::TextRange;
 
@@ -1601,19 +1601,34 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
-    if let TirTypeError::RuntimeTypeMustBeNamed { escape } = error {
-        // The headline says what is wrong; the label at the `unreflect(...)`
-        // slot says why the inline spelling cannot reach past this call —
-        // naming whichever published type the runtime parameter reached, the
-        // value or the error. The rewrite rides along as related info, built
-        // from the file text in `render_with_body_type_refs`.
-        return runtime_type::runtime_type_must_be_named()
-            .with_primary(span, escape.note())
-            .with_phase(DiagnosticPhase::Type);
-    }
     if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
         return runtime_type::cannot_construct_reflection_kind(&vp.path(class_name))
             .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if let TirTypeError::ScopedTypeEscapesBlock { name, value, kind } = error {
+        let value = value.render_with(vp);
+        let label = match kind {
+            ScopedTypeEscapeKind::Value => format!(
+                "this has type `{value}`; a value leaves the block only through a type that does not mention `{name}`, such as `unknown`"
+            ),
+            // The remedy names the clause to write, not the rule that
+            // derives it: the author is being asked to type something.
+            ScopedTypeEscapeKind::Thrown { relaxation } => match relaxation {
+                Some(relaxation) => format!(
+                    "this throws `{value}`, which would be published past the block; catch it inside the block, or declare `throws {}`",
+                    relaxation.render_with(vp)
+                ),
+                None => format!(
+                    "this throws `{value}`, which would be published past the block; catch it inside the block, or declare a `throws` clause that does not mention `{name}`"
+                ),
+            },
+            ScopedTypeEscapeKind::Inferred => format!(
+                "the type inferred here would be `{value}`; give the binding it flows into a type that does not mention `{name}`, such as `unknown`"
+            ),
+        };
+        return runtime_type::scoped_type_escapes_block(name.as_str())
+            .with_primary(span, label)
             .with_phase(DiagnosticPhase::Type);
     }
     if let TirTypeError::CannotConstructBuiltinCompanion {
@@ -1814,14 +1829,11 @@ fn source_aware_tir_type_error_message(
                 ty(other_type)
             )
         }
-        TirTypeError::ThrowsContractViolation {
-            declared,
-            extra_types,
-        } => {
+        TirTypeError::ThrowsContractViolation { declared, extra } => {
             format!(
                 "declared throws is `{}`, but this function may also throw `{}`",
                 ty(declared),
-                extra_types.join(" | ")
+                ty(extra)
             )
         }
         TirTypeError::CallbackThrowsContractViolation {
@@ -1881,10 +1893,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
             runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
         }
-        TirTypeError::RuntimeTypeMustBeNamed { .. } => {
-            runtime_type::runtime_type_must_be_named().id
-        }
-        TirTypeError::RuntimeTypeHasNoScope => runtime_type::runtime_type_has_no_scope().id,
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
@@ -1950,10 +1958,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
-        TirTypeError::RuntimeTypeArgumentOnStreamingCall { .. } => DiagnosticId::InvalidSyntax,
-        TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
-            runtime_type::runtime_type_argument_on_indirect_call().id
-        }
+        TirTypeError::ScopedTypeEscapesBlock { .. } => DiagnosticId::ScopedTypeEscapesBlock,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

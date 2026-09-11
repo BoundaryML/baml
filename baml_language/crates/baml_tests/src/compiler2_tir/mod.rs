@@ -125,7 +125,6 @@ pub(crate) mod support {
                 }
             }
             Pattern::Type(ty) => ty.to_string(),
-            Pattern::Unreflect(expr) => format!("unreflect({})", expr_desc(*expr, body)),
             Pattern::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
@@ -134,18 +133,16 @@ pub(crate) mod support {
         }
     }
 
-    fn type_expr_desc(type_expr: &baml_compiler2_ast::TypeExpr, body: &ExprBody) -> String {
-        let mut rendered = type_expr.to_string();
-        let mut operands = Vec::new();
-        type_expr.unreflect_operands(&mut operands);
-        for operand in operands {
-            rendered = rendered.replacen(
-                "unreflect(…)",
-                &format!("unreflect({})", expr_desc(operand, body)),
-                1,
-            );
+    fn type_binding_value_desc(
+        value: &baml_compiler2_ast::TypeBindingValue,
+        body: &ExprBody,
+    ) -> String {
+        match value {
+            baml_compiler2_ast::TypeBindingValue::Runtime(operand) => {
+                format!("unreflect({})", expr_desc(*operand, body))
+            }
+            baml_compiler2_ast::TypeBindingValue::Static(ty) => ty.to_string(),
         }
-        rendered
     }
 
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
@@ -269,10 +266,7 @@ pub(crate) mod support {
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args
-                        .iter()
-                        .map(|arg| type_expr_desc(arg, body))
-                        .collect();
+                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let arg_strs: Vec<String> = args
@@ -678,7 +672,7 @@ pub(crate) mod support {
         let stmt = &body.stmts[stmt_id];
         match stmt {
             Stmt::TypeBinding { name, value } => {
-                let value = type_expr_desc(value, body);
+                let value = type_binding_value_desc(value, body);
                 writeln!(output, "{pad}type {name} = {value}").ok();
             }
             Stmt::Let {
@@ -827,15 +821,14 @@ pub(crate) mod support {
         let stmt = &body.stmts[stmt_id];
         match stmt {
             Stmt::TypeBinding { name, value } => {
-                let (value_desc, value_ty) = match &value.kind {
-                    baml_compiler2_ast::TypeExprKind::Unreflect {
-                        operand: Some(operand),
-                        ..
-                    } => (
+                let (value_desc, value_ty) = match value {
+                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => (
                         format!("unreflect({})", expr_desc_rich(*operand, body, inference)),
                         expr_ty(vp, inference, *operand).to_string(),
                     ),
-                    _ => (type_expr_desc(value, body), "type".to_string()),
+                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
+                        (ty.to_string(), "type".to_string())
+                    }
                 };
                 writeln!(output, "{pad}type {name} = {value_desc} : {value_ty}").ok();
             }
@@ -1383,7 +1376,6 @@ pub(crate) mod support {
             }
 
             match &ty.kind {
-                baml_compiler2_ast::TypeExprKind::Unreflect { .. } => "unreflect(…)".into(),
                 baml_compiler2_ast::TypeExprKind::Path {
                     segments,
                     generic_args,
@@ -1542,7 +1534,6 @@ pub(crate) mod support {
             }
 
             match &store[id].kind {
-                K::Unreflect { .. } => "unreflect(…)".into(),
                 K::Path {
                     segments,
                     generic_args,
@@ -1700,10 +1691,6 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(" | "),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
-                Pattern::Unreflect(expr) => format!(
-                    "unreflect({})",
-                    expr_desc_hir(*expr, body, prefix, local_type_names)
-                ),
                 Pattern::Class {
                     class,
                     generic_args,
@@ -2073,26 +2060,21 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn type_expr_desc_hir(
-                type_expr: &baml_compiler2_ast::TypeExpr,
+            fn type_binding_value_desc_hir(
+                value: &baml_compiler2_ast::TypeBindingValue,
                 body: &ExprBody,
                 prefix: &str,
                 local_type_names: &std::collections::HashSet<&str>,
             ) -> String {
-                let mut rendered = type_expr_to_string_hir(type_expr, prefix, local_type_names);
-                let mut operands = Vec::new();
-                type_expr.unreflect_operands(&mut operands);
-                for operand in operands {
-                    rendered = rendered.replacen(
-                        "unreflect(…)",
-                        &format!(
-                            "unreflect({})",
-                            expr_desc_hir(operand, body, prefix, local_type_names)
-                        ),
-                        1,
-                    );
+                match value {
+                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => format!(
+                        "unreflect({})",
+                        expr_desc_hir(*operand, body, prefix, local_type_names)
+                    ),
+                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
+                        type_expr_to_string_hir(ty, prefix, local_type_names)
+                    }
                 }
-                rendered
             }
 
             use baml_compiler2_ast::Stmt;
@@ -2100,7 +2082,7 @@ pub(crate) mod support {
             match stmt {
                 Stmt::TypeBinding { name, value } => format!(
                     "type {name} = {}",
-                    type_expr_desc_hir(value, body, prefix, local_type_names)
+                    type_binding_value_desc_hir(value, body, prefix, local_type_names)
                 ),
                 Stmt::Let {
                     pattern,

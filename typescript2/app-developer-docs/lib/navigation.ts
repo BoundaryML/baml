@@ -26,15 +26,11 @@ export const documentationNavigation: DocumentationGroup[] = [
       { href: '/baml/get-started', label: 'Get started' },
       {
         children: [
+          { href: '/baml/book/errors', label: '8. Handle errors' },
+          { href: '/baml/book/interfaces', label: '11. Interfaces' },
           {
-            children: [
-              {
-                href: '/baml/book/foundations/functions',
-                label: 'Functions',
-              },
-            ],
-            href: '/baml/book/foundations',
-            label: 'Foundations',
+            href: '/baml/book/concurrency',
+            label: '12. Run work concurrently',
           },
         ],
         href: '/baml/book',

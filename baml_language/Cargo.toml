@@ -439,6 +439,15 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
+# Syntax trees and type interning are hot in every compiler check. Neither
+# package depends on the embedded stdlib, so stdlib-only edits reuse these
+# optimized artifacts. Keep the dev profile's assertions and overflow checks.
+[profile.dev.package.rowan]
+opt-level = 3
+
+[profile.dev.package.baml_type]
+opt-level = 3
+
 # Salsa is the compiler's query engine: it only recompiles on a lockfile or
 # toolchain bump, but it executes on every compile. At opt-level 0 a debug
 # `baml-cli` takes 10-30s to cold-compile a one-function project, which the

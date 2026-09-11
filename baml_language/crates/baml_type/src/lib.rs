@@ -32,7 +32,9 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+pub mod call_layout;
 mod codegen_ty;
+pub mod compiler_aliases;
 pub mod decl_cycles;
 mod declaration_name;
 mod defs;
@@ -57,6 +59,7 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub use attr::*;
+pub use call_layout::{CallLayout, LayoutMismatch};
 pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;

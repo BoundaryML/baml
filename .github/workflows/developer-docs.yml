@@ -190,6 +190,15 @@ jobs:
         if: always()
         run: sccache --show-stats
 
+      - name: Execute book behavior and inferred-signature assertions
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:book:validate
+        working-directory: typescript2
+      - name: Check book interface package boundaries
+        run: cargo test -p baml_tests --test book_interfaces
+        working-directory: baml_language
+
   database-integration:
     name: Immutable document-store integration
     needs: determine-changes

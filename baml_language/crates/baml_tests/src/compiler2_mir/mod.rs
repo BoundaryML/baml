@@ -525,7 +525,7 @@ fn optional_named_reordered_args_evaluate_in_source_order() {
 }
 
 #[test]
-fn optional_dropping_adapter() {
+fn optional_dropping_function_value() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -540,7 +540,7 @@ fn optional_dropping_adapter() {
         }
         "#,
     );
-    mir_snapshot!("optional_dropping_adapter", render_mir(&db, file));
+    mir_snapshot!("optional_dropping_function_value", render_mir(&db, file));
 }
 
 #[test]
@@ -748,9 +748,9 @@ fn reflect_type_of_array_of_typevar() {
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
 }
 
-/// Runtime type syntax is consumed from hir_ty's durable plan: bind the
-/// lexical slot once, pass the stored runtime type operand to the generic call,
-/// retain its checked-call flag, and use the bound value for `is T`.
+/// A scoped runtime type is consumed from hir_ty's durable plan: bind the
+/// lexical slot once from the operand, then read the slot for the `let x: T`
+/// downcast, the generic call's type argument, and `is T`.
 #[test]
 fn runtime_type_plan_operations_are_explicit() {
     let mut db = make_db();
@@ -761,8 +761,10 @@ function accept<T>(value: T) -> T { value }
 
 function f(t: reflect.Type, value: unknown) -> bool {
     type T = unreflect(t)
-    let result = accept<unreflect(t)>(value)
-    result is T && result is unreflect(t)
+    match (value) {
+        let x: T => accept<T>(x) is T,
+        _ => false,
+    }
 }
 "#,
     );
@@ -773,8 +775,11 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
+/// A static right-hand side loads its template into the binding's slot; every
+/// later mention of the name reads that slot, including nested under a
+/// constructor (`Bound?`, `Bound[]`).
 #[test]
-fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
+fn static_type_binding_loads_its_template_into_the_slot() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -783,14 +788,14 @@ class Wrapper<T> { value T }
 
 function erase<T>() -> string { "ok" }
 
-function f(t: reflect.Type, value: unknown) -> bool {
-    type Bound = Wrapper<unreflect(t)>
-    let annotated: Wrapper<unreflect(t)>? = null
-    erase<Wrapper<unreflect(t)>>() == "ok"
+function f(value: unknown) -> bool {
+    type Bound = Wrapper<string>
+    let annotated: Bound? = null
+    erase<Bound>() == "ok"
         && annotated == null
-        && value is Wrapper<unreflect(t)>
+        && value is Bound
         && match value {
-            Wrapper<unreflect(t)> => true,
+            Bound => true,
             _ => false,
         }
 }
@@ -798,7 +803,7 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
-        "nested_runtime_type_atoms_bind_slots_before_loading_templates",
+        "static_type_binding_loads_its_template_into_the_slot",
         render_mir(&db, file)
     );
 }
@@ -830,7 +835,11 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
-    app.accept<unreflect(t)>(value)
+    type T = unreflect(t)
+    match (value) {
+        let x: T => app.accept<T>(x),
+        _ => null,
+    }
 }
 "#,
     );

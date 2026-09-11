@@ -30,13 +30,34 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
+impl crate::BexVm {
+    /// A private package that owns a runtime-created class and its impl
+    /// rules. The dynamic dispatch table only *finds* a witness; ownership is
+    /// what keeps the rule objects alive exactly as long as the class, through
+    /// the same `Class::owner` edge a compiled class has to its package. The
+    /// package is never installed under a name or rooted on its own: it lives
+    /// while something still reaches the class.
+    pub(crate) fn alloc_private_type_owner(&mut self) -> HeapPtr {
+        use bex_heap::TlabHolder;
+        self.tlab_mut().alloc(Object::Package(Box::new(Package {
+            kind: PackageKind::Runtime(Box::new(bex_vm_types::types::RuntimePackage {
+                initialized: true,
+                ..Default::default()
+            })),
+            ..Default::default()
+        })))
+    }
+}
+
 /// One anonymous-class witness in the dynamic dispatch table.
 ///
 /// Both pointers are **weak**: the table never keeps a minted definition or its
 /// rule alive. `class` decides liveness (the witness dies with its class);
 /// `rule` is the heap `Object::ImplRule` the resolver borrows — the one
 /// authoritative copy, so the collector's fixup of that object is what keeps
-/// the rule's own `interface_head`/`methods[].fqn` pointers current.
+/// the rule's own `interface_head`/`methods[].fqn` pointers current. The
+/// class keeps its rules alive through its private owner package
+/// (`BexVm::alloc_private_type_owner`).
 #[derive(Clone, Copy, Debug)]
 pub struct DynRuleEntry {
     pub class: HeapPtr,

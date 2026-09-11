@@ -109,8 +109,9 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
                     description: "symptoms",
                 },
             ])
-            let prompt = ExtractNote@render_prompt<unreflect(note_t.as_type())>("sample").text()
-            let note = ExtractNote@parse<unreflect(note_t.as_type())>(
+            type Note = unreflect(note_t.as_type())
+            let prompt = ExtractNote@render_prompt<Note>("sample").text()
+            let note = ExtractNote@parse<Note>(
                 `{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`,
             )
             let height = reflect.class.get_field<int>(note, "height_cm")
@@ -182,20 +183,23 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class() {
                 "args": search_args_t.as_type(),
             })
             let action_t = reflect.union.new([read_t.as_type(), search_t.as_type()])
-            let prompt = PickAction@render_prompt<unreflect(action_t.as_type())>("read the file").text()
-            let action = PickAction@parse<unreflect(action_t.as_type())>(
+            type Action = unreflect(action_t.as_type())
+            type Read = unreflect(read_t.as_type())
+            type Search = unreflect(search_t.as_type())
+            let prompt = PickAction@render_prompt<Action>("read the file").text()
+            let action = PickAction@parse<Action>(
                 `{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}}`,
             )
 
             let branch = "none"
-            if action is unreflect(read_t.as_type()) {
+            if action is Read {
                 branch = "read"
-            } else if action is unreflect(search_t.as_type()) {
+            } else if action is Search {
                 branch = "search"
             }
             let matched = match (action) {
-                unreflect(read_t.as_type()) => "read",
-                unreflect(search_t.as_type()) => "search",
+                Read => "read",
+                Search => "search",
                 _ => "none",
             }
             let args = reflect.class.get_field<unknown>(action, "args")
@@ -356,13 +360,15 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
                 "tags": ["urgent", "review"],
                 "scores": {"priority": 7, "followup": null}
             }`
-            let original_value = RoundTrip@parse<unreflect(original.as_type())>(document)
-            let compiled_value = RoundTrip@parse<unreflect(compiled.as_type())>(document)
+            type Original = unreflect(original.as_type())
+            type Compiled = unreflect(compiled.as_type())
+            let original_value = RoundTrip@parse<Original>(document)
+            let compiled_value = RoundTrip@parse<Compiled>(document)
 
             return original.as_type() != compiled.as_type()
                 && source == compiled.as_type().to_baml()
-                && RoundTrip@render_prompt<unreflect(original.as_type())>().text()
-                    == RoundTrip@render_prompt<unreflect(compiled.as_type())>().text()
+                && RoundTrip@render_prompt<Original>().text()
+                    == RoundTrip@render_prompt<Compiled>().text()
                 && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
                 && reflect.Type.of_value(original_value) == original.as_type()
                 && reflect.Type.of_value(compiled_value) == compiled.as_type()
@@ -458,9 +464,11 @@ async fn same_fields_in_different_orders_render_independently() {
                 "second": reflect.Type.of<string>(),
                 "first": reflect.Type.of<int>(),
             })
-            return Render@render_prompt<unreflect(left.as_type())>().text()
+            type Left = unreflect(left.as_type())
+            type Right = unreflect(right.as_type())
+            return Render@render_prompt<Left>().text()
                 + "\n<RIGHT>\n"
-                + Render@render_prompt<unreflect(right.as_type())>().text()
+                + Render@render_prompt<Right>().text()
                 + "\n<UNEQUAL>" + (left != right).to_string()
         }
         "##
@@ -506,7 +514,8 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
 
         function main() -> string {
             let t = reflect.class.new("OneField", { "count": reflect.Type.of<int>() })
-            let value = Extract@parse<unreflect(t.as_type())>(`{"count": 4}`)
+            type OneField = unreflect(t.as_type())
+            let value = Extract@parse<OneField>(`{"count": 4}`)
             let missing = reflect.class.get_field<int>(value, "absent") catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
@@ -574,7 +583,8 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
             let widget_t = reflect.class.new("Widget", {
                 "name": reflect.Type.of<string>(),
             })
-            Extract@parse<unreflect(widget_t.as_type())>(`{"name":"anonymous"}`)
+            type Widget = unreflect(widget_t.as_type())
+            Extract@parse<Widget>(`{"name":"anonymous"}`)
         }
         "##
     );
@@ -626,7 +636,8 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
                 "schema.baml": "class ExtractedRecord { account string }"
             })
             let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-            Extract@parse<unreflect(record_t.as_type())>(`{"account":"AC-1"}`)
+            type Record = unreflect(record_t.as_type())
+            Extract@parse<Record>(`{"account":"AC-1"}`)
         }
         "##
     );

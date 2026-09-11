@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "baml_release",
@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -743,6 +743,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "borsh",
  "la-arena",
  "num-bigint",

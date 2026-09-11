@@ -71,7 +71,8 @@ async fn runtime_never_specialization_uses_the_same_diagnostic() {
 
             function main() -> string throws never {{
                 let runtime_t = reflect.Type.of<never>()
-                let rendered = GenericList@render_prompt<unreflect(runtime_t)>("items") catch (e) {{
+                type RuntimeT = unreflect(runtime_t)
+                let rendered = GenericList@render_prompt<RuntimeT>("items") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -222,7 +223,8 @@ async fn runtime_minted_nested_non_data_field_is_rejected() {
                 let outer = reflect.class.new("RuntimeOuter", {{
                     "inner": inner.as_type(),
                 }})
-                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime") catch (e) {{
+                type Outer = unreflect(outer.as_type())
+                let rendered = GenericValue@render_prompt<Outer>("runtime") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -362,7 +364,8 @@ async fn never_nested_in_a_runtime_class_field_is_rejected_not_panicked() {
                 }}) catch (e) {{
                     _ => return "class.new threw",
                 }}
-                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime")
+                type Outer = unreflect(outer.as_type())
+                let rendered = GenericValue@render_prompt<Outer>("runtime")
                     catch (e) {{
                         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                         _ => "wrong error",
