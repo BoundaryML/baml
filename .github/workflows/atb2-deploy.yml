@@ -45,11 +45,32 @@ jobs:
       - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
       - name: Verify runtime secret filtering
         run: python3 tools/atb2/deploy/test_launch_runtime.py
+      - name: Verify sessions and push scans
+        run: |
+          python3 tools/atb2/deploy/test_sessions.py
+          python3 tools/atb2/deploy/test_push_scan.py
       - name: Verify builder cannot read the runtime login
         run: >-
-          docker run --rm --network none --entrypoint bash
+          docker run --rm --network none --privileged --entrypoint bash
           --mount type=bind,src="${{ github.workspace }}/tools/atb2/deploy/test_build_isolation.sh",dst=/test-build-isolation.sh,readonly
           atb2-runner:ci /test-build-isolation.sh
+
+      # Disposable, network-disabled fixtures need namespaces inside Docker.
+      # No credentials or host runtime directories are mounted.
+      - name: Verify agent boundary and trusted pushes
+        run: |
+          docker run --rm --network none --privileged \
+            -e FAKE_APP_SECRET=private-fixture \
+            --mount type=bind,src="${{ github.workspace }}/tools/atb2/deploy",dst=/tests,readonly \
+            --entrypoint bash atb2-runner:ci -c '
+              mkdir -p /data/home /data/worktrees /data/agent-cache /data/repo
+              chown -R 1000:1000 /data
+              mkdir -p /data/cli-cache
+              chown root:root /data/cli-cache
+              chmod 755 /data/cli-cache
+              printf %s "cached fixture" > /data/cli-cache/test-readonly
+              chmod 444 /data/cli-cache/test-readonly
+              exec setpriv --reuid=1000 --regid=1000 --clear-groups --no-new-privs --bounding-set=-all python3 /tests/test_sandbox.py'
 
   # On canary only: deploy. A manual run from any other ref is refused, so
   # the deploy token never runs against unreviewed code.
@@ -76,4 +97,4 @@ jobs:
         if: env.FLY_API_TOKEN != ''
         run: |
           flyctl apps list --json | grep -q '"atb2-runner"' || { echo "the Fly app atb2-runner does not exist yet; see tools/atb2/README.md"; exit 1; }
-          flyctl deploy tools/atb2 --config tools/atb2/deploy/fly.toml --remote-only --ha=false
+          flyctl deploy tools/atb2 --config deploy/fly.toml --remote-only --ha=false

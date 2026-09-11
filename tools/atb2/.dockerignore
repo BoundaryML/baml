@@ -6,3 +6,16 @@
 !deploy/bootstrap.sh
 !deploy/build-cli.sh
 !deploy/launch-runtime.py
+
+!deploy/sandbox.py
+!deploy/push.py
+
+!deploy/cache-cli.py
+!deploy/cli-cache-service.py
+!deploy/build-version.py
+!deploy/push-scan.py
+!deploy/reconcile-releases.py
+!deploy/sessions.py
+!deploy/session_home.py
+!deploy/tasks.py
+!deploy/traces.py
