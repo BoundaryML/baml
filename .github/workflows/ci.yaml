@@ -657,14 +657,38 @@ jobs:
         run: git diff --exit-code -- typescript2/pkg-grammar typescript2/app-vscode-ext
 
       - name: "Run grammar tests"
+        id: grammar-tests
+        continue-on-error: true
         run: pnpm --filter @b/pkg-grammar test
         working-directory: typescript2
+
+      - name: "Upload grammar test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: typescript2/pkg-grammar/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
+          collection: xl5LO9gK
+          test-outcome: ${{ steps.grammar-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Run highlight.js grammar tests"
         # The hljs port validates against pkg-grammar's fixtures, so a grammar
         # change that the port doesn't handle fails here (conformance gate).
+        id: hljs-tests
+        continue-on-error: true
         run: pnpm --filter @b/pkg-grammar-hljs test
         working-directory: typescript2
+
+      - name: "Upload highlight.js results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: typescript2/pkg-grammar-hljs/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
+          collection: xl5LO9gK
+          test-outcome: ${{ steps.hljs-tests.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Run tree-sitter grammar tests"
         # Generates the parser and runs the corpus + fixture parse gate.
