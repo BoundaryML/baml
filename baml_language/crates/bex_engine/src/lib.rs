@@ -3385,7 +3385,8 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        self.collect_garbage_parked(level, reason, heap_guard, cycle).await
+        self.collect_garbage_parked(level, reason, heap_guard, cycle)
+            .await
     }
 
     async fn collect_garbage_parked(

@@ -359,13 +359,8 @@ impl BexEngine {
         if !self.idle_gc.due() {
             return;
         }
-        self.collect_garbage_parked(
-            CollectionLevel::Major,
-            "idle",
-            guard,
-            cycle,
-        )
-        .await;
+        self.collect_garbage_parked(CollectionLevel::Major, "idle", guard, cycle)
+            .await;
     }
 }
 
