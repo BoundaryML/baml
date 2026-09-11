@@ -1,0 +1,9 @@
+[package]
+name = "node-baml"
+
+# Use ../scripts/baml.sh to invoke the locally built toolchain.
+
+[generator.app]
+output_type = "typescript/node"
+output_dir = "."
+naming_convention = "preserve-case"

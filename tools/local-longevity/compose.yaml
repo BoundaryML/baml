@@ -1,0 +1,165 @@
+name: baml-local-hello-world
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-experiment: &experiment
+  platform: linux/arm64
+  cpus: 1.0
+  mem_limit: 1g
+  memswap_limit: 1g
+  restart: "on-failure:10"
+  labels:
+    hello.experiment: "true"
+  environment:
+    BAML_PROFILE: "0"
+    BAML_TELEMETRY_DISABLED: "1"
+    BAML_LOG: "off"
+  logging: *logging
+
+x-load: &load
+  platform: linux/arm64
+  build:
+    context: .
+    dockerfile: load-generator/Dockerfile
+  restart: on-failure
+  cpus: 0.5
+  mem_limit: 384m
+  memswap_limit: 384m
+  environment:
+    GOMAXPROCS: "1"
+  stop_grace_period: 15s
+  logging: *logging
+
+services:
+  node-baseline:
+    <<: *experiment
+    build:
+      context: .
+      dockerfile: node-baseline/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT_PREFIX:-808}1:8080"
+
+  node-baml:
+    <<: *experiment
+    build:
+      context: .
+      dockerfile: node-baml/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT_PREFIX:-808}2:8080"
+
+  python-baseline:
+    <<: *experiment
+    build:
+      context: .
+      dockerfile: python-baseline/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT_PREFIX:-808}3:8080"
+
+  python-baml:
+    <<: *experiment
+    build:
+      context: .
+      dockerfile: python-baml/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT_PREFIX:-808}4:8080"
+
+  baml-debian:
+    <<: *experiment
+    build:
+      context: .
+      dockerfile: baml-debian/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT_PREFIX:-808}6:8080"
+
+  load-node-baseline:
+    <<: *load
+    command: ["-targets=/targets/node-baseline.txt", "-rate=${RATE_PER_TARGET:-100}/1s", "-duration=${DURATION_SECONDS:-0}s"]
+    depends_on:
+      node-baseline:
+        condition: service_started
+
+  load-node-baml:
+    <<: *load
+    command: ["-targets=/targets/node-baml.txt", "-rate=${RATE_PER_TARGET:-100}/1s", "-duration=${DURATION_SECONDS:-0}s"]
+    depends_on:
+      node-baml:
+        condition: service_started
+
+  load-python-baseline:
+    <<: *load
+    command: ["-targets=/targets/python-baseline.txt", "-rate=${RATE_PER_TARGET:-100}/1s", "-duration=${DURATION_SECONDS:-0}s"]
+    depends_on:
+      python-baseline:
+        condition: service_started
+
+  load-python-baml:
+    <<: *load
+    command: ["-targets=/targets/python-baml.txt", "-rate=${RATE_PER_TARGET:-100}/1s", "-duration=${DURATION_SECONDS:-0}s"]
+    depends_on:
+      python-baml:
+        condition: service_started
+
+  load-baml-debian:
+    <<: *load
+    command: ["-targets=/targets/baml-debian.txt", "-rate=${RATE_PER_TARGET:-100}/1s", "-duration=${DURATION_SECONDS:-0}s"]
+    depends_on:
+      baml-debian:
+        condition: service_started
+
+  container-metrics:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: container-metrics/Dockerfile
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+    logging: *logging
+
+  prometheus:
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    platform: linux/arm64
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=7d", "--storage.tsdb.retention.size=2GB"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.1.1@sha256:a1701c2180249361737a99a01bc770db39381640e4d631825d38ff4535efa47d
+    platform: linux/arm64
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hello-world.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${GRAFANA_DASHBOARDS_DIR:-./grafana/dashboards}:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    logging: *logging
+
+volumes:
+  prometheus:
+  grafana:

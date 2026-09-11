@@ -1,0 +1,4 @@
+[package]
+name = "baml-debian"
+
+# Use ../scripts/baml.sh to invoke the locally built toolchain.
