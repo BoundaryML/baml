@@ -240,3 +240,37 @@ def test_dry_run_has_no_network(monkeypatch, schedule):
     assert "Hey @vbv" in result.output
     assert "2026-09-18T09:00:00-07:00" in result.output
     assert "2026-09-18T15:00:00-07:00" in result.output
+
+
+def test_early_dispatch_does_not_pin_assignee_before_shift_swap(monkeypatch, schedule, slack):
+    from oncall.parser import emit
+
+    clock = [THURSDAY - dt.timedelta(hours=1)]
+
+    class FrozenDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0].astimezone(tz)
+
+    monkeypatch.setattr(dt, "datetime", FrozenDatetime)
+    monkeypatch.setattr("oncall.cli._parse_or_die", lambda _: (emit(schedule), schedule))
+    monkeypatch.setenv("GITHUB_REPOSITORY", "BoundaryML/baml")
+    journal = Mock()
+    journal.load.return_value = None
+    monkeypatch.setattr("oncall.notification_state.GitHubState", Mock(return_value=journal))
+    monkeypatch.setattr("oncall.slack.client", Mock(return_value=slack))
+    runner = CliRunner()
+    early = runner.invoke(app, ["notify", "--post-to-slack"])
+    assert early.exit_code == 1
+    assert "a new parent can only" in early.output
+    journal.save.assert_not_called()
+    slack.users_lookupByEmail.assert_not_called()
+    slack.chat_postMessage.assert_not_called()
+
+    schedule.shifts[-1].assignments["oncall-releases"] = "sam"
+    clock[0] = THURSDAY
+    on_time = runner.invoke(app, ["notify", "--post-to-slack"])
+    assert on_time.exit_code == 0, on_time.output
+    slack.users_lookupByEmail.assert_called_once_with(email="sam@boundaryml.com")
+    assert slack.chat_postMessage.call_count == 1
+    assert slack.chat_scheduleMessage.call_count == 2

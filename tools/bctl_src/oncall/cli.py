@@ -11,7 +11,7 @@ import typer
 from rich.console import Console
 
 from oncall.current import current_oncall
-from oncall.notify import compose_handoff, deliver_handoff, notification_friday
+from oncall.notify import compose_handoff, deliver_handoff, notification_friday, validate_parent_window
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
 
@@ -139,6 +139,7 @@ def notify(
         state = journal.load()
         wc = slack_client(retry_handlers=[])
         if state is None:
+            validate_parent_window(friday, datetime.datetime.now(ZoneInfo("America/Los_Angeles")))
             state = compose_handoff(sched, friday, wc)
             journal.save(state)
         if state["friday"] != friday.isoformat():

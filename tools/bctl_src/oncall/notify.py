@@ -66,6 +66,14 @@ def compose_handoff(sched: ScheduleFile, friday: datetime.date, wc) -> dict:
     }
 
 
+def validate_parent_window(friday: datetime.date, now: datetime.datetime) -> None:
+    """Reject early/late starts before pinning an assignee in durable state."""
+    local_now = now.astimezone(PACIFIC)
+    thursday = friday - datetime.timedelta(days=1)
+    if local_now.date() != thursday or local_now.hour < 17:
+        raise RuntimeError("a new parent can only be posted Thursday at/after 5pm Pacific")
+
+
 def deliver_handoff(wc, state: dict, save, *, now=None) -> None:
     """Checkpoint before each Slack mutation; never replay an uncertain request.
 
@@ -85,10 +93,7 @@ def deliver_handoff(wc, state: dict, save, *, now=None) -> None:
             )
     parent = state["parent"]
     if parent["status"] == "ready":
-        local_now = now().astimezone(PACIFIC)
-        thursday = friday - datetime.timedelta(days=1)
-        if local_now.date() != thursday or local_now.hour < 17:
-            raise RuntimeError("a new parent can only be posted Thursday at/after 5pm Pacific")
+        validate_parent_window(friday, now())
         parent["status"] = "pending"
         save(state)
         response = wc.chat_postMessage(
