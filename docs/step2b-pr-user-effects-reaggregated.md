@@ -4,7 +4,7 @@ Every effect from step2a appears exactly once below. No entry groups more than t
 
 | Category | Effects | PRs | Release entry |
 | --- | --- | --- | --- |
-| FEATURE | E01 | #4625 | Offline agent skill installation |
+| FEATURE | E01, E12 | #4625, #4723 | Toolchain now embeds the agent skill |
 | FEATURE | E04 | #4623 | Portable prompt and runtime values |
 | FEATURE | E16 | #4727 | Developer documentation portal |
 | FEATURE | E17 | #4730 | Versioned package and CLI references |
@@ -21,7 +21,6 @@ Every effect from step2a appears exactly once below. No entry groups more than t
 | FEATURE | E41 | #4805 | Book chapters |
 | BREAKING_CHANGE | E03 | #4623 | Function specs, companions, and generated clients |
 | BREAKING_CHANGE | E10 | #4611 | Union members require a shared interface |
-| BREAKING_CHANGE | E12 | #4723 | Agent commands require a matching skill |
 | BREAKING_CHANGE | E13 | #4725 | Standard-library names and panic handling |
 | BREAKING_CHANGE | E15 | #4739 | Total comparison and sorting |
 | BREAKING_CHANGE | E20 | #4742 | Removed changelog feed endpoints |

@@ -2,7 +2,7 @@
 
 Each effect has exactly one category. This list separates distinct effects within broad PRs. Paths link to immutable source at the upper boundary. See [inventory](step1a-full-commit-inventory.md) for the lower boundary.
 
-## E01: #4625 — Offline agent skill installation
+## E01: #4625 — Embedded agent skill installation
 
 Category: FEATURE.
 
@@ -90,11 +90,11 @@ Associated-type pins in interface requirements are honored. Invalid implementati
 
 Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4720), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/crates/baml_compiler2_hir_ty/src/lower.rs).
 
-## E12: #4723 — Agent commands require a matching skill
+## E12: #4723 — Agent skill freshness checks
 
-Category: BREAKING_CHANGE.
+Category: FEATURE.
 
-Detected coding agents must install the toolchain-matched skill before authoring commands run. `--agent-skill-check` and `BAML_AGENT_SKILL_CHECK` select auto, require, warn, or off. Run `baml agent install` after upgrading.
+Detected coding-agent sessions check that the installed skill matches the toolchain before authoring commands run, preventing agents from relying on stale instructions after an upgrade. Human sessions retain warnings. `--agent-skill-check` and `BAML_AGENT_SKILL_CHECK` select auto, require, warn, or off.
 
 Evidence: [merged PR](https://github.com/BoundaryML/baml/pull/4723), [upper source](https://github.com/BoundaryML/baml/tree/a748b3a694496fa96b043b4bb03b02b529c95584/baml_language/crates/baml_cli/src/skill_check.rs).
 

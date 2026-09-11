@@ -2,7 +2,7 @@
 
 Boundaries and exclusions: [complete inventory](step1a-full-commit-inventory.md). All effects below survive at the pinned upper boundary. Internal-only v1 PRs remain in the notification audit.
 
-- [#4625](https://github.com/BoundaryML/baml/pull/4625): Offline agent skill installation.
+- [#4625](https://github.com/BoundaryML/baml/pull/4625): Embedded agent skill installation.
 - [#4630](https://github.com/BoundaryML/baml/pull/4630): Interface default dispatch.
 - [#4623](https://github.com/BoundaryML/baml/pull/4623): Function specs, companions, and generated clients; Portable prompt and runtime values; Rust LLM function generation; Nullable and mixed-enum matching; SAP parsing errors.
 - [#4646](https://github.com/BoundaryML/baml/pull/4646): Callable union inference.
@@ -12,7 +12,7 @@ Boundaries and exclusions: [complete inventory](step1a-full-commit-inventory.md)
 - [#4714](https://github.com/BoundaryML/baml/pull/4714): Mounted runtime package methods.
 - [#4611](https://github.com/BoundaryML/baml/pull/4611): Union members require a shared interface.
 - [#4720](https://github.com/BoundaryML/baml/pull/4720): Type-bound diagnostics.
-- [#4723](https://github.com/BoundaryML/baml/pull/4723): Agent commands require a matching skill.
+- [#4723](https://github.com/BoundaryML/baml/pull/4723): Agent skill freshness checks.
 - [#4725](https://github.com/BoundaryML/baml/pull/4725): Standard-library names and panic handling.
 - [#4721](https://github.com/BoundaryML/baml/pull/4721): Closure return scope.
 - [#4739](https://github.com/BoundaryML/baml/pull/4739): Total comparison and sorting.
