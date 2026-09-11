@@ -412,8 +412,8 @@ fn corpus_snapshots() {
             let func = crate::engine::bound_function(&heap, idx)
                 .unwrap_or_else(|| panic!("bytecode snapshot entry is not a function: {name}"));
             assert_eq!(
-                source_dir(&func.source_file),
-                source_dir(example.path),
+                func.source_file.replace('\\', "/"),
+                example.path,
                 "wrong source for {name}"
             );
             functions.push((name.strip_prefix("user.").unwrap_or(name).to_string(), func));
