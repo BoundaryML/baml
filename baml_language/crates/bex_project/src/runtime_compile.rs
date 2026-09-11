@@ -586,6 +586,8 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
+                    param_bounds,
+                    requires,
                     associated_types,
                     fields,
                     required_methods,
@@ -594,18 +596,66 @@ fn enrich_runtime_mount(
                 } => {
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
+                    // The stub is the interface the consumer's type checker
+                    // sees, so it must carry the declaration's whole contract:
+                    // parameter bounds, the `requires` closure, and each
+                    // associated type's bound and default. Dropping them let a
+                    // consumer bind an unbounded argument, skip a required
+                    // interface, and forced it to spell every defaulted
+                    // associated type. A bound this world cannot name is
+                    // dropped rather than widened, as for method generics.
+                    let spell_bound = |bound: &baml_type::Interface<TypeName>| {
+                        (!viewpoint.hides_interface(bound)).then(|| {
+                            baml_type::Ty::Interface(
+                                bound.name.clone(),
+                                bound.generics.clone(),
+                                bound.associated_types.clone(),
+                                baml_type::TyAttr::default(),
+                            )
+                            .to_string()
+                        })
+                    };
                     let generics = generic_params
                         .iter()
-                        .map(ToString::to_string)
+                        .enumerate()
+                        .map(|(index, param)| {
+                            let bounds = param_bounds
+                                .get(index)
+                                .map(|bounds| bounds.iter().filter_map(spell_bound).collect())
+                                .unwrap_or_else(Vec::new);
+                            if bounds.is_empty() {
+                                param.to_string()
+                            } else {
+                                format!("{param} extends {}", bounds.join(" & "))
+                            }
+                        })
                         .collect::<Vec<_>>();
                     let generic_suffix = if generics.is_empty() {
                         String::new()
                     } else {
                         format!("<{}>", generics.join(", "))
                     };
-                    let mut source = format!("interface {name}{generic_suffix} {{\n");
-                    for associated in associated_types {
-                        writeln!(&mut source, "  type {}", associated.name)
+                    let required = requires.iter().filter_map(spell_bound).collect::<Vec<_>>();
+                    let requires_suffix = if required.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" requires {}", required.join(", "))
+                    };
+                    let mut source =
+                        format!("interface {name}{generic_suffix}{requires_suffix} {{\n");
+                    for associated in associated_types.iter() {
+                        let bound = associated
+                            .bound
+                            .as_ref()
+                            .and_then(spell_bound)
+                            .map(|bound| format!(" extends {bound}"))
+                            .unwrap_or_default();
+                        let default = associated
+                            .default
+                            .as_ref()
+                            .map(|default| format!(" = {}", stub_type(default, &viewpoint)))
+                            .unwrap_or_default();
+                        writeln!(&mut source, "  type {}{bound}{default}", associated.name)
                             .expect("writing to String is infallible");
                     }
                     for (field, ty, attrs) in fields {
@@ -2825,6 +2875,101 @@ mod tests {
         assert_eq!(
             free_stub("make"),
             "function make(name: unknown) -> string { $rust_function }\n"
+        );
+    }
+
+    /// An interface stub carries the declaration's whole contract: generic
+    /// parameter bounds, the `requires` closure, and associated-type bounds
+    /// and defaults - not just the names.
+    #[test]
+    fn runtime_mount_interface_stubs_keep_bounds_requires_and_associated_types() {
+        use baml_compiler2_hir_ty::{
+            callable::{ExternalCallTarget, ExternalLinkability},
+            package_interface::{ExportedAssociatedType, ExportedFunction, ExportedType},
+        };
+        use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
+
+        let app = Name::new("app");
+        let qtn = |name: &str| {
+            baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new(name))
+        };
+        let iface = |name: &str| baml_type::Interface::new(qtn(name), Box::new([]), Box::new([]));
+        let self_param = ParamTy::new(0, Name::new("Self"));
+        let value_param = ParamTy::new(1, Name::new("T"));
+        let counter = qtn("Counter");
+        let count = ExportedFunction {
+            name: Name::new("count"),
+            params: vec![
+                FunctionParamTy::required(
+                    Some(Name::new("self")),
+                    Ty::TypeVar(self_param.clone(), TyAttr::default()),
+                ),
+                FunctionParamTy::required(
+                    Some(Name::new("at")),
+                    Ty::TypeVar(value_param.clone(), TyAttr::default()),
+                ),
+            ],
+            return_type: Ty::int(),
+            callable_throws: Ty::Never {
+                attr: TyAttr::default(),
+            },
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            builtin_kind: None,
+            target: ExternalCallTarget::Interface {
+                interface: counter.clone(),
+                method: Name::new("count"),
+            },
+            linkability: ExternalLinkability::Linkable,
+        };
+        let mut root = IndexMap::new();
+        root.insert(
+            Name::new("Counter"),
+            ExportedType::Interface {
+                qtn: counter,
+                self_param,
+                generic_params: vec![value_param],
+                param_bounds: vec![vec![iface("Marker")]],
+                requires: vec![iface("Named")],
+                associated_types: vec![ExportedAssociatedType {
+                    name: Name::new("Value"),
+                    bound: Some(iface("Anchor")),
+                    default: Some(Ty::int()),
+                }],
+                fields: Vec::new(),
+                required_methods: vec![count],
+                default_methods: Vec::new(),
+            },
+        );
+        let mut types = IndexMap::new();
+        types.insert(Vec::new(), root);
+        let interface = PackageInterface {
+            types,
+            functions: IndexMap::new(),
+            throw_sets: FunctionThrowSets::default(),
+            namespaces: std::collections::BTreeSet::default(),
+            impls: Vec::new(),
+        };
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .expect("package interface encodes");
+        let package = RuntimePackageMount {
+            identity: bex_vm_types::RuntimePackageIdentity::synthetic(1),
+            interface_blob,
+            types: Vec::new(),
+        };
+        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
+            .expect("runtime mount enriches");
+        let (namespace, name, source) = stubs
+            .iter()
+            .find(|(_, stub, _)| stub.as_str() == "Counter")
+            .unwrap_or_else(|| panic!("missing stub for Counter: {stubs:?}"));
+        assert!(namespace.is_empty());
+        assert_eq!(name.as_str(), "Counter");
+        assert_eq!(
+            source,
+            "interface Counter<T extends app.Marker> requires app.Named {\n  type Value extends \
+             app.Anchor = int\n  function count(self, at: T) -> int throws never\n}\n"
         );
     }
 

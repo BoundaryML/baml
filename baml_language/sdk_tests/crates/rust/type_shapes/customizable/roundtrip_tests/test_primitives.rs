@@ -63,6 +63,9 @@ fn test_primitives_round_trip_float_accepts_int() {
     // the wire is inexpressible through it. Go through the low-level invoke
     // API instead so the wire-level intent (int out, float back) is
     // preserved.
+    // The generated wrappers initialize the runtime lazily; a raw invoke
+    // does not, and under nextest this test is its own process.
+    baml_sdk::init().unwrap();
     let int_on_the_wire = baml_bridge::wire::InboundValue {
         value_type: None,
         value: Some(baml_bridge::wire::inbound_value::Value::IntValue(7)),

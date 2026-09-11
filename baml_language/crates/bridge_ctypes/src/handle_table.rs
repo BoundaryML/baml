@@ -255,25 +255,33 @@ impl CffiHandleTable {
     /// The row (and its dedup index entry) is removed when the last
     /// ownership is released.
     pub fn release(&self, key: u64) -> bool {
-        let mut entries = self
-            .entries
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(row) = entries.get_mut(&key) else {
-            return false;
-        };
-        row.refcount -= 1;
-        if row.refcount == 0 {
-            let row = entries
-                .remove(&key)
-                .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
-            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
-                self.heap_keys
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(handle);
+        let removed = {
+            let mut entries = self
+                .entries
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(row) = entries.get_mut(&key) else {
+                return false;
+            };
+            row.refcount -= 1;
+            if row.refcount == 0 {
+                let row = entries
+                    .remove(&key)
+                    .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
+                if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
+                    self.heap_keys
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(handle);
+                }
+                Some(row)
+            } else {
+                None
             }
-        }
+        };
+        // RustData/ADT destructors may reenter the bridge. Never run the last
+        // value destructor while holding a handle-table write lock.
+        drop(removed);
         true
     }
 
@@ -400,6 +408,28 @@ mod tests {
         let key = table.insert(make_function_ref());
         assert!(table.release(key));
         assert!(!table.release(key)); // second release returns false
+    }
+
+    #[test]
+    fn last_release_drops_resource_after_unlocking_table() {
+        struct Resource(
+            std::sync::Weak<CffiHandleTable>,
+            Arc<std::sync::atomic::AtomicBool>,
+        );
+        impl Drop for Resource {
+            fn drop(&mut self) {
+                let table = self.0.upgrade().unwrap();
+                assert!(table.entries.try_write().is_ok());
+                assert!(table.heap_keys.try_write().is_ok());
+                self.1.store(true, Ordering::SeqCst);
+            }
+        }
+        let table = Arc::new(CffiHandleTable::new());
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let resource = Arc::new(Resource(Arc::downgrade(&table), dropped.clone()));
+        let key = table.insert(CffiHandleTableEntry::RustData(BexRustData(resource)));
+        assert!(table.release(key));
+        assert!(dropped.load(Ordering::SeqCst));
     }
 
     #[test]

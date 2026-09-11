@@ -41,10 +41,10 @@ Get-ChildItem -Directory | ForEach-Object {
             Write-Host "==> skipping $($_.Name)/generated (no Cargo.toml - codegen failed?)"
             return
         }
-        Write-Host "==> cargo test --no-run in $($_.Name)/generated"
-        Push-Location $generated
+        Write-Host "==> nextest pre-warm for $($_.Name)/generated"
+        Push-Location $WorkspaceRoot
         try {
-            cargo test --no-run --manifest-path Cargo.toml
+            cargo nextest list --list-type binaries-only --manifest-path $manifest
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location

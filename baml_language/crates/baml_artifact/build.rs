@@ -17,7 +17,24 @@ fn track_git_head() {
     if let Some(reference) = git_output(&["symbolic-ref", "-q", "HEAD"])
         && let Some(path) = git_output(&["rev-parse", "--git-path", &reference])
     {
-        println!("cargo:rerun-if-changed={path}");
+        // A packed ref has no loose file. Watching a nonexistent path makes
+        // Cargo rerun this script (and rebuild the compiler) on every command.
+        // Watch an existing ancestor to notice a future loose ref, plus the
+        // packed-ref file for updates to the current packed value.
+        let mut watched = PathBuf::from(path);
+        while !watched.exists() {
+            if !watched.pop() {
+                break;
+            }
+        }
+        if watched.exists() {
+            println!("cargo:rerun-if-changed={}", watched.display());
+        }
+        if let Some(packed) = git_output(&["rev-parse", "--git-path", "packed-refs"])
+            && PathBuf::from(&packed).exists()
+        {
+            println!("cargo:rerun-if-changed={packed}");
+        }
     }
 }
 

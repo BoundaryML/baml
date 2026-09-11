@@ -199,6 +199,15 @@ pub fn result_to_outbound(
             infra_error_arm(message_instance(TYPE_MISMATCH_CLASS, message), options)
         }
 
+        // 🟥 Calling a function the program does not define is a *caller*
+        // error, not an SDK panic: route it to `baml.errors.InvalidArgument`
+        // like the pre-call `BridgeError::FunctionNotFound` in
+        // [`error_to_outbound`].
+        Err(RuntimeError::Engine(err @ EngineError::FunctionNotFound { .. })) => infra_error_arm(
+            message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
+            options,
+        ),
+
         // Every other 🟥 engine/VM-internal failure → one opaque `SdkPanic`,
         // its `Display` (incl. any formatted VM trace) carried as `message`.
         Err(RuntimeError::Engine(engine_err)) => sdk_panic_arm(engine_err.to_string(), options),
@@ -445,6 +454,26 @@ mod tests {
         let envelope = BamlOutboundResult::decode(encoded.as_slice()).unwrap();
         let Some(baml_outbound_result::Result::Error(error)) = envelope.result else {
             panic!("expected an error envelope");
+        };
+        let Some(baml_outbound_value::Value::ClassValue(class)) =
+            error.value.and_then(|value| value.value)
+        else {
+            panic!("expected a structured error class");
+        };
+        assert_eq!(class.name, "baml.errors.InvalidArgument");
+    }
+
+    #[test]
+    fn engine_function_not_found_is_classified_as_invalid_argument() {
+        let err = BridgeError::Runtime(bex_project::RuntimeError::Engine(
+            bex_project::EngineError::FunctionNotFound {
+                name: "missing_function".to_string(),
+            },
+        ));
+        let encoded = error_to_outbound(err);
+        let envelope = BamlOutboundResult::decode(encoded.as_slice()).unwrap();
+        let Some(baml_outbound_result::Result::Error(error)) = envelope.result else {
+            panic!("a missing function is a caller error, not an SdkPanic");
         };
         let Some(baml_outbound_value::Value::ClassValue(class)) =
             error.value.and_then(|value| value.value)

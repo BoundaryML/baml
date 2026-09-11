@@ -134,19 +134,25 @@ fn unset_takes_default_and_null_stays_null() {
 }
 
 #[test]
-fn unknown_function_is_a_panic() {
-    // The engine reports a missing entry point on the panic arm (the same
-    // envelope python surfaces as `BamlPanic`), not as a thrown error.
+fn unknown_function_is_an_invalid_argument() {
+    // A missing entry point is the caller's mistake: the engine reports it
+    // as `baml.errors.InvalidArgument`, the same class the bridge raises
+    // before a call, not on the panic arm.
     ensure_runtime();
     let result = runtime::invoke_sync::<i64, Infallible>("user.does_not_exist", vec![], vec![]);
     match result {
-        Err(Error::Panic { message, .. }) => {
+        Err(Error::Runtime {
+            class_name,
+            message,
+            ..
+        }) => {
+            assert_eq!(class_name.as_deref(), Some("baml.errors.InvalidArgument"));
             assert!(
                 message.contains("user.does_not_exist"),
                 "message: {message}"
             );
         }
-        other => panic!("expected a panic, got {other:?}"),
+        other => panic!("expected an InvalidArgument error, got {other:?}"),
     }
 }
 
