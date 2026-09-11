@@ -19,7 +19,6 @@ out.mkdir()
 import shutil
 runs = sorted(p for p in history.iterdir() if p.is_dir())
 for old in runs[:-10]: shutil.rmtree(old)
-(ROOT/'latest').write_text(str(out))
 start = time.time()
 state = {'id': run_id, 'start_utc': datetime.datetime.fromtimestamp(start, datetime.timezone.utc).isoformat(), 'configured_duration_seconds': duration, 'scheduled_end_utc': datetime.datetime.fromtimestamp(start+duration, datetime.timezone.utc).isoformat() if duration else None, 'supervisor_pid': os.getpid(), 'vegeta_version': subprocess.check_output(['vegeta','-version'],text=True).strip(), 'status': 'running', 'targets': {}}
 processes = []
@@ -94,6 +93,9 @@ def attack(name, url):
     finally:
         row['finished_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+# Publish a complete status before exposing this run to stop/status controls.
+save()
+(ROOT/'latest').write_text(str(out))
 threads=[threading.Thread(target=attack,args=item) for item in targets.items()]
 for t in threads:t.start()
 previous={name:0 for name in targets};previous_time=start

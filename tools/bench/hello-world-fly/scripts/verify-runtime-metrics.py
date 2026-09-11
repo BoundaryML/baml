@@ -9,11 +9,12 @@ def check(v):
     assert len(machines)==1,(app,len(machines))
     m=machines[0]
     result={'variant':name,'machine':m,'checked_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
-    if name.startswith(('node-','python-')):
-        with urllib.request.urlopen('https://'+app+'.fly.dev/',timeout=15) as response:
-            body=response.read(); assert response.status==200 and body==b'hello world',(app,body)
-            assert response.headers['content-type']=='text/plain; charset=utf-8'
-            result['hello']={'status':response.status,'body':body.decode(),'content_type':response.headers['content-type']}
+    assert m['state'] == 'started', (app, m['state'])
+    with urllib.request.urlopen('https://'+app+'.fly.dev/',timeout=15) as response:
+        body=response.read(); assert response.status==200 and body==b'hello world',(app,body)
+        assert response.headers['content-type']=='text/plain; charset=utf-8'
+        result['hello']={'status':response.status,'body':body.decode(),'content_type':response.headers['content-type']}
+    if v.get('runtime_metrics'):
         if name.startswith('node-'):
             code="require('node:http').get('http://127.0.0.1:9091/metrics',r=>r.pipe(process.stdout))"
             command='node -e '+shlex.quote(code)
@@ -40,11 +41,13 @@ def check(v):
             raise AssertionError('Private metrics accidentally exposed on the public service')
         except urllib.error.HTTPError as e: assert e.code==404,e
     return app,result
+before_raw=subprocess.check_output(['python3',str(root/'scripts/load-control.py'),'status'],text=True)
+before=json.loads(before_raw[before_raw.index('{'):])
 rows=dict(concurrent.futures.ThreadPoolExecutor(max_workers=4).map(check,manifest['variants']))
 (root/'runtime-metrics-verification.json').write_text(json.dumps(rows,indent=2)+'\n')
 for a,row in rows.items():print(a,row['machine']['id'],row.get('metrics',{}))
 s=subprocess.check_output(['python3',str(root/'scripts/load-control.py'),'status'],text=True);s=s[s.index('{'):];(root/'runtime-metrics-load-status.json').write_text(s);load=json.loads(s)
 assert load['status']=='running' and load['configured_duration_seconds']==0
-before=json.loads((root/'pre-runtime-metrics-load.json').read_text());assert before['id']==load['id'];assert all(load['targets'][n]['requests']>t['requests'] for n,t in before['targets'].items())
+assert before['id']==load['id'];assert all(load['targets'][n]['requests']>t['requests'] for n,t in before['targets'].items())
 print('Same continuous run:',load['id'],load['elapsed_seconds'])
 for n,t in load['targets'].items():print(n,t['observed_completion_qps_last_interval'],t['status_codes'])

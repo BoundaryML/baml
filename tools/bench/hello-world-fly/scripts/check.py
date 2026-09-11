@@ -15,7 +15,17 @@ assert len(variants) == len(expected)
 assert {v['variant'] for v in variants} == expected
 assert targets == {v['variant']: v['url'] for v in variants}
 assert {v['app']: v['instance'] for v in dashboard['vms']} == {v['app']: v['machine_id'] for v in variants}
-assert dashboard['layout']['rows'] == 6 and dashboard['layout']['panels'] == 24
+assert dashboard['layout']['rows'] == 7 and dashboard['layout']['panels'] == 28
+comparison = json.loads((root / 'grafana' / dashboard['comparison_panels_file']).read_text())
+assert len(comparison) == 4
+for index, panel in enumerate(comparison):
+    assert panel['gridPos'] == {'x': index * 6, 'y': 0, 'w': 6, 'h': 11}
+    assert {target['legendFormat'] for target in panel['targets']} == expected
+    assert len(panel['targets']) == len(expected)
+    assert {override['matcher']['options']: override['properties'][0]['value']['fixedColor'] for override in panel['fieldConfig']['overrides']} == dashboard['variant_colors']
+for panel in dashboard['memory_panels']:
+    name = panel['app'].removeprefix('baml-hw-0910-')
+    assert panel['primary_series_color']['color'] == dashboard['variant_colors'][name]
 for variant in variants:
     source = root / variant['source']
     config = tomllib.loads((source / 'fly.toml').read_text())

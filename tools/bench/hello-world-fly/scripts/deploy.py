@@ -4,6 +4,9 @@ root=pathlib.Path(__file__).resolve().parents[1]
 m=json.loads((root/'manifest.json').read_text())
 (root/'artifacts').mkdir(exist_ok=True)
 selected=sys.argv[1:] or [v['variant'] for v in m['variants']]
+unknown = set(selected) - {v['variant'] for v in m['variants']}
+if unknown:
+    raise SystemExit('Unknown variants: ' + ', '.join(sorted(unknown)))
 for v in m['variants']:
     if v['variant'] not in selected: continue
     app=v['app']; name=v['variant']

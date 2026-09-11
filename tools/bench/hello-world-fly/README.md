@@ -50,3 +50,9 @@ The active matrix contains the four Node/Python variants plus `baml-debian` (run
 The [live dashboard](https://fly-metrics.net/d/baml-hw-0910-matrix?orgId=721257&refresh=30s&from=now-1h&to=now) retains its UID and compares HTTP status counts, latency, normalized VM load, and VM memory for both Debian variants. Profiling data stays inside the telemetry VM; the dashboard uses existing Fly metrics. VM total minus available memory is not BAML heap usage.
 
 The telemetry app passed the exact-response smoke check and created its runtime profile store. The existing telemetry-off Debian app timed out during the same check, so this rollout does not establish stability. Rollout snapshots and deployment logs are retained locally under ignored `artifacts/telemetry-rollout/`.
+
+## Comparison row and colors
+
+The first dashboard row overlays all six variants in four charts: HTTP 200 requests per second, p90 response-header latency, VM CPU utilization, and memory. `grafana/comparison-panels.json` contains their complete Grafana panel models; the detailed rows start at grid Y=11. Each variant keeps the local dashboard’s color across all four comparison charts and its detailed memory panel’s primary line (Process RSS or Used); the telemetry-enabled Debian variant is yellow. `grafana/dashboard-spec.json` records the shared palette and primary-series overrides.
+
+The memory comparison uses process RSS for Node/Python and VM total minus available memory for native BAML. Those scopes differ and include different overheads. CPU uses execution modes only, converts Fly’s centisecond counters to seconds, and normalizes per vCPU; waiting, idle, and steal time are excluded. Fly HTTP latency measures response headers, not the complete client request. [Fly metrics definitions](https://fly.io/docs/monitoring/metrics/).

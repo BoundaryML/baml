@@ -5,8 +5,8 @@ import datetime,json,shutil
 r=Path(__file__).resolve().parents[1]
 d=r/'artifacts/reports/baml-in-prod3'
 d.mkdir(parents=True,exist_ok=True);e=d/'evidence';e.mkdir(exist_ok=True)
-s=json.loads((r/'load-status.json').read_text());m=json.loads((r/'manifest.json').read_text());machines=json.loads((r/'report-machines.json').read_text())
-for src,dst in [('load-status.json','load-status.json'),('manifest.json','matrix-manifest.json'),('report-machines.json','machine-state.json'),('operational-failures.json','first-native-failures.json'),('pre-load.json','pre-load-smoke.json'),('load-preflight.json','two-second-preflight.json'),('load-initial-failed.json','failed-collector-attempt.json'),('load-machine.json','load-machine.json')]:
+s=json.loads((r/'load-status.json').read_text());m=json.loads((r/'pre-runtime-metrics-manifest.json').read_text());machines=json.loads((r/'report-machines.json').read_text())
+for src,dst in [('load-status.json','load-status.json'),('pre-runtime-metrics-manifest.json','matrix-manifest.json'),('report-machines.json','machine-state.json'),('operational-failures.json','first-native-failures.json'),('pre-load.json','pre-load-smoke.json'),('load-preflight.json','two-second-preflight.json'),('load-initial-failed.json','failed-collector-attempt.json'),('load-machine.json','load-machine.json')]:
  shutil.copyfile(r/src,e/dst)
 mem=(r/'artifacts/baml-al2023-process-state.txt').read_text().split('Name:',1)[0]
 (e/'al2023-meminfo.txt').write_text(mem)

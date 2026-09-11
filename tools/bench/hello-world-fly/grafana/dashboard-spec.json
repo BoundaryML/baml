@@ -9,11 +9,12 @@
     "uid": "prometheus_on_fly"
   },
   "layout": {
-    "rows": 6,
+    "rows": 7,
     "columns": 4,
-    "panels": 24,
+    "panels": 28,
     "width_per_panel": 6,
-    "height_per_panel": 9
+    "height_per_panel": 9,
+    "comparison_height": 11
   },
   "time": {
     "from": "now-1h",
@@ -92,7 +93,7 @@
       "label": "Pure BAML / Debian 12 \u00b7 telemetry on"
     }
   ],
-  "saved_version": 5,
+  "saved_version": 6,
   "memory_panels": [
     {
       "id": 4,
@@ -123,7 +124,11 @@
           "expr": "nodejs_arraybuffer_memory_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
           "legend": "ArrayBuffers (within external)"
         }
-      ]
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#5794F2"
+      }
     },
     {
       "id": 8,
@@ -154,7 +159,11 @@
           "expr": "nodejs_arraybuffer_memory_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
           "legend": "ArrayBuffers (within external)"
         }
-      ]
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#73BF69"
+      }
     },
     {
       "id": 12,
@@ -181,7 +190,11 @@
           "expr": "python_tracemalloc_overhead_bytes{app=\"baml-hw-0910-python-baseline\",instance=\"2862642f434d18\"}",
           "legend": "Tracing overhead"
         }
-      ]
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#FF9830"
+      }
     },
     {
       "id": 16,
@@ -208,7 +221,11 @@
           "expr": "python_tracemalloc_overhead_bytes{app=\"baml-hw-0910-python-baml\",instance=\"86599efe755658\"}",
           "legend": "Tracing overhead"
         }
-      ]
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#B877D9"
+      }
     },
     {
       "id": 24,
@@ -218,7 +235,11 @@
         "mode(fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"})",
         "fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"} - fly_instance_memory_mem_available{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"}"
       ],
-      "max": 1073741824
+      "max": 1073741824,
+      "primary_series_color": {
+        "legend": "Used",
+        "color": "#F2495C"
+      }
     },
     {
       "id": 32,
@@ -228,7 +249,20 @@
         "mode(fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"})",
         "fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"} - fly_instance_memory_mem_available{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"}"
       ],
-      "max": 1073741824
+      "max": 1073741824,
+      "primary_series_color": {
+        "legend": "Used",
+        "color": "#F2CC0C"
+      }
     }
-  ]
+  ],
+  "comparison_panels_file": "comparison-panels.json",
+  "variant_colors": {
+    "node-baseline": "#5794F2",
+    "node-baml": "#73BF69",
+    "python-baseline": "#FF9830",
+    "python-baml": "#B877D9",
+    "baml-debian": "#F2495C",
+    "baml-debian-telemetry": "#F2CC0C"
+  }
 }
