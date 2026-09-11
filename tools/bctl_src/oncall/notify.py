@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from oncall.parser import ScheduleFile, ShiftLine
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
+SANDBOX_CHANNEL = "C07UTQN7N1X"
 
 
 def _current_shift(sched: ScheduleFile, today: datetime.date) -> Optional[ShiftLine]:
@@ -74,12 +75,17 @@ def validate_parent_window(friday: datetime.date, now: datetime.datetime) -> Non
         raise RuntimeError("a new parent can only be posted Thursday at/after 5pm Pacific")
 
 
-def deliver_handoff(wc, state: dict, save, *, now=None) -> None:
+def deliver_handoff(wc, state: dict, save, *, now=None, sandbox: bool = False) -> None:
     """Checkpoint before each Slack mutation; never replay an uncertain request.
 
     `save` must durably compare-and-swap the journal before returning. A stale
     writer must fail, including the first writer creating a week's journal.
     """
+    if sandbox and (
+        state["channel"] != SANDBOX_CHANNEL
+        or state["parent"].get("channel", SANDBOX_CHANNEL) != SANDBOX_CHANNEL
+    ):
+        raise RuntimeError("accelerated tests can only use #sam-sandbox")
     now = now or (lambda: datetime.datetime.now(PACIFIC))
     friday = datetime.date.fromisoformat(state["friday"])
     if state.get("version") != 1:
@@ -93,7 +99,8 @@ def deliver_handoff(wc, state: dict, save, *, now=None) -> None:
             )
     parent = state["parent"]
     if parent["status"] == "ready":
-        validate_parent_window(friday, now())
+        if not sandbox:
+            validate_parent_window(friday, now())
         parent["status"] = "pending"
         save(state)
         response = wc.chat_postMessage(

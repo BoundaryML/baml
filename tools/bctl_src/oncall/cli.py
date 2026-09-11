@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 
 from oncall.current import current_oncall
-from oncall.notify import compose_handoff, deliver_handoff, notification_friday, validate_parent_window
+from oncall.notify import SANDBOX_CHANNEL, compose_handoff, deliver_handoff, notification_friday, validate_parent_window
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
 
@@ -154,16 +154,16 @@ def notify(
 
 @app.command(name="test-notify")
 def test_notify(
-    parent_ts: str = typer.Option(..., help="Existing #sam-sandbox parent thread timestamp"),
+    parent_ts: str = typer.Option("", help="Optional existing #sam-sandbox parent timestamp; omit to test all three messages in a new thread"),
     run_id: str = typer.Option(..., help="GitHub Actions run ID; reruns reuse the same test journal"),
 ) -> None:
-    """Exercise Python's actual Slack scheduling path in an existing sandbox thread."""
+    """Exercise Python's actual Slack posting and scheduling path in #sam-sandbox."""
     from oncall.notification_state import GitHubState
     from oncall.slack import client as slack_client
 
     # This explicit test entry point can never send to the production channel.
-    channel = "C07UTQN7N1X"
-    if not re.fullmatch(r"[0-9]+\.[0-9]+", parent_ts):
+    channel = SANDBOX_CHANNEL
+    if parent_ts and not re.fullmatch(r"[0-9]+\.[0-9]+", parent_ts):
         raise typer.BadParameter("parent timestamp must be an exact Slack timestamp string")
     repository = os.environ.get("GITHUB_REPOSITORY")
     if not repository:
@@ -177,16 +177,21 @@ def test_notify(
         _, sched = _parse_or_die(_schedule_path())
         state = compose_handoff(sched, friday, wc)
         state["channel"] = channel
-        state["parent"].update(status="sent", channel=channel, ts=parent_ts)
+        state["test_parent_ts"] = parent_ts
+        if parent_ts:
+            state["parent"].update(status="sent", channel=channel, ts=parent_ts)
+        else:
+            state["parent"]["text"] = "[Python tooling test: Thursday 5pm Pacific parent; accelerated delivery]\n" + state["parent"]["text"]
         for reminder, delay, label in zip(state["reminders"], [90, 180], ["Friday 9am", "Friday 3pm"]):
             reminder["post_at"] = int(now.timestamp()) + delay
             reminder["text"] = f"[Python tooling test: {label} Pacific reminder; accelerated delivery]\n{reminder['text']}"
         journal.save(state)
-    if state["channel"] != channel or state["parent"].get("channel") != channel or state["parent"].get("ts") != parent_ts:
+    requested_parent = state.get("test_parent_ts", state["parent"].get("ts"))
+    if state["channel"] != channel or requested_parent != parent_ts:
         raise RuntimeError("sandbox journal does not match the requested thread")
-    deliver_handoff(wc, state, journal.save)
+    deliver_handoff(wc, state, journal.save, sandbox=True)
     for reminder in state["reminders"]:
-        typer.echo(f"Queued {reminder['scheduled_message_id']} at {reminder['post_at']} in {channel} thread {parent_ts}")
+        typer.echo(f"Queued {reminder['scheduled_message_id']} at {reminder['post_at']} in {channel} thread {state['parent']['ts']}")
 
 
 @app.command(name="notify-failure")

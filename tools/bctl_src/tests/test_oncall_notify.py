@@ -320,3 +320,47 @@ def test_sandbox_state_namespace_cannot_overwrite_production():
     assert sandbox.path.endswith("notifications/sandbox/12345.json")
     with pytest.raises(RuntimeError, match="numeric run ID"):
         GitHubState("BoundaryML/baml", FRIDAY, sandbox_run_id="../2026-09-18")
+
+
+def test_new_sandbox_thread_posts_all_three_and_retries_without_duplicates(monkeypatch, schedule, slack):
+    from oncall.parser import emit
+
+    monkeypatch.setattr("oncall.cli._parse_or_die", lambda _: (emit(schedule), schedule))
+    monkeypatch.setenv("GITHUB_REPOSITORY", "BoundaryML/baml")
+    # Friday is intentionally outside the production parent send window.
+    test_time = THURSDAY - dt.timedelta(days=6)
+
+    class FrozenDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return test_time.astimezone(tz)
+
+    monkeypatch.setattr(dt, "datetime", FrozenDatetime)
+    journal = Mock()
+    journal.load.return_value = None
+    monkeypatch.setattr("oncall.notification_state.GitHubState", Mock(return_value=journal))
+    monkeypatch.setattr("oncall.slack.client", Mock(return_value=slack))
+    slack.chat_postMessage.return_value = {"ok": True, "channel": "C07UTQN7N1X", "ts": "123.456789"}
+    runner = CliRunner()
+    result = runner.invoke(app, ["test-notify", "--run-id", "56789"])
+    assert result.exit_code == 0, result.output
+    slack.chat_postMessage.assert_called_once()
+    assert slack.chat_postMessage.call_args.kwargs["channel"] == "C07UTQN7N1X"
+    assert "Thursday 5pm" in slack.chat_postMessage.call_args.kwargs["text"]
+    assert "<@UINCOMING>" in slack.chat_postMessage.call_args.kwargs["text"]
+    for call in slack.chat_scheduleMessage.call_args_list:
+        assert call.kwargs["thread_ts"] == "123.456789"
+        assert call.kwargs["channel"] == "C07UTQN7N1X"
+        assert "<@UINCOMING>" in call.kwargs["text"]
+    journal.load.return_value = copy.deepcopy(journal.save.call_args.args[0])
+    assert runner.invoke(app, ["test-notify", "--run-id", "56789"]).exit_code == 0
+    assert slack.chat_postMessage.call_count == 1
+    assert slack.chat_scheduleMessage.call_count == 2
+
+
+def test_accelerated_parent_cannot_target_production(schedule, slack):
+    state = compose_handoff(schedule, FRIDAY, slack)
+    with pytest.raises(RuntimeError, match="only use #sam-sandbox"):
+        deliver_handoff(slack, state, Mock(), now=lambda: THURSDAY, sandbox=True)
+    slack.chat_postMessage.assert_not_called()
+    slack.chat_scheduleMessage.assert_not_called()
