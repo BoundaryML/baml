@@ -11,9 +11,10 @@
   },
   "reminders": [
     {
-      "status": "pending",
+      "status": "sent",
       "post_at": 1789165231,
-      "text": "[Python tooling test: Friday 9am Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to put out the canary release today!"
+      "text": "[Python tooling test: Friday 9am Pacific reminder; accelerated delivery]\nHey <@U0436HGTNTU>, reminder to put out the canary release today!",
+      "scheduled_message_id": "Q0C25MQ9BG8"
     },
     {
       "status": "ready",
