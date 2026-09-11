@@ -1559,7 +1559,7 @@ jobs:
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
-      - name: "Run snapshot tests"
+      - name: "Run compiler, CLI, and snapshot tests"
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
         env:
