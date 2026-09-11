@@ -1,0 +1,22 @@
+[
+  {
+    "name": "node-baseline",
+    "port": 8081
+  },
+  {
+    "name": "node-baml",
+    "port": 8082
+  },
+  {
+    "name": "python-baseline",
+    "port": 8083
+  },
+  {
+    "name": "python-baml",
+    "port": 8084
+  },
+  {
+    "name": "baml-debian",
+    "port": 8086
+  }
+]

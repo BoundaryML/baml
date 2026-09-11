@@ -1,0 +1,11 @@
+.build/
+results/
+.env
+.env.*
+!.env.example
+!.env.10rps.example
+**/baml_sdk/
+**/node_modules/
+**/dist/
+**/.baml/
+**/__pycache__/
