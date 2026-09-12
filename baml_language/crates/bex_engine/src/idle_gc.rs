@@ -1,4 +1,4 @@
-//! Opportunistic cleanup after work stops. Scheduling state contains no heap
+//! Engine-owned background collection. Scheduling state contains no heap
 //! pointers and can be inspected without a heap permit. Moving GC cannot.
 use std::sync::{Arc, Mutex, Weak};
 
@@ -9,11 +9,24 @@ use tokio::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::ParkRequestGuard;
 use crate::{BexEngine, GcCheckGuard};
 
 const IDLE_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 #[cfg(not(target_arch = "wasm32"))]
 const PARK_WAIT: std::time::Duration = std::time::Duration::from_millis(5);
+/// Maximum time native engines retain cleanup work when steady traffic never
+/// leaves the quiet interval needed by idle collection.
+#[cfg(not(target_arch = "wasm32"))]
+const ACTIVE_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CollectionMode {
+    Idle,
+    Active,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CleanupVersion {
@@ -26,7 +39,9 @@ struct State {
     revision: u64,
     collected: CleanupVersion,
     observed_releases: usize,
-    deadline: Option<Instant>,
+    idle_deadline: Option<Instant>,
+    #[cfg(not(target_arch = "wasm32"))]
+    active_deadline: Option<Instant>,
     suspended: bool,
     closed: bool,
     #[cfg(not(target_arch = "wasm32"))]
@@ -52,8 +67,13 @@ impl Drop for WorkGuard {
         let mut s = self.idle.lock();
         s.work -= 1;
         s.revision = s.revision.wrapping_add(1);
-        if s.work == 0 && !s.suspended && !s.closed {
-            s.deadline = Some(Instant::now() + IDLE_DELAY);
+        if !s.suspended && !s.closed && self.idle.version(&s) != s.collected {
+            #[cfg(not(target_arch = "wasm32"))]
+            s.active_deadline
+                .get_or_insert(Instant::now() + ACTIVE_DELAY);
+            if s.work == 0 {
+                s.idle_deadline = Some(Instant::now() + IDLE_DELAY);
+            }
         }
         drop(s);
         self.idle.wake.notify_one();
@@ -71,7 +91,9 @@ impl IdleGc {
                     releases: heap.root_release_epoch(),
                 },
                 observed_releases: heap.root_release_epoch(),
-                deadline: None,
+                idle_deadline: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                active_deadline: None,
                 suspended: false,
                 closed: false,
                 #[cfg(not(target_arch = "wasm32"))]
@@ -104,14 +126,19 @@ impl IdleGc {
             s.observed_releases = current.releases;
             // A release while already waiting must not postpone the existing
             // deadline. On WASM it may only be observed at the next admission.
-            if s.work == 0 && !s.suspended && !s.closed && current != s.collected {
+            if !s.suspended && !s.closed && current != s.collected {
                 #[cfg(not(target_arch = "wasm32"))]
-                let deadline = Instant::now() + IDLE_DELAY;
+                s.active_deadline
+                    .get_or_insert(Instant::now() + ACTIVE_DELAY);
                 // WASM has no observer while idle: service newly observed root
                 // releases at this admission instead of delaying another call.
                 #[cfg(target_arch = "wasm32")]
                 let deadline = Instant::now();
-                s.deadline.get_or_insert(deadline);
+                #[cfg(not(target_arch = "wasm32"))]
+                let deadline = Instant::now() + IDLE_DELAY;
+                if s.work == 0 {
+                    s.idle_deadline.get_or_insert(deadline);
+                }
             }
         }
     }
@@ -122,10 +149,15 @@ impl IdleGc {
         let idle_due_on_entry = s.work == 0
             && !s.suspended
             && !s.closed
-            && s.deadline.is_some_and(|d| d <= Instant::now())
+            && s.idle_deadline.is_some_and(|d| d <= Instant::now())
             && self.version(&s) != s.collected;
         s.work += 1;
-        s.deadline = None;
+        s.idle_deadline = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.version(&s) != s.collected {
+            s.active_deadline
+                .get_or_insert(Instant::now() + ACTIVE_DELAY);
+        }
         drop(s);
         self.wake.notify_one();
         WorkGuard {
@@ -144,9 +176,18 @@ impl IdleGc {
         let mut s = self.lock();
         s.collected = version;
         if self.version(&s) == version {
-            s.deadline = None;
-        } else if s.work == 0 && !s.suspended && !s.closed {
-            s.deadline.get_or_insert(Instant::now() + IDLE_DELAY);
+            s.idle_deadline = None;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                s.active_deadline = None;
+            }
+        } else if !s.suspended && !s.closed {
+            #[cfg(not(target_arch = "wasm32"))]
+            s.active_deadline
+                .get_or_insert(Instant::now() + ACTIVE_DELAY);
+            if s.work == 0 {
+                s.idle_deadline.get_or_insert(Instant::now() + IDLE_DELAY);
+            }
         }
         drop(s);
         self.wake.notify_one();
@@ -155,11 +196,20 @@ impl IdleGc {
     pub(crate) fn suspend(&self, suspended: bool) {
         let mut s = self.lock();
         s.suspended = suspended;
-        s.deadline = if !suspended && !s.closed && s.work == 0 && self.version(&s) != s.collected {
-            Some(Instant::now() + IDLE_DELAY)
-        } else {
-            None
-        };
+        s.idle_deadline = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            s.active_deadline = None;
+        }
+        if !suspended && !s.closed && self.version(&s) != s.collected {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                s.active_deadline = Some(Instant::now() + ACTIVE_DELAY);
+            }
+            if s.work == 0 {
+                s.idle_deadline = Some(Instant::now() + IDLE_DELAY);
+            }
+        }
         drop(s);
         self.wake.notify_one();
     }
@@ -167,7 +217,11 @@ impl IdleGc {
     pub(crate) fn close(&self) {
         let mut s = self.lock();
         s.closed = true;
-        s.deadline = None;
+        s.idle_deadline = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            s.active_deadline = None;
+        }
         drop(s);
         self.wake.notify_one();
     }
@@ -183,14 +237,29 @@ impl IdleGc {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn due(&self) -> bool {
+    fn due(&self) -> Option<CollectionMode> {
         let mut s = self.lock();
         self.refresh(&mut s);
-        !s.closed
-            && !s.suspended
-            && s.work == 0
-            && s.deadline.is_some_and(|d| d <= Instant::now())
-            && self.version(&s) != s.collected
+        if s.closed || s.suspended || self.version(&s) == s.collected {
+            return None;
+        }
+        if s.work == 0 && s.idle_deadline.is_some_and(|d| d <= Instant::now()) {
+            return Some(CollectionMode::Idle);
+        }
+        s.active_deadline
+            .is_some_and(|d| d <= Instant::now())
+            .then_some(CollectionMode::Active)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retry_expired(&self) {
+        let mut s = self.lock();
+        if s.idle_deadline.is_some_and(|d| d <= Instant::now()) {
+            s.idle_deadline = Some(Instant::now() + IDLE_DELAY);
+        }
+        if s.active_deadline.is_some_and(|d| d <= Instant::now()) {
+            s.active_deadline = Some(Instant::now() + ACTIVE_DELAY);
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -209,7 +278,11 @@ impl IdleGc {
                         return;
                     }
                     self.refresh(&mut s);
-                    s.deadline
+                    match (s.idle_deadline, s.active_deadline) {
+                        (Some(idle), Some(active)) => Some(idle.min(active)),
+                        (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
+                        (None, None) => None,
+                    }
                 };
                 match deadline {
                     Some(deadline) => tokio::select! {
@@ -229,20 +302,17 @@ impl IdleGc {
             let Some(engine) = engine.upgrade() else {
                 return;
             };
-            Box::pin(engine.try_idle_gc()).await;
+            Box::pin(engine.try_background_gc()).await;
             drop(engine); // No strong engine reference across a timer/event wait.
-            let mut s = self.lock();
-            if s.deadline.is_some_and(|d| d <= Instant::now()) {
-                // Keep cleanup pending after timeout/contention; one bounded
-                // retry per idle delay, not a busy loop at an expired deadline.
-                s.deadline = Some(Instant::now() + IDLE_DELAY);
-            }
+            // Keep cleanup pending after timeout/contention, without spinning
+            // on an expired deadline.
+            self.retry_expired();
         }
     }
 }
 
 impl BexEngine {
-    pub(crate) fn ensure_idle_gc_worker(self: &Arc<Self>) {
+    pub(crate) fn ensure_background_gc_worker(self: &Arc<Self>) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let mut s = self.idle_gc.lock();
@@ -254,7 +324,7 @@ impl BexEngine {
                 return;
             }
             // Embedders without a Tokio runtime still get entry/safe-point GC.
-            // A later call on a runtime can start the single idle worker.
+            // A later call on a runtime can start the single engine worker.
             let Ok(runtime) = tokio::runtime::Handle::try_current() else {
                 return;
             };
@@ -295,44 +365,67 @@ impl BexEngine {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn try_idle_gc(self: &Arc<Self>) {
+    async fn try_background_gc(self: &Arc<Self>) {
         let changed = self.idle_gc.wake.notified();
         tokio::pin!(changed);
         changed.as_mut().enable();
-        if !self.idle_gc.due()
-            || self
-                .checking_gc
-                .compare_exchange(
-                    false,
-                    true,
-                    std::sync::atomic::Ordering::Acquire,
-                    std::sync::atomic::Ordering::Relaxed,
-                )
-                .is_err()
+        let Some(mode) = self.idle_gc.due() else {
+            return;
+        };
+        if self
+            .checking_gc
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::Acquire,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_err()
         {
             return;
         }
         let _checking = GcCheckGuard(&self.checking_gc);
         #[cfg(feature = "gc_profiling")]
         let started = web_time::Instant::now();
-        // Idle GC is passive: do not set the VM park-request flag. If an active
-        // permit remains, cancel this request instead of forcing its VM to yield.
-        let guard = tokio::select! {
-            biased;
-            () = &mut changed => return,
-            acquired = tokio::time::timeout(PARK_WAIT, self.heap_permit_manager.request_park()) => {
-                let Ok(guard) = acquired else { return; };
+        let guard = match mode {
+            CollectionMode::Idle => {
+                // Idle collection is passive. Incoming work cancels the park
+                // attempt rather than adding latency to that call.
+                tokio::select! {
+                    biased;
+                    () = &mut changed => return,
+                    acquired = tokio::time::timeout(PARK_WAIT, self.heap_permit_manager.request_park()) => {
+                        let Ok(guard) = acquired else { return; };
+                        guard
+                    }
+                }
+            }
+            CollectionMode::Active => {
+                // This is the same cooperative stop-the-world handshake used
+                // by allocation-pressure GC in BAML-only programs. The timer
+                // lives in the engine worker instead of the permit allocation
+                // path, so allocation-free bridge calls are covered too.
+                let park_request = ParkRequestGuard::new(Arc::clone(&self.park_requested));
+                let acquired =
+                    tokio::time::timeout(PARK_WAIT, self.heap_permit_manager.request_park()).await;
+                drop(park_request);
+                let Ok(guard) = acquired else {
+                    return;
+                };
                 guard
             }
         };
         // Admission updates the same lifecycle state before obtaining a permit.
         // Once this check succeeds, a later caller can wait for this collection.
-        if !self.idle_gc.due() {
+        if self.idle_gc.due().is_none() {
             return;
         }
         self.collect_garbage_parked(
             CollectionLevel::Major,
-            "idle",
+            match mode {
+                CollectionMode::Idle => "idle",
+                CollectionMode::Active => "background_active",
+            },
             guard,
             #[cfg(feature = "gc_profiling")]
             started,
@@ -357,6 +450,7 @@ mod tests {
                     r#"
                     class Node { value int }
                     function Tiny() -> Node { Node { value: 7 } }
+                    function Scalar() -> int { 7 }
                     function Detached() -> int {
                         spawn with baml.spawn.options(detach = true) {
                             baml.sys.sleep(baml.time.Duration.from_milliseconds(1000n));
@@ -377,6 +471,20 @@ mod tests {
         engine
             .call_function(
                 "Tiny",
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .suppress_internal_profile()
+                    .build(),
+                false,
+            )
+            .await
+            .unwrap()
+    }
+
+    async fn scalar(engine: &Arc<BexEngine>) -> Ext {
+        engine
+            .call_function(
+                "Scalar",
                 vec![],
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .suppress_internal_profile()
@@ -414,7 +522,8 @@ mod tests {
         assert_eq!(engine.heap.gc_budget().full_collections, 0);
         advance(IDLE_DELAY / 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
-        assert!(engine.idle_gc.lock().deadline.is_none());
+        assert!(engine.idle_gc.lock().idle_deadline.is_none());
+        assert!(engine.idle_gc.lock().active_deadline.is_none());
         assert_eq!(engine.heap.stats().active_handles, 1);
         advance(IDLE_DELAY * 10).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
@@ -424,9 +533,56 @@ mod tests {
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 2);
         assert_eq!(engine.heap.stats().active_handles, 0);
-        assert!(engine.idle_gc.lock().deadline.is_none());
+        assert!(engine.idle_gc.lock().idle_deadline.is_none());
+        assert!(engine.idle_gc.lock().active_deadline.is_none());
         engine.shutdown().await;
         assert!(engine.idle_gc.lock().worker.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn continuous_scalar_calls_reach_the_active_collection_deadline() {
+        let engine = engine();
+        for _ in 0..100 {
+            assert_eq!(scalar(&engine).await, Ext::Int(7));
+            // Model bridge traffic whose quiet gaps never reach IDLE_DELAY.
+            advance(IDLE_DELAY / 2).await;
+        }
+        assert_eq!(engine.heap.gc_budget().bytes_since_full_gc, 0);
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        assert!(engine.idle_gc.lock().active_deadline.is_none());
+        engine.shutdown().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn active_collection_uses_the_vm_park_handshake() {
+        let engine = engine();
+        let continuous_work = engine.idle_gc.start_work();
+        assert_eq!(scalar(&engine).await, Ext::Int(7));
+        let held = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+
+        advance(ACTIVE_DELAY).await;
+        assert!(
+            engine
+                .park_requested
+                .load(std::sync::atomic::Ordering::Acquire)
+        );
+        assert_eq!(engine.heap.gc_budget().full_collections, 0);
+
+        drop(held);
+        settle().await;
+        assert!(
+            !engine
+                .park_requested
+                .load(std::sync::atomic::Ordering::Acquire)
+        );
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        drop(continuous_work);
+        engine.shutdown().await;
     }
 
     #[tokio::test(start_paused = true)]

@@ -755,7 +755,7 @@ impl ActiveCallGuard {
         let idle_work = engine.idle_gc.start_work();
         drop(map);
         drop(lifecycle);
-        engine.ensure_idle_gc_worker();
+        engine.ensure_background_gc_worker();
         Ok((
             Self {
                 idle_work,
