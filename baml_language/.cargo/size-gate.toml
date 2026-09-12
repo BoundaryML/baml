@@ -49,7 +49,7 @@ policy.max_delta_pct = 3.0
 max_file_bytes = "62.9 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "72.3 MiB"
+max_file_bytes = "72.5 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
 max_file_bytes = "83.0 MiB"
@@ -70,7 +70,7 @@ policy.max_delta_pct = 3.0
 max_file_bytes = "26.4 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "29.2 MiB"
+max_file_bytes = "29.4 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
 max_file_bytes = "31.7 MiB"
