@@ -1,5 +1,12 @@
-//! Experimental fork of the producer ring plus a new no-op pipeline runtime.
-//! Start reading `pipeline.rs`, then `range_handler.rs` and `runtime.rs`.
+//! Experimental producer rings and reusable batch transport.
+//! Start with `runtime.rs` and `drain_target.rs`, then `batch.rs`.
+//! `pipeline.rs` retains the synchronous semantic-stage adapter.
+#[cfg(not(baml_loom))]
+pub mod batch;
+#[cfg(not(baml_loom))]
+mod drain_target;
+#[cfg(not(baml_loom))]
+pub use drain_target::DrainTarget;
 #[allow(
     dead_code,
     reason = "preserve copied governor behavior for later experiments"

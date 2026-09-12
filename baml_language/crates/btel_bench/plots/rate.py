@@ -185,7 +185,7 @@ def render(identity, runs, root):
     fig.text(
         0.075,
         0.937,
-        f"{identity['calls_per_run'] / 1e6:g} million calls per run • requested rate split evenly across producers • clock + encoding + rings + discard drainer",
+        f"{identity['calls_per_run'] / 1e6:g} million calls per run • requested rate split evenly across producers • clock + encoding + rings + {identity.get('stage_description', 'discard drainer')}",
         fontsize=10.5,
         color="#475569",
     )

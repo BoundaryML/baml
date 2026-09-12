@@ -1,7 +1,25 @@
 //! The stage assembly. No runtime mode enum or trait objects enter this path.
 use btel_core::stage::{Aggregator, EventBuilder, MarkerBatch, MarkerRange, Publisher};
 
-use crate::RangeHandler;
+use crate::{DrainTarget, RangeHandler};
+
+impl<H, B, A, P> DrainTarget for Pipeline<H, B, A, P>
+where
+    H: RangeHandler,
+    B: EventBuilder,
+    A: Aggregator<B::Event>,
+    P: Publisher<B::Event, A::Aggregate>,
+{
+    type Output = P;
+
+    fn accept(&mut self, input: MarkerRange<'_>) {
+        self.consume(input);
+    }
+
+    fn finish(self) -> P {
+        Self::finish(self)
+    }
+}
 
 pub struct Pipeline<H, B, A, P> {
     range_handler: H,
