@@ -195,7 +195,7 @@ mod tests {
         ids::{CallRef, ThreadRef},
         prof::{
             backend::{CapturePlan, ContextKey, ContextTuple, RootProfiler},
-            record::{CallSiteSourceSpan, RawRecord},
+            record::{CallSiteSourceSpan, Marker},
         },
     };
 
@@ -207,7 +207,7 @@ mod tests {
         assert_eq!(size_of::<ThreadRef>(), 32);
         assert_eq!(size_of::<CallRef>(), 40);
         assert_eq!(size_of::<CallSiteSourceSpan>(), 16);
-        assert_eq!(size_of::<RawRecord<'static>>(), 72);
+        assert_eq!(size_of::<Marker<'static>>(), 72);
         assert_eq!(size_of::<CapturePlan>(), 3);
         assert_eq!(size_of::<ContextKey>(), 32);
         assert_eq!(size_of::<ContextTuple>(), 76);

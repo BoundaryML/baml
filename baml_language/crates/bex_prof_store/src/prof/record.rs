@@ -1,7 +1,7 @@
 //! Raw ring records: the producer→consumer wire format (v2 §4.1).
 //!
 //! Every record is `tag: u8` followed by a fixed little-endian field layout
-//! per tag; only `StartThread` carries a variable-length tail (the thread
+//! per tag; only `BexThreadStart` carries a variable-length tail (the thread
 //! name, capped at [`MAX_THREAD_NAME_LEN`] bytes). Producer and consumer live
 //! in the same binary, so the tag→layout table is compiled in — there is no
 //! self-describing framing on the ring.
@@ -14,30 +14,30 @@
 //! `parent_call_id`/`parent_thread_id` fields. `engine_id`/`process_id` are
 //! deliberately absent — they are per-ring and per-file-header state.
 
-/// Maximum thread-name bytes carried by a [`RawRecord::StartThread`] record.
+/// Maximum thread-name bytes carried by a [`Marker::BexThreadStart`] record.
 pub const MAX_THREAD_NAME_LEN: usize = 256;
 
 /// Encoded sizes, tag byte included.
-pub const CALL_FUNCTION_LEN: usize = 54;
-/// See [`CALL_FUNCTION_LEN`].
-pub const END_FUNCTION_LEN: usize = 26;
+pub const FUNCTION_ENTER_LEN: usize = 54;
+/// See [`FUNCTION_ENTER_LEN`].
+pub const FUNCTION_EXIT_LEN: usize = 26;
 /// Awaited call-end variant: compact end plus `await_ns: u64` and
 /// `await_count: u32`.
-pub const END_FUNCTION_AWAITED_LEN: usize = END_FUNCTION_LEN + 12;
-/// Fixed prefix of a `StartThread` record; the name bytes follow.
+pub const FUNCTION_EXIT_AWAITED_LEN: usize = FUNCTION_EXIT_LEN + 12;
+/// Fixed prefix of a `BexThreadStart` record; the name bytes follow.
 pub const START_THREAD_FIXED_LEN: usize = 36;
 /// Fixed prefix of a spawned-thread start, including its source span.
 pub const START_THREAD_SPAWN_FIXED_LEN: usize = START_THREAD_FIXED_LEN + 16;
-/// See [`CALL_FUNCTION_LEN`].
+/// See [`FUNCTION_ENTER_LEN`].
 pub const END_THREAD_LEN: usize = 18;
-/// See [`CALL_FUNCTION_LEN`].
+/// See [`FUNCTION_ENTER_LEN`].
 pub const SET_FUNCTION_ID_LEN: usize = 41;
 
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
 pub const MAX_RECORD_LEN: usize = START_THREAD_SPAWN_FIXED_LEN + MAX_THREAD_NAME_LEN;
 
 /// Caps a thread name at [`MAX_THREAD_NAME_LEN`] bytes without splitting a
-/// UTF-8 character — the producer-side capture helper for `StartThread`.
+/// UTF-8 character — the producer-side capture helper for `BexThreadStart`.
 #[must_use]
 pub fn capped_name_bytes(name: &str) -> &[u8] {
     if name.len() <= MAX_THREAD_NAME_LEN {
@@ -52,12 +52,12 @@ pub fn capped_name_bytes(name: &str) -> &[u8] {
 
 use crate::ids::{BexCallId, BexThreadId, FunctionId};
 
-const TAG_CALL_FUNCTION: u8 = 0x01;
-const TAG_END_FUNCTION: u8 = 0x02;
+const TAG_FUNCTION_ENTER: u8 = 0x01;
+const TAG_FUNCTION_EXIT: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
-const TAG_END_FUNCTION_AWAITED: u8 = 0x06;
+const TAG_FUNCTION_EXIT_AWAITED: u8 = 0x06;
 const TAG_START_THREAD_SPAWN: u8 = 0x07;
 const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 
@@ -106,9 +106,9 @@ pub enum ThreadEndStatus {
 
 /// A decoded ring record. Borrowed (`name`) from the drained byte range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RawRecord<'a> {
+pub enum Marker<'a> {
     /// Tag `0x01`: a function call began (pushed right after the frame push).
-    CallFunction {
+    FunctionEnter {
         /// Reserved flag bits (zero today).
         flags: u8,
         /// Logical BEX thread id (not the OS thread).
@@ -128,24 +128,24 @@ pub enum RawRecord<'a> {
         ts_ticks: u64,
     },
     /// Tag `0x02`: a function call ended (return, unwind, or cancel drain).
-    EndFunction {
+    FunctionExit {
         /// How the frame ended (see [`FunctionEndStatus`]).
         status: FunctionEndStatus,
         /// Logical BEX thread id.
         thread_id: BexThreadId,
-        /// Matches the `CallFunction` it closes.
+        /// Matches the `FunctionEnter` it closes.
         call_id: BexCallId,
         /// Raw clock ticks; converted to ns by the consumer at transcode.
         ts_ticks: u64,
     },
     /// Tag `0x06`: the alternative call-end encoding used only when the call
     /// suspended at least once. This is one end fact, not an additional event.
-    EndFunctionAwaited {
+    FunctionExitAwaited {
         /// How the frame ended.
         status: FunctionEndStatus,
         /// Logical BEX thread id.
         thread_id: BexThreadId,
-        /// Matches the `CallFunction` it closes.
+        /// Matches the `FunctionEnter` it closes.
         call_id: BexCallId,
         /// Raw clock ticks; converted to ns by the consumer.
         ts_ticks: u64,
@@ -155,7 +155,7 @@ pub enum RawRecord<'a> {
         await_count: u32,
     },
     /// Tag `0x03`: a logical thread started (root or spawn).
-    StartThread {
+    BexThreadStart {
         /// Reserved flag bits (zero today).
         flags: u8,
         /// Logical BEX thread id.
@@ -171,9 +171,9 @@ pub enum RawRecord<'a> {
         name: &'a [u8],
     },
     /// Tag `0x07`: spawned logical thread start with the spawn expression's
-    /// source span. This remains distinct from root `StartThread` so the
+    /// source span. This remains distinct from root `BexThreadStart` so the
     /// legacy root record retains its frozen byte shape.
-    StartThreadSpawn {
+    BexThreadStartSpawned {
         flags: u8,
         thread_id: BexThreadId,
         parent_thread_id: BexThreadId,
@@ -183,7 +183,7 @@ pub enum RawRecord<'a> {
         name: &'a [u8],
     },
     /// Tag `0x04`: a logical thread ended.
-    EndThread {
+    BexThreadEnd {
         /// How the thread ended.
         status: ThreadEndStatus,
         /// Logical BEX thread id.
@@ -193,7 +193,7 @@ pub enum RawRecord<'a> {
     },
     /// Tag `0x05`: `$id` override for a call (reserved for the M1 language
     /// surface; the shape is fixed so the ring format doesn't change).
-    SetFunctionId {
+    SetBoundaryLocalId {
         /// Logical BEX thread id.
         thread_id: BexThreadId,
         /// The call whose `$id` is overridden.
@@ -216,32 +216,32 @@ pub enum DecodeError {
     Truncated,
     /// A status byte holds an undefined value.
     InvalidStatus(u8),
-    /// A `StartThread` name length exceeds [`MAX_THREAD_NAME_LEN`].
+    /// A `BexThreadStart` name length exceeds [`MAX_THREAD_NAME_LEN`].
     NameTooLong(u16),
 }
 
-impl RawRecord<'_> {
+impl Marker<'_> {
     /// Encoded length of this record in bytes.
     #[must_use]
     pub fn encoded_len(&self) -> usize {
         match self {
-            RawRecord::CallFunction { .. } => CALL_FUNCTION_LEN,
-            RawRecord::EndFunction { .. } => END_FUNCTION_LEN,
-            RawRecord::EndFunctionAwaited { .. } => END_FUNCTION_AWAITED_LEN,
-            RawRecord::StartThread { name, .. } => {
+            Marker::FunctionEnter { .. } => FUNCTION_ENTER_LEN,
+            Marker::FunctionExit { .. } => FUNCTION_EXIT_LEN,
+            Marker::FunctionExitAwaited { .. } => FUNCTION_EXIT_AWAITED_LEN,
+            Marker::BexThreadStart { name, .. } => {
                 START_THREAD_FIXED_LEN + name.len().min(MAX_THREAD_NAME_LEN)
             }
-            RawRecord::StartThreadSpawn { name, .. } => {
+            Marker::BexThreadStartSpawned { name, .. } => {
                 START_THREAD_SPAWN_FIXED_LEN + name.len().min(MAX_THREAD_NAME_LEN)
             }
-            RawRecord::EndThread { .. } => END_THREAD_LEN,
-            RawRecord::SetFunctionId { .. } => SET_FUNCTION_ID_LEN,
+            Marker::BexThreadEnd { .. } => END_THREAD_LEN,
+            Marker::SetBoundaryLocalId { .. } => SET_FUNCTION_ID_LEN,
         }
     }
 
     /// Encodes into the front of `buf`, returning the encoded length.
     ///
-    /// `StartThread` names are truncated to [`MAX_THREAD_NAME_LEN`] bytes
+    /// `BexThreadStart` names are truncated to [`MAX_THREAD_NAME_LEN`] bytes
     /// defensively; callers are expected to cap (UTF-8-safely) at capture
     /// time.
     #[inline]
@@ -259,13 +259,13 @@ impl RawRecord<'_> {
     /// fields are written via unchecked unaligned stores (debug-asserted, not
     /// release-checked), so an undersized `buf` is undefined behavior in
     /// release builds — not a panic. Every caller satisfies this:
-    /// [`Self::encode`] uses a [`MAX_RECORD_LEN`] buffer and `Ring::push_with`
+    /// [`Self::encode`] uses a [`MAX_RECORD_LEN`] buffer and `OSThreadMarkerRing::push_with`
     /// reserves exactly `encoded_len()`.
     #[inline]
     pub fn encode_to(&self, buf: &mut [u8]) -> usize {
         let mut w = Writer { buf, pos: 0 };
         match *self {
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags,
                 thread_id,
                 call_id,
@@ -274,7 +274,7 @@ impl RawRecord<'_> {
                 call_site,
                 ts_ticks,
             } => {
-                w.u8(TAG_CALL_FUNCTION);
+                w.u8(TAG_FUNCTION_ENTER);
                 w.u8(flags);
                 w.u64(thread_id.0);
                 w.u64(call_id.0);
@@ -293,19 +293,19 @@ impl RawRecord<'_> {
                     w.u32(0);
                 }
             }
-            RawRecord::EndFunction {
+            Marker::FunctionExit {
                 status,
                 thread_id,
                 call_id,
                 ts_ticks,
             } => {
-                w.u8(TAG_END_FUNCTION);
+                w.u8(TAG_FUNCTION_EXIT);
                 w.u8(status as u8);
                 w.u64(thread_id.0);
                 w.u64(call_id.0);
                 w.u64(ts_ticks);
             }
-            RawRecord::EndFunctionAwaited {
+            Marker::FunctionExitAwaited {
                 status,
                 thread_id,
                 call_id,
@@ -313,7 +313,7 @@ impl RawRecord<'_> {
                 await_ns,
                 await_count,
             } => {
-                w.u8(TAG_END_FUNCTION_AWAITED);
+                w.u8(TAG_FUNCTION_EXIT_AWAITED);
                 w.u8(status as u8);
                 w.u64(thread_id.0);
                 w.u64(call_id.0);
@@ -321,7 +321,7 @@ impl RawRecord<'_> {
                 w.u64(await_ns);
                 w.u32(await_count);
             }
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 flags,
                 thread_id,
                 parent_thread_id,
@@ -339,7 +339,7 @@ impl RawRecord<'_> {
                 w.u16(u16::try_from(name.len()).expect("thread name is capped at 256 bytes"));
                 w.bytes(name);
             }
-            RawRecord::StartThreadSpawn {
+            Marker::BexThreadStartSpawned {
                 flags,
                 thread_id,
                 parent_thread_id,
@@ -369,7 +369,7 @@ impl RawRecord<'_> {
                 w.u16(u16::try_from(name.len()).expect("thread name is capped at 256 bytes"));
                 w.bytes(name);
             }
-            RawRecord::EndThread {
+            Marker::BexThreadEnd {
                 status,
                 thread_id,
                 ts_ticks,
@@ -379,7 +379,7 @@ impl RawRecord<'_> {
                 w.u64(thread_id.0);
                 w.u64(ts_ticks);
             }
-            RawRecord::SetFunctionId {
+            Marker::SetBoundaryLocalId {
                 thread_id,
                 call_id,
                 id,
@@ -399,11 +399,11 @@ impl RawRecord<'_> {
 
 /// Decodes the record at the front of `buf`, returning it and its encoded
 /// length. Never panics on malformed input.
-pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
+pub fn decode(buf: &[u8]) -> Result<(Marker<'_>, usize), DecodeError> {
     let mut r = Reader { buf, pos: 0 };
     let tag = r.u8()?;
     let rec = match tag {
-        TAG_CALL_FUNCTION => {
+        TAG_FUNCTION_ENTER => {
             let flags = r.u8()?;
             let thread_id = BexThreadId(r.u64()?);
             let call_id = BexCallId(r.u64()?);
@@ -414,7 +414,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             let call_site_start_offset = r.u32()?;
             let call_site_end_offset = r.u32()?;
             let call_site_line = r.u32()?;
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags,
                 thread_id,
                 call_id,
@@ -431,7 +431,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 ts_ticks,
             }
         }
-        TAG_END_FUNCTION => RawRecord::EndFunction {
+        TAG_FUNCTION_EXIT => Marker::FunctionExit {
             status: match r.u8()? {
                 0 => FunctionEndStatus::Ok,
                 1 => FunctionEndStatus::Errored,
@@ -443,7 +443,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             call_id: BexCallId(r.u64()?),
             ts_ticks: r.u64()?,
         },
-        TAG_END_FUNCTION_AWAITED => RawRecord::EndFunctionAwaited {
+        TAG_FUNCTION_EXIT_AWAITED => Marker::FunctionExitAwaited {
             status: match r.u8()? {
                 0 => FunctionEndStatus::Ok,
                 1 => FunctionEndStatus::Errored,
@@ -467,7 +467,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             if usize::from(name_len) > MAX_THREAD_NAME_LEN {
                 return Err(DecodeError::NameTooLong(name_len));
             }
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 flags,
                 thread_id,
                 parent_thread_id,
@@ -496,7 +496,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             if usize::from(name_len) > MAX_THREAD_NAME_LEN {
                 return Err(DecodeError::NameTooLong(name_len));
             }
-            RawRecord::StartThreadSpawn {
+            Marker::BexThreadStartSpawned {
                 flags,
                 thread_id,
                 parent_thread_id,
@@ -506,7 +506,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 name: r.bytes(usize::from(name_len))?,
             }
         }
-        TAG_END_THREAD => RawRecord::EndThread {
+        TAG_END_THREAD => Marker::BexThreadEnd {
             status: match r.u8()? {
                 0 => ThreadEndStatus::Completed,
                 1 => ThreadEndStatus::Cancelled,
@@ -516,7 +516,7 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             thread_id: BexThreadId(r.u64()?),
             ts_ticks: r.u64()?,
         },
-        TAG_SET_FUNCTION_ID => RawRecord::SetFunctionId {
+        TAG_SET_FUNCTION_ID => Marker::SetBoundaryLocalId {
             thread_id: BexThreadId(r.u64()?),
             call_id: BexCallId(r.u64()?),
             id: {
@@ -543,7 +543,7 @@ pub struct RecordIter<'a> {
 }
 
 impl<'a> Iterator for RecordIter<'a> {
-    type Item = Result<RawRecord<'a>, DecodeError>;
+    type Item = Result<Marker<'a>, DecodeError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.buf.is_empty() {
@@ -578,7 +578,7 @@ impl Writer<'_> {
     fn u16(&mut self, v: u16) {
         debug_assert!(self.pos + 2 <= self.buf.len());
         // SAFETY: callers size `buf` >= `encoded_len()` (producer reserves
-        // exactly that via `Ring::push_with`), so `pos + 2` is in bounds.
+        // exactly that via `OSThreadMarkerRing::push_with`), so `pos + 2` is in bounds.
         #[expect(
             unsafe_code,
             reason = "in-bounds unaligned store; avoids non-inlined copy"
@@ -680,7 +680,7 @@ impl<'a> Reader<'a> {
 mod tests {
     use super::*;
 
-    fn roundtrip(rec: RawRecord<'_>) {
+    fn roundtrip(rec: Marker<'_>) {
         let mut buf = [0u8; MAX_RECORD_LEN];
         let len = rec.encode(&mut buf);
         assert_eq!(len, rec.encoded_len());
@@ -700,7 +700,7 @@ mod tests {
     )]
     fn roundtrip_all_variants() {
         for v in [0u64, 1, 42, u64::MAX] {
-            roundtrip(RawRecord::CallFunction {
+            roundtrip(Marker::FunctionEnter {
                 flags: v as u8,
                 thread_id: BexThreadId(v),
                 call_id: BexCallId(v.wrapping_add(1)),
@@ -709,13 +709,13 @@ mod tests {
                 call_site: None,
                 ts_ticks: v,
             });
-            roundtrip(RawRecord::EndFunction {
+            roundtrip(Marker::FunctionExit {
                 status: FunctionEndStatus::Ok,
                 thread_id: BexThreadId(v),
                 call_id: BexCallId(v),
                 ts_ticks: v,
             });
-            roundtrip(RawRecord::EndFunctionAwaited {
+            roundtrip(Marker::FunctionExitAwaited {
                 status: FunctionEndStatus::Ok,
                 thread_id: BexThreadId(v),
                 call_id: BexCallId(v),
@@ -723,12 +723,12 @@ mod tests {
                 await_ns: v.wrapping_mul(3),
                 await_count: v as u32,
             });
-            roundtrip(RawRecord::EndThread {
+            roundtrip(Marker::BexThreadEnd {
                 status: ThreadEndStatus::Cancelled,
                 thread_id: BexThreadId(v),
                 ts_ticks: v,
             });
-            roundtrip(RawRecord::SetFunctionId {
+            roundtrip(Marker::SetBoundaryLocalId {
                 thread_id: BexThreadId(v),
                 call_id: BexCallId(v),
                 id: [v as u8; 16],
@@ -740,24 +740,24 @@ mod tests {
             FunctionEndStatus::Cancelled,
             FunctionEndStatus::Exited,
         ] {
-            roundtrip(RawRecord::EndFunction {
+            roundtrip(Marker::FunctionExit {
                 status,
                 thread_id: BexThreadId(7),
                 call_id: BexCallId(9),
                 ts_ticks: 11,
             });
         }
-        roundtrip(RawRecord::EndThread {
+        roundtrip(Marker::BexThreadEnd {
             status: ThreadEndStatus::Completed,
             thread_id: BexThreadId(7),
             ts_ticks: 11,
         });
-        roundtrip(RawRecord::EndThread {
+        roundtrip(Marker::BexThreadEnd {
             status: ThreadEndStatus::Errored,
             thread_id: BexThreadId(7),
             ts_ticks: 11,
         });
-        roundtrip(RawRecord::CallFunction {
+        roundtrip(Marker::FunctionEnter {
             flags: 0,
             thread_id: BexThreadId(1),
             call_id: BexCallId(2),
@@ -777,7 +777,7 @@ mod tests {
     fn roundtrip_thread_names() {
         for len in [0usize, 1, 100, 255, 256] {
             let name = vec![b'x'; len];
-            roundtrip(RawRecord::StartThread {
+            roundtrip(Marker::BexThreadStart {
                 flags: 1,
                 thread_id: BexThreadId(2),
                 parent_thread_id: BexThreadId(0),
@@ -785,7 +785,7 @@ mod tests {
                 ts_ticks: 4,
                 name: &name,
             });
-            roundtrip(RawRecord::StartThreadSpawn {
+            roundtrip(Marker::BexThreadStartSpawned {
                 flags: 1,
                 thread_id: BexThreadId(3),
                 parent_thread_id: BexThreadId(2),
@@ -805,7 +805,7 @@ mod tests {
     #[test]
     fn encode_truncates_oversized_name() {
         let name = vec![b'y'; 300];
-        let rec = RawRecord::StartThread {
+        let rec = Marker::BexThreadStart {
             flags: 0,
             thread_id: BexThreadId(1),
             parent_thread_id: BexThreadId(0),
@@ -818,7 +818,7 @@ mod tests {
         assert_eq!(len, START_THREAD_FIXED_LEN + MAX_THREAD_NAME_LEN);
         let (decoded, _) = decode(&buf[..len]).expect("decode");
         match decoded {
-            RawRecord::StartThread { name, .. } => assert_eq!(name.len(), MAX_THREAD_NAME_LEN),
+            Marker::BexThreadStart { name, .. } => assert_eq!(name.len(), MAX_THREAD_NAME_LEN),
             other => panic!("wrong variant: {other:?}"),
         }
     }
@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn fixed_sizes_match_spec() {
         let mut buf = [0u8; MAX_RECORD_LEN];
-        let call = RawRecord::CallFunction {
+        let call = Marker::FunctionEnter {
             flags: 0,
             thread_id: BexThreadId(1),
             call_id: BexCallId(1),
@@ -836,14 +836,14 @@ mod tests {
             ts_ticks: 0,
         };
         assert_eq!(call.encode(&mut buf), 54);
-        let end = RawRecord::EndFunction {
+        let end = Marker::FunctionExit {
             status: FunctionEndStatus::Ok,
             thread_id: BexThreadId(1),
             call_id: BexCallId(1),
             ts_ticks: 0,
         };
         assert_eq!(end.encode(&mut buf), 26);
-        let awaited_end = RawRecord::EndFunctionAwaited {
+        let awaited_end = Marker::FunctionExitAwaited {
             status: FunctionEndStatus::Ok,
             thread_id: BexThreadId(1),
             call_id: BexCallId(1),
@@ -852,7 +852,7 @@ mod tests {
             await_count: 2,
         };
         assert_eq!(awaited_end.encode(&mut buf), 38);
-        let start_thread = RawRecord::StartThread {
+        let start_thread = Marker::BexThreadStart {
             flags: 0,
             thread_id: BexThreadId(1),
             parent_thread_id: BexThreadId(0),
@@ -861,7 +861,7 @@ mod tests {
             name: b"",
         };
         assert_eq!(start_thread.encode(&mut buf), 36);
-        let spawned_thread = RawRecord::StartThreadSpawn {
+        let spawned_thread = Marker::BexThreadStartSpawned {
             flags: 0,
             thread_id: BexThreadId(2),
             parent_thread_id: BexThreadId(1),
@@ -871,13 +871,13 @@ mod tests {
             name: b"",
         };
         assert_eq!(spawned_thread.encode(&mut buf), 52);
-        let end_thread = RawRecord::EndThread {
+        let end_thread = Marker::BexThreadEnd {
             status: ThreadEndStatus::Completed,
             thread_id: BexThreadId(1),
             ts_ticks: 0,
         };
         assert_eq!(end_thread.encode(&mut buf), 18);
-        let set_id = RawRecord::SetFunctionId {
+        let set_id = Marker::SetBoundaryLocalId {
             thread_id: BexThreadId(1),
             call_id: BexCallId(1),
             id: [0; 16],
@@ -893,7 +893,7 @@ mod tests {
         assert_eq!(decode(&[]), Err(DecodeError::Truncated));
 
         let mut buf = [0u8; MAX_RECORD_LEN];
-        let len = RawRecord::EndFunction {
+        let len = Marker::FunctionExit {
             status: FunctionEndStatus::Ok,
             thread_id: BexThreadId(1),
             call_id: BexCallId(1),
@@ -907,7 +907,7 @@ mod tests {
     #[test]
     fn awaited_end_golden_bytes_are_stable() {
         let mut buf = [0u8; MAX_RECORD_LEN];
-        let len = RawRecord::EndFunctionAwaited {
+        let len = Marker::FunctionExitAwaited {
             status: FunctionEndStatus::Cancelled,
             thread_id: BexThreadId(0x0102_0304_0506_0708),
             call_id: BexCallId(0x1112_1314_1516_1718),
@@ -929,7 +929,7 @@ mod tests {
     #[test]
     fn spawned_thread_golden_bytes_are_stable() {
         let mut buf = [0u8; MAX_RECORD_LEN];
-        let len = RawRecord::StartThreadSpawn {
+        let len = Marker::BexThreadStartSpawned {
             flags: 0xAB,
             thread_id: BexThreadId(0x0102_0304_0506_0708),
             parent_thread_id: BexThreadId(0x1112_1314_1516_1718),
@@ -958,7 +958,7 @@ mod tests {
     #[test]
     fn decode_rejects_oversized_name_len() {
         let mut buf = [0u8; MAX_RECORD_LEN];
-        let len = RawRecord::StartThread {
+        let len = Marker::BexThreadStart {
             flags: 0,
             thread_id: BexThreadId(1),
             parent_thread_id: BexThreadId(0),
@@ -977,7 +977,7 @@ mod tests {
     fn every_truncation_errors_without_panicking() {
         let name = vec![b'n'; 17];
         let records = [
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags: 1,
                 thread_id: BexThreadId(2),
                 call_id: BexCallId(3),
@@ -991,7 +991,7 @@ mod tests {
                 }),
                 ts_ticks: 6,
             },
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 flags: 0,
                 thread_id: BexThreadId(1),
                 parent_thread_id: BexThreadId(2),
@@ -999,7 +999,7 @@ mod tests {
                 ts_ticks: 4,
                 name: &name,
             },
-            RawRecord::StartThreadSpawn {
+            Marker::BexThreadStartSpawned {
                 flags: 0,
                 thread_id: BexThreadId(1),
                 parent_thread_id: BexThreadId(2),
@@ -1013,13 +1013,13 @@ mod tests {
                 }),
                 name: &name,
             },
-            RawRecord::SetFunctionId {
+            Marker::SetBoundaryLocalId {
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(2),
                 id: [3; 16],
                 ts_ticks: 4,
             },
-            RawRecord::EndFunctionAwaited {
+            Marker::FunctionExitAwaited {
                 status: FunctionEndStatus::Errored,
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(2),
@@ -1045,7 +1045,7 @@ mod tests {
     fn iterates_packed_records() {
         let name = b"worker".as_slice();
         let records = vec![
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 flags: 0,
                 thread_id: BexThreadId(1),
                 parent_thread_id: BexThreadId(0),
@@ -1053,7 +1053,7 @@ mod tests {
                 ts_ticks: 1,
                 name,
             },
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags: 0,
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(1),
@@ -1062,13 +1062,13 @@ mod tests {
                 call_site: None,
                 ts_ticks: 2,
             },
-            RawRecord::EndFunction {
+            Marker::FunctionExit {
                 status: FunctionEndStatus::Ok,
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(1),
                 ts_ticks: 3,
             },
-            RawRecord::EndThread {
+            Marker::BexThreadEnd {
                 status: ThreadEndStatus::Completed,
                 thread_id: BexThreadId(1),
                 ts_ticks: 4,

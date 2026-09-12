@@ -55,7 +55,7 @@ pub struct ExecutionMetadata {
     /// Host runtime token (`baml_id_1_…`), opaque to the profiler.
     pub runtime_id: BoundaryId,
     /// `now_ticks()` sampled at the top of `register_root`; the durable
-    /// `RootStarted.started_ns` source (a lost `StartThread` record must not
+    /// `RootStarted.started_ns` source (a lost `BexThreadStart` record must not
     /// lose the start time).
     pub admitted_ticks: u64,
 }

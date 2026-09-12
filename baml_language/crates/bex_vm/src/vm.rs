@@ -1270,7 +1270,7 @@ pub struct BexVm {
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
     /// `None` = profiling off. Pushes go through `prof_push_record`.
-    pub prof_ring: Option<&'static bex_events::prof::Ring>,
+    pub prof_ring: Option<&'static bex_events::prof::OSThreadMarkerRing>,
 
     /// Per-root execution suppression for project/catalog work that must not
     /// become visible run/profile state. `$id` call ids are still minted.
@@ -5951,14 +5951,14 @@ impl BexVm {
 
     /// Encodes one profiling record directly into a reserved slot of the
     /// supplied per-resume ring snapshot. Callers do the profiling-off gate
-    /// (they pass the already-unwrapped `&Ring`); the slot is sized from
-    /// [`bex_events::prof::record::RawRecord::encoded_len`] and initialized in
+    /// (they pass the already-unwrapped `&OSThreadMarkerRing`); the slot is sized from
+    /// [`bex_events::prof::record::Marker::encoded_len`] and initialized in
     /// place by `encode_to` — no intermediate stack buffer, no zeroing.
     #[inline]
     fn prof_push_record(
         &self,
-        ring: &bex_events::prof::Ring,
-        rec: &bex_events::prof::record::RawRecord<'_>,
+        ring: &bex_events::prof::OSThreadMarkerRing,
+        rec: &bex_events::prof::record::Marker<'_>,
     ) -> bool {
         // Encode straight into the ring slot: no intermediate stack buffer,
         // no 41-byte zeroing, and one copy instead of two (encode→buf→ring).
@@ -5998,7 +5998,7 @@ impl BexVm {
     /// latter owns a boundary handle, and every record it would have pushed is
     /// one `StructuralTransportExceeded` loss (§8.4), not one per exec resume.
     #[inline]
-    fn prof_ring_for_push(&self) -> Option<&'static bex_events::prof::Ring> {
+    fn prof_ring_for_push(&self) -> Option<&'static bex_events::prof::OSThreadMarkerRing> {
         if self.prof_ring.is_none() {
             self.prof_note_transport_loss();
         }
@@ -6060,7 +6060,7 @@ impl BexVm {
         let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::CallFunction {
+                &bex_events::prof::record::Marker::FunctionEnter {
                     flags: capture_plan.to_call_flags(),
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6100,7 +6100,7 @@ impl BexVm {
             let ts_ticks = bex_events::prof::clock::now_ticks();
             let record = match awaited {
                 Some((await_ns, await_count)) => {
-                    bex_events::prof::record::RawRecord::EndFunctionAwaited {
+                    bex_events::prof::record::Marker::FunctionExitAwaited {
                         status,
                         thread_id: BexThreadId(self.prof_thread_id),
                         call_id: BexCallId(call_id),
@@ -6109,7 +6109,7 @@ impl BexVm {
                         await_count,
                     }
                 }
-                None => bex_events::prof::record::RawRecord::EndFunction {
+                None => bex_events::prof::record::Marker::FunctionExit {
                     status,
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6304,7 +6304,7 @@ impl BexVm {
         let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::CallFunction {
+                &bex_events::prof::record::Marker::FunctionEnter {
                     flags: capture_plan.to_call_flags(),
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6331,7 +6331,7 @@ impl BexVm {
         if let Some(ring) = self.prof_ring_for_push() {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::SetFunctionId {
+                &bex_events::prof::record::Marker::SetBoundaryLocalId {
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
                     id,
@@ -6366,9 +6366,9 @@ impl BexVm {
         };
         // Both records in one push: one bounds check + one Release store
         // for the pair (the ring moves whole records; two at once is fine).
-        let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN
-            + bex_events::prof::record::END_FUNCTION_LEN];
-        let call_len = bex_events::prof::record::RawRecord::CallFunction {
+        let mut buf = [0u8; bex_events::prof::record::FUNCTION_ENTER_LEN
+            + bex_events::prof::record::FUNCTION_EXIT_LEN];
+        let call_len = bex_events::prof::record::Marker::FunctionEnter {
             flags: 0,
             thread_id: BexThreadId(self.prof_thread_id),
             call_id: BexCallId(call_id),
@@ -6378,7 +6378,7 @@ impl BexVm {
             ts_ticks: start_ticks,
         }
         .encode_to(&mut buf);
-        let end_len = bex_events::prof::record::RawRecord::EndFunction {
+        let end_len = bex_events::prof::record::Marker::FunctionExit {
             status,
             thread_id: BexThreadId(self.prof_thread_id),
             call_id: BexCallId(call_id),

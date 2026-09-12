@@ -15,7 +15,7 @@ use crate::{
     ids::{BexCallId, BoundaryId, CallRef, EngineId, ProcessEuid, ProgramId, ThreadRef},
     prof::{
         clock::TickConverter,
-        record::{CallSiteSourceSpan, FunctionEndStatus, RawRecord, ThreadEndStatus},
+        record::{CallSiteSourceSpan, FunctionEndStatus, Marker, ThreadEndStatus},
     },
 };
 
@@ -154,7 +154,7 @@ pub struct QueueHealthSnapshot {
     pub publication_inflight: bool,
 }
 
-pub(super) struct ExecutionRuntime {
+pub(super) struct ExecutionDecodeAccumulator {
     pub generation: u32,
     /// The execution's identity: its root thread.
     pub root: ThreadRef,
@@ -166,10 +166,10 @@ pub(super) struct ExecutionRuntime {
     pub(super) health: ExecutionHealthSnapshot,
 }
 
-impl std::fmt::Debug for ExecutionRuntime {
+impl std::fmt::Debug for ExecutionDecodeAccumulator {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("ExecutionRuntime")
+            .debug_struct("ExecutionDecodeAccumulator")
             .field("generation", &self.generation)
             .field("root", &self.root)
             .field("health", &self.health)
@@ -177,7 +177,7 @@ impl std::fmt::Debug for ExecutionRuntime {
     }
 }
 
-impl ExecutionRuntime {
+impl ExecutionDecodeAccumulator {
     pub(super) fn new(
         generation: u32,
         root: ThreadRef,
@@ -283,7 +283,7 @@ impl EvidenceBatch {
 }
 
 #[derive(Debug)]
-struct ThreadState {
+struct BexThreadDecodeState {
     boundary: ExecutionHandle,
     spawn_parent: Option<ContextKeyProjection>,
     spawn_site: Option<CallSiteSourceSpan>,
@@ -297,7 +297,7 @@ struct ThreadState {
 struct ContextKeyProjection(super::ContextKey);
 
 #[derive(Debug)]
-struct CallState {
+struct CallDecodeState {
     boundary: ExecutionHandle,
     context: ContextAdmission,
     context_key: Option<ContextKeyProjection>,
@@ -313,7 +313,7 @@ struct CallState {
     _reservation: Reservation,
 }
 
-impl CallState {
+impl CallDecodeState {
     fn observe_value(&mut self, role: super::ValueRole) {
         self.values_observed |= match role {
             super::ValueRole::Input => super::RoleMask::INPUT,
@@ -485,8 +485,8 @@ struct PendingTerminalError {
 
 #[derive(Debug, Default)]
 pub(super) struct DirectDecoder {
-    threads: HashMap<ThreadRef, ThreadState>,
-    calls: HashMap<CallRef, CallState>,
+    threads: HashMap<ThreadRef, BexThreadDecodeState>,
+    calls: HashMap<CallRef, CallDecodeState>,
     /// Parked call starts, keyed by owning thread with `call_id` order
     /// inside. The per-thread split keeps `resolve_starts_for_thread` from
     /// scanning every parked start in the process on each opened call — a
@@ -509,7 +509,7 @@ pub(super) struct DecoderResources<'a> {
     pub memory: &'a ProfilerMemoryGovernor,
     pub sizing: DerivedSizing,
     pub clock: &'a TickConverter,
-    pub boundaries: &'a [std::sync::Mutex<Option<ExecutionRuntime>>],
+    pub boundaries: &'a [std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     /// The session's stream writer; hand-off target for sealed epochs and
     /// evidence batches (consumer thread only; lock order decoder → writer).
     pub writer: &'a Mutex<StreamWriter>,
@@ -523,7 +523,7 @@ impl DirectDecoder {
     /// Queue snapshot for one live execution (session checkpoint support).
     pub(super) fn queue_snapshot(
         handle: ExecutionHandle,
-        boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+        boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     ) -> Option<(ThreadRef, ExecutionHealthSnapshot, QueueHealthSnapshot)> {
         let slot = boundaries.get(handle.slot as usize)?;
         let runtime = slot
@@ -557,9 +557,9 @@ impl DirectDecoder {
         ))
     }
 
-    pub(super) fn consume(&mut self, resources: &DecoderResources<'_>, raw: RawRecord<'_>) {
+    pub(super) fn consume(&mut self, resources: &DecoderResources<'_>, raw: Marker<'_>) {
         match raw {
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 thread_id,
                 parent_thread_id,
                 ts_ticks,
@@ -583,7 +583,7 @@ impl DirectDecoder {
                 );
                 self.resolve_starts_for_thread(resources, thread_ref);
             }
-            RawRecord::StartThreadSpawn {
+            Marker::BexThreadStartSpawned {
                 thread_id,
                 parent_thread_id,
                 parent_call_id,
@@ -602,7 +602,7 @@ impl DirectDecoder {
                     name,
                 );
             }
-            RawRecord::StartThread {
+            Marker::BexThreadStart {
                 thread_id,
                 parent_thread_id,
                 parent_call_id,
@@ -620,7 +620,7 @@ impl DirectDecoder {
                     name,
                 );
             }
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags,
                 thread_id,
                 call_id,
@@ -644,7 +644,7 @@ impl DirectDecoder {
                     ts_ticks,
                 },
             ),
-            RawRecord::EndFunction {
+            Marker::FunctionExit {
                 status,
                 thread_id,
                 call_id,
@@ -664,7 +664,7 @@ impl DirectDecoder {
                     await_count: 0,
                 },
             ),
-            RawRecord::EndFunctionAwaited {
+            Marker::FunctionExitAwaited {
                 status,
                 thread_id,
                 call_id,
@@ -686,7 +686,7 @@ impl DirectDecoder {
                     await_count,
                 },
             ),
-            RawRecord::EndThread {
+            Marker::BexThreadEnd {
                 thread_id,
                 status,
                 ts_ticks,
@@ -701,7 +701,7 @@ impl DirectDecoder {
                     }
                 }
             }
-            RawRecord::SetFunctionId {
+            Marker::SetBoundaryLocalId {
                 thread_id,
                 call_id,
                 id,
@@ -1159,7 +1159,7 @@ impl DirectDecoder {
         };
         self.calls.insert(
             fact.call_ref,
-            CallState {
+            CallDecodeState {
                 boundary,
                 context,
                 context_key,
@@ -1453,7 +1453,7 @@ impl DirectDecoder {
         .unwrap_or(false);
         self.threads.insert(
             thread_ref,
-            ThreadState {
+            BexThreadDecodeState {
                 boundary,
                 spawn_parent,
                 spawn_site,
@@ -2225,7 +2225,7 @@ fn flush_evidence(resources: &DecoderResources<'_>, handle: ExecutionHandle) {
 /// `ThreadStart` was pushed (dependency rule).
 fn push_thread_end(
     resources: &DecoderResources<'_>,
-    state: &ThreadState,
+    state: &BexThreadDecodeState,
     thread_ref: ThreadRef,
     ts_ticks: u64,
     status: ThreadEndStatus,
@@ -2319,7 +2319,7 @@ impl ContextAdmissionExt for ContextAdmission {
 /// Infallible: no store I/O happens on this path.
 pub(super) fn finalize_ready_execution(
     handle: ExecutionHandle,
-    runtime: &mut ExecutionRuntime,
+    runtime: &mut ExecutionDecodeAccumulator,
     decoder: &mut DirectDecoder,
     registry: &super::ExecutionRegistry,
     writer: &Mutex<StreamWriter>,
@@ -2410,7 +2410,7 @@ pub(super) fn finalize_ready_execution(
 }
 
 fn find_execution_by_root(
-    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     root: ThreadRef,
 ) -> Option<ExecutionHandle> {
     boundaries.iter().enumerate().find_map(|(slot, runtime)| {
@@ -2430,9 +2430,9 @@ fn find_execution_by_root(
 }
 
 pub(super) fn with_runtime(
-    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     handle: ExecutionHandle,
-    operation: impl FnOnce(&mut ExecutionRuntime),
+    operation: impl FnOnce(&mut ExecutionDecodeAccumulator),
 ) {
     let Some(slot) = boundaries.get(handle.slot as usize) else {
         return;
@@ -2447,9 +2447,9 @@ pub(super) fn with_runtime(
 }
 
 fn with_runtime_value<T>(
-    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     handle: ExecutionHandle,
-    operation: impl FnOnce(&mut ExecutionRuntime) -> Option<T>,
+    operation: impl FnOnce(&mut ExecutionDecodeAccumulator) -> Option<T>,
 ) -> Option<T> {
     let slot = boundaries.get(handle.slot as usize)?;
     let mut slot = slot
@@ -2462,7 +2462,7 @@ fn with_runtime_value<T>(
 }
 
 fn record_join_capacity_exceeded(
-    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     handle: Option<ExecutionHandle>,
 ) {
     if let Some(handle) = handle {
@@ -2477,7 +2477,7 @@ fn record_join_capacity_exceeded(
 /// one boundary, so every live boundary of that engine is marked as having a
 /// possibly incomplete structural stream.
 pub(super) fn record_engine_framing_error(
-    boundaries: &[std::sync::Mutex<Option<ExecutionRuntime>>],
+    boundaries: &[std::sync::Mutex<Option<ExecutionDecodeAccumulator>>],
     engine_id: EngineId,
 ) {
     for slot in boundaries {

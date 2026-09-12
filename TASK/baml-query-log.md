@@ -115,7 +115,7 @@ amendments, loom re-run on the P0 tree, e2e run.py + bench perf numbers.
   `maintain_ready_executions` (take_admitted → finalize → publish_if_due),
   `force_publish`, Stream/Execution checkpoints,
   `configure_global_store_root` + `BAML_PROFILE_DIR`.
-- `decoder.rs`: `ExecutionRuntime` (root/runtime_id/program_id), hand-off to
+- `decoder.rs`: `ExecutionDecodeAccumulator` (root/runtime_id/program_id), hand-off to
   the writer (no publisher, no FinalizationState), durable
   `ThreadStart`/`ThreadEnd` emission with ts/name retention through pending
   tables, `apply_batch_outcomes`, §5.6 finalization (slot released

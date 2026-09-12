@@ -3,7 +3,9 @@ use std::sync::Mutex;
 use std::sync::{Arc, OnceLock};
 
 #[cfg(not(target_arch = "wasm32"))]
-use super::decoder::{DecoderResources, DirectDecoder, ExecutionRuntime, finalize_ready_execution};
+use super::decoder::{
+    DecoderResources, DirectDecoder, ExecutionDecodeAccumulator, finalize_ready_execution,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use super::writer::{ExecutionCheckpoint, StreamCheckpoint, StreamWriter, WriterEnv, counters};
 use super::{
@@ -104,7 +106,7 @@ struct OnSession {
     #[cfg(not(target_arch = "wasm32"))]
     store: Arc<ProfilerStore>,
     #[cfg(not(target_arch = "wasm32"))]
-    publishers: Box<[Mutex<Option<ExecutionRuntime>>]>,
+    publishers: Box<[Mutex<Option<ExecutionDecodeAccumulator>>]>,
     #[cfg(not(target_arch = "wasm32"))]
     decoder: Mutex<DirectDecoder>,
     /// Driven only by the consumer thread; checkpoint readers on other
@@ -688,7 +690,7 @@ impl ProfilerSession {
         true
     }
 
-    /// Resolve cross-ring `EndThread` facts only after the consumer has swept
+    /// Resolve cross-ring `BexThreadEnd` facts only after the consumer has swept
     /// every ring. A child start and its entry call are consecutive on the
     /// parent ring, but an earlier per-ring resolution point could still fall
     /// between them at a segment boundary.
@@ -1370,7 +1372,7 @@ impl ProfilerSession {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Step 1: the admission timestamp — the durable started_ns source
-            // (the root StartThread record is emitted later and can be lost).
+            // (the root BexThreadStart record is emitted later and can be lost).
             let admitted_ticks = crate::prof::clock::now_ticks();
             let RootProfileIntent::UserRoot { runtime_id } = intent else {
                 return RootAdmission::Inactive(RootProfiler::Inactive(InactiveReason::Suppressed));
@@ -1406,7 +1408,7 @@ impl ProfilerSession {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             debug_assert!(slot.is_none());
-            *slot = Some(ExecutionRuntime::new(
+            *slot = Some(ExecutionDecodeAccumulator::new(
                 handle.generation,
                 root_thread_ref,
                 runtime_id,
@@ -1581,7 +1583,7 @@ mod tests {
     fn final_drain_keeps_structural_end_when_value_command_was_lost() {
         use crate::{
             ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
-            prof::record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord},
+            prof::record::{FunctionEndStatus, MAX_RECORD_LEN, Marker},
         };
 
         let temp = tempfile::TempDir::new().unwrap();
@@ -1609,12 +1611,12 @@ mod tests {
             thread_id: thread_ref.thread_id,
             call_id: BexCallId(6),
         };
-        let emit = |record: RawRecord<'_>| {
+        let emit = |record: Marker<'_>| {
             let mut bytes = [0; MAX_RECORD_LEN];
             let len = record.encode(&mut bytes);
             session.consume_raw_bytes(thread_ref.process_euid, thread_ref.engine_id, &bytes[..len]);
         };
-        emit(RawRecord::StartThread {
+        emit(Marker::BexThreadStart {
             flags: 0,
             thread_id: thread_ref.thread_id,
             parent_thread_id: BexThreadId(0),
@@ -1622,7 +1624,7 @@ mod tests {
             ts_ticks: 10,
             name: b"",
         });
-        emit(RawRecord::CallFunction {
+        emit(Marker::FunctionEnter {
             flags: resolve_capture_plan(true, FunctionCaptureClass::Ordinary, None).to_call_flags(),
             thread_id: thread_ref.thread_id,
             call_id: call_ref.call_id,
@@ -1631,7 +1633,7 @@ mod tests {
             call_site: None,
             ts_ticks: 20,
         });
-        emit(RawRecord::EndFunction {
+        emit(Marker::FunctionExit {
             status: FunctionEndStatus::Errored,
             thread_id: thread_ref.thread_id,
             call_id: call_ref.call_id,
@@ -1693,7 +1695,7 @@ mod tests {
     fn parked_sibling_chain_resolves_iteratively_on_a_small_stack() {
         use crate::{
             ids::{BexCallId, BexThreadId, EngineId, FunctionId, ProcessEuid},
-            prof::record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord},
+            prof::record::{FunctionEndStatus, MAX_RECORD_LEN, Marker},
         };
 
         std::thread::Builder::new()
@@ -1719,7 +1721,7 @@ mod tests {
                 ) else {
                     panic!("root must be admitted");
                 };
-                let emit = |record: RawRecord<'_>| {
+                let emit = |record: Marker<'_>| {
                     let mut bytes = [0; MAX_RECORD_LEN];
                     let len = record.encode(&mut bytes);
                     session.consume_raw_bytes(
@@ -1732,7 +1734,7 @@ mod tests {
                     .to_call_flags();
                 // Every start and end parks: the thread is not yet known.
                 for i in 0..CHAIN {
-                    emit(RawRecord::CallFunction {
+                    emit(Marker::FunctionEnter {
                         flags,
                         thread_id: thread_ref.thread_id,
                         call_id: BexCallId(10 + i),
@@ -1741,7 +1743,7 @@ mod tests {
                         call_site: None,
                         ts_ticks: 20 + 2 * i,
                     });
-                    emit(RawRecord::EndFunction {
+                    emit(Marker::FunctionExit {
                         status: FunctionEndStatus::Ok,
                         thread_id: thread_ref.thread_id,
                         call_id: BexCallId(10 + i),
@@ -1749,7 +1751,7 @@ mod tests {
                     });
                 }
                 // The thread start resolves the whole parked chain at once.
-                emit(RawRecord::StartThread {
+                emit(Marker::BexThreadStart {
                     flags: 0,
                     thread_id: thread_ref.thread_id,
                     parent_thread_id: BexThreadId(0),
@@ -1803,7 +1805,7 @@ mod tests {
             ids::{BexCallId, BexThreadId, EngineId, FunctionId, ProcessEuid},
             prof::{
                 backend::{DataState, EdgeKind, ExecutionStatus},
-                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, Marker, ThreadEndStatus},
             },
         };
 
@@ -1828,24 +1830,23 @@ mod tests {
         ) else {
             panic!("root must be admitted");
         };
-        let emit = |record: RawRecord<'_>| {
+        let emit = |record: Marker<'_>| {
             let mut bytes = [0; MAX_RECORD_LEN];
             let len = record.encode(&mut bytes);
             session.consume_raw_bytes(euid, engine_id, &bytes[..len]);
         };
         let ordinary =
             resolve_capture_plan(false, FunctionCaptureClass::Ordinary, None).to_call_flags();
-        let call =
-            |call_id, parent_call_id, function_id, flags, ts_ticks| RawRecord::CallFunction {
-                flags,
-                thread_id: root_thread,
-                call_id: BexCallId(call_id),
-                parent_call_id: BexCallId(parent_call_id),
-                function_id: FunctionId(function_id),
-                call_site: None,
-                ts_ticks,
-            };
-        let end = |call_id, ts_ticks| RawRecord::EndFunction {
+        let call = |call_id, parent_call_id, function_id, flags, ts_ticks| Marker::FunctionEnter {
+            flags,
+            thread_id: root_thread,
+            call_id: BexCallId(call_id),
+            parent_call_id: BexCallId(parent_call_id),
+            function_id: FunctionId(function_id),
+            call_site: None,
+            ts_ticks,
+        };
+        let end = |call_id, ts_ticks| Marker::FunctionExit {
             status: FunctionEndStatus::Ok,
             thread_id: root_thread,
             call_id: BexCallId(call_id),
@@ -1871,7 +1872,7 @@ mod tests {
         }
 
         // The root thread start resolves everything parked above in one sweep.
-        emit(RawRecord::StartThread {
+        emit(Marker::BexThreadStart {
             flags: 0,
             thread_id: root_thread,
             parent_thread_id: BexThreadId(0),
@@ -1882,7 +1883,7 @@ mod tests {
         if !park_parent_end {
             emit(end(1, parent_end_ts));
         }
-        emit(RawRecord::EndThread {
+        emit(Marker::BexThreadEnd {
             status: ThreadEndStatus::Completed,
             thread_id: root_thread,
             ts_ticks: parent_end_ts + 10,
@@ -1971,7 +1972,7 @@ mod tests {
             ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
             prof::{
                 backend::{ContextKey, EdgeKind},
-                record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+                record::{FunctionEndStatus, MAX_RECORD_LEN, Marker, ThreadEndStatus},
             },
         };
 
@@ -1997,7 +1998,7 @@ mod tests {
         ) else {
             panic!("root must be admitted");
         };
-        let emit = |record: RawRecord<'_>| {
+        let emit = |record: Marker<'_>| {
             let mut bytes = [0; MAX_RECORD_LEN];
             let len = record.encode(&mut bytes);
             session.consume_raw_bytes(euid, engine_id, &bytes[..len]);
@@ -2005,7 +2006,7 @@ mod tests {
         let ordinary =
             resolve_capture_plan(false, FunctionCaptureClass::Ordinary, None).to_call_flags();
         let call = |thread_id, call_id, parent_call_id, function_id, flags, ts_ticks| {
-            RawRecord::CallFunction {
+            Marker::FunctionEnter {
                 flags,
                 thread_id,
                 call_id: BexCallId(call_id),
@@ -2015,13 +2016,13 @@ mod tests {
                 ts_ticks,
             }
         };
-        let end = |thread_id, call_id, ts_ticks| RawRecord::EndFunction {
+        let end = |thread_id, call_id, ts_ticks| Marker::FunctionExit {
             status: FunctionEndStatus::Ok,
             thread_id,
             call_id: BexCallId(call_id),
             ts_ticks,
         };
-        let end_thread = |thread_id, ts_ticks| RawRecord::EndThread {
+        let end_thread = |thread_id, ts_ticks| Marker::BexThreadEnd {
             status: ThreadEndStatus::Completed,
             thread_id,
             ts_ticks,
@@ -2034,7 +2035,7 @@ mod tests {
         emit(call(grandchild_thread, 3, 99, 31, ordinary, 320));
         emit(call(grandchild_thread, 1, 0, 20, ordinary, 290));
         emit(end(grandchild_thread, 1, 330));
-        emit(RawRecord::StartThreadSpawn {
+        emit(Marker::BexThreadStartSpawned {
             flags: 0,
             thread_id: grandchild_thread,
             parent_thread_id: child_thread,
@@ -2047,7 +2048,7 @@ mod tests {
 
         // Child thread: entry call before its own spawn fact.
         emit(call(child_thread, 1, 0, 10, ordinary, 200));
-        emit(RawRecord::StartThreadSpawn {
+        emit(Marker::BexThreadStartSpawned {
             flags: 0,
             thread_id: child_thread,
             parent_thread_id: root_thread,
@@ -2070,7 +2071,7 @@ mod tests {
 
         // Root last. Its thread start attributes the whole parked tree; its
         // call start resolves the child, which resolves the grandchild.
-        emit(RawRecord::StartThread {
+        emit(Marker::BexThreadStart {
             flags: 0,
             thread_id: root_thread,
             parent_thread_id: BexThreadId(0),
@@ -2689,7 +2690,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn thousand_roots_publish_two_meta_segments_and_bounded_data() {
-        use crate::prof::record::{MAX_RECORD_LEN, RawRecord};
+        use crate::prof::record::{MAX_RECORD_LEN, Marker};
 
         let temp = tempfile::TempDir::new().unwrap();
         let root_path = temp.path().join(".baml/profiles-v1");
@@ -2701,7 +2702,7 @@ mod tests {
             ..test_config(&root_path, euid)
         });
         assert!(diagnostic.is_none());
-        let emit = |record: RawRecord<'_>| {
+        let emit = |record: Marker<'_>| {
             let mut bytes = [0; MAX_RECORD_LEN];
             let len = record.encode(&mut bytes);
             session.consume_raw_bytes(euid, crate::ids::EngineId(1), &bytes[..len]);
@@ -2722,7 +2723,7 @@ mod tests {
             ) else {
                 panic!("root {index} must be admitted");
             };
-            emit(RawRecord::StartThread {
+            emit(Marker::BexThreadStart {
                 flags: 0,
                 thread_id,
                 parent_thread_id: crate::ids::BexThreadId(0),
@@ -2730,7 +2731,7 @@ mod tests {
                 ts_ticks: 10,
                 name: b"",
             });
-            emit(RawRecord::CallFunction {
+            emit(Marker::FunctionEnter {
                 flags: resolve_capture_plan(true, FunctionCaptureClass::Ordinary, None)
                     .to_call_flags(),
                 thread_id,
@@ -2740,13 +2741,13 @@ mod tests {
                 call_site: None,
                 ts_ticks: 20,
             });
-            emit(RawRecord::EndFunction {
+            emit(Marker::FunctionExit {
                 status: crate::prof::record::FunctionEndStatus::Ok,
                 thread_id,
                 call_id: crate::ids::BexCallId(1),
                 ts_ticks: 30,
             });
-            emit(RawRecord::EndThread {
+            emit(Marker::BexThreadEnd {
                 status: crate::prof::record::ThreadEndStatus::Completed,
                 thread_id,
                 ts_ticks: 40,
@@ -2813,13 +2814,13 @@ mod tests {
                 panic!("root must be admitted");
             };
             {
-                use crate::prof::record::{MAX_RECORD_LEN, RawRecord};
-                let emit = |record: RawRecord<'_>| {
+                use crate::prof::record::{MAX_RECORD_LEN, Marker};
+                let emit = |record: Marker<'_>| {
                     let mut bytes = [0; MAX_RECORD_LEN];
                     let len = record.encode(&mut bytes);
                     session.consume_raw_bytes(euid, crate::ids::EngineId(1), &bytes[..len]);
                 };
-                emit(RawRecord::StartThread {
+                emit(Marker::BexThreadStart {
                     flags: 0,
                     thread_id: crate::ids::BexThreadId(1),
                     parent_thread_id: crate::ids::BexThreadId(0),
@@ -2980,13 +2981,13 @@ mod tests {
             panic!("root must be admitted");
         };
         {
-            use crate::prof::record::{MAX_RECORD_LEN, RawRecord};
-            let emit = |record: RawRecord<'_>| {
+            use crate::prof::record::{MAX_RECORD_LEN, Marker};
+            let emit = |record: Marker<'_>| {
                 let mut bytes = [0; MAX_RECORD_LEN];
                 let len = record.encode(&mut bytes);
                 session.consume_raw_bytes(euid, crate::ids::EngineId(1), &bytes[..len]);
             };
-            emit(RawRecord::StartThread {
+            emit(Marker::BexThreadStart {
                 flags: 0,
                 thread_id: crate::ids::BexThreadId(1),
                 parent_thread_id: crate::ids::BexThreadId(0),
@@ -3074,9 +3075,9 @@ mod tests {
             panic!("root must be admitted");
         };
         {
-            use crate::prof::record::{MAX_RECORD_LEN, RawRecord};
+            use crate::prof::record::{MAX_RECORD_LEN, Marker};
             let mut bytes = [0; MAX_RECORD_LEN];
-            let record = RawRecord::StartThread {
+            let record = Marker::BexThreadStart {
                 flags: 0,
                 thread_id: crate::ids::BexThreadId(1),
                 parent_thread_id: crate::ids::BexThreadId(0),

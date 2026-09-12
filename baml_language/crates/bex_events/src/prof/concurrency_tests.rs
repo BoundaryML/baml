@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::prof::{
-    ring::{Ring, RingCtx, RingState},
+    ring::{OSThreadMarkerRing, RingCtx, RingState},
     sync::thread,
 };
 
@@ -43,17 +43,18 @@ fn collect_seqs(bytes: &[u8], out: &mut Vec<u64>) {
 /// provenance) after all threads quiesce. Production never frees rings; the
 /// reclaim exists so loom iterations and miri runs stay leak-tight.
 struct TestRing {
-    ring: *mut Ring,
+    ring: *mut OSThreadMarkerRing,
 }
 
 impl TestRing {
     fn new(ctx: &'static RingCtx, seg_bytes: usize, freelist_cap: usize, engine_id: u64) -> Self {
         Self {
-            ring: Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id).expect("test ring capacity"),
+            ring: OSThreadMarkerRing::alloc(ctx, seg_bytes, freelist_cap, engine_id)
+                .expect("test ring capacity"),
         }
     }
 
-    fn get(&self) -> &'static Ring {
+    fn get(&self) -> &'static OSThreadMarkerRing {
         unsafe { &*self.ring }
     }
 }
@@ -149,10 +150,14 @@ mod scenarios {
             assert_eq!(seen, vec![3, 4]);
         }
         // Behavioral leak check (miri's leak checker is off for these tests):
-        // Ring::drop must walk both the live chain and the free list back to
+        // OSThreadMarkerRing::drop must walk both the live chain and the free list back to
         // a zero balance.
         drop(tr);
-        assert_eq!(ctx.live_bytes(), 0, "Ring::drop leaked segments");
+        assert_eq!(
+            ctx.live_bytes(),
+            0,
+            "OSThreadMarkerRing::drop leaked segments"
+        );
     }
 
     /// (3) Free-list SPSC integrity: heavier producer/consumer traffic so
@@ -191,14 +196,14 @@ mod scenarios {
         let ring = tr.get();
 
         let mut tagged: Vec<(u64, u64)> = Vec::new();
-        let mut sink = |ring: &'static Ring, bytes: &[u8]| {
+        let mut sink = |ring: &'static OSThreadMarkerRing, bytes: &[u8]| {
             // SAFETY: bytes in hand are drain progress (engine_id contract).
             let engine = unsafe { ring.engine_id() };
             let mut seqs = Vec::new();
             collect_seqs(bytes, &mut seqs);
             tagged.extend(seqs.into_iter().map(|s| (engine, s)));
         };
-        let drain = |sink: &mut dyn FnMut(&'static Ring, &[u8])| {
+        let drain = |sink: &mut dyn FnMut(&'static OSThreadMarkerRing, &[u8])| {
             // SAFETY: this thread is the single consumer.
             unsafe { ring.drain(&mut |b| sink(ring, b)) }
         };
@@ -588,7 +593,7 @@ mod stress {
     use crate::{
         ids::{BexCallId, BexThreadId, FunctionId},
         prof::{
-            record::{self, RawRecord},
+            record::{self, Marker},
             registry::Registry,
             ring::RingState,
         },
@@ -625,7 +630,7 @@ mod stress {
                         .expect("test ring capacity");
                     let mut buf = [0u8; record::MAX_RECORD_LEN];
                     for seq in 1u64..=per_producer {
-                        let len = RawRecord::CallFunction {
+                        let len = Marker::FunctionEnter {
                             flags: 0,
                             thread_id: BexThreadId(engine),
                             call_id: BexCallId(seq),
@@ -652,12 +657,12 @@ mod stress {
 
         // Consumer: sweep with the D4 protocol (park flag, recheck, timeout).
         let mut per_engine: Vec<Vec<u64>> = vec![Vec::new(); producers + 1];
-        let mut sink = |ring: &'static crate::prof::ring::Ring, bytes: &[u8]| {
+        let mut sink = |ring: &'static crate::prof::ring::OSThreadMarkerRing, bytes: &[u8]| {
             // SAFETY: bytes in hand are drain progress.
             let engine = unsafe { ring.engine_id() };
             for r in record::iter(bytes) {
                 match r.expect("corrupt record in committed range") {
-                    RawRecord::CallFunction {
+                    Marker::FunctionEnter {
                         thread_id, call_id, ..
                     } => {
                         assert_eq!(
@@ -734,14 +739,14 @@ mod stress {
     #[test]
     fn bounded_drain_spreads_backlog_and_defers_orphan_pooling() {
         use super::collect_seqs;
-        use crate::prof::ring::Ring;
+        use crate::prof::ring::OSThreadMarkerRing;
 
         let ctx = leak_ctx(BIG_CAP);
         let reg_ptr = Box::into_raw(Box::new(Registry::new()));
         let reg: &'static Registry = unsafe { &*reg_ptr };
         let total: u64 = 100; // 50 two-record segments — several drain bounds
 
-        let ring: &'static Ring = std::thread::spawn(move || {
+        let ring: &'static OSThreadMarkerRing = std::thread::spawn(move || {
             let h = reg
                 .acquire(ctx, 16, 8, 1) // two 8-byte records per segment
                 .expect("test ring capacity");
@@ -758,7 +763,9 @@ mod stress {
 
         let mut seen = Vec::new();
         // SAFETY: this thread is the single consumer.
-        assert!(unsafe { reg.sweep(&mut |_: &'static Ring, b: &[u8]| collect_seqs(b, &mut seen)) });
+        assert!(unsafe {
+            reg.sweep(&mut |_: &'static OSThreadMarkerRing, b: &[u8]| collect_seqs(b, &mut seen))
+        });
         assert!(
             seen.len() < usize::try_from(total).unwrap(),
             "one sweep must not chase the whole backlog"
@@ -771,7 +778,11 @@ mod stress {
         let mut sweeps = 1;
         while ring.state() != RingState::Pooled {
             // SAFETY: same single consumer.
-            unsafe { reg.sweep(&mut |_: &'static Ring, b: &[u8]| collect_seqs(b, &mut seen)) };
+            unsafe {
+                reg.sweep(&mut |_: &'static OSThreadMarkerRing, b: &[u8]| {
+                    collect_seqs(b, &mut seen)
+                })
+            };
             sweeps += 1;
             assert!(sweeps < 100, "orphan backlog must pool in bounded sweeps");
         }
