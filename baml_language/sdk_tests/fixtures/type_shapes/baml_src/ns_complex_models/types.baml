@@ -71,6 +71,14 @@ class AuditEvent {
   context map<string, string>
 }
 
+// String-literal union arms need valid host-language identifiers without
+// changing their exact wire values. These cover punctuation from real SDK
+// surfaces such as commands and text-decoding modes.
+class LiteralUnionIdentifierEdges {
+  command "graph.query" | "graph.diff"
+  encoding "utf8-lossy" | "utf8-strict"
+}
+
 class ComplexProfile {
   id string
   tier AccountTier
@@ -85,4 +93,8 @@ class ComplexProfile {
 
 function round_trip_complex_profile(profile: ComplexProfile) -> ComplexProfile {
   profile
+}
+
+function round_trip_literal_union_identifier_edges(value: LiteralUnionIdentifierEdges) -> LiteralUnionIdentifierEdges {
+  value
 }
