@@ -98,8 +98,8 @@ def compose_handoff(
             "<https://github.com/BoundaryML/baml/blob/canary/"
             "docs/prepare-changelog.md|docs/prepare-changelog.md>",
             "*3. Tell your agent to thank external contributors.* "
-            "`&lt;version&gt;.todo.md` will have instructions for your agent to handle this for you.\n"
-            "> The changelog is published. Find the newest `blog-release/&lt;version&gt;.todo.md` "
+            "`&lt;date&gt;-&lt;version&gt;.todo.md` will have instructions for your agent to handle this for you.\n"
+            "> The changelog is published. Find the newest `blog-releases/&lt;date&gt;-&lt;version&gt;.todo.md` "
             "and follow its instructions to thank all external contributors.",
         ]
         blocks: list[dict[str, Any]] = [
