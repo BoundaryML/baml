@@ -72,7 +72,7 @@ pub enum CollectionLevel {
 pub struct GcStats {
     /// Objects marked as live (copied).
     pub live_count: usize,
-    /// Objects collected (not copied).
+    /// Slots reclaimed (including unused TLAB reservations), not an object-death count.
     pub collected_count: usize,
     /// Which collection level was run.
     pub level: CollectionLevel,
@@ -80,6 +80,8 @@ pub struct GcStats {
     pub promoted_to_gen1: usize,
     /// Objects promoted from Gen1 to Gen2 during this cycle.
     pub promoted_to_gen2: usize,
+    /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
+    pub profile: crate::GcProfile,
 }
 
 impl BexHeap {
@@ -307,28 +309,42 @@ impl BexHeap {
     ) -> Vec<crate::UnhandledSpawnError> {
         let mut errors = Vec::new();
         for space in gens {
-            for i in 0..space.len() {
-                // SAFETY: GC safepoint and `i` is in bounds.
-                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
-                if forwarding.contains_key(&ptr) {
-                    continue;
-                }
-                // SAFETY: from-space is intact until the collection swap.
-                let Object::Future(future) = (unsafe { ptr.get() }) else {
-                    continue;
-                };
-                if future.is_observed() {
-                    continue;
-                }
-                if let FutureRead::Error(value) = future.read()
-                    && future.try_mark_reported()
-                {
-                    errors.push(crate::UnhandledSpawnError {
-                        future_id: future.id(),
-                        value,
-                        trace: future.error_trace(),
-                        cancelled: future.cancel_requested(),
-                    });
+            let len = space.len();
+            // Resolve each stable chunk once, rather than taking the storage
+            // read lock for every slot. GC has exclusive access, and this scan
+            // neither grows nor clears any of the spaces it reads.
+            for start in (0..len).step_by(ChunkedVec::<Object>::CHUNK_SIZE) {
+                // SAFETY: start < len, so this chunk exists. Its initialized
+                // slots remain valid for the entire scan (before the swap).
+                let chunk =
+                    unsafe { space.chunk_start_ptr(start / ChunkedVec::<Object>::CHUNK_SIZE) };
+                let count = (len - start).min(ChunkedVec::<Object>::CHUNK_SIZE);
+                for offset in 0..count {
+                    // SAFETY: offset is in this initialized chunk. No mutator
+                    // can write or reclaim this object while GC holds permits.
+                    let raw_ptr = unsafe { chunk.add(offset) };
+                    let Object::Future(future) = (unsafe { &*raw_ptr }) else {
+                        continue;
+                    };
+                    if future.is_observed() {
+                        continue;
+                    }
+                    // Only futures can contribute an unhandled error. In
+                    // particular, do not hash unused TLAB slots or instances.
+                    let ptr = unsafe { self.make_heap_ptr(raw_ptr.cast_mut()) };
+                    if forwarding.contains_key(&ptr) {
+                        continue;
+                    }
+                    if let FutureRead::Error(value) = future.read()
+                        && future.try_mark_reported()
+                    {
+                        errors.push(crate::UnhandledSpawnError {
+                            future_id: future.id(),
+                            value,
+                            trace: future.error_trace(),
+                            cancelled: future.cancel_requested(),
+                        });
+                    }
                 }
             }
         }
@@ -424,6 +440,8 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         // Track old -> new pointer mappings (forwarding pointers)
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
@@ -445,6 +463,8 @@ impl BexHeap {
 
         // BFS from roots — copy every reachable object into inactive.
         let mut worklist: Vec<HeapPtr> = roots.to_vec();
+
+        profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
         while let Some(old_ptr) = worklist.pop() {
             // Skip already-forwarded objects.
@@ -484,6 +504,8 @@ impl BexHeap {
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
+
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
@@ -499,11 +521,15 @@ impl BexHeap {
             self.keepalive_finalizers_major(&mut forwarding);
         }
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
+
         // Patch all intra-heap pointers in the inactive space to their new locations.
         // SAFETY: All live objects have been copied; no VMs are executing.
         unsafe {
             self.fixup_references_in_inactive(&forwarding);
         }
+
+        profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: GC runs at safepoints.
         let live_count = unsafe { self.inactive_ref().len() };
@@ -549,6 +575,8 @@ impl BexHeap {
             self.debug_assert_post_major_no_dead_refs();
         }
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
+
         // Remap each root to its new location (or keep it if it was compile-time).
         let remapped_roots: Vec<HeapPtr> = roots
             .iter()
@@ -566,9 +594,14 @@ impl BexHeap {
         // check would re-trigger GC forever.
         self.reset_gc_counter();
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
+
+        // SAFETY: exclusive heap access is still held.
+        let profile = unsafe { profile.finish(self) };
         let stats = GcStats {
             live_count,
             collected_count,
+            profile,
             level: CollectionLevel::Major,
             promoted_to_gen1: 0,
             promoted_to_gen2: live_count,
@@ -1483,6 +1516,8 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
         self.bump_epoch();
@@ -1511,6 +1546,8 @@ impl BexHeap {
         }
 
         let mut promoted_to_gen2 = 0usize;
+
+        profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
@@ -1543,6 +1580,8 @@ impl BexHeap {
             }
         }
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
+
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
@@ -1557,6 +1596,8 @@ impl BexHeap {
         unsafe {
             self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
         }
+
+        profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
         // Fix up references:
         // - Full fixup for inactive (new Gen1 — all objects are freshly copied).
@@ -1604,6 +1645,8 @@ impl BexHeap {
             }
         }
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
+
         // Swap inactive ↔ Gen1; clear Gen0.
         // SAFETY: GC safepoint; exclusive access to all spaces.
         unsafe {
@@ -1614,6 +1657,8 @@ impl BexHeap {
         self.clear_tlab_canaries();
         // Poison/clear the old Gen1 (now in inactive).
         self.finalize_inactive_space();
+
+        profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
         let new_gen1_count = unsafe { self.gen1_ref().len() };
         let total_live = new_gen1_count + promoted_to_gen2;
@@ -1635,9 +1680,14 @@ impl BexHeap {
         // allocations, because the counter would never go below the threshold.
         self.reset_gc_counter();
 
+        profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
+
+        // SAFETY: exclusive heap access is still held.
+        let profile = unsafe { profile.finish(self) };
         let stats = GcStats {
             live_count: total_live,
             collected_count: total_before.saturating_sub(total_live),
+            profile,
             level: CollectionLevel::Minor,
             promoted_to_gen1: new_gen1_count,
             promoted_to_gen2,
@@ -1675,6 +1725,63 @@ mod tests {
 
     use super::*;
     use crate::Tlab;
+
+    #[test]
+    fn unhandled_error_scan_covers_chunk_edges_and_preserves_observation() {
+        use bex_vm_types::types::{CancellationToken, FutureId};
+        for level in [CollectionLevel::Minor, CollectionLevel::Major] {
+            let heap = BexHeap::with_tlab_size(vec![], 1);
+            let mut tlab = Tlab::new(heap.clone());
+            for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
+                tlab.alloc_float(0.0);
+            }
+            let mut rooted = None;
+            for id in 0..4 {
+                let ptr = tlab.alloc_future(Future::pending(
+                    FutureId::from_usize(id),
+                    RealizedTy::unknown(),
+                    RealizedTy::unknown(),
+                    CancellationToken::new(),
+                ));
+                let Object::Future(future) = (unsafe { ptr.get() }) else {
+                    unreachable!()
+                };
+                // SAFETY: private pending future, no producer or other holder.
+                assert!(unsafe {
+                    future.settle_error(heap.as_ref(), ptr, Value::int(id as i64), vec![])
+                });
+                if id == 2 {
+                    future.mark_observed();
+                }
+                if id == 3 {
+                    rooted = Some(ptr);
+                }
+            }
+            // The two unobserved dead errors straddle a storage chunk boundary;
+            // the remaining futures occupy a partially filled final chunk.
+            let (_, _, _) = unsafe { heap.collect_garbage_generational(&[rooted.unwrap()], level) };
+            let errors = heap.take_unhandled_spawn_errors();
+            assert_eq!(
+                errors
+                    .iter()
+                    .map(|e| e.future_id.as_usize())
+                    .collect::<Vec<_>>(),
+                vec![0, 1]
+            );
+            assert_eq!(
+                errors.iter().map(|e| e.value).collect::<Vec<_>>(),
+                vec![Value::int(0), Value::int(1)]
+            );
+            // Dropping the last root makes the remaining unobserved error
+            // reportable. Already observed/reported errors must not reappear.
+            unsafe { heap.collect_garbage(&[]) };
+            let errors = heap.take_unhandled_spawn_errors();
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].future_id.as_usize(), 3);
+            unsafe { heap.collect_garbage(&[]) };
+            assert!(heap.take_unhandled_spawn_errors().is_empty());
+        }
+    }
 
     #[test]
     fn test_gc_empty_heap() {

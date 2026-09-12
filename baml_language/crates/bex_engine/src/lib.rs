@@ -3206,7 +3206,8 @@ impl BexEngine {
             on_leaks(&[]);
         }
 
-        self.collect_garbage(bex_heap::CollectionLevel::Major).await;
+        self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
+            .await;
         shutdown.complete();
     }
 
@@ -3341,11 +3342,22 @@ impl BexEngine {
         self: &Arc<Self>,
         level: bex_heap::CollectionLevel,
     ) -> bex_heap::GcStats {
+        self.collect_garbage_with_reason(level, "explicit").await
+    }
+
+    async fn collect_garbage_with_reason(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+        reason: &'static str,
+    ) -> bex_heap::GcStats {
+        let mut cycle = bex_heap::GcCycleProfiler::start();
         #[cfg(not(target_arch = "wasm32"))]
         let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
         let mut heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
+
+        cycle.parked();
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -3359,9 +3371,13 @@ impl BexEngine {
             heap_guard.num_permits(),
         );
 
+        cycle.roots_scanned();
+
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
-        let (stats, _remapped_roots, forwarding) =
+        let (mut stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+
+        cycle.heap_done();
 
         // Bug H, check 1 (heap_debug only): every pointer the GC was told
         // about (`all_roots`) must end up in the forwarding map. If a
@@ -3431,6 +3447,7 @@ impl BexEngine {
             .extend(unhandled_spawn_errors);
 
         drop(heap_guard);
+        cycle.released();
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
@@ -3455,6 +3472,7 @@ impl BexEngine {
         // moving them mid-drain.
         self.drain_finalizers().await;
 
+        cycle.finish(&mut stats, reason);
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,
@@ -5095,7 +5113,7 @@ impl BexEngine {
             // We won the CAS, so we own the GC check.
             if let Some(level) = self.heap.should_collect() {
                 let inactive = permit.release();
-                self.collect_garbage(level).await;
+                self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
             }
             self.checking_gc.store(false, Ordering::Release);
@@ -5118,7 +5136,7 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             if let Some(level) = self.heap.should_collect() {
-                self.collect_garbage(level).await;
+                self.collect_garbage_with_reason(level, "automatic").await;
             }
             self.checking_gc.store(false, Ordering::Release);
         }
