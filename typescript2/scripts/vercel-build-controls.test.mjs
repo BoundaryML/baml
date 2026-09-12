@@ -11,7 +11,7 @@ test('BEPs and Prompt Fiddle deploy from Git only on the production branch', asy
   for (const app of ['app-beps', 'app-promptfiddle']) {
     const config = await readConfig(app);
     assert.deepEqual(config.git?.deploymentEnabled, {
-      '*': false,
+      '**': false,
       canary: true,
     });
   }
