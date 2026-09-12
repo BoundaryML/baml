@@ -2,8 +2,10 @@ mod entry;
 mod fixing_parser;
 mod markdown_parser;
 mod multi_json_parser;
+mod toon_parser;
 
 pub use entry::parse;
+pub(crate) use toon_parser::parse as parse_toon;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ParseOptions {

@@ -4,7 +4,7 @@ pub mod tests;
 use anyhow::Result;
 use indexmap::IndexMap;
 pub mod deserializer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 pub mod jsonish;
 
 use baml_types::{
@@ -237,11 +237,21 @@ pub fn from_str(
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
-    let value = jsonish::parse(
+    let mut value = jsonish::parse(
         raw_string,
         jsonish::ParseOptions::default(),
         raw_string_is_done,
     )?;
+
+    if let Some(toon_values) = jsonish::parse_toon(raw_string) {
+        let mut candidates = match value {
+            Value::AnyOf(candidates, _) => candidates,
+            value => vec![value],
+        };
+        candidates.extend(toon_values);
+        deduplicate_candidates(&mut candidates);
+        value = Value::AnyOf(candidates, raw_string.to_string());
+    }
 
     // Pick the schema that is the most specific.
     log::debug!("Parsed JSONish (step 1 of parsing) {raw_string_is_done}: {value:#?}");
@@ -280,6 +290,25 @@ pub fn from_str(
     // parsed_value.clear_flags();
 
     Ok(parsed_value)
+}
+
+fn deduplicate_candidates(candidates: &mut Vec<Value>) {
+    let mut seen = HashSet::new();
+    candidates.retain(|candidate| seen.insert(candidate.clone()));
+}
+
+#[cfg(test)]
+mod toon_candidate_tests {
+    use super::*;
+
+    #[test]
+    fn deduplicates_all_candidates_in_first_seen_order() {
+        let mut candidates = vec![Value::Boolean(true), Value::Null, Value::Boolean(true)];
+
+        deduplicate_candidates(&mut candidates);
+
+        assert_eq!(candidates, vec![Value::Boolean(true), Value::Null]);
+    }
 }
 
 impl ResponseBamlValue {
