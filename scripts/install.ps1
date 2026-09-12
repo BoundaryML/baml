@@ -100,7 +100,18 @@ try {
 
   Write-Host "BAML installed at $WrapperPath"
   if ($NoModifyPath -or -not $Yes) {
-    Write-Host "Add $BinDir to your user PATH to run baml.exe from new terminals."
+    $EscapedBinDir = $BinDir.Replace("'", "''")
+    Write-Host ""
+    Write-Host "Add BAML to your user PATH by running these commands in PowerShell:"
+    Write-Host ""
+    Write-Host "  `$BamlBin = '$EscapedBinDir'"
+    Write-Host '  $UserPath = @([Environment]::GetEnvironmentVariable("Path", "User") -split ";" | Where-Object { $_ })'
+    Write-Host '  if ($UserPath -notcontains $BamlBin) {'
+    Write-Host '    [Environment]::SetEnvironmentVariable("Path", (($UserPath + $BamlBin) -join ";"), "User")'
+    Write-Host '  }'
+    Write-Host '  $env:Path = "$BamlBin;$env:Path"'
+    Write-Host ""
+    Write-Host "The last command also makes baml.exe available in this terminal."
   }
 } finally {
   Remove-Item -Path $Temp -Recurse -Force -ErrorAction SilentlyContinue
