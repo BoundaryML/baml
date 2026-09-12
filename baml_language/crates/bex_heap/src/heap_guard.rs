@@ -38,6 +38,11 @@ const MAX_PERMITS: u32 = {
     }
 };
 
+/// Sweep dead weak holder rows at a bounded registration cadence. A workload
+/// that creates short-lived VMs without allocating BAML heap objects may never
+/// request GC, so `request_park` cannot be the only cleanup path.
+const DEAD_HOLDER_SWEEP_INTERVAL: usize = 1024;
+
 /// The existence of a value that implements this trait proves that the heap is currently accessible for non-exclusive access (e.g. by a VM executor task).
 pub trait HeapPermit<T: RootHaver> {
     /// Get a reference to the root holder (for example, the active VM)
@@ -217,6 +222,9 @@ impl HeapPermitManager {
         debug_assert!(guard.len() < MAX_PERMITS as usize);
         let holder = Arc::new(PermitCell::new(with_roots));
         guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
+        if guard.len().is_multiple_of(DEAD_HOLDER_SWEEP_INTERVAL) {
+            guard.retain(|holder| holder.strong_count() > 0);
+        }
         let permit = InactiveHeapPermit {
             active: self.active.clone(),
             holder,
@@ -338,3 +346,24 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn short_lived_permits_are_swept_without_gc() {
+        let manager = HeapPermitManager::new();
+        for _ in 0..DEAD_HOLDER_SWEEP_INTERVAL * 4 {
+            drop(manager.new_permit(()).await);
+        }
+
+        let holders = manager.holders.lock().await;
+        assert!(
+            holders.len() < DEAD_HOLDER_SWEEP_INTERVAL,
+            "dead holder rows grew without a GC park: {}",
+            holders.len()
+        );
+        assert!(holders.iter().all(|holder| holder.strong_count() == 0));
+    }
+}
