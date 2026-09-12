@@ -473,12 +473,7 @@ fn resolve_path_to_ty<'db>(
         // unreachable for its results; either way they are not nameable as a
         // thrown type. Spelled out rather than wildcarded so a new
         // `Definition` variant has to be classified here.
-        Definition::Interface(_)
-        | Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Interface(_) | Definition::Function(_) | Definition::Let(_) => None,
     }
 }
 

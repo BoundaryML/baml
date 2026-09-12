@@ -302,13 +302,12 @@ fn definition_kind(kind: DefinitionKind) -> CompletionKind {
         DefinitionKind::Interface => CompletionKind::Interface,
         DefinitionKind::TypeAlias => CompletionKind::TypeAlias,
         DefinitionKind::Client => CompletionKind::Client,
-        DefinitionKind::RetryPolicy => CompletionKind::RetryPolicy,
         DefinitionKind::Let => CompletionKind::Local,
         DefinitionKind::Method => CompletionKind::Method,
         DefinitionKind::Field => CompletionKind::Field,
         DefinitionKind::Variant => CompletionKind::EnumVariant,
         DefinitionKind::Parameter => CompletionKind::Parameter,
         DefinitionKind::Binding => CompletionKind::Local,
-        DefinitionKind::TemplateString | DefinitionKind::AssociatedType => CompletionKind::Other,
+        DefinitionKind::AssociatedType => CompletionKind::Other,
     }
 }

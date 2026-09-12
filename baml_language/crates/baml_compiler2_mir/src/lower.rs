@@ -1087,8 +1087,8 @@ use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef<'db> {
     use baml_compiler2_ppir::item_data::{
-        MethodOwner, class_data, client_data, enum_data, function_data, interface_data, let_data,
-        method_owner, retry_policy_data, template_string_data, type_alias_data,
+        MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
+        type_alias_data,
     };
     let pkg_info = file_package(db, def.file(db));
 
@@ -1098,9 +1098,6 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::Enum(loc) => enum_data(db, loc).name.clone(),
         Definition::Interface(loc) => interface_data(db, loc).name.clone(),
         Definition::TypeAlias(loc) => type_alias_data(db, loc).name.clone(),
-        Definition::TemplateString(loc) => template_string_data(db, loc).name.clone(),
-        Definition::Client(loc) => client_data(db, loc).name.clone(),
-        Definition::RetryPolicy(loc) => retry_policy_data(db, loc).name.clone(),
         Definition::Let(loc) => let_data(db, loc).name.clone(),
     };
 

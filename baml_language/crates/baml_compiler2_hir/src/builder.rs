@@ -25,10 +25,7 @@ use crate::{
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
     item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
-    loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TypeAliasLoc,
-    },
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
         BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
@@ -1272,9 +1269,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::Class(c) => self.lower_class(c),
             ast::Item::Enum(e) => self.lower_enum(e),
             ast::Item::TypeAlias(ta) => self.lower_type_alias(ta),
-            ast::Item::Client(c) => self.lower_client(c),
-            ast::Item::TemplateString(ts) => self.lower_template_string(ts),
-            ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
             ast::Item::Interface(i) => self.lower_interface(i),
             ast::Item::ImplementsFor(imp) => self.lower_implements_for(imp),
@@ -1634,57 +1628,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.push_scope(ScopeKind::TypeAlias, Some(ta.name.clone()), ta.span);
         let scope = self.current_scope_id();
         self.record_scope_owner(scope, ItemScopeOwner::TypeAlias(local_id));
-        self.pop_scope();
-    }
-
-    fn lower_client(&mut self, c: &ast::ClientDef) {
-        let local_id = self.item_tree.alloc_client(c);
-        let loc = ClientLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            c.name.clone(),
-            Contribution {
-                name_span: c.name_span,
-                definition: Definition::Client(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(c.name.clone()), c.span);
-        let scope = self.current_scope_id();
-        self.record_scope_owner(scope, ItemScopeOwner::Client(local_id));
-        self.pop_scope();
-    }
-
-    fn lower_template_string(&mut self, ts: &ast::TemplateStringDef) {
-        let local_id = self.item_tree.alloc_template_string(ts);
-        let loc = TemplateStringLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            ts.name.clone(),
-            Contribution {
-                name_span: ts.name_span,
-                definition: Definition::TemplateString(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Function, Some(ts.name.clone()), ts.span);
-        let scope = self.current_scope_id();
-        self.record_scope_owner(scope, ItemScopeOwner::TemplateString(local_id));
-        self.pop_scope();
-    }
-
-    fn lower_retry_policy(&mut self, rp: &ast::RetryPolicyDef) {
-        let local_id = self.item_tree.alloc_retry_policy(rp);
-        let loc = RetryPolicyLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            rp.name.clone(),
-            Contribution {
-                name_span: rp.name_span,
-                definition: Definition::RetryPolicy(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(rp.name.clone()), rp.span);
-        let scope = self.current_scope_id();
-        self.record_scope_owner(scope, ItemScopeOwner::RetryPolicy(local_id));
         self.pop_scope();
     }
 

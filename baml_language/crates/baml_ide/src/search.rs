@@ -435,10 +435,7 @@ fn collect_definition_candidates(
         Definition::TypeAlias(loc) => item_data::type_alias_data(db, loc).docstring.clone(),
         // Contributions without firewall docstring readers today; still
         // findable by name.
-        Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Let(_) => None,
     };
 
     out.push(Candidate {
@@ -456,9 +453,6 @@ fn def_kind(def: Definition<'_>) -> DefinitionKind {
         Definition::Interface(_) => DefinitionKind::Interface,
         Definition::TypeAlias(_) => DefinitionKind::TypeAlias,
         Definition::Function(_) => DefinitionKind::Function,
-        Definition::TemplateString(_) => DefinitionKind::TemplateString,
-        Definition::Client(_) => DefinitionKind::Client,
-        Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
         Definition::Let(_) => DefinitionKind::Let,
     }
 }

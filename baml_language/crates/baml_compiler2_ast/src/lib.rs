@@ -1913,8 +1913,6 @@ function f() -> int {
         }
     }
 
-    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
-
     // ── Postfix type expression tests ────────────────────────────────────────
 
     fn first_type_alias(items: Vec<Item>) -> crate::ast::TypeAliasDef {
@@ -2072,12 +2070,10 @@ function f() -> int {
         );
     }
 
-    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
-
     #[test]
-    fn retry_policy_produces_let_item_with_retry_policy_origin() {
-        // Renamed behavior: retry_policy blocks are removed; retry composes
-        // at the client boundary (ai.Retry).
+    fn retry_policy_block_lowers_to_a_removal_diagnostic() {
+        // `retry_policy` blocks are removed; retry composes at the client
+        // boundary (ai.Retry).
         let source = r#"
 retry_policy MyRetry {
   max_retries 3

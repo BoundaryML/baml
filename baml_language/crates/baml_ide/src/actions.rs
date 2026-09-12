@@ -95,16 +95,13 @@ pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<F
                     kind: FileActionKind::RunInPlayground,
                 });
             }
-            // Other value-namespace items (client, template string,
-            // retry policy, top-level let) don't get code lenses; type
-            // definitions never appear in the value namespace.
+            // Other value-namespace items (top-level lets, client bindings
+            // included) don't get code lenses; type definitions never appear
+            // in the value namespace.
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
             | Definition::Let(_) => {}
         }
     }

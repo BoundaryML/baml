@@ -1888,11 +1888,7 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::TypeAlias(loc) => baml_compiler2_ppir::item_data::type_alias_data(db, loc)
             .name
             .clone(),
-        Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => return None,
+        Definition::Function(_) | Definition::Let(_) => return None,
     };
     match def {
         Definition::Class(loc) => {
@@ -1921,10 +1917,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
             TyAttr::default(),
         )),
         // The non-type definitions returned above, before `name` was bound.
-        Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Function(_) | Definition::Let(_) => None,
     }
 }

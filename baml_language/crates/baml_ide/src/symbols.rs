@@ -53,8 +53,6 @@ pub enum SymbolKind {
     Client,
     Test,
     Generator,
-    TemplateString,
-    RetryPolicy,
 }
 
 /// Information about a symbol in the project.

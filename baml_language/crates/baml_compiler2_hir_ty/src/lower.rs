@@ -1214,11 +1214,7 @@ impl<'db> LowerCtx<'db> {
             // cycle-guarded, through the fact oracle.
             Definition::TypeAlias(_) => LoweringTy::TypeAlias(self.qualify(def, short), attr()),
             // Value-namespace definitions are not types.
-            Definition::Function(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
-            | Definition::Let(_) => LoweringTy::error(),
+            Definition::Function(_) | Definition::Let(_) => LoweringTy::error(),
         }
     }
 
@@ -1767,9 +1763,6 @@ pub fn declaration_self_ty<'db>(
         Definition::Interface(_)
         | Definition::TypeAlias(_)
         | Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }
 }

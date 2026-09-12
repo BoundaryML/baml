@@ -20,11 +20,8 @@
 //! - `ResolvedName::Item(Definition::TypeAlias(_))` — builds `TypeInfo::TypeAlias`
 //!   with the expansion type from `resolve_type_alias`.
 //!
-//! - `ResolvedName::Item(Definition::TemplateString(_))` — builds
-//!   `TypeInfo::TemplateString` (no further info available).
-//!
-//! - `ResolvedName::Item(Definition::Client(_) | Generator(_) | ...)` — builds
-//!   `TypeInfo::OtherItem` with the kind label.
+//! - `ResolvedName::Item(Definition::Let(_))` — builds `TypeInfo::OtherItem`
+//!   with the kind label the binding was written as (`client` or `let`).
 //!
 //! - `ResolvedName::Local { definition_site: Some(Parameter(idx)) }` — builds
 //!   `TypeInfo::LocalVar` with the parameter type from `function_signature`.
@@ -163,8 +160,6 @@ pub enum TypeInfo {
         expansion: String,
         owner: Option<String>,
     },
-    /// A template string: name only (no further type info).
-    TemplateString { name: String },
     /// A named binding or member slot: a local, a parameter, or a field.
     LocalVar {
         name: String,
@@ -190,7 +185,7 @@ pub enum TypeInfo {
     },
     /// Concise language documentation for a primitive, literal, or keyword.
     Documentation { label: String, detail: String },
-    /// A non-structural top-level item (client, generator, test, `retry_policy`).
+    /// A non-structural top-level item (a `client` or `let` binding).
     OtherItem { name: String, kind: &'static str },
 }
 
@@ -206,9 +201,7 @@ impl TypeInfo {
             | TypeInfo::Interface { owner, .. }
             | TypeInfo::TypeAlias { owner, .. }
             | TypeInfo::Symbol { owner, .. } => owner.as_deref(),
-            TypeInfo::TemplateString { .. }
-            | TypeInfo::Documentation { .. }
-            | TypeInfo::OtherItem { .. } => None,
+            TypeInfo::Documentation { .. } | TypeInfo::OtherItem { .. } => None,
         }
     }
 
@@ -221,7 +214,6 @@ impl TypeInfo {
             | TypeInfo::Symbol { docstring, .. } => docstring.as_deref(),
             TypeInfo::Enum { .. }
             | TypeInfo::TypeAlias { .. }
-            | TypeInfo::TemplateString { .. }
             | TypeInfo::LocalVar { .. }
             | TypeInfo::Documentation { .. }
             | TypeInfo::OtherItem { .. } => None,
@@ -372,7 +364,6 @@ impl TypeInfo {
             TypeInfo::TypeAlias {
                 name, expansion, ..
             } => format!("type {name} = {expansion}"),
-            TypeInfo::TemplateString { name } => format!("template_string {name}"),
             TypeInfo::LocalVar {
                 name, ty, is_let, ..
             } => {
@@ -1239,34 +1230,10 @@ pub fn type_info_for_definition(
             }
         }
 
-        Definition::TemplateString(ts_loc) => {
-            let ts_data = baml_compiler2_ppir::item_data::template_string_data(db, ts_loc);
-            TypeInfo::TemplateString {
-                name: ts_data.name.as_str().to_string(),
-            }
-        }
-
-        Definition::Client(loc) => {
-            let data = baml_compiler2_ppir::item_data::client_data(db, loc);
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "client",
-            }
-        }
-
-        Definition::RetryPolicy(loc) => {
-            let data = baml_compiler2_ppir::item_data::retry_policy_data(db, loc);
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "retry_policy",
-            }
-        }
-
         Definition::Let(loc) => {
             let data = baml_compiler2_ppir::item_data::let_data(db, loc);
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
-                baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
                 baml_compiler2_ast::ast::LetOrigin::Source => "let",
             };
             TypeInfo::OtherItem {

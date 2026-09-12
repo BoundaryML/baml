@@ -30,9 +30,9 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc},
 };
 use baml_compiler2_ppir::item_data::{
-    class_data, class_impls, class_source_map, client_source_map, enum_data, enum_source_map,
-    function_data, function_source_map, impl_block_data, interface_source_map, let_data,
-    let_source_map, retry_policy_source_map, template_string_source_map, type_alias_source_map,
+    class_data, class_impls, class_source_map, enum_data, enum_source_map, function_data,
+    function_source_map, impl_block_data, interface_source_map, let_data, let_source_map,
+    type_alias_source_map,
 };
 use text_size::TextRange;
 
@@ -80,11 +80,7 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
             // Interfaces and type aliases contribute no outline children.
             Definition::Interface(_) | Definition::TypeAlias(_) => Vec::new(),
             // Value-namespace kinds never appear in the type namespace.
-            Definition::Function(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
-            | Definition::Let(_) => Vec::new(),
+            Definition::Function(_) | Definition::Let(_) => Vec::new(),
         };
 
         items.push(OutlineItem {
@@ -96,7 +92,7 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
         });
     }
 
-    // ── Values: functions, template strings, clients, generators, tests, retry policies ──
+    // ── Values: functions and top-level lets ──────────────────────────────────
     for (name, contrib) in &contribs.values {
         // `Definition::is_language_internal` reads the raw HIR item tree,
         // which re-runs on every keystroke; `function_data` carries the same
@@ -108,9 +104,6 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
             | Definition::Let(_) => false,
         };
         if is_internal {
@@ -121,23 +114,19 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
         // params / return types could be surfaced as children later.)
         //
         // For `Definition::Let`, use the `LetOrigin` to report the symbol
-        // kind the user wrote (Client or RetryPolicy) rather than the generic
-        // `Let` kind. `Definition::source_kind` computes the same mapping but
-        // reads the raw item tree; `let_data` is the PPIR firewall query.
+        // kind the user wrote (`client`) rather than the generic `Let` kind.
+        // `Definition::source_kind` computes the same mapping but reads the
+        // raw item tree; `let_data` is the PPIR firewall query.
         let kind = match contrib.definition {
             Definition::Let(loc) => match let_data(db, loc).origin {
                 LetOrigin::Client => DefinitionKind::Client,
-                LetOrigin::RetryPolicy => DefinitionKind::RetryPolicy,
                 LetOrigin::Source => DefinitionKind::Let,
             },
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_)
-            | Definition::Function(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_) => contrib.definition.kind(),
+            | Definition::Function(_) => contrib.definition.kind(),
         };
         items.push(OutlineItem {
             name: name.to_string(),
@@ -168,9 +157,6 @@ fn definition_full_span<'db>(
         Definition::Interface(loc) => interface_source_map(db, loc).span,
         Definition::TypeAlias(loc) => type_alias_source_map(db, loc).span,
         Definition::Function(loc) => function_source_map(db, loc).span,
-        Definition::TemplateString(loc) => template_string_source_map(db, loc).span,
-        Definition::Client(loc) => client_source_map(db, loc).span,
-        Definition::RetryPolicy(loc) => retry_policy_source_map(db, loc).span,
         Definition::Let(loc) => let_source_map(db, loc).span,
     }
 }

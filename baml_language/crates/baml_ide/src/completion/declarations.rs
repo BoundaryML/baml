@@ -29,8 +29,6 @@ const TOP_LEVEL: &[(&str, &str)] = &[
     ("generator", "generator ${1:name} {\n\t$0\n}"),
     ("test", "test \"${1:name}\" {\n\t$0\n}"),
     ("testset", "testset \"${1:name}\" {\n\t$0\n}"),
-    ("retry_policy", "retry_policy ${1:name} {\n\t$0\n}"),
-    ("template_string", "template_string ${1:name}($2) #\"$0\"#"),
 ];
 
 /// Declarations the grammar accepts inside a `class` body (fields are the
