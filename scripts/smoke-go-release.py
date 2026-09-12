@@ -237,8 +237,12 @@ def main() -> None:
     if manifest.get("version") != version:
         fail(f"manifest version is {manifest.get('version')!r}, expected {version!r}")
 
-    go_release = manifest.get("baml_bridge_go")
-    expected_go_release = {"module": GO_MODULE, "version": f"v{version}"}
+    go_release = manifest.get("sdks", {}).get("go")
+    expected_go_release = {
+        "registry": "go",
+        "package": GO_MODULE,
+        "version": f"v{version}",
+    }
     if go_release != expected_go_release:
         fail(f"manifest Go release is {go_release!r}, expected {expected_go_release!r}")
 
