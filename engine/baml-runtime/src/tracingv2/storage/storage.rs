@@ -188,6 +188,7 @@ fn build_function_log(
 
     // We must group requests by request_id for LLM calls.
     let mut calls_map: HashMap<HttpRequestId, CallAccumulator> = HashMap::new();
+    let mut next_attempt_order = 0usize;
 
     // TODO sort events by timestamp:
     for event in guard.iter() {
@@ -212,12 +213,20 @@ fn build_function_log(
                 // TODO: request_id must match
                 let rid = llm_req.request_id.clone();
                 let entry = calls_map.entry(rid).or_default();
+                if entry.attempt_order.is_none() {
+                    entry.attempt_order = Some(next_attempt_order);
+                    next_attempt_order += 1;
+                }
                 entry.llm_request = Some(llm_req.clone());
                 entry.timestamp_first_seen = Some(time_ms);
             }
             TraceData::LLMResponse(llm_res) => {
                 let rid = llm_res.request_id.clone();
                 let entry = calls_map.entry(rid).or_default();
+                if entry.attempt_order.is_none() {
+                    entry.attempt_order = Some(next_attempt_order);
+                    next_attempt_order += 1;
+                }
                 entry.llm_response = Some(llm_res.clone());
                 entry.timestamp_last_seen = Some(time_ms);
 
@@ -238,18 +247,30 @@ fn build_function_log(
             TraceData::RawLLMRequest(http_req) => {
                 let rid = http_req.id.clone();
                 let entry = calls_map.entry(rid).or_default();
+                if entry.attempt_order.is_none() {
+                    entry.attempt_order = Some(next_attempt_order);
+                    next_attempt_order += 1;
+                }
                 entry.http_request = Some(http_req.clone());
                 entry.timestamp_first_seen = Some(time_ms);
             }
             TraceData::RawLLMResponse(http_res) => {
                 let rid = http_res.request_id.clone();
                 let entry = calls_map.entry(rid).or_default();
+                if entry.attempt_order.is_none() {
+                    entry.attempt_order = Some(next_attempt_order);
+                    next_attempt_order += 1;
+                }
                 entry.http_response = Some(http_res.clone());
                 entry.timestamp_last_seen = Some(time_ms);
             }
             TraceData::RawLLMResponseStream(http_res_stream) => {
                 let rid = http_res_stream.request_id.clone();
                 let entry = calls_map.entry(rid.clone()).or_default();
+                if entry.attempt_order.is_none() {
+                    entry.attempt_order = Some(next_attempt_order);
+                    next_attempt_order += 1;
+                }
 
                 // find or insert the event
                 match &mut entry.http_response_stream {
@@ -283,6 +304,7 @@ fn build_function_log(
     // Build each LLM call candidate first so we can compute the selected one by timestamp
     struct CallCandidate {
         request_id: HttpRequestId,
+        attempt_order: usize,
         is_stream: bool,
         client: String,
         provider: String,
@@ -327,14 +349,20 @@ fn build_function_log(
                 (None, Some(j)) => Some(j),
             };
 
-        let is_success = call_acc
+        let llm_ok = call_acc
             .llm_response
             .as_ref()
             .map(|resp| resp.error_message.is_none())
             .unwrap_or(false);
+        let http_ok = call_acc
+            .http_response
+            .as_ref()
+            .is_none_or(|resp| resp.status < 400);
+        let is_success = llm_ok && http_ok;
 
         candidates.push(CallCandidate {
             request_id: rid.clone(),
+            attempt_order: call_acc.attempt_order.unwrap_or(0),
             is_stream,
             client,
             provider,
@@ -349,24 +377,16 @@ fn build_function_log(
         });
     }
 
-    // Determine which candidate should be marked selected
-    let mut selected_idx: Option<usize> = None;
-    if !candidates.is_empty() {
-        // Filter successful candidates
-        let mut successful_calls: Vec<(usize, &CallCandidate)> = candidates
-            .iter()
-            .enumerate()
-            .filter(|(_, c)| c.is_success)
-            .collect();
+    // Oldest to newest by trace event first-seen order (not lexical request_id).
+    candidates.sort_by_key(|c| c.attempt_order);
 
-        if !successful_calls.is_empty() {
-            // Sort successful calls by lexicographic order of request_id (ULID UUID)
-            successful_calls.sort_by_key(|(_, a)| a.request_id.to_string());
-
-            // Pick the first (earliest lexicographically)
-            selected_idx = Some(successful_calls[0].0);
-        }
-    }
+    // The call used for parsing is the last successful attempt (fallback/retry).
+    let selected_idx = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.is_success)
+        .map(|(i, _)| i)
+        .last();
 
     // Build final calls vector, marking only the selected one as selected
     let mut calls = Vec::new();
@@ -481,6 +501,7 @@ struct CallAccumulator {
     pub usage: Option<Usage>,
     pub timestamp_first_seen: Option<i64>,
     pub timestamp_last_seen: Option<i64>,
+    pub attempt_order: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1491,6 +1512,201 @@ mod tests {
                 }
                 LLMCallKind::Stream(s) => {
                     assert_eq!(s.llm_call.client_name, "client_ok");
+                    assert!(s.llm_call.selected);
+                }
+            }
+
+            drop(flog);
+            drop(collector);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_selected_call_uses_attempt_order_not_request_id_lex_order() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id = FunctionCallId::new();
+
+            // Lexical request_id order is inverted vs creation order.
+            let rid_first = HttpRequestId::testonly_from_u16(2);
+            let rid_second = HttpRequestId::testonly_from_u16(1);
+
+            let first_req = LoggedLLMRequest {
+                request_id: rid_first.clone(),
+                client_name: "client_first".into(),
+                client_provider: "provider_a".into(),
+                params: IndexMap::new(),
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hi".into())],
+                }],
+            };
+            let first_resp = LoggedLLMResponse::new_success(
+                rid_first.clone(),
+                "m1".into(),
+                Some("stop".into()),
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(1),
+                    total_tokens: Some(2),
+                    cached_input_tokens: Some(0),
+                },
+                "ok-first".into(),
+                vec![],
+            );
+
+            let second_req = LoggedLLMRequest {
+                request_id: rid_second.clone(),
+                client_name: "client_second".into(),
+                client_provider: "provider_b".into(),
+                params: IndexMap::new(),
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hello".into())],
+                }],
+            };
+            let second_resp = LoggedLLMResponse::new_success(
+                rid_second.clone(),
+                "m2".into(),
+                Some("stop".into()),
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(2),
+                    total_tokens: Some(3),
+                    cached_input_tokens: Some(0),
+                },
+                "ok-second".into(),
+                vec![],
+            );
+
+            let collector = inject_test_events(
+                &f_id,
+                "test_selected_call_attempt_order",
+                vec![(first_req, first_resp), (second_req, second_resp)],
+            )
+            .await;
+
+            let mut flog = FunctionLog::new(f_id.clone());
+            let calls = flog.calls();
+            assert_eq!(calls.len(), 2);
+            match &calls[0] {
+                LLMCallKind::Basic(c) => assert_eq!(c.client_name, "client_first"),
+                LLMCallKind::Stream(s) => assert_eq!(s.llm_call.client_name, "client_first"),
+            }
+            match &calls[1] {
+                LLMCallKind::Basic(c) => assert_eq!(c.client_name, "client_second"),
+                LLMCallKind::Stream(s) => assert_eq!(s.llm_call.client_name, "client_second"),
+            }
+
+            let selected: Vec<_> = calls.iter().filter(|c| c.selected()).collect();
+            assert_eq!(selected.len(), 1);
+            match selected[0] {
+                LLMCallKind::Basic(c) => {
+                    assert_eq!(c.client_name, "client_second");
+                    assert!(c.selected);
+                }
+                LLMCallKind::Stream(s) => {
+                    assert_eq!(s.llm_call.client_name, "client_second");
+                    assert!(s.llm_call.selected);
+                }
+            }
+
+            drop(collector);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_selected_call_prefers_later_success_over_earlier_success() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id = FunctionCallId::new();
+
+            let rid_first = HttpRequestId::new();
+            let rid_second = HttpRequestId::new();
+
+            let first_req = LoggedLLMRequest {
+                request_id: rid_first.clone(),
+                client_name: "client_first".into(),
+                client_provider: "provider_a".into(),
+                params: IndexMap::new(),
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hi".into())],
+                }],
+            };
+            let first_resp = LoggedLLMResponse::new_success(
+                rid_first.clone(),
+                "m1".into(),
+                Some("stop".into()),
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(1),
+                    total_tokens: Some(2),
+                    cached_input_tokens: Some(0),
+                },
+                "ok-first".into(),
+                vec![],
+            );
+
+            let second_req = LoggedLLMRequest {
+                request_id: rid_second.clone(),
+                client_name: "client_second".into(),
+                client_provider: "provider_b".into(),
+                params: IndexMap::new(),
+                prompt: vec![LLMChatMessage {
+                    role: "user".into(),
+                    content: vec![LLMChatMessagePart::Text("hello".into())],
+                }],
+            };
+            let second_resp = LoggedLLMResponse::new_success(
+                rid_second.clone(),
+                "m2".into(),
+                Some("stop".into()),
+                LLMUsage {
+                    input_tokens: Some(1),
+                    output_tokens: Some(2),
+                    total_tokens: Some(3),
+                    cached_input_tokens: Some(0),
+                },
+                "ok-second".into(),
+                vec![],
+            );
+
+            let collector = inject_test_events(
+                &f_id,
+                "test_selected_call_later_success",
+                vec![(first_req, first_resp), (second_req, second_resp)],
+            )
+            .await;
+
+            let mut flog = FunctionLog::new(f_id.clone());
+            let calls = flog.calls();
+            assert_eq!(calls.len(), 2);
+            match &calls[0] {
+                LLMCallKind::Basic(c) => assert_eq!(c.client_name, "client_first"),
+                LLMCallKind::Stream(s) => assert_eq!(s.llm_call.client_name, "client_first"),
+            }
+            match &calls[1] {
+                LLMCallKind::Basic(c) => assert_eq!(c.client_name, "client_second"),
+                LLMCallKind::Stream(s) => assert_eq!(s.llm_call.client_name, "client_second"),
+            }
+
+            let selected: Vec<_> = calls.iter().filter(|c| c.selected()).collect();
+            assert_eq!(selected.len(), 1);
+            match selected[0] {
+                LLMCallKind::Basic(c) => {
+                    assert_eq!(c.client_name, "client_second");
+                    assert!(c.selected);
+                }
+                LLMCallKind::Stream(s) => {
+                    assert_eq!(s.llm_call.client_name, "client_second");
                     assert!(s.llm_call.selected);
                 }
             }
