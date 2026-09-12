@@ -1,0 +1,61 @@
+{
+  "source_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "source_dirty": true,
+  "source_patch": "periodically remove dead weak holder registrations in bex_heap::HeapPermitManager::new_permit",
+  "source_patch_sha256": "a62fb999afb672b46e33c40106cd4fa9de781c0961628d5e129af74b91004f22",
+  "rate_per_target": 300,
+  "duration_seconds": 300.050559292,
+  "sample_interval_seconds": 15,
+  "variants": {
+    "node-baseline": {
+      "rss_first_mib": 54.3125,
+      "rss_last_mib": 108.859375,
+      "rss_slope_mib_per_minute_after_60s": 0.46618327784479197,
+      "http_200": 89907,
+      "delivered_rps": 299.63950146316927
+    },
+    "node-baml": {
+      "rss_first_mib": 122.75,
+      "rss_last_mib": 170.609375,
+      "rss_slope_mib_per_minute_after_60s": 0.5113686641924565,
+      "http_200": 89907,
+      "delivered_rps": 299.63950146316927
+    },
+    "python-baseline": {
+      "rss_first_mib": 49.875,
+      "rss_last_mib": 51.09375,
+      "rss_slope_mib_per_minute_after_60s": 0.0,
+      "http_200": 89907,
+      "delivered_rps": 299.63950146316927
+    },
+    "python-baml": {
+      "rss_first_mib": 118.515625,
+      "rss_last_mib": 123.484375,
+      "rss_slope_mib_per_minute_after_60s": 0.037664339832540736,
+      "http_200": 89907,
+      "delivered_rps": 299.63950146316927
+    },
+    "baml-only": {
+      "rss_first_mib": 37.0625,
+      "rss_last_mib": 97.078125,
+      "rss_slope_mib_per_minute_after_60s": 1.597220445704095,
+      "http_200": 89907,
+      "delivered_rps": 299.63950146316927
+    }
+  },
+  "engine_isolation": {
+    "workload": "100000 sequential scalar engine calls after 32 warmup calls",
+    "heap_slots_before_and_after": 0,
+    "before_fix_rss_start_mib": 279.531,
+    "before_fix_rss_end_mib": 368.641,
+    "before_fix_rss_growth_mib": 89.11,
+    "after_fix_rss_start_mib": 280.109,
+    "after_fix_rss_end_mib": 280.141,
+    "after_fix_rss_growth_mib": 0.032
+  },
+  "validation": {
+    "all_variants_alive_at_last_sample": true,
+    "all_exact_response_probes_passed": true,
+    "only_http_status": 200
+  }
+}
