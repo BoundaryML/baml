@@ -1802,6 +1802,7 @@ name = "btel_transport"
 version = "0.0.0-beta"
 dependencies = [
  "btel_core",
+ "crossbeam-queue",
  "crossbeam-utils",
  "loom",
 ]

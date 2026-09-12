@@ -3,15 +3,26 @@ use std::{io, path::PathBuf, time::Duration};
 
 use btel_bench::{
     feeder::ProducerMode,
-    replay::{self, ReplayConfig, SourceLoad},
+    replay::{self, ConsumerMode, ReplayConfig, SourceLoad},
     workload::Fixture,
 };
-use btel_transport::TransportConfig;
+use btel_transport::{TransportConfig, batch::BatchConfig};
 use clap::Parser;
 
 #[derive(Parser)]
 #[command(about = "Measure Btel ring producers and all-no-op pipeline (drain-only)")]
 struct Args {
+    /// Discard, copy/reuse on the drainer, or copy/handoff to a downstream worker.
+    #[arg(long, value_enum, default_value_t = ConsumerMode::Discard)]
+    consumer_mode: ConsumerMode,
+    #[arg(long, default_value_t = 262_144)]
+    batch_payload_bytes: usize,
+    #[arg(long, default_value_t = 256)]
+    batch_source_ranges: usize,
+    #[arg(long, default_value_t = 64)]
+    batch_queue_capacity: usize,
+    #[arg(long, default_value_t = 8)]
+    batch_retained_capacity: usize,
     /// Live clock/encoding, prepared-byte replay, or a feeder-only baseline.
     #[arg(long, value_enum, default_value_t = ProducerMode::EncodeClock)]
     producer_mode: ProducerMode,
@@ -87,6 +98,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let result = replay::run(
         ReplayConfig {
+            consumer_mode: args.consumer_mode,
+            batch: BatchConfig {
+                payload_bytes: args.batch_payload_bytes,
+                source_ranges: args.batch_source_ranges,
+                queue_batches: args.batch_queue_capacity,
+                retained_batches: args.batch_retained_capacity,
+            },
             producer_mode: args.producer_mode,
             transport: TransportConfig {
                 segment_bytes: args.segment_bytes,

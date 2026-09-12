@@ -166,6 +166,7 @@ console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
+crossbeam-queue = "0.3.12"
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).
 crossbeam-utils = { version = "0.8" }

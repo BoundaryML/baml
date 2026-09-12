@@ -10,14 +10,26 @@ use std::{
 };
 
 use btel_core::{clock, marker::Marker};
-use btel_transport::{TransportConfig, transport};
+use btel_transport::{
+    DrainTarget, TransportConfig,
+    batch::{BatchConfig, BatchReceiver, CopyHandoff, CopyLocal},
+    transport,
+};
 use serde::Serialize;
 
 use crate::{
-    feeder::{ProducerMode, stamp, write_or_wait},
+    feeder::ProducerMode,
     noop,
     workload::{Fixture, Manifest},
 };
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConsumerMode {
+    Discard,
+    CopyLocal,
+    CopyHandoff,
+}
 
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct SourceLoad {
@@ -29,6 +41,8 @@ pub struct SourceLoad {
 
 #[derive(Clone, Copy)]
 pub struct ReplayConfig {
+    pub consumer_mode: ConsumerMode,
+    pub batch: BatchConfig,
     pub producer_mode: ProducerMode,
     pub transport: TransportConfig,
     pub source_budget: usize,
@@ -38,6 +52,12 @@ pub struct ReplayConfig {
 
 #[derive(Serialize)]
 pub struct ReplayResult {
+    pub consumer_mode: ConsumerMode,
+    pub downstream_threads: usize,
+    pub batch_payload_bytes: usize,
+    pub batch_source_ranges: usize,
+    pub batch_queue_capacity: usize,
+    pub batch_retained_capacity: usize,
     pub producer_mode: ProducerMode,
     pub clock_kind: Option<String>,
     pub clock_reads: u64,
@@ -105,16 +125,46 @@ pub fn run(
     config: ReplayConfig,
     fixtures: Vec<(Fixture, SourceLoad)>,
 ) -> Result<ReplayResult, String> {
-    match config.producer_mode {
-        ProducerMode::Prepared => run_with::<false, false>(config, fixtures),
-        ProducerMode::EncodeClock => run_with::<true, false>(config, fixtures),
-        ProducerMode::FeederOnly => run_with::<true, true>(config, fixtures),
+    if matches!(config.producer_mode, ProducerMode::FeederOnly) {
+        return run_target(config, fixtures, noop::DiscardRanges, None);
+    }
+    match config.consumer_mode {
+        ConsumerMode::Discard => run_target(config, fixtures, noop::DiscardRanges, None),
+        ConsumerMode::CopyLocal => run_target(
+            config,
+            fixtures,
+            CopyLocal::new(config.batch, noop::ReturnBatches)?,
+            None,
+        ),
+        ConsumerMode::CopyHandoff => {
+            let (target, receiver) = CopyHandoff::new(config.batch)?;
+            run_target(config, fixtures, target, Some(receiver))
+        }
     }
 }
 
-fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
+fn run_target<T: DrainTarget<Output = ()> + Send + 'static>(
     config: ReplayConfig,
     fixtures: Vec<(Fixture, SourceLoad)>,
+    target: T,
+    receiver: Option<BatchReceiver>,
+) -> Result<ReplayResult, String> {
+    match config.producer_mode {
+        ProducerMode::Prepared => run_with::<false, false, T>(config, fixtures, target, receiver),
+        ProducerMode::EncodeClock => run_with::<true, false, T>(config, fixtures, target, receiver),
+        ProducerMode::FeederOnly => run_with::<true, true, T>(config, fixtures, target, receiver),
+    }
+}
+
+fn run_with<
+    const ENCODE: bool,
+    const FEEDER_ONLY: bool,
+    T: DrainTarget<Output = ()> + Send + 'static,
+>(
+    config: ReplayConfig,
+    fixtures: Vec<(Fixture, SourceLoad)>,
+    target: T,
+    batch_receiver: Option<BatchReceiver>,
 ) -> Result<ReplayResult, String> {
     if ENCODE && !FEEDER_ONLY {
         clock::init();
@@ -166,6 +216,17 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
     let gate = Arc::new(Gate::new());
     let stopped = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel();
+    let downstream = batch_receiver.map(|receiver| {
+        let gate = gate.clone();
+        let ready = ready_tx.clone();
+        thread::spawn(move || {
+            ready.send(Ok::<_, String>(())).unwrap();
+            if gate.wait().is_some() {
+                receiver.run(noop::ReturnBatches);
+            }
+            Instant::now()
+        })
+    });
     // A feeder baseline has the same producer setup, but no drainer competing
     // for CPU. Const specialization removes this choice from the marker loop.
     let receiver = if FEEDER_ONLY {
@@ -180,7 +241,7 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
             if gate.wait().is_none() {
                 return Ok(Instant::now());
             }
-            let mut pipeline = noop::pipeline();
+            let mut pipeline = target;
             while !stopped.load(Ordering::Acquire) {
                 if !drainer.drain(&mut pipeline, config.source_budget) {
                     drainer.idle(&mut pipeline, config.source_budget, config.idle_timeout);
@@ -212,51 +273,14 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
             let Some(start) = gate.wait() else {
                 return Err("replay aborted during setup".into());
             };
-            let mut offset = 0usize;
-            let delay = Duration::from_millis(load.start_delay_ms);
-            for (batch_index, batch) in fixture.lengths.chunks(load.batch_markers).enumerate() {
-                let paced_ns = if load.bytes_per_second == 0 {
-                    0
-                } else {
-                    offset as u128 * 1_000_000_000 / u128::from(load.bytes_per_second)
-                };
-                let pauses = u128::from(load.burst_pause_ms) * batch_index as u128 * 1_000_000;
-                let nanos =
-                    u64::try_from(paced_ns + pauses).map_err(|_| "pacing duration overflow")?;
-                let deadline = start
-                    .checked_add(delay)
-                    .and_then(|t| t.checked_add(Duration::from_nanos(nanos)))
-                    .ok_or("pacing deadline overflow")?;
-                // Pacing clocks are per batch; EncodeClock also stamps each marker.
-                if load.bytes_per_second != 0
-                    || load.start_delay_ms != 0
-                    || load.burst_pause_ms != 0
-                {
-                    if let Some(wait) = deadline.checked_duration_since(Instant::now()) {
-                        thread::sleep(wait);
-                    }
-                }
-                for (within_batch, &len) in batch.iter().enumerate() {
-                    let end = offset + usize::from(len);
-                    if ENCODE {
-                        let mut marker = templates[batch_index * load.batch_markers + within_batch];
-                        if FEEDER_ONLY {
-                            // Expose the local copy's contents through a
-                            // reference; passing the value caused an extra
-                            // stack copy. Keep offset work observable too.
-                            // Barriers still make subtraction an estimate.
-                            std::hint::black_box(&marker);
-                            std::hint::black_box(end);
-                        } else {
-                            stamp(&mut marker, clock::now_ticks());
-                            write_or_wait(&factory, || producer.write_marker(&marker));
-                        }
-                    } else {
-                        write_or_wait(&factory, || producer.write(&fixture.bytes[offset..end]));
-                    }
-                    offset = end;
-                }
-            }
+            crate::feeder::replay_source::<ENCODE, FEEDER_ONLY>(
+                &mut producer,
+                &factory,
+                &fixture,
+                &templates,
+                load,
+                start,
+            )?;
             // Keep prepared input alive until the thread exits, after producer
             // drop publishes its last write. No per-marker measurement counter.
             Ok::<_, String>((fixture, templates))
@@ -264,7 +288,8 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
     }
     drop(ready_tx);
     let mut setup_error = None;
-    for _ in 0..writers.len() + usize::from(receiver.is_some()) {
+    for _ in 0..writers.len() + usize::from(receiver.is_some()) + usize::from(downstream.is_some())
+    {
         match ready_rx.recv().map_err(|e| e.to_string())? {
             Ok(()) => {}
             Err(e) => setup_error = Some(e),
@@ -298,6 +323,10 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
         Some(receiver) => receiver.join().map_err(|_| "drainer panicked")??,
         None => producers_done,
     };
+    let finish = match downstream {
+        Some(worker) => finish.max(worker.join().map_err(|_| "batch worker panicked")?),
+        None => finish,
+    };
     let usage_end = usage();
     if let Some(error) = error {
         return Err(error);
@@ -309,13 +338,25 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
     )]
     let bytes_per_second = (!FEEDER_ONLY).then_some(input_bytes as f64 / elapsed);
     Ok(ReplayResult {
+        consumer_mode: config.consumer_mode,
+        downstream_threads: usize::from(
+            !FEEDER_ONLY && matches!(config.consumer_mode, ConsumerMode::CopyHandoff),
+        ),
+        batch_payload_bytes: config.batch.payload_bytes,
+        batch_source_ranges: config.batch.source_ranges,
+        batch_queue_capacity: config.batch.queue_batches,
+        batch_retained_capacity: config.batch.retained_batches,
         producer_mode: config.producer_mode,
         clock_kind: (ENCODE && !FEEDER_ONLY).then(|| format!("{:?}", clock::meta().kind)),
         clock_reads: if ENCODE && !FEEDER_ONLY { markers } else { 0 },
         preset: if FEEDER_ONLY {
             "feeder-only"
         } else {
-            "drain-only"
+            match config.consumer_mode {
+                ConsumerMode::Discard => "drain-only",
+                ConsumerMode::CopyLocal => "copy-local",
+                ConsumerMode::CopyHandoff => "copy-handoff",
+            }
         },
         full_ring_policy: if FEEDER_ONLY {
             "not-applicable"
@@ -325,7 +366,7 @@ fn run_with<const ENCODE: bool, const FEEDER_ONLY: bool>(
         pipeline: if FEEDER_ONLY {
             "none"
         } else {
-            std::any::type_name::<noop::NoopPipeline>()
+            std::any::type_name::<T>()
         },
         source_threads: sources.len(),
         consumer_threads: usize::from(!FEEDER_ONLY),
@@ -384,7 +425,7 @@ mod tests {
 
     #[test]
     fn baseline_preserves_workload_but_reports_no_telemetry_work() {
-        let run_mode = |producer_mode| {
+        let run_mode = |producer_mode, consumer_mode| {
             let fixtures = [(1, 25), (2, 41)]
                 .into_iter()
                 .map(|(source, calls)| {
@@ -401,6 +442,8 @@ mod tests {
                 .collect();
             run(
                 ReplayConfig {
+                    consumer_mode,
+                    batch: BatchConfig::default(),
                     producer_mode,
                     transport: TransportConfig::default(),
                     source_budget: 1,
@@ -411,27 +454,38 @@ mod tests {
             )
             .unwrap()
         };
-        let baseline = run_mode(ProducerMode::FeederOnly);
-        let full = run_mode(ProducerMode::EncodeClock);
-        assert_eq!(baseline.input_bytes, full.input_bytes);
-        assert_eq!(baseline.markers, full.markers);
-        assert_eq!(baseline.source_threads, full.source_threads);
-        assert_eq!(
-            serde_json::to_value(&baseline.sources).unwrap(),
-            serde_json::to_value(&full.sources).unwrap()
-        );
-        assert_eq!(baseline.clock_reads, 0);
-        assert!(baseline.clock_kind.is_none());
-        assert_eq!(baseline.consumer_threads, 0);
-        assert_eq!(baseline.ring_bytes, 0);
-        assert_eq!(baseline.ring_markers, 0);
-        assert!(baseline.bytes_per_second.is_none());
-        assert!(baseline.final_drain_seconds.abs() < f64::EPSILON);
-        assert!(baseline.replay_seconds >= 0.001);
-        assert_eq!(full.clock_reads, full.markers);
-        assert_eq!(full.ring_bytes, full.input_bytes);
-        assert_eq!(full.ring_markers, full.markers);
-        assert_eq!(full.consumer_threads, 1);
-        assert!(full.bytes_per_second.unwrap() > 0.0);
+        for consumer_mode in [
+            ConsumerMode::Discard,
+            ConsumerMode::CopyLocal,
+            ConsumerMode::CopyHandoff,
+        ] {
+            let baseline = run_mode(ProducerMode::FeederOnly, consumer_mode);
+            let full = run_mode(ProducerMode::EncodeClock, consumer_mode);
+            assert_eq!(baseline.input_bytes, full.input_bytes);
+            assert_eq!(baseline.markers, full.markers);
+            assert_eq!(baseline.source_threads, full.source_threads);
+            assert_eq!(
+                serde_json::to_value(&baseline.sources).unwrap(),
+                serde_json::to_value(&full.sources).unwrap()
+            );
+            assert_eq!(baseline.clock_reads, 0);
+            assert!(baseline.clock_kind.is_none());
+            assert_eq!(baseline.consumer_threads, 0);
+            assert_eq!(baseline.ring_bytes, 0);
+            assert_eq!(baseline.ring_markers, 0);
+            assert!(baseline.bytes_per_second.is_none());
+            assert!(baseline.final_drain_seconds.abs() < f64::EPSILON);
+            assert!(baseline.replay_seconds >= 0.001);
+            assert_eq!(full.clock_reads, full.markers);
+            assert_eq!(full.ring_bytes, full.input_bytes);
+            assert_eq!(full.ring_markers, full.markers);
+            assert_eq!(full.consumer_threads, 1);
+            assert!(full.bytes_per_second.unwrap() > 0.0);
+            assert_eq!(baseline.downstream_threads, 0);
+            assert_eq!(
+                full.downstream_threads,
+                usize::from(matches!(consumer_mode, ConsumerMode::CopyHandoff))
+            );
+        }
     }
 }

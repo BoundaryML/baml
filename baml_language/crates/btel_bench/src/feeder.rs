@@ -54,6 +54,68 @@ fn wait_for_capacity(factory: &btel_transport::SourceFactory, mut write: impl Fn
     }
 }
 
+/// Share exactly the same producer loop across consumer configurations.
+/// This single call is outside the per-marker loop; preventing inlining avoids
+/// consumer-type specialization changing producer code/register allocation.
+#[inline(never)]
+pub(crate) fn replay_source<const ENCODE: bool, const FEEDER_ONLY: bool>(
+    producer: &mut btel_transport::Producer,
+    factory: &btel_transport::SourceFactory,
+    fixture: &crate::workload::Fixture,
+    templates: &[Marker<'static>],
+    load: crate::replay::SourceLoad,
+    start: std::time::Instant,
+) -> Result<(), String> {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use btel_core::clock;
+    let mut offset = 0usize;
+    let delay = Duration::from_millis(load.start_delay_ms);
+    for (batch_index, batch) in fixture.lengths.chunks(load.batch_markers).enumerate() {
+        let paced_ns = if load.bytes_per_second == 0 {
+            0
+        } else {
+            offset as u128 * 1_000_000_000 / u128::from(load.bytes_per_second)
+        };
+        let pauses = u128::from(load.burst_pause_ms) * batch_index as u128 * 1_000_000;
+        let nanos = u64::try_from(paced_ns + pauses).map_err(|_| "pacing duration overflow")?;
+        let deadline = start
+            .checked_add(delay)
+            .and_then(|t| t.checked_add(Duration::from_nanos(nanos)))
+            .ok_or("pacing deadline overflow")?;
+        // Pacing clocks are per batch; EncodeClock also stamps each marker.
+        if load.bytes_per_second != 0 || load.start_delay_ms != 0 || load.burst_pause_ms != 0 {
+            if let Some(wait) = deadline.checked_duration_since(Instant::now()) {
+                thread::sleep(wait);
+            }
+        }
+        for (within_batch, &len) in batch.iter().enumerate() {
+            let end = offset + usize::from(len);
+            if ENCODE {
+                let mut marker = templates[batch_index * load.batch_markers + within_batch];
+                if FEEDER_ONLY {
+                    // Expose the local copy's contents through a
+                    // reference; passing the value caused an extra
+                    // stack copy. Keep offset work observable too.
+                    // Barriers still make subtraction an estimate.
+                    std::hint::black_box(&marker);
+                    std::hint::black_box(end);
+                } else {
+                    stamp(&mut marker, clock::now_ticks());
+                    write_or_wait(factory, || producer.write_marker(&marker));
+                }
+            } else {
+                write_or_wait(factory, || producer.write(&fixture.bytes[offset..end]));
+            }
+            offset = end;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc};

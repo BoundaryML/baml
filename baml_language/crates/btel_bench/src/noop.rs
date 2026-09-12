@@ -1,6 +1,9 @@
 //! No-op range handling and semantic stages; the concrete Drainer still polls rings.
 use btel_core::stage::{Aggregator, EventBuilder, MarkerBatch, MarkerRange, Publisher};
-use btel_transport::{Pipeline, RangeHandler};
+use btel_transport::{
+    DrainTarget, Pipeline, RangeHandler,
+    batch::{BatchProcessor, SharedMarkerBatch},
+};
 
 #[derive(Default)]
 pub struct DiscardRanges;
@@ -40,6 +43,22 @@ pub fn pipeline() -> NoopPipeline {
     )
 }
 
+impl DrainTarget for DiscardRanges {
+    type Output = ();
+    fn accept(&mut self, _: MarkerRange<'_>) {}
+    fn finish(self) {}
+}
+
+/// Keep copied payload observable without decoding or timing individual records.
+pub struct ReturnBatches;
+impl BatchProcessor for ReturnBatches {
+    type Output = ();
+    fn process(&mut self, batch: &SharedMarkerBatch) {
+        std::hint::black_box(batch);
+    }
+    fn finish(self) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,7 +69,9 @@ mod tests {
             source_id: 1,
             bytes: &[1, 2, 3],
         };
-        DiscardRanges.accept(range, |_| panic!("discard must not manufacture a batch"));
+        RangeHandler::accept(&mut DiscardRanges, range, |_| {
+            panic!("discard must not manufacture a batch")
+        });
         NoopEventBuilder.build(range, |()| panic!("no-op builder emitted"));
         NoopAggregator.observe(&(), |()| panic!("no-op aggregator emitted"));
         let (factory, mut drainer) =
