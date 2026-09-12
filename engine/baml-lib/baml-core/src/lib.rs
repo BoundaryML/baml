@@ -28,6 +28,7 @@ pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::Configuration,
     feature_flags::{BamlFeatureFlag, FeatureFlags},
+    validate::validation_pipeline::validations::reserved_names::baml_keywords,
 };
 
 pub struct ValidatedSchema {
