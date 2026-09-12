@@ -173,3 +173,49 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
     ");
     assert_eq!(output.result, Ok(BexExternalValue::Float(2.0)));
 }
+
+/// The generic `bin_op` the spawn-capture guard falls back to must be total
+/// over bigint (BAMLGH-79): it used to reach the string-concatenation arm and
+/// fail with `expected string, got bigint`. Pins both the opcode and the result.
+#[tokio::test]
+async fn captured_bigint_arithmetic_uses_generic_binop() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let value = 10n;
+            let f = spawn { value };
+            let _ = await f;
+            value + 1n
+        }
+        "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bigint {
+        load_var ?1
+        make_cell
+        store_var ?1
+        load_const 10n
+        store_deref ?1
+        load_var value
+        make_closure .<lambda(main, 0)>, 1
+        load_const null
+        load_const null
+        load_type bigint
+        load_type never
+        spawn
+        store_var _4
+        load_var _4
+        await
+        pop 1
+        load_deref ?1
+        load_const 1n
+        bin_op +
+        return
+    }
+    ");
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(11)))
+    );
+}

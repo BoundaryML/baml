@@ -4340,6 +4340,23 @@ impl BexVm {
         }
     }
 
+    /// Classify a `Value` as a [`BigintOperand`] if it is numerically a bigint
+    /// or an `int`; `None` for anything else (float, string, …).
+    ///
+    /// The generic arithmetic path (`exec_binop`) uses this where the
+    /// specialized `*Bigint` opcodes use `pop_bigint_operand`: that one may
+    /// assert its operand is a bigint because emit only routes proven pairs to
+    /// it, while here the operand can legitimately be any value.
+    fn bigint_operand_of(&self, v: Value) -> Option<BigintOperand> {
+        if let Some(n) = v.as_int() {
+            Some(BigintOperand::Int(n))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            matches!(self.get_object(ptr), Object::Bigint(_)).then_some(BigintOperand::Heap(ptr))
+        } else {
+            None
+        }
+    }
+
     /// Reconstruct the original `Value` for a [`BigintOperand`].
     ///
     /// Used to populate panic payloads (e.g. `DivisionByZero`) without
@@ -7594,8 +7611,13 @@ impl BexVm {
     }
 
     /// Execute a binary arithmetic operation. Pops two values, pushes the result.
-    /// Shared between the legacy `step()` `BinOp` arm and the compact `Add` opcode
-    /// (which needs string concatenation in addition to numeric dispatch).
+    ///
+    /// The generic `BinOp` opcode: emit falls back to it whenever it declines a
+    /// specialized `*Int`/`*Float`/`*Bigint` opcode (an operand read from a
+    /// spawn-shared cell, an operand whose static type it cannot resolve, a
+    /// field compound-assignment). It must therefore be total over every
+    /// operand pair the specialized opcodes accept — including bigint and the
+    /// `bigint`/`int` mix — plus string concatenation for `+`.
     fn exec_binop(&mut self, op: BinOp) -> Result<(), VmError> {
         let right = self.stack.ensure_pop();
         let left = self.stack.ensure_pop();
@@ -7660,6 +7682,17 @@ impl BexVm {
                 }
             };
             Value::object(self.alloc_float(f))
+        } else if let (Some(l), Some(r)) =
+            (self.bigint_operand_of(left), self.bigint_operand_of(right))
+        {
+            // Bigint, or a `bigint`/`int` mix, exactly as the specialized
+            // `*Bigint` opcodes see it. Ordered after the float arm on purpose:
+            // `value_as_float` is `None` for a heap bigint, and the `(int, int)`
+            // arm above has already consumed a pure-int pair, so reaching here
+            // means at least one side is a bigint. Placed before the
+            // object/object arm, which would otherwise treat two heap bigints
+            // as a string concatenation (`expected string, got bigint`).
+            self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
