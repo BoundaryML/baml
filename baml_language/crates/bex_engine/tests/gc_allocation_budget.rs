@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bex_engine::{BexEngine, BexExternalValue as Ext, FunctionCallContextBuilder};
+use bex_engine::{BexEngine, BexExternalValue as Ext, FunctionCallContextBuilder, RuntimeTy};
 use bex_heap::CollectionLevel;
 use sys_native::SysOpsExt;
 
@@ -34,8 +34,8 @@ function Size(values: int[]) -> int { values.length() }
 function At(values: int[], i: int) -> int { values[i] }
 function Text(text: string) -> string { text }
 function TextSize(text: string) -> int { text.length() }
-function SpawnText(text: string) -> baml.future.Future<int, never> {
-    spawn { text.length() }
+function SpawnTexts(texts: string[]) -> baml.future.Future<int, never> {
+    spawn { texts.length() + texts[0].length() + texts[texts.length() - 1].length() }
 }
 function JoinText(job: baml.future.Future<int, never>) -> int { await job }
 function Async(n: int) -> int {
@@ -87,23 +87,23 @@ async fn short_calls_service_pressure_on_next_entry() {
 }
 
 // Import spends the budget after the entry check. A short spawn must service
-// that debt before returning, and preserve both the captured string and the
+// that debt before returning, and preserve both the captured strings and the
 // future handle when the child has not yet acquired its first heap permit.
 #[tokio::test(start_paused = true)]
 async fn spawn_services_pressure_after_rooting_child_and_future() {
     let engine = engine();
-    let bytes = 40 * 1024 * 1024;
-    let job = call(
-        &engine,
-        "SpawnText",
-        vec![Ext::String("x".repeat(bytes).into())],
-        false,
-    )
-    .await;
+    let count = engine.heap().gc_budget().full_budget_bytes
+        / std::mem::size_of::<bex_vm_types::Object>()
+        + 1;
+    let texts = Ext::Array {
+        element_type: RuntimeTy::string(),
+        items: vec![Ext::String("x".into()); count],
+    };
+    let job = call(&engine, "SpawnTexts", vec![texts], false).await;
     assert_eq!(engine.heap().gc_budget().full_collections, 1);
     assert_eq!(
         call(&engine, "JoinText", vec![job], true).await,
-        Ext::Int(i64::try_from(bytes).unwrap())
+        Ext::Int(i64::try_from(count + 2).unwrap())
     );
     engine.shutdown().await;
 }
