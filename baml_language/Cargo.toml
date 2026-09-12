@@ -66,6 +66,8 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+btel_core = { path = "crates/btel_core" }
+btel_transport = { path = "crates/btel_transport" }
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
@@ -506,3 +508,11 @@ inherits = "release"
 # size-minimizing settings — so the size-gate ceilings carry it explicitly
 # (`.cargo/size-gate.toml`). wasm32 is unaffected: it has no unwinding and
 # behaves as `abort` regardless of this setting.
+
+# Iteration profile for the isolated telemetry replay harness.
+[profile.btel]
+inherits = "release"
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = false

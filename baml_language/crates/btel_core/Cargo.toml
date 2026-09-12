@@ -1,0 +1,20 @@
+[package]
+name = "btel_core"
+description = "Experimental Btel marker formats, clocks, and stage contracts"
+version.workspace = true
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+uuid = { workspace = true, features = [ "v7" ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time.workspace = true
+uuid = { workspace = true, features = [ "js" ] }

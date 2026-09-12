@@ -1,0 +1,66 @@
+{
+  "base_commit": "bd1fb53cda094c6cd37318cf411c40dfa72689ea",
+  "copies": [
+    {
+      "source": "crates/bex_prof_store/src/ids.rs",
+      "destination": "crates/btel_core/src/ids.rs",
+      "source_sha256": "c57ca12410187b0481a8d10cd32dff91b324f50bf7331055157f399de18b1a0b"
+    },
+    {
+      "source": "crates/bex_prof_store/src/prof/clock.rs",
+      "destination": "crates/btel_core/src/clock.rs",
+      "source_sha256": "679948aa52fde27aef7d2a08e8fb5cdda0d63b0571c723d20f0d61dfe0e00e17"
+    },
+    {
+      "source": "crates/bex_prof_store/src/prof/record.rs",
+      "destination": "crates/btel_core/src/marker.rs",
+      "source_sha256": "10f1c918a7acab47c589d7e973c83510bb7e5da3385f0c8fbd29f183db228576"
+    },
+    {
+      "source": "crates/bex_events/src/prof/ring.rs",
+      "destination": "crates/btel_transport/src/ring.rs",
+      "source_sha256": "4aebeaf6bfe2c8ea073ab8ce7a28423cea7d68d9e6f6cc482a7c3debf57d8d7e"
+    },
+    {
+      "source": "crates/bex_events/src/prof/sync.rs",
+      "destination": "crates/btel_transport/src/sync.rs",
+      "source_sha256": "92bcfc700dff2c7681b4a9a3a10074b1f325419410f1158ebede580cf67c6e7e"
+    },
+    {
+      "source": "crates/bex_events/src/prof/wake.rs",
+      "destination": "crates/btel_transport/src/wake.rs",
+      "source_sha256": "7e391bb95502c431ae0d9545a2626a6edbb5ee41a72a2af4fabb9dc978cd7677"
+    },
+    {
+      "source": "crates/bex_events/src/prof/registry.rs",
+      "destination": "crates/btel_transport/src/registry.rs",
+      "source_sha256": "7a69487d9a6441d31bd0e0fc7a6195b78ddbd29056be051bb1f2707b0d04cc75"
+    },
+    {
+      "source": "crates/bex_events/src/prof/concurrency_tests.rs",
+      "destination": "crates/btel_transport/src/concurrency_tests.rs",
+      "source_sha256": "551af143d30fdad243a010376980d670fb7ccfd23ea9ddc7a73f025b90073911"
+    },
+    {
+      "source": "crates/bex_prof_store/src/prof/backend/memory.rs",
+      "destination": "crates/btel_transport/src/memory.rs",
+      "source_sha256": "6d36c04a8749c655ca6bf3b6c5e603ed3f77186f65af0fb237ee8670829242fb"
+    },
+    {
+      "source": "crates/bex_prof_store/src/prof/backend/sizing.rs",
+      "destination": "crates/btel_transport/src/sizing.rs",
+      "source_sha256": "1fcf4f97d789e84fc57ca4f8a617ac906a5878b919e57e7077ad095aa2b6f325"
+    }
+  ],
+  "adaptations": [
+    "Imports redirected to Btel-local modules.",
+    "Old global/TLS consumer integration omitted; original production files untouched.",
+    "Sizing disk/session configuration and legacy session-layout test omitted.",
+    "Global consumer stress test omitted; primitive tests copied.",
+    "New runtime and pipeline are separate from the copied ring algorithm.",
+    "Copied transport internals are crate-private; public endpoints retain instance ownership through Arc.",
+    "Registry adds a persistent round-robin cursor and full-drain outcome for finite replay completion.",
+    "Sizing omits configuration-only tests; instance segment size determines the minimum transport reservation.",
+    "Public Producer::write_marker uses the copied direct-slot push_with and marker encode_to path for clocked encoding benchmarks."
+  ]
+}
