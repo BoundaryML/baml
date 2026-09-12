@@ -4,3 +4,5 @@ pub mod replay;
 pub mod workload;
 
 pub mod feeder;
+
+pub mod builder;
