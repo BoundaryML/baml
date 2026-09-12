@@ -1780,12 +1780,20 @@ dependencies = [
 name = "btel_bench"
 version = "0.0.0-beta"
 dependencies = [
+ "btel_builder",
  "btel_core",
  "btel_transport",
  "clap",
  "libc",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "btel_builder"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_core",
 ]
 
 [[package]]

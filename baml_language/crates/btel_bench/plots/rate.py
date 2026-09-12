@@ -192,7 +192,12 @@ def render(identity, runs, root):
     fig.text(
         0.075,
         0.118,
-        "1 call = enter + exit. Achieved rate = total calls / elapsed time through complete drain; this is not span-builder throughput.",
+        "1 call = enter + exit. Achieved rate = total calls / elapsed time through complete drain; "
+        + (
+            "includes span building and output counting."
+            if identity["consumer_stage"] == "build-spans"
+            else "this is not span-builder throughput."
+        ),
         fontsize=10,
         color="#475569",
     )

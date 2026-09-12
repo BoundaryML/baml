@@ -68,7 +68,7 @@ def load_results(directory):
             in (
                 {"feeder-only"}
                 if baseline
-                else {"drain-only", "copy-local", "copy-handoff"}
+                else {"drain-only", "copy-local", "copy-handoff", "build-spans"}
             ),
             "Unsupported consumer stage",
         )
@@ -76,13 +76,25 @@ def load_results(directory):
             stages.add(result["preset"])
         require(
             result.get("downstream_threads", 0)
-            == int(not baseline and result["preset"] == "copy-handoff"),
+            == int(
+                not baseline and result["preset"] in ("copy-handoff", "build-spans")
+            ),
             "Unexpected downstream worker count",
         )
         require(
             result["consumer_threads"] == (0 if baseline else 1),
             "Unexpected drainer count",
         )
+        if not baseline and result["preset"] == "build-spans":
+            require(
+                result.get("builder")
+                == {
+                    "closed_spans": run["calls"],
+                    "standalone_events": run["threads"] * 2,
+                    "unmatched_halves": 0,
+                },
+                "Builder output validation failed",
+            )
         require(len(result["loads"]) == run["threads"], "Source load count mismatch")
         for metric in (
             "replay_seconds",
@@ -133,6 +145,7 @@ def load_results(directory):
         "drain-only": "discard drainer",
         "copy-local": "local copy/reuse",
         "copy-handoff": "copy/handoff + return",
+        "build-spans": "copy/handoff + span builder + counting sink",
     }[identity["consumer_stage"]]
     threads = sorted({r["threads"] for r in runs})
     values = sorted({r[dimension] for r in runs})

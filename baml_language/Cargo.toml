@@ -66,6 +66,7 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+btel_builder = { path = "crates/btel_builder" }
 btel_core = { path = "crates/btel_core" }
 btel_transport = { path = "crates/btel_transport" }
 #  Internal dependencies (baml_*)

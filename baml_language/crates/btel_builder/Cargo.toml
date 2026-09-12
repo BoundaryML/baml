@@ -1,0 +1,15 @@
+[package]
+name = "btel_builder"
+description = "Incremental Btel marker matching and owned telemetry events"
+version.workspace = true
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_core.workspace = true
