@@ -281,10 +281,9 @@ impl WeakHeapRef for BexHeap {
         if by_ptr.get(&ptr).is_some_and(|(key, _)| *key == handle_key) {
             by_ptr.remove(&ptr);
         }
-        self.root_release_epoch.fetch_add(1, Ordering::Release);
         drop(by_ptr);
         drop(handles);
-        self.gc_activity.notify_one();
+        self.notify_root_released();
     }
 
     fn resolve_handle_ptr(&self, slab_key: usize) -> Option<HeapPtr> {
@@ -848,10 +847,17 @@ impl BexHeap {
         None
     }
 
-    /// Monotonic change token for external roots disappearing, including after
+    /// Monotonic change token for GC roots disappearing, including after
     /// the last engine call. No heap permit is required to read this token.
     pub fn root_release_epoch(&self) -> usize {
         self.root_release_epoch.load(Ordering::Acquire)
+    }
+
+    /// Record a removed root and wake idle cleanup, including when no work ends.
+    /// Call after removing the root; registry callers must still hold their heap permit.
+    pub fn notify_root_released(&self) {
+        self.root_release_epoch.fetch_add(1, Ordering::Release);
+        self.gc_activity.notify_one();
     }
 
     /// Dedicated wake signal for the engine's single idle-GC coordinator.

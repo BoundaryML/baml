@@ -74,7 +74,8 @@ pub(crate) struct BexWork {
     wake: Arc<Notify>,
 }
 
-/// Owned by each root call, registered future, and spawned task until it ends.
+/// Counts root-call and producer lifetimes, and registry work until settlement
+/// or removal. A retained settled entry can stay rooted without its guard.
 /// Future and task guards deliberately overlap: cancellation can settle the
 /// future while its producer is still unwinding or waiting for admission.
 /// This prevents idle cleanup; heap access still requires a heap permit.
@@ -628,6 +629,141 @@ mod tests {
             advance(IDLE_DELAY).await;
             assert_eq!(engine.heap.gc_budget().full_collections, outcome + 1);
         }
+        engine.shutdown().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn retained_engine_errors_allow_idle_gc_and_late_removal_rearms_it() {
+        for spawn_fallback in [false, true] {
+            let engine = engine();
+            drop(tiny(&engine).await);
+            let producer = engine.bex_work.register_work();
+            let permit = engine
+                .heap_permit_manager
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let original = crate::EngineError::Other("retained engine error".into());
+            let id = {
+                let mut futures = engine.futures.acquire(permit.proof()).await;
+                let (id, _) = futures.new_future(
+                    RealizedTy::int(),
+                    RealizedTy::never(),
+                    CancellationToken::new(),
+                    "retained-error-test".into(),
+                );
+                if spawn_fallback {
+                    futures.settle_spawn_engine_error(id, original.clone());
+                } else {
+                    futures.internal_error_future(id, original.clone()).unwrap();
+                }
+                assert_eq!(futures.active_future_count(), 1);
+                id
+            };
+            drop(permit);
+            assert_eq!(engine.bex_work.lock().work, 1, "producer still counts");
+            advance(IDLE_DELAY * 2).await;
+            assert_eq!(engine.heap.gc_budget().full_collections, 0);
+
+            drop(producer);
+            advance(IDLE_DELAY).await;
+            assert_eq!(engine.heap.gc_budget().full_collections, 1);
+            assert_eq!(engine.bex_work.lock().work, 0);
+
+            // Read through the registry after moving GC, with no host handle
+            // rooting the future. Repeated settlement must preserve the error
+            // and must not release a second work guard.
+            let permit = engine
+                .heap_permit_manager
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let waiter = {
+                let mut futures = engine.futures.acquire(permit.proof()).await;
+                assert_eq!(futures.active_future_count(), 1);
+                futures.settle_spawn_engine_error(id, crate::EngineError::Other("ignored".into()));
+                futures.future_ready(id).unwrap()
+            };
+            drop(permit);
+            assert_eq!(waiter.await, Err(original));
+            advance(IDLE_DELAY * 2).await;
+            assert_eq!(engine.heap.gc_budget().full_collections, 1);
+
+            // Shutdown can prune retained roots, then be cancelled before its
+            // final GC. The root-release atomic must preserve that cleanup.
+            let epoch = engine.heap.root_release_epoch();
+            let shutdown = engine.begin_shutdown().await.unwrap();
+            assert!(
+                engine
+                    .futures
+                    .pending_join_handles(&engine.heap_permit_manager)
+                    .await
+                    .is_empty()
+            );
+            assert_eq!(engine.heap.root_release_epoch(), epoch.wrapping_add(1));
+            drop(shutdown);
+            advance(IDLE_DELAY).await;
+            assert_eq!(engine.heap.gc_budget().full_collections, 2);
+            engine.shutdown().await;
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelled_future_releases_registry_work_on_spawn_error() {
+        let engine = engine();
+        drop(tiny(&engine).await);
+        let producer = engine.bex_work.register_work();
+        let permit = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let id = {
+            let mut futures = engine.futures.acquire(permit.proof()).await;
+            let (id, ptr) = futures.new_future(
+                RealizedTy::int(),
+                RealizedTy::never(),
+                CancellationToken::new(),
+                "cancelled-error-test".into(),
+            );
+            // Model f.cancel() winning before the producer's engine-error
+            // fallback. It settles the heap object without removing the entry.
+            // SAFETY: the registry roots ptr and permit excludes moving GC.
+            let bex_vm_types::Object::Future(future) = (unsafe { ptr.get() }) else {
+                panic!("expected a future");
+            };
+            assert!(future.settle_cancelled());
+            futures.settle_spawn_engine_error(id, crate::EngineError::Other("lost race".into()));
+            id
+        };
+        drop(permit);
+        assert_eq!(engine.bex_work.lock().work, 1);
+        advance(IDLE_DELAY * 2).await;
+        assert_eq!(engine.heap.gc_budget().full_collections, 0);
+        drop(producer);
+        advance(IDLE_DELAY).await;
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+
+        let epoch = engine.heap.root_release_epoch();
+        let permit = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        {
+            let mut futures = engine.futures.acquire(permit.proof()).await;
+            futures.cancel_future(id).unwrap();
+            futures.cancel_future(id).unwrap();
+            assert_eq!(futures.active_future_count(), 0);
+        }
+        drop(permit);
+        assert_eq!(engine.heap.root_release_epoch(), epoch.wrapping_add(1));
+        advance(IDLE_DELAY).await;
+        assert_eq!(engine.heap.gc_budget().full_collections, 2);
         engine.shutdown().await;
     }
 
