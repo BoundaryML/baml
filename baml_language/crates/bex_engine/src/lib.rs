@@ -311,7 +311,7 @@ pub(crate) enum ThreadOutcome {
 }
 
 /// How a spawned child settled its future — drives the profiling
-/// `EndThread` status (children settle as `Ok(SettledChild)` even when
+/// `BexThreadEnd` status (children settle as `Ok(SettledChild)` even when
 /// cancelled or errored, so the kind must travel in the outcome).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChildSettleKind {
@@ -358,11 +358,11 @@ impl Drop for ThreadBoundaryLeaseGuard {
 /// task future is dropped before its event loop takes over (abnormal host
 /// teardown — e.g. dropping the runtime while the task is queued on a
 /// `TaskGroup` ticket or parked on the heap permit). By that point the
-/// Spawn arm has emitted `StartThread` and `set_entry_point` the entry
+/// Spawn arm has emitted `BexThreadStart` and `set_entry_point` the entry
 /// `CallFunction`; nothing else would close them. Armed at the top of the
 /// task body; also the closer for the queued-then-cancelled early return;
 /// defused once `run_thread_event_loop` is entered (its wrapper owns
-/// `EndThread` on every return path from there). Emits via the TLS ring
+/// `BexThreadEnd` on every return path from there). Emits via the TLS ring
 /// lookup, so dropping from any thread is sound. Drops *after* the loop
 /// has started (mid-await teardown) are out of scope — the artifact is
 /// torn-tail territory there anyway.
@@ -383,7 +383,7 @@ impl SpawnProfCloser {
 
 impl Drop for SpawnProfCloser {
     fn drop(&mut self) {
-        use bex_events::prof::record::{FunctionEndStatus, RawRecord, ThreadEndStatus};
+        use bex_events::prof::record::{FunctionEndStatus, Marker, ThreadEndStatus};
         if !self.armed || !self.engine.profiler_session.is_on() {
             return;
         }
@@ -396,7 +396,7 @@ impl Drop for SpawnProfCloser {
             let ts_ticks = bex_events::prof::clock::now_ticks();
             let committed = match self.awaited {
                 Some((await_ns, await_count)) => {
-                    self.engine.prof_emit(&RawRecord::EndFunctionAwaited {
+                    self.engine.prof_emit(&Marker::FunctionExitAwaited {
                         status: FunctionEndStatus::Cancelled,
                         thread_id,
                         call_id: self.entry_call_id,
@@ -405,7 +405,7 @@ impl Drop for SpawnProfCloser {
                         await_count,
                     })
                 }
-                None => self.engine.prof_emit(&RawRecord::EndFunction {
+                None => self.engine.prof_emit(&Marker::FunctionExit {
                     // Dropped-before-run is a cancellation, not a failure.
                     status: FunctionEndStatus::Cancelled,
                     thread_id,
@@ -417,7 +417,7 @@ impl Drop for SpawnProfCloser {
                 self.engine.prof_record_transport_loss(boundary_handle);
             }
         }
-        if !self.engine.prof_emit(&RawRecord::EndThread {
+        if !self.engine.prof_emit(&Marker::BexThreadEnd {
             status: ThreadEndStatus::Cancelled,
             thread_id,
             ts_ticks: bex_events::prof::clock::now_ticks(),
@@ -2510,7 +2510,7 @@ impl BexEngine {
     /// engine arms run after `.await`s, where the task may have migrated
     /// OS threads (the VM snapshot is only valid within one exec resume).
     #[allow(unsafe_code)]
-    fn prof_emit(&self, rec: &bex_events::prof::record::RawRecord<'_>) -> bool {
+    fn prof_emit(&self, rec: &bex_events::prof::record::Marker<'_>) -> bool {
         if !self.profiler_session.is_on() {
             return true;
         }
@@ -2549,7 +2549,7 @@ impl BexEngine {
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
         vm.prof_ring = if self.profiler_session.is_on() && !vm.prof_suppressed {
             bex_events::prof::ring_for_engine(self.engine_id.0)
-                .map(bex_events::prof::RingHandle::ring)
+                .map(bex_events::prof::OSThreadMarkerRingHandle::ring)
         } else {
             None
         };
@@ -2578,11 +2578,11 @@ impl BexEngine {
         call_id: u64,
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
-        use bex_events::prof::record::RawRecord;
+        use bex_events::prof::record::Marker;
         let ts_ticks = bex_events::prof::clock::now_ticks();
         let thread_id = BexThreadId(vm.prof_thread_id);
         let committed = match vm.prof_take_await(call_id) {
-            Some((await_ns, await_count)) => self.prof_emit(&RawRecord::EndFunctionAwaited {
+            Some((await_ns, await_count)) => self.prof_emit(&Marker::FunctionExitAwaited {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
@@ -2590,7 +2590,7 @@ impl BexEngine {
                 await_ns,
                 await_count,
             }),
-            None => self.prof_emit(&RawRecord::EndFunction {
+            None => self.prof_emit(&Marker::FunctionExit {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
@@ -4074,14 +4074,14 @@ impl BexEngine {
         // `$id` works with profiling off, and the ids it exposes are the
         // VM-minted ids the event stream records.
         vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
-        // No ring snapshot and no StartThread here: the permit acquisition
+        // No ring snapshot and no BexThreadStart here: the permit acquisition
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
-        // would leak a StartThread with no EndThread. Both happen at
-        // guaranteed-balanced points instead: the StartThread in
+        // would leak a BexThreadStart with no BexThreadEnd. Both happen at
+        // guaranteed-balanced points instead: the BexThreadStart in
         // run_entry_point right before set_entry_point (§7 decision 7 —
         // straight-line into run_thread_event_loop, whose every exit path
-        // emits the EndThread), and the snapshot at the same spot plus each
+        // emits the BexThreadEnd), and the snapshot at the same spot plus each
         // loop-head resume.
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
@@ -4190,16 +4190,16 @@ impl BexEngine {
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
         self.prof_refresh_vm_ring(&mut thread.vm);
-        // §7 decision 7: the root StartThread is emitted before the entry
+        // §7 decision 7: the root BexThreadStart is emitted before the entry
         // frame's CallFunction so that every thread's first record is its
-        // StartThread — a uniform invariant for renderers (children get
+        // BexThreadStart — a uniform invariant for renderers (children get
         // theirs at the Spawn arm, before their entry push). BALANCE: the
-        // matching EndThread is emitted by run_thread_event_loop on every
+        // matching BexThreadEnd is emitted by run_thread_event_loop on every
         // exit path; no early return / `?` may be introduced between this
         // emission and the run_thread_event_loop call below, or an error
-        // path would leak an unclosed StartThread.
+        // path would leak an unclosed BexThreadStart.
         if thread.vm.prof_ring.is_some() {
-            let committed = self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+            let committed = self.prof_emit(&bex_events::prof::record::Marker::BexThreadStart {
                 flags: 0,
                 thread_id: BexThreadId(thread.vm.prof_thread_id),
                 parent_thread_id: BexThreadId(0), // engine-root thread
@@ -5888,7 +5888,7 @@ impl BexEngine {
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
         // refresh re-snapshots on the child task's own thread later. The
-        // StartThread (with the spawn edge) was already emitted into the
+        // BexThreadStart (with the spawn edge) was already emitted into the
         // ring at the Spawn arm.
         self.prof_refresh_vm_ring(&mut child_vm);
         child_vm.set_entry_point(closure, &[]);
@@ -5911,7 +5911,7 @@ impl BexEngine {
         let task = async move {
             // Outlives the execution locals (but not SpawnedWork): if dropped at
             // any await below (before the event loop takes over), the closer
-            // emits the child's EndFunction/EndThread (follow-up 11).
+            // emits the child's EndFunction/BexThreadEnd (follow-up 11).
             let mut prof_closer = SpawnProfCloser {
                 engine: Arc::clone(&engine),
                 prof_thread_id,
@@ -5952,7 +5952,7 @@ impl BexEngine {
                             );
                         }
                         // The armed `prof_closer` emits the profiling
-                        // closes (EndFunction{Cancelled} + EndThread{
+                        // closes (EndFunction{Cancelled} + BexThreadEnd{
                         // Cancelled}) when it drops at this return — the
                         // event loop that would otherwise close them never
                         // runs for a queued-then-cancelled spawn.
@@ -5973,7 +5973,7 @@ impl BexEngine {
             }
             // The entry call's id was minted by set_entry_point on the
             // spawning thread; its CallFunction is already in the ring.
-            // EndThread (ring) is emitted by the run_thread_event_loop
+            // BexThreadEnd (ring) is emitted by the run_thread_event_loop
             // wrapper on every exit path from here on.
             prof_closer.defuse();
             match engine
@@ -5992,7 +5992,7 @@ impl BexEngine {
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
                 // The abnormal arms close any spans the event loop left open
-                // before the thread ends — the ring EndThread (emitted by the
+                // before the thread ends — the ring BexThreadEnd (emitted by the
                 // run_thread_event_loop wrapper) must never strand open spans.
                 Ok(ThreadOutcome::RootValue(_)) => {
                     tracing::error!(
@@ -6037,7 +6037,7 @@ impl BexEngine {
     }
 
     /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
-    /// and closes its profiling lifecycle: one `EndThread` per `StartThread`,
+    /// and closes its profiling lifecycle: one `BexThreadEnd` per `BexThreadStart`,
     /// on every exit path (the inner loop has many early returns; thread
     /// join at shutdown makes the final commits visible to the consumer per
     /// plan §1).
@@ -6060,10 +6060,10 @@ impl BexEngine {
         let profile_thread = thread.vm.prof_ring.is_some();
         let prof_thread_id = thread.vm.prof_thread_id;
         let prof_boundary_handle = thread.vm.prof_boundary_handle;
-        // StartThread was already emitted before this function: roots in
+        // BexThreadStart was already emitted before this function: roots in
         // run_entry_point (right before `set_entry_point`, §7 decision 7 —
-        // StartThread-first is a wire invariant), children at the Spawn
-        // arm. This wrapper owns the matching EndThread on every exit path;
+        // BexThreadStart-first is a wire invariant), children at the Spawn
+        // arm. This wrapper owns the matching BexThreadEnd on every exit path;
         // queued-then-cancelled spawns (which never reach this loop) close
         // their lifecycle in spawn_thread_inner's task body.
         let result = self
@@ -6098,7 +6098,7 @@ impl BexEngine {
                 }
                 Err(_) => bex_events::prof::record::ThreadEndStatus::Errored,
             };
-            let committed = self.prof_emit(&bex_events::prof::record::RawRecord::EndThread {
+            let committed = self.prof_emit(&bex_events::prof::record::Marker::BexThreadEnd {
                 status,
                 thread_id: BexThreadId(prof_thread_id),
                 ts_ticks: bex_events::prof::clock::now_ticks(),
@@ -6712,7 +6712,7 @@ impl BexEngine {
                     if child_profile_active {
                         let name = spawn_name.as_deref().unwrap_or("");
                         let committed = self.prof_emit(
-                            &bex_events::prof::record::RawRecord::StartThreadSpawn {
+                            &bex_events::prof::record::Marker::BexThreadStartSpawned {
                                 flags: 0,
                                 thread_id: BexThreadId(child_prof_thread_id),
                                 parent_thread_id: BexThreadId(thread.vm.prof_thread_id),

@@ -79,7 +79,7 @@ clean`; wasm = off.
 ### 2.1 Execution
 
 An **execution** is the tree of logical threads rooted at a thread whose
-`StartThread` record has `parent_thread_id == 0` (`record.rs:157-172`,
+`BexThreadStart` record has `parent_thread_id == 0` (`record.rs:157-172`,
 emitted at `bex_engine/src/lib.rs:3602-3609`). Its identity:
 
 ~~~rust
@@ -112,7 +112,7 @@ format (MVP §4.3, §12.4; `bex_engine/tests/identity.rs` passes unchanged).
 legacy history/playground plane, Section 10). Inside `prof/backend` it appears
 only as `RuntimeIdAnnotation.runtime_id`, `SpanRuntimeId.runtime_id`,
 `RootStarted.runtime_id`, `ExecutionMetadata.runtime_id`,
-`ExecutionRuntime.runtime_id` — "host/language runtime token, opaque to the
+`ExecutionDecodeAccumulator.runtime_id` — "host/language runtime token, opaque to the
 profiler". Renames (values unchanged): `BoundaryRegistry/Handle/Slot/State/
 Phase/EndStatus/Metadata` → `ExecutionRegistry/Handle/Slot/State/Phase/
 EndStatus/Metadata`; `RootProfileIntent::UserBoundary { boundary_id }` →
@@ -282,7 +282,7 @@ trailing bytes, unknown tag → `MetaUnknownTag(tag)`.
   NULL.
 - `RootStarted.started_ns = TickConverter::to_ns(admitted_ticks)` where
   `admitted_ticks = now_ticks()` sampled at the top of `register_root`
-  (Section 5.5). It is **not** derived from the root `StartThread` record
+  (Section 5.5). It is **not** derived from the root `BexThreadStart` record
   (which is emitted after admission, `lib.rs:3596-3609`, and may be lost).
   `runtime_id` = host token. There is no `entry_function_id` (Q4 resolved:
   dropped — the root span's `function_id` is in the data plane).
@@ -338,7 +338,7 @@ Tags 0–5 keep their numbers and `fact_count`/`tag`/`len` framing.
 
 | fact | change |
 |---|---|
-| `SpanStart` (0) | **remove** leading `boundary_id[16]`. Body: `CallRef(40) ‖ opt CallRef parent ‖ ThreadRef(32) ‖ ContextRef ‖ function_id u32 ‖ opt call_site ‖ edge_kind u8 ‖ started_ns u64 ‖ selection_reasons u8 ‖ roles u8 ‖ opt (annotation_ordinal u32 ‖ runtime_id[16])` (order as `evidence_codec.rs:112-134` minus the first field). The ordinal-0 annotation's source is `ExecutionRuntime.runtime_id` (today `publisher.meta().boundary_id`, `decoder.rs:1078-1083`). |
+| `SpanStart` (0) | **remove** leading `boundary_id[16]`. Body: `CallRef(40) ‖ opt CallRef parent ‖ ThreadRef(32) ‖ ContextRef ‖ function_id u32 ‖ opt call_site ‖ edge_kind u8 ‖ started_ns u64 ‖ selection_reasons u8 ‖ roles u8 ‖ opt (annotation_ordinal u32 ‖ runtime_id[16])` (order as `evidence_codec.rs:112-134` minus the first field). The ordinal-0 annotation's source is `ExecutionDecodeAccumulator.runtime_id` (today `publisher.meta().boundary_id`, `decoder.rs:1078-1083`). |
 | `SpanEnd` (1), `SpanRuntimeId` (2), `ValueOccurrence` (3), `TerminalErrorRef` (5) | unchanged |
 | `ErrorCapture` (4) | **remove** `boundary_id[16]` after `ErrorCaptureId` (`evidence.rs:182-213`); sub-codec magic `BAMLERR1`/version stay. |
 | `ContextRef` | `Overflow` = `1 ‖ reason u8 ‖ edge_kind u8` (today `1 ‖ BoundaryRef(40) ‖ reason ‖ edge`, `evidence_codec.rs:305-319`, `evidence.rs:302-317`). `BoundaryRef` type deleted; `ActiveCctEpoch.boundary` field and the `BoundaryRef` parameter of `ActiveCctEpoch::new` (`cct.rs:214-230`) deleted; `record_overflow` (`cct.rs:507-522`) builds the new variant; `BoundaryRuntime::new`/`fresh_epoch` (`decoder.rs:198-233`) adjusted; `backend/mod.rs:33` export removed. |
@@ -572,7 +572,7 @@ Inputs (consumer thread only):
    pending that is publishable (not waiting on `inflight`/`indeterminate`),
    repeat from step 3.
 
-**Health sink.** "The execution's health" means `ExecutionRuntime.health`
+**Health sink.** "The execution's health" means `ExecutionDecodeAccumulator.health`
 while `registry.validate(handle)` succeeds (slot still live); otherwise the
 pending `RootEnded(root)`'s health (which by the eligibility rule is still
 pending whenever a group of that execution can still complete or fail —
@@ -651,7 +651,7 @@ publish_interval)` when `publish_interval < 50 ms`.
 5. `registry.reserve_root(ExecutionMetadata { root_thread_ref, runtime_id, admitted_ticks })`
    → slot (with `admitted_pending = true`, new slot flag) or
    `Inactive(ExecutionStateUnavailable)` (unchanged).
-6. `publishers[slot] = Some(ExecutionRuntime::new(generation, root_thread_ref, runtime_id, program_id, process_euid, engine_id))`.
+6. `publishers[slot] = Some(ExecutionDecodeAccumulator::new(generation, root_thread_ref, runtime_id, program_id, process_euid, engine_id))`.
 7. Return `Active(ActiveRootAdmission { profiler: Active(ActiveRootProfiler { root_thread_ref }), completion })`.
 
 No store call, no lock, no I/O, no queue send. `reserve_root` stores
@@ -690,7 +690,7 @@ recorded by the registry at the one-to-zero lease release (new field set in
 `Abandoned`, as `decoder.rs:2303-2305`). Then `registry.acknowledge_terminal
 (handle, ExecutionPhase::Released)` immediately (slot cleared, generation
 bumped, free-listed; `acknowledge_terminal` accepts only `Released`); the
-`ExecutionRuntime` is dropped. `ExecutionPhase` = `Open, RootReturned,
+`ExecutionDecodeAccumulator` is dropped. `ExecutionPhase` = `Open, RootReturned,
 Closing, Released` (`Sealed`/`ReleasedIncomplete` removed). `FinalizationState`
 is removed. The nuance of today's `flush_evidence` ("on CCT `Lost`, drop the
 evidence batch", `decoder.rs:1957-1965`) disappears: CCT and evidence of one
@@ -863,7 +863,7 @@ time; `ExecutionSummary.status = Running` means "at bind time".
 ### 7.1 `bex_engine` admission call site (`lib.rs:3560-3610`)
 
 `register_root(RootProfileIntent::UserRoot { runtime_id }, root_thread_ref, program_id)`.
-`install_boundary_id_for_current_call` unchanged. Root `StartThread` record
+`install_boundary_id_for_current_call` unchanged. Root `BexThreadStart` record
 unchanged (parent 0/0).
 
 ### 7.2 Engine activation
@@ -894,16 +894,16 @@ happens once per engine, before any root of that engine can be admitted.
 - `insert_thread(resources, thread_ref, exec, parent: Option<(ThreadRef, CallRef)>, spawn_site, started_ticks, name)`
   (today `decoder.rs:1356`, signature `(resources, thread_ref, boundary,
   spawn_parent: Option<ContextKeyProjection>, spawn_site)`) pushes
-  `ThreadStart`; `EndThread` consumption pushes `ThreadEnd` (ts from the
+  `ThreadStart`; `BexThreadEnd` consumption pushes `ThreadEnd` (ts from the
   record). **New retention**: the decoder keeps `ts_ticks` and `name` of
-  `StartThread`/`StartThreadSpawn` and `ts_ticks` of `EndThread` through its
+  `BexThreadStart`/`BexThreadStartSpawned` and `ts_ticks` of `BexThreadEnd` through its
   pending tables (`insert_pending_thread` `decoder.rs:1522-1557`,
   `insert_pending_thread_end` `:1559-1600`, both of which drop them today).
 - `rollover_if_needed`, `flush_evidence`, and finalization call
   `writer.hand_off` instead of `publisher.publish_*`; the rule "seal and
   include the current CCT epoch whenever evidence is handed off"
   (`flush_evidence`, `decoder.rs:1932-2005`) is preserved.
-- `ExecutionRuntime { generation, root: ThreadRef, runtime_id: BoundaryId, cct: Option<ActiveCctEpoch>, evidence: EvidenceBatch, health: ExecutionHealthSnapshot }`.
+- `ExecutionDecodeAccumulator { generation, root: ThreadRef, runtime_id: BoundaryId, cct: Option<ActiveCctEpoch>, evidence: EvidenceBatch, health: ExecutionHealthSnapshot }`.
 - `DecoderCommand` variants carry `ExecutionHandle` (rename only).
 
 ### 7.4 Registry (`boundary.rs` → `execution.rs`)
