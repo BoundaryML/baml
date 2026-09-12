@@ -545,7 +545,7 @@ fn active_selector() -> Result<ResolvedSelector> {
 
 fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
     let mut dir = env::current_dir()?;
-    let home = env::var_os("HOME").map(PathBuf::from);
+    let home = home_dir();
     loop {
         let candidate = dir.join("baml.toml");
         if candidate.exists() {
@@ -574,14 +574,17 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
 }
 
 fn find_project_manifest(start: &Path) -> Option<PathBuf> {
+    find_project_manifest_in(start, home_dir().as_deref())
+}
+
+fn find_project_manifest_in(start: &Path, home: Option<&Path>) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
-    let home = env::var_os("HOME").map(PathBuf::from);
     loop {
         let candidate = dir.join("baml.toml");
         if candidate.exists() {
             return Some(candidate);
         }
-        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
+        if home.is_some_and(|home| dir == home) || !dir.pop() {
             break;
         }
     }
@@ -721,9 +724,12 @@ fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
 }
 
 fn home_dir() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
+    baml_release::user_home()
+}
+
+/// Own-home `~`, `~/…`, or `~\…`. `~alice` is not expanded.
+fn is_own_home_tilde(raw: &str) -> bool {
+    raw == "~" || raw.starts_with("~/") || raw.starts_with("~\\")
 }
 
 /// Whether a path selector stands on its own, independent of the directory it
@@ -739,7 +745,7 @@ fn is_cwd_independent_with_home(selector: &str, home: Option<&Path>) -> bool {
     if Path::new(selector).is_absolute() {
         return true;
     }
-    (selector == "~" || selector.starts_with("~/")) && home.is_some()
+    is_own_home_tilde(selector) && home.is_some()
 }
 
 fn resolve_selector_path_with_home(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
@@ -803,9 +809,9 @@ fn with_exe_suffix(path: PathBuf) -> PathBuf {
 
 fn join_selector_path(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
     let raw = raw.trim();
-    if raw == "~" || raw.starts_with("~/") {
+    if is_own_home_tilde(raw) {
         if let Some(home) = home {
-            return home.join(raw.trim_start_matches('~').trim_start_matches('/'));
+            return home.join(raw.trim_start_matches('~').trim_start_matches(['/', '\\']));
         }
     }
     let path = PathBuf::from(raw);
@@ -1828,6 +1834,20 @@ mod tests {
         );
     }
 
+    /// Windows users type `~\…`; treating only `~/` as a home prefix leaves
+    /// that selector relative to the declaring directory.
+    #[test]
+    fn windows_tilde_backslash_expands_to_home() {
+        assert_eq!(
+            resolve_selector_path_with_home(
+                r"~\builds\baml-cli",
+                Path::new(TEST_BASE),
+                Some(Path::new(TEST_HOME))
+            ),
+            Path::new(TEST_HOME).join(r"builds\baml-cli")
+        );
+    }
+
     /// `..` is collapsed so the path reads cleanly in `--version`, `status`,
     /// and the config file it gets written to.
     #[test]
@@ -2031,6 +2051,29 @@ mod tests {
             Some(Path::new(TEST_HOME))
         ));
         assert!(!is_cwd_independent_with_home("~/builds/baml-cli", None));
+        assert!(is_cwd_independent_with_home(
+            r"~\builds\baml-cli",
+            Some(Path::new(TEST_HOME))
+        ));
+        assert!(!is_cwd_independent_with_home(r"~\builds\baml-cli", None));
+    }
+
+    /// A `baml.toml` above the home directory must not be treated as the
+    /// project's manifest. Walk-up used to stop only at `$HOME`, so a blank
+    /// or missing `$HOME` on Windows continued to the drive root.
+    #[test]
+    fn find_project_manifest_stops_at_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let nested = home.join("proj").join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(tmp.path().join("baml.toml"), "").unwrap();
+        assert_eq!(find_project_manifest_in(&nested, Some(&home)), None);
+        fs::write(home.join("baml.toml"), "").unwrap();
+        assert_eq!(
+            find_project_manifest_in(&nested, Some(&home)),
+            Some(home.join("baml.toml"))
+        );
     }
 
     /// `~user` is not a form we expand, so it must not be waved through by a
