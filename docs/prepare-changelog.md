@@ -6,7 +6,7 @@ Figure out the latest canary release that went out:
 - `release.json` / `baml-language.cfg`
 - `baml-language-a.b.c` git tags
 
-A canary changelog must cover changes since the previous released language canary. Use explicit lower and upper tags or commit IDs when supplied, including for historical backtests. Otherwise, use the latest released language canary’s `baml-language-a.b.c` tag as `LOWER_REF` and `origin/canary` as `UPPER_REF`. A newer `baml-language-*-nightly.*` tag does not advance the canary lower boundary; include all changes since the previous canary, even if they have already appeared in nightlies. Set both variables to the selected references, then fetch and pin them in a fresh checkout of BoundaryML/baml:
+When explicit lower or upper tags or commit IDs are supplied, use those references. Otherwise, use the latest released canary's `baml-language-a.b.c` tag as `LOWER_REF` and `origin/canary` as `UPPER_REF` - the changelog we prepare is intended to cover all changes introduced between the previous and the new canary release:
 
 ```sh
 git fetch origin --tags
@@ -17,7 +17,7 @@ git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}"
 git log --reverse --format='%H %s' "${LOWER_SHA}..${UPPER_SHA}" -- baml_language/
 ```
 
-The lower bound is excluded and the upper bound is included. Record both commit IDs, the assumed release date, and timezone. Keep the complete inventory with exclusion reasons, and hold the upper bound fixed throughout preparation. For a backtest, preserve the historical post and give the draft a unique slug. Unpublished website drafts must set `isPublished: false`.
+Resolve the references to commit SHAs once, record them, and reuse those fixed SHAs for the inventory, changelog, and follow-up checklist so the release boundary cannot move during preparation.
 
 Then prepare the changelog draft to target the human's goals:
 
@@ -35,7 +35,8 @@ Then prepare the changelog draft to target the human's goals:
 3. Classify each effect exactly once as HEADLINE_CHANGE, FEATURE, BREAKING_CHANGE, or BUGFIX.
    - Headline changes are rare. Use judgment when more than one category seems applicable.
    - Performance improvements are FEATURE, but a refactor alone is not evidence of improved performance.
-4. Review the generated changelog.
+4. Generate and review the changelog.
+   - For the release post, omit `isPublished: false` - we want the PR to be as close to merge as possible. Keep `isPublished: false` in the internal follow-up checklist.
    - Every HEADLINE_CHANGE, FEATURE, or BREAKING_CHANGE involving syntax or a library API must include a code block demonstrating the final API.
    - Every BREAKING_CHANGE must include migration instructions, including changes to behavior, paths, CLI commands, configuration, and generated artifacts. For code migrations, show before and after. State required user action even when an effect is categorized as BUGFIX.
    - For a performance-only FEATURE, include the PR's data analysis instead of a code example. Record the measured revision, workload, build profile, baseline, and measurement scope (for example parser-only, static instruction counts, or end-to-end latency). Verify that the measured implementation remains in the release. Do not use superseded intermediate measurements or neutral/noisy benchmarks as proof of a release-level improvement; qualify results when only a narrower workload was measured.
@@ -135,9 +136,9 @@ In parallel, we should also collect every BAML v1 PR (i.e. all PRs in the specif
   - every GitHub PR opened by an external user which was included in this release
   - every GitHub issue opened by an external user which was fixed (partial or complete) in this release
   - every Discord thread started by an external user which was addressed by this release
-- Prepare a `<version>.todo.md`, in `typescript2/app-website/blog-releases/`, next to the changelog release notes, that includes everything we need to do once we post the changelog and the release goes out. Give this internal checklist YAML frontmatter containing `isPublished: false`, and keep that flag false when publishing the release post so the website never lists or serves the checklist as a blog post.
+- Prepare a `<date>-<version>.todo.md`, in `typescript2/app-website/blog-releases/`, next to the changelog release notes, that includes everything we need to do once we post the changelog and the release goes out. Give this internal checklist YAML frontmatter containing `isPublished: false`, and keep that flag false when publishing the release post so the website never lists or serves the checklist as a blog post.
 
-`[<version>.todo.md]`
+`[<date>-<version>.todo.md]`
 
 # GitHub PR: link
 
@@ -166,4 +167,4 @@ In parallel, we should also collect every BAML v1 PR (i.e. all PRs in the specif
 
 ```
 
-`[/<version>.todo.md]`
+`[/<date>-<version>.todo.md]`
