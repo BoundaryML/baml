@@ -2,5 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
   "framework": "nextjs",
+  "ignoreCommand": "if [ \"$VERCEL_TARGET_ENV\" != \"preview\" ]; then exit 1; fi; npx --yes turbo@2.10.12 query affected --packages app-developer-docs --tasks build --exit-code",
   "installCommand": "pnpm install --frozen-lockfile"
 }
