@@ -1,0 +1,51 @@
+`baml-cli` emits one telemetry event when a command starts, except for `lsp`.
+
+## Event Behavior
+
+- Event name: `baml.engine_cli.command.started`
+- Commands included: all CLI commands except `lsp`
+- Trigger time: command start
+- Delivery: fire-and-forget with a short timeout
+
+Telemetry errors never change command output or exit codes.
+
+## What Is Captured
+
+`baml-cli` captures a minimal event payload:
+
+- command and subcommand names
+- CLI version
+- caller output type and runtime (for example `python`, `typescript`, `ruby`, `go`, `native`)
+- CI presence and CI provider
+- project hash (hashed path only, no raw path)
+- anonymous machine id and per-invocation session id
+- argv length and feature flag count
+- OS platform/arch and tty status
+
+## What Is Not Captured
+
+- raw filesystem paths
+- raw argv values
+- arbitrary environment variable values
+
+## Disable Telemetry
+
+Set `BAML_CLI_DISABLE_TELEMETRY` to a truthy value:
+
+- `1`
+- `true`
+- `yes`
+- `on`
+
+Examples:
+
+```bash
+BAML_CLI_DISABLE_TELEMETRY=1 baml-cli generate
+```
+
+```bash
+export BAML_CLI_DISABLE_TELEMETRY=true
+baml-cli test
+```
+
+Values are case-insensitive and surrounding whitespace is ignored.
