@@ -1,0 +1,64 @@
+[
+  {
+    "id": "8ee335b73679e8",
+    "name": "hello-world-load-1",
+    "state": "started",
+    "region": "iad",
+    "image_ref": {
+      "registry": "registry.fly.io",
+      "repository": "baml-hw-0910-load",
+      "tag": "deployment-01M26KC1M3RJW1271MR1ZVHT3E",
+      "digest": "sha256:f8105e76e8f87d50bb90c769f8bb32b7b51a7216be7b19978aadba77d2c5155f"
+    },
+    "instance_id": "01M26KDQMKBDMZBZFATPRJEPN6",
+    "private_ip": "fdaa:9:11b0:a7b:888:aeee:af78:2",
+    "created_at": "2026-09-10T20:52:33Z",
+    "updated_at": "2026-09-10T21:26:23Z",
+    "config": {
+      "env": {
+        "DURATION_SECONDS": "0"
+      },
+      "init": {
+        "cmd": [
+          "off"
+        ]
+      },
+      "guest": {
+        "cpu_kind": "performance",
+        "cpus": 8,
+        "memory_mb": 16384
+      },
+      "image": "registry.fly.io/baml-hw-0910-load:deployment-01M26KC1M3RJW1271MR1ZVHT3E",
+      "restart": {
+        "policy": "always"
+      },
+      "dns": {},
+      "rootfs": {
+        "persist": "always"
+      }
+    },
+    "events": [
+      {
+        "type": "start",
+        "status": "started",
+        "request": {},
+        "source": "flyd",
+        "timestamp": 1789075583755
+      },
+      {
+        "type": "launch",
+        "status": "created",
+        "source": "user",
+        "timestamp": 1789075578667
+      },
+      {
+        "type": "launch",
+        "status": "pending",
+        "source": "flyd",
+        "timestamp": 1789075578515
+      }
+    ],
+    "host_status": "ok",
+    "cordoned": false
+  }
+]

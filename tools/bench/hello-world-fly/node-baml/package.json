@@ -1,0 +1,15 @@
+{
+  "name": "node-baml",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "express": "5.1.0",
+    "@boundaryml/baml-bridge": "0.18.1-nightly.20260908.a"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2",
+    "@types/node": "20.19.13",
+    "@types/express": "5.0.3"
+  },
+  "type": "module"
+}

@@ -1,0 +1,54 @@
+{
+  "source_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "source_parents": [
+    "a303df192d5138145fc3285bd1ffa4488e93aec3",
+    "aa7a17d56e55631b03a3192ca092f01680278950"
+  ],
+  "platform": "macOS arm64",
+  "node": "20.14.0",
+  "python": "3.10.0",
+  "rate_per_target": 300,
+  "duration_seconds": 902.397,
+  "sample_interval_seconds": 15,
+  "variants": {
+    "node-baseline": {
+      "rss_first_mib": 82.203125,
+      "rss_at_one_minute_mib": 105.4375,
+      "rss_last_mib": 110.03125,
+      "rss_slope_mib_per_minute_after_60s": 0.3110351253,
+      "http_200": 272396
+    },
+    "node-baml": {
+      "rss_first_mib": 174.484375,
+      "rss_at_one_minute_mib": 197.984375,
+      "rss_last_mib": 430.125,
+      "rss_slope_mib_per_minute_after_60s": 16.4621987786,
+      "http_200": 272401
+    },
+    "python-baseline": {
+      "rss_first_mib": 33.4375,
+      "rss_at_one_minute_mib": 33.75,
+      "rss_last_mib": 33.75,
+      "rss_slope_mib_per_minute_after_60s": 0.0,
+      "http_200": 272405
+    },
+    "python-baml": {
+      "rss_first_mib": 92.546875,
+      "rss_at_one_minute_mib": 120.453125,
+      "rss_last_mib": 352.25,
+      "rss_slope_mib_per_minute_after_60s": 16.4510503366,
+      "http_200": 272410
+    },
+    "baml-only": {
+      "rss_first_mib": 58.796875,
+      "rss_at_one_minute_mib": 108.921875,
+      "rss_last_mib": 130.390625,
+      "rss_slope_mib_per_minute_after_60s": 1.2726953707,
+      "http_200": 272413
+    }
+  },
+  "limitations": [
+    "macOS did not enforce a 1 GiB per-process limit, so this run measured growth rather than OOM timing",
+    "Vegeta recorded HTTP status for every request; exact body and headers were checked outside each attack"
+  ]
+}

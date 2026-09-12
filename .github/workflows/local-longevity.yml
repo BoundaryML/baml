@@ -1,0 +1,36 @@
+name: Local longevity harness
+
+on:
+  pull_request:
+    paths:
+      - "tools/bench/hello-world-local/**"
+      - ".github/workflows/local-longevity.yml"
+  push:
+    branches: [canary]
+    paths:
+      - "tools/bench/hello-world-local/**"
+      - ".github/workflows/local-longevity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/bench/hello-world-local
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: python3 scripts/check.py
+      - name: Resolve both stack configurations without starting containers
+        run: |
+          docker compose --env-file .env.example config --quiet
+          docker compose --env-file .env.10rps.example config --quiet

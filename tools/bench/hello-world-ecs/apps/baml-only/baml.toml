@@ -1,0 +1,5 @@
+[package]
+name = "baml-only"
+
+[toolchain]
+version = "0.18.1-nightly.20260908.a"

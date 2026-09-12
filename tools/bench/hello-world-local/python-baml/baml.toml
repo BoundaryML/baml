@@ -1,0 +1,9 @@
+[package]
+name = "python-baml"
+
+# Use ../scripts/baml.sh to invoke the locally built toolchain.
+
+[generator.app]
+output_type = "python/pydantic"
+output_dir = "."
+naming_convention = "preserve-case"

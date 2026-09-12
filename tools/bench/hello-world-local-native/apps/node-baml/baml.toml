@@ -1,0 +1,7 @@
+[package]
+name = "node-baml"
+
+[generator.app]
+output_type = "typescript/node"
+output_dir = "."
+naming_convention = "preserve-case"

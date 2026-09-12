@@ -1,0 +1,7 @@
+[package]
+name = "python-baml"
+
+[generator.app]
+output_type = "python/pydantic"
+output_dir = "."
+naming_convention = "preserve-case"

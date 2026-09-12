@@ -1,0 +1,8 @@
+.build/
+results/
+**/baml_sdk/
+**/.baml/
+**/node_modules/
+**/dist/
+**/__pycache__/
+*.pyc
