@@ -1,0 +1,13 @@
+{
+  "name": "baml-native-node-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@boundaryml/baml-bridge": "file:../../node-bridge",
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}
