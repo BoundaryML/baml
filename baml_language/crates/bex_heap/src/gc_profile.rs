@@ -164,7 +164,7 @@ mod enabled {
             self.released_at = Instant::now();
         }
 
-        pub fn finish(self, stats: &mut GcStats, reason: &'static str) {
+        pub fn finish(self, stats: &mut GcStats, reason: &'static str, heap: &BexHeap) {
             let finished_at = Instant::now();
             let profile = &mut stats.profile;
             profile.park_wait = self.parked_at - self.start;
@@ -174,7 +174,7 @@ mod enabled {
             profile.post_gc = finished_at - self.released_at;
             profile.total = finished_at - self.start;
             tracing::debug!(target: "bex_gc", reason = reason, level = ?stats.level,
-            profile = ?profile, "GC cycle");
+            budget = ?heap.gc_budget(), profile = ?profile, "GC cycle");
         }
     }
 
@@ -254,7 +254,7 @@ mod disabled {
         #[inline]
         pub fn released(&mut self) {}
         #[inline]
-        pub fn finish(self, _: &mut GcStats, _: &'static str) {}
+        pub fn finish(self, _: &mut GcStats, _: &'static str, _: &BexHeap) {}
     }
 
     #[cfg(test)]

@@ -149,6 +149,14 @@ struct RuntimeSchemaOverlay {
     named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
 }
 
+// Release collector arbitration even when a caller drops the checking future.
+struct GcCheckGuard<'a>(&'a AtomicBool);
+impl Drop for GcCheckGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
 ///
 /// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
@@ -3472,7 +3480,7 @@ impl BexEngine {
         // moving them mid-drain.
         self.drain_finalizers().await;
 
-        cycle.finish(&mut stats, reason);
+        cycle.finish(&mut stats, reason, &self.heap);
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,
@@ -5098,9 +5106,8 @@ impl BexEngine {
     /// Run GC if conditions are met (called at safepoints),
     /// or yield if another thread is running GC.
     ///
-    /// Uses the adaptive `should_collect()` policy to choose the appropriate
-    /// collection level (Minor or Major) based on live object counts and
-    /// allocation pressure.
+    /// Allocation spending requests a full collection. Other VMs cooperate
+    /// with both automatic and explicit collections through permit renewal.
     async fn gc_safepoint<T: RootHaver>(
         self: &Arc<Self>,
         mut permit: ActiveHeapPermit<T>,
@@ -5110,14 +5117,17 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
             if let Some(level) = self.heap.should_collect() {
                 let inactive = permit.release();
                 self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
             }
-            self.checking_gc.store(false, Ordering::Release);
-            permit
+            drop(checking);
+            // An explicit collector can request parking even if our policy is
+            // not due. Renew so that it can acquire this permit too.
+            permit.renew().await
         } else {
             // Another thread is checking; park if they've requested it.
             permit.renew().await
@@ -5135,10 +5145,10 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let _checking = GcCheckGuard(&self.checking_gc);
             if let Some(level) = self.heap.should_collect() {
                 self.collect_garbage_with_reason(level, "automatic").await;
             }
-            self.checking_gc.store(false, Ordering::Release);
         }
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
@@ -5997,6 +6007,9 @@ impl BexEngine {
                 copy_objects,
             )
             .await;
+        // The outcome is now externally rooted (or the child future is settled),
+        // and the VM has released its permit. Short calls must service pressure too.
+        Box::pin(self.maybe_collect_garbage()).await;
         if profile_thread {
             let status = match &result {
                 Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {
@@ -6140,7 +6153,7 @@ impl BexEngine {
                         self.capture_root_value(&thread, capture, value);
                     }
 
-                    let (return_value, _event_result) = if !copy_objects {
+                    let return_value = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
                             // SAFETY: the active thread holds the heap permit
                             // through `thread.proof()`.
@@ -6154,19 +6167,15 @@ impl BexEngine {
                             // (e.g. Union wrapping) is preserved; the bare
                             // unboxing fast-path stripped that.
                             if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                let external = self.convert_vm_value_to_external_with_type(
+                                self.convert_vm_value_to_external_with_type(
                                     value,
                                     &return_type,
                                     &thread.vm,
                                     thread.proof(),
-                                )?;
-                                (external.clone(), external)
+                                )?
                             } else {
                                 let handle = self.heap.create_handle(ptr);
-                                (
-                                    BexExternalValue::Handle(handle),
-                                    self.vm_value_to_owned(thread.proof(), value),
-                                )
+                                BexExternalValue::Handle(handle)
                             }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
@@ -6175,11 +6184,10 @@ impl BexEngine {
                                 &thread.vm,
                                 thread.proof(),
                             )?;
-                            let external = crate::conversion::coerce_return_to_declared_type(
+                            crate::conversion::coerce_return_to_declared_type(
                                 external,
                                 &return_type,
-                            )?;
-                            (external.clone(), external)
+                            )?
                         }
                     } else {
                         let external = self.convert_vm_value_to_external_with_type(
@@ -6188,11 +6196,7 @@ impl BexEngine {
                             &thread.vm,
                             thread.proof(),
                         )?;
-                        let external = crate::conversion::coerce_return_to_declared_type(
-                            external,
-                            &return_type,
-                        )?;
-                        (external.clone(), external)
+                        crate::conversion::coerce_return_to_declared_type(external, &return_type)?
                     };
 
                     return Ok(ThreadOutcome::RootValue(return_value));
@@ -7659,6 +7663,62 @@ mod concurrent_tests {
         );
 
         drop(active_permit);
+    }
+
+    #[tokio::test]
+    async fn cancelling_automatic_collection_releases_checker_ownership() {
+        use std::{
+            sync::{Arc, atomic::Ordering},
+            time::Duration,
+        };
+
+        use sys_native::SysOpsExt;
+
+        use super::BexEngine;
+
+        let engine = Arc::new(
+            BexEngine::new(
+                baml_db::testing::compile_source("function Main() -> int { 1 }"),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+            )
+            .unwrap(),
+        );
+        let active = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        // Keep a permit active so automatic GC waits after claiming the checker.
+        let mut tlab = bex_heap::Tlab::new_empty(engine.heap.clone());
+        while !engine.heap.should_gc() {
+            tlab.alloc_string("inline");
+        }
+        drop(tlab);
+        let checking_engine = engine.clone();
+        let task = tokio::spawn(async move {
+            checking_engine.maybe_collect_garbage().await;
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !engine.checking_gc.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!task.is_finished());
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(!engine.checking_gc.load(Ordering::Acquire));
+        assert!(engine.heap.should_gc());
+        drop(active);
+        tokio::time::timeout(Duration::from_secs(5), engine.maybe_collect_garbage())
+            .await
+            .unwrap();
+        assert!(!engine.heap.should_gc());
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        engine.shutdown().await;
     }
 
     /// Test that demonstrates concurrent `call_function` is safe.

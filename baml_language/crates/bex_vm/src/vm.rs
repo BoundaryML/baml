@@ -1905,6 +1905,9 @@ impl BexVm {
             park_requested,
         );
 
+        let early_yield =
+            early_yield.with_gc_pressure(heap.gc_pressure(), bex_heap::gc_policy::POLL_INTERVAL);
+
         Self {
             frames: Vec::new(),
             stack: EvalStack::new(),

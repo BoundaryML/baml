@@ -1294,32 +1294,38 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         owner: package_ptr,
     })));
 
-    // Root only the interface across two moves and a compaction.
-    let (_, roots, _) =
-        unsafe { heap.collect_garbage_generational(&[iface_ptr], CollectionLevel::Minor) };
-    let (_, roots, _) =
-        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-    let (stats, roots, _) =
-        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
-
-    assert_eq!(
-        stats.live_count, 3,
-        "interface, owner package and default body must all survive"
-    );
+    // Check each forwarding step. A later allocation may reuse the original
+    // address after its source chunk was freed; comparing against that stale
+    // address after three collections is not a valid movement assertion.
+    let mut roots = vec![iface_ptr];
+    let mut expected_body = body_ptr;
+    let mut expected_owner = package_ptr;
+    for level in [
+        CollectionLevel::Minor,
+        CollectionLevel::Minor,
+        CollectionLevel::Major,
+    ] {
+        let (stats, next_roots, forwarding) =
+            unsafe { heap.collect_garbage_generational(&roots, level) };
+        assert_eq!(stats.live_count, 3);
+        let next_body = forwarding[&expected_body];
+        let next_owner = forwarding[&expected_owner];
+        assert_ne!(next_body, expected_body);
+        assert_ne!(next_owner, expected_owner);
+        expected_body = next_body;
+        expected_owner = next_owner;
+        roots = next_roots;
+    }
     let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
         panic!("root was not the interface")
     };
-    assert_ne!(
-        iface.owner, package_ptr,
-        "package moved; owner must be repointed"
-    );
+    assert_eq!(iface.owner, expected_owner);
     assert!(matches!(unsafe { iface.owner.get() }, Object::Package(_)));
-    let bound = iface.methods[0].default_fn;
-    assert_ne!(
-        bound, body_ptr,
-        "default body moved; default_fn must be repointed"
-    );
-    assert!(matches!(unsafe { bound.get() }, Object::String(_)));
+    assert_eq!(iface.methods[0].default_fn, expected_body);
+    let Object::String(body) = (unsafe { expected_body.get() }) else {
+        panic!("body was not forwarded")
+    };
+    assert_eq!(body.as_str(), "default body");
 }
 
 /// A runtime-declared alias back-references its owning package; the collector
