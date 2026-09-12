@@ -44,7 +44,7 @@ use crate::prof::{
     wake::Wake,
 };
 
-/// OSThreadMarkerRing lifecycle states (design D5b).
+/// `OSThreadMarkerRing` lifecycle states (design D5b).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum RingState {

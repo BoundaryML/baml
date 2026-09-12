@@ -780,7 +780,7 @@ mod stress {
             // SAFETY: same single consumer.
             unsafe {
                 reg.sweep(&mut |_: &'static OSThreadMarkerRing, b: &[u8]| {
-                    collect_seqs(b, &mut seen)
+                    collect_seqs(b, &mut seen);
                 })
             };
             sweeps += 1;
