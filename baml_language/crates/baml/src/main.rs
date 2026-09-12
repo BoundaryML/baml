@@ -119,7 +119,7 @@ Usage:
 Commands:
   use <canary|nightly|version|path>  Install if needed and select as default
   pin <canary|nightly|version|path>  Select in the nearest baml.toml
-  install <canary|nightly|version>   Download without selecting
+  install [canary|nightly|version]   Download without selecting
   update                             Advance the active channel
   status                             Check latest remote version without installing
   list                               Show installed toolchains, local only
@@ -142,6 +142,18 @@ Network behavior:
 
 Wrapper updates:
   baml self-update                   Update curl-installed wrapper only
+"#;
+
+const TOOLCHAIN_INSTALL_HELP: &str = r#"Install a BAML toolchain without selecting it as the global default
+
+Usage:
+  baml toolchain install [canary|nightly|version] [--force]
+
+When the selector is omitted, install uses the toolchain pin from the nearest
+baml.toml, or canary if the project does not specify one.
+
+Options:
+  --force  Reinstall the toolchain if it is already installed
 "#;
 
 const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
@@ -352,13 +364,7 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             print!("{TOOLCHAIN_HELP}");
             Ok(())
         }
-        Some("install") => {
-            let selector = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain install <canary|nightly|version>"))?;
-            let force = args.iter().any(|arg| arg == "--force");
-            install_toolchain(selector, false, manifest_base_url.as_deref(), force)
-        }
+        Some("install") => install_toolchain_command(&args[1..], manifest_base_url.as_deref()),
         Some("use") => {
             let selector = args.get(1).ok_or_else(|| {
                 anyhow!("usage: baml toolchain use <canary|nightly|version|path>")
@@ -393,6 +399,40 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             "unknown toolchain command {other:?}\n\n{TOOLCHAIN_HELP}"
         )),
     }
+}
+
+fn install_toolchain_command(args: &[String], manifest_base_url: Option<&str>) -> Result<()> {
+    if args.iter().any(|arg| is_help_arg(arg)) {
+        print!("{TOOLCHAIN_INSTALL_HELP}");
+        return Ok(());
+    }
+
+    let mut selector = None;
+    let mut force = false;
+    for arg in args {
+        if arg == "--force" {
+            force = true;
+        } else if arg.starts_with('-') {
+            return Err(anyhow!(
+                "unknown option {arg:?}\n\n{TOOLCHAIN_INSTALL_HELP}"
+            ));
+        } else if selector.replace(arg.as_str()).is_some() {
+            return Err(anyhow!(
+                "unexpected argument {arg:?}\n\n{TOOLCHAIN_INSTALL_HELP}"
+            ));
+        }
+    }
+
+    let (selector, activate_channel) = match selector {
+        Some(selector) => (selector.to_string(), false),
+        None => (
+            project_toolchain_selector()?
+                .map(|(_, selector)| selector)
+                .unwrap_or_else(|| "canary".to_string()),
+            true,
+        ),
+    };
+    install_toolchain(&selector, activate_channel, manifest_base_url, force)
 }
 
 fn is_help_arg(arg: &str) -> bool {
