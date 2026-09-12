@@ -229,6 +229,8 @@ pub struct BexHeap {
     tlab_size: usize,
     pub(crate) max_tlab_size: usize,
     pub(crate) gc_policy: crate::gc_policy::AllocationBudget,
+    root_release_epoch: AtomicUsize,
+    gc_activity: Arc<tokio::sync::Notify>,
 
     /// Lock for growing Gen0 (rare operation).
     ///
@@ -279,6 +281,9 @@ impl WeakHeapRef for BexHeap {
         if by_ptr.get(&ptr).is_some_and(|(key, _)| *key == handle_key) {
             by_ptr.remove(&ptr);
         }
+        drop(by_ptr);
+        drop(handles);
+        self.notify_root_released();
     }
 
     fn resolve_handle_ptr(&self, slab_key: usize) -> Option<HeapPtr> {
@@ -356,6 +361,8 @@ impl BexHeap {
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
+            root_release_epoch: AtomicUsize::new(0),
+            gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
@@ -838,6 +845,24 @@ impl BexHeap {
             }
         }
         None
+    }
+
+    /// Monotonic change token for GC roots disappearing, including after
+    /// the last engine call. No heap permit is required to read this token.
+    pub fn root_release_epoch(&self) -> usize {
+        self.root_release_epoch.load(Ordering::Acquire)
+    }
+
+    /// Record a removed root and wake idle cleanup, including when no work ends.
+    /// Call after removing the root; registry callers must still hold their heap permit.
+    pub fn notify_root_released(&self) {
+        self.root_release_epoch.fetch_add(1, Ordering::Release);
+        self.gc_activity.notify_one();
+    }
+
+    /// Dedicated wake signal for the engine's single idle-GC coordinator.
+    pub fn gc_activity(&self) -> Arc<tokio::sync::Notify> {
+        Arc::clone(&self.gc_activity)
     }
 
     /// Get the TLAB chunk size.

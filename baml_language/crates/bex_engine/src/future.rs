@@ -107,7 +107,7 @@ impl FutureManager {
         }
     }
 
-    /// Number of `Pending` futures currently tracked.
+    /// Number of tracked registry entries, including retained engine errors.
     ///
     /// Takes a one-shot heap permit internally so external diagnostic callers
     /// (notably tests) don't need to construct a `PermitProof` themselves.
@@ -158,7 +158,7 @@ pub struct FutureManagerGuard<'a> {
 }
 
 impl FutureManagerGuard<'_> {
-    /// Number of `Pending` futures currently tracked by the manager.
+    /// Number of tracked registry entries, including retained engine errors.
     pub fn active_future_count(&self) -> usize {
         self.holder().active_future_count()
     }
@@ -186,17 +186,14 @@ impl FutureManagerGuard<'_> {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = FutureId::from_usize(id);
 
+        let work_guard = inner.bex_work.register_work();
         let ptr = inner
             .tlab
             .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
-        inner.active_futures.insert(
-            id,
-            FutureState {
-                future: ptr,
-                origin,
-            },
-        );
+        inner
+            .active_futures
+            .insert(id, FutureWork::new(work_guard, ptr, origin));
         (id, ptr)
     }
 
@@ -267,21 +264,23 @@ impl FutureManagerGuard<'_> {
     /// `Future` (and its `SetOnce`-with-error) so a later `Await` resumes
     /// against the same heap object and the engine can surface the original
     /// `EngineError` to the host. Internal errors are by-construction bugs;
-    /// the leak buys us never losing the error.
+    /// the leak buys us never losing the error. Once settled, the retained
+    /// entry releases its work guard so it cannot keep the engine busy.
     pub fn internal_error_future(
         &mut self,
         id: FutureId,
         err: EngineError,
     ) -> Result<(), EngineError> {
         let entry = self
-            .holder()
+            .holder_mut()
             .active_futures
-            .get(&id)
+            .get_mut(&id)
             .ok_or(EngineError::FutureNotFound { future_id: id })?;
         // SAFETY: caller holds the heap permit via `self.proof`.
         let fut = unsafe { entry.future_ref() }?;
         let observed = FutureType::of(fut);
         if !matches!(fut.read(), FutureRead::Pending(_)) {
+            entry.finish_work();
             debug_assert!(
                 false,
                 "internal_error_future called on non-Pending future {id:?} \
@@ -300,7 +299,7 @@ impl FutureManagerGuard<'_> {
         //
         // The CAS can lose if a concurrent `f.cancel()` (or, in the future,
         // any other non-FutureManager writer) transitioned `Pending` →
-        // `Cancelled` between the pre-check on line 209 and this call. In
+        // `Cancelled` between the pre-check and this call. In
         // that case the user-initiated cancellation already represents an
         // intentional terminal state and the awaiter will see `Cancelled`
         // — the engine error is dropped on the floor. We log it instead of
@@ -316,6 +315,7 @@ impl FutureManagerGuard<'_> {
                  transition (likely f.cancel()); engine error discarded"
             );
         }
+        entry.finish_work();
         Ok(())
     }
 
@@ -333,7 +333,7 @@ impl FutureManagerGuard<'_> {
     /// retained so a later `Await` resumes against the same heap object and
     /// surfaces the original [`EngineError`] instead of parking forever.
     pub fn settle_spawn_engine_error(&mut self, id: FutureId, err: EngineError) {
-        let Some(entry) = self.holder().active_futures.get(&id) else {
+        let Some(entry) = self.holder_mut().active_futures.get_mut(&id) else {
             tracing::error!(
                 ?id,
                 ?err,
@@ -361,6 +361,7 @@ impl FutureManagerGuard<'_> {
         // that state is the one the awaiter observes, and it is already a
         // wake-up — no parked parent is left behind either way.
         let _ = fut.settle_internal_error(Box::new(err));
+        entry.finish_work();
     }
 
     /// Remove and return the heap `Future` for `id` if it's still
@@ -391,7 +392,7 @@ impl FutureManagerGuard<'_> {
         if already_settled {
             // Heap state moved on without us — drop the bookkeeping entry
             // and return None so the caller treats this as a no-op.
-            let _ = self.holder_mut().active_futures.remove(&id);
+            let _ = self.holder_mut().remove_future(id);
             return Ok(None);
         }
         // Phase 2: still Pending. Remove and return the heap Future ref.
@@ -399,8 +400,7 @@ impl FutureManagerGuard<'_> {
         // (typically `BexThread.settles_future` or the awaiter's stack).
         let entry = self
             .holder_mut()
-            .active_futures
-            .remove(&id)
+            .remove_future(id)
             .expect("entry was present in phase 1 and we hold the `FutureManager` Mutex");
         let self_ptr = entry.future;
         // SAFETY: heap permit witnessed by `self.proof`. The returned ref
@@ -519,7 +519,7 @@ impl FutureManagerGuard<'_> {
             })
             .collect();
         for id in settled {
-            self.holder_mut().active_futures.remove(&id);
+            self.holder_mut().remove_future(id);
         }
         self.holder()
             .active_futures
@@ -562,20 +562,34 @@ impl HeapPermit<FutureManagerInner> for FutureManagerGuard<'_> {
 pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
-    active_futures: HashMap<FutureId, FutureState>,
+    active_futures: HashMap<FutureId, FutureWork>,
+    // Mandatory bookkeeping on both targets. Only the native build contains
+    // the background worker; WASM consumes the state at call entry.
+    bex_work: Arc<crate::bex_work::BexWork>,
 }
 impl FutureManagerInner {
-    pub fn new(tlab: Tlab) -> Self {
+    pub(crate) fn new(tlab: Tlab, bex_work: Arc<crate::bex_work::BexWork>) -> Self {
         Self {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
+            bex_work,
         }
     }
 
-    /// Number of `Pending` futures currently tracked by the manager. This is
-    /// the same as the number of futures whose heap object is in
-    /// `Future::Pending(_)`. Intended for tests and telemetry.
+    fn remove_future(&mut self, id: FutureId) -> Option<FutureWork> {
+        let entry = self.active_futures.remove(&id)?;
+        // Pending entries notify through their work guard on drop. Retained
+        // settled entries already released it, so root removal needs its own
+        // notification even if the producer ended and GC ran long ago.
+        if entry.work_guard.is_none() {
+            self.tlab.heap().notify_root_released();
+        }
+        Some(entry)
+    }
+
+    /// Number of tracked registry entries, including retained engine errors.
+    /// Intended for tests and telemetry; this is not a count of only pending futures.
     pub fn active_future_count(&self) -> usize {
         self.active_futures.len()
     }
@@ -607,7 +621,11 @@ impl TlabHolder for FutureManagerInner {
     }
 }
 
-struct FutureState {
+/// Roots a registered future; counts its work until settlement or removal.
+struct FutureWork {
+    // Every new entry starts with a guard. A retained settled entry releases
+    // it without losing its GC root or the original error for later awaiters.
+    work_guard: Option<crate::bex_work::BexWorkGuard>,
     /// Heap pointer to the `Object::Future`. Rooted via `RootHaver` so
     /// the heap object survives even when no awaiter / producer stack
     /// holds it directly (fire-and-forget spawn before the producer task
@@ -620,7 +638,23 @@ struct FutureState {
     /// hot-loop budget.
     origin: std::sync::Arc<str>,
 }
-impl FutureState {
+impl FutureWork {
+    fn new(
+        work_guard: crate::bex_work::BexWorkGuard,
+        future: HeapPtr,
+        origin: std::sync::Arc<str>,
+    ) -> Self {
+        Self {
+            work_guard: Some(work_guard),
+            future,
+            origin,
+        }
+    }
+
+    fn finish_work(&mut self) {
+        drop(self.work_guard.take());
+    }
+
     /// Returns an immutable reference to the heap-allocated `Future`.
     ///
     /// The [`bex_vm_types::Future`] uses interior mutability (`AtomicU8` +
@@ -643,7 +677,7 @@ impl FutureState {
         }
     }
 }
-impl RootHaver for FutureState {
+impl RootHaver for FutureWork {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.future);
     }
@@ -669,7 +703,10 @@ mod tests {
         let heap = BexHeap::new(Vec::new());
         let permit_manager = Arc::new(HeapPermitManager::new());
         let permit = permit_manager
-            .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap))))
+            .new_permit(FutureManagerInner::new(
+                Tlab::new_empty(Arc::clone(&heap)),
+                crate::bex_work::BexWork::new(&heap),
+            ))
             .await;
         (FutureManager::new(permit), permit_manager)
     }

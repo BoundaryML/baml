@@ -69,7 +69,7 @@ async fn call(engine: &Arc<BexEngine>, name: &str, args: Vec<Ext>, copy: bool) -
 }
 
 #[tokio::test]
-async fn short_calls_service_pressure_after_export() {
+async fn short_calls_service_pressure_on_next_entry() {
     let engine = engine();
     for n in 0..30_000 {
         let result = call(&engine, "Tiny", vec![Ext::Int(n)], true).await;
@@ -77,7 +77,6 @@ async fn short_calls_service_pressure_after_export() {
             panic!("expected copied instance")
         };
         assert_eq!(fields["value"], Ext::Int(n));
-        assert!(engine.heap().should_collect().is_none());
     }
     assert!(engine.heap().gc_budget().full_collections >= 1);
     engine.shutdown().await;
@@ -245,5 +244,33 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
         Ext::Int(2_100_000 * 2_099_999 / 2)
     );
     assert!(engine.heap().gc_budget().full_collections > before);
+    engine.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_handle() {
+    let engine = engine();
+    let mut n = 0;
+    let retained = loop {
+        let value = call(&engine, "Tiny", vec![Ext::Int(n)], false).await;
+        if engine.heap().should_gc() {
+            break value;
+        }
+        n += 1;
+        assert!(
+            n < 30_000,
+            "short-call reservations must eventually exhaust the budget"
+        );
+    };
+    assert_eq!(engine.heap().gc_budget().full_collections, 0);
+    assert!(
+        engine.heap().should_gc(),
+        "completion must leave debt unpaid"
+    );
+    assert_eq!(
+        call(&engine, "Read", vec![retained], true).await,
+        Ext::Int(n)
+    );
+    assert_eq!(engine.heap().gc_budget().full_collections, 1);
     engine.shutdown().await;
 }
