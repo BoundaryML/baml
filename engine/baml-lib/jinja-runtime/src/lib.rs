@@ -692,7 +692,7 @@ mod render_tests {
 
     use std::sync::Once;
 
-    use baml_types::{BamlMap, BamlMediaType};
+    use baml_types::{BamlMap, BamlMediaType, TypeIR};
     use indexmap::IndexMap;
 
     use super::*;
@@ -1103,6 +1103,64 @@ mod render_tests {
     }
 
     #[test]
+    fn render_output_format_as_xml() -> anyhow::Result<()> {
+        setup_logging();
+
+        let ir = make_test_ir(
+            "
+            class Person {
+              name string
+            }
+            ",
+        )?;
+        let output_format = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![types::Class {
+                name: types::Name::new("Person".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(
+                    types::Name::new("name".to_string()),
+                    TypeIR::string(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(format='xml') }}",
+            &BamlValue::Map(BamlMap::new()),
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format,
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                "Answer in XML using this structure:\n<Person>\n  <name>string</name>\n</Person>"
+                    .to_string()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
@@ -1162,7 +1220,7 @@ mod render_tests {
         )?;
 
         let rendered = render_prompt(
-            "{{ ctx.output_format(prefix=null) }}",
+            "{{ ctx.output_format(prefix=null, format=none) }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
