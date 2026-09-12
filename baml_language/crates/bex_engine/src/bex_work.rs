@@ -1,5 +1,6 @@
-//! Opportunistic cleanup after work stops. Scheduling state contains no heap
-//! pointers and can be inspected without a heap permit. Moving GC cannot.
+//! Engine work registration, handle-release observation, and opportunistic GC.
+//! Scheduling state contains no heap pointers and can be inspected without a
+//! heap permit. Moving GC cannot.
 use std::sync::{Arc, Mutex, Weak};
 
 use bex_heap::{BexHeap, CollectionLevel};
@@ -66,36 +67,37 @@ struct State {
     worker: Option<tokio::task::JoinHandle<()>>,
 }
 
-pub(crate) struct IdleGc {
+/// Per-engine work tracking and idle-collection scheduling.
+pub(crate) struct BexWork {
     state: Mutex<State>,
     heap: Weak<BexHeap>,
     wake: Arc<Notify>,
 }
 
 /// Owned by each root call, registered future, and spawned task until it ends.
-/// Future and task permits deliberately overlap: cancellation can settle the
+/// Future and task guards deliberately overlap: cancellation can settle the
 /// future while its producer is still unwinding or waiting for admission.
 /// This prevents idle cleanup; heap access still requires a heap permit.
-#[must_use = "work must own its permit until its entire lifecycle ends"]
-pub(crate) struct WorkPermit {
-    idle: Arc<IdleGc>,
+#[must_use = "work must own its guard until its entire lifecycle ends"]
+pub(crate) struct BexWorkGuard {
+    bex_work: Arc<BexWork>,
     idle_due_on_entry: bool,
 }
 
-impl Drop for WorkPermit {
+impl Drop for BexWorkGuard {
     fn drop(&mut self) {
-        let mut s = self.idle.lock();
+        let mut s = self.bex_work.lock();
         s.work -= 1;
         s.revision = s.revision.wrapping_add(1);
         if s.work == 0 && s.scheduling.is_running() {
             s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
         }
         drop(s);
-        self.idle.wake.notify_one();
+        self.bex_work.wake.notify_one();
     }
 }
 
-impl IdleGc {
+impl BexWork {
     pub(crate) fn new(heap: &Arc<BexHeap>) -> Arc<Self> {
         Arc::new(Self {
             state: Mutex::new(State {
@@ -149,7 +151,8 @@ impl IdleGc {
         }
     }
 
-    pub(crate) fn acquire_work_permit(self: &Arc<Self>) -> WorkPermit {
+    /// Registers work until the returned guard drops.
+    pub(crate) fn register_work(self: &Arc<Self>) -> BexWorkGuard {
         let mut s = self.lock();
         self.refresh(&mut s);
         let idle_due_on_entry = s.work == 0
@@ -159,8 +162,8 @@ impl IdleGc {
         s.scheduling.disarm();
         drop(s);
         self.wake.notify_one();
-        WorkPermit {
-            idle: Arc::clone(self),
+        BexWorkGuard {
+            bex_work: Arc::clone(self),
             idle_due_on_entry,
         }
     }
@@ -278,7 +281,7 @@ impl IdleGc {
 impl BexEngine {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn ensure_idle_gc_worker(self: &Arc<Self>) {
-        let mut s = self.idle_gc.lock();
+        let mut s = self.bex_work.lock();
         if s.scheduling == Scheduling::Closed
             || s.worker
                 .as_ref()
@@ -291,10 +294,10 @@ impl BexEngine {
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return;
         };
-        s.worker = Some(runtime.spawn(Arc::clone(&self.idle_gc).run(Arc::downgrade(self))));
+        s.worker = Some(runtime.spawn(Arc::clone(&self.bex_work).run(Arc::downgrade(self))));
     }
 
-    pub(crate) async fn collect_before_call(self: &Arc<Self>, work: &WorkPermit) {
+    pub(crate) async fn collect_before_call(self: &Arc<Self>, work: &BexWorkGuard) {
         let idle_due = cfg!(target_arch = "wasm32") && work.idle_due_on_entry;
         if !idle_due && !self.heap.should_gc() {
             return;
@@ -328,10 +331,10 @@ impl BexEngine {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn try_idle_gc(self: &Arc<Self>) {
-        let changed = self.idle_gc.wake.notified();
+        let changed = self.bex_work.wake.notified();
         tokio::pin!(changed);
         changed.as_mut().enable();
-        if !self.idle_gc.due()
+        if !self.bex_work.due()
             || self
                 .checking_gc
                 .compare_exchange(
@@ -356,9 +359,9 @@ impl BexEngine {
                 guard
             }
         };
-        // Admission updates the same lifecycle state before obtaining a permit.
+        // Admission updates the same lifecycle state before obtaining a heap permit.
         // Once this check succeeds, a later caller can wait for this collection.
-        if !self.idle_gc.due() {
+        if !self.bex_work.due() {
             return;
         }
         self.collect_garbage_parked(CollectionLevel::Major, "idle", guard, cycle)
@@ -426,53 +429,53 @@ mod tests {
         settle().await;
     }
 
-    struct WorkDropProbe(Arc<IdleGc>);
+    struct WorkDropProbe(Arc<BexWork>);
 
     impl Drop for WorkDropProbe {
         fn drop(&mut self) {
             assert_eq!(
                 self.0.lock().work,
                 1,
-                "task cleanup must still own its permit"
+                "task cleanup must still own its work guard"
             );
         }
     }
 
     #[tokio::test(start_paused = true)]
-    async fn spawned_work_owns_permit_before_poll_and_through_cancellation() {
+    async fn spawned_work_owns_guard_before_poll_and_through_cancellation() {
         let heap = BexHeap::new(vec![]);
-        let idle = IdleGc::new(&heap);
+        let bex_work = BexWork::new(&heap);
         for poll_first in [false, true] {
-            let probe = WorkDropProbe(Arc::clone(&idle));
-            let work = crate::SpawnedWork::new(idle.acquire_work_permit(), async move {
+            let probe = WorkDropProbe(Arc::clone(&bex_work));
+            let work = crate::SpawnedWork::new(bex_work.register_work(), async move {
                 let _probe = probe;
                 std::future::pending::<()>().await;
             });
             let mut task = Box::pin(work.run());
-            assert_eq!(idle.lock().work, 1);
+            assert_eq!(bex_work.lock().work, 1);
             if poll_first {
                 assert!(futures::poll!(task.as_mut()).is_pending());
             }
             drop(task);
-            assert_eq!(idle.lock().work, 0);
-            assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+            assert_eq!(bex_work.lock().work, 0);
+            assert!(matches!(bex_work.lock().scheduling, Scheduling::Waiting(_)));
         }
     }
 
     #[tokio::test(start_paused = true)]
-    async fn spawned_work_releases_permit_after_success_or_error_cleanup() {
+    async fn spawned_work_releases_guard_after_success_or_error_cleanup() {
         let heap = BexHeap::new(vec![]);
-        let idle = IdleGc::new(&heap);
+        let bex_work = BexWork::new(&heap);
         for outcome in [Ok(()), Err(())] {
-            let probe = WorkDropProbe(Arc::clone(&idle));
-            let work = crate::SpawnedWork::new(idle.acquire_work_permit(), async move {
+            let probe = WorkDropProbe(Arc::clone(&bex_work));
+            let work = crate::SpawnedWork::new(bex_work.register_work(), async move {
                 let _probe = probe;
                 outcome?;
                 Ok(())
             });
             assert_eq!(work.run().await, outcome);
-            assert_eq!(idle.lock().work, 0);
-            assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+            assert_eq!(bex_work.lock().work, 0);
+            assert!(matches!(bex_work.lock().scheduling, Scheduling::Waiting(_)));
         }
     }
 
@@ -480,16 +483,16 @@ mod tests {
     async fn burst_uses_one_worker_and_handle_release_rearms_cleanup() {
         let engine = engine();
         let kept = tiny(&engine).await;
-        let worker = engine.idle_gc.lock().worker.as_ref().unwrap().id();
+        let worker = engine.bex_work.lock().worker.as_ref().unwrap().id();
         for _ in 0..20 {
             drop(tiny(&engine).await);
-            assert_eq!(engine.idle_gc.lock().worker.as_ref().unwrap().id(), worker);
+            assert_eq!(engine.bex_work.lock().worker.as_ref().unwrap().id(), worker);
         }
         advance(IDLE_DELAY / 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 0);
         advance(IDLE_DELAY / 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
-        assert_eq!(engine.idle_gc.lock().scheduling, Scheduling::Disarmed);
+        assert_eq!(engine.bex_work.lock().scheduling, Scheduling::Disarmed);
         assert_eq!(engine.heap.stats().active_handles, 1);
         advance(IDLE_DELAY * 10).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
@@ -499,9 +502,9 @@ mod tests {
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 2);
         assert_eq!(engine.heap.stats().active_handles, 0);
-        assert_eq!(engine.idle_gc.lock().scheduling, Scheduling::Disarmed);
+        assert_eq!(engine.bex_work.lock().scheduling, Scheduling::Disarmed);
         engine.shutdown().await;
-        assert!(engine.idle_gc.lock().worker.is_none());
+        assert!(engine.bex_work.lock().worker.is_none());
     }
 
     #[tokio::test(start_paused = true)]
@@ -562,7 +565,7 @@ mod tests {
                 .checking_gc
                 .load(std::sync::atomic::Ordering::Acquire)
         );
-        let work = engine.idle_gc.acquire_work_permit();
+        let work = engine.bex_work.register_work();
         settle().await;
         assert!(
             !engine
@@ -583,7 +586,7 @@ mod tests {
         let engine = engine();
         drop(tiny(&engine).await);
         for outcome in 0..3 {
-            let producer = engine.idle_gc.acquire_work_permit();
+            let producer = engine.bex_work.register_work();
             let permit = engine
                 .heap_permit_manager
                 .new_permit(())
@@ -643,11 +646,11 @@ mod tests {
             .await
             .unwrap();
         settle().await;
-        assert!(engine.idle_gc.lock().work > 0);
+        assert!(engine.bex_work.lock().work > 0);
         advance(IDLE_DELAY * 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 0);
         advance(std::time::Duration::from_secs(1)).await;
-        assert_eq!(engine.idle_gc.lock().work, 0);
+        assert_eq!(engine.bex_work.lock().work, 0);
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
         engine.shutdown().await;
@@ -660,9 +663,9 @@ mod tests {
         engine.collect_garbage(CollectionLevel::Major).await;
         advance(IDLE_DELAY * 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
-        let collected = engine.idle_gc.cleanup_version();
+        let collected = engine.bex_work.cleanup_version();
         drop(kept);
-        engine.idle_gc.collected(collected);
+        engine.bex_work.collected(collected);
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 2);
         engine.shutdown().await;
@@ -672,7 +675,7 @@ mod tests {
     async fn cancelled_shutdown_resumes_worker_and_engine_drop_stops_it() {
         let engine = engine();
         drop(tiny(&engine).await);
-        let worker = engine.idle_gc.lock().worker.as_ref().unwrap().id();
+        let worker = engine.bex_work.lock().worker.as_ref().unwrap().id();
         // Exercise the same RAII transition as cancellation of shutdown().
         let shutdown = engine.begin_shutdown().await.unwrap();
         advance(IDLE_DELAY * 2).await;
@@ -680,8 +683,8 @@ mod tests {
         drop(shutdown);
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
-        assert_eq!(engine.idle_gc.lock().worker.as_ref().unwrap().id(), worker);
-        let idle = Arc::clone(&engine.idle_gc);
+        assert_eq!(engine.bex_work.lock().worker.as_ref().unwrap().id(), worker);
+        let bex_work = Arc::clone(&engine.bex_work);
         let weak = Arc::downgrade(&engine);
         drop(engine);
         settle().await;
@@ -689,49 +692,49 @@ mod tests {
             weak.upgrade().is_none(),
             "sleeping worker must not own engine"
         );
-        assert_eq!(idle.lock().scheduling, Scheduling::Closed);
-        assert!(idle.lock().worker.as_ref().unwrap().is_finished());
+        assert_eq!(bex_work.lock().scheduling, Scheduling::Closed);
+        assert!(bex_work.lock().worker.as_ref().unwrap().is_finished());
     }
 
     #[tokio::test(start_paused = true)]
     async fn completion_and_collection_cannot_rearm_suspended_or_closed_cleanup() {
         let heap = BexHeap::new(vec![]);
-        let idle = IdleGc::new(&heap);
-        drop(idle.acquire_work_permit());
-        assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+        let bex_work = BexWork::new(&heap);
+        drop(bex_work.register_work());
+        assert!(matches!(bex_work.lock().scheduling, Scheduling::Waiting(_)));
 
-        idle.suspend();
-        drop(idle.acquire_work_permit());
-        let collected = idle.cleanup_version();
-        idle.collected(collected);
-        assert_eq!(idle.lock().scheduling, Scheduling::Suspended);
-        idle.resume();
-        assert_eq!(idle.lock().scheduling, Scheduling::Disarmed);
+        bex_work.suspend();
+        drop(bex_work.register_work());
+        let collected = bex_work.cleanup_version();
+        bex_work.collected(collected);
+        assert_eq!(bex_work.lock().scheduling, Scheduling::Suspended);
+        bex_work.resume();
+        assert_eq!(bex_work.lock().scheduling, Scheduling::Disarmed);
 
-        drop(idle.acquire_work_permit());
-        idle.suspend();
-        idle.resume();
-        assert!(matches!(idle.lock().scheduling, Scheduling::Waiting(_)));
+        drop(bex_work.register_work());
+        bex_work.suspend();
+        bex_work.resume();
+        assert!(matches!(bex_work.lock().scheduling, Scheduling::Waiting(_)));
 
-        idle.close();
-        idle.suspend();
-        idle.resume();
-        drop(idle.acquire_work_permit());
-        idle.collected(collected);
-        assert_eq!(idle.lock().scheduling, Scheduling::Closed);
-        assert!(!idle.due());
+        bex_work.close();
+        bex_work.suspend();
+        bex_work.resume();
+        drop(bex_work.register_work());
+        bex_work.collected(collected);
+        assert_eq!(bex_work.lock().scheduling, Scheduling::Closed);
+        assert!(!bex_work.due());
     }
 
     #[tokio::test(start_paused = true)]
     async fn cooperative_entry_remembers_expired_idle_deadline() {
         // No worker: model WASM's bookkeeping and next-entry decision.
         let heap = BexHeap::new(vec![]);
-        let idle = IdleGc::new(&heap);
-        drop(idle.acquire_work_permit());
+        let bex_work = BexWork::new(&heap);
+        drop(bex_work.register_work());
         tokio::time::advance(IDLE_DELAY).await;
-        let entry = idle.acquire_work_permit();
+        let entry = bex_work.register_work();
         assert!(entry.idle_due_on_entry);
-        let overlapping = idle.acquire_work_permit();
+        let overlapping = bex_work.register_work();
         assert!(!overlapping.idle_due_on_entry);
     }
 }

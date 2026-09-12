@@ -107,7 +107,7 @@ impl FutureManager {
         }
     }
 
-    /// Number of `Pending` futures currently tracked.
+    /// Number of tracked registry entries, including retained engine errors.
     ///
     /// Takes a one-shot heap permit internally so external diagnostic callers
     /// (notably tests) don't need to construct a `PermitProof` themselves.
@@ -158,7 +158,7 @@ pub struct FutureManagerGuard<'a> {
 }
 
 impl FutureManagerGuard<'_> {
-    /// Number of `Pending` futures currently tracked by the manager.
+    /// Number of tracked registry entries, including retained engine errors.
     pub fn active_future_count(&self) -> usize {
         self.holder().active_future_count()
     }
@@ -186,14 +186,14 @@ impl FutureManagerGuard<'_> {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = FutureId::from_usize(id);
 
-        let work_permit = inner.idle_gc.acquire_work_permit();
+        let work_guard = inner.bex_work.register_work();
         let ptr = inner
             .tlab
             .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
         inner
             .active_futures
-            .insert(id, FutureWork::new(work_permit, ptr, origin));
+            .insert(id, FutureWork::new(work_guard, ptr, origin));
         (id, ptr)
     }
 
@@ -562,21 +562,20 @@ pub struct FutureManagerInner {
     active_futures: HashMap<FutureId, FutureWork>,
     // Mandatory bookkeeping on both targets. Only the native build contains
     // the background worker; WASM consumes the state at call entry.
-    idle_gc: Arc<crate::idle_gc::IdleGc>,
+    bex_work: Arc<crate::bex_work::BexWork>,
 }
 impl FutureManagerInner {
-    pub(crate) fn new(tlab: Tlab, idle_gc: Arc<crate::idle_gc::IdleGc>) -> Self {
+    pub(crate) fn new(tlab: Tlab, bex_work: Arc<crate::bex_work::BexWork>) -> Self {
         Self {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
-            idle_gc,
+            bex_work,
         }
     }
 
-    /// Number of `Pending` futures currently tracked by the manager. This is
-    /// the same as the number of futures whose heap object is in
-    /// `Future::Pending(_)`. Intended for tests and telemetry.
+    /// Number of tracked registry entries, including retained engine errors.
+    /// Intended for tests and telemetry; this is not a count of only pending futures.
     pub fn active_future_count(&self) -> usize {
         self.active_futures.len()
     }
@@ -608,10 +607,10 @@ impl TlabHolder for FutureManagerInner {
     }
 }
 
-/// Owns a future's registry entry and its work permit until removal.
+/// Owns a future's registry entry and its work guard until removal.
 struct FutureWork {
     // Mirrors registry ownership without making the timer inspect heap objects.
-    _work_permit: crate::idle_gc::WorkPermit,
+    _work_guard: crate::bex_work::BexWorkGuard,
     /// Heap pointer to the `Object::Future`. Rooted via `RootHaver` so
     /// the heap object survives even when no awaiter / producer stack
     /// holds it directly (fire-and-forget spawn before the producer task
@@ -626,12 +625,12 @@ struct FutureWork {
 }
 impl FutureWork {
     fn new(
-        work_permit: crate::idle_gc::WorkPermit,
+        work_guard: crate::bex_work::BexWorkGuard,
         future: HeapPtr,
         origin: std::sync::Arc<str>,
     ) -> Self {
         Self {
-            _work_permit: work_permit,
+            _work_guard: work_guard,
             future,
             origin,
         }
@@ -687,7 +686,7 @@ mod tests {
         let permit = permit_manager
             .new_permit(FutureManagerInner::new(
                 Tlab::new_empty(Arc::clone(&heap)),
-                crate::idle_gc::IdleGc::new(&heap),
+                crate::bex_work::BexWork::new(&heap),
             ))
             .await;
         (FutureManager::new(permit), permit_manager)
