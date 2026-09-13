@@ -31,6 +31,11 @@ export type Expectation =
   | { check: "requires_inspection"; instructions: string };
 
 export interface Repro {
+  observed?: string | null;
+  verified_version?: string | null;
+  source_files?: Record<string, string> | null;
+  source_observed?: string | null;
+  result?: "passes" | "fails" | "inconclusive" | null;
   files: Record<string, string>;
   command: string;
   setup: string | null;

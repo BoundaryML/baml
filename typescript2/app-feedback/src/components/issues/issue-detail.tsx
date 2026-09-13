@@ -1,29 +1,14 @@
 import { InvestigationPrompt } from "./investigation-prompt";
 import { investigationPrompt } from "@/lib/investigation";
-import { CodeBlock, FormattedText } from "@/components/code";
+import { FormattedText } from "@/components/code";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import type { Issue, Repro } from "@/lib/types";
+import { ReproCard } from "./repro-card";
+import type { Issue } from "@/lib/types";
 import { formatSeconds, stageInfo } from "@/lib/pipeline";
 import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStripLabeled } from "./pipeline-strip";
-
-function expectationLabel(r: Repro): string {
-  switch (r.expectation.check) {
-    case "should_compile":
-      return "should compile";
-    case "should_not_compile":
-      return r.expectation.diagnostic_contains
-        ? `should not compile (${r.expectation.diagnostic_contains})`
-        : "should not compile";
-    case "should_evaluate_to":
-      return `should evaluate to ${JSON.stringify(r.expectation.expected)}`;
-    case "requires_inspection":
-      return "requires inspection";
-  }
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -86,20 +71,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
             ) : (
               <div className="space-y-3">
                 {issue.repros.map((r, i) => (
-                  <div key={i} className="rounded-md border overflow-hidden">
-                    <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-muted/60 text-xs">
-                      <span className="font-mono">$ {r.command}</span>
-                      <Badge variant="outline" className="font-normal">
-                        {expectationLabel(r)}
-                      </Badge>
-                    </div>
-                    {Object.entries(r.files).map(([name, content]) => (
-                      <div key={name}>
-                        <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground border-t">{name}</div>
-                        <CodeBlock text={content} language={name} />
-                      </div>
-                    ))}
-                  </div>
+                  <ReproCard key={i} repro={r} comparison={i > 0} />
                 ))}
               </div>
             )}
