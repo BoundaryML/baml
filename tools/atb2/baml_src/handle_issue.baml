@@ -311,48 +311,61 @@ function handle_ready(issue: Issue, update: bool) -> string? {
     }
 }
 
-/// True unless EVERY repro comes back Fixed on CANARY. Inconclusive (needs
-/// a human, or a command that cannot be checked) counts as still broken —
-/// the agent gets to look.
-///
-/// The check runs the cache's freshly built canary `baml-cli` out of
-/// process (falling back to the installed toolchain before the cache
-/// exists): a repro that crashes the compiler (#4468, #4587 ...) would
-/// take this process down, and a fix already merged to canary would be
-/// invisible to the installed release.
+/// Reconfirm on the latest nightly before starting a fix. Unconfirmed work
+/// is deferred rather than sent to a fix agent as a verified defect.
 function still_broken(issue: Issue) -> bool {
+    let nightly = latest_nightly_cli();
     if (issue.repros.length() == 0) {
-        return true;
+        throw StoreError { message: "cannot verify issue without a repro" };
     };
-    // An issue requiring a concrete compiler triggers a cache lookup/build.
-    // A cache miss/failure is inconclusive, never evidence that the issue is fixed.
-    let cli = cli_for_version(issue.version);
-    if (cli == null) {
-        return true;
-    };
-    // An older version cannot establish whether current canary is already fixed.
-    let head = git(cache_repo(), ["rev-parse", "HEAD"]);
-    if (!head.ok || !(cli ?? "").includes("/" + head.stdout.trim() + "/baml-cli")) {
-        return true;
-    };
+    let confirmed = false;
     let i = 0;
     for (let r in issue.repros) {
-        i += 1;
-        if (check_on_canary(r, i, cli = cli) != Verdict.Fixed) {
-            return true;
+        let verdict = check_on_canary(r, i, cli = nightly.path);
+        if (i == 0 && verdict == Verdict.Inconclusive) {
+            throw StoreError { message: "primary repro unconfirmed on " + nightly.version };
         };
+        if (verdict == Verdict.StillBroken) {
+            confirmed = true;
+        };
+        i += 1;
     }
-    false
+    confirmed
 }
 
 function check_cli() -> string {
     atb2_home() + "/target/debug/baml-cli"
 }
 
+class VerifiedNightlyCli {
+    path: string,
+    version: string,
+}
+
+/// Never fall back to the controller or the reporter's toolchain.
+function latest_nightly_cli() -> VerifiedNightlyCli {
+    let selected = cli_for_version("nightly");
+    if (selected == null) {
+        throw StoreError { message: "latest nightly CLI unavailable; retry verification later" };
+    };
+    let cli = selected ?? "";
+    let result = baml.sys.exec(
+        cli,
+        ["--version"],
+        baml.sys.ProcessOptions { env: { "PATH": "/usr/bin:/bin" }, timeout_ms: 10000 },
+    );
+    let version = result.stdout.to_string().trim().split(" ").at(-1) ?? "";
+    if (result.exit_code != 0 || !version.includes("-nightly.") || !cli.includes("/" + version + "/")) {
+        throw StoreError { message: "cached nightly binary did not match its concrete version" };
+    };
+    VerifiedNightlyCli { path: cli, version: version }
+}
+
 /// Controller-only request: agents cannot write the shared cache or access its socket.
 function cli_for_version(version: string) -> string? {
     if (atb2_home() != "/data") {
-        return check_cli();
+        // Local runs must not silently impersonate a requested release.
+        throw StoreError { message: "versioned CLI resolution requires the runner cache service" };
     };
     let out = baml.sys.exec(
         "/usr/bin/python3",
@@ -368,6 +381,25 @@ function cli_for_version(version: string) -> string? {
 
 /// Write the repro to a scratch project and run it with check_cli().
 function check_on_canary(r: Repro, n: int, cli: string? = null) -> Verdict {
+    run_repro_with_cli(r, n, cli ?? check_cli()).verdict
+}
+
+function run_repro_with_cli(
+    r: Repro,
+    n: int,
+    cli: string,
+    format_sources: bool = false,
+) -> ReproRun {
+    let native_test = r.command == "baml test";
+    if (
+        r.expectation is RequiresInspection
+            || (!native_test && !command_covered_by_compile(r.command))
+    ) {
+        return ReproRun {
+            verdict: Verdict.Inconclusive,
+            observed: "requires manual inspection; not automatically confirmed",
+        };
+    };
     //# write the repro to a scratch project
     let repro_id = baml.id.new();
     let dir = atb2_home() + "/repro-check/" + repro_id;
@@ -400,28 +432,81 @@ function check_on_canary(r: Repro, n: int, cli: string? = null) -> Verdict {
     if (v != null) {
         env.set("BAML_VERSION", v ?? "");
     };
+    if (format_sources && !(r.preserve_formatting ?? false)) {
+        let formatted = run_with(
+            Cmd {
+                program: cli,
+                args: ["fmt", "--color", "never", "--no-progress"],
+                cwd: dir,
+                timeout_ms: 180000,
+            },
+            env,
+        );
+        for (let name in r.files.keys()) {
+            let path = dir + "/" + repro_file_path(name, prefixed);
+            if (formatted.exit_code == 0) {
+                r.files.set(name, baml.fs.read(path));
+            } else {
+                // An invalid-source formatter may fail after partial writes.
+                // Test the original bytes and keep the stored example truthful.
+                baml.fs.write(path, r.files.get(name) ?? "");
+            };
+        }
+    };
     //# run it with canary's baml-cli (check, or run for should_evaluate_to)
     let evaluate = match (r.expectation) {
         let e: ShouldEvaluateTo => true,
         _ => false,
     };
-    let args = if (evaluate) {
-        ["run", "-e", "repro_main()"]
+    let args = if (native_test) {
+        ["test", "--color", "never", "--no-progress"]
+    } else if (evaluate) {
+        ["run", "--output-format", "json", "-e", "repro_main()"]
     } else {
         ["check"]
     };
-    let out = run_with(Cmd { program: cli ?? check_cli(), args: args, cwd: dir, timeout_ms: 180000 }, env);
+    let out = run_with(Cmd { program: cli, args: args, cwd: dir, timeout_ms: 180000 }, env);
     //# map exit code + diagnostics to a verdict
-    let verdict = verdict_from_check(r.expectation, out.exit_code, out.stdout, out.stderr);
+    let verdict = if (native_test) {
+        native_test_verdict(out.exit_code, out.stdout + out.stderr)
+    } else {
+        verdict_from_check(r.expectation, out.exit_code, out.stdout, out.stderr)
+    };
     log.info(
-        {
-            "repro_check": n,
-            "cli": cli ?? check_cli(),
-            "exit_code": out.exit_code,
-            "verdict": verdict.to_string(),
-        },
+        { "repro_check": n, "cli": cli, "exit_code": out.exit_code, "verdict": verdict.to_string() },
     );
-    verdict
+    ReproRun {
+        verdict: verdict,
+        observed: "$ "
+            + r.command
+            + "\nExit code: "
+            + out.exit_code.to_string()
+            + "\n\nstdout:\n"
+            + out.stdout
+            + "\nstderr:\n"
+            + out.stderr,
+    }
+}
+
+function native_test_verdict(exit_code: int, output: string) -> Verdict {
+    if (exit_code == 0 && output.includes("PASS ")) {
+        return Verdict.Fixed;
+    };
+    if (
+        exit_code == 2
+            && (
+                output.includes("FAIL ")
+                    || (
+                        output.includes("AGGREGATE FAIL\n")
+                            && output.includes("error: test failures")
+                    )
+            )
+    ) {
+        return Verdict.StillBroken;
+    };
+    // Invalid generated tests, zero tests, infrastructure errors and timeouts
+    // cannot establish that the reported behavior is broken.
+    Verdict.Inconclusive
 }
 
 /// Where a repro file goes in the scratch project: repros name files
@@ -2633,4 +2718,33 @@ function handoff_issue_pr(issue: Issue, pr: string, doc: string, thread: SlackRe
     // Reconciliation queues this only after handle_one has saved the outcome
     // and handle_issue has closed its sandbox. Never wake a worker here.
     progressed
+}
+
+testset "native_repro_results" {
+    test "test failures are distinguished from broken harnesses" {
+        assert.equal(
+            native_test_verdict(2, "FAIL root::reported behavior\nAGGREGATE FAIL [outcome=fail]"),
+            Verdict.StillBroken,
+        );
+        assert.equal(
+            native_test_verdict(4, "compilation error: FAIL is not a type"),
+            Verdict.Inconclusive,
+        );
+        assert.equal(
+            native_test_verdict(
+                2,
+                "AGGREGATE FAIL\nVM internal error\nerror: test failures — 0 passed, 1 failed, 1 total",
+            ),
+            Verdict.StillBroken,
+        );
+        assert.equal(native_test_verdict(124, "timeout"), Verdict.Inconclusive);
+        assert.equal(
+            native_test_verdict(0, "Finished 0 passed, 0 failed, 0 total"),
+            Verdict.Inconclusive,
+        );
+        assert.equal(
+            native_test_verdict(0, "PASS root::reported behavior\nFinished 1 passed, 0 failed, 1 total"),
+            Verdict.Fixed,
+        );
+    }
 }

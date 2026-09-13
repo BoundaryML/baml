@@ -400,6 +400,37 @@ function triage_feedback(fb: Feedback) -> Issue? {
         null,
     );
     let created = create_issue(fb) catch (e) {
+        BehaviorNeedsReview => {
+            log_event(
+                "no_issue",
+                null,
+                fb.id,
+                {
+                    "reason": e.decision,
+                    "summary": e.reason,
+                    "requires_review": e.decision == "uncertain",
+                }
+                    .to_json(),
+                null,
+                null,
+            );
+            return null;
+        },
+        ReproUnconfirmed => {
+            // Retain the report and verification evidence without opening a false
+            // issue or blocking every later report behind this one.
+            log_event(
+                "no_issue",
+                null,
+                fb.id,
+                { "reason": "unconfirmed_repro", "toolchain": e.toolchain, "observed": e.observed }
+                    .to_json(),
+                null,
+                null,
+            );
+            return null;
+        },
+
         FeedbackNeedsDetails => {
             // Keep the original report, but do not create an issue or page a shepherd.
             // This terminal event also prevents the same report being retried every poll.
