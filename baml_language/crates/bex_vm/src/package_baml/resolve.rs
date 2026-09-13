@@ -67,6 +67,13 @@ pub(crate) struct RuleMethodImpl<'r> {
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
     root_package: Option<bex_vm_types::HeapPtr>,
+    /// A value-owned dynamic world is not always the whole lexical world: a
+    /// runtime package may legally declare a local interface impl for a class
+    /// imported from one of its dependencies. Dispatch on that foreign class
+    /// must therefore search both the receiver owner's graph and the calling
+    /// package's graph. Explicit `for_package` reflection keeps this empty so
+    /// inspecting one package cannot accidentally see the caller's impls.
+    additional_package: Option<bex_vm_types::HeapPtr>,
     /// Rules a registration proposes but has not published. They take part
     /// in every lookup this resolver makes and are visible nowhere else.
     staged_rules: &'vm [RuntimeImplRule],
@@ -77,6 +84,7 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: None,
+            additional_package: None,
             staged_rules: &[],
         }
     }
@@ -129,18 +137,27 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: Some(package),
+            additional_package: None,
             staged_rules: &[],
         }
     }
 
-    /// Resolve in the dynamic world that owns `value`, falling back to the
-    /// lexical frame's world for static values and primitives.
+    /// Resolve in every dynamic world relevant to a call on `value`: its
+    /// owning package (where runtime-created witnesses live) plus the lexical
+    /// frame's package (which may own an orphan-legal impl for an imported
+    /// receiver). Static values and primitives need only the lexical world.
     pub(crate) fn for_value(vm: &'vm BexVm, value: bex_vm_types::Value) -> Self {
         let package = vm.value_runtime_package(value);
         if package.is_null() {
             Self::new(vm)
         } else {
-            Self::for_package(vm, package)
+            let lexical = vm.current_runtime_package();
+            Self {
+                vm,
+                root_package: Some(package),
+                additional_package: (!lexical.is_null() && lexical != package).then_some(lexical),
+                staged_rules: &[],
+            }
         }
     }
 
@@ -168,6 +185,7 @@ impl<'vm> ImplResolver<'vm> {
             self.root_package
                 .unwrap_or_else(|| self.vm.current_runtime_package()),
         ];
+        packages.extend(self.additional_package);
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {

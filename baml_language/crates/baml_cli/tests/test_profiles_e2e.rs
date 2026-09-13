@@ -46,6 +46,24 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::process::Output {
+    run_impl(dir, args, env, &common::shared_cache_dir(), true)
+}
+
+fn run_cache_sensitive(
+    dir: &Path,
+    args: &[&str],
+    env: Option<(&str, &str)>,
+) -> std::process::Output {
+    run_impl(dir, args, env, &dir.join(".baml-cache"), false)
+}
+
+fn run_impl(
+    dir: &Path,
+    args: &[&str],
+    env: Option<(&str, &str)>,
+    cache_dir: &Path,
+    force_honest_discovery: bool,
+) -> std::process::Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
@@ -59,7 +77,13 @@ fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::pr
         .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_HOME", home)
-        .env("BAML_CACHE_DIR", dir.join(".baml-cache"));
+        .env("BAML_CACHE_DIR", cache_dir);
+    if force_honest_discovery {
+        // These tests exercise profile selection and lazy expansion, not the
+        // discovery cache. Keep discovery honest while sharing content-addressed
+        // bytecode/stdlib entries across their otherwise-isolated projects.
+        command.env("BAML_NO_DISCOVERY_CACHE", "1");
+    }
     if let Some((name, value)) = env {
         command.env(name, value);
     }
@@ -369,11 +393,11 @@ testset "transient" {
     )
     .unwrap();
 
-    let cold_failure = run(tmp.path(), &["test", "--list", "--no-profile"]);
+    let cold_failure = run_cache_sensitive(tmp.path(), &["test", "--list", "--no-profile"], None);
     assert!(cold_failure.status.success());
     assert!(stdout(&cold_failure).contains("(failed to expand)"));
 
-    let retry = run_with_env(
+    let retry = run_cache_sensitive(
         tmp.path(),
         &["test", "--list", "--no-profile", "-i", "*::path/to/case"],
         Some(("PROFILE_EXPAND_OK", "1")),

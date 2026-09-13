@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use baml_compiler_diagnostics::{
-    Diagnostic, DiagnosticId, DiagnosticPhase,
+    Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageKind, DiagnosticPhase,
+    Severity,
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
@@ -1477,23 +1478,75 @@ fn alloc_compilation_error_with_span(
     let values = diagnostics
         .iter()
         .map(|diagnostic| {
-            let code = Value::object(vm.alloc_string(diagnostic.code()));
-            let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
-            let span = span.map_or(Value::NULL, |(file, start, end)| {
-                let file = Value::object(vm.alloc_string(file.as_str()));
-                copy::Span {
-                    file,
-                    start: i64::from(*start),
-                    end: i64::from(*end),
-                }
-                .to_value(vm)
+            let source_span = span.map(|(file, start, end)| bex_vm_types::RuntimeSourceSpan {
+                file: file.clone(),
+                start: usize::try_from(*start).expect("source offsets fit usize"),
+                end: usize::try_from(*end).expect("source offsets fit usize"),
             });
-            copy::Diagnostic {
-                code,
-                span,
-                message,
-            }
-            .to_value(vm)
+            let highlights = diagnostic
+                .message_highlights
+                .iter()
+                .map(|highlight| bex_vm_types::RuntimeDiagnosticHighlight {
+                    start: highlight.start,
+                    end: highlight.end,
+                    kind: match highlight.kind {
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField
+                        }
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable
+                        }
+                        DiagnosticMessageKind::Identifier(
+                            DiagnosticIdentifierKind::EnumVariant,
+                        ) => bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant,
+                        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute
+                        }
+                        DiagnosticMessageKind::TypeExpression => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression
+                        }
+                        DiagnosticMessageKind::Code => {
+                            bex_vm_types::RuntimeDiagnosticHighlightKind::Code
+                        }
+                    },
+                })
+                .collect();
+            let runtime = bex_vm_types::RuntimeCompileDiagnostic {
+                code: diagnostic.code().to_string(),
+                message: diagnostic.message_with_primary_label().into_owned(),
+                severity: match diagnostic.severity {
+                    Severity::Error => bex_vm_types::RuntimeDiagnosticSeverity::Error,
+                    Severity::Warning => bex_vm_types::RuntimeDiagnosticSeverity::Warning,
+                    Severity::Info => bex_vm_types::RuntimeDiagnosticSeverity::Info,
+                },
+                span: source_span,
+                details: Some(bex_vm_types::RuntimeDiagnosticDetails {
+                    headline: diagnostic.message.clone(),
+                    primary_label: diagnostic
+                        .annotations
+                        .iter()
+                        .find(|annotation| annotation.is_primary)
+                        .and_then(|annotation| annotation.message.clone()),
+                    phase: match diagnostic.phase {
+                        DiagnosticPhase::Parse => bex_vm_types::RuntimeDiagnosticPhase::Parse,
+                        DiagnosticPhase::Hir => bex_vm_types::RuntimeDiagnosticPhase::Hir,
+                        DiagnosticPhase::Validation => {
+                            bex_vm_types::RuntimeDiagnosticPhase::Validation
+                        }
+                        DiagnosticPhase::Type => bex_vm_types::RuntimeDiagnosticPhase::Type,
+                    },
+                    message_highlights: highlights,
+                    annotations: Vec::new(),
+                    related_info: Vec::new(),
+                }),
+            };
+            super::reflect::diagnostic_value(vm, &runtime)
         })
         .collect();
     let diagnostic_qtn = baml_type::QualifiedTypeName::from_dotted_path("reflect.Diagnostic");

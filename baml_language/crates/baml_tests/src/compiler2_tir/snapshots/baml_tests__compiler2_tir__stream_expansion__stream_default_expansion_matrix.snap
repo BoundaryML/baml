@@ -1,0 +1,97 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.Primitives {
+  name: string
+  count: int
+  flag: bool
+  score: float
+}
+enum user.Status
+class user.WithEnum {
+  status: user.Status
+}
+class user.DefaultInner {
+  value: string
+}
+class user.ClassFieldOuter {
+  inner: user.DefaultInner
+}
+class user.WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+class user.WithLists {
+  strings: string[]
+  ints: int[]
+  classes: user.DefaultInner[]
+}
+class user.WithMaps {
+  simple: map<string, int>
+  complex: map<string, user.DefaultInner>
+}
+class user.WithUnions {
+  simple: int | string
+  with_class: user.DefaultInner | string
+  mixed: int | user.DefaultInner
+}
+class user.WithOptionals {
+  name: string | null
+  inner: user.DefaultInner | null
+}
+type user.SimpleAlias = string
+type user.ClassAlias = user.DefaultInner
+type user.UnionAlias = int | user.DefaultInner
+type user.OptionalAlias = user.DefaultInner | null
+class user.TreeNode {
+  value: string
+  children: user.TreeNode[]
+}
+class user.Primitives$stream {
+  name: string | null
+  count: int | null
+  flag: bool | null
+  score: float | null
+}
+class user.WithEnum$stream {
+  status: user.Status | null
+}
+class user.DefaultInner$stream {
+  value: string | null
+}
+class user.ClassFieldOuter$stream {
+  inner: user.DefaultInner$stream | null
+}
+class user.WithLiterals$stream {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+class user.WithLists$stream {
+  strings: string[]
+  ints: int[]
+  classes: user.DefaultInner$stream[]
+}
+class user.WithMaps$stream {
+  simple: map<string, int>
+  complex: map<string, user.DefaultInner$stream>
+}
+class user.WithUnions$stream {
+  simple: int | string | null
+  with_class: user.DefaultInner$stream | string | null
+  mixed: int | user.DefaultInner$stream | null
+}
+class user.WithOptionals$stream {
+  name: string | null
+  inner: user.DefaultInner$stream | null
+}
+type user.SimpleAlias$stream = string
+type user.ClassAlias$stream = user.DefaultInner$stream
+type user.UnionAlias$stream = int | user.DefaultInner$stream
+type user.OptionalAlias$stream = user.DefaultInner$stream | null
+class user.TreeNode$stream {
+  value: string | null
+  children: user.TreeNode$stream[]
+}

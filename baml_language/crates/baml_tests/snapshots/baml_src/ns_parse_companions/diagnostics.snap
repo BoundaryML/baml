@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[parse_companions.baml:96:14]
+ 96 │         _ => "wrong-error",
+    ·              ─────────────
+    ╰────

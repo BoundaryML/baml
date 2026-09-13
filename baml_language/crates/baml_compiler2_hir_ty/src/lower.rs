@@ -1470,9 +1470,18 @@ impl<'db> LowerCtx<'db> {
                     return Some(def);
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
-                let dep_items = baml_compiler2_ppir::package_items(self.db, package);
-                if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
-                    return Some(def);
+                // A source root served from a package interface may also carry
+                // link-only PPIR stubs so emit can allocate import slots. Those
+                // stubs are deliberately type-erased (notably generic function
+                // parameters become `unknown`) and must never win semantic
+                // resolution over the mounted interface row. Inference falls
+                // through to `resolve_exported_value` for that authoritative
+                // signature.
+                if !is_served_from_interface(self.db, package) {
+                    let dep_items = baml_compiler2_ppir::package_items(self.db, package);
+                    if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
+                        return Some(def);
+                    }
                 }
             }
         }

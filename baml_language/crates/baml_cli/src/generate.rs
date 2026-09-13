@@ -24,6 +24,55 @@ use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
+#[derive(Debug, PartialEq, Eq)]
+struct GenerationPresentation {
+    details: Vec<String>,
+    status: Option<String>,
+}
+
+fn generation_presentation(
+    generator_name: &str,
+    count: usize,
+    output_dir: &Path,
+    identifier_renames: &[sdkgen_python_pydantic2::IdentifierRename],
+    quiet: bool,
+    verbose: bool,
+) -> GenerationPresentation {
+    if quiet {
+        return GenerationPresentation {
+            details: Vec::new(),
+            status: None,
+        };
+    }
+
+    let details = if verbose {
+        identifier_renames
+            .iter()
+            .map(|rename| {
+                format!(
+                    "Renamed {} `{}`: `{}` → `{}` ({})",
+                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let rename_count = identifier_renames.len();
+    let rename_label = if rename_count == 1 {
+        "identifier rename"
+    } else {
+        "identifier renames"
+    };
+    GenerationPresentation {
+        details,
+        status: Some(format!(
+            "{generator_name} ({count} file(s), {rename_count} {rename_label} → {})",
+            output_dir.display()
+        )),
+    }
+}
+
 /// Generate client code from BAML definitions.
 ///
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
@@ -545,31 +594,25 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
-            for rename in &identifier_renames {
-                crate::reporter::print_verbose(format_args!(
-                    "Renamed {} `{}`: `{}` → `{}` ({})",
-                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
-                ));
+            let presentation = generation_presentation(
+                &generator.name,
+                count,
+                &output_dir,
+                &identifier_renames,
+                crate::reporter::quiet(),
+                crate::reporter::verbose(),
+            );
+            for detail in presentation.details {
+                crate::reporter::print_verbose(format_args!("{detail}"));
             }
-            let rename_count = identifier_renames.len();
-            let rename_label = if rename_count == 1 {
-                "identifier rename"
-            } else {
-                "identifier renames"
-            };
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo
             // v0.1.0` pattern: per-unit progress that sticks around
             // above the spinner.
-            reporter.status(
-                "Generated",
-                format!(
-                    "{} ({count} file(s), {rename_count} {rename_label} → {})",
-                    generator.name,
-                    output_dir.display()
-                ),
-            );
+            if let Some(status) = presentation.status {
+                reporter.status("Generated", status);
+            }
             total_files += count;
         }
 
@@ -906,8 +949,40 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        is_valid_go_import_path, parse_add_output_type,
+        generation_presentation, is_valid_go_import_path, parse_add_output_type,
     };
+
+    #[test]
+    fn identifier_rename_presentation_respects_normal_verbose_and_quiet_modes() {
+        let rename = sdkgen_python_pydantic2::IdentifierRename {
+            kind: "enum variant".to_string(),
+            fqn: "user.Choice.None".to_string(),
+            original: "None".to_string(),
+            generated: "None_".to_string(),
+            reason: sdkgen_python_pydantic2::IdentifierRenameReason::PythonKeyword,
+        };
+        let output = std::path::Path::new("generated");
+
+        let normal =
+            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, false);
+        assert!(normal.details.is_empty());
+        assert_eq!(
+            normal.status.as_deref(),
+            Some("py (4 file(s), 1 identifier rename → generated)")
+        );
+
+        let verbose =
+            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, true);
+        assert_eq!(
+            verbose.details,
+            ["Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"]
+        );
+        assert_eq!(verbose.status, normal.status);
+
+        let quiet = generation_presentation("py", 4, output, &[rename], true, true);
+        assert!(quiet.details.is_empty());
+        assert_eq!(quiet.status, None);
+    }
 
     fn go_manifest(threshold: Option<i64>) -> String {
         let threshold = threshold

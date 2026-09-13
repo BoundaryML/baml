@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"type_alias_optional_self_reference\", \"type A = A?\"),\n(\"type_alias_union_with_base_case\", \"type A = A | string\",),\n(\"type_alias_mutual_cycle_through_optional\", \"type A = B?\\ntype B = A\",),])"
+---
+=== type_alias_optional_self_reference ===
+type user.A = user.A | null
+  !! 0..11: recursive type alias cycle: A
+type user.A$stream = user.A$stream | null
+  !! 0..0: recursive type alias cycle: A$stream
+
+=== type_alias_union_with_base_case ===
+type user.A = user.A | string
+  !! 0..19: recursive type alias cycle: A
+type user.A$stream = user.A$stream | string
+  !! 0..0: recursive type alias cycle: A$stream
+
+=== type_alias_mutual_cycle_through_optional ===
+type user.A = user.B | null
+  !! 0..11: recursive type alias cycle: A
+type user.B = user.A
+  !! 12..22: recursive type alias cycle: B
+type user.A$stream = user.B$stream | null
+  !! 0..0: recursive type alias cycle: A$stream
+type user.B$stream = user.A$stream
+  !! 0..0: recursive type alias cycle: B$stream

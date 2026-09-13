@@ -971,23 +971,38 @@ fn build_packages<'db>(
         };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
-        // only sees the target), so lower them here to fold into the implemented
-        // interface's bindings.
-        let lower_assoc = |store: &TypeRefStore,
+        // only sees the target), so fold them into the implemented interface's
+        // bindings here. Prefer `impl_data`'s canonical checked value: it lowers
+        // bindings in declaration order with `Self` carrying the pins resolved so
+        // far, so `type Item = int; type Items = Self.Item[]` becomes `int[]`.
+        // Re-lowering the raw `Items` ref in the plain impl scope loses that
+        // witness and leaves an error-recovery projection that RuntimeTy cannot
+        // represent. Mounted interfaces have no source `InterfaceLoc` and hence
+        // no `ImplData`; retain the raw fallback for that separate path.
+        let lower_assoc = |impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+                           store: &TypeRefStore,
                            bindings: &[AssociatedTypeBindingData],
                            generics: &[ParamTy],
                            bounds: &BoundsMap|
          -> Vec<(Name, bex_vm_types::TyTemplate)> {
+            let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
+                .as_ref()
+                .ok();
             bindings
                 .iter()
                 .filter_map(|b| {
-                    let id = b.type_ref?;
+                    let ty = canonical
+                        .and_then(|data| {
+                            data.associated_types
+                                .iter()
+                                .find(|(name, _)| *name == b.name)
+                                .map(|(_, ty)| ty.clone())
+                        })
+                        .or_else(|| b.type_ref.map(|id| lower(store, id, generics, bounds)))?;
                     Some((
                         b.name.clone(),
                         bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                            &lower(store, id, generics, bounds),
-                            resolved,
-                            generics,
+                            &ty, resolved, generics,
                         )),
                     ))
                 })
@@ -1022,6 +1037,7 @@ fn build_packages<'db>(
                 continue;
             };
             interface_assoc.extend(lower_assoc(
+                impl_loc,
                 store,
                 &block.associated_type_bindings,
                 &impl_params,

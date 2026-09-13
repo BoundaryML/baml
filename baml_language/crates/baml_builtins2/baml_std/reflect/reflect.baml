@@ -37,11 +37,55 @@ class Span {
     end: int,
 }
 
-/// The stable structured diagnostic surfaced by reflection constructors.
+/// A UTF-8 byte range inside a diagnostic headline or annotation label.
+class DiagnosticHighlight {
+    start: int,
+    end: int,
+    kind: "identifier.type"
+        | "identifier.function"
+        | "identifier.field"
+        | "identifier.variable"
+        | "identifier.enum_variant"
+        | "identifier.attribute"
+        | "type_expression"
+        | "code",
+}
+
+/// A primary or secondary source annotation. `message = null` represents a
+/// span-only annotation.
+class DiagnosticAnnotation {
+    span: Span,
+    message: string?,
+    message_highlights: DiagnosticHighlight[],
+    is_primary: bool,
+}
+
+/// Additional source information associated with a diagnostic.
+class DiagnosticRelatedInfo {
+    span: Span,
+    message: string,
+    message_highlights: DiagnosticHighlight[],
+    file_path: string?,
+}
+
+/// The stable structured diagnostic surfaced by reflection constructors and
+/// runtime compilation. `message` retains the historical flattened
+/// headline-plus-primary-label representation; use `headline` and
+/// `primary_label` when those parts must be inspected independently.
 class Diagnostic {
     code: string,
     span: Span?,
     message: string,
+    /// Severity retained from the compiler diagnostic stream.
+    severity: "error" | "warning" | "info",
+    /// Compiler stage that emitted a source diagnostic. Runtime-generated
+    /// diagnostics which do not belong to a compiler stage report `null`.
+    phase: ("parse" | "hir" | "validation" | "type")?,
+    headline: string,
+    primary_label: string?,
+    message_highlights: DiagnosticHighlight[],
+    annotations: DiagnosticAnnotation[],
+    related_info: DiagnosticRelatedInfo[],
 }
 
 /// Common identity-preserving surface shared by every reflection kind view.

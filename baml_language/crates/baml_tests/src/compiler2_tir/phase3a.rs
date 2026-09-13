@@ -317,12 +317,14 @@ fn new_mode_failures_have_good_diagnostics() {
             "expected 1 argument(s), got 0",
         ),
     ];
+    let mut db = make_db();
     for (label, client, body, expect_substr) in cases {
-        let mut db = make_db();
         let src = format!(
             "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
-        let file = db.file("test.baml", &src);
+        // Keep every case in its own namespace so one database can share the
+        // stdlib setup without duplicate C/Greet declarations.
+        let file = db.file(format!("ns_new_mode_{label}/test.baml"), &src);
         let tir = render_tir(&db, file);
         let diags: Vec<&str> = tir
             .lines()

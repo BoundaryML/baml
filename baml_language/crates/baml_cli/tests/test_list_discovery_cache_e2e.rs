@@ -90,38 +90,25 @@ fn stdout_of(output: &Output) -> String {
 
 const SERVED_FROM_CACHE: &str = "served `test --list` from discovery cache";
 
-/// Cold run (fresh cache) then warm run (cache populated) of `baml test --list
-/// <extra…>`. Asserts exit code AND stdout are identical, and that only the warm
-/// run served from the discovery cache (proving it skipped engine boot). Works
-/// for both matching filters (exit 0) and no-match filters (exit 5), so the
+/// Compare forced-honest discovery with an already-populated cache. Asserts
+/// exit code AND stdout are identical, and that only the warm run served from
+/// the discovery cache (proving it skipped engine boot). Works for both
+/// matching filters (exit 0) and no-match filters (exit 5), so the
 /// no-tests-selected edge is covered too.
-fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
-    let tmp = tempfile::tempdir().unwrap();
-    create_test_project(tmp.path());
-    let cache_dir = tmp.path().join(".discovery-cache");
-
+fn assert_honest_equals_warm(cli: &Path, dir: &Path, cache_dir: &Path, extra: &[&str]) -> String {
     let mut args = vec!["test", "--list", "--from", "."];
     args.extend_from_slice(extra);
 
-    // The honest filtered path must not populate an unfiltered cache by
-    // expanding profile-excluded lazy testsets. Force honest discovery, then
-    // independently populate the cache with an explicitly unfiltered list and
-    // prove that applying `extra` to that cache is output-identical.
+    // The honest filtered path must neither read nor update the unfiltered
+    // entry. The warm side applies `extra` to that one canonical entry in Rust.
     let cold = run_list(
         cli,
-        tmp.path(),
-        &cache_dir,
+        dir,
+        cache_dir,
         &args,
         &[("BAML_NO_DISCOVERY_CACHE", "1")],
     );
-    let _populate = run_list(
-        cli,
-        tmp.path(),
-        &cache_dir,
-        &["test", "--list", "--from", "."],
-        &[],
-    );
-    let warm = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
+    let warm = run_list(cli, dir, cache_dir, &args, &[]);
 
     assert_eq!(
         cold.status.code(),
@@ -151,6 +138,22 @@ fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
         "the warm run must serve `--list {extra:?}` from the discovery cache (engine boot \
          skipped); stderr:\n{warm_err}",
     );
+
+    cold_out
+}
+
+fn populate_unfiltered_cache(cli: &Path, dir: &Path, cache_dir: &Path) -> String {
+    let populate = run_list(cli, dir, cache_dir, &["test", "--list", "--from", "."], &[]);
+    assert!(
+        populate.status.success(),
+        "unfiltered cache population failed:\n{}",
+        String::from_utf8_lossy(&populate.stderr)
+    );
+    assert!(
+        !String::from_utf8_lossy(&populate.stderr).contains(SERVED_FROM_CACHE),
+        "cache population unexpectedly reused an existing discovery entry"
+    );
+    stdout_of(&populate)
 }
 
 /// Unfiltered `--list`: the corpus measurement path and the common case. Also
@@ -158,83 +161,43 @@ fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
 #[test]
 fn list_unfiltered_cold_equals_warm() {
     let cli = common::baml_cli();
-    assert_cold_equals_warm(&cli, &[]);
-
-    // Independent sanity: the unfiltered list is non-empty and exit 0.
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
-    let out = run_list(
-        &cli,
-        tmp.path(),
-        &cache_dir,
-        &["test", "--list", "--from", "."],
-        &[],
+    let populated_output = populate_unfiltered_cache(&cli, tmp.path(), &cache_dir);
+    let honest_output = assert_honest_equals_warm(&cli, tmp.path(), &cache_dir, &[]);
+    assert_eq!(
+        populated_output, honest_output,
+        "the initial cache-populating list must match forced-honest and warm output"
     );
-    assert!(out.status.success(), "unfiltered `--list` should exit 0");
     assert!(
-        stdout_of(&out).contains("root::suite::nested::deep"),
+        populated_output.contains("root::suite::nested::deep"),
         "unfiltered list should render the nested leaf, got:\n{}",
-        stdout_of(&out),
+        populated_output,
     );
 }
 
-/// A filter matrix. Each variant re-runs cold (BAML filter) vs warm (Rust
-/// filter) from a fresh cache, so byte-identity across the matrix proves the two
-/// filter implementations select the same leaves (including a no-match case).
+/// A filter matrix over one project and one unfiltered discovery-cache entry.
+/// Each variant still performs an independent forced-honest BAML-filter run and
+/// compares it with the Rust-filtered cached result, including a no-match case.
 #[test]
 fn list_filtered_cold_equals_warm_across_matrix() {
     let cli = common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_test_project(tmp.path());
+    let cache_dir = tmp.path().join(".discovery-cache");
+    let _ = populate_unfiltered_cache(&cli, tmp.path(), &cache_dir);
+
     for extra in [
         vec!["-i", "root::suite::*"],
         vec!["-i", "root::suite::one"],
         vec!["-i", "root::suite::nested::deep"],
         vec!["-i", "root::top_alpha"],
         vec!["-i", "*::solo"],
-        vec!["-i", "root::suite::*"],
         vec!["-x", "root::suite::*"],
         vec!["-i", "root::suite::*", "-x", "root::suite::two"],
         vec!["-i", "totally-bogus-selector-xyz"], // no match (exit 5, empty stdout)
     ] {
-        assert_cold_equals_warm(&cli, &extra);
+        let _ = assert_honest_equals_warm(&cli, tmp.path(), &cache_dir, &extra);
     }
-}
-
-/// `BAML_NO_DISCOVERY_CACHE=1` must be output-neutral (it only forces the honest
-/// path): the knobbed run's stdout matches the honest cold run, and it never
-/// serves from the discovery cache even when the cache is warm.
-#[test]
-fn no_discovery_cache_knob_is_output_neutral() {
-    let cli = common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-    create_test_project(tmp.path());
-    let cache_dir = tmp.path().join(".discovery-cache");
-    let args = ["test", "--list", "--from", "."];
-
-    // Warm the discovery cache.
-    let cold = run_list(&cli, tmp.path(), &cache_dir, &args, &[]);
-    assert!(cold.status.success());
-    let warm = run_list(&cli, tmp.path(), &cache_dir, &args, &[]);
-    assert!(warm.status.success());
-    assert!(String::from_utf8_lossy(&warm.stderr).contains(SERVED_FROM_CACHE));
-
-    // With the knob set, the warm cache is ignored: honest discovery runs and
-    // produces the same stdout.
-    let knobbed = run_list(
-        &cli,
-        tmp.path(),
-        &cache_dir,
-        &args,
-        &[("BAML_NO_DISCOVERY_CACHE", "1")],
-    );
-    assert!(knobbed.status.success());
-    assert_eq!(
-        stdout_of(&knobbed),
-        stdout_of(&warm),
-        "BAML_NO_DISCOVERY_CACHE must not change `--list` stdout",
-    );
-    assert!(
-        !String::from_utf8_lossy(&knobbed.stderr).contains(SERVED_FROM_CACHE),
-        "BAML_NO_DISCOVERY_CACHE=1 must force the honest path, not serve from cache",
-    );
 }

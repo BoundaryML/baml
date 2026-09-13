@@ -9,9 +9,8 @@
 // Helper functions throughout are needed because test-block locals are boxed
 // (VM quirk; see ns_arrays/sort_compare.baml's header note).
 //
-// Tests requiring compiler-diagnostics assertions (setup_test_db + collect_diagnostics,
-// checking specific compile errors or isolated-project compiles) cannot be
-// expressed as BAML corpus tests:
+// The former Rust compiler-diagnostic assertions below now live as reflected
+// native tests in `ns_compiler/ns_mixed_suite_diagnostics/sort_diagnostics.baml`:
 //   - spike_1a_projection_valued_assoc_binding_in_blanket_impl_compiles
 //   - spike_1a_projection_with_concrete_error_requires_handling
 //   - spike_1a_symbolic_projection_in_generic_signature_compiles
@@ -36,8 +35,9 @@
 //   - element_is_dispatch_user_error_callsite_requires_handling
 //   - phase6_sort_error_message_names_the_array_type
 //
-// Opt-level-specific test (requires OptLevel::Two pinning via baml_test_optimized!):
-//   - phase2_user_class_compare_direct_call_mir_optimized
+// `phase2_user_class_compare_direct_call_mir_optimized` was removed because
+// `phase2_user_class_compare_direct_call_in_main` below already exercises the
+// same behavior through the native corpus's Opt2 compilation path.
 //
 // Wall-clock perf test (requires std::time::Instant measurement, not available in BAML):
 //   - perf_large_int_array_uses_native_fast_path

@@ -7,7 +7,9 @@
 // A test block can only assert a deterministic value, not scheduling/timing.
 // It remains in the Rust file.
 
-function compute() -> int { 42 }
+function compute() -> int {
+    42
+}
 
 function multiple_awaits_on_same_future_return_cached_value_fn() -> int {
     let f = spawn { compute() };
@@ -21,7 +23,9 @@ test "multiple_awaits_on_same_future_return_cached_value" {
     assert.equal(multiple_awaits_on_same_future_return_cached_value_fn(), 126)
 }
 
-function leaf() -> int { 1 }
+function leaf() -> int {
+    1
+}
 
 function mid() -> int {
     let l = spawn { leaf() };
@@ -53,4 +57,26 @@ function function_can_return_future_typed_value_fn() -> int {
 
 test "function_can_return_future_typed_value" {
     assert.equal(function_can_return_future_typed_value_fn(), 99)
+}
+
+function finite_detached_spawn_does_not_block_completion_fn() -> string {
+    let detached = spawn with baml.spawn.options(detach = true) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(150));
+        1
+    };
+    "done"
+}
+
+test "finite_detached_spawn_does_not_block_completion" {
+    assert.equal(finite_detached_spawn_does_not_block_completion_fn(), "done")
+}
+
+function never_awaited_successful_spawn_returns_cleanly_fn() -> string {
+    let successful = spawn { 42 };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(250));
+    "done"
+}
+
+test "never_awaited_successful_spawn_returns_cleanly" {
+    assert.equal(never_awaited_successful_spawn_returns_cleanly_fn(), "done")
 }

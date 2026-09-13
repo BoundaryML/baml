@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"class_union_field_all_variants_same_class\",\n\"class A { b B | B }\\nclass B { a A }\",),\n(\"class_union_field_different_variants_breaks_cycle\",\n\"class A { b B | string }\\nclass B { a A }\",),])"
+---
+=== class_union_field_all_variants_same_class ===
+class user.A {
+  b: user.B | user.B
+}
+  !! 0..19: class cycle: user.A -> user.B -> user.A
+class user.B {
+  a: user.A
+}
+  !! 20..35: class cycle: user.A -> user.B -> user.A
+class user.A$stream {
+  b: user.B$stream | user.B$stream | null
+}
+class user.B$stream {
+  a: user.A$stream | null
+}
+
+=== class_union_field_different_variants_breaks_cycle ===
+class user.A {
+  b: user.B | string
+}
+class user.B {
+  a: user.A
+}
+class user.A$stream {
+  b: user.B$stream | string | null
+}
+class user.B$stream {
+  a: user.A$stream | null
+}
