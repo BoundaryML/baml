@@ -14,8 +14,6 @@ defaults:
   run:
     shell: bash
 
-env:
-
 jobs:
   typecheck:
     name: "Typecheck"

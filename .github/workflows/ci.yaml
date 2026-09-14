@@ -594,6 +594,7 @@ jobs:
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
   size-gate:
     name: "Size Gate"

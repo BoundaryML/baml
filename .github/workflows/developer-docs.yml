@@ -29,8 +29,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-
 jobs:
   determine-changes:
     name: Determine documentation changes
