@@ -1,6 +1,6 @@
 """Static contract for inferred and explicitly-bound generic BAML calls."""
 
-from typing import assert_type
+from typing_extensions import assert_type
 
 from baml_bridge import BamlType
 from baml_sdk import reflect

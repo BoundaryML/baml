@@ -1090,16 +1090,14 @@ self.onmessage = async (event: MessageEvent) => {
       runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
       return;
 
-    // Telemetry reads `.baml/profiles-v1` on disk, which only the local
-    // toolchain server can reach. The WASM runtime has no such store, so
-    // these say so rather than failing silently or timing out.
+    // Profiling is unavailable in both browser and local runtimes.
     case 'listExecutions':
     case 'openExecution':
     case 'readTelemetryMedia':
       postOut({
-        code: 'telemetryUnavailable',
+        code: 'profilingUnavailable',
         message:
-          'Telemetry needs the local profile store, which the in-browser runtime does not have.',
+          'Profiling is unavailable: the old runtime tracing pipeline has been removed',
         requestId: msg.requestId,
         type: 'commandError',
       });

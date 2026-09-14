@@ -52,8 +52,6 @@ jobs:
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
-      # Flag for profiling-ring changes (bex_events) - triggers loom + miri
-      prof: ${{ steps.check_prof.outputs.changed }}
       # Flag for inputs that can change the shipping bridge_cffi binaries
       bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
       # Flag for SDK test changes - triggers the SDK parity analysis pipeline
@@ -270,28 +268,6 @@ jobs:
             ':baml_language/crates/bridge_cffi/include/**' \
             ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
             ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
-          ; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Includes the job's own inputs (workspace manifest with the
-      # loom/minstant dep versions + check-cfg list, the pinned toolchain,
-      # and this workflow file) so a change that can break the loom/miri
-      # build re-runs the gate. Cargo.lock is deliberately excluded: it
-      # churns on every dep bump and the cargo-tests job already covers the
-      # std halves of the suite.
-      - name: Check if profiling ring code changed
-        id: check_prof
-        env:
-          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
-        run: |
-          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/bex_events/**' \
-            ':baml_language/Cargo.toml' \
-            ':baml_language/rust-toolchain.toml' \
-            ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -759,65 +735,6 @@ jobs:
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
 
-  # Loom + Miri verification for the lock-free profiling ring
-  # (bex_events::prof). Scoped to the prof:: tests so it stays minutes-fast —
-  # deliberately narrower than the (disabled) whole-crate miri-tests job
-  # above, whose bex_heap runs were timing out.
-  prof-concurrency:
-    name: "Profiling ring (loom + miri)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: determine_changes
-    if: needs.determine_changes.outputs.prof == 'true'
-    timeout-minutes: 45
-    steps:
-      - name: "Checkout"
-        uses: useblacksmith/checkout@v1
-        with:
-          persist-credentials: false
-
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
-      - name: "Install Rust toolchain"
-        run: rustup toolchain install
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "prof-concurrency"
-
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-
-      # The model checker explores every interleaving (bounded at 3
-      # preemptions, set in the test harness) of the ring's
-      # producer/consumer/lifecycle protocols. The custom cfg name
-      # (baml_loom, not the conventional loom) keeps the flag from
-      # half-activating loom support in third-party deps (e.g. boxcar) that
-      # gate on cfg(loom) but need their own loom feature enabled to compile.
-      - name: "Loom model checking (bex_events::prof)"
-        run: 'cargo test -p bex_events --release --lib prof::'
-        working-directory: baml_language
-        env:
-          RUSTFLAGS: "--cfg baml_loom"
-          CARGO_TARGET_DIR: target/loom
-
-      - name: "Install Rust nightly and Miri"
-        run: rustup toolchain install nightly --component miri
-        working-directory: baml_language
-
-      # Miri checks the raw-pointer/UnsafeCell discipline of the same
-      # scenarios on real threads. Leaked rings are by design (&'static
-      # lifetime model); isolation is off for park_timeout/sleep in the
-      # stress tests. Scoped to the ring/registry modules: the durable
-      # store under `prof::backend` needs `statvfs`/`flock` (foreign
-      # functions Miri cannot run) and its tests are plain std tests.
-      - name: "Miri (bex_events::prof ring)"
-        run: 'cargo +nightly miri test -p bex_events --lib -- prof::concurrency_tests:: prof::ring:: prof::record:: prof::config::'
-        working-directory: baml_language
-        env:
-          MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"
-
   proto-sync:
     name: "proto generated files sync"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -1252,7 +1169,6 @@ jobs:
       - grammar-tests
       - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
-      - prof-concurrency
       - proto-sync
       - sdk_parity_check
       # NOTE: size-gate is intentionally NOT a required gate. It is an
@@ -1281,7 +1197,6 @@ jobs:
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
-          echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| sdk-parity-check | ${{ needs.sdk_parity_check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1320,13 +1235,12 @@ jobs:
       - grammar-tests
       - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
-      - prof-concurrency
       - proto-sync
       - sdk_parity_check
     # `!failure() && !cancelled()` rather than `success()`, because that is what
     # the old `workflow_run.conclusion == 'success'` gate meant: a skipped gate
-    # is not a failure. prof-concurrency and proto-sync are change-detected with
-    # no `|| ref == canary` escape hatch, so they are skipped on most canary
+    # is not a failure. proto-sync is change-detected with
+    # no `|| ref == canary` escape hatch, so it is skipped on most canary
     # pushes and `success()` would keep the release from ever firing.
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref_name == 'canary' }}
     permissions:

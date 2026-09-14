@@ -24,10 +24,7 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_events::{
-    ids::{BoundaryId, RuntimeId},
-    prof::backend::{ProfilerConfig, ProfilerSession},
-};
+use bex_events::ids::{BoundaryId, RuntimeId};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -41,19 +38,8 @@ async fn baml_id_inside_spawn_uses_child_thread_root_call() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
-        enabled: false,
-        ..ProfilerConfig::default()
-    });
-    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new_with_profiler_session(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-            profiler_session,
-        )
-        .unwrap(),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );
 
     let boundary_id = BoundaryId::from_bytes([1; 16]);
@@ -435,8 +421,6 @@ async fn baml_id_current_new_and_set_roundtrip() {
         panic!("expected override runtime ID");
     };
     assert_ne!(root_boundary_id, override_id);
-
-    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 #[tokio::test]
@@ -477,8 +461,6 @@ async fn baml_id_assignment_overrides_current_id() {
         panic!("expected override runtime ID");
     };
     assert_ne!(root_boundary_id, override_id);
-
-    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 // ── §2.2 contract: `$id` override persistence (T4-T7) ──────────────────────
@@ -615,8 +597,7 @@ async fn id_override_not_inherited_by_nested_call() {
         panic!("helper's $id should be a default CallRef, got {}", parts[1]);
     };
     assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-    // Call ids count sys-op calls too (the ring records them as call pairs,
-    // minted unconditionally in `prof_enter_sysop`): main = 1,
+    // Call ids count sys-op calls too: main = 1,
     // baml.id.new() = 2, the `$id =` set-op = 3, helper = 4.
     assert_eq!(call_ref.call_id, bex_engine::BexCallId(4));
 }
@@ -712,8 +693,6 @@ async fn id_override_read_at_return_is_override_uuid() {
     let RuntimeId::Boundary(_override_id) = RuntimeId::decode(id.as_str()).unwrap() else {
         panic!("expected override runtime ID, got {id}");
     };
-
-    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 // ── §2.1 contract: identity across caught exceptions (T2) ──────────────────
@@ -828,19 +807,8 @@ async fn sinkless_engine_still_mints_correct_ids() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
-        enabled: false,
-        ..ProfilerConfig::default()
-    });
-    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new_with_profiler_session(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-            profiler_session,
-        )
-        .unwrap(),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );
 
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
@@ -922,4 +890,38 @@ async fn two_engines_mint_distinct_call_refs() {
         assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
         assert_eq!(call_ref.call_id, bex_engine::BexCallId(2));
     }
+}
+
+#[tokio::test]
+async fn local_id_capture_reports_unavailable() {
+    let snapshot = compile_for_engine(
+        r#"
+        function main() -> string {
+            let id = boundary.id();
+            let _ = id.capture(inputs = true) catch (err) {
+                baml.errors.InvalidArgument => { return err.message; }
+            };
+            "unexpected success"
+        }
+    "#,
+    );
+    let engine =
+        Arc::new(BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    let BexExternalValue::String(message) = result else {
+        panic!("expected unavailable message")
+    };
+    assert!(
+        message
+            .as_str()
+            .contains("profiling capture is unavailable")
+    );
 }

@@ -1,4 +1,4 @@
-from typing import assert_type
+from typing_extensions import assert_type
 
 from baml_sdk.ai.stream import Done
 from baml_sdk.lorem import (

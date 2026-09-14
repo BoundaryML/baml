@@ -342,9 +342,9 @@ pub enum VmInternalError {
     CallLayout(baml_type::LayoutMismatch),
 }
 
-/// Any kind of virtual machine error.
+/// Whether a thrown value is fresh or propagated from an earlier throw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProfilerErrorKind {
+pub enum ThrowKind {
     Fresh,
     Rethrow,
 }
@@ -371,9 +371,6 @@ pub struct VmUnwindOrigin {
     pub throw_function_id: u32,
     pub throw_site: Option<VmThrowSite>,
     pub source: VmUnwindSource,
-    pub selected_error: bool,
-    pub manual_eligible: bool,
-    pub origin_span_already_terminated: bool,
 }
 
 impl VmUnwindOrigin {
@@ -384,9 +381,6 @@ impl VmUnwindOrigin {
             throw_function_id: 0,
             throw_site: None,
             source,
-            selected_error: false,
-            manual_eligible: false,
-            origin_span_already_terminated: false,
         }
     }
 }
@@ -394,7 +388,7 @@ impl VmUnwindOrigin {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VmThrown {
     pub value: Value,
-    pub profiler_kind: ProfilerErrorKind,
+    pub throw_kind: ThrowKind,
     pub language_is_rethrow: bool,
     pub origin: VmUnwindOrigin,
 }
@@ -404,7 +398,7 @@ impl VmThrown {
     pub const fn fresh(value: Value, source: VmUnwindSource) -> Self {
         Self {
             value,
-            profiler_kind: ProfilerErrorKind::Fresh,
+            throw_kind: ThrowKind::Fresh,
             language_is_rethrow: false,
             origin: VmUnwindOrigin::unresolved(source),
         }
@@ -414,7 +408,7 @@ impl VmThrown {
     pub const fn rethrow(value: Value, source: VmUnwindSource, language_is_rethrow: bool) -> Self {
         Self {
             value,
-            profiler_kind: ProfilerErrorKind::Rethrow,
+            throw_kind: ThrowKind::Rethrow,
             language_is_rethrow,
             origin: VmUnwindOrigin::unresolved(source),
         }
@@ -475,10 +469,7 @@ pub enum VmRustFnError {
     /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
-    Thrown {
-        value: Value,
-        profiler_kind: ProfilerErrorKind,
-    },
+    Thrown { value: Value, throw_kind: ThrowKind },
 }
 
 impl VmRustFnError {
@@ -486,7 +477,7 @@ impl VmRustFnError {
     pub const fn thrown_fresh(value: Value) -> Self {
         Self::Thrown {
             value,
-            profiler_kind: ProfilerErrorKind::Fresh,
+            throw_kind: ThrowKind::Fresh,
         }
     }
 
@@ -494,7 +485,7 @@ impl VmRustFnError {
     pub const fn thrown_rethrow(value: Value) -> Self {
         Self::Thrown {
             value,
-            profiler_kind: ProfilerErrorKind::Rethrow,
+            throw_kind: ThrowKind::Rethrow,
         }
     }
 }

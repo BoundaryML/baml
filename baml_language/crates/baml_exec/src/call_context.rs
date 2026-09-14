@@ -4,15 +4,6 @@ use bex_engine::{
 };
 use indexmap::IndexMap;
 
-/// Logger and cancellation settings inherited by helper calls.
-///
-/// JSON argument and output conversion run as distinct engine calls, so they
-/// need fresh call contexts. They are host plumbing around the user's root,
-/// not user work: their roots are `SuppressInternal` so an invocation
-/// publishes exactly one profiling run (the user boundary). A user-written
-/// `from_json` override executed during argument decoding runs inside this
-/// suppressed root; the same override called from the user's function body is
-/// profiled under the user's root as usual.
 #[derive(Clone)]
 pub struct HelperCallContext {
     logger: TraceLogger,
@@ -45,7 +36,6 @@ impl HelperCallContext {
             .with_logger(self.logger.clone())
             .with_cancel_token(self.cancel.clone())
             .with_type_args(type_args)
-            .suppress_internal_profile()
             .build()
     }
 }
@@ -63,16 +53,5 @@ mod tests {
         parent.cancel.cancel();
 
         assert!(helper.cancel.is_cancelled());
-    }
-
-    #[test]
-    fn helper_context_suppresses_internal_profile() {
-        let parent = FunctionCallContextBuilder::new(bex_engine::CallId::next()).build();
-        let helper = HelperCallContext::from_call_context(&parent).call_context(IndexMap::new());
-
-        assert_eq!(
-            helper.profile_intent,
-            bex_engine::RootProfileIntent::SuppressInternal
-        );
     }
 }
