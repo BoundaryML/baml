@@ -10,7 +10,7 @@ Prerequisites on macOS: Rust/rustup, Zig, `uv`, Node/npm, Docker with Compose, a
 
 ```sh
 # From the BAML repository root:
-cd tools/bench/hello-world-local
+cd tools/bench/hello-world-docker-compose
 
 # Dedicated Docker VM with capacity for the apps, generator, and monitoring.
 colima start baml-hello-world --cpu 10 --memory 16 --disk 40 --vm-type vz --activate=false
@@ -139,7 +139,7 @@ The completed ramp passed three-minute stages at 10, 20, and 40 RPS, then Docker
 
 ## Migration and retained local evidence
 
-The repository destination is `tools/bench/hello-world-local`; the Orca worktree is `local-longevity-test`. All 33,649 source files and symlinks (805,182,444 file bytes) were copied and verified by SHA-256, symlink target, and file mode before adapting source and documentation. `.build/`, generated SDKs, dependency trees, `.env`, `.env.10rps`, and historical `results/` remain available locally and ignored by Git. The inventory is `results/migration-inventory.json`; the original build fingerprint and artifact hashes remain in `.build/manifest.json`. No local env file or bulky build output belongs in the PR. Copied Python build-tool environments can contain absolute shebangs referencing the retained source; recreate `.build/build-tools` with `uv venv` and reinstall the pinned build tool when rebuilding after retiring that source.
+The repository destination is `tools/bench/hello-world-docker-compose`; the Orca worktree is `local-longevity-test`. All 33,649 source files and symlinks (805,182,444 file bytes) were copied and verified by SHA-256, symlink target, and file mode before adapting source and documentation. `.build/`, generated SDKs, dependency trees, `.env`, `.env.10rps`, and historical `results/` remain available locally and ignored by Git. The inventory is `results/migration-inventory.json`; the original build fingerprint and artifact hashes remain in `.build/manifest.json`. No local env file or bulky build output belongs in the PR. Copied Python build-tool environments can contain absolute shebangs referencing the retained source; recreate `.build/build-tools` with `uv venv` and reinstall the pinned build tool when rebuilding after retiring that source.
 
 The original `~/work-repos/baml-demos/2026-09-10-local-hello-world` directory was retained unchanged by the migration because both running projects still bind-mount its Prometheus and Grafana configurations. Keep it until an intentional stack recreation switches those mounts to this harness. Existing project names preserve the named Prometheus/Grafana volumes. No workload or monitoring container was restarted by the migration, and no volume was removed. Editing a destination dashboard does not update the retained source mount in a currently running container.
 
@@ -157,7 +157,7 @@ python3 scripts/check.py
 (cd baml-debian && ../scripts/baml.sh check --agent-skill-check off)
 ```
 
-`check.py` validates source syntax and dashboard invariants without Docker, BAML build outputs, or installed app dependencies. CI runs these checks and resolves both example Compose configurations. `verify.py` exercises existing HTTP endpoints and observes load; it never starts containers and intentionally fails for stopped apps/load generators, mismatched rates, or restarts. A clean source checkout cannot reproduce the full runtime until the heap-metrics dependency is available and the local artifacts are built.
+`check.py` validates source syntax and dashboard invariants without Docker, BAML build outputs, or installed app dependencies. Run the commands above locally to validate changes and resolve both example Compose configurations; this experimental harness is not enabled in CI. `verify.py` exercises existing HTTP endpoints and observes load; it never starts containers and intentionally fails for stopped apps/load generators, mismatched rates, or restarts. A clean source checkout cannot reproduce the full runtime until the heap-metrics dependency is available and the local artifacts are built.
 
 Migration validation on September 10, 2026 passed the offline checks, all three BAML checks using the preserved CLI, both example Compose configurations, both served dashboard comparisons (27 panels on port 3000 and 23 on port 3100), and all 20 comparison queries over the preceding hour through Grafana. All 26 container identities and mounts were unchanged. The 60-second default-stack verification **failed for native Debian**: 6,000 attempts, 5,985 HTTP 200s, 15 transport errors, and one new restart. The other four variants each delivered 6,000 HTTP 200s at approximately 100 RPS without new transport errors or restarts. The second-stack verification failed at its stopped load generator. No full-load pass or sustained stability is claimed. The earlier successful verification report is also retained at `results/migration/historical-verification.json`.
 

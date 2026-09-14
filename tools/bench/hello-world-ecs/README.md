@@ -14,7 +14,7 @@ This uses ECS with the **EC2 launch type**. `matrix.json` describes the matrix a
 
 The handlers, package pins, and instrumentation originate from [the Fly harness](../hello-world-fly/README.md). `GET /` returns exactly `hello world`, no trailing newline, with `Content-Type: text/plain; charset=utf-8` and `Cache-Control: no-store`. BAML bridges await a deterministic BAML function through one process-wide runtime on every request. Native BAML runs the packed server directly. There are no LLM calls, caches, forced collections, or per-request application logs. Python tracing is enabled for both Python variants, just as in the Fly experiment.
 
-BAML is pinned to `0.18.1-nightly.20260908.a`, with its corresponding Node and Python bridges. This is a published toolchain, separate from the custom heap-metrics build used by [the local harness](../hello-world-local/README.md). All base images are pinned to multi-architecture index digests in `images.lock.json`; each build selects the appropriate native CLI, pack host, bridge, and base-image child manifest. `x64` maps to Docker `amd64` and ECS `X86_64`. The load image is x64 for every target, holding generator architecture constant.
+BAML is pinned to `0.18.1-nightly.20260908.a`, with its corresponding Node and Python bridges. This is a published toolchain, separate from the custom heap-metrics build used by [the local harness](../hello-world-docker-compose/README.md). All base images are pinned to multi-architecture index digests in `images.lock.json`; each build selects the appropriate native CLI, pack host, bridge, and base-image child manifest. `x64` maps to Docker `amd64` and ECS `X86_64`. The load image is x64 for every target, holding generator architecture constant.
 
 ## CDK and local iteration
 
