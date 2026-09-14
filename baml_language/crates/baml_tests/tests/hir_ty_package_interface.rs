@@ -10,7 +10,7 @@ use baml_compiler2_hir_ty::{
     extern_loc::{
         ExternFunctionLoc, ExternRowAddr, exported_impl_identity, extern_class_method,
         extern_function_named, extern_function_row, extern_impl_block, extern_impl_method,
-        extern_interface_method, extern_owner_generics, extern_signature_ty, impl_identity,
+        extern_interface_method, extern_signature_ty, impl_identity,
     },
     impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
@@ -288,15 +288,20 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
             .collect::<Vec<_>>()
     );
 
-    let ResolvedValue::Exported(function) = context
+    let ResolvedValue::External(function) = context
         .resolve_value(&db, &[Name::new("app"), Name::new("choose")], &[])
         .expect("mounted function resolves")
     else {
         panic!("mounted result must not contain a FunctionLoc");
     };
-    let external = function.external.expect("loc-free callable facts");
-    assert!(matches!(external.target, ExternalCallTarget::Free { .. }));
-    assert_eq!(external.user_generic_params().count(), 1);
+    assert!(matches!(
+        function.slot(&db),
+        ExternalCallTarget::Free { .. }
+    ));
+    assert_eq!(
+        callable_user_generic_params(&db, DeclRef::External(function)).len(),
+        1
+    );
 }
 
 fn error_messages(source: &str) -> Vec<String> {
@@ -560,11 +565,9 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
         let targets = inference
             .member_resolutions
             .values()
-            .filter_map(|resolution| match resolution {
-                baml_compiler2_hir_ty::infer::MemberResolution::External(callable) => {
-                    Some(callable.target.clone())
-                }
-                _ => None,
+            .filter_map(|resolution| match resolution.callable(db)? {
+                DeclRef::External(function) => Some(function.slot(db)),
+                DeclRef::Source(_) => None,
             })
             .collect::<Vec<_>>();
         (root_ty, targets)
@@ -1026,85 +1029,4 @@ fn callable_takes_self_agrees_across_lanes_and_with_the_export_predicate() {
         }
     }
     assert!(seen_instance && seen_static);
-}
-
-#[test]
-fn the_row_reproduces_the_external_callable_descriptor() {
-    let mut db = ProjectDatabase::new();
-    db.workspace(std::path::Path::new(
-        "/hir-ty-package-interface-extern-parity",
-    ));
-    db.mount("app", library_blob());
-    db.file("main.baml", WITNESS_CONSUMER);
-    assert_no_diagnostic_errors(&db);
-    let workspace = db.workspace_root().unwrap();
-
-    let mut callables = Vec::new();
-    let ResolvedValue::Exported(choose) = package_resolution_context(&db, workspace)
-        .resolve_value(&db, &[Name::new("app"), Name::new("choose")], &[])
-        .expect("choose resolves")
-    else {
-        panic!("mounted result must not contain a FunctionLoc")
-    };
-    callables.push(choose.external.clone().expect("loc-free callable facts"));
-    let items = baml_compiler2_ppir::package_items(&db, workspace);
-    let Some(baml_compiler2_hir::contributions::Definition::Function(inspect)) =
-        items.lookup_value(&[], &Name::new("inspect"))
-    else {
-        panic!("inspect resolves")
-    };
-    let inference = baml_compiler2_hir_ty::infer::infer_body(
-        &db,
-        baml_compiler2_hir::body::BodyOwnerId::Function(inspect),
-    );
-    callables.extend(inference.member_resolutions.values().filter_map(
-        |resolution| match resolution {
-            baml_compiler2_hir_ty::infer::MemberResolution::External(callable) => {
-                Some(callable.clone())
-            }
-            _ => None,
-        },
-    ));
-    assert!(callables.len() >= 4, "{}", callables.len());
-
-    let mut families = std::collections::BTreeSet::new();
-    for callable in callables {
-        let loc = match &callable.target {
-            ExternalCallTarget::Free { function } => {
-                families.insert("free");
-                extern_function_named(&db, function.root(), function.namespace(), function.name())
-            }
-            ExternalCallTarget::Method { class, name } => {
-                families.insert("method");
-                extern_class_method(&db, class, name)
-            }
-            ExternalCallTarget::Interface { interface, method } => {
-                families.insert("interface");
-                extern_interface_method(&db, interface, method)
-            }
-        }
-        .expect("every carried descriptor names a row its target addresses");
-        let row = extern_function_row(&db, loc);
-        assert_eq!(callable.target, row.target);
-        assert_eq!(callable.linkability, row.linkability);
-        assert_eq!(callable.builtin_kind, row.builtin_kind);
-        assert_eq!(
-            callable.takes_self,
-            callable_takes_self(&db, DeclRef::External(loc))
-        );
-        assert_eq!(callable.generic_params, row.generic_params);
-        assert_eq!(callable.generic_param_bounds, row.generic_param_bounds);
-        let (owner_params, owner_bounds) = extern_owner_generics(&db, loc);
-        assert_eq!(callable.owner_generic_params.as_slice(), owner_params);
-        assert_eq!(callable.owner_generic_param_bounds.as_slice(), owner_bounds);
-        let user: Vec<_> = callable
-            .user_generic_params()
-            .map(|(param, bounds)| (param.clone(), bounds.to_vec()))
-            .collect();
-        assert_eq!(
-            user,
-            callable_user_generic_params(&db, DeclRef::External(loc))
-        );
-    }
-    assert_eq!(families.len(), 3, "{families:?}");
 }

@@ -1,6 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
+use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir_ty::{
+    callable::callable_takes_self,
+    extern_loc::{
+        ExternFunctionLoc, FunctionRef, InterfaceRef, extern_function_row, extern_interface_method,
+    },
+    package_interface::ExportedFunction,
+};
 use baml_type::{
     DeclName, ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy,
     TyAttr, TyTemplate, TyTemplateInterface, TypeName,
@@ -1370,115 +1378,154 @@ fn method_item_ref<'db>(
     }
 }
 
-/// Convert a `MemberResolution` (from TIR) into an `ItemRef` (for MIR).
-///
-/// Only `Method` and `Free` variants are callable — callers must guard against
-/// `Field` and `Variant` variants before calling this function.
+/// The item a member resolution links as, by dispatch mode: a callable's
+/// own item ([`function_item_ref`]), or — for a virtual interface method —
+/// the slot the runtime dispatches through ([`interface_slot_item_ref`]).
+/// Fields, variants, and virtual fields link no item.
 fn resolution_to_item_ref<'db>(
     db: &'db dyn crate::Db,
     res: &crate::inference_provider::MemberResolution<'db>,
 ) -> Option<ItemRef<'db>> {
     use crate::inference_provider::MemberResolution;
     match res {
-        MemberResolution::Free { func_loc } => {
-            let pkg_info = file_package(db, func_loc.file(db));
-            let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
-            Some(ItemRef::Free {
-                package: spelling(db).of(pkg_info.root).clone(),
-                namespace: pkg_info.namespace_path,
-                name: func_data.name.clone(),
-            })
+        MemberResolution::Free { func_loc }
+        | MemberResolution::BoundMethod { func_loc }
+        | MemberResolution::UnboundMethod { func_loc }
+        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+            Some(function_item_ref(db, *func_loc))
         }
-        MemberResolution::BoundMethod {
-            class_loc,
-            func_loc,
-        }
-        | MemberResolution::UnboundMethod {
-            class_loc,
-            func_loc,
-        } => Some(method_item_ref(db, *class_loc, *func_loc)),
         MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-            // A virtual interface-method call: the ItemRef names the interface + method, and
-            // the runtime dispatches on the receiver's actual impl.
-            let pkg_info = file_package(db, iface_loc.file(db));
-            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
-            Some(ItemRef::Method {
-                package: spelling(db).of(pkg_info.root).clone(),
-                namespace: pkg_info.namespace_path,
-                class: iface_data.name.clone(),
-                name: method.clone(),
-            })
-        }
-        MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-            // A statically-resolved interface-method call: the callee IS the
-            // resolved body — the impl's override or the interface's default
-            // — and the resolution carries the owner frame it expects
-            // (`frame_type_args`), which the call-lowering path emits ahead
-            // of the method's own type args per the `[owner ++ own]`
-            // invariant. Nothing routes through the interface's method ref.
-            Some(def_to_item_ref(db, Definition::Function(*func_loc)))
-        }
-        MemberResolution::External(external) => {
-            use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-            Some(match &external.target {
-                ExternalCallTarget::Free { function } => ItemRef::Free {
-                    package: spelling(db).of(function.root()).clone(),
-                    namespace: function.namespace().clone(),
-                    name: function.name().clone(),
-                },
-                ExternalCallTarget::Method { class, name } => ItemRef::Method {
-                    package: spelling(db).of(class.root()).clone(),
-                    namespace: class.namespace().clone(),
-                    class: class.name().clone(),
-                    name: name.clone(),
-                },
-                ExternalCallTarget::Interface { interface, method } => ItemRef::Method {
-                    package: spelling(db).of(interface.root()).clone(),
-                    namespace: interface.namespace().clone(),
-                    class: interface.name().clone(),
-                    name: method.clone(),
-                },
-            })
+            Some(interface_slot_item_ref(db, *iface_loc, method))
         }
         MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. }
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. }
-        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
+        | MemberResolution::InterfaceVirtualField { .. } => None,
     }
 }
 
-/// The statically-known callable body of a member resolution, if any. Interface **virtual**
-/// methods dispatch at runtime and have no static body (`None`); a concrete interface method
-/// carries its resolved `func_loc`. Field / variant / virtual-field resolutions are not
-/// callable. Centralizes the `func_loc` extraction the call-lowering paths share.
+/// The item a callable links as, wherever it is declared.
+///
+/// A source declaration links as its own item: [`def_to_item_ref`] shapes a
+/// free function, a class-inherent method (Method-keyed on the owner
+/// `method_owner` records), and an interface body — an impl's provided
+/// method or an adopted default — alike. A statically-resolved interface
+/// method therefore links to the resolved BODY, never through the
+/// interface's slot: its resolution carries the owner frame that body
+/// expects (`frame_type_args`), which call lowering emits ahead of the
+/// method's own type args per the `[owner ++ own]` invariant.
+///
+/// A served package's row links as its ADDRESS — its dispatch slot — never
+/// the heads the row's own `target` spells: a blob cannot point a
+/// consumer's call at another package's symbol.
+fn function_item_ref<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> ItemRef<'db> {
+    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
+    match func {
+        DeclRef::Source(func_loc) => def_to_item_ref(db, Definition::Function(func_loc)),
+        DeclRef::External(callee) => match callee.slot(db) {
+            ExternalCallTarget::Free { function } => ItemRef::Free {
+                package: spelling(db).of(function.root()).clone(),
+                namespace: function.namespace().clone(),
+                name: function.name().clone(),
+            },
+            ExternalCallTarget::Method { class, name } => ItemRef::Method {
+                package: spelling(db).of(class.root()).clone(),
+                namespace: class.namespace().clone(),
+                class: class.name().clone(),
+                name,
+            },
+            ExternalCallTarget::Interface { interface, method } => ItemRef::Method {
+                package: spelling(db).of(interface.root()).clone(),
+                namespace: interface.namespace().clone(),
+                class: interface.name().clone(),
+                name: method,
+            },
+        },
+    }
+}
+
+/// The slot a virtual interface-method call dispatches through — the
+/// interface plus the member, wherever the interface is declared; the
+/// runtime resolves it against the receiver's actual impl.
+fn interface_slot_item_ref<'db>(
+    db: &'db dyn crate::Db,
+    interface: InterfaceRef<'db>,
+    method: &Name,
+) -> ItemRef<'db> {
+    let (package, namespace, class) = match interface {
+        DeclRef::Source(iface_loc) => {
+            let pkg_info = file_package(db, iface_loc.file(db));
+            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+            (
+                spelling(db).of(pkg_info.root).clone(),
+                pkg_info.namespace_path,
+                iface_data.name.clone(),
+            )
+        }
+        DeclRef::External(interface) => {
+            let head = interface.head(db);
+            (
+                spelling(db).of(head.root()).clone(),
+                head.namespace().clone(),
+                head.name().clone(),
+            )
+        }
+    };
+    ItemRef::Method {
+        package,
+        namespace,
+        class,
+        name: method.clone(),
+    }
+}
+
+/// The body a resolution calls directly in THIS compilation: its callable,
+/// when declared in source. A served package's row has no body here, and a
+/// virtual interface method dispatches at runtime even when the interface
+/// declares a default. Fields, variants, and virtual fields are not
+/// callable.
 fn resolution_func_loc<'db>(
     res: &crate::inference_provider::MemberResolution<'db>,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use crate::inference_provider::MemberResolution;
     match res {
         MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(*func_loc),
-        MemberResolution::External(_)
-        | MemberResolution::InterfaceVirtualMethod { .. }
+        | MemberResolution::BoundMethod { func_loc }
+        | MemberResolution::UnboundMethod { func_loc }
+        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
+            DeclRef::Source(func_loc) => Some(*func_loc),
+            DeclRef::External(_) => None,
+        },
+        MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. }
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. }
-        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
+        | MemberResolution::InterfaceVirtualField { .. } => None,
     }
 }
 
-fn resolution_external_callable<'a>(
-    res: &'a crate::inference_provider::MemberResolution<'_>,
-) -> Option<&'a baml_compiler2_hir_ty::callable::ExternalCallable> {
+/// The exported row a resolution names, when its callee is a served
+/// package's: the row itself for a free function, a class method, or an
+/// impl-provided method; the interface's own declaration of the method for
+/// a virtual slot on a served interface.
+fn resolution_external_function<'db>(
+    db: &'db dyn crate::Db,
+    res: &crate::inference_provider::MemberResolution<'db>,
+) -> Option<ExternFunctionLoc<'db>> {
+    use crate::inference_provider::MemberResolution;
     match res {
-        crate::inference_provider::MemberResolution::External(external) => Some(external),
-        _ => None,
+        MemberResolution::Free { func_loc }
+        | MemberResolution::BoundMethod { func_loc }
+        | MemberResolution::UnboundMethod { func_loc }
+        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
+            DeclRef::Source(_) => None,
+            DeclRef::External(function) => Some(*function),
+        },
+        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => match iface_loc {
+            DeclRef::Source(_) => None,
+            DeclRef::External(interface) => extern_interface_method(db, interface.head(db), method),
+        },
+        MemberResolution::Field { .. }
+        | MemberResolution::Variant { .. }
+        | MemberResolution::InterfaceVirtualField { .. } => None,
     }
 }
 
@@ -3054,11 +3101,6 @@ impl<'db> LoweringContext<'db> {
                 interface,
                 field_index,
                 ..
-            }
-            | MemberResolution::ExternalInterfaceVirtualField {
-                interface,
-                field_index,
-                ..
             } => (interface, *field_index),
             _ => return None,
         };
@@ -3570,8 +3612,11 @@ impl<'db> LoweringContext<'db> {
         if !is_ufcs {
             return false;
         }
-        let Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) =
-            self.tir_resolution(self.expr_metadata_key(callee)).cloned()
+        // A served interface's slot takes the UFCS dispatch road below.
+        let Some(MemberResolution::InterfaceVirtualMethod {
+            iface_loc: DeclRef::Source(iface_loc),
+            method,
+        }) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
         else {
             return false;
         };
@@ -3661,15 +3706,91 @@ impl<'db> LoweringContext<'db> {
         match resolution {
             MemberResolution::BoundMethod { func_loc, .. }
             | MemberResolution::UnboundMethod { func_loc, .. }
-            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(
-                baml_compiler2_ppir::function_signature(self.db, *func_loc)
-                    .params
-                    .first()
-                    .is_some_and(|param| param.name.as_str() == "self"),
-            ),
+            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+                Some(callable_takes_self(self.db, *func_loc))
+            }
             MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-                let iface_data =
-                    baml_compiler2_ppir::item_data::interface_data(self.db, *iface_loc);
+                self.virtual_slot_takes_self(*iface_loc, method)
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether a resolution names a METHOD for the call roads' receiver
+    /// handling. A source method counts by its mode; a served package's
+    /// callee counts only when its row takes `self` — a served static links
+    /// as a plain constant on the residual road (converges at
+    /// link-by-identity).
+    fn resolution_is_method_call(
+        &self,
+        resolution: &crate::inference_provider::MemberResolution<'db>,
+    ) -> bool {
+        use crate::inference_provider::MemberResolution;
+        match resolution {
+            MemberResolution::BoundMethod { func_loc, .. }
+            | MemberResolution::UnboundMethod { func_loc, .. }
+            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
+                DeclRef::Source(_) => true,
+                DeclRef::External(function) => {
+                    callable_takes_self(self.db, DeclRef::External(*function))
+                }
+            },
+            MemberResolution::InterfaceVirtualMethod { iface_loc, method } => match iface_loc {
+                DeclRef::Source(_) => true,
+                DeclRef::External(interface) => {
+                    self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                        == Some(true)
+                }
+            },
+            MemberResolution::Free { .. }
+            | MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => false,
+        }
+    }
+
+    /// The served package's interface slot a resolution dispatches through,
+    /// with whether its method takes `self`: a virtual slot on a served
+    /// interface, or a served impl's provided method — which links through
+    /// its interface's slot (the runtime realizes the frame from the rule)
+    /// until link-by-identity. `None` for anything with a body in this
+    /// compilation, or with no slot.
+    fn served_slot_method(
+        &self,
+        resolution: &crate::inference_provider::MemberResolution<'db>,
+    ) -> Option<(Name, bool)> {
+        use baml_compiler2_hir_ty::callable::ExternalCallTarget;
+
+        use crate::inference_provider::MemberResolution;
+        match resolution {
+            MemberResolution::InterfaceVirtualMethod {
+                iface_loc: DeclRef::External(interface),
+                method,
+            } => Some((
+                method.clone(),
+                self.virtual_slot_takes_self(DeclRef::External(*interface), method) == Some(true),
+            )),
+            MemberResolution::InterfaceConcreteMethod {
+                func_loc: DeclRef::External(function),
+                ..
+            } => match function.slot(self.db) {
+                ExternalCallTarget::Interface { method, .. } => Some((
+                    method,
+                    callable_takes_self(self.db, DeclRef::External(*function)),
+                )),
+                ExternalCallTarget::Free { .. } | ExternalCallTarget::Method { .. } => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Whether the method a virtual slot names takes a `self` receiver,
+    /// wherever the interface is declared. `None` when the slot cannot be
+    /// read at all.
+    fn virtual_slot_takes_self(&self, interface: InterfaceRef<'db>, method: &Name) -> Option<bool> {
+        match interface {
+            DeclRef::Source(iface_loc) => {
+                let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
                 let pkg_info = file_package(self.db, iface_loc.file(self.db));
                 let iface_tn = TypeName::new(
                     self.spelling.of(pkg_info.root).clone(),
@@ -3679,8 +3800,10 @@ impl<'db> LoweringContext<'db> {
                 self.interface_method_shape(&iface_tn, method)
                     .map(|shape| shape.takes_self)
             }
-            MemberResolution::External(external) => Some(external.takes_self),
-            _ => None,
+            DeclRef::External(interface) => {
+                extern_interface_method(self.db, interface.head(self.db), method)
+                    .map(|method| callable_takes_self(self.db, DeclRef::External(method)))
+            }
         }
     }
 
@@ -5165,27 +5288,40 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.1b: Tagged-template lowering (BEP-049 §10 / M4e.1) ─────────────────────
 
 impl<'db> LoweringContext<'db> {
-    /// Source-less callable metadata for a callee expression, following the
-    /// same flat-vs-path-member precedence as the source-location helpers.
-    fn external_callee(
-        &self,
-        callee: AstExprId,
-    ) -> Option<&baml_compiler2_hir_ty::callable::ExternalCallable> {
+    /// The exported row a callee expression names, following the same
+    /// flat-vs-path-member precedence as the source-location helpers.
+    fn external_callee(&self, callee: AstExprId) -> Option<ExternFunctionLoc<'db>> {
         let key = self.expr_metadata_key(callee);
         match &self.body.exprs[callee] {
             AstExpr::Path(segments) if segments.len() >= 2 => self
                 .tir_path_member_resolutions(key)
                 .and_then(|resolutions| resolutions.last())
-                .and_then(resolution_external_callable)
+                .and_then(|res| resolution_external_function(self.db, res))
                 .or_else(|| {
                     self.tir_resolution(key)
-                        .and_then(resolution_external_callable)
+                        .and_then(|res| resolution_external_function(self.db, res))
                 }),
             AstExpr::MemberAccess { .. } => self
                 .tir_resolution(key)
-                .and_then(resolution_external_callable),
+                .and_then(|res| resolution_external_function(self.db, res)),
             _ => None,
         }
+    }
+
+    /// The exported row a callee names, ONLY when its package is
+    /// compiler-built (the precompiled stdlib): the one gate on trusting a
+    /// row's `builtin_kind` for compiler-owned lowering. Trust follows the
+    /// package the row's ADDRESS lives in — a blob cannot borrow another
+    /// package's trust by spelling its `target`.
+    fn trusted_external_callee(
+        &self,
+        callee: AstExprId,
+    ) -> Option<(ExternFunctionLoc<'db>, &'db ExportedFunction)> {
+        let function = self.external_callee(callee)?;
+        if !is_precompiled_stdlib(self.db, function.package(self.db)) {
+            return None;
+        }
+        Some((function, extern_function_row(self.db, function)))
     }
 
     /// Lower a tagged template (a `TAGGED_TEMPLATE_EXPR`) to a
@@ -5995,7 +6131,10 @@ impl<'db> LoweringContext<'db> {
                 // other spelling takes (the frame realizes associated types
                 // the written qualifier omits). `self`, if the method takes
                 // one, stays an ordinary first parameter.
-                if let Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) = self
+                if let Some(MemberResolution::InterfaceVirtualMethod {
+                    iface_loc: DeclRef::Source(iface_loc),
+                    method,
+                }) = self
                     .tir_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
                     && let Some(rvalue) = self.virtual_function_rvalue(expr_id, iface_loc, &method)
@@ -6379,11 +6518,7 @@ impl<'db> LoweringContext<'db> {
                         // type, whose class arguments fill the callee frame
                         // (a bare constant runs a generic class's method with
                         // an empty frame).
-                        let takes_self =
-                            baml_compiler2_ppir::function_signature(self.db, *func_loc)
-                                .params
-                                .first()
-                                .is_some_and(|param| param.name.as_str() == "self");
+                        let takes_self = callable_takes_self(self.db, *func_loc);
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
                         let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
@@ -6450,53 +6585,11 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    Some(MemberResolution::External(external))
-                        if matches!(
-                            external.target,
-                            baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface { .. }
-                        ) && self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
-                    Some(MemberResolution::External(external))
-                        if external.takes_self
-                            && matches!(
-                                external.target,
-                                baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { .. }
-                            )
-                            && self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
-                    {
-                        let resolution = member_resolutions.into_iter().last().unwrap();
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
-                            let receiver_segments = &segments[..segments.len() - 1];
-                            let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
-                                    || Operand::Constant(Constant::Null),
-                                    Operand::Copy,
-                                )
-                            } else {
-                                let recv_ty = self.expr_ty(expr_id);
-                                let recv_local = self.builder.temp(recv_ty);
-                                self.lower_multi_segment_path_as_field_chain(
-                                    expr_id,
-                                    receiver_segments,
-                                    Place::local(recv_local),
-                                );
-                                Operand::Copy(Place::local(recv_local))
-                            };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    item_ref: item,
-                                    receiver: receiver_op,
-                                },
-                            );
-                            return;
-                        }
-                    }
                     Some(
                         MemberResolution::UnboundMethod { .. }
                         | MemberResolution::Free { .. }
                         | MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. }
-                        | MemberResolution::External(_),
+                        | MemberResolution::InterfaceConcreteMethod { .. },
                     ) => {
                         // Unbound method or free function reference — emit a plain function constant.
                         //
@@ -6520,18 +6613,14 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    Some(
-                        MemberResolution::Field { .. } | MemberResolution::ExternalField { .. },
-                    ) => {
+                    Some(MemberResolution::Field { .. }) => {
                         // Local-rooted field access — chain field projections.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
                         return;
                     }
                     Some(
                         MemberResolution::Variant { .. }
-                        | MemberResolution::InterfaceVirtualField { .. }
-                        | MemberResolution::ExternalVariant { .. }
-                        | MemberResolution::ExternalInterfaceVirtualField { .. },
+                        | MemberResolution::InterfaceVirtualField { .. },
                     ) => {
                         // Handled by expr_types check below (a virtual field read on an
                         // existential falls through to the general member-access lowering).
@@ -6589,7 +6678,10 @@ impl<'db> LoweringContext<'db> {
                     // type-keyed road the qualified spelling takes. An
                     // interface method has no global function symbol, so the
                     // bare-constant road below can never serve it.
-                    MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+                    MemberResolution::InterfaceVirtualMethod {
+                        iface_loc: DeclRef::Source(iface_loc),
+                        method,
+                    } => {
                         let method = method.clone();
                         let iface_loc = *iface_loc;
                         if let Some(rvalue) =
@@ -6607,50 +6699,13 @@ impl<'db> LoweringContext<'db> {
                         );
                         return;
                     }
-                    MemberResolution::External(external)
-                        if matches!(
-                            external.target,
-                            baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface { .. }
-                        ) && self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
-                    MemberResolution::External(external)
-                        if external.takes_self
-                            && matches!(
-                                external.target,
-                                baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { .. }
-                            )
-                            && self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
-                    {
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
-                            let receiver_segments = &segments[..segments.len() - 1];
-                            let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
-                                    || Operand::Constant(Constant::Null),
-                                    Operand::Copy,
-                                )
-                            } else {
-                                let recv_ty = self.expr_ty(expr_id);
-                                let recv_local = self.builder.temp(recv_ty);
-                                self.lower_multi_segment_path_as_field_chain(
-                                    expr_id,
-                                    receiver_segments,
-                                    Place::local(recv_local),
-                                );
-                                Operand::Copy(Place::local(recv_local))
-                            };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    item_ref: item,
-                                    receiver: receiver_op,
-                                },
-                            );
-                            return;
-                        }
-                    }
                     MemberResolution::UnboundMethod { .. }
                     | MemberResolution::Free { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. }
-                    | MemberResolution::External(_) => {
+                    | MemberResolution::InterfaceVirtualMethod {
+                        iface_loc: DeclRef::External(_),
+                        ..
+                    } => {
                         // BUG: same frameless-constant hole as the
                         // `member_resolutions` arm above — an
                         // `InterfaceConcreteMethod` reaching this bare
@@ -6667,13 +6722,11 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     MemberResolution::Variant { .. }
-                    | MemberResolution::InterfaceVirtualField { .. }
-                    | MemberResolution::ExternalVariant { .. }
-                    | MemberResolution::ExternalInterfaceVirtualField { .. } => {
+                    | MemberResolution::InterfaceVirtualField { .. } => {
                         // Handled by expr_types check below (a virtual field read on an
                         // existential falls through to the general lowering).
                     }
-                    MemberResolution::Field { .. } | MemberResolution::ExternalField { .. } => {
+                    MemberResolution::Field { .. } => {
                         // Local-rooted field access — chain field projections.
                         // The root segment is a local; chain through class fields.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
@@ -8681,8 +8734,6 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
-        use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-
         use crate::inference_provider::MemberResolution;
 
         // A UFCS interface-item call, whatever its spelling — the resolution
@@ -8731,13 +8782,11 @@ impl<'db> LoweringContext<'db> {
             // `a` with `b` and drop the real argument.  Only a type-/package-
             // rooted path spells UFCS, and therefore supplies `self` explicitly.
             && self.binding_id_for_path(callee, &segments[0]).is_none()
-            && let Some(MemberResolution::External(external)) =
-                self.tir_resolution(self.expr_metadata_key(callee)).cloned()
-            && let ExternalCallTarget::Interface { method, .. } = &external.target
-            && external.takes_self
+            && let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
+            && let Some((method, true)) = self.served_slot_method(&resolution)
             && let Some(&receiver) = args.first()
             && self.try_lower_interface_ufcs_dispatch(
-                expr_id, receiver, method, args, runtime_id, &dest,
+                expr_id, receiver, &method, args, runtime_id, &dest,
             )
         {
             return;
@@ -9063,7 +9112,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::Free { .. }
                             | MemberResolution::InterfaceVirtualMethod { .. }
                             | MemberResolution::InterfaceConcreteMethod { .. }
-                    ) || matches!(r, MemberResolution::External(_))
+                    )
                 })
             {
                 // Check if base is a value receiver or a bare type/package path.
@@ -9090,16 +9139,22 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::UnboundMethod { func_loc, .. }
                             | MemberResolution::Free { func_loc }
                             | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                                let sig =
-                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
-                                sig.params
-                                    .first()
-                                    .is_some_and(|param| param.name.as_str() == "self")
+                                callable_takes_self(self.db, *func_loc)
                             }
-                            // A virtual interface-method call is always on a receiver, so it
-                            // takes `self`; there is no static body to inspect.
-                            MemberResolution::InterfaceVirtualMethod { .. } => true,
-                            MemberResolution::External(external) => external.takes_self,
+                            // A virtual interface-method call on a source
+                            // interface is always on a receiver, so it takes
+                            // `self`; a served interface's row says.
+                            MemberResolution::InterfaceVirtualMethod {
+                                iface_loc: DeclRef::Source(_),
+                                ..
+                            } => true,
+                            MemberResolution::InterfaceVirtualMethod {
+                                iface_loc: DeclRef::External(interface),
+                                method,
+                            } => {
+                                self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                                    == Some(true)
+                            }
                             _ => false,
                         })
                 };
@@ -9113,6 +9168,7 @@ impl<'db> LoweringContext<'db> {
                         let resolution =
                             self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                         if let Some(MemberResolution::InterfaceConcreteMethod {
+                            func_loc: DeclRef::Source(_),
                             frame_type_args,
                             ..
                         }) = resolution.as_ref()
@@ -9149,6 +9205,7 @@ impl<'db> LoweringContext<'db> {
                         let resolution =
                             self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                         if let Some(MemberResolution::InterfaceConcreteMethod {
+                            func_loc: DeclRef::Source(_),
                             frame_type_args,
                             ..
                         }) = resolution.as_ref()
@@ -9178,29 +9235,13 @@ impl<'db> LoweringContext<'db> {
                 && self
                     .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
-                    .is_some_and(|r| {
-                        matches!(
-                            r,
-                            MemberResolution::BoundMethod { .. }
-                                | MemberResolution::UnboundMethod { .. }
-                                | MemberResolution::InterfaceVirtualMethod { .. }
-                                | MemberResolution::InterfaceConcreteMethod { .. }
-                        ) || matches!(r, MemberResolution::External(external) if external.takes_self)
-                    });
+                    .is_some_and(|r| self.resolution_is_method_call(r));
             // Also check flat resolutions (package-path method call, kept for compatibility).
             let is_pkg_method = !is_local_method
                 && segments.len() >= 2
                 && self
                     .tir_resolution(self.expr_metadata_key(callee))
-                    .is_some_and(|r| {
-                        matches!(
-                            r,
-                            MemberResolution::BoundMethod { .. }
-                                | MemberResolution::UnboundMethod { .. }
-                                | MemberResolution::InterfaceVirtualMethod { .. }
-                                | MemberResolution::InterfaceConcreteMethod { .. }
-                        ) || matches!(r, MemberResolution::External(external) if external.takes_self)
-                    });
+                    .is_some_and(|r| self.resolution_is_method_call(r));
 
             if is_local_method {
                 // Multi-segment path callee with a local-rooted Method resolution.
@@ -9215,7 +9256,9 @@ impl<'db> LoweringContext<'db> {
                     .and_then(|resolutions| resolutions.last())
                     .cloned();
                 if let Some(MemberResolution::InterfaceConcreteMethod {
-                    frame_type_args, ..
+                    func_loc: DeclRef::Source(_),
+                    frame_type_args,
+                    ..
                 }) = method_resolution.as_ref()
                 {
                     carried_owner_frame = Some(frame_type_args.clone());
@@ -9231,13 +9274,19 @@ impl<'db> LoweringContext<'db> {
                     MemberResolution::BoundMethod { func_loc, .. }
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                        let sig = baml_compiler2_ppir::function_signature(self.db, *func_loc);
-                        sig.params
-                            .first()
-                            .is_some_and(|param| param.name.as_str() == "self")
+                        callable_takes_self(self.db, *func_loc)
                     }
-                    MemberResolution::InterfaceVirtualMethod { .. } => true,
-                    MemberResolution::External(external) => external.takes_self,
+                    MemberResolution::InterfaceVirtualMethod {
+                        iface_loc: DeclRef::Source(_),
+                        ..
+                    } => true,
+                    MemberResolution::InterfaceVirtualMethod {
+                        iface_loc: DeclRef::External(interface),
+                        method,
+                    } => {
+                        self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                            == Some(true)
+                    }
                     _ => false,
                 });
                 if !method_takes_self {
@@ -9277,7 +9326,9 @@ impl<'db> LoweringContext<'db> {
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let flat_resolution = self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                 if let Some(MemberResolution::InterfaceConcreteMethod {
-                    frame_type_args, ..
+                    func_loc: DeclRef::Source(_),
+                    frame_type_args,
+                    ..
                 }) = flat_resolution.as_ref()
                 {
                     carried_owner_frame = Some(frame_type_args.clone());
@@ -9625,21 +9676,22 @@ impl<'db> LoweringContext<'db> {
     fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
         use crate::inference_provider::MemberResolution;
         let key = self.expr_metadata_key(callee);
-        matches!(
-            self.tir_resolution(key),
-            Some(MemberResolution::BoundMethod { .. })
-        ) || matches!(
-            self.tir_resolution(key),
-            Some(MemberResolution::External(external)) if external.takes_self
-        ) || matches!(
-            self.tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last()),
-            Some(MemberResolution::BoundMethod { .. })
-        ) || matches!(
-            self.tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last()),
-            Some(MemberResolution::External(external)) if external.takes_self
-        )
+        // A served interface's virtual slot counts when its method takes
+        // `self`: the source lane's virtual road consumes those calls before
+        // this predicate runs, while the served lane's residual direct road
+        // still relies on it (converges when the roads do).
+        let uses = |res: Option<&MemberResolution<'db>>| match res {
+            Some(MemberResolution::BoundMethod { .. }) => true,
+            Some(res) => self
+                .served_slot_method(res)
+                .is_some_and(|(_, takes_self)| takes_self),
+            None => false,
+        };
+        uses(self.tir_resolution(key))
+            || uses(
+                self.tir_path_member_resolutions(key)
+                    .and_then(|resolutions| resolutions.last()),
+            )
     }
 
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
@@ -9719,22 +9771,8 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
-        if let Some(external) = self.external_callee(callee) {
-            let package_root = match &external.target {
-                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } => {
-                    function.root()
-                }
-                baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, .. } => {
-                    class.root()
-                }
-                baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface {
-                    interface,
-                    ..
-                } => interface.root(),
-            };
-            if is_precompiled_stdlib(self.db, package_root) {
-                return external.builtin_kind;
-            }
+        if let Some((_, row)) = self.trusted_external_callee(callee) {
+            return row.builtin_kind;
         }
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -9887,11 +9925,10 @@ impl<'db> LoweringContext<'db> {
     fn check_intrinsic(&self, callee: AstExprId) -> Option<IntrinsicOp> {
         use baml_compiler2_ast::BuiltinKind;
 
-        if let Some(external) = self.external_callee(callee)
+        if let Some((external, row)) = self.trusted_external_callee(callee)
             && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } =
-                &external.target
-            && is_precompiled_stdlib(self.db, function.root())
-            && external.builtin_kind == Some(BuiltinKind::Intrinsic)
+                external.slot(self.db)
+            && row.builtin_kind == Some(BuiltinKind::Intrinsic)
             && self.spelling.of(function.root()).as_str() == "log"
             && function.namespace().is_empty()
         {
@@ -9979,18 +10016,20 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── 1. Check the callee resolves to `reflect.Type.of` ──────────
-        let external_type_of = self.external_callee(callee).is_some_and(|external| {
-            external.builtin_kind == Some(BuiltinKind::Intrinsic)
-                && matches!(
-                    &external.target,
-                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, name }
-                        if class.is_lang_root_type(
-                            baml_compiler2_hir::package::lang_roots(self.db),
-                            baml_base::LangPackage::Reflect,
-                            "Type",
-                        ) && name.as_str() == "of"
-                )
-        });
+        let external_type_of = self.trusted_external_callee(callee).is_some_and(
+            |(external, row)| {
+                row.builtin_kind == Some(BuiltinKind::Intrinsic)
+                    && matches!(
+                        external.slot(self.db),
+                        baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, name }
+                            if class.is_lang_root_type(
+                                baml_compiler2_hir::package::lang_roots(self.db),
+                                baml_base::LangPackage::Reflect,
+                                "Type",
+                            ) && name.as_str() == "of"
+                    )
+            },
+        );
         let func_loc = (!external_type_of)
             .then(|| {
                 if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -11021,40 +11060,9 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                MemberResolution::External(external) => {
-                    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-                    match &external.target {
-                        ExternalCallTarget::Method { .. } if external.takes_self => {
-                            if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
-                                let receiver_op = self.lower_to_operand(base);
-                                self.builder.assign(
-                                    dest,
-                                    Rvalue::MakeBoundMethod {
-                                        item_ref: item,
-                                        receiver: receiver_op,
-                                    },
-                                );
-                                return;
-                            }
-                        }
-                        ExternalCallTarget::Interface { .. } => {}
-                        ExternalCallTarget::Free { .. } | ExternalCallTarget::Method { .. } => {
-                            if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
-                                self.builder.assign(
-                                    dest,
-                                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                                );
-                                return;
-                            }
-                        }
-                    }
-                }
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. }
-                | MemberResolution::ExternalField { .. }
-                | MemberResolution::ExternalVariant { .. }
-                | MemberResolution::ExternalInterfaceVirtualField { .. } => {
+                | MemberResolution::InterfaceVirtualField { .. } => {
                     // Fall through — handled by the existing field / enum-variant / interface
                     // virtual-field lowering below (a virtual field read on an existential).
                 }

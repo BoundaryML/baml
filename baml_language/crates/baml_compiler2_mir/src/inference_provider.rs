@@ -16,12 +16,9 @@
 //! per-scope dispatch reduces to body-vs-defaults.
 
 use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId, StmtId as AstStmtId};
-use baml_compiler2_hir::{
-    body::BodyOwnerId,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
-};
+use baml_compiler2_hir::body::BodyOwnerId;
 use baml_compiler2_hir_ty::{
-    callable::{ExternalCallTarget, ExternalCallable},
+    extern_loc::{ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef},
     infer as hir_infer,
 };
 use baml_type::{Name, Ty as Tir2Ty};
@@ -41,36 +38,30 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub(crate) enum MemberResolution<'db> {
     /// A class field access (e.g. `p.name`).
     Field {
-        class_loc: ClassLoc<'db>,
+        class_loc: ClassRef<'db>,
         field_name: Name,
     },
     /// An enum variant access (e.g. `Status.Active`).
     Variant {
-        enum_loc: EnumLoc<'db>,
+        enum_loc: EnumRef<'db>,
         variant_name: Name,
     },
     /// A free item accessed via a package/namespace path.
-    Free { func_loc: FunctionLoc<'db> },
+    Free { func_loc: FunctionRef<'db> },
     /// A bound method reference: root is a value; type has `self` stripped.
-    BoundMethod {
-        class_loc: ClassLoc<'db>,
-        func_loc: FunctionLoc<'db>,
-    },
+    BoundMethod { func_loc: FunctionRef<'db> },
     /// An unbound method reference: root is a type name; type keeps `self`.
-    UnboundMethod {
-        class_loc: ClassLoc<'db>,
-        func_loc: FunctionLoc<'db>,
-    },
+    UnboundMethod { func_loc: FunctionRef<'db> },
     /// A VIRTUAL interface-method call: only the slot (interface + member)
     /// is statically known; dispatch resolves to the receiver's runtime impl.
     InterfaceVirtualMethod {
-        iface_loc: InterfaceLoc<'db>,
+        iface_loc: InterfaceRef<'db>,
         method: Name,
     },
     /// A CONCRETE interface-method call through a statically-matched impl.
     InterfaceConcreteMethod {
-        impl_loc: ImplLoc<'db>,
-        func_loc: FunctionLoc<'db>,
+        impl_loc: ImplRef<'db>,
+        func_loc: FunctionRef<'db>,
         /// The callee's OWNER frame, carried from resolution: the impl's
         /// generic bindings (declaration order) for an override,
         /// `[Self = receiver, iface args..]` for an adopted default. The
@@ -82,25 +73,7 @@ pub(crate) enum MemberResolution<'db> {
     },
     /// A VIRTUAL interface-field access through the realized declaring view.
     InterfaceVirtualField {
-        iface_loc: InterfaceLoc<'db>,
-        interface: Tir2Ty,
-        field_index: u32,
-        field: Name,
-    },
-    /// A callable exported by a source-less package. Its owned descriptor is
-    /// the complete link and frame-layout contract; it intentionally carries
-    /// no HIR location.
-    External(std::sync::Arc<ExternalCallable>),
-    ExternalField {
-        class: baml_type::DeclName,
-        field: Name,
-    },
-    ExternalVariant {
-        enum_name: baml_type::DeclName,
-        variant: Name,
-    },
-    ExternalInterfaceVirtualField {
-        interface_name: baml_type::DeclName,
+        iface_loc: InterfaceRef<'db>,
         interface: Tir2Ty,
         field_index: u32,
         field: Name,
@@ -118,7 +91,6 @@ pub(crate) struct CallPlan {
     pub(crate) own_offset: usize,
     pub(crate) explicit: bool,
     pub(crate) slots: Vec<CallTypeArgPlan>,
-    pub(crate) target: Option<ExternalCallTarget>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub(crate) side_channels: CallSideChannels,
 }
@@ -372,7 +344,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         emission_ty: slot.emission_ty.clone(),
                     })
                     .collect(),
-                target: plan.target.clone(),
                 side_channels: CallSideChannels {
                     runtime_id: plan.runtime_id,
                 },
@@ -421,15 +392,11 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             variant_name: variant.clone(),
         },
         hir_infer::MemberResolution::Free { func } => MemberResolution::Free { func_loc: *func },
-        hir_infer::MemberResolution::BoundMethod { class, func } => MemberResolution::BoundMethod {
-            class_loc: *class,
-            func_loc: *func,
-        },
-        hir_infer::MemberResolution::UnboundMethod { class, func } => {
-            MemberResolution::UnboundMethod {
-                class_loc: *class,
-                func_loc: *func,
-            }
+        hir_infer::MemberResolution::BoundMethod { func } => {
+            MemberResolution::BoundMethod { func_loc: *func }
+        }
+        hir_infer::MemberResolution::UnboundMethod { func } => {
+            MemberResolution::UnboundMethod { func_loc: *func }
         }
         hir_infer::MemberResolution::InterfaceVirtualMethod { interface, method } => {
             MemberResolution::InterfaceVirtualMethod {
@@ -455,32 +422,6 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field,
         } => MemberResolution::InterfaceVirtualField {
             iface_loc: *interface,
-            interface: view.clone(),
-            field_index: *field_index,
-            field: field.clone(),
-        },
-        hir_infer::MemberResolution::External(external) => {
-            MemberResolution::External(external.clone())
-        }
-        hir_infer::MemberResolution::ExternalField { class, field } => {
-            MemberResolution::ExternalField {
-                class: class.clone(),
-                field: field.clone(),
-            }
-        }
-        hir_infer::MemberResolution::ExternalVariant { enum_name, variant } => {
-            MemberResolution::ExternalVariant {
-                enum_name: enum_name.clone(),
-                variant: variant.clone(),
-            }
-        }
-        hir_infer::MemberResolution::ExternalInterfaceVirtualField {
-            interface,
-            view,
-            field_index,
-            field,
-        } => MemberResolution::ExternalInterfaceVirtualField {
-            interface_name: interface.clone(),
             interface: view.clone(),
             field_index: *field_index,
             field: field.clone(),

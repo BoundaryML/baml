@@ -243,6 +243,18 @@ function main() -> reflect.Type {
         "forged intrinsic metadata selected compiler-owned lowering: {}",
         display_function(mir)
     );
+    // The consumer links against the rows' honest ADDRESSES in the mounted
+    // package — never against the symbols the forged `target`s spell.
+    let rendered = display_function(mir);
+    assert!(
+        rendered.contains("dependency.forged_log")
+            && rendered.contains("dependency.forged_type_of"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("log.info") && !rendered.contains("reflect.Type.of"),
+        "{rendered}"
+    );
 }
 
 #[test]

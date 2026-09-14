@@ -96,30 +96,19 @@ pub(super) fn token_type_for_definition(def: Definition<'_>) -> SemanticTokenTyp
     token_type_for_kind(def.kind())
 }
 
-/// Classify a member access / path segment resolution.
+/// Classify a member access / path segment resolution: by dispatch MODE,
+/// whichever lane the declaration lives in.
 pub(super) fn classify_member(res: &MemberResolution<'_>) -> (SemanticTokenType, ModifierSet) {
     use MemberResolution as M;
     use SemanticTokenType as T;
     let token_type = match res {
-        M::Field { .. }
-        | M::InterfaceVirtualField { .. }
-        | M::ExternalField { .. }
-        | M::ExternalInterfaceVirtualField { .. } => T::Property,
-        M::Variant { .. } | M::ExternalVariant { .. } => T::EnumMember,
+        M::Field { .. } | M::InterfaceVirtualField { .. } => T::Property,
+        M::Variant { .. } => T::EnumMember,
         M::Free { .. } => T::Function,
-        M::External(callable)
-            if matches!(
-                callable.target,
-                baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { .. }
-            ) =>
-        {
-            T::Function
-        }
         M::BoundMethod { .. }
         | M::UnboundMethod { .. }
         | M::InterfaceConcreteMethod { .. }
-        | M::InterfaceVirtualMethod { .. }
-        | M::External(_) => T::Method,
+        | M::InterfaceVirtualMethod { .. } => T::Method,
     };
     (token_type, ModifierSet::empty())
 }

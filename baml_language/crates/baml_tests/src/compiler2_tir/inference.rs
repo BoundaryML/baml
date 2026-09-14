@@ -3,7 +3,7 @@
 use baml_base::Name;
 use baml_compiler2_hir::scope::ScopeKind;
 use baml_compiler2_hir_ty::{
-    package_interface::{ExportedType, package_interface, package_resolution_context},
+    package_interface::{ExportedType, package_interface},
     render::Viewpoint,
 };
 use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
@@ -644,36 +644,48 @@ class SearchService {
         .find(|method| method.name.as_str() == "Run")
         .expect("exported method");
 
-    let res_ctx = package_resolution_context(&db, pkg_id);
-    let own_method = res_ctx
-        .lookup_class_method(
-            &db,
-            &baml_type::DeclName::in_root(pkg_id, vec![], Name::new("SearchService")),
-            &Name::new("Run"),
-        )
+    // The source item's own resolved signature, through the one callable
+    // surface, is what the export row was lowered from.
+    let items = baml_compiler2_ppir::package_items(&db, pkg_id);
+    let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+        items.lookup_type(&[], &Name::new("SearchService"))
+    else {
+        panic!("SearchService resolves")
+    };
+    let run = baml_compiler2_ppir::item_data::class_data(&db, class)
+        .methods
+        .iter()
+        .copied()
+        .find(|&method| {
+            baml_compiler2_ppir::item_data::function_data(&db, method)
+                .name
+                .as_str()
+                == "Run"
+        })
         .expect("own method");
+    let own_method = baml_compiler2_hir_ty::callable::callable_signature(
+        &db,
+        baml_compiler2_hir::loc::DeclRef::Source(run),
+    );
 
-    assert_eq!(&own_method.function.params, &exported_method.params);
+    assert_eq!(&own_method.params, &exported_method.params);
     assert!(
-        !matches!(own_method.function.params[0].ty, Ty::Error { .. }),
+        !matches!(own_method.params[0].ty, Ty::Error { .. }),
         "implicit self should be reified before lowering"
     );
     assert_eq!(
-        own_method.function.params[1]
+        own_method.params[1]
             .ty
             .render_with(&Viewpoint::canonical(&db)),
         "string"
     );
     assert_eq!(
-        own_method.function.params[2]
+        own_method.params[2]
             .ty
             .render_with(&Viewpoint::canonical(&db)),
         "int"
     );
-    assert_eq!(
-        own_method.function.params[2].mode,
-        FunctionParamMode::Optional
-    );
+    assert_eq!(own_method.params[2].mode, FunctionParamMode::Optional);
 }
 
 #[test]

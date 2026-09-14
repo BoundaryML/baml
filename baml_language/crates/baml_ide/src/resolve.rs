@@ -948,9 +948,9 @@ pub(crate) fn template_position_at(
             let func_owner = item_data::function_scope(db, func_loc)?;
             let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
             match inference.member_resolutions.get(tag) {
-                Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) => {
-                    Some(TemplatePosition::Driver(*func))
-                }
+                Some(baml_compiler2_hir_ty::infer::MemberResolution::Free {
+                    func: baml_compiler2_hir::loc::DeclRef::Source(func),
+                }) => Some(TemplatePosition::Driver(*func)),
                 // Unresolved or non-free tags still block prose words from
                 // resolving as code; hover documents the template form.
                 _ => Some(TemplatePosition::DefaultText),
@@ -1013,8 +1013,9 @@ pub(crate) fn template_driver_at(
             }
             let func_owner = item_data::function_scope(db, *func)?;
             let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-            if let Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) =
-                inference.member_resolutions.get(tag)
+            if let Some(baml_compiler2_hir_ty::infer::MemberResolution::Free {
+                func: baml_compiler2_hir::loc::DeclRef::Source(func),
+            }) = inference.member_resolutions.get(tag)
             {
                 return Some(*func);
             }
@@ -1349,10 +1350,14 @@ pub(crate) fn member_resolution_target<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     resolution: &baml_compiler2_hir_ty::infer::MemberResolution<'db>,
 ) -> Option<SymbolTarget<'db>> {
+    use baml_compiler2_hir::loc::DeclRef;
     use baml_compiler2_hir_ty::infer::MemberResolution;
 
     match resolution {
-        MemberResolution::Field { class, field } => {
+        MemberResolution::Field {
+            class: DeclRef::Source(class),
+            field,
+        } => {
             // Read the canonical (PPIR) tree, not the HIR pre-expansion tree:
             // an inferred `class` can be a synthetic `$stream` class (the
             // type of a streamed partial), which is absent pre-expansion.
@@ -1367,7 +1372,10 @@ pub(crate) fn member_resolution_target<'db>(
                 field_index,
             })
         }
-        MemberResolution::Variant { enum_loc, variant } => {
+        MemberResolution::Variant {
+            enum_loc: DeclRef::Source(enum_loc),
+            variant,
+        } => {
             let variant_index = item_data::enum_data(db, *enum_loc)
                 .variants
                 .iter()
@@ -1377,13 +1385,25 @@ pub(crate) fn member_resolution_target<'db>(
                 variant_index,
             })
         }
-        MemberResolution::Free { func } => Some(SymbolTarget::Item(Definition::Function(*func))),
-        MemberResolution::BoundMethod { func, .. }
-        | MemberResolution::UnboundMethod { func, .. }
-        | MemberResolution::InterfaceConcreteMethod { func, .. } => {
-            Some(SymbolTarget::Method { func: *func })
+        MemberResolution::Free {
+            func: DeclRef::Source(func),
+        } => Some(SymbolTarget::Item(Definition::Function(*func))),
+        MemberResolution::BoundMethod {
+            func: DeclRef::Source(func),
+            ..
         }
-        MemberResolution::InterfaceVirtualMethod { interface, method } => {
+        | MemberResolution::UnboundMethod {
+            func: DeclRef::Source(func),
+            ..
+        }
+        | MemberResolution::InterfaceConcreteMethod {
+            func: DeclRef::Source(func),
+            ..
+        } => Some(SymbolTarget::Method { func: *func }),
+        MemberResolution::InterfaceVirtualMethod {
+            interface: DeclRef::Source(interface),
+            method,
+        } => {
             // Only the slot (interface + name) is known statically: address
             // the declaration — the required signature, or the default
             // method's definition.
@@ -1405,18 +1425,46 @@ pub(crate) fn member_resolution_target<'db>(
             Some(SymbolTarget::Method { func: default_loc })
         }
         MemberResolution::InterfaceVirtualField {
-            interface,
+            interface: DeclRef::Source(interface),
             field_index,
             ..
         } => Some(SymbolTarget::InterfaceField {
             iface: *interface,
             field_index: *field_index as usize,
         }),
-        // Mounted rows deliberately carry no dependency SourceFile/span.
-        MemberResolution::External(_)
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. }
-        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
+        // A served package's rows have no `SourceFile` and no span in this
+        // database by construction: nothing to navigate to.
+        MemberResolution::Field {
+            class: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::Variant {
+            enum_loc: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::Free {
+            func: DeclRef::External(_),
+        }
+        | MemberResolution::BoundMethod {
+            func: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::UnboundMethod {
+            func: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::InterfaceConcreteMethod {
+            func: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::InterfaceVirtualMethod {
+            interface: DeclRef::External(_),
+            ..
+        }
+        | MemberResolution::InterfaceVirtualField {
+            interface: DeclRef::External(_),
+            ..
+        } => None,
     }
 }
 

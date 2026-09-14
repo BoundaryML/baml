@@ -1637,19 +1637,24 @@ pub(crate) fn collect_type_surface<'db>(
                     ImplMethodBody::Source { method, exported } => collect_source(method, exported),
                     // A mounted/precompiled impl's method: fully resolved
                     // signature, no docstring and no source to point at.
-                    ImplMethodBody::Exported(exported) => CollectedMethod {
-                        name: exported.name.as_str().to_string(),
-                        signature: render::FnSigParts::of_exported(&exported).render(
-                            db,
-                            file,
-                            method_sig_style(),
-                        ),
-                        docstring: None,
-                        location: None,
-                        is_instance: baml_compiler2_hir_ty::package_interface::exported_takes_self(
-                            &exported,
-                        ),
-                    },
+                    ImplMethodBody::Exported(method) => {
+                        let exported =
+                            baml_compiler2_hir_ty::extern_loc::extern_function_row(db, method);
+                        CollectedMethod {
+                            name: exported.name.as_str().to_string(),
+                            signature: render::FnSigParts::of_exported(exported).render(
+                                db,
+                                file,
+                                method_sig_style(),
+                            ),
+                            docstring: None,
+                            location: None,
+                            is_instance:
+                                baml_compiler2_hir_ty::package_interface::exported_takes_self(
+                                    exported,
+                                ),
+                        }
+                    }
                 })
                 .collect(),
         })
@@ -1798,9 +1803,9 @@ pub(crate) enum ImplMethodBody<'db> {
         method: baml_compiler2_hir::loc::FunctionLoc<'db>,
         exported: Option<&'db ExportedFunction>,
     },
-    /// A mounted or precompiled impl's method: a descriptor with no source
-    /// item in this database (boxed: the descriptor dwarfs the source arm).
-    Exported(Box<ExportedFunction>),
+    /// An external impl's method: the exported row's identity, with no
+    /// source item in this database.
+    Exported(baml_compiler2_hir_ty::extern_loc::ExternFunctionLoc<'db>),
 }
 
 /// One impl that applies to a concrete type declaration, with the methods it
@@ -1837,7 +1842,10 @@ pub(crate) fn type_impls<'db>(
     viewer: baml_base::SourceRoot,
     definition: Definition<'db>,
 ) -> Vec<TypeImpl<'db>> {
-    use baml_compiler2_hir_ty::impls::{ResolvedImplFacts, ResolvedImplOrigin};
+    use baml_compiler2_hir_ty::{
+        extern_loc::{exported_impl_identity, impl_identity},
+        impls::ResolvedImplOrigin,
+    };
 
     let Some(self_ty) = baml_compiler2_hir_ty::lower::declaration_self_ty(db, definition) else {
         return Vec::new();
@@ -1876,39 +1884,16 @@ pub(crate) fn type_impls<'db>(
                 .collect();
             let (block, field_links, methods) = match &resolved.origin {
                 ResolvedImplOrigin::Source { block, methods } => {
-                    let row = match &resolved.facts {
-                        ResolvedImplFacts::Source(facts) => {
-                            let for_ty = facts.for_ty_pattern.to_plain();
-                            let fact_iface = facts.interface.to_plain();
-                            iface.impls.iter().find(|row| {
-                                row.interface.name == fact_iface.name
-                                    && row.for_ty_pattern == for_ty
-                                    && row.interface.generics == fact_iface.generics
-                                    // The constraint set is part of the impl
-                                    // identity (`ImplCoherenceKey`'s
-                                    // invariant): two same-head rows may one
-                                    // day differ only by bounds, and matching
-                                    // the wrong one would pair this block's
-                                    // methods with the other impl's exported
-                                    // signatures. Positional compare is exact
-                                    // here — both sides lower the same
-                                    // declaration.
-                                    && row.param_bounds.len() == facts.generic_params.len()
-                                    && row
-                                        .param_bounds
-                                        .iter()
-                                        .zip(facts.generic_params.iter())
-                                        .all(|(exported, (_, fact))| {
-                                            exported.len() == fact.len()
-                                                && exported
-                                                    .iter()
-                                                    .zip(fact.iter())
-                                                    .all(|(e, f)| *e == f.to_plain())
-                                        })
-                            })
-                        }
-                        ResolvedImplFacts::Mounted(_) | ResolvedImplFacts::Precompiled(_) => None,
-                    };
+                    // Pair the block with its export row by the impl's
+                    // coherence identity (interface instantiation +
+                    // for-target + constraint set) — the ONE identity an
+                    // external row is addressed by, so this cannot drift from
+                    // it.
+                    let identity = impl_identity(&resolved.facts);
+                    let row = iface
+                        .impls
+                        .iter()
+                        .find(|row| exported_impl_identity(row) == identity);
                     let methods = methods
                         .iter()
                         .copied()
@@ -1927,11 +1912,8 @@ pub(crate) fn type_impls<'db>(
                         .collect();
                     (Some(*block), impl_field_links(db, *block), methods)
                 }
-                ResolvedImplOrigin::Mounted { methods } => {
-                    (None, Vec::new(), exported_bodies(methods))
-                }
-                ResolvedImplOrigin::Precompiled { methods, .. } => {
-                    (None, Vec::new(), exported_bodies(methods))
+                ResolvedImplOrigin::External { block } => {
+                    (None, Vec::new(), exported_bodies(db, *block))
                 }
             };
             TypeImpl {
@@ -1963,11 +1945,21 @@ pub(crate) fn impl_field_links(
         .collect()
 }
 
-/// The bodies of a mounted/precompiled impl: each method IS its descriptor.
-fn exported_bodies<'db>(methods: &[ExportedFunction]) -> Vec<ImplMethodBody<'db>> {
-    methods
+/// The bodies of an external impl: each provided method's row identity.
+fn exported_bodies<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: baml_compiler2_hir_ty::extern_loc::ExternImplLoc<'db>,
+) -> Vec<ImplMethodBody<'db>> {
+    use baml_compiler2_hir_ty::extern_loc::{extern_impl_method, extern_impl_row};
+    extern_impl_row(db, block)
+        .methods
         .iter()
-        .map(|exported| ImplMethodBody::Exported(Box::new(exported.clone())))
+        .map(|exported| {
+            ImplMethodBody::Exported(
+                extern_impl_method(db, block, &exported.name)
+                    .unwrap_or_else(|| unreachable!("a provided row of the block mints")),
+            )
+        })
         .collect()
 }
 

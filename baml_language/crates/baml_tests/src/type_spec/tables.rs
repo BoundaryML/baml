@@ -43,10 +43,6 @@ fn kind(resolution: &MemberResolution<'_>) -> &'static str {
         MemberResolution::InterfaceVirtualMethod { .. } => "InterfaceVirtualMethod",
         MemberResolution::InterfaceConcreteMethod { .. } => "InterfaceConcreteMethod",
         MemberResolution::InterfaceVirtualField { .. } => "InterfaceVirtualField",
-        MemberResolution::External(_) => "External",
-        MemberResolution::ExternalField { .. } => "ExternalField",
-        MemberResolution::ExternalVariant { .. } => "ExternalVariant",
-        MemberResolution::ExternalInterfaceVirtualField { .. } => "ExternalInterfaceVirtualField",
     }
 }
 

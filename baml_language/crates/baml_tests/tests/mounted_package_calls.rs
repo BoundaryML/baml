@@ -16,8 +16,8 @@
 //!
 //! The CONSUMER database is a fresh `ProjectDatabase` with NO `app`
 //! source anywhere. The blob is mounted as a source-less root (checking
-//! resolves `app.…` through the interface rows and records loc-free
-//! `MemberResolution::External` callees), and bytecode is generated with
+//! resolves `app.…` through the interface rows and records callees whose
+//! `FunctionRef` is `External`), and bytecode is generated with
 //! `generate_project_bytecode_with_mounted_units(consumer_db, library_units)`:
 //! the public seam links the units and seeds emit from that prefix, so the
 //! consumer's symbolic references (`app.add`, `app.Widget`, the interface

@@ -8,10 +8,7 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
@@ -29,6 +26,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callable::{ExternalCallTarget, ExternalLinkability},
+    extern_loc::{ExternFunctionLoc, extern_function_named},
     lower::qualify_def,
 };
 
@@ -429,74 +427,27 @@ pub enum ResolvedSource {
     Builtin,
 }
 
-/// Common output for resolved function signatures.
-#[derive(Clone)]
-pub struct ResolvedFunction {
-    pub name: Name,
-    pub params: Vec<FunctionParamTy>,
-    pub return_type: Ty,
-    pub callable_throws: Ty,
-    pub generic_params: Vec<ParamTy>,
-    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-    pub builtin_kind: Option<BuiltinKind>,
-    pub external: Option<Arc<crate::callable::ExternalCallable>>,
-}
-
-/// A value lookup never lies about source ownership. Source-backed results
-/// retain their real definition; mounted results carry only owned symbolic
-/// callable facts.
+/// A value lookup never lies about source ownership: a source-backed result
+/// is its real definition; a served package's result is the identity of its
+/// exported row, whose facts every consumer reads through
+/// [`crate::extern_loc::extern_function_row`].
 pub enum ResolvedValue<'db> {
     Source(Definition<'db>),
-    Exported(Box<ResolvedFunction>),
-}
-
-/// Common output for resolved method lookups (includes class context).
-pub struct ResolvedMethod {
-    pub function: ResolvedFunction,
-    pub class_name: Name,
-    pub class_generic_params: Vec<ParamTy>,
+    External(ExternFunctionLoc<'db>),
 }
 
 /// Whether an exported function declares a `self` receiver, and is therefore
 /// an instance method rather than a static one.
 ///
 /// The receiver is an ordinary first parameter named `self` (there is no
-/// separate receiver slot), so this is the whole test — for the dispatch
-/// shape `resolved_exported_function` records and for the member
-/// enumeration alike.
+/// separate receiver slot), so this is the whole test — the row-side twin of
+/// [`crate::callable::callable_takes_self`], for readers holding a row.
 pub fn exported_takes_self(function: &ExportedFunction) -> bool {
     function
         .params
         .first()
         .and_then(|param| param.name.as_ref())
         .is_some_and(|name| name.as_str() == "self")
-}
-
-pub(crate) fn resolved_exported_function(
-    function: &ExportedFunction,
-    owner_generic_params: Vec<ParamTy>,
-    owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-) -> ResolvedFunction {
-    let takes_self = exported_takes_self(function);
-    ResolvedFunction {
-        name: function.name.clone(),
-        params: function.params.clone(),
-        return_type: function.return_type.clone(),
-        callable_throws: function.callable_throws.clone(),
-        generic_params: function.generic_params.clone(),
-        generic_param_bounds: function.generic_param_bounds.clone(),
-        builtin_kind: function.builtin_kind,
-        external: Some(Arc::new(crate::callable::ExternalCallable {
-            target: function.target.clone(),
-            linkability: function.linkability,
-            builtin_kind: function.builtin_kind,
-            takes_self,
-            owner_generic_params,
-            owner_generic_param_bounds,
-            generic_params: function.generic_params.clone(),
-            generic_param_bounds: function.generic_param_bounds.clone(),
-        })),
-    }
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -707,25 +658,19 @@ fn external_target<'db>(
         function: DeclName::in_root(package.root, package.namespace_path.clone(), name.clone()),
     };
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
-        Some(MethodOwner::Class(class)) => {
-            if let Some(target) = crate::lower::owner_impl_target(db, function, frame) {
-                ExternalCallTarget::Interface {
-                    interface: target.name,
-                    method: name,
-                }
-            } else {
-                ExternalCallTarget::Method {
-                    class: DeclName::in_root(
-                        package.root,
-                        package.namespace_path.clone(),
-                        baml_compiler2_ppir::item_data::class_data(db, class)
-                            .name
-                            .clone(),
-                    ),
-                    name,
-                }
-            }
-        }
+        // A class-owned method is inherent: post-erasure an `implements`
+        // block's method is owned by the block (`MethodOwner::Impl`), never by
+        // the class, so no class method carries an impl target.
+        Some(MethodOwner::Class(class)) => ExternalCallTarget::Method {
+            class: DeclName::in_root(
+                package.root,
+                package.namespace_path.clone(),
+                baml_compiler2_ppir::item_data::class_data(db, class)
+                    .name
+                    .clone(),
+            ),
+            name,
+        },
         Some(MethodOwner::Interface(interface)) => ExternalCallTarget::Interface {
             interface: crate::lower::interface_qualified_name(db, interface),
             method: name,
@@ -1773,13 +1718,15 @@ impl<'db> PackageResolutionContext<'db> {
                     return Some(ResolvedValue::Source(def));
                 }
             }
-            for (dep_name, dep_root, dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_root, _) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     if is_served_from_interface(db, *dep_root) {
-                        let function = dep_iface.lookup_function(&path[1..path.len() - 1], item)?;
-                        return Some(ResolvedValue::Exported(Box::new(
-                            resolved_exported_function(function, Vec::new(), Vec::new()),
-                        )));
+                        return Some(ResolvedValue::External(extern_function_named(
+                            db,
+                            *dep_root,
+                            &path[1..path.len() - 1],
+                            item,
+                        )?));
                     }
                     let dep_items = baml_compiler2_ppir::package_items(db, *dep_root);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
@@ -1787,88 +1734,6 @@ impl<'db> PackageResolutionContext<'db> {
                     }
                 }
             }
-        }
-        None
-    }
-
-    /// Look up a class method. Dual dispatch.
-    pub fn lookup_class_method(
-        &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
-        class_name: &DeclName,
-        method_name: &Name,
-    ) -> Option<ResolvedMethod> {
-        if class_name.root() == self.own {
-            self.lookup_own_class_method(db, class_name, method_name)
-        } else {
-            for (_, dep_root, dep_iface) in &self.dep_interfaces {
-                if *dep_root != class_name.root() {
-                    continue;
-                }
-                if let Some(ExportedType::Class {
-                    methods,
-                    generic_params,
-                    generic_param_bounds,
-                    ..
-                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
-                {
-                    if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
-                        return Some(ResolvedMethod {
-                            function: resolved_exported_function(
-                                method,
-                                generic_params.clone(),
-                                generic_param_bounds.clone(),
-                            ),
-                            class_name: class_name.name().clone(),
-                            class_generic_params: generic_params.clone(),
-                        });
-                    }
-                }
-            }
-            None
-        }
-    }
-
-    fn lookup_own_class_method(
-        &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
-        class_name: &DeclName,
-        method_name: &Name,
-    ) -> Option<ResolvedMethod> {
-        let def = self
-            .own_items
-            .lookup_type(class_name.namespace(), class_name.name())?;
-        let Definition::Class(class_loc) = def else {
-            return None;
-        };
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-
-        for &method_loc in &class_data.methods {
-            let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
-            if &method_data.name != method_name {
-                continue;
-            }
-            let exported = exported_function(
-                db,
-                method_loc,
-                &method_data.name,
-                crate::lower::class_generic_frame(db, class_loc).len(),
-            );
-
-            return Some(ResolvedMethod {
-                function: ResolvedFunction {
-                    name: exported.name,
-                    params: exported.params,
-                    return_type: exported.return_type,
-                    callable_throws: exported.callable_throws,
-                    generic_params: exported.generic_params,
-                    generic_param_bounds: exported.generic_param_bounds,
-                    builtin_kind: exported.builtin_kind,
-                    external: None,
-                },
-                class_name: class_name.name().clone(),
-                class_generic_params: crate::lower::class_generic_frame(db, class_loc),
-            });
         }
         None
     }

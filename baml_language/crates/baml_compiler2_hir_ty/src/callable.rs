@@ -66,43 +66,6 @@ pub enum ExternalLinkability {
     ReservedBuiltin,
 }
 
-/// Owned call-site facts for a source-less dependency callable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExternalCallable {
-    pub target: ExternalCallTarget,
-    pub linkability: ExternalLinkability,
-    /// Preserved so source-less consumers can lower compiler intrinsics and
-    /// await/sys-op call shapes through the same road as source functions.
-    pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
-    pub takes_self: bool,
-    pub owner_generic_params: Vec<baml_type::ParamTy>,
-    pub owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-    pub generic_params: Vec<baml_type::ParamTy>,
-    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-}
-
-impl ExternalCallable {
-    /// Call-site-suppliable generics. Synthetic callback-effect parameters are
-    /// inference-only and never participate in written arity.
-    pub fn user_generic_params(
-        &self,
-    ) -> impl Iterator<Item = (&baml_type::ParamTy, &[baml_type::Interface])> {
-        self.generic_params
-            .iter()
-            .zip(self.generic_param_bounds.iter())
-            .filter(|(param, _)| !baml_type::is_synthetic_effect_param(param.name()))
-            .map(|(param, bounds)| (param, bounds.as_slice()))
-    }
-
-    pub fn display_name(&self) -> &baml_base::Name {
-        match &self.target {
-            ExternalCallTarget::Free { function } => function.name(),
-            ExternalCallTarget::Method { name, .. } => name,
-            ExternalCallTarget::Interface { method, .. } => method,
-        }
-    }
-}
-
 /// A function's effect: plain (ground - inference never leaks variables,
 /// finalize defaults unconstrained effects to `never`). Wrapped for the
 /// manual `salsa::Update` impl (`baml_type` has no salsa dependency).
@@ -268,7 +231,25 @@ fn enclosing_param_count<'db>(
     }
 }
 
-#[salsa::tracked(returns(ref))]
+fn function_signature_ty_cycle_initial<'db>(
+    _db: &'db dyn baml_compiler2_ppir::Db,
+    _id: salsa::Id,
+    _function: FunctionLoc<'db>,
+) -> FunctionSignatureTy {
+    // A projection of `function_signature`, so it sits inside the same
+    // signature/throws/inference fixpoint (an omitted throws clause runs
+    // body inference, which resolves callees through this view): the same
+    // degenerate seed as `function_signature_cycle_initial`; iteration
+    // converges with the signature it projects.
+    FunctionSignatureTy {
+        params: Vec::new(),
+        return_type: baml_type::Ty::error(),
+        generic_params: Vec::new(),
+        builtin_kind: None,
+    }
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = function_signature_ty_cycle_initial)]
 pub fn function_signature_ty<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,

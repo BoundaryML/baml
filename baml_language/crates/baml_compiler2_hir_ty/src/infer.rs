@@ -32,6 +32,7 @@ use baml_compiler2_hir::{
     body::BodyOwnerId,
     body_type_refs::{BodyTypeRefId, BodyTypeRefs},
     contributions::Definition,
+    loc::DeclRef,
     scope::FileScopeId,
     semantic_index::{
         BindingId, BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
@@ -49,7 +50,17 @@ use baml_type::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    callable::{
+        callable_display_name, callable_generic_frame, callable_owner_type, callable_signature,
+        callable_takes_self, callable_throws_of, callable_user_generic_params,
+        instantiate_callable_signature,
+    },
     diagnostics::ScopedTypeEscapeKind,
+    extern_loc::{
+        ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_row,
+        extern_function_row, extern_interface_method, mounted_class_loc, mounted_class_method,
+        mounted_enum_loc,
+    },
     facts::Facts,
     infer::unify::InferenceTable,
     lower::{
@@ -369,42 +380,36 @@ const PROJECTION_FINALIZE_FUEL: u32 = 32;
 pub enum MemberResolution<'db, T = baml_type::Ty> {
     /// A class field access (`p.name`).
     Field {
-        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        class: ClassRef<'db>,
         field: baml_type::Name,
     },
     /// An enum variant access (`Status.Active`).
     Variant {
-        enum_loc: baml_compiler2_hir::loc::EnumLoc<'db>,
+        enum_loc: EnumRef<'db>,
         variant: baml_type::Name,
     },
     /// A free function named by a package/namespace path.
-    Free {
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    },
-    /// A method on a VALUE receiver (`p.get_name`): `self` is bound.
-    BoundMethod {
-        class: baml_compiler2_hir::loc::ClassLoc<'db>,
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    },
-    /// A method behind a TYPE qualifier (`Person.get_name`,
+    Free { func: FunctionRef<'db> },
+    /// A class-inherent method on a VALUE receiver (`p.get_name`): `self`
+    /// is bound. The owning class is the method's own
+    /// (`callable_owner_type`), never carried alongside it.
+    BoundMethod { func: FunctionRef<'db> },
+    /// A class-inherent method behind a TYPE qualifier (`Person.get_name`,
     /// `Array.filled`): no receiver, `self` stays a parameter.
-    UnboundMethod {
-        class: baml_compiler2_hir::loc::ClassLoc<'db>,
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    },
+    UnboundMethod { func: FunctionRef<'db> },
     /// A VIRTUAL interface-method call: only the slot (interface +
     /// member) is statically known; dispatch resolves to the receiver's
     /// runtime impl.
     InterfaceVirtualMethod {
-        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        interface: InterfaceRef<'db>,
         method: baml_type::Name,
     },
     /// A CONCRETE interface-method call through a statically-matched
-    /// impl: `func` is the impl's override, or the interface's default
-    /// body when inherited.
+    /// impl: `func` is the method the impl provides, or the interface's
+    /// default body when adopted.
     InterfaceConcreteMethod {
-        impl_block: baml_compiler2_hir::loc::ImplLoc<'db>,
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        impl_block: ImplRef<'db>,
+        func: FunctionRef<'db>,
         /// The callee's OWNER frame, carried from resolution (see
         /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
         /// bindings for an override, `[Self, iface args..]` for a default.
@@ -416,31 +421,44 @@ pub enum MemberResolution<'db, T = baml_type::Ty> {
     /// declaring-interface view (`view`, the runtime resolver's key)
     /// at `field_index` in that interface's own declared field list.
     InterfaceVirtualField {
-        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        interface: InterfaceRef<'db>,
         view: T,
         field_index: u32,
         field: baml_type::Name,
     },
-    /// A source-less callable, carrying its complete symbolic link and
-    /// generic-frame contract.
-    External(std::sync::Arc<crate::callable::ExternalCallable>),
-    /// A field on a source-less class.
-    ExternalField {
-        class: baml_type::DeclName,
-        field: baml_type::Name,
-    },
-    /// A variant on a source-less enum.
-    ExternalVariant {
-        enum_name: baml_type::DeclName,
-        variant: baml_type::Name,
-    },
-    /// A virtual field on a source-less interface.
-    ExternalInterfaceVirtualField {
-        interface: baml_type::DeclName,
-        view: T,
-        field_index: u32,
-        field: baml_type::Name,
-    },
+}
+
+impl<'db, T> MemberResolution<'db, T> {
+    /// The callable a resolution statically names, wherever it is
+    /// declared: the free function, the class method, the impl-provided (or
+    /// adopted) method, or — for a virtual slot — the interface's own
+    /// declaration of the method. Fields and variants name none.
+    pub fn callable(&self, db: &'db dyn baml_compiler2_ppir::Db) -> Option<FunctionRef<'db>> {
+        match self {
+            MemberResolution::Free { func }
+            | MemberResolution::BoundMethod { func, .. }
+            | MemberResolution::UnboundMethod { func, .. }
+            | MemberResolution::InterfaceConcreteMethod { func, .. } => Some(*func),
+            MemberResolution::InterfaceVirtualMethod { interface, method } => match interface {
+                DeclRef::Source(interface) => {
+                    baml_compiler2_ppir::item_data::interface_data(db, *interface)
+                        .methods
+                        .iter()
+                        .copied()
+                        .find(|&func| {
+                            baml_compiler2_ppir::item_data::function_data(db, func).name == *method
+                        })
+                        .map(DeclRef::Source)
+                }
+                DeclRef::External(interface) => {
+                    extern_interface_method(db, interface.head(db), method).map(DeclRef::External)
+                }
+            },
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => None,
+        }
+    }
 }
 
 /// A value-rooted path expression's resolved ladder (`a.b.c`: one
@@ -527,10 +545,6 @@ pub struct CallPlan<T = baml_type::Ty> {
     /// The trailing `$id = ...` side-channel argument (TIR's
     /// `CallSideChannels`, flattened until a second channel exists).
     pub runtime_id: Option<ExprId>,
-    /// Stable source-location-free identity for a mounted callable. Source
-    /// functions keep their existing location-backed `MemberResolution` and
-    /// leave this empty.
-    pub target: Option<crate::callable::ExternalCallTarget>,
 }
 
 /// Hand-written: the derive would bound `T: Default`, which neither type
@@ -545,7 +559,6 @@ impl<T> Default for CallPlan<T> {
             explicit: false,
             slots: Vec::new(),
             runtime_id: None,
-            target: None,
         }
     }
 }
@@ -2465,7 +2478,9 @@ impl<'db> InferenceContext<'db> {
                     let (result, frame) = match resolved.kind() {
                         InferTy::Function { params, ret, .. } => {
                             let func = match self.result.member_resolutions.get(tag) {
-                                Some(MemberResolution::Free { func }) => Some(*func),
+                                Some(MemberResolution::Free {
+                                    func: DeclRef::Source(func),
+                                }) => Some(*func),
                                 _ => None,
                             };
                             let is_tagged = func.is_some_and(|func| {
@@ -5208,31 +5223,34 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
-        let Some(MemberResolution::External(external)) =
-            self.result.member_resolutions.get(&callee)
+        let Some(DeclRef::External(function)) = self
+            .result
+            .member_resolutions
+            .get(&callee)
+            .and_then(|resolution| resolution.callable(self.db))
         else {
             return;
         };
-        let package_root = match &external.target {
-            crate::callable::ExternalCallTarget::Free { function } => function.root(),
-            crate::callable::ExternalCallTarget::Method { class, .. } => class.root(),
-            crate::callable::ExternalCallTarget::Interface { interface, .. } => interface.root(),
-        };
-        let trusted_callsite_lowering =
-            matches!(
-                external.builtin_kind,
-                Some(
-                    baml_compiler2_ast::BuiltinKind::Intrinsic
-                        | baml_compiler2_ast::BuiltinKind::AwaitAny
-                )
-            ) && baml_compiler2_hir::package::is_precompiled_stdlib(self.db, package_root);
-        if external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
+        let row = extern_function_row(self.db, function);
+        // Trust is decided by the package the row's ADDRESS lives in, never
+        // by the heads the row's own `target` spells.
+        let trusted_callsite_lowering = matches!(
+            row.builtin_kind,
+            Some(
+                baml_compiler2_ast::BuiltinKind::Intrinsic
+                    | baml_compiler2_ast::BuiltinKind::AwaitAny
+            )
+        ) && baml_compiler2_hir::package::is_precompiled_stdlib(
+            self.db,
+            function.package(self.db),
+        );
+        if row.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
             && !trusted_callsite_lowering
         {
             self.pending_diags
                 .push(PendingDiag::MountedPackageCallUnsupported {
                     expr: call,
-                    path: external_target_path(&self.viewpoint(), &external.target),
+                    path: external_target_path(&self.viewpoint(), &function.slot(self.db)),
                 });
         }
     }
@@ -5302,8 +5320,9 @@ impl<'db> InferenceContext<'db> {
         if self.type_refs.expr_type_args.contains_key(&call) {
             return;
         }
-        let Some(MemberResolution::Free { func }) =
-            self.result.member_resolutions.get(&callee).cloned()
+        let Some(MemberResolution::Free {
+            func: DeclRef::Source(func),
+        }) = self.result.member_resolutions.get(&callee).cloned()
         else {
             return;
         };
@@ -5394,12 +5413,15 @@ impl<'db> InferenceContext<'db> {
         if self.type_refs.expr_type_args.contains_key(&call) {
             return;
         }
-        let Some(MemberResolution::BoundMethod { class, func }) =
-            self.result.member_resolutions.get(&callee).cloned()
+        let Some(MemberResolution::BoundMethod {
+            func: DeclRef::Source(func),
+        }) = self.result.member_resolutions.get(&callee).cloned()
         else {
             return;
         };
-        let qtn = crate::lower::class_qualified_name(self.db, class);
+        let Some(qtn) = callable_owner_type(self.db, DeclRef::Source(func)) else {
+            return;
+        };
         if !self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             || !qtn.namespace().is_empty()
             || qtn.name().as_str() != "Session"
@@ -5411,7 +5433,7 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let signature = function_signature(self.db, func);
-        let owner_count = crate::lower::class_generic_frame(self.db, class).len();
+        let owner_count = callable_generic_frame(self.db, DeclRef::Source(func)).own_start;
         let Some((index, _)) = signature
             .generic_params
             .iter()
@@ -5829,36 +5851,35 @@ impl<'db> InferenceContext<'db> {
                     crate::lower::TypePosition::Existential,
                 );
                 let instantiation = self.write_call_type_args(call, &instantiation, 0);
-                self.register_call_bounds(function, &instantiation, call);
-                let fn_ty = function_value_ty(signature, &instantiation);
-                self.result.type_of_expr.insert(callee, fn_ty.clone());
-                self.write_member_resolution(callee, MemberResolution::Free { func: function });
-                return (fn_ty, false);
-            }
-            if let Some(function) = self.lower.resolve_exported_value(segments) {
-                let external = function
-                    .external
-                    .clone()
-                    .expect("mounted free function carries an external descriptor");
-                let instantiation = self.instantiation_args_at(
-                    call,
-                    &function.generic_params,
-                    Some(&function.name),
-                    external_type_position(
-                        baml_compiler2_hir::package::lang_roots(self.db),
-                        &external.target,
-                    ),
-                );
-                let instantiation = self.write_call_type_args(call, &instantiation, 0);
-                self.register_external_call_bounds(&external, &instantiation, call);
-                self.result.call_plans.entry(call).or_default().target =
-                    Some(external.target.clone());
-                let fn_ty = crate::method_resolution::instantiate_external_signature(
-                    &function,
+                self.register_callable_bounds(DeclRef::Source(function), &instantiation, call);
+                let fn_ty = instantiate_callable_signature(
+                    self.db,
+                    DeclRef::Source(function),
                     &instantiation,
                 );
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
-                self.write_member_resolution(callee, MemberResolution::External(external));
+                self.write_member_resolution(
+                    callee,
+                    MemberResolution::Free {
+                        func: DeclRef::Source(function),
+                    },
+                );
+                return (fn_ty, false);
+            }
+            if let Some(function) = self.lower.resolve_exported_value(segments) {
+                let callable = DeclRef::External(function);
+                let row = extern_function_row(self.db, function);
+                let instantiation = self.instantiation_args_at(
+                    call,
+                    &row.generic_params,
+                    Some(&row.name),
+                    crate::lower::TypePosition::Existential,
+                );
+                let instantiation = self.write_call_type_args(call, &instantiation, 0);
+                self.register_callable_bounds(callable, &instantiation, call);
+                let fn_ty = instantiate_callable_signature(self.db, callable, &instantiation);
+                self.result.type_of_expr.insert(callee, fn_ty.clone());
+                self.write_member_resolution(callee, MemberResolution::Free { func: callable });
                 return (fn_ty, false);
             }
             // A type-qualified method path (`Array.filled(3, 0)`,
@@ -6221,80 +6242,35 @@ impl<'db> InferenceContext<'db> {
             }
             return (field, false, field_resolution, false);
         };
-        match candidate.source {
-            crate::method_resolution::MethodCandidateSource::Source { method, class } => {
-                if self.reject_selfless_inherent_method(method, member, member_expr) {
-                    return (Ty::error(), false, None, false);
-                }
-                let signature = function_signature(self.db, method);
-                let class_count = candidate.class_args.len();
-                let own_params = signature.generic_params[class_count..].to_vec();
-                let method_name = baml_compiler2_ppir::item_data::function_data(self.db, method)
-                    .name
-                    .clone();
-                let mut instantiation = candidate.class_args;
-                let position = if self.is_reflect_package_get_function(class, method) {
-                    crate::lower::TypePosition::ExtractionContract
-                } else {
-                    crate::lower::TypePosition::Existential
-                };
-                instantiation.extend(self.instantiation_args_at(
-                    call,
-                    &own_params,
-                    Some(&method_name),
-                    position,
-                ));
-                let instantiation = self.write_call_type_args(call, &instantiation, class_count);
-                self.register_call_bounds(method, &instantiation, call);
-                let fn_ty = function_value_ty(signature, &instantiation);
-                let bound = signature
-                    .params
-                    .first()
-                    .is_some_and(|param| param.name.as_str() == "self");
-                let resolution = if bound {
-                    MemberResolution::BoundMethod {
-                        class,
-                        func: method,
-                    }
-                } else {
-                    MemberResolution::UnboundMethod {
-                        class,
-                        func: method,
-                    }
-                };
-                (fn_ty, bound, Some(resolution), false)
-            }
-            crate::method_resolution::MethodCandidateSource::External(function) => {
-                let external = function
-                    .external
-                    .clone()
-                    .expect("mounted method carries an external descriptor");
-                let own_offset = candidate.class_args.len();
-                let mut instantiation = candidate.class_args;
-                instantiation.extend(self.instantiation_args_at(
-                    call,
-                    &function.generic_params,
-                    Some(&function.name),
-                    external_type_position(
-                        baml_compiler2_hir::package::lang_roots(self.db),
-                        &external.target,
-                    ),
-                ));
-                let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-                self.register_external_call_bounds(&external, &instantiation, call);
-                self.result.call_plans.entry(call).or_default().target =
-                    Some(external.target.clone());
-                (
-                    crate::method_resolution::instantiate_external_signature(
-                        &function,
-                        &instantiation,
-                    ),
-                    external.takes_self,
-                    Some(MemberResolution::External(external)),
-                    false,
-                )
-            }
+        let crate::method_resolution::MethodCandidate { method, class_args } = candidate;
+        if self.reject_selfless_inherent_method(method, member, member_expr) {
+            return (Ty::error(), false, None, false);
         }
+        let own_params = callable_signature(self.db, method).generic_params.clone();
+        let method_name = callable_display_name(self.db, method).clone();
+        let class_count = class_args.len();
+        let mut instantiation = class_args;
+        let position = if self.is_reflect_package_get_function(method) {
+            crate::lower::TypePosition::ExtractionContract
+        } else {
+            crate::lower::TypePosition::Existential
+        };
+        instantiation.extend(self.instantiation_args_at(
+            call,
+            &own_params,
+            Some(&method_name),
+            position,
+        ));
+        let instantiation = self.write_call_type_args(call, &instantiation, class_count);
+        self.register_callable_bounds(method, &instantiation, call);
+        let fn_ty = instantiate_callable_signature(self.db, method, &instantiation);
+        let bound = callable_takes_self(self.db, method);
+        let resolution = if bound {
+            MemberResolution::BoundMethod { func: method }
+        } else {
+            MemberResolution::UnboundMethod { func: method }
+        };
+        (fn_ty, bound, Some(resolution), false)
     }
 
     /// The `default` receiver's meaning inside an `implements` block:
@@ -6386,58 +6362,39 @@ impl<'db> InferenceContext<'db> {
         let bound = interface_member.is_method
             && bind_self
             && self.interface_member_takes_self(&interface_member);
-        if let Some(pending) = interface_member.pending_own {
-            match pending {
-                crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
-                    let signature = function_signature(self.db, method);
-                    let own_offset = prefix.len();
-                    let own_params = signature.generic_params[own_offset..].to_vec();
-                    let method_name =
-                        baml_compiler2_ppir::item_data::function_data(self.db, method)
-                            .name
-                            .clone();
-                    let mut instantiation = prefix;
-                    instantiation.extend(self.instantiation_args_at(
-                        call,
-                        &own_params,
-                        Some(&method_name),
-                        crate::lower::TypePosition::Existential,
-                    ));
-                    let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-                    self.register_call_bounds(method, &instantiation, call);
-                    return (function_value_ty(signature, &instantiation), bound);
-                }
-                crate::method_resolution::PendingOwnGenerics::External { function, prefix } => {
-                    let external = function
-                        .external
-                        .clone()
-                        .expect("mounted interface method has an external descriptor");
-                    let own_offset = prefix.len();
-                    let mut instantiation = prefix;
-                    instantiation.extend(self.instantiation_args_at(
-                        call,
-                        &function.generic_params,
-                        Some(&function.name),
-                        crate::lower::TypePosition::Existential,
-                    ));
-                    let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-                    self.register_external_call_bounds(&external, &instantiation, call);
-                    self.result.call_plans.entry(call).or_default().target =
-                        Some(external.target.clone());
-                    return (
-                        crate::method_resolution::instantiate_external_signature(
-                            &function,
-                            &instantiation,
-                        ),
-                        bound,
-                    );
-                }
-            }
-        }
-        if let crate::method_resolution::MemberDeclarer::ExternalMethod(external) =
-            &interface_member.declarer
+        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
+            interface_member.pending_own
         {
-            self.result.call_plans.entry(call).or_default().target = Some(external.target.clone());
+            let own_params = callable_signature(self.db, callable).generic_params.clone();
+            let method_name = callable_display_name(self.db, callable).clone();
+            let own_offset = prefix.len();
+            let mut instantiation = prefix;
+            instantiation.extend(self.instantiation_args_at(
+                call,
+                &own_params,
+                Some(&method_name),
+                crate::lower::TypePosition::Existential,
+            ));
+            let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
+            self.register_callable_bounds(callable, &instantiation, call);
+            return (
+                instantiate_callable_signature(self.db, callable, &instantiation),
+                bound,
+            );
+        }
+        if matches!(
+            &interface_member.declarer,
+            crate::method_resolution::MemberDeclarer::VirtualMethod {
+                method: DeclRef::External(_),
+                ..
+            } | crate::method_resolution::MemberDeclarer::ImplMethod {
+                func: DeclRef::External(_),
+                ..
+            }
+        ) {
+            // A served callee's call keeps a plan entry even without
+            // instantiation data (MIR reads the entry's presence).
+            self.result.call_plans.entry(call).or_default();
         }
         (interface_member.ty, bound)
     }
@@ -6464,11 +6421,16 @@ impl<'db> InferenceContext<'db> {
             if signature.generic_params.len() != 1 {
                 return None;
             }
-            return Some(function_value_ty(signature, &[target]));
+            return Some(instantiate_callable_signature(
+                self.db,
+                DeclRef::Source(function),
+                &[target],
+            ));
         }
         let function = self.lower.resolve_exported_value(&segments)?;
-        (function.generic_params.len() == 1)
-            .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
+        (extern_function_row(self.db, function).generic_params.len() == 1).then(|| {
+            instantiate_callable_signature(self.db, DeclRef::External(function), &[target])
+        })
     }
 
     /// The source-level `$id = value` form is exactly a call to
@@ -6492,13 +6454,13 @@ impl<'db> InferenceContext<'db> {
                 crate::impls::interned_ty(&signature.throws),
             ));
         }
-        let function = self.lower.resolve_exported_value(&segments)?;
-        let [param] = function.params.as_slice() else {
+        let row = extern_function_row(self.db, self.lower.resolve_exported_value(&segments)?);
+        let [param] = row.params.as_slice() else {
             return None;
         };
         Some((
             Ty::from_plain(&param.ty),
-            Ty::from_plain(&function.callable_throws),
+            Ty::from_plain(&row.callable_throws),
         ))
     }
 
@@ -6524,21 +6486,16 @@ impl<'db> InferenceContext<'db> {
             if signature.generic_params.len() != 1 {
                 return None;
             }
-            return Some(function_value_ty(signature, &[target]));
+            return Some(instantiate_callable_signature(
+                self.db,
+                DeclRef::Source(method),
+                &[target],
+            ));
         }
         let qtn = self.lang_decl(baml_base::LangPackage::Baml, &[], "String")?;
-        let crate::package_interface::ExportedType::Class { methods, .. } =
-            crate::package_interface::mounted_type_row(self.db, &qtn)?
-        else {
-            return None;
-        };
-        let method = methods
-            .iter()
-            .find(|method| method.name.as_str() == "from")?;
-        let function =
-            crate::package_interface::resolved_exported_function(method, Vec::new(), Vec::new());
-        (function.generic_params.len() == 1)
-            .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
+        let method = mounted_class_method(self.db, &qtn, &baml_type::Name::new("from"))?;
+        (extern_function_row(self.db, method).generic_params.len() == 1)
+            .then(|| instantiate_callable_signature(self.db, DeclRef::External(method), &[target]))
     }
 
     /// Generic methods follow the same realization rule as free functions:
@@ -6561,81 +6518,43 @@ impl<'db> InferenceContext<'db> {
         };
         let reference = body.display_expr(expr);
         let had_context = expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
-        let source_method = match resolution {
+        let callable = match resolution {
             MemberResolution::BoundMethod { func, .. }
             | MemberResolution::InterfaceConcreteMethod { func, .. } => Some((func, true)),
             MemberResolution::UnboundMethod { func, .. } => Some((func, false)),
-            MemberResolution::InterfaceVirtualMethod { interface, method } => {
-                baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-                    .methods
-                    .iter()
-                    .copied()
-                    .find(|func| {
-                        baml_compiler2_ppir::item_data::function_data(self.db, *func).name == method
-                    })
-                    .map(|func| (func, true))
+            MemberResolution::InterfaceVirtualMethod { .. } => {
+                resolution.callable(self.db).map(|func| (func, true))
             }
-            MemberResolution::External(external)
-                if !matches!(
-                    external.target,
-                    crate::callable::ExternalCallTarget::Free { .. }
-                ) =>
-            {
-                if external.user_generic_params().next().is_some() {
-                    let generic_params: Vec<_> = external
-                        .user_generic_params()
-                        .map(|(param, _)| param.name().clone())
-                        .collect();
-                    let specialization_example_is_safe = external
-                        .user_generic_params()
-                        .all(|(_, bounds)| bounds.is_empty());
-                    let specialization_syntax_available = matches!(body.exprs[expr], Expr::Path(_));
-                    self.pending_diags
-                        .push(PendingDiag::GenericFunctionValueNotSpecialized {
-                            expr,
-                            name: external.display_name().clone(),
-                            reference,
-                            inference_evidence: vec![inferred.clone()],
-                            specialization_args: None,
-                            unconditional: !had_context,
-                            had_expected_type: had_context,
-                            generic_params,
-                            binding_name: initializer_binding_name(body, expr),
-                            function_shape: None,
-                            annotation_ty: None,
-                            specialization_example_is_safe,
-                            specialization_syntax_available,
-                        });
-                }
-                return;
-            }
-            _ => None,
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::Free { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => None,
         };
-        let Some((method, receiver_is_bound)) = source_method else {
+        let Some((method, receiver_is_bound)) = callable else {
             return;
         };
-        let data = baml_compiler2_ppir::item_data::function_data(self.db, method);
-        if data.generic_params.is_empty() {
+        let user_params = callable_user_generic_params(self.db, method);
+        if user_params.is_empty() {
             return;
         }
-        let signature = function_signature(self.db, method);
-        let user_params = function_user_generic_params(self.db, method, signature);
         let generic_params = user_params
             .iter()
-            .map(|param| param.name().clone())
+            .map(|(param, _)| param.name().clone())
             .collect();
-        let specialization_example_is_safe = data
-            .generic_params
+        let specialization_example_is_safe =
+            user_params.iter().all(|(_, bounds)| bounds.is_empty());
+        let user_param_tys: Vec<baml_type::ParamTy> =
+            user_params.into_iter().map(|(param, _)| param).collect();
+        let signature = callable_signature(self.db, method);
+        let throws = callable_throws_of(self.db, method);
+        let has_phantom_param = user_param_tys
             .iter()
-            .all(|param| param.bounds.is_empty());
+            .any(|param| !signature_mentions_param(signature, throws, param));
         let specialization_syntax_available = matches!(body.exprs[expr], Expr::Path(_));
-        let has_phantom_param = user_params
-            .iter()
-            .any(|param| !function_signature_mentions_param(signature, param));
         self.pending_diags
             .push(PendingDiag::GenericFunctionValueNotSpecialized {
                 expr,
-                name: data.name.clone(),
+                name: callable_display_name(self.db, method).clone(),
                 reference,
                 inference_evidence: vec![inferred.clone()],
                 specialization_args: None,
@@ -6647,8 +6566,9 @@ impl<'db> InferenceContext<'db> {
                     .then(|| {
                         generic_function_value_shape(
                             &self.viewpoint(),
-                            signature,
-                            user_params,
+                            self.db,
+                            method,
+                            &user_param_tys,
                             receiver_is_bound,
                             false,
                         )
@@ -6740,9 +6660,13 @@ impl<'db> InferenceContext<'db> {
                     .generic_params
                     .iter()
                     .all(|param| param.bounds.is_empty());
-                let has_phantom_param = user_params
-                    .iter()
-                    .any(|param| !function_signature_mentions_param(signature, param));
+                let has_phantom_param = user_params.iter().any(|param| {
+                    !signature_mentions_param(
+                        callable_signature(self.db, DeclRef::Source(function)),
+                        &signature.throws,
+                        param,
+                    )
+                });
                 let inference_evidence = user_params
                     .iter()
                     .filter_map(|param| instantiation.get(param.index() as usize).cloned())
@@ -6773,59 +6697,71 @@ impl<'db> InferenceContext<'db> {
                             .then(|| {
                                 generic_function_value_shape(
                                     &self.viewpoint(),
-                                    signature,
+                                    self.db,
+                                    DeclRef::Source(function),
                                     user_params,
                                     false,
                                     false,
                                 )
                             })
                             .flatten(),
-                        annotation_ty: (specialization_example_is_safe && !has_phantom_param)
-                            .then(|| function_value_ty(signature, &instantiation)),
+                        annotation_ty: (specialization_example_is_safe && !has_phantom_param).then(
+                            || {
+                                instantiate_callable_signature(
+                                    self.db,
+                                    DeclRef::Source(function),
+                                    &instantiation,
+                                )
+                            },
+                        ),
                         specialization_example_is_safe,
                         specialization_syntax_available: true,
                     });
             }
-            self.write_member_resolution(expr, MemberResolution::Free { func: function });
-            return function_value_ty(signature, &instantiation);
+            self.write_member_resolution(
+                expr,
+                MemberResolution::Free {
+                    func: DeclRef::Source(function),
+                },
+            );
+            return instantiate_callable_signature(
+                self.db,
+                DeclRef::Source(function),
+                &instantiation,
+            );
         }
         if let Some(function) = self.lower.resolve_exported_value(segments) {
             let had_context =
                 expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
-            let external = function
-                .external
-                .clone()
-                .expect("mounted free function carries an external descriptor");
-            let instantiation: Vec<Ty> = function
+            let callable = DeclRef::External(function);
+            let row = extern_function_row(self.db, function);
+            let instantiation: Vec<Ty> = row
                 .generic_params
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
-            if external.user_generic_params().next().is_some() {
-                let user_params: Vec<_> = external
-                    .user_generic_params()
-                    .map(|(param, _)| param.clone())
-                    .collect();
+            let user = callable_user_generic_params(self.db, callable);
+            if !user.is_empty() {
+                let user_params: Vec<_> = user.iter().map(|(param, _)| param.clone()).collect();
                 let generic_params = user_params
                     .iter()
                     .map(|param| param.name().clone())
                     .collect();
-                let specialization_example_is_safe = external
-                    .user_generic_params()
-                    .all(|(_, bounds)| bounds.is_empty());
+                let specialization_example_is_safe =
+                    user.iter().all(|(_, bounds)| bounds.is_empty());
                 let shape_ty =
-                    external_generic_function_value_ty(&function, &user_params, false, false);
+                    generic_function_value_ty(self.db, callable, &user_params, false, false);
                 let has_phantom_param = user_params
                     .iter()
                     .any(|param| !ty_mentions_param(&shape_ty, param));
-                let inference_evidence = external
-                    .user_generic_params()
-                    .filter_map(|(param, _)| instantiation.get(param.index() as usize).cloned())
+                let inference_evidence = user_params
+                    .iter()
+                    .filter_map(|param| instantiation.get(param.index() as usize).cloned())
                     .collect();
                 self.pending_diags
                     .push(PendingDiag::GenericFunctionValueNotSpecialized {
                         expr,
-                        name: function.name.clone(),
+                        name: row.name.clone(),
                         reference: segments
                             .iter()
                             .map(baml_type::Name::as_str)
@@ -6852,22 +6788,14 @@ impl<'db> InferenceContext<'db> {
                             })
                             .flatten(),
                         annotation_ty: (specialization_example_is_safe && !has_phantom_param).then(
-                            || {
-                                crate::method_resolution::instantiate_external_signature(
-                                    &function,
-                                    &instantiation,
-                                )
-                            },
+                            || instantiate_callable_signature(self.db, callable, &instantiation),
                         ),
                         specialization_example_is_safe,
                         specialization_syntax_available: true,
                     });
             }
-            self.write_member_resolution(expr, MemberResolution::External(external));
-            return crate::method_resolution::instantiate_external_signature(
-                &function,
-                &instantiation,
-            );
+            self.write_member_resolution(expr, MemberResolution::Free { func: callable });
+            return instantiate_callable_signature(self.db, callable, &instantiation);
         }
         // Session submissions persist root bindings as top-level `let`s. A
         // let has no declaration signature, so recover its value type from the
@@ -7210,7 +7138,7 @@ impl<'db> InferenceContext<'db> {
                 plan.own_offset = 0;
             }
         }
-        self.register_call_bounds(method, &instantiation, anchor);
+        self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
         if let Some(record_at) = record_at {
             // The slot is what is statically known - interface plus member -
             // recorded uniformly for every spelling and for default and
@@ -7221,12 +7149,16 @@ impl<'db> InferenceContext<'db> {
             self.write_member_resolution(
                 record_at,
                 MemberResolution::InterfaceVirtualMethod {
-                    interface,
+                    interface: DeclRef::Source(interface),
                     method: member.clone(),
                 },
             );
         }
-        Some(function_value_ty(signature, &instantiation))
+        Some(instantiate_callable_signature(
+            self.db,
+            DeclRef::Source(method),
+            &instantiation,
+        ))
     }
 
     /// The `(Base as I).item` spelling: both halves written. Validates them
@@ -7450,39 +7382,24 @@ impl<'db> InferenceContext<'db> {
                     .map(|(exported, args)| (exported, Some(args)))
             });
         if let Some((exported, pinned)) = exported_class
-            && let crate::package_interface::ExportedType::Class {
-                methods,
-                generic_params,
-                generic_param_bounds,
-                ..
-            } = exported.as_ref()
-            && let Some(method) = methods.iter().find(|method| &method.name == member)
+            && let crate::package_interface::ExportedType::Class { qtn, .. } = exported.as_ref()
+            && let Some(method) = mounted_class_method(self.db, qtn, member)
         {
-            let function = crate::package_interface::resolved_exported_function(
-                method,
-                generic_params.clone(),
-                generic_param_bounds.clone(),
-            );
-            let external = function
-                .external
-                .clone()
-                .expect("mounted static method carries an external descriptor");
-            let frame: Vec<baml_type::ParamTy> = external
-                .owner_generic_params
-                .iter()
-                .chain(&external.generic_params)
-                .cloned()
-                .collect();
+            let callable = DeclRef::External(method);
+            let row = extern_function_row(self.db, method);
+            let frame = callable_generic_frame(self.db, callable).params;
+            let position = if self.is_reflect_package_get_function(callable) {
+                crate::lower::TypePosition::ExtractionContract
+            } else {
+                crate::lower::TypePosition::Existential
+            };
             let (instantiation, own_offset) = match (own, pinned) {
                 (OwnArgs::Call(call), Some(owner_args)) => {
                     let own_args = self.instantiation_args_at(
                         call,
-                        &external.generic_params,
+                        &row.generic_params,
                         Some(member),
-                        external_type_position(
-                            baml_compiler2_hir::package::lang_roots(self.db),
-                            &external.target,
-                        ),
+                        position,
                     );
                     let own_offset = owner_args.len();
                     let mut instantiation = owner_args;
@@ -7490,25 +7407,17 @@ impl<'db> InferenceContext<'db> {
                     (instantiation, own_offset)
                 }
                 (OwnArgs::Call(call), None) => {
-                    let instantiation = self.instantiation_args_at(
-                        call,
-                        &frame,
-                        Some(member),
-                        external_type_position(
-                            baml_compiler2_hir::package::lang_roots(self.db),
-                            &external.target,
-                        ),
-                    );
+                    let instantiation =
+                        self.instantiation_args_at(call, &frame, Some(member), position);
                     (instantiation, 0)
                 }
                 (OwnArgs::Fresh, Some(mut owner_args)) => {
                     owner_args.extend(
-                        external
-                            .generic_params
+                        row.generic_params
                             .iter()
                             .map(|param| self.fresh_generic_arg(param)),
                     );
-                    let offset = owner_args.len() - external.generic_params.len();
+                    let offset = owner_args.len() - row.generic_params.len();
                     (owner_args, offset)
                 }
                 (OwnArgs::Fresh, None) => (
@@ -7521,18 +7430,20 @@ impl<'db> InferenceContext<'db> {
             };
             let instantiation = if let OwnArgs::Call(call) = own {
                 let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-                self.register_external_call_bounds(&external, &instantiation, anchor);
-                self.result.call_plans.entry(call).or_default().target =
-                    Some(external.target.clone());
+                self.register_callable_bounds(callable, &instantiation, anchor);
                 instantiation
             } else {
                 instantiation
             };
             if let Some(record_at) = record_at {
-                self.write_member_resolution(record_at, MemberResolution::External(external));
+                self.write_member_resolution(
+                    record_at,
+                    MemberResolution::UnboundMethod { func: callable },
+                );
             }
-            return Some(crate::method_resolution::instantiate_external_signature(
-                &function,
+            return Some(instantiate_callable_signature(
+                self.db,
+                callable,
                 &instantiation,
             ));
         }
@@ -7735,7 +7646,7 @@ impl<'db> InferenceContext<'db> {
             })?;
         let signature = function_signature(self.db, method);
         let frame = crate::lower::class_generic_frame(self.db, class);
-        let position = if self.is_reflect_package_get_function(class, method) {
+        let position = if self.is_reflect_package_get_function(DeclRef::Source(method)) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -7764,29 +7675,35 @@ impl<'db> InferenceContext<'db> {
         };
         if let OwnArgs::Call(call) = own {
             let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-            self.register_call_bounds(method, &instantiation, anchor);
+            self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
             if let Some(record_at) = record_at {
                 self.write_member_resolution(
                     record_at,
                     MemberResolution::UnboundMethod {
-                        class,
-                        func: method,
+                        func: DeclRef::Source(method),
                     },
                 );
             }
-            return Some(function_value_ty(signature, &instantiation));
+            return Some(instantiate_callable_signature(
+                self.db,
+                DeclRef::Source(method),
+                &instantiation,
+            ));
         }
-        self.register_call_bounds(method, &instantiation, anchor);
+        self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
         if let Some(record_at) = record_at {
             self.write_member_resolution(
                 record_at,
                 MemberResolution::UnboundMethod {
-                    class,
-                    func: method,
+                    func: DeclRef::Source(method),
                 },
             );
         }
-        Some(function_value_ty(signature, &instantiation))
+        Some(instantiate_callable_signature(
+            self.db,
+            DeclRef::Source(method),
+            &instantiation,
+        ))
     }
 
     /// Source-less counterpart of [`Self::static_class_for`] for primitive or
@@ -7833,20 +7750,17 @@ impl<'db> InferenceContext<'db> {
             self.write_member_resolution(
                 record_at,
                 MemberResolution::Variant {
-                    enum_loc,
+                    enum_loc: DeclRef::Source(enum_loc),
                     variant: variant.clone(),
                 },
             );
         } else if let Some(record_at) = record_at
-            && matches!(
-                crate::package_interface::mounted_type_row(self.db, qtn),
-                Some(crate::package_interface::ExportedType::Enum { .. })
-            )
+            && let Some(enum_loc) = mounted_enum_loc(self.db, qtn)
         {
             self.write_member_resolution(
                 record_at,
-                MemberResolution::ExternalVariant {
-                    enum_name: qtn.clone(),
+                MemberResolution::Variant {
+                    enum_loc: DeclRef::External(enum_loc),
                     variant: variant.clone(),
                 },
             );
@@ -8289,71 +8203,34 @@ impl<'db> InferenceContext<'db> {
     /// substituted through bound args (bounds may reference sibling
     /// params). Discharge stalls until the argument grounds -
     /// rust-analyzer's where-clause obligations.
-    fn register_call_bounds(
+    /// One Implements obligation per declared bound of the callable's
+    /// generic frame at `instantiation` — the same registration for a source
+    /// item and an exported row.
+    fn register_callable_bounds(
         &mut self,
-        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        callable: FunctionRef<'db>,
         instantiation: &[Ty],
         at: ExprId,
     ) {
-        let bounds = crate::lower::function_generic_bounds(self.db, function);
-        // The concreteness rule covers the function's OWN declared params
+        // The concreteness rule covers the callable's OWN declared params
         // (turbofish or inferred - the user's type arguments). The frame
         // PREFIX is the receiver's business: `Self` legitimately binds an
         // existential for virtual dispatch, and class/interface args were
         // judged at the receiver's own annotation.
-        let own_start = {
-            let frame = crate::lower::function_generic_frame(self.db, function);
-            let own = baml_compiler2_ppir::item_data::function_data(self.db, function)
-                .generic_params
-                .len();
-            frame.len().saturating_sub(own)
-        };
-        for (param, param_bounds) in bounds {
+        let frame = callable_generic_frame(self.db, callable);
+        for (param, param_bounds) in frame.params.iter().zip(&frame.bounds) {
             let Some(arg) = instantiation.get(param.index() as usize) else {
                 continue;
             };
             for bound in param_bounds {
                 // Declared bounds are plain; the obligation machinery's
                 // vocabulary is interned — ingest once per bound.
-                let bound = InferInterface::from_constraint(&bound);
-                self.register_obligation(obligations::Obligation::Implements {
-                    ty: arg.clone(),
-                    interface: substitute_interface_params(&bound, instantiation),
-                    at,
-                    not_concrete_rejects: (param.index() as usize) >= own_start,
-                });
-            }
-        }
-    }
-
-    fn register_external_call_bounds(
-        &mut self,
-        external: &crate::callable::ExternalCallable,
-        instantiation: &[Ty],
-        at: ExprId,
-    ) {
-        let own_start = external.owner_generic_params.len();
-        let params = external
-            .owner_generic_params
-            .iter()
-            .zip(&external.owner_generic_param_bounds)
-            .chain(
-                external
-                    .generic_params
-                    .iter()
-                    .zip(&external.generic_param_bounds),
-            );
-        for (param, bounds) in params {
-            let Some(arg) = instantiation.get(param.index() as usize) else {
-                continue;
-            };
-            for bound in bounds {
                 let bound = InferInterface::from_constraint(bound);
                 self.register_obligation(obligations::Obligation::Implements {
                     ty: arg.clone(),
                     interface: substitute_interface_params(&bound, instantiation),
                     at,
-                    not_concrete_rejects: (param.index() as usize) >= own_start,
+                    not_concrete_rejects: (param.index() as usize) >= frame.own_start,
                 });
             }
         }
@@ -8489,19 +8366,14 @@ impl<'db> InferenceContext<'db> {
         instantiation
     }
 
-    fn is_reflect_package_get_function(
-        &self,
-        class: baml_compiler2_hir::loc::ClassLoc<'db>,
-        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ) -> bool {
-        let qtn = crate::lower::class_qualified_name(self.db, class);
+    fn is_reflect_package_get_function(&self, function: FunctionRef<'db>) -> bool {
+        let Some(qtn) = callable_owner_type(self.db, function) else {
+            return false;
+        };
         self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             && qtn.namespace().is_empty()
             && qtn.name().as_str() == "Package"
-            && baml_compiler2_ppir::item_data::function_data(self.db, function)
-                .name
-                .as_str()
-                == "get_function"
+            && callable_display_name(self.db, function).as_str() == "get_function"
     }
 
     fn computed_generic_argument_name(
@@ -9000,21 +8872,16 @@ impl<'db> InferenceContext<'db> {
         ty
     }
 
-    fn report_bare_output_format_reference(
-        &mut self,
-        expr: ExprId,
-        class: baml_compiler2_hir::loc::ClassLoc<'db>,
-        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class);
-        let function_data = baml_compiler2_ppir::item_data::function_data(self.db, function);
-        let package = baml_compiler2_hir::file_package::file_package(self.db, class.file(self.db));
-        let is_output_format = function_data.name.as_str() == "output_format"
-            && self.lang().is(baml_base::LangPackage::Ai, package.root)
-            && match class_data.name.as_str() {
-                "Context" => package.namespace_path.is_empty(),
-                "SpecCtx" => package
-                    .namespace_path
+    fn report_bare_output_format_reference(&mut self, expr: ExprId, function: FunctionRef<'db>) {
+        let Some(class) = callable_owner_type(self.db, function) else {
+            return;
+        };
+        let is_output_format = callable_display_name(self.db, function).as_str() == "output_format"
+            && self.lang().is(baml_base::LangPackage::Ai, class.root())
+            && match class.name().as_str() {
+                "Context" => class.namespace().is_empty(),
+                "SpecCtx" => class
+                    .namespace()
                     .iter()
                     .map(baml_type::Name::as_str)
                     .eq(["internal"]),
@@ -9063,20 +8930,22 @@ impl<'db> InferenceContext<'db> {
             return (
                 substitute_params(&crate::impls::interned_ty(field_ty), args),
                 Some(MemberResolution::Field {
-                    class,
+                    class: DeclRef::Source(class),
                     field: member.clone(),
                 }),
             );
         }
         if let InferTy::Class(qtn, args, _) = resolved.kind()
-            && let Some(crate::package_interface::ExportedType::Class { fields, .. }) =
-                crate::package_interface::mounted_type_row(self.db, qtn)
-            && let Some((_, field_ty, _)) = fields.iter().find(|(field, ..)| field == member)
+            && let Some(class) = mounted_class_loc(self.db, qtn)
+            && let Some((_, field_ty, _)) = extern_class_row(self.db, class)
+                .fields
+                .iter()
+                .find(|(field, ..)| field == member)
         {
             return (
                 substitute_params(&Ty::from_plain(field_ty), args),
-                Some(MemberResolution::ExternalField {
-                    class: qtn.clone(),
+                Some(MemberResolution::Field {
+                    class: DeclRef::External(class),
                     field: member.clone(),
                 }),
             );
@@ -9104,61 +8973,33 @@ impl<'db> InferenceContext<'db> {
                 }
                 return (Ty::error(), None);
             }
-            match candidate.source {
-                crate::method_resolution::MethodCandidateSource::Source { method, class } => {
-                    if self.reject_selfless_inherent_method(method, member, at) {
-                        return (Ty::error(), None);
-                    }
-                    if self.member_probe_depth == 0 {
-                        self.report_bare_output_format_reference(at, class, method);
-                    }
-                    let signature = function_signature(self.db, method);
-                    let mut instantiation = candidate.class_args;
-                    let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
-                        .iter()
-                        .map(|param| self.fresh_generic_arg(param))
-                        .collect();
-                    instantiation.extend(own);
-                    // r-a registers required obligations at EVERY value
-                    // instantiation, whatever the spelling - a method read as a
-                    // VALUE obligates its own generics' bounds exactly as a
-                    // call would (add_required_obligations_for_value_path).
-                    self.register_call_bounds(method, &instantiation, at);
-                    return (
-                        bind_receiver(function_value_ty(signature, &instantiation)),
-                        Some(MemberResolution::BoundMethod {
-                            class,
-                            func: method,
-                        }),
-                    );
-                }
-                crate::method_resolution::MethodCandidateSource::External(function) => {
-                    let external = function
-                        .external
-                        .clone()
-                        .expect("mounted method carries an external descriptor");
-                    let mut instantiation = candidate.class_args;
-                    instantiation.extend(
-                        function
-                            .generic_params
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param)),
-                    );
-                    self.register_external_call_bounds(&external, &instantiation, at);
-                    let ty = crate::method_resolution::instantiate_external_signature(
-                        &function,
-                        &instantiation,
-                    );
-                    return (
-                        if external.takes_self {
-                            bind_receiver(ty)
-                        } else {
-                            ty
-                        },
-                        Some(MemberResolution::External(external)),
-                    );
-                }
+            let crate::method_resolution::MethodCandidate { method, class_args } = candidate;
+            if self.reject_selfless_inherent_method(method, member, at) {
+                return (Ty::error(), None);
             }
+            if self.member_probe_depth == 0 {
+                self.report_bare_output_format_reference(at, method);
+            }
+            let mut instantiation = class_args;
+            let own: Vec<Ty> = callable_signature(self.db, method)
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            instantiation.extend(own);
+            // r-a registers required obligations at EVERY value
+            // instantiation, whatever the spelling - a method read as a
+            // VALUE obligates its own generics' bounds exactly as a
+            // call would (add_required_obligations_for_value_path).
+            self.register_callable_bounds(method, &instantiation, at);
+            return (
+                bind_receiver(instantiate_callable_signature(
+                    self.db,
+                    method,
+                    &instantiation,
+                )),
+                Some(MemberResolution::BoundMethod { func: method }),
+            );
         }
         match crate::method_resolution::lookup_interface_member(
             self.db,
@@ -9350,19 +9191,6 @@ impl<'db> InferenceContext<'db> {
                 from_interface_default: *from_interface_default,
             }),
             MemberDeclarer::ImplField { .. } => None,
-            MemberDeclarer::ExternalMethod(callable) => {
-                Some(MemberResolution::External(callable.clone()))
-            }
-            MemberDeclarer::ExternalVirtualField {
-                interface,
-                realized,
-                field_index,
-            } => Some(MemberResolution::ExternalInterfaceVirtualField {
-                interface: interface.clone(),
-                view: realized.existential(),
-                field_index: *field_index,
-                field: member.clone(),
-            }),
         }
     }
 
@@ -9527,16 +9355,10 @@ impl<'db> InferenceContext<'db> {
         match &member.declarer {
             MemberDeclarer::VirtualMethod { method, .. }
             | MemberDeclarer::ImplMethod { func: method, .. } => {
-                function_signature(self.db, *method)
-                    .params
-                    .first()
-                    .is_some_and(|param| param.name.as_str() == "self")
+                callable_takes_self(self.db, *method)
             }
-            MemberDeclarer::ExternalMethod(callable) => callable.takes_self,
             // Fields have no receiver-vs-associated split.
-            MemberDeclarer::VirtualField { .. }
-            | MemberDeclarer::ImplField { .. }
-            | MemberDeclarer::ExternalVirtualField { .. } => true,
+            MemberDeclarer::VirtualField { .. } | MemberDeclarer::ImplField { .. } => true,
         }
     }
 
@@ -9552,15 +9374,11 @@ impl<'db> InferenceContext<'db> {
     /// parameter. `Widget.make(..)` is the spelling.
     fn reject_selfless_inherent_method(
         &mut self,
-        method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        method: FunctionRef<'db>,
         member_name: &baml_type::Name,
         at: ExprId,
     ) -> bool {
-        let takes_self = function_signature(self.db, method)
-            .params
-            .first()
-            .is_some_and(|param| param.name.as_str() == "self");
-        if takes_self {
+        if callable_takes_self(self.db, method) {
             return false;
         }
         if self.member_probe_depth == 0 {
@@ -9569,7 +9387,12 @@ impl<'db> InferenceContext<'db> {
             // CONCRETE receiver's interface static lands. Name its interface
             // when it has one; `None` is reserved for genuinely inherent
             // statics, whose spelling is the owning type.
-            let interface_name = self.declaring_interface_of_method(method);
+            let interface_name = match method {
+                DeclRef::Source(method) => self.declaring_interface_of_method(method),
+                // A served package's static: its row's declaring interface
+                // is not on the row, so the message stays the general one.
+                DeclRef::External(_) => None,
+            };
             self.pending_diags
                 .push(PendingDiag::SelflessInstanceMember {
                     expr: at,
@@ -9593,19 +9416,19 @@ impl<'db> InferenceContext<'db> {
         use crate::method_resolution::MemberDeclarer;
 
         match declarer {
-            MemberDeclarer::VirtualMethod { interface, .. } => {
-                Some(self.interface_short_name(*interface))
-            }
-            MemberDeclarer::ImplMethod { func, .. } => self.declaring_interface_of_method(*func),
-            // A mounted method's descriptor is source-less: it records
-            // `takes_self` but not the interface that declared it, so there is
-            // no name to give and the message stays the general one.
-            MemberDeclarer::ExternalMethod(_) => None,
+            MemberDeclarer::VirtualMethod { interface, .. } => Some(match interface {
+                DeclRef::Source(interface) => self.interface_short_name(*interface),
+                DeclRef::External(interface) => interface.head(self.db).name().clone(),
+            }),
+            MemberDeclarer::ImplMethod { func, .. } => match func {
+                DeclRef::Source(func) => self.declaring_interface_of_method(*func),
+                // A served package's row does not carry its declaring
+                // interface, so the message stays the general one.
+                DeclRef::External(_) => None,
+            },
             // FIELD declarers cannot reach here — the only caller has already
             // required `member.is_method`.
-            MemberDeclarer::VirtualField { .. }
-            | MemberDeclarer::ImplField { .. }
-            | MemberDeclarer::ExternalVirtualField { .. } => None,
+            MemberDeclarer::VirtualField { .. } | MemberDeclarer::ImplField { .. } => None,
         }
     }
 
@@ -9680,32 +9503,21 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         interface_member: crate::method_resolution::InterfaceMember<'db>,
     ) -> Ty {
-        if let Some(pending) = interface_member.pending_own {
-            return match pending {
-                crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
-                    let signature = function_signature(self.db, method);
-                    let own: Vec<Ty> = signature.generic_params[prefix.len()..]
-                        .iter()
-                        .map(|param| self.fresh_generic_arg(param))
-                        .collect();
-                    let mut instantiation = prefix;
-                    instantiation.extend(own);
-                    bind_receiver(function_value_ty(signature, &instantiation))
-                }
-                crate::method_resolution::PendingOwnGenerics::External { function, prefix } => {
-                    let mut instantiation = prefix;
-                    instantiation.extend(
-                        function
-                            .generic_params
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param)),
-                    );
-                    bind_receiver(crate::method_resolution::instantiate_external_signature(
-                        &function,
-                        &instantiation,
-                    ))
-                }
-            };
+        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
+            interface_member.pending_own
+        {
+            let own: Vec<Ty> = callable_signature(self.db, callable)
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            let mut instantiation = prefix;
+            instantiation.extend(own);
+            return bind_receiver(instantiate_callable_signature(
+                self.db,
+                callable,
+                &instantiation,
+            ));
         }
         // Same rule as the call road: a `self`-less method binds nothing.
         if interface_member.is_method && self.interface_member_takes_self(&interface_member) {
@@ -9720,32 +9532,17 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         interface_member: crate::method_resolution::InterfaceMember<'db>,
     ) -> Ty {
-        if let Some(pending) = interface_member.pending_own {
-            return match pending {
-                crate::method_resolution::PendingOwnGenerics::Source { method, prefix } => {
-                    let signature = function_signature(self.db, method);
-                    let mut instantiation = prefix;
-                    instantiation.extend(
-                        signature.generic_params[instantiation.len()..]
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param)),
-                    );
-                    function_value_ty(signature, &instantiation)
-                }
-                crate::method_resolution::PendingOwnGenerics::External { function, prefix } => {
-                    let mut instantiation = prefix;
-                    instantiation.extend(
-                        function
-                            .generic_params
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param)),
-                    );
-                    crate::method_resolution::instantiate_external_signature(
-                        &function,
-                        &instantiation,
-                    )
-                }
-            };
+        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
+            interface_member.pending_own
+        {
+            let own: Vec<Ty> = callable_signature(self.db, callable)
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            let mut instantiation = prefix;
+            instantiation.extend(own);
+            return instantiate_callable_signature(self.db, callable, &instantiation);
         }
         interface_member.ty
     }
@@ -12987,29 +12784,15 @@ fn function_user_generic_params<'a, 'db>(
     &signature.generic_params[start..end]
 }
 
-fn function_signature_mentions_param(
-    signature: &crate::lower::FunctionSignature,
+fn signature_mentions_param(
+    signature: &crate::callable::FunctionSignatureTy,
+    throws: &baml_type::Ty,
     param: &baml_type::ParamTy,
 ) -> bool {
     signature.params.iter().any(|function_param| {
         ty_mentions_param(&crate::impls::interned_ty(&function_param.ty), param)
-    }) || ty_mentions_param(&crate::impls::interned_ty(&signature.ret), param)
-        || ty_mentions_param(&crate::impls::interned_ty(&signature.throws), param)
-}
-
-fn external_type_position(
-    lang: baml_base::LangRoots,
-    target: &crate::callable::ExternalCallTarget,
-) -> crate::lower::TypePosition {
-    match target {
-        crate::callable::ExternalCallTarget::Method { class, name }
-            if class.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "Package")
-                && name.as_str() == "get_function" =>
-        {
-            crate::lower::TypePosition::ExtractionContract
-        }
-        _ => crate::lower::TypePosition::Existential,
-    }
+    }) || ty_mentions_param(&crate::impls::interned_ty(&signature.return_type), param)
+        || ty_mentions_param(&crate::impls::interned_ty(throws), param)
 }
 
 fn external_target_path(
@@ -13243,28 +13026,6 @@ fn bind_receiver(fn_ty: Ty) -> Ty {
 /// A resolved function as a first-class value: its signature instantiated
 /// into an interned function type. Shared by direct calls (turbofish-aware
 /// instantiation) and value-position references (fresh-var instantiation).
-fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
-    let params: Box<[baml_type::interned::InferFunctionParamTy]> = signature
-        .params
-        .iter()
-        .map(|param| baml_type::interned::InferFunctionParamTy {
-            name: Some(param.name.clone()),
-            ty: substitute_params(&crate::impls::interned_ty(&param.ty), instantiation),
-            mode: if param.has_default {
-                baml_type::FunctionParamMode::Optional
-            } else {
-                baml_type::FunctionParamMode::Required
-            },
-        })
-        .collect();
-    Ty::intern(InferTy::Function {
-        params,
-        ret: substitute_params(&crate::impls::interned_ty(&signature.ret), instantiation),
-        throws: substitute_params(&crate::impls::interned_ty(&signature.throws), instantiation),
-        attr: TyAttr::default(),
-    })
-}
-
 impl<'db> InferenceContext<'db> {
     /// Inference finalize's exit through the
     /// [`baml_type::interned::ClosedTy`] boundary, TOTAL: a finalized
@@ -13414,12 +13175,8 @@ impl<'db> InferenceContext<'db> {
                 MemberResolution::Variant { enum_loc, variant }
             }
             MemberResolution::Free { func } => MemberResolution::Free { func },
-            MemberResolution::BoundMethod { class, func } => {
-                MemberResolution::BoundMethod { class, func }
-            }
-            MemberResolution::UnboundMethod { class, func } => {
-                MemberResolution::UnboundMethod { class, func }
-            }
+            MemberResolution::BoundMethod { func } => MemberResolution::BoundMethod { func },
+            MemberResolution::UnboundMethod { func } => MemberResolution::UnboundMethod { func },
             MemberResolution::InterfaceVirtualMethod { interface, method } => {
                 MemberResolution::InterfaceVirtualMethod { interface, method }
             }
@@ -13448,24 +13205,6 @@ impl<'db> InferenceContext<'db> {
                 field_index,
                 field,
             },
-            MemberResolution::External(callable) => MemberResolution::External(callable),
-            MemberResolution::ExternalField { class, field } => {
-                MemberResolution::ExternalField { class, field }
-            }
-            MemberResolution::ExternalVariant { enum_name, variant } => {
-                MemberResolution::ExternalVariant { enum_name, variant }
-            }
-            MemberResolution::ExternalInterfaceVirtualField {
-                interface,
-                view,
-                field_index,
-                field,
-            } => MemberResolution::ExternalInterfaceVirtualField {
-                interface,
-                view: self.materialize_ty(&view),
-                field_index,
-                field,
-            },
         }
     }
 
@@ -13478,7 +13217,6 @@ impl<'db> InferenceContext<'db> {
             explicit,
             slots,
             runtime_id,
-            target,
         } = plan;
         CallPlan {
             bindings,
@@ -13494,7 +13232,6 @@ impl<'db> InferenceContext<'db> {
                 })
                 .collect(),
             runtime_id,
-            target,
         }
     }
 
@@ -13515,47 +13252,18 @@ impl<'db> InferenceContext<'db> {
     }
 }
 
-fn generic_function_value_shape(
-    vp: &crate::render::Viewpoint<'_>,
-    signature: &crate::lower::FunctionSignature,
-    user_params: &[baml_type::ParamTy],
-    receiver_is_bound: bool,
-    concrete_example: bool,
-) -> Option<String> {
-    let mut instantiation: Vec<Ty> = signature
-        .generic_params
-        .iter()
-        .map(|param| {
-            Ty::intern(InferTy::TypeVar(
-                param.clone(),
-                baml_type::TyAttr::default(),
-            ))
-        })
-        .collect();
-    if concrete_example {
-        for param in user_params {
-            if let Some(slot) = instantiation.get_mut(param.index() as usize) {
-                *slot = Ty::int();
-            }
-        }
-    }
-    let ty = function_value_ty(signature, &instantiation);
-    let ty = if receiver_is_bound {
-        bind_receiver(ty)
-    } else {
-        ty
-    };
-    vp.source_text(&rendered_plain(&ty)).ok()
-}
-
-fn external_generic_function_value_ty(
-    function: &crate::package_interface::ResolvedFunction,
+/// The callable's value type at its own symbolic frame (each slot its
+/// rigid parameter), optionally with the user-facing params set to `int` as
+/// a concrete example — the shape the "not specialized" diagnostic shows.
+fn generic_function_value_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
     user_params: &[baml_type::ParamTy],
     receiver_is_bound: bool,
     concrete_example: bool,
 ) -> Ty {
-    let mut instantiation: Vec<Ty> = function
-        .generic_params
+    let mut instantiation: Vec<Ty> = callable_generic_frame(db, callable)
+        .params
         .iter()
         .map(|param| {
             Ty::intern(InferTy::TypeVar(
@@ -13571,12 +13279,30 @@ fn external_generic_function_value_ty(
             }
         }
     }
-    let ty = crate::method_resolution::instantiate_external_signature(function, &instantiation);
+    let ty = instantiate_callable_signature(db, callable, &instantiation);
     if receiver_is_bound {
         bind_receiver(ty)
     } else {
         ty
     }
+}
+
+fn generic_function_value_shape<'db>(
+    vp: &crate::render::Viewpoint<'_>,
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+    user_params: &[baml_type::ParamTy],
+    receiver_is_bound: bool,
+    concrete_example: bool,
+) -> Option<String> {
+    let ty = generic_function_value_ty(
+        db,
+        callable,
+        user_params,
+        receiver_is_bound,
+        concrete_example,
+    );
+    vp.source_text(&rendered_plain(&ty)).ok()
 }
 
 fn initializer_binding_name(body: &ExprBody, initializer: ExprId) -> Option<baml_type::Name> {
@@ -13619,8 +13345,7 @@ fn finalize_member_resolution(
     resolution: &mut MemberResolution<'_, Ty>,
 ) {
     match resolution {
-        MemberResolution::InterfaceVirtualField { view, .. }
-        | MemberResolution::ExternalInterfaceVirtualField { view, .. } => {
+        MemberResolution::InterfaceVirtualField { view, .. } => {
             *view = ctx.finalize_ty(view).into_ty();
         }
         MemberResolution::InterfaceConcreteMethod {
@@ -13635,10 +13360,7 @@ fn finalize_member_resolution(
         | MemberResolution::Free { .. }
         | MemberResolution::BoundMethod { .. }
         | MemberResolution::UnboundMethod { .. }
-        | MemberResolution::InterfaceVirtualMethod { .. }
-        | MemberResolution::External(_)
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. } => {}
+        | MemberResolution::InterfaceVirtualMethod { .. } => {}
     }
 }
 

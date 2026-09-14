@@ -25,7 +25,7 @@
 //! bodyless default through this lane).
 
 use baml_base::{Name, SourceRoot};
-use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
+use baml_compiler2_hir::loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc};
 use baml_type::{
     DeclName, ParamTy,
     interned::{ClosedInterface, ClosedTy},
@@ -35,12 +35,229 @@ use rustc_hash::FxHashMap;
 use crate::{
     callable::{ExternalCallTarget, FunctionSignatureTy},
     impls::{MountedImplFacts, ResolvedImplFacts},
-    package_interface::{ExportedFunction, ExportedImpl, ExportedType, package_interface},
+    package_interface::{
+        ExportedAssociatedType, ExportedFieldAttrs, ExportedFunction, ExportedImpl, ExportedType,
+        package_interface,
+    },
     render::{Spell, Viewpoint},
 };
 
 /// A function by provenance: a source item or an exported row.
 pub type FunctionRef<'db> = DeclRef<FunctionLoc<'db>, ExternFunctionLoc<'db>>;
+/// A class, wherever it is declared.
+pub type ClassRef<'db> = DeclRef<ClassLoc<'db>, ExternClassLoc<'db>>;
+/// An enum, wherever it is declared.
+pub type EnumRef<'db> = DeclRef<EnumLoc<'db>, ExternEnumLoc<'db>>;
+/// An interface, wherever it is declared.
+pub type InterfaceRef<'db> = DeclRef<InterfaceLoc<'db>, ExternInterfaceLoc<'db>>;
+/// An `implements` block, wherever it is declared.
+pub type ImplRef<'db> = DeclRef<ImplLoc<'db>, ExternImplLoc<'db>>;
+
+// ── Type rows ────────────────────────────────────────────────────────────────
+//
+// A type row is addressed by its head — the one lane-uniform identity types
+// already have — but as an INTERNED loc minted only from a row that exists,
+// so that a `DeclName` fabricated anywhere (`DeclName::in_root(..)`) cannot
+// pose as a declaration. One total read per kind hands the whole row back.
+
+/// The identity of an exported class row.
+#[salsa::interned]
+pub struct ExternClassLoc<'db> {
+    #[returns(ref)]
+    pub head: DeclName,
+}
+
+/// The identity of an exported enum row.
+#[salsa::interned]
+pub struct ExternEnumLoc<'db> {
+    #[returns(ref)]
+    pub head: DeclName,
+}
+
+/// The identity of an exported interface row.
+#[salsa::interned]
+pub struct ExternInterfaceLoc<'db> {
+    #[returns(ref)]
+    pub head: DeclName,
+}
+
+impl std::fmt::Debug for ExternClassLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExternClassLoc(..)")
+    }
+}
+
+impl std::fmt::Debug for ExternEnumLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExternEnumLoc(..)")
+    }
+}
+
+impl std::fmt::Debug for ExternInterfaceLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExternInterfaceLoc(..)")
+    }
+}
+
+/// An exported class row, borrowed whole from the package interface.
+#[derive(Clone, Copy)]
+pub struct ClassRow<'db> {
+    pub head: &'db DeclName,
+    pub fields: &'db [(Name, baml_type::Ty, ExportedFieldAttrs)],
+    pub methods: &'db [ExportedFunction],
+    pub generic_params: &'db [ParamTy],
+    pub generic_param_bounds: &'db [Vec<baml_type::Interface>],
+}
+
+/// An exported enum row, borrowed whole from the package interface.
+#[derive(Clone, Copy)]
+pub struct EnumRow<'db> {
+    pub head: &'db DeclName,
+    pub variants: &'db [Name],
+}
+
+/// An exported interface row, borrowed whole from the package interface.
+#[derive(Clone, Copy)]
+pub struct InterfaceRow<'db> {
+    pub head: &'db DeclName,
+    pub self_param: &'db ParamTy,
+    pub generic_params: &'db [ParamTy],
+    pub param_bounds: &'db [Vec<baml_type::Interface>],
+    pub requires: &'db [baml_type::Interface],
+    pub associated_types: &'db [ExportedAssociatedType],
+    pub fields: &'db [(Name, baml_type::Ty, ExportedFieldAttrs)],
+    pub required_methods: &'db [ExportedFunction],
+    pub default_methods: &'db [ExportedFunction],
+}
+
+fn no_type_row(db: &dyn baml_compiler2_ppir::Db, kind: &str, head: &DeclName) -> ! {
+    panic!(
+        "internal error: no exported {kind} row for `{}`; an extern type loc is minted only from          a row in the current revision's package interface",
+        head.spell(&Viewpoint::canonical(db))
+    )
+}
+
+/// The row `class` names. TOTAL, as [`extern_function_row`].
+pub fn extern_class_row<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ExternClassLoc<'db>,
+) -> ClassRow<'db> {
+    let head = class.head(db);
+    match type_row_at(db, head) {
+        Some(ExportedType::Class {
+            qtn,
+            fields,
+            methods,
+            generic_params,
+            generic_param_bounds,
+        }) => ClassRow {
+            head: qtn,
+            fields,
+            methods,
+            generic_params,
+            generic_param_bounds,
+        },
+        _ => no_type_row(db, "class", head),
+    }
+}
+
+/// The row `enum_loc` names. TOTAL, as [`extern_function_row`].
+pub fn extern_enum_row<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    enum_loc: ExternEnumLoc<'db>,
+) -> EnumRow<'db> {
+    let head = enum_loc.head(db);
+    match type_row_at(db, head) {
+        Some(ExportedType::Enum { qtn, variants }) => EnumRow {
+            head: qtn,
+            variants,
+        },
+        _ => no_type_row(db, "enum", head),
+    }
+}
+
+/// The row `interface` names. TOTAL, as [`extern_function_row`].
+pub fn extern_interface_row<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: ExternInterfaceLoc<'db>,
+) -> InterfaceRow<'db> {
+    let head = interface.head(db);
+    match type_row_at(db, head) {
+        Some(ExportedType::Interface {
+            qtn,
+            self_param,
+            generic_params,
+            param_bounds,
+            requires,
+            associated_types,
+            fields,
+            required_methods,
+            default_methods,
+        }) => InterfaceRow {
+            head: qtn,
+            self_param,
+            generic_params,
+            param_bounds,
+            requires,
+            associated_types,
+            fields,
+            required_methods,
+            default_methods,
+        },
+        _ => no_type_row(db, "interface", head),
+    }
+}
+
+/// The class `head` names, if its package exports one.
+pub fn extern_class_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternClassLoc<'db>> {
+    matches!(type_row_at(db, head)?, ExportedType::Class { .. })
+        .then(|| ExternClassLoc::new(db, head.clone()))
+}
+
+/// The enum `head` names, if its package exports one.
+pub fn extern_enum_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternEnumLoc<'db>> {
+    matches!(type_row_at(db, head)?, ExportedType::Enum { .. })
+        .then(|| ExternEnumLoc::new(db, head.clone()))
+}
+
+/// The interface `head` names, if its package exports one.
+pub fn extern_interface_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternInterfaceLoc<'db>> {
+    matches!(type_row_at(db, head)?, ExportedType::Interface { .. })
+        .then(|| ExternInterfaceLoc::new(db, head.clone()))
+}
+
+/// [`extern_class_loc`] for a package served from its interface.
+pub fn mounted_class_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternClassLoc<'db>> {
+    served(db, head.root()).then(|| extern_class_loc(db, head))?
+}
+
+/// [`extern_enum_loc`] for a package served from its interface.
+pub fn mounted_enum_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternEnumLoc<'db>> {
+    served(db, head.root()).then(|| extern_enum_loc(db, head))?
+}
+
+/// [`extern_interface_loc`] for a package served from its interface.
+pub fn mounted_interface_loc<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    head: &DeclName,
+) -> Option<ExternInterfaceLoc<'db>> {
+    served(db, head.root()).then(|| extern_interface_loc(db, head))?
+}
 
 // ── Impl identity ────────────────────────────────────────────────────────────
 
@@ -191,6 +408,37 @@ pub struct ExternFunctionLoc<'db> {
 }
 
 impl<'db> ExternFunctionLoc<'db> {
+    /// The package the row lives in, from the ADDRESS — never from the
+    /// row's own `target`, whose heads a blob spells for itself.
+    pub fn package(self, db: &'db dyn baml_compiler2_ppir::Db) -> SourceRoot {
+        match self.addr(db) {
+            ExternRowAddr::Declared(ExternalCallTarget::Free { function }) => function.root(),
+            ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => class.root(),
+            ExternRowAddr::Declared(ExternalCallTarget::Interface { interface, .. }) => {
+                interface.root()
+            }
+            ExternRowAddr::ImplProvided { package, .. } => *package,
+        }
+    }
+
+    /// The dispatch slot this row occupies, from the ADDRESS: a declared
+    /// row's own target; the implemented interface's `{ I, m }` slot for an
+    /// impl-provided row. Equal to the row's `target` for every honest row
+    /// (the substrate's oracles pin it), and the HONEST answer when a blob's
+    /// `target` lies — which is why consumers link and trust through this,
+    /// never through `extern_function_row(..).target`.
+    pub fn slot(self, db: &'db dyn baml_compiler2_ppir::Db) -> ExternalCallTarget {
+        match self.addr(db) {
+            ExternRowAddr::Declared(target) => target.clone(),
+            ExternRowAddr::ImplProvided {
+                identity, method, ..
+            } => ExternalCallTarget::Interface {
+                interface: identity.interface.clone(),
+                method: method.clone(),
+            },
+        }
+    }
+
     /// The impl block that provides this row, for an impl-provided row.
     /// `None` IS the answer for a declared row.
     pub fn impl_block(self, db: &'db dyn baml_compiler2_ppir::Db) -> Option<ExternImplLoc<'db>> {
@@ -458,6 +706,50 @@ fn mint_declared(
     let addr = ExternRowAddr::Declared(target);
     extern_row_at(db, &addr)?;
     Some(ExternFunctionLoc::new(db, addr))
+}
+
+// ── The ladder's lane gate ───────────────────────────────────────────────────
+//
+// A package's rows are minted for CONSUMERS only when the package is served
+// from its interface; a source-backed package's declarations are its items,
+// and its rows exist only for export. The `mounted_*` twins of the three
+// declared mints apply that gate (the same one `mounted_type_row` applies to
+// type rows), so a resolution ladder that consults them cannot answer a
+// source item with an extern loc. The ungated mints below are for callers
+// that hold a served-root head already, or that deliberately want the
+// export (the incomplete-impl recovery in `lookup_impl_member`).
+
+fn served(db: &dyn baml_compiler2_ppir::Db, root: SourceRoot) -> bool {
+    baml_compiler2_hir::package::is_served_from_interface(db, root)
+}
+
+/// [`extern_function_named`] for a package served from its interface.
+pub fn mounted_function_named<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    root: SourceRoot,
+    namespace: &[Name],
+    name: &Name,
+) -> Option<ExternFunctionLoc<'db>> {
+    served(db, root).then(|| extern_function_named(db, root, namespace, name))?
+}
+
+/// [`extern_class_method`] for a class of a package served from its interface.
+pub fn mounted_class_method<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: &DeclName,
+    name: &Name,
+) -> Option<ExternFunctionLoc<'db>> {
+    served(db, class.root()).then(|| extern_class_method(db, class, name))?
+}
+
+/// [`extern_interface_method`] for an interface of a package served from its
+/// interface.
+pub fn mounted_interface_method<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: &DeclName,
+    name: &Name,
+) -> Option<ExternFunctionLoc<'db>> {
+    served(db, interface.root()).then(|| extern_interface_method(db, interface, name))?
 }
 
 /// The free function `namespace.name` of `root`, if exported.

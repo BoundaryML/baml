@@ -1494,7 +1494,7 @@ impl<'db> LowerCtx<'db> {
     pub fn resolve_exported_value(
         &self,
         segments: &[Name],
-    ) -> Option<crate::package_interface::ResolvedFunction> {
+    ) -> Option<crate::extern_loc::ExternFunctionLoc<'db>> {
         if segments.len() < 2 {
             return None;
         }
@@ -1507,17 +1507,8 @@ impl<'db> LowerCtx<'db> {
                 (segments[0].clone(), &segments[1..])
             };
         let package = self.accessible_package(&package_name)?;
-        if !is_served_from_interface(self.db, package) {
-            return None;
-        }
         let (item, namespace) = visible_segments.split_last()?;
-        let interface = crate::package_interface::mounted_interface(self.db, package)?;
-        let function = interface.lookup_function(namespace, item)?;
-        Some(crate::package_interface::resolved_exported_function(
-            function,
-            Vec::new(),
-            Vec::new(),
-        ))
+        crate::extern_loc::mounted_function_named(self.db, package, namespace, item)
     }
 
     /// Type-namespace resolution, exposed for constructor and member typing.

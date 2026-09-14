@@ -641,6 +641,7 @@ fn resolved_call_function<'db>(
     dispatch_bindings: &CfgDispatchBindings,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use baml_compiler2_ast::Expr;
+    use baml_compiler2_hir::loc::DeclRef;
     use baml_compiler2_hir_ty::infer::MemberResolution;
 
     let resolution = inference.member_resolutions.get(&callee).or_else(|| {
@@ -653,12 +654,26 @@ fn resolved_call_function<'db>(
 
     match resolution {
         Some(
-            MemberResolution::Free { func }
-            | MemberResolution::BoundMethod { func, .. }
-            | MemberResolution::UnboundMethod { func, .. }
-            | MemberResolution::InterfaceConcreteMethod { func, .. },
+            MemberResolution::Free {
+                func: DeclRef::Source(func),
+            }
+            | MemberResolution::BoundMethod {
+                func: DeclRef::Source(func),
+                ..
+            }
+            | MemberResolution::UnboundMethod {
+                func: DeclRef::Source(func),
+                ..
+            }
+            | MemberResolution::InterfaceConcreteMethod {
+                func: DeclRef::Source(func),
+                ..
+            },
         ) => Some(*func),
-        Some(MemberResolution::InterfaceVirtualMethod { interface, method }) => {
+        Some(MemberResolution::InterfaceVirtualMethod {
+            interface: DeclRef::Source(interface),
+            method,
+        }) => {
             let receiver = match &body.exprs[callee] {
                 Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
                     match &body.exprs[*base] {
@@ -674,14 +689,30 @@ fn resolved_call_function<'db>(
             let concrete = dispatch_bindings.get(receiver)?;
             interface_method_impl_loc(db, viewer, concrete, *interface, method)
         }
+        // A served package's callee has no body in this database: no edge.
         Some(
-            MemberResolution::Field { .. }
+            MemberResolution::Free {
+                func: DeclRef::External(_),
+            }
+            | MemberResolution::BoundMethod {
+                func: DeclRef::External(_),
+                ..
+            }
+            | MemberResolution::UnboundMethod {
+                func: DeclRef::External(_),
+                ..
+            }
+            | MemberResolution::InterfaceConcreteMethod {
+                func: DeclRef::External(_),
+                ..
+            }
+            | MemberResolution::InterfaceVirtualMethod {
+                interface: DeclRef::External(_),
+                ..
+            }
+            | MemberResolution::Field { .. }
             | MemberResolution::Variant { .. }
-            | MemberResolution::InterfaceVirtualField { .. }
-            | MemberResolution::External(_)
-            | MemberResolution::ExternalField { .. }
-            | MemberResolution::ExternalVariant { .. }
-            | MemberResolution::ExternalInterfaceVirtualField { .. },
+            | MemberResolution::InterfaceVirtualField { .. },
         )
         | None => None,
     }
@@ -769,7 +800,10 @@ fn interface_method_impl_loc<'db>(
     };
     let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, viewer, concrete)
         .into_iter()
-        .filter_map(|resolved| resolved.source_block())
+        .filter_map(|resolved| match resolved.block() {
+            baml_compiler2_hir::loc::DeclRef::Source(block) => Some(block),
+            baml_compiler2_hir::loc::DeclRef::External(_) => None,
+        })
         .filter(|block| {
             baml_compiler2_hir_ty::interfaces::impl_data(db, *block)
                 .as_ref()
