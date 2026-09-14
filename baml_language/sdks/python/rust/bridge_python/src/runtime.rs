@@ -1,5 +1,7 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
+use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
+use prost::Message;
 use pyo3::{
     Py, Python,
     prelude::{PyResult, pyfunction, pymethods},
@@ -15,6 +17,19 @@ use crate::{
     errors::{bridge_error_to_sdk_panic, py_sdk_panic},
     types::collector::Collector,
 };
+
+struct DecodedCallArgs {
+    kwargs: bex_project::BexArgs,
+    call_id: bex_project::CallId,
+    target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
+    /// Explicit, named `TypeVar` bindings for a generic call (`_types=` + a
+    /// generic receiver's class type args): `TypeVar name -> concrete type`,
+    /// insertion order is De Bruijn order. Empty for non-generic calls. The
+    /// engine maps each name onto the entry-frame `type_args` slot by matching
+    /// the callee's generic params.
+    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
+    type_defs: indexmap::IndexMap<String, bex_project::PortableTypeDef>,
+}
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
@@ -111,12 +126,10 @@ impl BamlRuntime {
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
-        // `prepare_call` pins a handle target before we yield to the event
-        // loop, so a Python-side release of that handle cannot race the call.
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
-            Ok((runtime, prepared))
+            let decoded = decode_args(&args_proto)?;
+            Ok((runtime, decoded))
         })();
 
         // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
@@ -128,7 +141,20 @@ impl BamlRuntime {
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let bytes = match prepared {
-                Ok((runtime, prepared)) => bridge_cffi::invoke_prepared(runtime, prepared).await,
+                Ok((runtime, decoded)) => {
+                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+                        .with_type_args(decoded.type_args)
+                        .with_type_defs(decoded.type_defs)
+                        .build();
+                    match decoded.target {
+                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
+                            bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx).await
+                        }
+                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
+                            bridge_cffi::call_handle_and_encode(runtime, handle_key, decoded.kwargs, call_ctx).await
+                        }
+                    }
+                }
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
             Ok(bytes)
@@ -156,12 +182,12 @@ impl BamlRuntime {
         // returned bytes decode + raise uniformly via decode_call_result.
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
+            let decoded = decode_args(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, prepared, rt))
+            Ok((runtime, decoded, rt))
         })();
 
-        let (runtime, prepared, rt) = match prepared {
+        let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
@@ -169,12 +195,67 @@ impl BamlRuntime {
         // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
         // stability but no longer wired into the call context.
         let _ = (&ctx, &collectors);
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+            .with_type_args(decoded.type_args)
+            .with_type_defs(decoded.type_defs)
+            .build();
 
-        // Same shared invoke_prepared as the async + C-ABI paths — returns the
+        // Same shared call_and_encode as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
-        let bytes = py.detach(|| rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared)));
+        let bytes = py.detach(|| match decoded.target {
+            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
+                function_name,
+            ) => rt.block_on(bridge_cffi::call_and_encode(
+                runtime,
+                function_name,
+                decoded.kwargs,
+                call_ctx,
+            )),
+            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
+                handle_key,
+            ) => rt.block_on(bridge_cffi::call_handle_and_encode(
+                runtime,
+                handle_key,
+                decoded.kwargs,
+                call_ctx,
+            )),
+        });
         Ok(bytes)
     }
+}
+
+/// Decode protobuf-encoded function arguments into `BexArgs`.
+///
+/// Returns a `BridgeError` (not a `PyErr`) so the byte-returning call sites can
+/// route the failure through `bridge_cffi::error_to_outbound` into the
+/// structured `BamlOutboundResult` envelope (32c) rather than raising.
+fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
+
+    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
+        .map_err(bridge_ctypes::CtypesError::from)?;
+
+    if args.call_id == 0 {
+        return Err(bridge_cffi::BridgeError::InvalidCallId);
+    }
+
+    let call_id = bex_project::CallId(args.call_id);
+    let target = args
+        .call_target
+        .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
+    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
+        return Err(bridge_cffi::BridgeError::FunctionHandleTypeArgs);
+    }
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
+    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
+
+    Ok(DecodedCallArgs {
+        kwargs: kwargs.into(),
+        call_id,
+        target,
+        type_args: type_args.type_args,
+        type_defs: type_args.type_defs,
+    })
 }
 
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
