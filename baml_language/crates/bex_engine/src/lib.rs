@@ -3454,6 +3454,10 @@ impl BexEngine {
         let (mut stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
 
+        if level == bex_heap::CollectionLevel::Major && self.bex_work.has_concurrent_work() {
+            self.heap.suppress_minor_collection();
+        }
+
         cycle.heap_done();
 
         // Bug H, check 1 (heap_debug only): every pointer the GC was told
@@ -5178,7 +5182,7 @@ impl BexEngine {
     /// Run GC if conditions are met (called at safepoints),
     /// or yield if another thread is running GC.
     ///
-    /// Allocation spending requests a full collection. Other VMs cooperate
+    /// Allocation spending requests a minor or full collection. Other VMs cooperate
     /// with both automatic and explicit collections through permit renewal.
     async fn gc_safepoint<T: RootHaver>(
         self: &Arc<Self>,
@@ -5191,7 +5195,7 @@ impl BexEngine {
         if i_am_checking {
             let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
-            if let Some(level) = self.heap.should_collect() {
+            if let Some(level) = self.automatic_collection_level() {
                 let inactive = permit.release();
                 self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
@@ -5218,7 +5222,7 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
-            if let Some(level) = self.heap.should_collect() {
+            if let Some(level) = self.automatic_collection_level() {
                 self.collect_garbage_with_reason(level, "automatic").await;
             }
         }
@@ -7776,6 +7780,7 @@ mod concurrent_tests {
             tlab.alloc_string("inline");
         }
         drop(tlab);
+        let expected_level = engine.heap.should_collect().unwrap();
         let checking_engine = engine.clone();
         let task = tokio::spawn(async move {
             checking_engine.maybe_collect_garbage().await;
@@ -7797,7 +7802,11 @@ mod concurrent_tests {
             .await
             .unwrap();
         assert!(!engine.heap.should_gc());
-        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        let budget = engine.heap.gc_budget();
+        match expected_level {
+            bex_heap::CollectionLevel::Minor => assert_eq!(budget.minor_collections, 1),
+            bex_heap::CollectionLevel::Major => assert_eq!(budget.full_collections, 1),
+        }
         engine.shutdown().await;
     }
 

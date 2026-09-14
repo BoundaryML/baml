@@ -224,7 +224,12 @@ async fn concurrent_callers_share_pressure_and_preserve_parked_roots() {
     })
     .await
     .expect("pressure collection must not deadlock parked callers");
-    assert!(engine.heap().gc_budget().full_collections >= 1);
+    let budget = engine.heap().gc_budget();
+    assert!(budget.full_collections >= 1);
+    assert_eq!(
+        budget.minor_collections, 0,
+        "minor collections are deferred while multiple units of work are active"
+    );
     engine.shutdown().await;
 }
 

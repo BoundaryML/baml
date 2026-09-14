@@ -1640,7 +1640,7 @@ impl BexHeap {
         self.update_handles(&forwarding);
 
         // A minor collection pays young debt without erasing cumulative full-GC debt.
-        self.gc_policy.after_minor();
+        self.gc_policy.after_minor(total_before, total_live);
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
