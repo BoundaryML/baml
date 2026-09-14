@@ -790,10 +790,11 @@ function ufcs(b: Box) -> string throws never { Shows.show(b) }
             .iter()
             .map(|l| at_call.format_location_with_name(l))
             .collect();
+        // The SETS, not their sizes: equal counts over different spans
+        // would be exactly the split identity this unification removed.
         assert_eq!(
-            from_decl.len(),
-            from_call.len(),
-            "declaration and call are the same symbol: {from_decl:?} vs {from_call:?}"
+            from_decl, from_call,
+            "declaration and call are the same symbol"
         );
     }
 

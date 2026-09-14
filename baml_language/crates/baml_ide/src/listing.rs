@@ -110,7 +110,13 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Hide)) {
+        // `Internals::Show`: reaching an EXACT path is itself the explicit
+        // naming the `_` convention asks for — the reader spelled every
+        // segment, `_tz_offset_at` included. Hiding here contradicted the
+        // did-you-mean list, which uses `Internals::for_query` and so
+        // suggested the very path this refused. `LanguageInternal` stays
+        // unaddressable either way: `is_listed` rejects it regardless.
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Show)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -123,7 +129,9 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Hide)) {
+        // Show, for the same reason: naming a member of an internal names
+        // the internal.
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Show)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -725,6 +733,46 @@ function summarize_structured(input: string) -> Summary {
             assert!(
                 matches!(resolved, Some(ResolvedTarget::Item(_))),
                 "FQN `{fqn}` was listed but does not resolve as Item; got {:?}",
+                resolved.as_ref().map(std::mem::discriminant),
+            );
+        }
+    }
+
+    /// The round-trip property in the direction the `Internals::Hide`
+    /// listings never exercise: what a listing SHOWS must navigate, and a
+    /// listing asked to show internals shows `_`-prefixed stdlib helpers.
+    ///
+    /// Regression: exact resolution hid them while `describe`'s did-you-mean
+    /// (which asks [`Internals::for_query`]) offered them, so
+    /// `baml describe baml.time._tz_offset_at` reported "no symbol found"
+    /// and then suggested that exact path back.
+    #[test]
+    fn round_trip_listing_to_resolve_internals() {
+        let project = make_multi_ns_project();
+        let stdlib = spelling(&project.db).root(&Name::new("baml")).unwrap();
+        let entries = list_package_items(&project.db, stdlib, Internals::Show);
+
+        let internals: Vec<String> = entries
+            .iter()
+            .filter(|entry| entry.item_name.as_str().starts_with('_'))
+            .map(super::ListingEntry::fqn)
+            .collect();
+        assert!(
+            !internals.is_empty(),
+            "the stdlib declares `_`-prefixed helpers; showing internals must list them"
+        );
+
+        for fqn in &internals {
+            // A builtin listing emits package-qualified paths; the CLI
+            // dispatcher routes the package and hands the rest to
+            // `resolve_target`, so the test addresses them the same way.
+            let within_package = fqn
+                .strip_prefix("baml.")
+                .unwrap_or_else(|| unreachable!("a `baml` listing is package-qualified: {fqn}"));
+            let resolved = resolve_target(&project.db, stdlib, within_package);
+            assert!(
+                matches!(resolved, Some(ResolvedTarget::Item(_))),
+                "`{fqn}` was listed but does not resolve as Item; got {:?}",
                 resolved.as_ref().map(std::mem::discriminant),
             );
         }

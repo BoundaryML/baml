@@ -203,9 +203,10 @@ impl Internals {
 
     /// Whether this policy keeps `name`, declared in `declared_in`, out.
     ///
-    /// For a declaration prefer [`surface_of`], which answers this as
-    /// [`Surface::StdlibInternal`] along with everything else; this is for
+    /// For a declaration prefer `surface_of`, which answers this as
+    /// `Surface::StdlibInternal` along with everything else; this is for
     /// the member path, where there is no [`Definition`] to classify.
+    /// (Both are crate-private, so they are named rather than linked.)
     pub fn hides(
         self,
         db: &dyn baml_compiler2_ppir::Db,

@@ -12,7 +12,8 @@
 //! one per `implements` block, because the compiler pairs an impl's members
 //! with the interface's BY NAME and rejects a mismatch outright
 //! (`MissingInterfaceMethod`, `UnknownInterfaceMember`,
-//! `MissingInterfaceField`). See [`rename_group`].
+//! `MissingInterfaceField`). See `rename_group` below (crate-private, so
+//! named rather than linked).
 //!
 //! The union and the dedup are both load-bearing: `usages_at` includes an
 //! ITEM's declaration but not a member's or a local's, and two group
