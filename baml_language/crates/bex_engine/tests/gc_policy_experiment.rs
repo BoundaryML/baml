@@ -538,6 +538,189 @@ fn profile_json(stats: &bex_heap::GcStats) -> serde_json::Value {
     })
 }
 
+#[cfg(feature = "gc_profiling")]
+#[test]
+#[ignore = "manual concurrent production-policy experiment"]
+fn compare_concurrent_runtime_policy() {
+    let audit = cycle_audit::Cycles::default();
+    tracing::subscriber::set_global_default(audit.clone()).unwrap();
+    assert_eq!(std::env::var("GC_POLICY").as_deref(), Ok("current"));
+    let workload = std::env::var("GC_WORKLOAD").unwrap_or_else(|_| "churn".into());
+    assert!(matches!(workload.as_str(), "churn" | "retained" | "cache"));
+    let program = baml_db::testing::compile_source(SOURCE);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap(),
+        );
+        let workers = setting("GC_WORKERS", 8);
+        let calls = setting("GC_CALLS", 128);
+        let retain = setting("GC_RETAIN", 32);
+        let n = i64::try_from(setting("GC_N", 2048)).unwrap();
+        let cache_n = i64::try_from(setting("GC_CACHE_N", 262_144)).unwrap();
+        assert!(workers > 0 && calls > 0);
+        let cache = if workload == "cache" {
+            Some(
+                engine
+                    .call_function(
+                        "Batch",
+                        vec![BexExternalValue::Int(cache_n)],
+                        context(),
+                        false,
+                    )
+                    .await
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
+        engine.collect_garbage(CollectionLevel::Major).await;
+        audit.take();
+        let initial_rss = rss_bytes();
+        let cpu_start = process_cpu();
+        let start = Instant::now();
+        let mut tasks = Vec::new();
+        for _ in 0..workers {
+            let engine = engine.clone();
+            let keep_results = workload == "retained";
+            tasks.push(tokio::spawn(async move {
+                let mut latencies = Vec::new();
+                let mut kept = VecDeque::new();
+                for _ in 0..calls {
+                    let call_start = Instant::now();
+                    let result = engine
+                        .call_function(
+                            if keep_results { "Batch" } else { "AsyncBatch" },
+                            vec![BexExternalValue::Int(n)],
+                            context(),
+                            !keep_results,
+                        )
+                        .await
+                        .unwrap();
+                    latencies.push(call_start.elapsed().as_secs_f64() * 1000.0);
+                    if keep_results {
+                        assert!(matches!(result, BexExternalValue::Handle(_)));
+                        kept.push_back(result);
+                        if kept.len() > retain {
+                            kept.pop_front();
+                        }
+                    } else {
+                        assert_eq!(result, BexExternalValue::Int(n * (n - 1) / 2));
+                    }
+                    tokio::task::yield_now().await;
+                }
+                (latencies, kept)
+            }));
+        }
+        let mut latencies = Vec::new();
+        let mut kept = VecDeque::new();
+        tokio::time::timeout(std::time::Duration::from_secs(120), async {
+            for task in tasks {
+                let (times, values) = task.await.unwrap();
+                latencies.extend(times);
+                kept.extend(values);
+            }
+        })
+        .await
+        .expect("concurrent production-policy experiment stalled");
+        let elapsed = start.elapsed().as_secs_f64();
+        let process_cpu_seconds = cpu_start
+            .zip(process_cpu())
+            .map(|(before, after)| after.saturating_sub(before).as_secs_f64());
+        let records = audit.take();
+        let end_rss = rss_bytes();
+        let peak_rss = initial_rss.into_iter().chain(end_rss).max();
+        let gc_ms: Vec<_> = records
+            .iter()
+            .filter_map(|record| record["total_ms"].as_f64())
+            .collect();
+        let minor_count = records
+            .iter()
+            .filter(|record| record["level"] == "Minor")
+            .count();
+        let major_count = records
+            .iter()
+            .filter(|record| record["level"] == "Major")
+            .count();
+        let peak_slots = records
+            .iter()
+            .map(|record| {
+                ["before_gen0", "before_gen1", "before_gen2"]
+                    .iter()
+                    .filter_map(|key| record[*key].as_u64())
+                    .sum::<u64>()
+            })
+            .max()
+            .unwrap_or(0);
+        let validation_gc = engine.collect_garbage(CollectionLevel::Major).await;
+        for value in kept.iter().cloned() {
+            assert_eq!(
+                engine
+                    .call_function("CheckBatch", vec![value], context(), true)
+                    .await
+                    .unwrap(),
+                BexExternalValue::Int(n * (n - 1) / 2)
+            );
+        }
+        if let Some(cache) = cache {
+            assert_eq!(
+                engine
+                    .call_function("CheckBatch", vec![cache], context(), true)
+                    .await
+                    .unwrap(),
+                BexExternalValue::Int(cache_n * (cache_n - 1) / 2)
+            );
+        }
+        if let Ok(path) = std::env::var("GC_TRACE") {
+            let events: Vec<_> = records
+                .iter()
+                .map(|record| {
+                    serde_json::json!({
+                        "at_seconds": record["at_seconds"],
+                        "trigger": record["reason"],
+                        "level": record["level"],
+                        "copied_objects": record["copied_objects"],
+                        "reclaimed_slots": record["reclaimed_slots"],
+                        "promoted_gen1": record["promoted_gen1"],
+                        "promoted_gen2": record["promoted_gen2"],
+                        "profile": event_profile(record),
+                    })
+                })
+                .collect();
+            std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
+        }
+        let slot_size = std::mem::size_of::<bex_vm_types::Object>();
+        let end_slots = engine.heap_stats().runtime_objects;
+        println!(
+            "GC_POLICY_RESULT {}",
+            serde_json::json!({
+                "policy":"current", "workload":format!("concurrent_{workload}"), "calls":workers*calls,
+                "workers":workers, "n":n, "retain":retain, "warmup":0, "slot_bytes":slot_size,
+                "elapsed_seconds":elapsed, "calls_per_second":workers as f64*calls as f64/elapsed,
+                "process_cpu_seconds":process_cpu_seconds,
+                "gc_ms_total":gc_ms.iter().sum::<f64>(), "gc_ms_p50":percentile(&gc_ms,0.5),
+                "gc_ms_p95":percentile(&gc_ms,0.95), "gc_ms_max":percentile(&gc_ms,1.0),
+                "call_ms_p50":percentile(&latencies,0.5), "call_ms_p95":percentile(&latencies,0.95),
+                "call_ms_p99":percentile(&latencies,0.99), "call_ms_max":percentile(&latencies,1.0),
+                "minor_count":minor_count, "major_count":major_count,
+                "peak_slot_mib":peak_slots as f64*slot_size as f64/MIB as f64,
+                "end_slot_mib":end_slots as f64*slot_size as f64/MIB as f64,
+                "initial_rss_mib":rss_mib(initial_rss), "peak_sampled_rss_mib":rss_mib(peak_rss),
+                "end_rss_mib":rss_mib(end_rss), "retained_handles_verified":kept.len(), "snapshots":[],
+                "cache_objects":if workload == "cache" {cache_n} else {0}, "cache_verified":workload == "cache",
+                "idle_observation":null, "validation_gc_live_objects":validation_gc.live_count,
+                "cycle_coverage":"all engine cycles across the multi-threaded executor",
+            })
+        );
+        drop(kept);
+        engine.shutdown().await;
+    });
+}
+
 #[test]
 #[ignore = "manual concurrent GC profile, not a CI performance assertion"]
 fn profile_concurrent_gc() {

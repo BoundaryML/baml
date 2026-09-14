@@ -59,6 +59,9 @@ def main():
         ('continuous_100k', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=100000, GC_WARMUP=512)),
         ('cache', 'full_live', dict(GC_WORKLOAD='cache', GC_CALLS=1024, GC_N=4096, GC_CACHE_N=262144)),
         ('burst_idle', 'full32', dict(GC_WORKLOAD='burst_idle', GC_CALLS=512, GC_N=2048, GC_IDLE_MS=1000)),
+        ('runtime_concurrent_churn', 'current', dict(GC_WORKLOAD='churn', GC_WORKERS=8, GC_CALLS=128, GC_N=2048)),
+        ('runtime_concurrent_retained', 'current', dict(GC_WORKLOAD='retained', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_RETAIN=32)),
+        ('runtime_concurrent_cache', 'current', dict(GC_WORKLOAD='cache', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_CACHE_N=262144)),
     ]
     if args.extended or args.case:
         cases += extended
@@ -96,7 +99,8 @@ def main():
             rng.shuffle(order)
             for variant in order:
                 name = f'{repeat}-{case}-{variant}'
-                test = 'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy'
+                test = ('compare_concurrent_runtime_policy' if case.startswith('runtime_concurrent_') else
+                        'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy')
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})

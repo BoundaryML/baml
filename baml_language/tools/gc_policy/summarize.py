@@ -86,15 +86,15 @@ def main():
         ratios = [p['baseline']['elapsed_seconds'] / p['candidate']['elapsed_seconds'] for p in pairs]
         cpu_ratios = [p['baseline']['process_cpu_seconds'] / p['candidate']['process_cpu_seconds'] for p in pairs]
         rss = f'{med("baseline", "peak_sampled_rss_mib"):.1f} → {med("candidate", "peak_sampled_rss_mib"):.1f}'
-        collections = (f'{med("baseline", "minor_count"):.0f}/{med("baseline", "major_count"):.0f} → '
-                       f'{med("candidate", "minor_count"):.0f}/{med("candidate", "major_count"):.0f}')
+        collection_counts = (f'{med("baseline", "minor_count"):.0f}/{med("baseline", "major_count"):.0f} → '
+                             f'{med("candidate", "minor_count"):.0f}/{med("candidate", "major_count"):.0f}')
         pauses = []
         for variant in ['baseline', 'candidate']:
             values = [p[variant]['recorded_max_pause_ms'] for p in pairs]
             pauses.append(f'{statistics.median(values):.1f}' if all(v is not None for v in values) else '-')
         lines.append(f'| {case} | {statistics.median(ratios):.2f}× ({min(ratios):.2f}–{max(ratios):.2f}) | '
                      f'{statistics.median(cpu_ratios):.2f}× ({min(cpu_ratios):.2f}–{max(cpu_ratios):.2f}) | '
-                     f'{rss} | {collections} | {pauses[0]} → {pauses[1]} |')
+                     f'{rss} | {collection_counts} | {pauses[0]} → {pauses[1]} |')
     lines += ['', '## Where collection time went', '',
               'Medians of per-run totals for all engine collections captured on the experiment executor.', '',
               '| Case | Binary | Trace/copy ms | Error/finalizer scans ms | Pointer fixup ms | Reclaim ms | Wait to park ms |',
