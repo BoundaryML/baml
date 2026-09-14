@@ -82,8 +82,14 @@ pub struct ElaboratedFunctionSignature {
 /// `function_signature`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureSourceMap {
-    /// One span per parameter, parallel to `FunctionSignature::params`.
+    /// One span per parameter, parallel to `FunctionSignature::params`:
+    /// the whole `name: Type`, which is what a diagnostic underlines.
     pub param_spans: Vec<TextRange>,
+    /// One span per parameter's NAME token. Distinct from
+    /// [`Self::param_spans`] because a rename replaces an identifier and
+    /// go-to-definition should land on one, neither of which is the
+    /// annotated parameter.
+    pub param_name_spans: Vec<TextRange>,
     /// One span per parameter's type expression (just the type, not the name).
     /// `None` when the parameter has no explicit type annotation.
     pub param_type_spans: Vec<Option<TextRange>>,
@@ -131,6 +137,7 @@ fn function_signature_with_source_map<'db>(
     // Build source map — spans only (separate for early-cutoff)
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()
@@ -326,6 +333,7 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()

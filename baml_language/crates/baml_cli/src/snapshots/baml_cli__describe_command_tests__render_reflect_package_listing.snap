@@ -19,14 +19,12 @@ class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml
 class            reflect.CompileArtifact          <builtin>/reflect/reflect.baml:250
 class            reflect.Package                  <builtin>/reflect/reflect.baml:255
 class            reflect.Session                  <builtin>/reflect/reflect.baml:379
-function         reflect._render_cause            <builtin>/reflect/reflect.baml:452
 function         reflect.signature                <builtin>/reflect/reflect.baml:463
 function         reflect.call_any                 <builtin>/reflect/reflect.baml:480
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:7
 function         reflect.class.new                <builtin>/reflect/ns_class/class.baml:36
-function         reflect.class._new               <builtin>/reflect/ns_class/class.baml:50
 function         reflect.class.builder            <builtin>/reflect/ns_class/class.baml:61
 class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:67
 class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:116

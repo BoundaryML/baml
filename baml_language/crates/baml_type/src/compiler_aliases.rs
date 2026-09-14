@@ -133,6 +133,41 @@ impl CompilerAlias {
         }
     }
 
+    /// Whether source reaches this entry's members WITHOUT naming its
+    /// carrier class — so the carrier's own path is a spelling nobody
+    /// writes, and a surface that enumerates what a reader can type should
+    /// offer the spelling instead.
+    ///
+    /// Two independent conditions, both read off this entry rather than
+    /// listed per carrier:
+    ///
+    /// 1. The spelling must be able to ROOT A PATH. `int.max_value()`
+    ///    parses; `int[].filled` and `map<string, int>.of` do not, because
+    ///    postfix-array syntax has no bare keyword and a generic
+    ///    application is not a path root. That is what `arity == 0` on a
+    ///    [`Spelling::Named`] entry means here.
+    /// 2. The spelling must be a DIFFERENT name from the carrier's own
+    ///    path. `int` stands in for `baml.Int`, but `reflect.Type`'s
+    ///    spelling IS its declaration — there is no shorter alias to offer,
+    ///    so hiding the class would hide the only handle on its members.
+    ///
+    /// Derived rather than declared so a new carrier cannot be added with
+    /// the answer left wrong, and so the two rules have one home. It
+    /// encodes what the grammar admits, so a grammar change moves it — were
+    /// `map<K, V>.of` to parse, condition 1 would be the line to revisit.
+    /// Getting it wrong fails safe: a carrier stays offered under its path
+    /// rather than disappearing.
+    pub fn members_reachable_without_carrier(&self) -> bool {
+        let Spelling::Named(spelling) = self.spelling else {
+            return false;
+        };
+        if self.arity != 0 {
+            return false;
+        }
+        self.definition
+            .is_none_or(|definition| !definition.source_segments().eq(spelling.split('.')))
+    }
+
     /// The structural type this entry's class declaration denotes when it is
     /// applied to `arity` arguments: `class baml.media.Image` IS `image`,
     /// `class baml.Array<T>` IS `T[]`. Json stays on the alias resolver path,
@@ -407,6 +442,53 @@ pub fn by_definition_path(package: LangPackage, path: &[&str]) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every carrier's reachability, stated exhaustively so adding one to
+    /// [`ALL`] fails here until its answer is considered. The two that must
+    /// read `false` for a reason other than arity are the ones whose
+    /// spelling IS their declaration: hiding those classes would leave a
+    /// reader no way to name their members at all.
+    #[test]
+    fn every_carrier_agrees_on_whether_its_members_need_the_carrier() {
+        let mut actual: Vec<(&str, bool)> = ALL
+            .iter()
+            .filter(|alias| matches!(alias.construction, Construction::Builtin { .. }))
+            .map(|alias| {
+                (
+                    alias.display_name(),
+                    alias.members_reachable_without_carrier(),
+                )
+            })
+            .collect();
+        actual.sort();
+        assert_eq!(
+            actual,
+            vec![
+                // `T[]` is postfix syntax with no bare keyword, and
+                // `int[].filled` does not parse.
+                ("array", false),
+                ("audio", true),
+                // `baml.future.Future` is spelled by its own path.
+                ("baml.future.Future", false),
+                ("bigint", true),
+                ("bool", true),
+                ("float", true),
+                ("image", true),
+                ("int", true),
+                // `map<string, int>.of` does not parse.
+                ("map", false),
+                ("null", true),
+                ("pdf", true),
+                // `reflect.Type` is spelled by its own path.
+                ("reflect.Type", false),
+                ("string", true),
+                ("uint8array", true),
+                ("video", true),
+            ],
+            "got {actual:?}"
+        );
+    }
+
     use crate::{
         MediaKind, TyAttr,
         interned::{InferTy, Ty},
