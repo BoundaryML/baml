@@ -5,27 +5,13 @@
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
-use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use prost::Message;
 
 use crate::{
     errors::bridge_error_to_napi,
     types::{HostSpanManager, collector::Collector},
 };
-
-struct DecodedCallArgs {
-    kwargs: bex_project::BexArgs,
-    call_id: bex_project::CallId,
-    target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
-    /// Explicit TypeVar bindings for a generic call (`CallFunctionArgs.type_args`),
-    /// as a name-keyed map in wire (De Bruijn) order. Seeded into the entry
-    /// frame's `type_args` slot. Empty for non-generic calls. Mirrors
-    /// `bridge_python`'s `DecodedCallArgs::type_args`.
-    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
-    type_defs: indexmap::IndexMap<String, bex_project::PortableTypeDef>,
-}
 
 /// The main BAML runtime. A zero-sized handle (see module docs).
 #[napi]
@@ -77,43 +63,22 @@ impl BamlRuntime {
     ) -> napi::Result<Buffer> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(args_proto.as_ref())?;
+            let prepared = bridge_cffi::prepare_call(args_proto.as_ref())?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, decoded, rt))
+            Ok((runtime, prepared, rt))
         })();
         let _ = (&ctx, &collectors);
 
-        let (runtime, decoded, rt) = match prepared {
+        let (runtime, prepared, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
         };
-        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-            .with_type_args(decoded.type_args)
-            .with_type_defs(decoded.type_defs)
-            .build();
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
         // bridge_cffi; we just return the encoded envelope bytes for the TS
         // decoder to surface.
-        let bytes = match decoded.target {
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
-                function_name,
-            ) => rt.block_on(bridge_cffi::call_and_encode(
-                runtime,
-                function_name,
-                decoded.kwargs,
-                call_ctx,
-            )),
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
-                handle_key,
-            ) => rt.block_on(bridge_cffi::call_handle_and_encode(
-                runtime,
-                handle_key,
-                decoded.kwargs,
-                call_ctx,
-            )),
-        };
+        let bytes = rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared));
 
         Ok(Buffer::from(bytes))
     }
@@ -127,31 +92,20 @@ impl BamlRuntime {
         ctx: Option<&HostSpanManager>,
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
+        // `prepare_call` pins a handle target before the future is spawned,
+        // so a JS-side release of that handle cannot race the call.
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(args_proto.as_ref())?;
-            Ok((runtime, decoded))
+            let prepared = bridge_cffi::prepare_call(args_proto.as_ref())?;
+            Ok((runtime, prepared))
         })();
         let _ = (&ctx, &collectors);
 
-        // Same shared call_and_encode as the sync + C-ABI paths — returns the
+        // Same shared invoke_prepared as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
             let bytes = match prepared {
-                Ok((runtime, decoded)) => {
-                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                        .with_type_args(decoded.type_args)
-                        .with_type_defs(decoded.type_defs)
-                        .build();
-                    match decoded.target {
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
-                            bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx).await
-                        }
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
-                            bridge_cffi::call_handle_and_encode(runtime, handle_key, decoded.kwargs, call_ctx).await
-                        }
-                    }
-                }
+                Ok((runtime, prepared)) => bridge_cffi::invoke_prepared(runtime, prepared).await,
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
             Ok(Buffer::from(bytes))
@@ -173,36 +127,4 @@ pub fn get_runtime() -> napi::Result<BamlRuntime> {
         other => bridge_error_to_napi(other),
     })?;
     Ok(BamlRuntime {})
-}
-
-/// Decode protobuf-encoded function arguments into `BexArgs`.
-fn decode_args(
-    args_proto: &[u8],
-) -> std::result::Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
-
-    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
-        .map_err(bridge_ctypes::CtypesError::from)?;
-
-    if args.call_id == 0 {
-        return Err(bridge_cffi::BridgeError::InvalidCallId);
-    }
-
-    let call_id = bex_project::CallId(args.call_id);
-    let target = args
-        .call_target
-        .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
-    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
-        return Err(bridge_cffi::BridgeError::FunctionHandleTypeArgs);
-    }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
-    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-
-    Ok(DecodedCallArgs {
-        kwargs: kwargs.into(),
-        call_id,
-        target,
-        type_args: type_args.type_args,
-        type_defs: type_args.type_defs,
-    })
 }
