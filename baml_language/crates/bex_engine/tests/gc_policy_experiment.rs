@@ -1,4 +1,4 @@
-//! Opt-in policy experiment. No production GC policy changes.
+//! Opt-in GC policy experiment.
 //! GC checkpoints are before host calls, identical for all candidate policies.
 //! Run via `GC_POLICY` / `GC_WORKLOAD` and
 //! `cargo test --test gc_policy_experiment --profile fasttest -- --ignored --nocapture`.
@@ -581,8 +581,22 @@ fn compare_concurrent_runtime_policy() {
         engine.collect_garbage(CollectionLevel::Major).await;
         audit.take();
         let initial_rss = rss_bytes();
+        let peak_rss = Arc::new(std::sync::atomic::AtomicUsize::new(
+            initial_rss.unwrap_or(0),
+        ));
+        let sampling_done = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let cpu_start = process_cpu();
         let start = Instant::now();
+        let sampler_peak = peak_rss.clone();
+        let sampler_done = sampling_done.clone();
+        let sampler = tokio::spawn(async move {
+            while !sampler_done.load(std::sync::atomic::Ordering::Relaxed) {
+                if let Some(rss) = rss_bytes() {
+                    sampler_peak.fetch_max(rss, std::sync::atomic::Ordering::Relaxed);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        });
         let mut tasks = Vec::new();
         for _ in 0..workers {
             let engine = engine.clone();
@@ -628,12 +642,20 @@ fn compare_concurrent_runtime_policy() {
         .await
         .expect("concurrent production-policy experiment stalled");
         let elapsed = start.elapsed().as_secs_f64();
+        sampling_done.store(true, std::sync::atomic::Ordering::Relaxed);
+        sampler.await.unwrap();
         let process_cpu_seconds = cpu_start
             .zip(process_cpu())
             .map(|(before, after)| after.saturating_sub(before).as_secs_f64());
         let records = audit.take();
         let end_rss = rss_bytes();
-        let peak_rss = initial_rss.into_iter().chain(end_rss).max();
+        if let Some(rss) = end_rss {
+            peak_rss.fetch_max(rss, std::sync::atomic::Ordering::Relaxed);
+        }
+        let peak_rss = match peak_rss.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => None,
+            rss => Some(rss),
+        };
         let gc_ms: Vec<_> = records
             .iter()
             .filter_map(|record| record["total_ms"].as_f64())

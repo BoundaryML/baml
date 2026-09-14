@@ -3269,7 +3269,8 @@ impl BexEngine {
             on_leaks(&[]);
         }
 
-        self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
+        let _ = self
+            .collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown", false)
             .await;
         shutdown.complete();
         #[cfg(not(target_arch = "wasm32"))]
@@ -3407,14 +3408,17 @@ impl BexEngine {
         self: &Arc<Self>,
         level: bex_heap::CollectionLevel,
     ) -> bex_heap::GcStats {
-        self.collect_garbage_with_reason(level, "explicit").await
+        self.collect_garbage_with_reason(level, "explicit", false)
+            .await
+            .expect("explicit collection is never suppressed")
     }
 
     async fn collect_garbage_with_reason(
         self: &Arc<Self>,
         level: bex_heap::CollectionLevel,
         reason: &'static str,
-    ) -> bex_heap::GcStats {
+        automatic: bool,
+    ) -> Option<bex_heap::GcStats> {
         let cycle = bex_heap::GcCycleProfiler::start();
         #[cfg(not(target_arch = "wasm32"))]
         let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
@@ -3422,19 +3426,33 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        self.collect_garbage_parked(level, reason, heap_guard, cycle)
+        self.collect_garbage_parked(level, reason, automatic, heap_guard, cycle)
             .await
     }
 
     async fn collect_garbage_parked(
         self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
+        mut level: bex_heap::CollectionLevel,
         reason: &'static str,
+        automatic: bool,
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
-    ) -> bex_heap::GcStats {
+    ) -> Option<bex_heap::GcStats> {
         let cleanup_version = self.bex_work.cleanup_version();
         cycle.parked();
+
+        // Allocation and new work can race with the initial policy decision
+        // while the collector waits for every mutator to park. Revalidate only
+        // automatic requests under exclusive access; explicit requests retain
+        // their caller-selected level.
+        if automatic {
+            let current_level = self.heap.should_collect()?;
+            level = current_level;
+            if level == bex_heap::CollectionLevel::Minor && self.bex_work.has_concurrent_work() {
+                self.heap.suppress_minor_collection();
+                return None;
+            }
+        }
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -3563,7 +3581,7 @@ impl BexEngine {
             stats.collected_count
         );
 
-        stats
+        Some(stats)
     }
 
     /// Execute a function by name.
@@ -5197,7 +5215,9 @@ impl BexEngine {
             // We won the CAS, so we own the GC check.
             if let Some(level) = self.automatic_collection_level() {
                 let inactive = permit.release();
-                self.collect_garbage_with_reason(level, "automatic").await;
+                let _ = self
+                    .collect_garbage_with_reason(level, "automatic", true)
+                    .await;
                 permit = inactive.acquire().await;
             }
             drop(checking);
@@ -5223,7 +5243,9 @@ impl BexEngine {
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
             if let Some(level) = self.automatic_collection_level() {
-                self.collect_garbage_with_reason(level, "automatic").await;
+                let _ = self
+                    .collect_garbage_with_reason(level, "automatic", true)
+                    .await;
             }
         }
         // If we are not the checker, the actual checker (some other VM) is
@@ -7807,6 +7829,68 @@ mod concurrent_tests {
             bex_heap::CollectionLevel::Minor => assert_eq!(budget.minor_collections, 1),
             bex_heap::CollectionLevel::Major => assert_eq!(budget.full_collections, 1),
         }
+        engine.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn automatic_minor_is_rechecked_after_mutators_park() {
+        use std::{
+            sync::{Arc, atomic::Ordering},
+            time::Duration,
+        };
+
+        use sys_native::SysOpsExt;
+
+        use super::BexEngine;
+
+        let engine = Arc::new(
+            BexEngine::new(
+                baml_db::testing::compile_source("function Main() -> int { 1 }"),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+            )
+            .unwrap(),
+        );
+        let active = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let mut tlab = bex_heap::Tlab::new_empty(engine.heap.clone());
+        while !engine.heap.should_gc() {
+            tlab.alloc_string("inline");
+        }
+        drop(tlab);
+        assert_eq!(
+            engine.heap.should_collect(),
+            Some(bex_heap::CollectionLevel::Minor)
+        );
+
+        let checking_engine = engine.clone();
+        let task = tokio::spawn(async move {
+            checking_engine.maybe_collect_garbage().await;
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !engine.park_requested.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        let first = engine.bex_work.register_work();
+        let second = engine.bex_work.register_work();
+        drop(active);
+        tokio::time::timeout(Duration::from_secs(5), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(engine.heap.gc_budget().minor_collections, 0);
+        assert!(!engine.heap.should_gc());
+
+        drop(second);
+        drop(first);
         engine.shutdown().await;
     }
 

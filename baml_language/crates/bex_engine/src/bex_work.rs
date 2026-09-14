@@ -342,7 +342,7 @@ impl BexEngine {
                 .map(|level| (level, "allocation_on_entry"))
         };
         if let Some((level, reason)) = requested {
-            self.collect_garbage_with_reason(level, reason).await;
+            let _ = self.collect_garbage_with_reason(level, reason, true).await;
         }
     }
 
@@ -381,7 +381,8 @@ impl BexEngine {
         if !self.bex_work.due() {
             return;
         }
-        self.collect_garbage_parked(CollectionLevel::Major, "idle", guard, cycle)
+        let _ = self
+            .collect_garbage_parked(CollectionLevel::Major, "idle", false, guard, cycle)
             .await;
     }
 }

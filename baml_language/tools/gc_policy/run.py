@@ -70,6 +70,9 @@ def main():
         if unknown:
             parser.error(f'Unknown cases: {sorted(unknown)}')
         cases = [c for c in cases if c[0] in args.case]
+    if args.policy and args.policy != 'current' and any(
+            case.startswith('runtime_concurrent_') for case, _, _ in cases):
+        parser.error('runtime_concurrent_* cases only support --policy current')
     out.mkdir(parents=True, exist_ok=False)
     for name in provenance:
         shutil.copy2(variants[name].parent / 'build-manifest.json', out / f'{name}-build.json')

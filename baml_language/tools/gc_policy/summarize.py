@@ -115,7 +115,8 @@ def main():
               'the original `collected_count` means reclaimed slots and must not be interpreted as dead-object count.',
               '- The `payload` case passes 64 KiB strings and retains 256 results. Payload bytes, compiler memory, '
               'allocator retention and scratch copies are not interchangeable with slot counts. RSS samples are in the raw results; '
-              'they are sampled every 32 calls, include startup/compilation, and can miss brief peaks.',
+              'single-work cases sample every 32 calls and runtime-concurrent cases every 5 ms. Samples include '
+              'startup/compilation and can miss briefer peaks.',
               '- The long-call case allocates roughly 64 MiB of slots within each call. A 32 MiB threshold checked '
               'only between calls cannot constrain that in-call growth. Production scheduling still needs safe allocation checkpoints.',
               '- `park_wait` is time waiting to acquire all permits; different callers may stop at different times. '
