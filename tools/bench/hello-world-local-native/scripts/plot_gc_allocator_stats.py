@@ -52,10 +52,21 @@ def decorate_gc(axis, samples):
             axis.axvline(exact[0], color=COLORS["gc"], alpha=0.42, linewidth=0.9, linestyle="--")
 
 
+def decorate_automatic_gc(axis, samples):
+    loaded = [sample for sample in samples if sample["phase"] == "load"]
+    for before, after in zip(loaded, loaded[1:]):
+        if before["cycle"] == after["cycle"] and after["heap"]["allocations_since_gc"] < before["heap"]["allocations_since_gc"]:
+            axis.axvline(after["elapsed_seconds"], color=COLORS["baml_capacity"], alpha=0.35, linewidth=0.9, linestyle=":")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("evidence_dir", type=Path, help="Directory containing pure-samples.jsonl and python-samples.jsonl")
     parser.add_argument("--output", type=Path, help="PNG destination; defaults to gc-allocator-timeline.png in the evidence directory")
+    parser.add_argument("--title", default="One-minute BAML GC and allocator accounting")
+    parser.add_argument("--subtitle", default="1,000 RPS per target in parallel · 9 s load · explicit major GC · 1 s pause · shaded bands are GC/pause windows")
+    parser.add_argument("--observation", action="append", help="Footer observation; repeat for multiple lines")
+    parser.add_argument("--mark-automatic-gc", action="store_true", help="Mark sampled drops in allocations-since-GC during a loaded interval")
     args = parser.parse_args()
     evidence = args.evidence_dir.resolve()
     output = (args.output or evidence / "gc-allocator-timeline.png").resolve()
@@ -67,14 +78,16 @@ def main():
     plt.style.use("seaborn-v0_8-whitegrid")
     figure, axes = plt.subplots(4, 2, figsize=(16, 13), sharex="col", constrained_layout=False)
     figure.subplots_adjust(left=0.075, right=0.98, top=0.88, bottom=0.15, hspace=0.22, wspace=0.16)
-    figure.suptitle("One-minute BAML GC and allocator accounting", fontsize=21, fontweight="bold", y=0.965)
-    figure.text(0.5, 0.925, "1,000 RPS per target in parallel · 9 s load · explicit major GC · 1 s pause · shaded bands are GC/pause windows", ha="center", fontsize=12, color="#4a4a4a")
+    figure.suptitle(args.title, fontsize=21, fontweight="bold", y=0.965)
+    figure.text(0.5, 0.925, args.subtitle, ha="center", fontsize=12, color="#4a4a4a")
 
     for column, (title, samples) in enumerate(targets):
         elapsed = [sample["elapsed_seconds"] for sample in samples]
         for row in range(4):
             axis = axes[row][column]
             decorate_gc(axis, samples)
+            if args.mark_automatic_gc:
+                decorate_automatic_gc(axis, samples)
             axis.set_xlim(0, 61)
             axis.xaxis.set_major_locator(MultipleLocator(10))
             axis.grid(True, color="#d9d9d9", linewidth=0.65, alpha=0.72)
@@ -113,8 +126,12 @@ def main():
 
     figure.text(0.075, 0.087, "How to read: rising BAML slots or permits means the runtime still tracks objects or roots.", fontsize=10.5, color="#303030")
     figure.text(0.075, 0.066, "Flat BAML counters + rising malloc-live bytes means live memory elsewhere. Flat malloc-live bytes + rising RSS means retained allocator pages or non-malloc mappings.", fontsize=10.5, color="#303030")
-    figure.text(0.075, 0.039, "Observed: every GC collapses BAML slots and permits. Pure BAML malloc-live bytes return to ~19 MiB; Python returns to ~33 MiB.", fontsize=10.5, fontweight="bold", color="#303030")
-    figure.text(0.075, 0.018, "RSS stays near the higher malloc-reserved watermark in both processes.", fontsize=10.5, fontweight="bold", color="#303030")
+    observations = args.observation or [
+        "Observed: every GC collapses BAML slots and permits. Pure BAML malloc-live bytes return to ~19 MiB; Python returns to ~33 MiB.",
+        "RSS stays near the higher malloc-reserved watermark in both processes.",
+    ]
+    for index, observation in enumerate(observations[:2]):
+        figure.text(0.075, 0.039 - index * 0.021, observation, fontsize=10.5, fontweight="bold", color="#303030")
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=180, facecolor="white")
     figure.savefig(output.with_suffix(".svg"), facecolor="white")

@@ -1,0 +1,153 @@
+{
+  "experiment": {
+    "date": "2026-09-14",
+    "profile": "continuous load for 60 seconds followed by one explicit full-GC checkpoint",
+    "rate_per_target": 2000,
+    "aggregate_rate": 4000,
+    "targets_run_in_parallel": [
+      "baml-only",
+      "python-baml"
+    ],
+    "diagnostic_source_revision": "540971880764f64a21d23c68703902719efe7c7a",
+    "diagnostic_source_dirty": false,
+    "canary_base_revision": "e01f4e1a0ec0996b274ae68f15e5ffdefb977005"
+  },
+  "pure_baml": {
+    "requests": 120000,
+    "status_counts": {
+      "200": 120000
+    },
+    "delivered_rps": 2000.0116945350471,
+    "sampled_automatic_gc_count": 7,
+    "sampled_automatic_gc_resets": [
+      {
+        "sample_elapsed_seconds": 9.00925825,
+        "allocations_before_sample": 301116,
+        "allocations_after_sample": 27977,
+        "runtime_objects_after_sample": 47141,
+        "permit_slots_after_sample": 1477
+      },
+      {
+        "sample_elapsed_seconds": 17.0088935,
+        "allocations_before_sample": 294980,
+        "allocations_after_sample": 21859,
+        "runtime_objects_after_sample": 36837,
+        "permit_slots_after_sample": 1155
+      },
+      {
+        "sample_elapsed_seconds": 25.00916025,
+        "allocations_before_sample": 288862,
+        "allocations_after_sample": 15798,
+        "runtime_objects_after_sample": 26629,
+        "permit_slots_after_sample": 836
+      },
+      {
+        "sample_elapsed_seconds": 33.009039916999996,
+        "allocations_before_sample": 282820,
+        "allocations_after_sample": 9718,
+        "runtime_objects_after_sample": 16389,
+        "permit_slots_after_sample": 516
+      },
+      {
+        "sample_elapsed_seconds": 41.008368292,
+        "allocations_before_sample": 276702,
+        "allocations_after_sample": 3619,
+        "runtime_objects_after_sample": 6117,
+        "permit_slots_after_sample": 195
+      },
+      {
+        "sample_elapsed_seconds": 50.010274374999995,
+        "allocations_before_sample": 308806,
+        "allocations_after_sample": 35748,
+        "runtime_objects_after_sample": 60229,
+        "permit_slots_after_sample": 1886
+      },
+      {
+        "sample_elapsed_seconds": 58.008306125,
+        "allocations_before_sample": 302694,
+        "allocations_after_sample": 29611,
+        "runtime_objects_after_sample": 49893,
+        "permit_slots_after_sample": 1563
+      }
+    ],
+    "loaded_minute": {
+      "initial_rss_mib": 35.921875,
+      "final_sample_rss_mib": 134.84375,
+      "peak_rss_mib": 134.84375,
+      "initial_allocator_live_mib": 18.913497924804688,
+      "final_sample_allocator_live_mib": 37.62950134277344,
+      "peak_allocator_live_mib": 99.30084228515625,
+      "initial_allocator_reserved_mib": 52.0,
+      "final_sample_allocator_reserved_mib": 136.0,
+      "peak_runtime_objects": 520197,
+      "final_sample_runtime_objects": 114501,
+      "peak_permit_holder_slots": 16204,
+      "final_sample_permit_holder_slots": 3575,
+      "rss_linear_slope_mib_per_minute": 53.41224400116678,
+      "allocator_live_linear_slope_mib_per_minute": 7.905926068547334,
+      "allocator_reserved_linear_slope_mib_per_minute": 46.33312530281991,
+      "allocator_blocks_linear_slope_per_minute": 37040.022425529256
+    },
+    "final_explicit_gc": {
+      "gc_elapsed_seconds": 0.0036375410000033526,
+      "python_objects_collected": null,
+      "rss_before_mib": 134.84375,
+      "rss_after_one_second_mib": 134.84375,
+      "runtime_objects_before": 185701,
+      "runtime_objects_after": 15,
+      "permit_holder_slots_before": 5786,
+      "permit_holder_slots_after": 5,
+      "allocator_live_before_mib": 47.67588806152344,
+      "allocator_live_after_mib": 19.175537109375,
+      "allocator_reserved_before_mib": 136.0,
+      "allocator_reserved_after_mib": 136.0,
+      "allocator_blocks_before": 263054,
+      "allocator_blocks_after": 129480,
+      "delayed_sample_allocator_live_mib": 19.54071044921875
+    }
+  },
+  "python_baml": {
+    "requests": 120000,
+    "status_counts": {
+      "200": 120000
+    },
+    "delivered_rps": 2000.0089292065318,
+    "sampled_automatic_gc_count": 0,
+    "sampled_automatic_gc_resets": [],
+    "loaded_minute": {
+      "initial_rss_mib": 98.1875,
+      "final_sample_rss_mib": 202.359375,
+      "peak_rss_mib": 202.359375,
+      "initial_allocator_live_mib": 29.685440063476562,
+      "final_sample_allocator_live_mib": 135.63084411621094,
+      "peak_allocator_live_mib": 135.63084411621094,
+      "initial_allocator_reserved_mib": 101.0,
+      "final_sample_allocator_reserved_mib": 234.0,
+      "peak_runtime_objects": 7552,
+      "final_sample_runtime_objects": 7552,
+      "peak_permit_holder_slots": 236124,
+      "final_sample_permit_holder_slots": 236124,
+      "rss_linear_slope_mib_per_minute": 103.77418345053465,
+      "allocator_live_linear_slope_mib_per_minute": 105.80856857058339,
+      "allocator_reserved_linear_slope_mib_per_minute": 104.28138433418502,
+      "allocator_blocks_linear_slope_per_minute": 1515298.2129654284
+    },
+    "final_explicit_gc": {
+      "gc_elapsed_seconds": 0.03424429199999679,
+      "python_objects_collected": 1376,
+      "rss_before_mib": 204.03125,
+      "rss_after_one_second_mib": 144.921875,
+      "runtime_objects_before": 7808,
+      "runtime_objects_after": 1,
+      "permit_holder_slots_before": 240128,
+      "permit_holder_slots_after": 4,
+      "allocator_live_before_mib": 137.2779541015625,
+      "allocator_live_after_mib": 36.63383483886719,
+      "allocator_reserved_before_mib": 235.0,
+      "allocator_reserved_after_mib": 180.0,
+      "allocator_blocks_before": 1709692,
+      "allocator_blocks_after": 1458138,
+      "delayed_sample_allocator_live_mib": 35.85919189453125
+    }
+  }
+}
