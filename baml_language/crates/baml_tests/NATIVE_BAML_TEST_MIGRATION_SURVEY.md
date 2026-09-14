@@ -47,6 +47,8 @@ passes; the final full-workspace validation is tracked separately.
 - [x] Second CodeRabbit implementation follow-up: complete defaulted associated
   bindings for mounted qualifier candidates and make the intentional E0139
   blanket-impl diagnostic inventory explicit before inspecting its facts.
+- [x] CI performance follow-up: remove the standalone release-mode
+  `trace_heap` leg; those tests remain covered by the normal workspace tranche.
 
 Implementation started: 2026-09-12.
 
@@ -163,6 +165,8 @@ Progress:
   defaults unfilled. Its regression pins an inherited `Root = string`; the
   mounted blanket test separately asserts that its deliberate orphan-rule error
   is the only diagnostic before inspecting the recovered implementation facts.
+- The profiler value-copy tests remain in the all-feature workspace nextest
+  tranche, but no longer trigger a separate release build after that tranche.
 - Full validation is green after final review and PR follow-up: the offline
   native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and
