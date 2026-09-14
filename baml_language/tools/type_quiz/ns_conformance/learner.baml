@@ -183,9 +183,22 @@ function sit_from(
 
 function expert_report() -> string throws never {
     let knobs = root.engine.default_knobs();
+    // Over twelve sittings, not one. What it costs to certify a perfect
+    // learner varies enormously with the draw — the spread below runs from
+    // the high forties to the budget — so a single session measures the luck
+    // of that session, and the version of this test that asked one certified
+    // by chance.
+    let steps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((session) -> {
+        let sat = sit(expert, knobs, session);
+        `${sat.standing.why}:${sat.profile.step}`
+    });
+    let certified = steps
+        .filter((step) -> {
+            step.starts_with("Mastered")
+        })
+        .length();
     let sat = sit(expert, knobs, 1);
-    let suspected = sat.standing.suspected ?? "none";
-    `why=${sat.standing.why} within_budget=${sat.profile.step < knobs.budget} withheld=${sat.standing.withheld} suspected=${suspected}`
+    `certified=${certified} of 12 steps=${steps} withheld=${sat.standing.withheld} suspected=${sat.standing.suspected ?? "none"}`
 }
 
 /// Practice asks a fixed number of cases and stops nowhere else: the expert
@@ -236,6 +249,115 @@ function coverage_report() -> string throws never {
         })
         .length();
     `loose_first=${loose.profile.step <= strict.profile.step} loose_done=${loose.standing.why} loose_steps=${loose.profile.step} strict_done=${strict.standing.why} strict_steps=${strict.profile.step} uncertified=${uncertified} rules=${strict.profile.skills.length()}`
+}
+
+/// How hard the questions stay as a perfect learner improves: the predicted
+/// chance they answer right, at every tenth question of a sitting, and the
+/// number of rules the case turned on.
+///
+/// Selection aims at `knobs.aim`, so this makes the BANK'S CEILING visible.
+/// While there are cases this learner might get wrong, the aim finds them and
+/// the chance sits near the aim. Once every case the bank can draw is one they
+/// would get right, the aim has nothing left to aim at, the chance runs away
+/// to one, and the sitting spends its remaining questions asking things it
+/// already knows the answer to. Three models that sat the quiz all said the
+/// difficulty stopped climbing; this is that, as a number.
+function escalation_report() -> string throws never {
+    escalation_of(expert)
+}
+
+/// A learner who knows the axioms and withholds on anything deeper must NOT
+/// be marched up the ladder: the case that would tell us most about a
+/// perfect learner is one they cannot get a foothold on.
+function beginner_escalation_report() -> string throws never {
+    escalation_of(beginner)
+}
+
+function escalation_of(learner: Learner) -> string throws never {
+    let knobs = root.engine.default_knobs();
+    let sat = sit(learner, knobs, 3);
+    let chances: int[] = [];
+    let depths: int[] = [];
+    let profile = sat.taken.reduce(
+        (carried, t) -> {
+            let put = root.put_at(knobs, t.item, t.seed);
+            let rules = root.tracer_rules(put.posed);
+            chances.push(hundredths(root.engine.predict(carried, knobs, rules, put.traps.length())));
+            depths.push(rules.length());
+            root.observe_answer(carried, knobs, t.item, t.seed, t.given)
+        },
+        root.fresh_profile(),
+    );
+    // Escalation is whether the questions get DEEPER as the learner improves,
+    // so it is the mean depth of the opening twenty against the closing
+    // twenty, not a reading every tenth question, which is too noisy to say
+    // anything.
+    let n = depths.length();
+    let opening = mean_of(depths.slice(0, 20.min(n)));
+    let closing = mean_of(depths.slice((n - 20).max(0), n));
+    let spread = [1, 2, 3, 4, 5].map((d) -> {
+        `${d}:${depths.filter((got) -> {
+            got == d
+        }).length()}`
+    });
+    `steps=${n} depth_first20=${opening} depth_last20=${closing} spread=${spread} chance_last20=${mean_of(chances.slice((n - 20).max(0), n))}`
+}
+
+/// How often the same item comes round in a perfect learner's sitting: the
+/// five most-served items with their counts, and how many distinct items
+/// the sitting drew on. Three models that sat the quiz each rated it five
+/// of five for repetition and counted the same template six to ten times;
+/// this is that, as a number.
+function repetition_report() -> string throws never {
+    let sat = sit(expert, root.engine.default_knobs(), 3);
+    let counts: map<string, int> = {};
+    for (let item in sat.served) {
+        counts.set(item, (counts.get(item) ?? 0) + 1);
+    }
+    let top = counts.keys()
+        .sort_by_key((item) -> {
+            0 - (counts.get(item) ?? 0)
+        })
+        .slice(0, 5)
+        .map((item) -> {
+            `${item.replace("flow/", "")}=${counts.get(item) ?? 0}`
+        });
+    `steps=${sat.served.length()} distinct=${counts.keys().length()} top=${top}`
+}
+
+test "learner: the same item comes round again and again" {
+    assert.equal(
+        repetition_report(),
+        `steps=55 distinct=35 top=["error_covariant=3", "double_contravariance=3", "carried_2=3", "carried_3=3", "map_value_invariant=3"]`,
+    )
+}
+
+/// The mean of `values`, in hundredths, or zero for none.
+function mean_of(values: int[]) -> int throws never {
+    if (values.length() == 0) {
+        return 0;
+    }
+    let total = values.reduce(
+        (acc, v) -> {
+            acc + v
+        },
+        0,
+    );
+    percent_of(total, values.length())
+}
+
+test "learner: a learner of the axioms is not marched into depth" {
+    assert.equal(
+        beginner_escalation_report(),
+        `steps=80 depth_first20=120 depth_last20=145 spread=["1:58", "2:17", "3:3", "4:2", "5:0"] chance_last20=5540`,
+    )
+}
+
+test "learner: the questions stop getting harder once the bank runs out of depth" {
+    assert.equal(
+        escalation_report(),
+        `steps=55 depth_first20=155 depth_last20=180 spread=["1:35", "2:9", "3:6", "4:3", "5:2"] chance_last20=7870`,
+    )
 }
 
 /// Every model's z-score in tenths, highest first.
@@ -304,8 +426,17 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: an expert is certified well within the budget, and calibrated" {
-    assert.equal(expert_report(), "why=Mastered within_budget=true withheld=0.0 suspected=none")
+test "learner: certifying a perfect learner costs 49 to 80 questions, and twice in twelve does not finish" {
+    // The two that do not finish are the measurement, not a fluke to be tuned
+    // away: at this budget a learner who answers everything right is left
+    // uncertified about one sitting in six, and three models that sat the quiz
+    // said independently that it should have had their measure by about
+    // question twenty-five. Raising the budget hides it; the estimator is
+    // where it would be fixed.
+    assert.equal(
+        expert_report(),
+        `certified=9 of 12 steps=["Mastered:70", "Budget:80", "Mastered:55", "Mastered:59", "Mastered:74", "Mastered:66", "Mastered:63", "Budget:80", "Mastered:79", "Mastered:65", "Mastered:62", "Budget:80"] withheld=0.0 suspected=none`,
+    )
 }
 
 test "learner: practice asks its count and stops nowhere else" {
@@ -319,7 +450,7 @@ test "learner: a learner who never commits is never certified" {
 test "learner: strict coverage costs more questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=50 strict_done=Mastered strict_steps=92 uncertified=0 rules=30",
+        "loose_first=true loose_done=Mastered loose_steps=55 strict_done=Mastered strict_steps=62 uncertified=0 rules=30",
     )
 }
 
@@ -337,14 +468,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=95 leading=spelling=22,typescript=-1,bounds=-1,structural=-2,covariant=-6",
+        "suspected=none why=Budget commits_unsure=95 leading=spelling=16,bounds=5,structural=-1,typescript=-3,covariant=-6",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=81,covariant=49,bounds=35,structural=30,spelling=-12 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=84,covariant=60,bounds=50,structural=49,spelling=6 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -538,7 +669,7 @@ test "profile: the same session seed serves the same cases" {
 /// positions, which is as deep as the bank goes today.
 function orders_report() -> string throws never {
     let orders = root.bank.rule_orders(4);
-    let counted = [1, 2, 3].map((order) -> {
+    let counted = [1, 2, 3, 4, 5].map((order) -> {
         orders
             .filter((o) -> {
                 o.highest == order
@@ -547,7 +678,7 @@ function orders_report() -> string throws never {
     });
     let deepest = orders
         .filter((o) -> {
-            o.highest == 3
+            o.highest >= 4
         })
         .map((o) -> {
             o.rule
@@ -560,10 +691,10 @@ function orders_report() -> string throws never {
     `rules=${orders.length()} of ${root.bank.rules().length() - 1} by_order=${counted} deepest=${deepest} never_alone=${never_alone}`
 }
 
-test "orders: every servable rule has one, and only parameter contravariance reaches three" {
+test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=30 of 32 by_order=[25, 4, 1] deepest=["variance/function-parameter-contravariant"] never_alone=5`,
+        `rules=30 of 32 by_order=[25, 2, 0, 0, 3] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=5`,
     )
 }
 
@@ -647,5 +778,5 @@ function leaning_report() -> string throws never {
 }
 
 test "sitting: the answer a question asks about is close to an even split" {
-    assert.equal(leaning_report(), "compiled=49 of=172")
+    assert.equal(leaning_report(), "compiled=61 of=158")
 }

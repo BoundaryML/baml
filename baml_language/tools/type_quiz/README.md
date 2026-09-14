@@ -87,6 +87,43 @@ the question. What that leaves out — member resolution, `Self` and dispatch,
 coherence, valid implementation targets — is material for cases about
 legality rather than about flow, and is not built.
 
+## Depth, and what a case turns on
+
+A case's explanation lists every rule its derivation applied. What the
+learner is *credited* with is narrower: only the claims the answer turns on.
+A transfer that maps `Sub`, `Super` and `Unrelated` alike screens off
+everything below it — invariance is exactly that — so `Box<S>` against
+`Box<T>` is answerable knowing only that the two types are written
+differently, and the rule beneath is part of the explanation and no part of
+the question. An equivalence is the exception, since invariance carries it
+through. Each claim carries whether it bears, and the tracer reads only those.
+
+Depth therefore comes from wraps that *carry* a relation — a covariant
+position keeps it, a contravariant one turns it round — and the `carried_2`,
+`carried_3` and `carried_4` items take a strict pair through that many
+function positions, where the verdict turns on the parity of the turns and a
+learner who loses count anywhere gets it wrong. The bank's depth is a
+measured number the suite pins: how many of the cases it can draw turn on
+one rule, two, three, four.
+
+## Choosing the next question
+
+Selection draws in proportion to the information an answer is expected to
+carry — the Fisher information over the ability and every rule's offset,
+from the same gradients the update uses — raised to `inform`. A case the
+learner would surely get right carries nothing, so does one they would
+surely miss, and a case on several half-held rules carries more than one on
+a single rule; so a learner who has the axioms is asked deeper things as a
+consequence, and a beginner is not marched into depth, because a case they
+would surely fail is worth nothing either. `inform` at zero aims at a success
+rate instead (`aim`): the rate at which people are said to learn best, as
+against what measuring them asks for. `exposure` penalises an item each time
+it has already been served, so a rule may come round as often as the estimate
+wants it while the same template does not. Both are measured in the suite: a
+perfect learner's questions get deeper over a sitting, the same item comes
+round three times at most, and certifying one costs 55 questions where it
+had cost 79 and failed one sitting in two.
+
 ## Interestingness
 
 A case is *interesting* when a plausible wrong intuition predicts the wrong
@@ -213,6 +250,48 @@ CLI marks ignored but does not clean up.
 The `live` profile is reserved for calibrating the answer grader against a
 real model. It selects no tests yet, and `baml-cli` exits 5 on an empty
 selection, so there is nothing to run under it until the grader lands.
+
+## Standing a model in for a learner
+
+`harness/take_quiz.mjs` has a language model sit the quiz, in mastery mode,
+exactly as the page puts it: the same adaptive selection, the same three
+answers, the same reveal after each one.
+
+```
+node tools/type_quiz/harness/take_quiz.mjs \
+    --sessions 3 --models opus,sonnet,haiku --out target/type-quiz-llm
+```
+
+Every model sits every session, so until their answers part company they are
+asked the same questions. Runs are written as they go and resume where they
+stopped, because the whole state of a sitting is its session number and the
+answers given so far — which is also what `adaptive_step` takes.
+
+The model cannot cheat, and not because it was asked not to. It is a
+`claude -p` session with every tool denied and no MCP server, which leaves it
+none at all: no compiler, no files, no search. It gets `TYPE_SYSTEM.md` and
+the scoring rule, and it reasons. The quiz's own answer to a step comes back
+in two parts — `asked`, which is everything a learner may see beforehand, and
+`marked`, which is what the last answer was worth — so the harness cannot pass
+on a key it never receives. What separates two programs of a pair is in
+`marked`, not `asked`, because the page says it in the reveal and a driver
+that said it first would be asking an easier question.
+
+Each run writes `<model>-<session>.json`: the answers, the model's replies in
+full, what each answer was worth, and the transcript a learner would have
+downloaded, which `baml run review` reads back like any other.
+
+**What it spends.** `ANTHROPIC_API_KEY` takes precedence over a claude.ai
+login, so a harness that passed the environment through would spend API
+credits without anyone choosing to. Measured, not assumed: with an invalid key
+the call fails outright and the CLI says the key wins over the login; with the
+key unset it succeeds on the login. So `--billing plan` is the default and
+unsets the key for the models, and `--billing api` is something you have to
+ask for. The cost a run reports is what its tokens would cost at API rates —
+on the plan nothing is charged and it is only a proxy for how much quota went.
+Measured at the start of a sitting, where context is smallest: about $0.02 a
+question for haiku, $0.10 for sonnet, $0.16 for opus, roughly doubling by the
+end of a sitting as the conversation grows.
 
 ## Compiler issues surfaced by this tool
 

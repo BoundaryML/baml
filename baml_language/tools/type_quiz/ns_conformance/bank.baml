@@ -655,7 +655,7 @@ function pairing_report() -> string throws never {
 }
 
 test "pairs: every foil is the same program a step away, answering the other way" {
-    assert.equal(pairing_report(), "cases=148 paired=60 items=15 of 37 mixed=[] faults=")
+    assert.equal(pairing_report(), "cases=160 paired=72 items=18 of 40 mixed=[] faults=")
 }
 
 // ─── how many ways an item can answer ────────────────────────────────────────
@@ -706,6 +706,46 @@ function items_answering_report() -> string throws never {
     of.join(" ")
 }
 
+// ─── how deep the bank goes ──────────────────────────────────────────────────
+
+/// How many rules each case the bank can draw actually turns on, over the
+/// first eight seeds of every servable item.
+///
+/// This is the ceiling on escalation, and no selection policy can beat it: if
+/// almost every case turns on one rule, then a learner who has that rule right
+/// is asked nothing harder for the rest of the sitting, which is what three
+/// models that sat the quiz each reported. Rules a case does not turn on are
+/// not counted — a case that mentions two rules but would answer the same way
+/// whatever the inner one said is a case about one rule wearing the costume of
+/// two. The site's own rule is not counted: every case has exactly one and it
+/// is the frame rather than the question.
+function depth_report() -> string throws never {
+    let depths = root.bank.items()
+        .filter((item) -> {
+            item.status() is root.engine.Verified
+        })
+        .flat_map((item) -> {
+            let id = item.id();
+            baml.iter.Range.new(0, 8)
+                .filter_map((i) -> {
+                    let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
+                        ?? return null;
+                    root.tracer_rules(candidate.case).length()
+                })
+                .collect()
+        });
+    let spread = [0, 1, 2, 3, 4].map((d) -> {
+        `${d}:${depths.filter((got) -> {
+            got == d
+        }).length()}`
+    });
+    `cases=${depths.length()} rules=${spread}`
+}
+
+test "bank: nearly every case it can draw turns on a single rule" {
+    assert.equal(depth_report(), `cases=312 rules=["0:0", "1:232", "2:48", "3:16", "4:8"]`)
+}
+
 // ─── which sites the bank reaches ────────────────────────────────────────────
 
 /// How many of the bank's cases are put at each kind of site, over the first
@@ -748,10 +788,10 @@ function sites_reached_report() -> string throws never {
 }
 
 test "bank: the coherence site takes the smaller share of the bank's cases" {
-    assert.equal(sites_reached_report(), "coherence=13 flow=275 other=0")
+    assert.equal(sites_reached_report(), "coherence=13 flow=299 other=0")
 }
 
 test "bank: two items in five answer the same way every time" {
-    assert.equal(items_answering_report(), "always=10 never=4 both=22")
+    assert.equal(items_answering_report(), "always=10 never=4 both=25")
 }
 

@@ -123,6 +123,15 @@ function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] thro
             binds_target(site)
         })
     };
+    // A pair spelled the same way makes two `implements` blocks that are
+    // character for character identical, which a learner can answer by
+    // spotting the duplication without knowing what coherence is — a model
+    // that sat the quiz said exactly that. Keeping them anyway is MEASURED,
+    // not conceded: holding them out costs certification badly (a perfect
+    // learner certified in 6 of 12 sittings rather than 10, six sessions
+    // flipping and none improving), because they are also the cheapest
+    // evidence the rule has. The complaint was really that one was asked six
+    // times over, which is selection's to fix, not the bank's.
     if (is_target(source) && is_target(target)) {
         bindable
     } else {

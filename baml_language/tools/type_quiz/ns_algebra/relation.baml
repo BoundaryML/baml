@@ -173,12 +173,66 @@ function flips(d: Derivation) -> int throws never {
 
 // ─── explaining derivations ──────────────────────────────────────────────────
 
+/// Whether a transfer says the same thing about its pair whatever strict
+/// relation went in.
+///
+/// Such a step SCREENS OFF everything below it: once it has been applied the
+/// pair is related the one way regardless, so a learner can answer without
+/// knowing which strict relation held, or that one held at all. Invariance is
+/// the transfer we have that does this — `Box<S>` against `Box<T>` is
+/// rejected for every strict pair, which is why a learner who knows only that
+/// the two types are written differently gets it right.
+function screens(transfer: (Knowledge) -> Knowledge throws never) -> bool throws never {
+    let from_sub = transfer(Relation.Sub);
+    from_sub == transfer(Relation.Super) && from_sub == transfer(Relation.Unrelated)
+}
+
+/// Which of `judged`'s steps the answer turns on.
+///
+/// Everything below the outermost screening step is inert, with one exception
+/// that matters: an equivalence is carried through invariance unchanged, so a
+/// screening step fed an equivalence screens nothing and the rule beneath it
+/// is exactly what the question is about. `Box<bool>` against
+/// `Box<true | false>` turns on knowing the two are one type; `Box<int>`
+/// against `Box<int | string>` turns on nothing but invariance.
+function bearing_of(judged: Judged[]) -> bool[] throws never {
+    let cut = baml.iter.Range.new(1, judged.length()).reduce(
+        (acc, i) -> {
+            let into = judged[i - 1].after;
+            match (judged[i].step) {
+                let t: Transferred => {
+                    if (screens(t.transfer) && into != Relation.Equiv) {
+                        i
+                    } else {
+                        acc
+                    }
+                },
+                Asserted => acc,
+            }
+        },
+        0,
+    );
+    baml.iter.Range.new(0, judged.length())
+        .map((i) -> {
+            i >= cut
+        })
+        .collect()
+}
+
 /// The explanation of `d` under the spec: one claim per step, each rule
-/// instantiated at the step's pair.
+/// instantiated at the step's pair, and whether the answer turns on it.
 function claims(d: Derivation) -> root.engine.Claim[] throws never {
-    judgments(d, null).map((j) -> {
-        root.engine.Claim { rule: step_rule(j.step), instance: instance_of(j) }
-    })
+    let judged = judgments(d, null);
+    let bearing = bearing_of(judged);
+    baml.iter.Range.new(0, judged.length())
+        .map((i) -> {
+            root.engine.Claim {
+                rule: step_rule(judged[i].step),
+                instance: instance_of(judged[i]),
+                bearing: bearing[i],
+            }
+        })
+        .collect()
 }
 
 /// A step's rule at its pair, in prose. A transferred step reads as a

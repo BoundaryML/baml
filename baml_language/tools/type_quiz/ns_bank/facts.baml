@@ -723,6 +723,70 @@ function bottom_beside_member(seed: root.engine.Seed) -> Derived throws never {
     derived(root.algebra.in_union_with(inner.value, other, union_member_covariant()), extra.next)
 }
 
+// ─── depth ───────────────────────────────────────────────────────────────────
+
+/// The context wraps that CARRY a relation rather than collapsing it.
+///
+/// Depth is only a question through transfers that preserve what went in: a
+/// covariant step keeps the relation and a contravariant one turns it round,
+/// so a learner has to track it through every layer and count the turns.
+/// Invariance screens off everything below it (`root.algebra.screens`), so
+/// stacking it adds text and no question — a reader who knows only that the
+/// two types are written differently answers it. That is why it is not here.
+function carrying_wraps(
+) -> ((root.algebra.Derivation, root.engine.Seed) -> Derived throws never)[] throws never {
+    [wrap_in_param, wrap_in_return, wrap_in_error]
+}
+
+function wrap_in_param(d: root.algebra.Derivation, seed: root.engine.Seed) -> Derived throws never {
+    let r = pick_leaves(seed, 1);
+    derived(root.algebra.in_fn_param(d, r.value[0], fn_param_contravariant()), r.next)
+}
+
+function wrap_in_return(
+    d: root.algebra.Derivation,
+    seed: root.engine.Seed,
+) -> Derived throws never {
+    derived(root.algebra.in_fn_return(d, fn_return_covariant()), seed)
+}
+
+function wrap_in_error(d: root.algebra.Derivation, seed: root.engine.Seed) -> Derived throws never {
+    let r = pick_leaves(seed, 1);
+    derived(root.algebra.in_fn_error(d, r.value[0], fn_error_covariant()), r.next)
+}
+
+/// A strict pair carried through `depth` function positions.
+///
+/// Every layer keeps the relation, so no layer can be skipped: the verdict
+/// turns on the parity of the contravariant ones, and a learner who loses
+/// count anywhere gets it wrong. This is the deep end of the bank, and the
+/// one place a case cannot be answered by a single reflex. Not a fact of its
+/// own: the facts below fix the depth, so that each depth is an item the
+/// sampler can tell apart and selection can reach for by name.
+function carried(depth: int, seed: root.engine.Seed) -> Derived throws never {
+    let inner = strict_pair(seed);
+    let pool = carrying_wraps();
+    baml.iter.Range.new(0, depth).reduce(
+        (so_far, i) -> {
+            let pick = root.engine.below(so_far.next, pool.length());
+            pool[pick.value](so_far.value, pick.next)
+        },
+        inner,
+    )
+}
+
+function carried_2(seed: root.engine.Seed) -> Derived throws never {
+    carried(2, seed)
+}
+
+function carried_3(seed: root.engine.Seed) -> Derived throws never {
+    carried(3, seed)
+}
+
+function carried_4(seed: root.engine.Seed) -> Derived throws never {
+    carried(4, seed)
+}
+
 // ─── registry ────────────────────────────────────────────────────────────────
 
 function fact(
@@ -768,6 +832,9 @@ function facts() -> Fact[] throws never {
         fact("error_covariant", error_covariant),
         fact("class_arg_of_equivalence", class_arg_of_equivalence),
         fact("double_contravariance", double_contravariance),
+        fact("carried_2", carried_2),
+        fact("carried_3", carried_3),
+        fact("carried_4", carried_4),
         fact("array_of_unfolded_alias", array_of_unfolded_alias),
         fact("bottom_beside_member", bottom_beside_member),
     ]
@@ -776,5 +843,5 @@ function facts() -> Fact[] throws never {
 /// Helpers that share a fact's signature but are not facts. The registry
 /// check excludes them by name.
 function fact_helpers() -> string[] throws never {
-    ["strict_pair", "equivalent_pair"]
+    ["strict_pair", "equivalent_pair", "wrap_in_param", "wrap_in_return", "wrap_in_error"]
 }

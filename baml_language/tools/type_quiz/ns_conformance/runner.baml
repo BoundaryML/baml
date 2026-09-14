@@ -142,6 +142,68 @@ test "prompt: the program and where it came from, and nothing else" {
     assert.equal(prompts_are_bare(), `matching=true fields=["item", "seed", "program", "against"]`)
 }
 
+// ─── a driven sitting gives nothing away either ──────────────────────────────
+
+/// What a driver of a sitting is handed before an answer, and what it is
+/// handed after.
+///
+/// `Asked` is the half a learner may see beforehand, so it must carry the
+/// programs and nothing else — not the item, not the seed, not the key, and
+/// not what separates two programs of a pair, which the page says only in the
+/// reveal. `Marked` is the half that may be shown afterwards. A field added
+/// to the wrong one of them is how a driver would start asking an easier
+/// question than the page asks, so both are read back through reflection.
+function driven_halves() -> string throws never {
+    let asked = reflect.Type.of<root.Asked>().as_class()?.fields().map((field) -> {
+        field.name
+    })
+        ?? [];
+    let marked = reflect.Type.of<root.Marked>().as_class()?.fields().map((field) -> {
+        field.name
+    })
+        ?? [];
+    `asked=${asked} marked=${marked}`
+}
+
+/// The first step of a driven sitting is the first question of that sitting
+/// and nothing has been marked yet; the second carries the marking of the
+/// first answer. Driving is a pure function of the session and the answers.
+function parsed_step(printed: string) -> root.Step? throws never {
+    baml.json.from_string<root.Step>(printed) catch_all (e) {
+        baml.json.DecodeError => null,
+        baml.json.ParseError => null,
+    }
+}
+
+function driven_first_steps() -> string throws never {
+    let opening = parsed_step(root.adaptive_step(11, ""));
+    let after = parsed_step(root.adaptive_step(11, "compiles"));
+    let first = root.next_prompt(root.fresh_profile(), root.engine.default_knobs(), 11, 0);
+    let same = match (first) {
+        let next: root.Next => {
+            match (opening?.asked) {
+                let asked: root.Asked => {
+                    asked.programs == [next.prompt.program.values().join("\n")]
+                },
+                null => false,
+            }
+        },
+        null => false,
+    };
+    `same_first=${same} opening_marked=${opening?.marked == null} second_marked=${after?.marked != null}`
+}
+
+test "driven: the half a learner sees before answering carries only programs" {
+    assert.equal(
+        driven_halves(),
+        `asked=["programs", "teach"] marked=["said", "correct", "points", "compiles", "reported", "because", "difference"]`,
+    )
+}
+
+test "driven: a step is the sitting's own question, and marks only what was answered" {
+    assert.equal(driven_first_steps(), "same_first=true opening_marked=true second_marked=true")
+}
+
 // ─── answering ───────────────────────────────────────────────────────────────
 
 function compiles_by_key(question: root.engine.Question) -> bool throws never {

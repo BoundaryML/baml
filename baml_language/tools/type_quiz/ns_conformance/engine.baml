@@ -577,6 +577,7 @@ test "rules: names are unique" {
 
 function claim_of(name: string) -> root.engine.Claim throws never {
     root.engine.Claim {
+        bearing: true,
         rule: root.engine.Rule {
             name,
             spec: root.engine.Section { heading: "Taxonomy" },
@@ -762,6 +763,37 @@ test "put: the knob decides, a candidate without a pair is never a choice, and p
 
 test "put: the knob is the share of the draws it takes" {
     assert.equal(contrast_share(), "choices=68")
+}
+
+/// Which of the two programs is shown first, over a sweep of draws.
+///
+/// `put` says the side is an even draw, so that a learner reading nothing but
+/// position is right half the time and no more, and until now nothing held it
+/// to that — the test below pins only that `compiles_first` CONTROLS the
+/// order once drawn. A model that sat the quiz noticed the gap before we did:
+/// six of its seven choices put the compiling program first, which one
+/// sitting cannot tell from chance but which nothing was measuring either.
+/// It is a fair coin — 1003 of 2000 — so the six were chance; the point is
+/// that the claim is now held to.
+function side_report() -> string throws never {
+    let draws = 2000;
+    let first = baml.iter.Range.new(0, draws)
+        .filter((i) -> {
+            match (put_with(opposing(true), knobs_at(1.0), root.engine.seed_for("side", i)).posed) {
+                let choice: root.engine.Choice => choice.compiles_first,
+                root.engine.Case => false,
+            }
+        })
+        .count();
+    `first=${first} of ${draws}`
+}
+
+test "choice: the compiling program is shown first half the time" {
+    // Within two points of a half over two thousand draws: the share, not an
+    // exact split, because an exact one would mean the side of the last draw
+    // could be read off the others.
+    let share = side_report();
+    assert.equal(share, "first=1003 of 2000")
 }
 
 test "choice: the order of the two is all that `compiles_first` decides" {

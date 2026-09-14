@@ -122,6 +122,8 @@ class Profile {
     unknown_mass: float,
     skills: Skill[],
     suspicions: Suspicion[],
+    /// How many times each item has been served this sitting, by id.
+    served: map<string, int>,
     /// Consecutive observations that taught us nothing: no rule's estimate
     /// rose by more than a hair, and no rule was met for the first time by
     /// an answer the learner committed to.
@@ -162,8 +164,21 @@ class Knobs {
     /// every rule before it can be called stuck.
     stall_after: int,
     minimum: int,
-    /// The success probability selection aims a case at.
+    /// The success probability selection aims a case at, when `inform` is
+    /// zero.
     aim: float,
+    /// How strongly selection follows expected information. Zero aims at a
+    /// success rate instead (`aim`); above zero the draw is in proportion to
+    /// the information a case is expected to carry, raised to this power,
+    /// and `aim` is not used. The two are different answers to what a
+    /// question is for: the aim is the success rate at which people are said
+    /// to learn best, and information is what measuring them asks for.
+    inform: float,
+    /// Penalty per time an item has already been served this sitting. A rule
+    /// may come round as often as the estimate wants it; the same ITEM coming
+    /// round is the same template again, which is what a learner calls
+    /// repetitive. Zero turns it off.
+    exposure: float,
     /// Rules seen within this many steps are avoided.
     rest: int,
     /// A mastered rule is rechecked after this many steps.
@@ -214,6 +229,8 @@ function default_knobs() -> Knobs throws never {
         stall_after: 20,
         minimum: 40,
         aim: 0.8,
+        inform: 1.0,
+        exposure: 1.5,
         rest: 3,
         recheck: 15,
         contrast: 0.5,
@@ -265,6 +282,7 @@ function fresh(rules: RuleOrder[], models: string[]) -> Profile throws never {
         suspicions: models.map((model) -> {
             Suspicion { model, score: 0.0, variance: 0.0 }
         }),
+        served: {},
         quiet: 0,
     }
 }
@@ -370,6 +388,53 @@ function taken(of: Chances, verdict: bool?) -> float throws never {
     }
 }
 
+/// What one answer on a case of these rules is expected to tell us about
+/// the learner, before it is seen: the trace of the Fisher information over
+/// the ability and every rule's offset.
+///
+/// This is what a question is WORTH. A case the learner would surely get
+/// right carries nothing, and so does one they would surely miss; a case on
+/// rules they half hold carries the most, and a case on several such rules
+/// carries more than a case on one. For a learner who holds every rule, no
+/// single-rule case is worth anything and only depth is — which makes
+/// escalation a consequence of asking worthwhile questions rather than a
+/// policy laid on top.
+function information(
+    profile: Profile,
+    knobs: Knobs,
+    rules: string[],
+    traps: int,
+) -> float throws never {
+    let q = knowing(profile, knobs, rules, traps);
+    let commit_rate = commits(profile, knobs);
+    let chance = chances(q, knobs, commit_rate);
+    let slope = slopes(knobs, commit_rate);
+    // What an outcome says about `q`, summed over the three outcomes.
+    let about_q = ratio(slope.right * slope.right, chance.right)
+        + ratio(slope.wrong * slope.wrong, chance.wrong)
+        + ratio(slope.withheld * slope.withheld, chance.withheld);
+    // How `q` moves with the ability and with each rule's own offset: the
+    // same gradients the update uses, so what selection values is exactly
+    // what the answer will move.
+    let doubts = rules.map((rule) -> {
+        1.0 - logistic(strength(profile, rule))
+    });
+    let total_doubt = doubts.reduce(
+        (acc, doubt) -> {
+            acc + doubt
+        },
+        0.0,
+    );
+    let by_ability = q * total_doubt * q * total_doubt;
+    let by_rules = doubts.reduce(
+        (acc, doubt) -> {
+            acc + q * doubt * q * doubt
+        },
+        0.0,
+    );
+    about_q * (by_ability + by_rules)
+}
+
 /// The chance of a right answer: what selection aims at, and what a
 /// suspicion's residual is measured against.
 function predict(
@@ -470,11 +535,21 @@ function floor_of(profile: Profile, knobs: Knobs, skill: Skill) -> float throws 
 }
 
 /// The highest order at which we would bet on the learner for `skill`, among
-/// orders they have been right at: zero when none. A rung is climbed by
-/// certainty, not by a single right answer, or a learner is pushed under
-/// constructors before the rule beneath has been settled.
+/// orders they have been right at: zero when none. A rung is climbed by more
+/// than a single right answer, or a learner is pushed under constructors
+/// before the rule beneath has been settled.
+///
+/// This reads the ESTIMATE, not the floor. What to ask next is a bet, and a
+/// bet is made on what we believe; the floor is a family-wise lower bound,
+/// which is the standard for SAYING someone has a rule and much too strict
+/// for choosing their next question. Reading the floor here means the ladder
+/// never advances: the bound needed to call rung three climbed is that we are
+/// ninety per cent sure, over every rule at once, that they hold each rule
+/// nine times in ten — so a learner answering everything right is asked
+/// one-rule cases to the end of the sitting, which is what three models who
+/// sat the quiz each reported as the difficulty never climbing.
 function climbed_rung(profile: Profile, knobs: Knobs, skill: Skill) -> int throws never {
-    let held = logistic(floor_of(profile, knobs, skill));
+    let held = logistic(profile.ability + skill.offset);
     baml.iter.Range.new(1, skill.highest_right + 1).reduce(
         (acc, order) -> {
             if (baml.Float.pow(held, order * 1.0) >= knobs.target) {
@@ -510,6 +585,8 @@ function mastered_rules(profile: Profile, knobs: Knobs) -> string[] throws never
 /// An answer as the tracer sees it: which rules the case held (inner first),
 /// which naive models it trapped, and what happened.
 class Observed {
+    /// The item the case came from, for exposure.
+    item: string,
     rules: string[],
     traps: string[],
     /// Right, wrong, or withheld.
@@ -677,6 +754,7 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         unknown_mass: profile.unknown_mass + (1.0 - q),
         skills,
         suspicions,
+        served: served_once_more(profile.served, seen.item),
         quiet: 0,
     };
     let after = next.skills.map((skill) -> {
@@ -713,6 +791,16 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
     } else {
         Profile { ...next, quiet: profile.quiet + 1 }
     }
+}
+
+/// `served` with one more serving of `item`.
+function served_once_more(served: map<string, int>, item: string) -> map<string, int> throws never {
+    let counts: map<string, int> = {};
+    for (let key in served.keys()) {
+        counts.set(key, served.get(key) ?? 0);
+    }
+    counts.set(item, (served.get(item) ?? 0) + 1);
+    counts
 }
 
 /// Whether `floor` stands more than a hair above where it was when this
@@ -920,7 +1008,16 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
     let rules = read.rules;
     let traps = read.scored.candidate.traps;
     let p = predict(profile, knobs, rules, traps.length());
-    let aim = 0.0 - 3.0 * (p - knobs.aim).abs();
+    // Either the aim or the information, never both: they are two answers
+    // to the same question. Drawing in proportion to information raised to
+    // `inform` is a Boltzmann draw over what the answer is worth.
+    let aim = if (knobs.inform > 0.0) {
+        knobs.inform
+            * baml.Float.ln(information(profile, knobs, rules, traps.length()).max(0.000001))
+    } else {
+        0.0 - 3.0 * (p - knobs.aim).abs()
+    };
+    let exposure = 0.0 - knobs.exposure * ((profile.served.get(read.scored.item) ?? 0) * 1.0);
     // A case on top of a rule the learner has not got yet says nothing about
     // the rule on top.
     let inner_unready = rules.length() >= 2 && logistic(strength(profile, rules[0])) < 0.55;
@@ -1047,6 +1144,7 @@ function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
         0.0
     };
     aim
+        + exposure
         + readiness
         + retired
         + recency

@@ -448,6 +448,7 @@ function observe_judged(
         profile,
         knobs,
         root.engine.Observed {
+            item: judgement.exchange.question.item,
             rules: tracer_rules(judgement.put.posed),
             traps: judgement.put.traps,
             verdict: judgement.exchange.judgement.verdict_correct,
@@ -570,6 +571,233 @@ function adaptive_json(
     baml.json.to_string(adaptive_sitting(session, full, knobs, taken)) catch_all (e) {
         baml.json.SerializationError => `{"error":"${e}"}`,
     }
+}
+
+// ─── driving a sitting from outside ──────────────────────────────────────────
+//
+// A driver that is not a browser — a script standing something else in for a
+// learner — runs a sitting through `adaptive_step`. The whole state of a
+// sitting is its session number and the answers given so far, in order,
+// because everything else is a pure function of those two: which case each
+// question draws and what the learner's profile is both follow. So a driver
+// holds one string, and can stop and resume on it.
+//
+// What comes back is in two parts, and the split is the honest boundary.
+// `asked` is everything a learner may see BEFORE answering: the programs,
+// what separates two of them, and the rule to teach if they have stalled on
+// one. It carries neither the key nor which item the case came from, so a
+// driver cannot pass on what it does not have. `marked` is what the LAST
+// answer was worth, which a learner may see only after giving it, exactly as
+// the page shows it and for the same reason.
+
+/// What a learner may see before they answer.
+class Asked {
+    /// The program to judge, or the two to choose between, in the order they
+    /// are shown. Their file names are not part of the question.
+    ///
+    /// What separates two programs is NOT here. The page says that in the
+    /// reveal, after the answer, and a driver that said it first would be
+    /// asking an easier question than the page does.
+    programs: string[],
+    /// The spec's own words on a rule they have stalled on, to be read before
+    /// this case; empty when there is nothing to teach.
+    teach: string,
+}
+
+/// What the last answer was worth.
+class Marked {
+    said: string,
+    /// Whether they were right, or null when they withheld.
+    correct: bool?,
+    points: int,
+    /// Whether the compiler accepts each program shown, in order.
+    compiles: bool[],
+    /// What the compiler says about each program, in its own words.
+    reported: string[],
+    /// The rules the case turns on, instantiated at its types: why the
+    /// answer is what it is.
+    because: string[],
+    /// What separated the two programs; empty when only one was shown.
+    difference: string,
+}
+
+/// What a finished sitting concluded.
+class Ended {
+    why: string,
+    steps: int,
+    committed: int,
+    right: int,
+    mastered: string[],
+    shaky: string[],
+    /// How often the learner committed to an answer they did not have.
+    commits_unsure: float?,
+    withheld: float,
+    suspected: string?,
+}
+
+/// One step of a driven sitting: what the last answer was worth, what to ask
+/// next, and what the sitting concluded if it is over.
+class Step {
+    /// How many answers have been given.
+    step: int,
+    marked: Marked?,
+    asked: Asked?,
+    ended: Ended?,
+}
+
+/// A sitting replayed through `answers`: the questions it drew and the
+/// profile it reached.
+class Driven {
+    taken: Taken[],
+    profile: root.engine.Profile,
+}
+
+/// The answers of `answers`, one word each: `compiles`, `rejected`, `first`,
+/// `second`, or `unsure`. An empty string is no answers at all.
+function answers_of(answers: string) -> string[] throws never {
+    answers.split(",")
+        .filter((word) -> {
+            word.trim() != ""
+        })
+        .map((word) -> {
+            word.trim()
+        })
+}
+
+/// The sitting drawn from `session` replayed through `answers`.
+///
+/// Selection is a pure function of the session and the answers before a
+/// step, so replaying the answers recovers which case every question drew.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if there are more answers than the sitting has
+///   questions, which means they did not come from this sitting.
+/// - As `said_given`, for a word this surface does not offer.
+function driven(session: int, answers: string) -> Driven throws never {
+    let knobs = root.engine.default_knobs();
+    let taken: Taken[] = [];
+    let profile = answers_of(answers).reduce(
+        (carried, said) -> {
+            let next = next_prompt(carried, knobs, session, taken.length())
+                ?? throw baml.panics.Unreachable {
+                    message: `the sitting from ${session} has no question ${taken.length()}`,
+                };
+            let given = Given { said, reasoning: "", mark: "" };
+            taken.push(Taken { item: next.prompt.item, seed: next.prompt.seed, given });
+            observe_answer(carried, knobs, next.prompt.item, next.prompt.seed, given)
+        },
+        fresh_profile(),
+    );
+    Driven { taken, profile }
+}
+
+/// The programs of a prompt, in the order they are shown.
+function programs_of(prompt: root.engine.Prompt) -> string[] throws never {
+    let shown = [prompt.program];
+    match (prompt.against) {
+        let second: map<string, string> => shown.push(second),
+        null => {},
+    }
+    shown.map((files) -> {
+        files.values().join("\n")
+    })
+}
+
+/// What the answer at the end of `answers` was worth.
+function marked_last(knobs: root.engine.Knobs, taken: Taken[]) -> Marked? throws never {
+    let last = taken.at(-1)
+        ?? return null;
+    let judgement = judged(knobs, last.item, last.seed, last.given);
+    let revealed = root.engine.reveal(judgement.put.posed);
+    Marked {
+        said: last.given.said,
+        correct: judgement.exchange.judgement.verdict_correct,
+        points: root.engine.points_for(knobs, judgement.exchange.judgement.verdict_correct),
+        compiles: revealed.programs.map((program) -> {
+            program.compiles
+        }),
+        reported: revealed.programs.map((program) -> {
+            let said = program.reported.codes.concat(program.reported.messages);
+            said.join("; ")
+        }),
+        because: revealed.shared.map((claim) -> {
+            claim.instance
+        }),
+        difference: revealed.difference,
+    }
+}
+
+function why_said(why: root.engine.Why) -> string throws never {
+    match (why) {
+        root.engine.Why.Continue => "continue",
+        root.engine.Why.Mastered => "mastered",
+        root.engine.Why.Budget => "budget",
+        root.engine.Why.Stalled => "stalled",
+    }
+}
+
+/// One step of a sitting driven from outside: hand it every answer given so
+/// far and it says what the last one was worth and what to ask next.
+///
+/// # Panics
+///
+/// - As `driven`.
+function adaptive_step(session: int, answers: string) -> string throws never {
+    let knobs = root.engine.default_knobs();
+    let sat = driven(session, answers);
+    let standing = root.engine.standing(sat.profile, knobs);
+    let over = standing.why != root.engine.Why.Continue;
+    let asked = if (over) {
+        null
+    } else {
+        let next = next_prompt(sat.profile, knobs, session, sat.taken.length());
+        match (next) {
+            let ask: Next => {
+                Asked {
+                    programs: programs_of(ask.prompt),
+                    teach: match (ask.teach) {
+                        let rule: root.engine.Rule => rule.statement(),
+                        null => "",
+                    },
+                }
+            },
+            null => null,
+        }
+    };
+    let step = Step {
+        step: sat.taken.length(),
+        marked: marked_last(knobs, sat.taken),
+        asked,
+        ended: if (over) {
+            Ended {
+                why: why_said(standing.why),
+                steps: sat.profile.step,
+                committed: sat.profile.committed,
+                right: sat.profile.right,
+                mastered: standing.mastered,
+                shaky: standing.shaky,
+                commits_unsure: standing.commits_unsure,
+                withheld: standing.withheld,
+                suspected: standing.suspected,
+            }
+        } else {
+            null
+        },
+    };
+    baml.json.to_string(step) catch_all (e) {
+        baml.json.SerializationError => `{"error":"${e}"}`,
+    }
+}
+
+/// A driven sitting as the JSON a learner would have taken away.
+///
+/// # Panics
+///
+/// - As `driven`.
+function adaptive_record(session: int, answers: string) -> string throws never {
+    let knobs = root.engine.default_knobs();
+    adaptive_json(session, false, knobs, driven(session, answers).taken)
 }
 
 /// What a learner who reasons as the naive model `id` does believes, in the

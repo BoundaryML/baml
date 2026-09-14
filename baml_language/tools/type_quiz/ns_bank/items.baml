@@ -116,7 +116,9 @@ function site_claim(
             `at ${root.algebra.site_phrase(site)}, a value of type ${s} meets a slot of type ${t}: ${s} <: ${t} ${outcome}`
         },
     };
-    root.engine.Claim { rule: site_rule(site), instance }
+    // The site's own rule is always what the answer turns on: it is the one
+    // that says what the construct makes of the pair.
+    root.engine.Claim { rule: site_rule(site), instance, bearing: true }
 }
 
 /// What a seed settles before either direction of a case is rendered.
@@ -356,6 +358,7 @@ class UnguardedCycleItem {
                 root.engine.Claim {
                     rule: unguarded_cycle_rejected(),
                     instance: `\`${a}\` is a fully unguarded cycle: it denotes \`never\` and is rejected`,
+                    bearing: true,
                 },
             ];
             root.engine.Candidate {

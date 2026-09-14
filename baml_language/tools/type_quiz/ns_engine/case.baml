@@ -55,6 +55,15 @@ class Claim {
     /// The rule instantiated at the case's types, as prose with the types in
     /// backticks.
     instance: string,
+    /// Whether the answer turns on this claim.
+    ///
+    /// A claim can be part of a true explanation and still be something the
+    /// learner did not need: if every value the claim could have taken leads
+    /// to the same verdict, they can answer without it, and crediting them
+    /// with the rule would be crediting them with reasoning they never had to
+    /// do. The explanation keeps every claim, because it is the honest
+    /// account of why; the tracer reads only the bearing ones.
+    bearing: bool,
 }
 
 /// The case compiles, and every listed test (by canonical id, `root::name`)
@@ -213,12 +222,22 @@ function cases_of(posed: Posed) -> Case[] throws never {
 /// what a learner must read correctly before the difference between them can
 /// decide anything. A rule that a case reaches twice is listed twice, which
 /// is what makes a case of it deeper than one that reaches it once.
+///
+/// Only the claims the answer TURNS ON. A claim the verdict would be the
+/// same without is part of the explanation and no part of the question: a
+/// learner who cannot do that step still gets the case right, so asking it
+/// tells us nothing about them and crediting them for it would be crediting
+/// reasoning they never had to do. This is what keeps a case from looking
+/// deeper than it is.
 function rules_of(posed: Posed) -> string[] throws never {
     shared_claims(
         cases_of(posed).map((case) -> {
             case.trace
         }),
     )
+        .filter((claim) -> {
+            claim.bearing
+        })
         .map((claim) -> {
             claim.rule.name
         })
