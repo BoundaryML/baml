@@ -39,6 +39,10 @@ passes; the final full-workspace validation is tracked separately.
   unreferenced check, and the full workspace nextest jobs.
 - [x] Final review: have a fresh subagent inspect the complete diff and fix all
   confirmed misses, then rerun affected validation.
+- [x] PR CI follow-up: repair the markdown/rustfmt pre-commit failures and
+  replace the deleted `book_interfaces` workflow target with its native suite.
+- [ ] CodeRabbit follow-up: address all five inline findings, add mounted-
+  interface regressions, rerun affected validation, and resolve the threads.
 
 Implementation started: 2026-09-12.
 
@@ -97,33 +101,39 @@ Progress:
   line/column and fully rendered source remain intentionally outside the API.
 - The cross-package parity gaps found by direct native probes are closed.
   Runtime compilation now preserves E0139 orphan validation and mounted
-  `requires` validation (including E0125), local implementations for mounted
-  foreign classes dispatch correctly, and explicit associated-type witnesses
-  use the type checker's canonical bindings during emit.
-- The three mounted-interface native regressions pass. That lets the last two
-  formerly parity-blocked `book_interfaces.rs` cases leave Rust as well (the
-  third case was already in the planned phase-2 count), so that Rust integration
-  binary is removed completely.
+  `requires` and required-method validation (including E0125 and E0113), local
+  implementations for mounted foreign classes dispatch correctly, and
+  explicit associated-type witnesses use the type checker's canonical,
+  sequential loc-free bindings during method lowering and emit.
+- Five mounted-interface native regressions now pass. Three close the original
+  migration blockers and let the last two formerly parity-blocked
+  `book_interfaces.rs` cases leave Rust (the third was already in the planned
+  phase-2 count), so that Rust integration binary is removed completely. The
+  two PR-review regressions pin dependent `Self.Item` bindings and E0113 for an
+  omitted required method across `reflect.Package.compile`.
 - Mixed-suite migration is complete. Its planned phase-1 tranche removes 163
   Rust definitions: 157 receive native replacements and six already had native
   coverage. The 128 newly authored cases in the final mixed-suite batch pass,
   as do all 65 reflected-diagnostic replacements removed from those Rust files.
   Session coverage is split across 25 minimal fixtures rather than repeating a
   large shared prelude.
-- The final Rust-residue audit migrated 22 additional language-observable cases:
-  two caught throw/panic `ErrorContext` cases, zero-duration `sys.sleep`, two
-  clean spawn-success lifecycle cases, ten `spawn_array_race` cases, six
+- The final Rust-residue audit leaves 21 additional language-observable native
+  cases: two caught throw/panic `ErrorContext` cases, zero-duration `sys.sleep`,
+  one clean spawn-success lifecycle case, ten `spawn_array_race` cases, six
   `future_all_settled` cases, and one reflected invalid-filesystem-mode
-  diagnostic. Five unobserved spawned-error cases remain in Rust because the
-  native runner intentionally reports `testing::unhandled_spawn_error`.
+  diagnostic. A second finite detached-spawn port was removed because the
+  retained infinite-spawn Rust timeout is the stronger oracle. Five unobserved
+  spawned-error cases remain in Rust because the native runner intentionally
+  reports `testing::unhandled_spawn_error`.
 - Fifteen ordinary mounted-package call tests are replaced by two native tests:
   one aggregate behavior test and one focused generic-return regression. The
   sole Rust survivor verifies the host-only privileged builtin-trust artifact.
   Supporting parity work also taught semantic value resolution to ignore
   type-erased link-only PPIR stubs in favor of mounted interface metadata.
-- Two additional redundant Rust assertions were removed: a duplicate fully
-  qualified bytecode case, and a status-code assertion merged into the stronger
-  foreign-class field-access bytecode test.
+- Three additional redundant Rust assertions were removed: a duplicate fully
+  qualified bytecode case, a status-code assertion merged into the stronger
+  foreign-class field-access bytecode test, and the finite detached-spawn timing
+  assertion subsumed by the retained infinite-spawn timeout oracle.
 - Every remaining Rust definition now has an explicit capability reason in the
   [companion survivor ledger](NATIVE_BAML_TEST_RUST_SURVIVORS.md), which is
   mechanically reconciled with the source inventory.
@@ -138,15 +148,16 @@ Progress:
   diagnostics through the host boundary, and removed one stale ignored TIR
   specification whose syntax no longer parses. Focused validation for every
   correction passes.
-- Full validation is green after final review: the post-review offline native
-  corpus selects 4,487 cases and reports 4,484 passes plus two expected
+- Full validation is green after final review and PR follow-up: the offline
+  native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and
   the post-review snapshot-owned job passes all 1,564 active Rust entries with
   21 ignored and no unreferenced snapshots. The complementary workspace job
   passed 4,352 tests with five skipped before the review; all compiler and CLI
   code changed during review was then covered by focused package and end-to-end
-  runs. `cargo fmt --check`, `git diff --check`, and the `.snap.new` scan are
-  clean.
+  runs. The PR follow-up also passes the repository's markdown/workflow hooks,
+  CI-configured rustfmt, and the three-case native Developer Docs gate.
+  `git diff --check` and the `.snap.new` scan are clean.
 
 ## Outcome
 
@@ -159,17 +170,17 @@ hand-written `baml_tests` integration binaries, not the whole nextest job.
 
 The implementation goes beyond the conservative survey. It closes the mounted-
 package parity gaps and the E0125 runtime-compile gap, then applies a complete
-survivor and overlap audit. As a result, **879 active Rust entries leave through
-native migration**: 869 integration entries, nine library entries, and the CLI
+survivor and overlap audit. As a result, **878 active Rust entries leave through
+native migration**: 868 integration entries, nine library entries, and the CLI
 `assert.approx_equal` wrapper.
 
 The complete all-feature nextest inventory is now **1,585 listed entries**:
 1,564 active and 21 ignored. The active inventory is down **1,064** from 2,628.
 The full unprofiled native universe grows from 3,770 to
-4,521 selected cases (+751), matching the source-definition increase from 3,728
-to 4,479. The default offline profile selects 4,487 of the current cases after
+4,522 selected cases (+752), matching the source-definition increase from 3,728
+to 4,480. The default offline profile selects 4,488 of the current cases after
 excluding 34 intentionally compile-only fixtures. Thus the logical test-count
-reduction is **313**, not 1,064.
+reduction is **312**, not 1,064.
 
 | Active slice | Baseline | Current | Removed |
 |---|---:|---:|---:|
@@ -180,17 +191,18 @@ reduction is **313**, not 1,064.
 
 The 1,064 removals partition without overlap:
 
-- **879** Rust entries removed through native migration;
+- **878** Rust entries removed through native migration;
 - **1** dead Rust entry;
 - **170** compiler-test reductions: 83 generated PPIR, ten MIR, and 77 TIR;
-- **14** other reductions: 12 net cache/discovery/CLI/shebang reductions (the
+- **15** other reductions: 12 net cache/discovery/CLI/shebang reductions (the
   survey's gross 13 is offset by one new pure generation-presentation unit) and
-  two redundant Rust assertions found by the final overlap audit.
+  three redundant Rust assertions found by the final overlap and PR audits.
 
-Against the 879 Rust entries removed through migration, the native universe
-grows by 751 selected cases after deduplication and table/matrix consolidation,
-a net reduction of 128 across that part of the program. Adding the dead test,
-170 compiler reductions, and 14 other reductions gives the exact **313 logical
+Against the 878 Rust entries removed through migration, the native universe
+grows by 752 selected cases after deduplication, table/matrix consolidation,
+and the two mounted-interface review regressions, a net reduction of 126 across
+that part of the program. Adding the dead test, 170 compiler reductions, and 15
+other reductions gives the exact **312 logical
 tests removed**.
 
 The final integration-layer disposition is:
@@ -199,8 +211,8 @@ The final integration-layer disposition is:
 |---|---:|---:|---|
 | Delete: already covered natively | 86 | 7.8% | Stronger existing native tests make a new port unnecessary |
 | Delete: dead | 1 | 0.1% | Import-only smoke test with no behavior |
-| Delete: redundant assertion | 2 | 0.2% | Duplicated bytecode/assertion coverage |
-| Add a phase-1 native port | 380 | 34.4% | BAML-observable behavior or successful compilation |
+| Delete: redundant assertion | 3 | 0.3% | Duplicated bytecode/assertion/timing coverage |
+| Add a phase-1 native port | 379 | 34.3% | BAML-observable behavior or successful compilation |
 | Add a phase-2 native diagnostic port | 403 | 36.4% | Use reflected compiler diagnostics |
 | Outside native migration | 234 | 21.2% | Host, compiler/VM internals, OS/I/O, concurrency, optimizer matrices, or ignored-test support |
 | **Total** | **1,106** | **100%** | |
@@ -209,10 +221,10 @@ Across the full original active inventory, the corrected capability split is:
 
 | Full active-test disposition | Tests | Share |
 |---|---:|---:|
-| Phase 1: native behavior/build or existing native coverage | 475 | 18.1% |
+| Phase 1: native behavior/build or existing native coverage | 474 | 18.0% |
 | Phase 2: reflected diagnostics | 404 | 15.4% |
 | Dead | 1 | <0.1% |
-| Redundant duplicates | 2 | 0.1% |
+| Redundant duplicates | 3 | 0.1% |
 | Outside native migration | 1,746 | 66.4% |
 | **Total** | **2,628** | **100%** |
 
@@ -226,9 +238,9 @@ non-native capability reason for every remaining definition.
 Three useful answers to “how many tests can we delete?” are now concrete:
 
 - **1,064 active nextest entries were removed** from the original 2,628;
-- **313 logical tests were eliminated net** after adding 751 native cases;
-- **89 integration tests required no new replacement at all** because 86 had
-  stronger native coverage already, one was dead, and two were redundant.
+- **312 logical tests were eliminated net** after adding 752 native cases;
+- **90 integration tests required no new replacement at all** because 86 had
+  stronger native coverage already, one was dead, and three were redundant.
 
 The inventory counts source-defined cases after expanding the macros in
 `map_aliasing.rs`, counts ignored tests, and counts both sides of target-specific
@@ -266,7 +278,7 @@ The integration action totals reconcile as follows:
 
 | Existing native | Phase-1 ports | Phase-2 ports | Rust | Dead | Redundant | Total |
 |---:|---:|---:|---:|---:|---:|---:|
-| 86 | 380 | 403 | 234 | 1 | 2 | **1,106** |
+| 86 | 379 | 403 | 234 | 1 | 3 | **1,106** |
 
 The final active nextest slices reconcile directly:
 
@@ -1414,8 +1426,8 @@ The four cache/discovery setup consolidations bring that cross-survey figure to
 99; deleting the adjacent simple shebang duplicate makes it 100 before the
 separate compiler-internal cleanup is added. The conservative
 CLI boundary retains three generator lifecycle/smoke cases, reducing those
-figures by three. The final authoritative integration result is 89: 86 existing-
-native duplicates, one dead test, and two redundant retained-Rust assertions.
+figures by three. The final authoritative integration result is 90: 86 existing-
+native duplicates, one dead test, and three redundant retained-Rust assertions.
 
 | Source group | Existing-native deletions | Dead | Total |
 |---|---:|---:|---:|

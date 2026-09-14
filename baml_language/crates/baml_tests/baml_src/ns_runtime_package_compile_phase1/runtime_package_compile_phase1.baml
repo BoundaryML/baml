@@ -139,6 +139,113 @@ test "mounted method stubs do not shadow their owner" {
     assert.equal(rpc_compile_method_plugin().diagnostics().length(), 0)
 }
 
+test "mounted associated bindings resolve earlier Self witnesses before emit" {
+    let app = reflect.Package.compile(
+        {
+            "app.baml": `
+                interface Batch {
+                    type Item
+                    type Items
+
+                    function all(self) -> Self.Items throws never
+                }
+            `,
+        },
+    );
+    let consumer = reflect.Package.compile(
+        {
+            "consumer.baml": `
+                class IntBatch {
+                    values: int[]
+
+                    implements app.Batch {
+                        type Item = int
+                        type Items = Self.Item[]
+
+                        function all(self) -> Self.Items throws never {
+                            self.values
+                        }
+                    }
+                }
+
+                class QualifiedIntBatch {
+                    values: int[]
+
+                    implements app.Batch {
+                        type Item = int
+                        type Items = (Self as app.Batch).Item[]
+
+                        function all(self) -> Self.Items throws never {
+                            self.values
+                        }
+                    }
+                }
+
+                function total(batch: app.Batch<Item = int, Items = int[]>) -> int throws never {
+                    let result = 0
+                    for (let value in batch.all()) {
+                        result += value
+                    }
+                    result
+                }
+
+                function exercise() -> int throws never {
+                    total(IntBatch { values: [2, 3, 5] })
+                }
+
+                function exercise_qualified() -> int throws never {
+                    total(QualifiedIntBatch { values: [7, 11] })
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    if (consumer.diagnostics().length() != 0) {
+        throw consumer.diagnostics()[0].message
+    }
+    let exercise = consumer.get_function<() -> int>("root.exercise") ?? throw "missing exercise";
+    let exercise_qualified = consumer.get_function<() -> int>("root.exercise_qualified")
+        ?? throw "missing qualified exercise";
+    assert.equal(exercise(), 10);
+    assert.equal(exercise_qualified(), 18)
+}
+
+test "mounted interface impl missing a required method reports E0113" {
+    let app = reflect.Package.compile(
+        {
+            "app.baml": `
+                interface Required {
+                    function required(self) -> string throws never
+                }
+            `,
+        },
+    );
+    let result = reflect.Package.compile(
+        {
+            "consumer.baml": `
+                class Incomplete {
+                    implements app.Required {}
+                }
+            `,
+        },
+        packages = { "app": app },
+    ) catch (e) {
+        reflect.errors.CompilationError => e.diagnostics,
+    };
+    if (result is reflect.Diagnostic[]) {
+        assert.equal(
+            result
+                .filter((diagnostic) -> bool {
+                    diagnostic.code == "E0113" && diagnostic.message.includes("required")
+                })
+                .length(),
+            1,
+        )
+    } else {
+        throw "incomplete mounted impl compiled without E0113"
+    }
+}
+
 test "runtime-compiled ToString on a reflected type dispatches" {
     let pkg = reflect.Package.compile(
         {

@@ -83,6 +83,8 @@ fn run_impl(
         // discovery cache. Keep discovery honest while sharing content-addressed
         // bytecode/stdlib entries across their otherwise-isolated projects.
         command.env("BAML_NO_DISCOVERY_CACHE", "1");
+    } else {
+        command.env_remove("BAML_NO_DISCOVERY_CACHE");
     }
     if let Some((name, value)) = env {
         command.env(name, value);

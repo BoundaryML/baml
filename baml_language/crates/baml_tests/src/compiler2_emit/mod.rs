@@ -7,8 +7,10 @@
 use baml_compiler2_emit::generate_project_bytecode_with_stdlib;
 use baml_db::ProjectDatabase;
 
-use crate::engine::TestDbExt;
-use crate::stdlib_prefix::{OptLevel, prefix};
+use crate::{
+    engine::TestDbExt,
+    stdlib_prefix::{OptLevel, prefix},
+};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"

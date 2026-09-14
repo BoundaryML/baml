@@ -109,6 +109,37 @@ fn library_blob_with_format(artifact_format: u32) -> Vec<u8> {
     .expect("package interface serializes")
 }
 
+fn mounted_assoc_blob() -> Vec<u8> {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-mounted-associated-library"));
+    db.dependency("app");
+    db.file(
+        "<builtin>/app/lib.baml",
+        r#"
+interface Batch {
+    type Item
+    type Items
+}
+
+interface QualifiedBatch {
+    type Item
+    type Items
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &export_interface(
+            &db,
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new("app"))
+                .unwrap(),
+        ),
+    )
+    .expect("package interface serializes")
+}
+
 #[test]
 fn mounted_interface_skew_is_rejected_before_installation() {
     let blob = library_blob_with_format(baml_artifact::FORMAT_VERSION + 1);
@@ -280,6 +311,74 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let external = function.external.expect("loc-free callable facts");
     assert!(matches!(external.target, ExternalCallTarget::Free { .. }));
     assert_eq!(external.user_generic_params().count(), 1);
+}
+
+fn assert_mounted_blanket_impl_resolves_self_associated_binding_symbolically() {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(
+        "/hir-ty-mounted-blanket-associated-consumer",
+    ));
+    db.mount("app", mounted_assoc_blob());
+    let file = db.file(
+        "main.baml",
+        r#"
+implement<T> app.Batch for T {
+    type Item = int
+    type Items = Self.Item[]
+}
+
+class ConcreteBatch {
+    implements app.QualifiedBatch {
+        type Item = int
+        type Items = (Self as app.QualifiedBatch).Item[]
+    }
+}
+"#,
+    );
+
+    let impl_locs = baml_compiler2_ppir::item_data::file_impls(&db, file);
+    let blanket =
+        baml_compiler2_hir_ty::impls::impl_facts(&db, *impl_locs.first().expect("blanket impl"))
+            .resolved()
+            .expect("blanket mounted impl facts resolve");
+    let item = blanket
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Item")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("Item witness");
+    let items = blanket
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Items")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("Items witness");
+
+    assert!(matches!(item, baml_type::Ty::Int { .. }), "{item:#?}");
+    assert!(
+        matches!(&items, baml_type::Ty::List(inner, _)
+            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        "a blanket receiver must keep Self's progressively pinned witness: {items:#?}"
+    );
+
+    let qualified = baml_compiler2_hir_ty::impls::impl_facts(
+        &db,
+        *impl_locs.get(1).expect("qualified concrete impl"),
+    )
+    .resolved()
+    .expect("qualified mounted impl facts resolve without a query cycle");
+    let qualified_items = qualified
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Items")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("qualified Items witness");
+    assert!(
+        matches!(&qualified_items, baml_type::Ty::List(inner, _)
+            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        "a qualified mounted Self projection must resolve from the symbolic bound: \
+         {qualified_items:#?}"
+    );
 }
 
 fn error_messages(source: &str) -> Vec<String> {
@@ -499,6 +598,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
         ExternalCallTarget::Interface { interface, method }
             if interface.name().as_str() == "View" && method.as_str() == "twice"
     )));
+    assert_mounted_blanket_impl_resolves_self_associated_binding_symbolically();
 }
 
 #[test]

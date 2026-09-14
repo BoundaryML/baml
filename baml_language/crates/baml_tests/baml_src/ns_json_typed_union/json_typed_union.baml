@@ -8,6 +8,8 @@ enum JsonUnionPhase {
 
 type JsonUnionPayload = JsonUnionRecord | JsonUnionPhase | image;
 
+type Payload = uint8array | string;
+
 function serialize_json_union_payload(value: JsonUnionPayload) -> string {
     baml.json.to_string(value)
 }
@@ -45,9 +47,9 @@ test "typed class and union serialization are equivalent" {
 }
 
 test "typed union preserves uint8array serialization error" {
-    type Payload = uint8array | string
     let result = {
-        let _ = baml.json.to_string(baml.Uint8Array.from_hex("00ff"));
+        let payload: Payload = baml.Uint8Array.from_hex("00ff");
+        let _ = baml.json.to_string(payload);
         "unexpected success"
     } catch (e) {
         baml.json.SerializationError => "serialization error",

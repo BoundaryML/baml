@@ -2120,6 +2120,37 @@ fn realize_qualifier_through_roots<'db>(
     fill_defaults: bool,
 ) -> Option<baml_type::Interface> {
     for root in roots {
+        // A mounted interface has no `InterfaceLoc`, but its exported row is
+        // still a complete root for qualifier proof. In particular, associated
+        // binding lowering gives symbolic `Self` a progressively pinned mounted
+        // bound; proving `(Self as dep.I).Item` from that bound must stay on the
+        // loc-free requires surface rather than fall through to concrete impl
+        // selection (which would re-enter the impl currently being built).
+        if matches!(
+            crate::package_interface::mounted_type_row(db, &root.name),
+            Some(crate::package_interface::ExportedType::Interface { .. })
+        ) {
+            let subject = root.to_ty();
+            for candidate in
+                std::iter::once(root.clone()).chain(crate::impls::direct_requires_closure_plain(
+                    db,
+                    root,
+                    &subject,
+                    crate::impls::REQUIRES_CLOSURE_FUEL,
+                ))
+            {
+                if candidate.name == qualifier.name
+                    && written_qualifier_proven_by(facts, qualifier, &candidate)
+                {
+                    return Some(baml_type::Interface {
+                        name: candidate.name,
+                        generics: qualifier.generics.clone(),
+                        associated_types: candidate.associated_types,
+                    });
+                }
+            }
+            continue;
+        }
         let Some(root_loc) = projection_interface_loc(db, &root.name) else {
             continue;
         };

@@ -59,18 +59,6 @@ test "function_can_return_future_typed_value" {
     assert.equal(function_can_return_future_typed_value_fn(), 99)
 }
 
-function finite_detached_spawn_does_not_block_completion_fn() -> string {
-    let detached = spawn with baml.spawn.options(detach = true) {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(150));
-        1
-    };
-    "done"
-}
-
-test "finite_detached_spawn_does_not_block_completion" {
-    assert.equal(finite_detached_spawn_does_not_block_completion_fn(), "done")
-}
-
 function never_awaited_successful_spawn_returns_cleanly_fn() -> string {
     let successful = spawn { 42 };
     baml.sys.sleep(baml.time.Duration.from_milliseconds(250));

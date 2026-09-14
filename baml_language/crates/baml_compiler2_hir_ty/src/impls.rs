@@ -325,7 +325,7 @@ pub fn impl_facts<'db>(
         .collect();
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
-        .with_bounds(bounds_map);
+        .with_bounds(bounds_map.clone());
     let Some(interface) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
         &data.type_refs,
         data.interface_target,
@@ -361,20 +361,107 @@ pub fn impl_facts<'db>(
     if !unconstrained.is_empty() {
         return ImplHeaderResolution::Poisoned { unconstrained };
     }
-    let associated_types = data
-        .associated_type_bindings
-        .iter()
-        .filter_map(|binding| {
-            binding.type_ref.map(|type_ref| {
+    // A mounted interface has no `InterfaceLoc`, so `impl_data` cannot use the
+    // source declaration's canonical associated-binding lowering for it. Do
+    // that work here, on the loc-free facts surface: visit members in the
+    // mounted declaration's order and expose each resolved pin on symbolic
+    // `Self`'s interface bound before lowering the next one. This is what makes
+    // `type Item = int; type Items = Self.Item[]` produce `Items = int[]`
+    // instead of retaining an unrepresentable recovery projection.
+    let associated_types = if let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        generic_params: interface_params,
+        associated_types: declared_associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &interface.name)
+    {
+        let interface = interface.to_plain();
+        let for_ty = for_ty_pattern.to_plain();
+        // Match `lower_interface_associated_bindings`: lower binding values with
+        // a symbolic interface `Self`, then substitute the impl receiver only
+        // after sibling projections have had a chance to resolve through the
+        // progressively pinned bound. Lowering with the concrete receiver here
+        // loses that bound for blanket impls (`for T`) and makes an explicitly
+        // qualified `(Self as dep.I).Item` re-enter impl selection on itself.
+        let self_var = baml_type::Ty::TypeVar(self_param.clone(), baml_type::TyAttr::default());
+        let mut value_scope = params.clone();
+        value_scope.push(self_param.clone());
+        let mut value_bindings: baml_type::unify::TypeBindings = params
+            .iter()
+            .map(|param| {
                 (
-                    binding.name.clone(),
-                    ClosedTy::from_plain(&crate::lower::reject_holes(
-                        &ctx.lower_type_ref(&data.type_refs, type_ref),
-                    )),
+                    param.clone(),
+                    baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()),
                 )
             })
-        })
-        .collect();
+            .collect();
+        value_bindings.insert(self_param.clone(), for_ty.clone());
+        let mut resolved_pins: Vec<(Name, baml_type::Ty)> = Vec::new();
+
+        for associated_type in declared_associated_types {
+            let ty = if let Some(binding) = data
+                .associated_type_bindings
+                .iter()
+                .find(|binding| binding.name == associated_type.name)
+                && let Some(type_ref) = binding.type_ref
+            {
+                let mut bounds = bounds_map.clone();
+                bounds.insert(
+                    self_param.clone(),
+                    vec![baml_type::Interface::new(
+                        interface.name.clone(),
+                        interface.generics.clone(),
+                        resolved_pins.clone().into(),
+                    )],
+                );
+                let lowered = crate::lower::reject_holes(
+                    &crate::lower::lower_ctx_for_file(db, file)
+                        .with_frame(value_scope.clone())
+                        .with_bounds(bounds)
+                        .with_self_ty(Some(self_var.clone()))
+                        .lower_type_ref(&data.type_refs, type_ref),
+                );
+                baml_type::unify::substitute_ty(&lowered, &value_bindings)
+            } else if let Some(default) = &associated_type.default {
+                crate::interfaces::realize_associated_default(
+                    default,
+                    interface_params,
+                    &interface.generics,
+                    self_param,
+                    &for_ty,
+                )
+            } else {
+                continue;
+            };
+            let ty = crate::interfaces::collapse_self_assoc_projections(
+                &ty,
+                &[&self_var, &for_ty],
+                Some(&interface.name),
+                &interface.generics,
+                &resolved_pins,
+            );
+            resolved_pins.push((associated_type.name.clone(), ty));
+        }
+
+        resolved_pins
+            .into_iter()
+            .map(|(name, ty)| (name, ClosedTy::from_plain(&ty)))
+            .collect()
+    } else {
+        data.associated_type_bindings
+            .iter()
+            .filter_map(|binding| {
+                binding.type_ref.map(|type_ref| {
+                    (
+                        binding.name.clone(),
+                        ClosedTy::from_plain(&crate::lower::reject_holes(
+                            &ctx.lower_type_ref(&data.type_refs, type_ref),
+                        )),
+                    )
+                })
+            })
+            .collect()
+    };
 
     let facts = ImplFacts {
         interface,

@@ -196,7 +196,10 @@ jobs:
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
       - name: Check book interface package boundaries
-        run: cargo test -p baml_tests --test book_interfaces
+        env:
+          BAML_AGENT_SKILL_CHECK: "off"
+          BAML_CLI_ALLOW_DIRECT: "1"
+        run: target/debug/baml-cli test --from crates/baml_tests/baml_src -i root.compiler.mounted_interface_diagnostics
         working-directory: baml_language
 
   database-integration:
