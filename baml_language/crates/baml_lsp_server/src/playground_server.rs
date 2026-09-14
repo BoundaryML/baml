@@ -594,7 +594,6 @@ fn drain_logs_and_broadcast(
 
         if let Some(patch) = run_store.ingest_log_value_ref(
             encoded.boundary_id,
-            encoded.call,
             encoded.metadata.level,
             encoded
                 .metadata
@@ -1615,7 +1614,7 @@ async fn handle_function_run(
 
     tokio::spawn(async move {
         let function_name = target.call_function_name;
-        match bex_project::Bex::call_function_with_trace(
+        match bex_project::Bex::call_function_with_outcome(
             bex,
             &function_name,
             kwargs.into(),
@@ -2680,8 +2679,8 @@ mod tests {
 
     use bex_events::{
         history::HistoryValueBody,
-        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
-        run::{PayloadKind, ProjectId, RunTimeAnchor, TraceCallKey},
+        ids::{BexThreadId, EngineId, ProcessEuid},
+        run::{PayloadKind, ProjectId, RunTimeAnchor, ThreadRef},
     };
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{RootHaver, Value};
@@ -2735,12 +2734,11 @@ mod tests {
         }
     }
 
-    fn test_trace_key() -> TraceCallKey {
-        TraceCallKey {
+    fn test_trace_key() -> ThreadRef {
+        ThreadRef {
             process_euid: ProcessEuid([8; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(1),
-            call_id: BexCallId(3),
         }
     }
 

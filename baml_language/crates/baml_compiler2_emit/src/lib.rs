@@ -40,9 +40,9 @@ use baml_compiler2_ppir::{
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionMeta, FunctionOrigin, GlobalIndex, Instruction, InterfaceBound, Object, ObjectIndex,
+    ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -4691,8 +4691,7 @@ fn emit_file_group<'db>(
                 is_interface_body: false,
                 native_key: None,
                 body_meta: None,
-                capture: FunctionCaptureProps::disabled(),
-                function_id: 0, // assigned at engine init (interim provider)
+
                 runtime_package: bex_vm_types::HeapPtr::null(),
             };
 
@@ -6308,8 +6307,7 @@ fn builtin_emit_function(
         is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
@@ -6349,10 +6347,6 @@ fn attach_function_metadata<'db>(
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
             client: client.to_string(),
         });
-        compiled_fn.capture = FunctionCaptureProps::disabled()
-            .with_auto(CaptureCategory::Input)
-            .with_auto(CaptureCategory::Output)
-            .with_auto(CaptureCategory::Error);
     }
 }
 
@@ -6645,8 +6639,7 @@ fn compile_init_function<'db>(
                     is_interface_body: false,
                     native_key: None,
                     body_meta: None,
-                    capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
+
                     runtime_package: bex_vm_types::HeapPtr::null(),
                 }
             }
@@ -6726,8 +6719,7 @@ fn compile_init_function<'db>(
         is_interface_body: false,
         native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+
         runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }

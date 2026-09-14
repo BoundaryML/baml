@@ -91,8 +91,8 @@ mod tests {
     use prost::Message;
 
     use crate::{
-        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
-        run::{RunError, RunErrorClass, RunStatus, SourceLocation, TraceCallKey},
+        ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        run::{RunError, RunErrorClass, RunStatus, SourceLocation, ThreadRef},
         value::{
             CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
             RunCompletedRecord, ValueCodec, ValueFileRecord, ValueRef, pb,
@@ -107,11 +107,10 @@ mod tests {
             body: vec![4, 5, 6],
             blob_ref: None,
             event: LogEventRecord {
-                call: TraceCallKey {
+                call: ThreadRef {
                     process_euid: ProcessEuid([1; 16]),
                     engine_id: EngineId(2),
                     thread_id: BexThreadId(3),
-                    call_id: BexCallId(4),
                 },
                 level: Some("info".to_string()),
                 source: Some(SourceLocation {

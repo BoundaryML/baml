@@ -22,13 +22,10 @@ pub enum LangPackage {
     /// LLM functions and clients; the `client:` desugar and prompt lowering
     /// name its declarations.
     Ai,
-    /// The `boundary` package, whose root-level `id` function is the one
-    /// allowlisted namespace shadow.
-    Boundary,
 }
 
 impl LangPackage {
-    pub const ALL: [Self; 4] = [Self::Baml, Self::Reflect, Self::Ai, Self::Boundary];
+    pub const ALL: [Self; 3] = [Self::Baml, Self::Reflect, Self::Ai];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
     /// spelling the installer matches to find the root.
@@ -37,7 +34,6 @@ impl LangPackage {
             Self::Baml => "baml",
             Self::Reflect => "reflect",
             Self::Ai => "ai",
-            Self::Boundary => "boundary",
         }
     }
 }
@@ -50,7 +46,6 @@ pub struct LangRoots {
     baml: Option<SourceRoot>,
     reflect: Option<SourceRoot>,
     ai: Option<SourceRoot>,
-    boundary: Option<SourceRoot>,
 }
 
 impl LangRoots {
@@ -61,7 +56,6 @@ impl LangRoots {
             LangPackage::Baml => self.baml,
             LangPackage::Reflect => self.reflect,
             LangPackage::Ai => self.ai,
-            LangPackage::Boundary => self.boundary,
         }
     }
 
@@ -78,7 +72,6 @@ impl LangRoots {
             LangPackage::Baml => &mut self.baml,
             LangPackage::Reflect => &mut self.reflect,
             LangPackage::Ai => &mut self.ai,
-            LangPackage::Boundary => &mut self.boundary,
         };
         *slot = Some(root);
         self

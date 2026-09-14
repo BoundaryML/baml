@@ -119,8 +119,6 @@ pub(crate) struct CallPlan {
     pub(crate) explicit: bool,
     pub(crate) slots: Vec<CallTypeArgPlan>,
     pub(crate) target: Option<ExternalCallTarget>,
-    /// Hidden call metadata which is not part of the callee's parameter list.
-    pub(crate) side_channels: CallSideChannels,
 }
 
 /// One written generic slot as MIR consumes it. Only the WRITTEN shape
@@ -147,12 +145,6 @@ pub(crate) enum ScopedTypeSource {
     Runtime(AstExprId),
     /// A static type, loaded as a template in the enclosing frame.
     Static(Tir2Ty),
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct CallSideChannels {
-    /// The trailing `boundary.LocalId` expression supplied as `$id = ...`.
-    pub(crate) runtime_id: Option<AstExprId>,
 }
 
 impl CallPlan {
@@ -373,9 +365,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     })
                     .collect(),
                 target: plan.target.clone(),
-                side_channels: CallSideChannels {
-                    runtime_id: plan.runtime_id,
-                },
             },
         );
     }

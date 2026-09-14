@@ -464,12 +464,6 @@ pub enum Terminator<'db> {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        ///
-        /// This is not part of ordinary call arity. Emitters push it above the
-        /// normal call payload and use an ID-aware bytecode call form.
-        runtime_id: Option<Operand<'db>>,
-        /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
         target: BlockId,
@@ -507,9 +501,6 @@ pub enum Terminator<'db> {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand<'db>>,
-        /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
         target: BlockId,
@@ -534,9 +525,6 @@ pub enum Terminator<'db> {
         callee: Operand<'db>,
         /// Arguments to the sys-op.
         args: Vec<Operand<'db>>,
-        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand<'db>>,
-        /// Where to store the sys-op's return value.
         destination: Place,
         /// Block to resume at after the sys-op returns.
         target: BlockId,

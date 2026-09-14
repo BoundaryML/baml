@@ -174,8 +174,8 @@ fn to_source_code_with_optional_metadata(
     // (Python separates module vs attribute lookup), but in Swift the
     // namespace enum and the func collide in one scope. The namespace
     // wins — it carries arbitrarily many symbols — and the colliding
-    // function is dropped (e.g. vendor `boundary.id()` vs the
-    // `boundary.id.*` namespace).
+    // function is dropped (e.g. vendor `factory.open()` vs the
+    // `factory.open.*` namespace).
     let all_paths: Vec<Vec<String>> = namespaces.keys().cloned().collect();
     for path in &all_paths {
         if path.is_empty() {

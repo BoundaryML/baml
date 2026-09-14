@@ -524,12 +524,6 @@ pub struct CallPlan<T = baml_type::Ty> {
     /// Every WRITTEN type-argument slot, in source order, with the written
     /// shape MIR emits alongside the solved type.
     pub slots: Vec<CallTypeArgPlan<T>>,
-    /// The trailing `$id = ...` side-channel argument (TIR's
-    /// `CallSideChannels`, flattened until a second channel exists).
-    pub runtime_id: Option<ExprId>,
-    /// Stable source-location-free identity for a mounted callable. Source
-    /// functions keep their existing location-backed `MemberResolution` and
-    /// leave this empty.
     pub target: Option<crate::callable::ExternalCallTarget>,
 }
 
@@ -544,7 +538,6 @@ impl<T> Default for CallPlan<T> {
             own_offset: 0,
             explicit: false,
             slots: Vec::new(),
-            runtime_id: None,
             target: None,
         }
     }
@@ -1016,19 +1009,7 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         field_names: Vec<baml_type::Name>,
     },
-    /// The call-site `$id` side channel's three rules: the value must be
-    /// `boundary.LocalId`, at most one `$id` per call, and it must be the
-    /// last argument (TIR's family, verbatim).
-    RuntimeIdArgMismatch {
-        at: ExprId,
-        got: Ty,
-    },
-    DuplicateRuntimeIdArg {
-        at: ExprId,
-    },
-    RuntimeIdArgNotLast {
-        at: ExprId,
-    },
+
     /// A throw site (or a callee's propagated effect) whose contribution
     /// escapes the CLOSED declared clause: TIR's throws-contract family,
     /// rendered as the dedicated E-code rather than a generic mismatch.
@@ -1089,13 +1070,7 @@ enum PendingDiag<'db> {
         at: baml_compiler2_ast::StmtId,
         unreachable_count: usize,
     },
-    RuntimeIdMember {
-        expr: ExprId,
-        member: baml_type::Name,
-    },
-    RuntimeIdCompoundAssignment {
-        expr: ExprId,
-    },
+
     UnknownPatternField {
         pat: PatId,
         class_name: baml_type::DeclName,
@@ -2671,9 +2646,6 @@ impl<'db> InferenceContext<'db> {
                 ..
             } => self.infer_object(body, expr, type_name, fields, spreads),
             Expr::MemberAccess { base, member } => {
-                if self.check_runtime_id_member(body, expr, *base, member) {
-                    return Ty::error();
-                }
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
             }
@@ -2689,9 +2661,6 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::OptionalMemberAccess { base, member } => {
-                if self.check_runtime_id_member(body, expr, *base, member) {
-                    return Ty::error();
-                }
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.check_needless_chain(body, expr, *base, &base_ty);
                 let nonnull = self.peel_chain_null(&base_ty);
@@ -3525,24 +3494,6 @@ impl<'db> InferenceContext<'db> {
         value: ExprId,
         op: Option<baml_compiler2_ast::AssignOp>,
     ) {
-        if Self::is_runtime_id_path(body, target) {
-            self.result.type_of_expr.insert(target, Ty::string());
-            if op.is_some() {
-                self.pending_diags
-                    .push(PendingDiag::RuntimeIdCompoundAssignment { expr: target });
-                self.infer_expr(body, value, &Expectation::None);
-                return;
-            }
-
-            let Some((param, throws)) = self.runtime_id_set_contract() else {
-                self.infer_expr(body, value, &Expectation::None);
-                return;
-            };
-            self.check_expr(body, value, &param);
-            self.record_throw(target, &throws);
-            return;
-        }
-
         // An INDEX target (`xs[0] = v`, `xs[0] += v`): the element type
         // comes from the same `baml.ops.Index` dispatch as a read, the
         // value checks against it (expectation propagation - an empty
@@ -5521,19 +5472,12 @@ impl<'db> InferenceContext<'db> {
             .cloned()
             .collect();
         let ret = ret.clone();
-        // The matching is decided ONCE, checked below and recorded as the
-        // call plan's bindings: a LABELED argument selects its parameter
-        // by NAME (`options(cancel = tok)` checks against `cancel`, not
-        // whatever sits at its position); unlabeled arguments fill
-        // positionally; an unmatched label falls back to position. The
-        // label/arity diagnostics are S17's. `$id = ...` is the runtime-id
-        // side channel (TIR's rule: not a parameter binding) - it never
-        // matches a parameter; its own LocalId check lives at the capture.
+        // Labels select parameters by name; unlabeled arguments fill positionally.
+        // An unknown label falls back to its position for type checking only.
         let matched: Vec<Option<usize>> = args
             .iter()
             .enumerate()
             .map(|(index, arg)| match &arg.label {
-                Some(label) if label.as_str() == "$id" => None,
                 Some(label) => params
                     .iter()
                     .position(|param| param.name.as_ref() == Some(label))
@@ -5549,10 +5493,9 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|arg| {
                 arg.label.as_ref().is_some_and(|label| {
-                    label.as_str() != "$id"
-                        && !params
-                            .iter()
-                            .any(|param| param.name.as_ref() == Some(label))
+                    !params
+                        .iter()
+                        .any(|param| param.name.as_ref() == Some(label))
                 })
             })
             .collect();
@@ -5578,38 +5521,7 @@ impl<'db> InferenceContext<'db> {
         // omitted OPTIONAL slots as defaults (required gaps get no entry;
         // arity is S17's).
         let mut slots: Vec<Option<ExprId>> = vec![None; params.len()];
-        let mut runtime_id = None;
         for (index, arg) in args.iter().enumerate() {
-            if arg
-                .label
-                .as_ref()
-                .is_some_and(|label| label.as_str() == "$id")
-            {
-                if runtime_id.is_some() {
-                    self.pending_diags
-                        .push(PendingDiag::DuplicateRuntimeIdArg { at: arg.expr });
-                } else {
-                    // The side channel accepts exactly `boundary.LocalId`.
-                    let got = self
-                        .result
-                        .type_of_expr
-                        .get(&arg.expr)
-                        .cloned()
-                        .unwrap_or_else(|| self.infer_expr(body, arg.expr, &Expectation::None));
-                    let local_id =
-                        self.lang_class_ty(baml_base::LangPackage::Boundary, &[], "LocalId");
-                    if !self.sub(&got, &local_id) {
-                        self.pending_diags
-                            .push(PendingDiag::RuntimeIdArgMismatch { at: arg.expr, got });
-                    }
-                }
-                runtime_id = Some(arg.expr);
-                continue;
-            }
-            if runtime_id.is_some() {
-                self.pending_diags
-                    .push(PendingDiag::RuntimeIdArgNotLast { at: arg.expr });
-            }
             if let Some(param_index) = matched[index]
                 && slots[param_index].is_none()
                 && !label_fallback[index]
@@ -5617,15 +5529,8 @@ impl<'db> InferenceContext<'db> {
                 slots[param_index] = Some(arg.expr);
             }
         }
-        // Arity + label diagnostics (S17): counts exclude the `$id`
-        // side channel; an over-supplied call reports against the full
-        // parameter count, an unfilled REQUIRED slot against the
-        // required count.
         {
-            let provided = args
-                .iter()
-                .filter(|arg| arg.label.as_ref().map(smol_str::SmolStr::as_str) != Some("$id"))
-                .count();
+            let provided = args.len();
             let required = params
                 .iter()
                 .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
@@ -5637,9 +5542,7 @@ impl<'db> InferenceContext<'db> {
                     got: provided,
                 });
             } else {
-                let saw_named = args
-                    .iter()
-                    .any(|arg| arg.label.as_ref().is_some_and(|l| l.as_str() != "$id"));
+                let saw_named = args.iter().any(|arg| arg.label.as_ref().is_some());
                 let unfilled: Vec<usize> = (0..params.len())
                     .filter(|&param_index| {
                         params[param_index].mode == baml_type::FunctionParamMode::Required
@@ -5679,7 +5582,6 @@ impl<'db> InferenceContext<'db> {
             let mut seen_labels: Vec<&baml_type::Name> = Vec::new();
             for (index, arg) in args.iter().enumerate() {
                 match &arg.label {
-                    Some(label) if label.as_str() == "$id" => {}
                     Some(label) => {
                         if seen_labels.contains(&label) {
                             self.pending_diags.push(PendingDiag::DuplicateNamedArg {
@@ -5710,7 +5612,6 @@ impl<'db> InferenceContext<'db> {
             }
             for arg in args {
                 if let Some(label) = &arg.label
-                    && label.as_str() != "$id"
                     && !params
                         .iter()
                         .any(|param| param.name.as_ref() == Some(label))
@@ -5746,7 +5647,6 @@ impl<'db> InferenceContext<'db> {
         plan.argument_layout =
             baml_type::CallLayout::from_modes(params.iter().map(|p| (p.name.clone(), p.mode)));
         plan.bindings = bindings;
-        plan.runtime_id = runtime_id;
         ret
     }
 
@@ -5906,10 +5806,7 @@ impl<'db> InferenceContext<'db> {
                         return (fn_ty, false);
                     }
                 }
-                if self.check_runtime_id_member(body, callee, *base, &member) {
-                    self.result.type_of_expr.insert(callee, Ty::error());
-                    return (Ty::error(), false);
-                }
+
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let (ty, bound, resolution, desugar) =
                     self.member_callee(call, callee, &receiver, &member);
@@ -5926,10 +5823,7 @@ impl<'db> InferenceContext<'db> {
             // chain boundary re-unions it) and dispatches on the rest.
             Expr::OptionalMemberAccess { base, member } => {
                 let member = member.clone();
-                if self.check_runtime_id_member(body, callee, *base, &member) {
-                    self.result.type_of_expr.insert(callee, Ty::error());
-                    return (Ty::error(), false);
-                }
+
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
                 let (ty, bound, resolution, desugar) =
@@ -6471,37 +6365,6 @@ impl<'db> InferenceContext<'db> {
             .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
     }
 
-    /// The source-level `$id = value` form is exactly a call to
-    /// `baml.id.set(value)`. Resolve its parameter and effect from the
-    /// builtin declaration so the type checker and MIR lowering cannot drift.
-    fn runtime_id_set_contract(&mut self) -> Option<(Ty, Ty)> {
-        let segments = [
-            baml_type::Name::new("baml"),
-            baml_type::Name::new("id"),
-            baml_type::Name::new("set"),
-        ];
-        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-            self.lower.resolve_value(&segments)
-        {
-            let signature = function_signature(self.db, function);
-            let [param] = signature.params.as_slice() else {
-                return None;
-            };
-            return Some((
-                crate::impls::interned_ty(&param.ty),
-                crate::impls::interned_ty(&signature.throws),
-            ));
-        }
-        let function = self.lower.resolve_exported_value(&segments)?;
-        let [param] = function.params.as_slice() else {
-            return None;
-        };
-        Some((
-            Ty::from_plain(&param.ty),
-            Ty::from_plain(&function.callable_throws),
-        ))
-    }
-
     /// The instantiated `string.from` callee backing the `to_string`
     /// operator-style fallback - a class STATIC (`baml.String.from<T>`),
     /// resolved through the same static-class correspondence written
@@ -6676,18 +6539,6 @@ impl<'db> InferenceContext<'db> {
         segments: &[baml_type::Name],
         expected: &Expectation,
     ) -> Ty {
-        if segments.len() == 1 && segments[0].as_str() == "$id" {
-            return Ty::string();
-        }
-        // `$id` reads as a string value, but is not a binding: any dotted
-        // use reports the bind-it-first rewrite.
-        if segments.len() > 1 && segments[0].as_str() == "$id" {
-            self.pending_diags.push(PendingDiag::RuntimeIdMember {
-                expr,
-                member: segments[1].clone(),
-            });
-            return Ty::error();
-        }
         let top_level_let_qualified_item = self.qualified_path_root_is_top_level_let(segments)
             && (matches!(
                 self.lower.resolve_value(segments),
@@ -9438,15 +9289,6 @@ impl<'db> InferenceContext<'db> {
         ))
     }
 
-    /// The class type `package.namespace.name`, or the error sentinel when
-    /// the package is not installed.
-    fn lang_class_ty(&self, package: baml_base::LangPackage, namespace: &[&str], name: &str) -> Ty {
-        match self.lang_decl(package, namespace, name) {
-            Some(decl) => Ty::intern(InferTy::Class(decl, Box::new([]), TyAttr::default())),
-            None => Ty::error(),
-        }
-    }
-
     /// The interface existential `package.namespace.name`, or the error
     /// sentinel when the package is not installed.
     fn lang_interface_ty(
@@ -10369,31 +10211,6 @@ impl<'db> InferenceContext<'db> {
             return Ty::never();
         }
         resolved
-    }
-
-    /// `$id` reads as a string value but is not a binding: member access on
-    /// it reports the rewrite hint (bind it to a local first).
-    fn check_runtime_id_member(
-        &mut self,
-        body: &ExprBody,
-        expr: ExprId,
-        base: ExprId,
-        member: &baml_type::Name,
-    ) -> bool {
-        let is_id = matches!(&body.exprs[base], Expr::Path(segments)
-            if segments.len() == 1 && segments[0].as_str() == "$id");
-        if is_id {
-            self.pending_diags.push(PendingDiag::RuntimeIdMember {
-                expr,
-                member: member.clone(),
-            });
-        }
-        is_id
-    }
-
-    fn is_runtime_id_path(body: &ExprBody, expr: ExprId) -> bool {
-        matches!(&body.exprs[expr], Expr::Path(segments)
-            if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user
@@ -11507,12 +11324,7 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    PendingDiag::RuntimeIdMember { expr, member } => {
-                        (TirTypeError::RuntimeIdMemberAccess { member }, expr)
-                    }
-                    PendingDiag::RuntimeIdCompoundAssignment { expr } => {
-                        (TirTypeError::RuntimeIdCompoundAssignment, expr)
-                    }
+
                     PendingDiag::DeadCode {
                         at,
                         unreachable_count,
@@ -11864,27 +11676,7 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::RuntimeIdArgMismatch { at, got } => {
-                        let got = self.finalize_ty(&got);
-                        if got.has_error() {
-                            continue;
-                        }
-                        diags.push(TirDiagnostic {
-                            error: TirTypeError::RuntimeIdArgumentTypeMismatch {
-                                got: got.to_plain(),
-                            },
-                            severity: DiagnosticSeverity::Error,
-                            primary: DiagnosticLocation::Expr(at),
-                            related: Vec::new(),
-                        });
-                        continue;
-                    }
-                    PendingDiag::DuplicateRuntimeIdArg { at } => {
-                        (TirTypeError::DuplicateRuntimeIdArgument, at)
-                    }
-                    PendingDiag::RuntimeIdArgNotLast { at } => {
-                        (TirTypeError::RuntimeIdArgumentMustBeLast, at)
-                    }
+
                     PendingDiag::ThrowsViolation {
                         at,
                         declared,
@@ -13477,7 +13269,6 @@ impl<'db> InferenceContext<'db> {
             own_offset,
             explicit,
             slots,
-            runtime_id,
             target,
         } = plan;
         CallPlan {
@@ -13493,7 +13284,6 @@ impl<'db> InferenceContext<'db> {
                     emission_ty: self.materialize_ty(&emission_ty),
                 })
                 .collect(),
-            runtime_id,
             target,
         }
     }

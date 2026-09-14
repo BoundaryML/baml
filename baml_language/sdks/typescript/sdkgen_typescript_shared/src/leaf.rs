@@ -1395,31 +1395,31 @@ mod tests {
     #[test]
     fn callable_child_collision_composes_function_with_namespace() {
         let b = body(
-            &["vendor", "boundary"],
+            &["vendor", "factory"],
             vec![
                 func_sym(
                     "id",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Sync,
                     vec![],
                     Ty::Class(
-                        name("boundary", &[], "LocalId"),
+                        name("factory", &[], "Resource"),
                         Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),
                 func_sym(
                     "id_async",
-                    "boundary.id",
+                    "factory.id",
                     SyncAsync::Async,
                     vec![],
                     Ty::Class(
-                        name("boundary", &[], "LocalId"),
+                        name("factory", &[], "Resource"),
                         Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),
-                class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
+                class_sym("Resource", name("factory", &[], "Resource"), vec![]),
             ],
         );
         let mut kids = BTreeSet::new();
@@ -1428,11 +1428,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Resource, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<Resource>;"
             )
         );
     }

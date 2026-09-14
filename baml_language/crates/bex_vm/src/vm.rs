@@ -105,10 +105,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use crate::{
-    errors::{
-        StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError, VmThrowSite,
-        VmThrown, VmUnwindOrigin, VmUnwindSource,
-    },
+    errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError, VmThrown},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{NativeCallResult, NativeFunction},
     types::ObjectTrait,
@@ -119,7 +116,6 @@ pub const MAX_FRAMES: usize = 256;
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
-    runtime_id: Option<Value>,
     type_args: &'a [bex_vm_types::RealizedTy],
     type_values: &'a [Option<TypeValue>],
 }
@@ -183,26 +179,6 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct AwaitAccumulatorEntry {
-    call_id: u64,
-    await_ns: u64,
-    await_count: u32,
-}
-
-#[derive(Debug)]
-struct AwaitAccumulator {
-    entries: Vec<AwaitAccumulatorEntry>,
-}
-
-impl AwaitAccumulator {
-    fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
-}
-
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
@@ -233,15 +209,6 @@ pub struct BytecodeFrame {
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
     /// source location capture.
     pub(crate) faulting_pc: usize,
-    /// This frame's identity, also exposed through `$id`.
-    pub(crate) call_id: u64,
-    /// The caller's `call_id` (`0` = thread-root call), restored into
-    /// `BexVm::current_call_id` when this frame pops. Stored here (rather
-    /// than recomputed from the frame below) so frameless native calls in
-    /// progress can't be skipped over.
-    pub(crate) parent_call_id: u64,
-
-    pub(crate) function_id: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -373,8 +340,8 @@ pub(crate) mod tests {
 
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
-        EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
-        ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
+        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
+        ValueKind, VmGlobals,
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
@@ -414,16 +381,10 @@ pub(crate) mod tests {
             panic_class_ptrs: Arc::from(Vec::new()),
 
             thread_id: 0,
-            call_id_counter: 0,
-            current_call_id: 0,
-
-            await_accumulator: None,
 
             thrown_value_causes: Vec::new(),
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
-            bex_ref_seed: None,
-            id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -432,44 +393,6 @@ pub(crate) mod tests {
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
         }
-    }
-
-    #[test]
-    fn await_accumulator_is_bounded_and_reuses_completed_entries() {
-        let mut vm = test_vm(Vec::new());
-        vm.enable_await_accumulator();
-        for id in 1..=1025 {
-            vm.record_await(id, Some(1));
-        }
-        assert_eq!(vm.await_accumulator.as_ref().unwrap().entries.len(), 1024);
-        assert_eq!(vm.take_await(1025), None);
-        vm.record_await(1, Some(u64::MAX));
-        assert_eq!(vm.take_await(1), Some((u64::MAX, 2)));
-        vm.record_await(1025, Some(9));
-        assert_eq!(vm.take_await(1025), Some((9, 1)));
-    }
-
-    #[test]
-    fn sparse_await_accumulator_allocates_only_after_first_valid_wait() {
-        let mut vm = test_vm(Vec::new());
-        assert!(vm.await_accumulator.is_none());
-
-        vm.enable_await_accumulator();
-        assert!(vm.await_accumulator.as_ref().unwrap().entries.is_empty());
-        vm.record_await(7, Some(11));
-        vm.record_await(7, Some(13));
-
-        assert_eq!(vm.take_await(7), Some((24, 2)));
-        assert!(vm.await_accumulator.as_ref().unwrap().entries.is_empty());
-    }
-
-    #[test]
-    fn invalid_await_interval_does_not_allocate() {
-        let mut vm = test_vm(Vec::new());
-        vm.enable_await_accumulator();
-        vm.record_await(7, None);
-
-        assert_eq!(vm.take_await(7), None);
     }
 
     fn native_done(_vm: &mut BexVm, _args: &[Value]) -> NativeCallResult {
@@ -507,8 +430,7 @@ pub(crate) mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
+
             runtime_package: HeapPtr::null(),
         }))
     }
@@ -1187,15 +1109,8 @@ pub struct BexVm {
     /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
     panic_class_ptrs: Arc<[HeapPtr]>,
 
-    /// Engine-local logical thread identity used by `$id` and structured logs.
+    /// Engine-local logical thread identity for structured logs.
     pub thread_id: u64,
-
-    pub(crate) call_id_counter: u64,
-
-    pub(crate) current_call_id: u64,
-
-    // Preserved by IMPLEMENTATION_PLAN.md §3; dormant until a future runtime integration.
-    await_accumulator: Option<AwaitAccumulator>,
 
     /// BEP-042 cause chain across a transparent re-raise: the `cause` context
     /// computed at each error value's original (fresh) throw site, keyed by the
@@ -1220,20 +1135,7 @@ pub struct BexVm {
     /// boundary.
     preserved_throw_contexts: Vec<(Value, ThrowContext)>,
 
-    pub bex_ref_seed: Option<(bex_events::ids::ProcessEuid, bex_events::ids::EngineId)>,
-
-    /// `baml.id.set()` override for the *current* call: `(call_id, encoded
-    /// override string, override uuid)`. Self-invalidating — read only while
-    /// `current_call_id` still matches, so it dies with the call.
-    /// `$id` overrides set via `baml.id.set` / `$id = ...`, one entry per
-    /// overriding call, innermost last. An entry is read only while its
-    /// call id equals `current_call_id` (so it dies with the call) and is
-    /// popped when its frame exits (`exit_call`), restoring the
-    /// caller's override underneath. Call ids are minted monotonically per
-    /// thread, so entries are strictly increasing by call id.
-    pub(crate) id_overrides: Vec<(u64, String)>,
-    /// Process argv passed to the engine at startup. Exposed to BAML via
-    /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
+    /// Process arguments exposed by `baml.sys.argv()`. Shared across VMs.
     pub argv: Arc<[String]>,
 
     /// Type-args of the *currently dispatching* call, populated by the
@@ -1774,16 +1676,10 @@ impl BexVm {
             panic_class_ptrs,
 
             thread_id: 0,
-            call_id_counter: 0,
-            current_call_id: 0,
-
-            await_accumulator: None,
 
             thrown_value_causes: Vec::new(),
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
-            bex_ref_seed: None,
-            id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -2013,40 +1909,6 @@ impl BexVm {
             .iter()
             .position(|(candidate, _)| *candidate == value)?;
         Some(self.preserved_throw_contexts.swap_remove(index).1)
-    }
-
-    fn install_consumed_local_id_for_call(
-        &mut self,
-        call_id: u64,
-        local_id: &crate::package_boundary::id::ConsumedLocalId,
-    ) {
-        if call_id == 0 {
-            return;
-        }
-        if let Some(top) = self.id_overrides.last_mut()
-            && top.0 == call_id
-        {
-            top.1.clone_from(&local_id.encoded);
-        } else {
-            self.id_overrides.push((call_id, local_id.encoded.clone()));
-        }
-    }
-
-    fn consume_local_id_value(
-        &mut self,
-        value: Value,
-    ) -> Result<crate::package_boundary::id::ConsumedLocalId, VmError> {
-        crate::package_boundary::id::consume_local_id(self, value)
-            .map_err(|err| self.native_error_to_vm_error(err))
-    }
-
-    fn invalid_argument_vm_error(&mut self, message: impl Into<String>) -> VmError {
-        self.native_error_to_vm_error(
-            VmBamlError::InvalidArgument {
-                message: message.into(),
-            }
-            .into(),
-        )
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -3576,12 +3438,12 @@ impl BexVm {
         let mut dispatch_ptr = function;
         let mut effective_type_args = type_args;
         let mut effective_type_values = type_values;
-        let (callable_kind, entry_function_id) = match self.get_object(function) {
-            Object::Function(f) => (f.kind, f.function_id),
+        let callable_kind = match self.get_object(function) {
+            Object::Function(f) => f.kind,
             Object::Closure(closure) => {
                 let func_obj = unsafe { closure.function.get() };
                 match func_obj {
-                    Object::Function(f) => (f.kind, f.function_id),
+                    Object::Function(f) => f.kind,
                     other => unreachable!("expect closure function, got {other:?}"),
                 }
             }
@@ -3592,7 +3454,7 @@ impl BexVm {
                     .generic_function_authored_ptr(gf)
                     .expect("generic function global resolves to a function");
                 match unsafe { dispatch_ptr.get() } {
-                    Object::Function(f) => (f.kind, f.function_id),
+                    Object::Function(f) => f.kind,
                     other => unreachable!("expect generic function inner, got {other:?}"),
                 }
             }
@@ -3612,8 +3474,6 @@ impl BexVm {
                     }))
                 };
                 self.stack.extend(args.iter().copied());
-                // The thread-root call: parent_call_id is 0 on a fresh VM.
-                let (call_id, parent_call_id) = self.enter_call();
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
@@ -3621,9 +3481,6 @@ impl BexVm {
                     type_args: effective_type_args,
                     type_metadata,
                     faulting_pc: 0,
-                    call_id,
-                    parent_call_id,
-                    function_id: entry_function_id,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -3770,15 +3627,13 @@ impl BexVm {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: bex_vm_types::FunctionCaptureProps::disabled(),
-            function_id: 0, // synthetic wrapper
+
             runtime_package: HeapPtr::null(),
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
 
         // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
         // its own pair through the normal Call/SysOp instruction paths.
-        let (call_id, parent_call_id) = self.enter_call();
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
@@ -3786,10 +3641,6 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            call_id,
-            parent_call_id,
-
-            function_id: 0,
         }));
     }
 
@@ -3853,12 +3704,10 @@ impl BexVm {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: bex_vm_types::FunctionCaptureProps::disabled(),
-            function_id: 0,
+
             runtime_package: HeapPtr::null(),
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
-        let (call_id, parent_call_id) = self.enter_call();
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
@@ -3866,10 +3715,6 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            call_id,
-            parent_call_id,
-
-            function_id: 0,
         }));
     }
 
@@ -4828,62 +4673,12 @@ impl BexVm {
             .collect()
     }
 
-    /// Walk the call stack outward from the current frame looking for an
-    /// exception handler.
-    ///
-    /// On `Ok(())` a handler was found and the VM is positioned at it.
-    fn throw_site_for_frame(&self, depth: usize, pc: usize) -> Option<VmEventSourceLocation> {
-        let Frame::Bytecode(frame) = self.frames.get(depth)? else {
-            return None;
-        };
-        let function = self.get_object(frame.function).as_callable().ok()?;
-        let entry = if let Some(compact) = &function.bytecode.compact {
-            compact.line_entry_for_pc(pc)
-        } else {
-            function.bytecode.line_entry_for_pc(pc)
-        }?;
-        Some(Self::event_source_location_for_line_entry(entry))
-    }
-
-    fn unwind_origin_for_frame(
-        &self,
-        depth: usize,
-        pc: usize,
-        source: VmUnwindSource,
-    ) -> VmUnwindOrigin {
-        let Some(Frame::Bytecode(frame)) = self.frames.get(depth) else {
-            return VmUnwindOrigin::unresolved(source);
-        };
-        let throw_site = self
-            .throw_site_for_frame(depth, pc)
-            .map(|site| VmThrowSite {
-                file_id: site.file_id,
-                line: site.line,
-                start_offset: site.start_offset,
-                end_offset: site.end_offset,
-            });
-        VmUnwindOrigin {
-            throw_call_id: frame.call_id,
-            throw_function_id: frame.function_id,
-            throw_site,
-            source,
-        }
-    }
-
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
-        mut thrown: VmThrown,
+        thrown: VmThrown,
     ) -> Result<(), VmError> {
-        if thrown.origin.throw_call_id == 0
-            && let Some(depth) = self
-                .frames
-                .iter()
-                .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
-        {
-            thrown.origin = self.unwind_origin_for_frame(depth, self.cur_pc, thrown.origin.source);
-        }
         let exception_value = thrown.value;
         let is_rethrow = thrown.language_is_rethrow;
 
@@ -5054,10 +4849,6 @@ impl BexVm {
 
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
-                if let Some(Frame::Bytecode(bf)) = self.frames.last() {
-                    let (call_id, parent_call_id) = (bf.call_id, bf.parent_call_id);
-                    self.exit_call(call_id, parent_call_id);
-                }
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace: trace.to_vec(),
@@ -5069,7 +4860,6 @@ impl BexVm {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
                     // Restore the caller's identity after unwinding this frame.
-                    self.exit_call(bf.call_id, bf.parent_call_id);
                 }
                 Frame::Native(_) => {} // native frames own no stack region
             }
@@ -5318,36 +5108,6 @@ impl BexVm {
         }
     }
 
-    #[must_use]
-    pub fn current_call_id(&self) -> u64 {
-        self.current_call_id
-    }
-
-    pub fn install_boundary_id_for_current_call(
-        &mut self,
-        boundary_id: bex_events::ids::BoundaryId,
-    ) {
-        let call_id = self.current_call_id();
-        if call_id == 0 {
-            return;
-        }
-        let encoded = boundary_id.to_wire_string();
-        if let Some(top) = self.id_overrides.last_mut()
-            && top.0 == call_id
-        {
-            top.1 = encoded;
-        } else {
-            self.id_overrides.push((call_id, encoded));
-        }
-    }
-
-    /// Mint the next per-call identity used by `$id` language semantics.
-    #[inline]
-    fn mint_call_id(&mut self) -> u64 {
-        self.call_id_counter += 1;
-        self.call_id_counter
-    }
-
     fn event_source_location_for_line_entry(
         entry: &bytecode::LineTableEntry,
     ) -> VmEventSourceLocation {
@@ -5358,75 +5118,6 @@ impl BexVm {
             start_offset: u32::from(entry.span.range.start()),
             end_offset: u32::from(entry.span.range.end()),
         }
-    }
-
-    #[inline]
-    /// Mint this frame's identity and preserve its caller for return/unwind.
-    fn enter_call(&mut self) -> (u64, u64) {
-        let parent_call_id = self.current_call_id;
-        let call_id = self.mint_call_id();
-        self.current_call_id = call_id;
-        (call_id, parent_call_id)
-    }
-
-    #[inline]
-    fn exit_call(&mut self, call_id: u64, parent_call_id: u64) {
-        self.current_call_id = parent_call_id;
-        while self
-            .id_overrides
-            .last()
-            .is_some_and(|(cid, _)| *cid >= call_id)
-        {
-            // SAFETY: the loop condition matched the last override.
-            unsafe { self.id_overrides.no_return_pop() };
-        }
-    }
-
-    pub fn enable_await_accumulator(&mut self) {
-        if self.await_accumulator.is_none() {
-            self.await_accumulator = Some(AwaitAccumulator::new());
-        }
-    }
-
-    /// Fold one completed semantic VM suspension. Invalid intervals (`None`)
-    /// are ignored without allocating a sparse call entry.
-    pub fn record_await(&mut self, call_id: u64, elapsed_ns: Option<u64>) {
-        const MAX_AWAIT_ENTRIES: usize = 1024;
-        let Some(accumulator) = &mut self.await_accumulator else {
-            return;
-        };
-        let Some(elapsed_ns) = elapsed_ns else {
-            return;
-        };
-        if call_id == 0 {
-            return;
-        }
-        if let Some(entry) = accumulator
-            .entries
-            .iter_mut()
-            .rev()
-            .find(|entry| entry.call_id == call_id)
-        {
-            entry.await_ns = entry.await_ns.saturating_add(elapsed_ns);
-            entry.await_count = entry.await_count.saturating_add(1);
-        } else if accumulator.entries.len() < MAX_AWAIT_ENTRIES {
-            accumulator.entries.push(AwaitAccumulatorEntry {
-                call_id,
-                await_ns: elapsed_ns,
-                await_count: 1,
-            });
-        }
-    }
-
-    #[must_use]
-    pub fn take_await(&mut self, call_id: u64) -> Option<(u64, u32)> {
-        let accumulator = self.await_accumulator.as_mut()?;
-        let index = accumulator
-            .entries
-            .iter()
-            .rposition(|entry| entry.call_id == call_id)?;
-        let entry = accumulator.entries.remove(index);
-        Some((entry.await_ns, entry.await_count))
     }
 
     /// Build the single-yield `SysOp::BamlHostCallHostValue` dispatch for
@@ -5521,9 +5212,6 @@ impl BexVm {
         );
         let ret_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(ret_ty));
         let throws_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(throws_ty));
-        // PR4b: host-closure calls ride the sys-op pair too. No Function
-        // object backs them, so function_id 0 (unassigned).
-        self.mint_call_id();
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
@@ -5552,11 +5240,7 @@ impl BexVm {
     /// for the `OpCode::SysOp` caller (its `as_object_ptr` does not verify the
     /// kind — see there); the funnel caller has already matched on the kind, so
     /// for it the check is redundant. Do not delete it.
-    fn dispatch_sysop_yield(
-        &mut self,
-        callee_fn_ptr: HeapPtr,
-        runtime_id: Option<Value>,
-    ) -> Result<VmExecState, VmError> {
+    fn dispatch_sysop_yield(&mut self, callee_fn_ptr: HeapPtr) -> Result<VmExecState, VmError> {
         let (sys_op, arity) = {
             let obj = self.get_object(callee_fn_ptr);
             let Object::Function(f) = obj else {
@@ -5583,11 +5267,6 @@ impl BexVm {
         let args_offset = StackIndex::from_raw(args_offset);
         let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
 
-        runtime_id
-            .map(|value| self.consume_local_id_value(value))
-            .transpose()?;
-        self.mint_call_id();
-
         Ok(VmExecState::SysOp {
             operation: sys_op,
             args: call_args,
@@ -5599,7 +5278,6 @@ impl BexVm {
         callee_ptr: HeapPtr,
         locals_offset: StackIndex,
         arg_count: usize,
-        runtime_id: Option<Value>,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
@@ -5630,11 +5308,6 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
-            if runtime_id.is_some() {
-                return Err(self.invalid_argument_vm_error(
-                    "explicit $id is not supported for host-callable values",
-                ));
-            }
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
             return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
         }
@@ -5655,8 +5328,7 @@ impl BexVm {
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
         // wrapping one. `callee_fn_ptr` is the heap pointer of the resolved
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
-        // specialized wrapper), carried on call notifications so the engine can map
-        // it to a `FunctionId` without a name lookup.
+        // specialized wrapper), retained by the frame for execution and GC.
         let (callee, callee_fn_ptr) = match callee_object {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
@@ -5719,7 +5391,6 @@ impl BexVm {
         // skip it but it's an easy and fast check.
         let callee_arity = callee.arity;
         let callee_kind = callee.kind;
-        let callee_function_id = callee.function_id;
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
                 expected: callee_arity,
@@ -5736,12 +5407,6 @@ impl BexVm {
 
         match callee_kind {
             FunctionKind::Native(func_ptr) => {
-                if runtime_id.is_some() {
-                    return Err(self.invalid_argument_vm_error(
-                        "explicit $id is not supported for native builtins",
-                    ));
-                }
-
                 // Cast the type-erased pointer back to NativeFunction.
                 //
                 // SAFETY: The pointer was created by casting a NativeFunction to *const ()
@@ -5786,24 +5451,10 @@ impl BexVm {
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
-                        self.mint_call_id();
-
                         self.stack.push(v);
                     }
                     NativeCallResult::Error(e) => {
-                        let call_id = self.mint_call_id();
-                        let vm_error = self.native_error_to_vm_error(e);
-                        let mut thrown = match vm_error {
-                            VmError::Thrown(thrown) => thrown,
-                            other => return Err(other),
-                        };
-                        thrown.origin = VmUnwindOrigin {
-                            throw_call_id: call_id,
-                            throw_function_id: callee_function_id,
-                            throw_site: None,
-                            source: VmUnwindSource::NativeCall,
-                        };
-                        return Err(VmError::Thrown(thrown));
+                        return Err(self.native_error_to_vm_error(e));
                     }
                     NativeCallResult::YieldToCall {
                         callee,
@@ -5833,7 +5484,6 @@ impl BexVm {
                             cb_locals,
                             arg_count,
                             CallOptions {
-                                runtime_id: None,
                                 type_args: &callback_type_args,
                                 type_values: &[],
                             },
@@ -5885,13 +5535,6 @@ impl BexVm {
                 } else {
                     closure_type_args
                 };
-                let explicit_local_id = runtime_id
-                    .map(|value| self.consume_local_id_value(value))
-                    .transpose()?;
-                let (call_id, parent_call_id) = self.enter_call();
-                if let Some(explicit_local_id) = &explicit_local_id {
-                    self.install_consumed_local_id_for_call(call_id, explicit_local_id);
-                }
 
                 // Construct after reserving capacity so the frame can be written
                 // directly into the vector instead of moved through a temporary.
@@ -5903,9 +5546,6 @@ impl BexVm {
                         type_args: initial_type_args.to_vec(),
                         type_metadata: None,
                         faulting_pc: 0,
-                        call_id,
-                        parent_call_id,
-                        function_id: callee_function_id,
                     })
                 }));
                 let new_len = self.stack.len() + callee.real_local_count;
@@ -5950,7 +5590,7 @@ impl BexVm {
                         && specialized_type_args.is_empty(),
                     "sysop dispatch received type args, which it cannot thread to the op",
                 );
-                return Ok(Some(self.dispatch_sysop_yield(callee_fn_ptr, runtime_id)?));
+                return Ok(Some(self.dispatch_sysop_yield(callee_fn_ptr)?));
             }
 
             FunctionKind::NativeUnresolved => {
@@ -5983,7 +5623,6 @@ impl BexVm {
                 value,
                 throw_kind,
                 language_is_rethrow: false,
-                origin: VmUnwindOrigin::unresolved(VmUnwindSource::NativeCall),
             }),
         }
     }
@@ -6008,7 +5647,6 @@ impl BexVm {
             callee_ptr,
             locals_offset,
             arg_count,
-            options.runtime_id,
             frame_idx,
             function,
         );
@@ -6276,10 +5914,7 @@ impl BexVm {
     /// past any Native frames at the top (which the unwinder would pop
     /// unconditionally).
     pub fn try_handle_external_exception(&mut self, exception_value: Value) -> Result<(), VmError> {
-        self.try_handle_external_thrown(VmThrown::fresh(
-            exception_value,
-            VmUnwindSource::EngineCall,
-        ))
+        self.try_handle_external_thrown(VmThrown::fresh(exception_value))
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
@@ -6616,7 +6251,6 @@ impl BexVm {
                             cb_locals,
                             arg_count,
                             CallOptions {
-                                runtime_id: None,
                                 type_args: &callback_type_args,
                                 type_values: &[],
                             },
@@ -7256,13 +6890,9 @@ impl BexVm {
                     }
 
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
-                    OpCode::SysOp | OpCode::SysOpWithRuntimeId => {
+                    OpCode::SysOp => {
                         let raw = { read_u32_unchecked(code, pc) };
-                        let runtime_id = if matches!(op, OpCode::SysOpWithRuntimeId) {
-                            Some(self.stack.ensure_pop())
-                        } else {
-                            None
-                        };
+
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value = self.load_global_in(function.runtime_package, callee);
                         // `as_object_ptr` only unwraps the value to a heap pointer
@@ -7272,7 +6902,7 @@ impl BexVm {
                         // rejects a non-sys-op global before draining and yields.
                         let callee_ptr =
                             self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
-                        return Ok(Some(self.dispatch_sysop_yield(callee_ptr, runtime_id)?));
+                        return Ok(Some(self.dispatch_sysop_yield(callee_ptr)?));
                     }
 
                     // ── Spawn (BEP-034) ────────────────────────────────────────────
@@ -7338,14 +6968,10 @@ impl BexVm {
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
-                    OpCode::Call | OpCode::CallWithRuntimeId => {
+                    OpCode::Call => {
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
-                        let runtime_id = if matches!(op, OpCode::CallWithRuntimeId) {
-                            Some(self.stack.ensure_pop())
-                        } else {
-                            None
-                        };
+
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value =
                             self.load_global_in(function.runtime_package, callee_global);
@@ -7379,7 +7005,6 @@ impl BexVm {
                                 callee_ptr,
                                 locals_offset,
                                 arg_count,
-                                runtime_id,
                                 frame_idx,
                                 function,
                             )
@@ -7391,7 +7016,6 @@ impl BexVm {
                                 locals_offset,
                                 arg_count,
                                 CallOptions {
-                                    runtime_id,
                                     type_args: &type_args.tys,
                                     type_values: &type_args.values,
                                 },
@@ -7407,14 +7031,9 @@ impl BexVm {
                     // from the receiver's concrete `Self` type, then take the shared
                     // frame-push call path (mirrors `Call`). Stack layout (top last):
                     // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
-                    OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
+                    OpCode::VirtualCall => {
                         let nargs = read_u16_unchecked(code, pc) as usize;
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
-                        let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
-                            Some(self.stack.ensure_pop())
-                        } else {
-                            None
-                        };
 
                         // Pop the method name (top) then the interface type. Keep
                         // both as values until after the static-cache probe: their
@@ -7587,7 +7206,6 @@ impl BexVm {
                                 callee_ptr,
                                 locals_offset,
                                 nargs,
-                                runtime_id,
                                 frame_idx,
                                 function,
                             )
@@ -7597,7 +7215,6 @@ impl BexVm {
                                 locals_offset,
                                 nargs,
                                 CallOptions {
-                                    runtime_id,
                                     type_args: &type_args,
                                     type_values: &type_values,
                                 },
@@ -7609,12 +7226,7 @@ impl BexVm {
                     }
 
                     // ── CallIndirect ──────────────────────────────────────────────
-                    OpCode::CallIndirect | OpCode::CallIndirectWithRuntimeId => {
-                        let runtime_id = if matches!(op, OpCode::CallIndirectWithRuntimeId) {
-                            Some(self.stack.ensure_pop())
-                        } else {
-                            None
-                        };
+                    OpCode::CallIndirect => {
                         // Save pc as return address before any call.
                         let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
                             verifier_unreachable!()
@@ -7628,11 +7240,6 @@ impl BexVm {
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
-                            if runtime_id.is_some() {
-                                return Err(self.invalid_argument_vm_error(
-                                    "explicit $id is not supported for host-callable values",
-                                ));
-                            }
                             // Host-callable dispatch via a single-yield sys-op. See
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.
@@ -7713,7 +7320,6 @@ impl BexVm {
                                 callee_ptr,
                                 locals_offset,
                                 full_arity,
-                                runtime_id,
                                 frame_idx,
                                 function,
                             )? {
@@ -7738,7 +7344,6 @@ impl BexVm {
                                 callee_ptr,
                                 locals_offset,
                                 arg_count,
-                                runtime_id,
                                 frame_idx,
                                 function,
                             )? {
@@ -7759,8 +7364,7 @@ impl BexVm {
                         let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                             unreachable!()
                         };
-                        let (popped_call_id, popped_parent_call_id, locals_offset) =
-                            (bf.call_id, bf.parent_call_id, bf.locals_offset);
+                        let locals_offset = bf.locals_offset;
 
                         // SAFETY: the compiler guarantees a result at or above the
                         // callee's locals base. That base is therefore an existing
@@ -7773,7 +7377,6 @@ impl BexVm {
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         unsafe { self.frames.no_return_pop() };
-                        self.exit_call(popped_call_id, popped_parent_call_id);
                         // Update frame_idx so the outer loop detects the frame change
                         // and re-extracts code/pc/function for the parent frame.
                         if !self.frames.is_empty() {
@@ -7832,31 +7435,11 @@ impl BexVm {
                                         );
                                         self.preserve_throw_context(value, value);
                                     }
-                                    let origin = self.unwind_origin_for_frame(
-                                        *frame_idx,
-                                        self.cur_pc,
-                                        VmUnwindSource::FutureResume,
-                                    );
-                                    return Err(VmError::Thrown(
-                                        VmThrown::rethrow(
-                                            value,
-                                            VmUnwindSource::FutureResume,
-                                            false,
-                                        )
-                                        .with_origin(origin),
-                                    ));
+                                    return Err(VmError::Thrown(VmThrown::rethrow(value, false)));
                                 }
                                 FutureRead::Cancelled => {
                                     let value = self.panic_to_exception_value(VmPanic::Cancelled);
-                                    let origin = self.unwind_origin_for_frame(
-                                        *frame_idx,
-                                        self.cur_pc,
-                                        VmUnwindSource::FutureResume,
-                                    );
-                                    return Err(VmError::Thrown(
-                                        VmThrown::fresh(value, VmUnwindSource::FutureResume)
-                                            .with_origin(origin),
-                                    ));
+                                    return Err(VmError::Thrown(VmThrown::fresh(value)));
                                 }
                                 FutureRead::InternalError(future_id) => {
                                     // Yield back to the engine; it will surface the original
@@ -7937,21 +7520,15 @@ impl BexVm {
                     OpCode::Throw | OpCode::Rethrow => {
                         let is_rethrow = op == OpCode::Rethrow;
                         let value = self.stack.ensure_pop();
-                        let origin = self.unwind_origin_for_frame(
-                            *frame_idx,
-                            self.cur_pc,
-                            VmUnwindSource::Bytecode,
-                        );
                         // Save pc before unwinding (handler lookup needs it).
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
                         let thrown = if is_rethrow {
-                            VmThrown::rethrow(value, VmUnwindSource::Bytecode, true)
+                            VmThrown::rethrow(value, true)
                         } else {
-                            VmThrown::fresh(value, VmUnwindSource::Bytecode)
-                        }
-                        .with_origin(origin);
+                            VmThrown::fresh(value)
+                        };
                         self.try_unwind_exception(frame_idx, function, thrown)?;
                         // A handler was found; sync the local `pc` to its entry.
                         // When the handler is in the SAME frame, the dispatch loop
@@ -8152,11 +7729,6 @@ impl BexVm {
                             None => false,
                         };
                         if is_panic {
-                            let origin = self.unwind_origin_for_frame(
-                                *frame_idx,
-                                self.cur_pc,
-                                VmUnwindSource::Bytecode,
-                            );
                             // Save pc before unwinding (handler lookup needs it).
                             if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                                 bf.instruction_ptr = *pc;
@@ -8164,8 +7736,7 @@ impl BexVm {
                             self.try_unwind_exception(
                                 frame_idx,
                                 function,
-                                VmThrown::rethrow(value, VmUnwindSource::Bytecode, true)
-                                    .with_origin(origin),
+                                VmThrown::rethrow(value, true),
                             )?;
                             // Sync the local `pc` to the handler entry (see
                             // OpCode::Throw): a same-frame rethrow — an inner
@@ -9336,18 +8907,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
             });
         }
 
-        // Forward a tagged runtime identity (`ptr | 1`) through the GC's
-        // forwarding map. The probe key is rebuilt from the untagged address
-        // and used only as a map key — `HeapPtr`'s `Eq`/`Hash` compare the
-        // pointer alone (the `heap_debug` epoch is excluded), and the key is
-        // never dereferenced. Probing `roots` directly keeps this O(1) per
-        // cache entry: `forward_roots` runs once per permit holder per GC, so
-        // materializing a by-address copy of the whole forwarding map here
-        // multiplied every GC by the live thread count (a corpus-scale run
-        // spent most of its wall clock inside that collect, world parked).
-        // A tagged identity absent from the map keeps today's behavior: the
-        // memo entry is dropped and re-derived from the authoritative
-        // created-once table on the owning package.
         let forward_identity = |identity: usize| -> Option<usize> {
             if identity & 1 == 0 {
                 return Some(identity);

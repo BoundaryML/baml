@@ -267,7 +267,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             callee,
             args,
             ntypeargs,
-            runtime_id,
+
             destination,
             target,
             unwind,
@@ -294,7 +294,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 write_operand(f, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -306,7 +305,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             method,
             args,
             ntypeargs,
-            runtime_id,
+
             destination,
             target,
             unwind,
@@ -332,7 +331,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 write_operand(f, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -345,7 +343,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
+
             destination,
             target,
             unwind,
@@ -361,7 +359,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 write_operand(f, arg)?;
                 wrote_arg = true;
             }
-            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> {target}")?;
             if let Some(u) = unwind {
                 write!(f, " unwind {u}")?;
@@ -448,21 +445,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             write!(f, " -> [eval: {eval_rhs}, join: {join}];")
         }
     }
-}
-
-fn write_runtime_id_arg(
-    f: &mut impl Write,
-    wrote_arg: bool,
-    runtime_id: Option<&Operand<'_>>,
-) -> fmt::Result {
-    if let Some(runtime_id) = runtime_id {
-        if wrote_arg {
-            write!(f, ", ")?;
-        }
-        write!(f, "$id = ")?;
-        write_operand(f, runtime_id)?;
-    }
-    Ok(())
 }
 
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
@@ -707,81 +689,5 @@ impl fmt::Display for MirFunction<'_> {
         let mut buf = String::new();
         write_function(&mut buf, self).map_err(|_| fmt::Error)?;
         f.write_str(&buf)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{BlockId, Place};
-
-    fn render_terminator(terminator: &Terminator<'_>) -> String {
-        let mut output = String::new();
-        write_terminator(&mut output, terminator).expect("terminator renders");
-        output
-    }
-
-    fn local_copy(local: usize) -> Operand<'static> {
-        Operand::copy_local(Local(local))
-    }
-
-    #[test]
-    fn call_runtime_id_without_visible_args_has_no_leading_comma() {
-        let terminator = Terminator::Call {
-            callee: local_copy(1),
-            args: Vec::new(),
-            argument_layout: None,
-            ntypeargs: 0,
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&terminator),
-            "_0 = call copy _1($id = copy _9) -> [bb1];"
-        );
-    }
-
-    #[test]
-    fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
-        let terminator = Terminator::VirtualCall {
-            argument_layout: None,
-            iface: baml_type::TyTemplateInterface::new(
-                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
-                Box::new([]),
-                Box::new([]),
-            ),
-            method: "eq".to_string(),
-            args: Vec::new(),
-            ntypeargs: 0,
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&terminator),
-            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
-        );
-    }
-
-    #[test]
-    fn sys_op_runtime_id_without_visible_args_has_no_leading_comma() {
-        let terminator = Terminator::SysOp {
-            callee: local_copy(1),
-            args: Vec::new(),
-            runtime_id: Some(local_copy(9)),
-            destination: Place::local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        };
-
-        assert_eq!(
-            render_terminator(&terminator),
-            "_0 = sys_op copy _1($id = copy _9) -> bb1;"
-        );
     }
 }

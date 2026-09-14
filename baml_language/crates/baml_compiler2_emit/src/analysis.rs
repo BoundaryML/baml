@@ -1047,7 +1047,6 @@ fn collect_uses_in_terminator<'db>(
         Terminator::Call {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1055,9 +1054,7 @@ fn collect_uses_in_terminator<'db>(
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
-            if let Some(runtime_id) = runtime_id {
-                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
-            }
+
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
                 if let Some(du) = def_use.get_mut(local) {
@@ -1074,18 +1071,13 @@ fn collect_uses_in_terminator<'db>(
             }
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
-            if let Some(runtime_id) = runtime_id {
-                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
-            }
+
             // Record the def for the destination (where the call result is stored).
             if let Place::Local(local) = destination {
                 if let Some(du) = def_use.get_mut(local) {
@@ -1101,7 +1093,6 @@ fn collect_uses_in_terminator<'db>(
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1109,9 +1100,7 @@ fn collect_uses_in_terminator<'db>(
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
-            if let Some(runtime_id) = runtime_id {
-                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
-            }
+
             // Record the def for the destination place
             if let Place::Local(local) = destination {
                 if let Some(du) = def_use.get_mut(local) {
@@ -2720,7 +2709,6 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
-                        runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -2785,7 +2773,6 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
-                        runtime_id: None,
                         destination: Place::Local(result),
                         target: BlockId(1),
                         unwind: None,
@@ -3354,7 +3341,6 @@ mod tests {
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_id: None,
             destination: Place::Local(Local(1)),
             target,
             unwind,
@@ -3372,7 +3358,6 @@ mod tests {
             method: "eq".to_string(),
             args: vec![],
             ntypeargs: 0,
-            runtime_id: None,
             destination: Place::Local(Local(1)),
             target,
             unwind: None,
@@ -3621,7 +3606,6 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,
-                        runtime_id: None,
                         destination: Place::Local(call_result),
                         target: BlockId(2),
                         unwind: None,
