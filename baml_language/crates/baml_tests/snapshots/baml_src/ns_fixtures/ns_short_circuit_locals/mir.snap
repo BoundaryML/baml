@@ -162,3 +162,109 @@ fn user.fixtures.short_circuit_locals.mixed_join(a: bool, b: bool, cond: bool) -
         return;
     }
 }
+
+fn user.fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: fixtures.short_circuit_locals.ShortCircuitBox // box
+    let _2: int[]
+    let _3: map<string, int>
+    let _4: null | int[] // items
+    let _5: null | map<string, int> // tags
+    let _6: bool // items_ok
+    let _7: int
+    let _8: int
+    let _9: int | null
+    let _10: null | int[]
+    let _11: bool
+    let _12: null | int[]
+    let _13: bool // tags_ok
+    let _14: int
+    let _15: int
+    let _16: int | null
+    let _17: null | map<string, int>
+    let _18: bool
+    let _19: null | map<string, int>
+    let _20: bool
+    let _21: bool
+
+    bb0: {
+        _2 = []: int[];
+        _3 = { const "a": const 1_i64 }: map<string, int>;
+        _1 = user.fixtures.short_circuit_locals.ShortCircuitBox { copy _2, copy _3 };
+        _4 = copy _1.0;
+        _5 = copy _1.1;
+        _10 = copy _4;
+        _11 = copy _10 == const null;
+        branch copy _11 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _12 = copy _4;
+        _9 = len(_12);
+        goto -> bb3;
+    }
+
+    bb2: {
+        _9 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _8 = short_circuit(??) copy _9 -> [eval: bb4, join: bb5];
+    }
+
+    bb4: {
+        _8 = const -1_i64;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _7 = copy _8;
+        _6 = copy _7 == const 0_i64;
+        _17 = copy _5;
+        _18 = copy _17 == const null;
+        branch copy _18 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _19 = copy _5;
+        _16 = len(_19);
+        goto -> bb8;
+    }
+
+    bb7: {
+        _16 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _15 = short_circuit(??) copy _16 -> [eval: bb9, join: bb10];
+    }
+
+    bb9: {
+        _15 = const 0_i64;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _14 = copy _15;
+        _13 = copy _14 == const 1_i64;
+        _21 = copy _6;
+        _20 = short_circuit(&&) copy _21 -> [eval: bb11, join: bb12];
+    }
+
+    bb11: {
+        _20 = copy _13;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _0 = copy _20;
+        goto -> bb13;
+    }
+
+    bb13: {
+        return;
+    }
+}

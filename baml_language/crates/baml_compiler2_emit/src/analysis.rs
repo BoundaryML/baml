@@ -1559,8 +1559,9 @@ fn classify_locals(
 ///
 /// This predicate is the *entire* soundness proof for `StackCarryKind::PhiLike`.
 /// The stack simulation in [`crate::stack_carry`] starts AT the use block and
-/// only validates that block's own statement prefix — it never inspects the
-/// local's definitions, nor the use block's predecessors. So every def this
+/// only validates that block's statements and the straight-line blocks Virtual
+/// forwarding may carry the use into — it never inspects the local's
+/// definitions, nor the use block's predecessors. So every def this
 /// function accepts is emitted as a push with no store, and the use pops
 /// exactly one value: an uncovered incoming edge leaves the pop consuming an
 /// unrelated value, and a definition off the covered paths leaves a push that

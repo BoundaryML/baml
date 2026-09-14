@@ -189,18 +189,23 @@ fn is_stack_carry_use_safe(
     }
 
     let du = &def_use[&local];
-    if du.uses.len() != 1 {
+    let [raw_use] = du.uses.as_slice() else {
         return false;
-    }
+    };
 
-    let Some(use_loc) = resolve_effective_use_location(&du.uses[0], body, classifications, def_use)
+    let Some(use_loc) = resolve_effective_use_location(raw_use, body, classifications, def_use)
     else {
         return false;
     };
     let mut sim = StackCarrySim::new();
     let mut start_statement = 0;
     let mut current_block = match kind {
-        StackCarryKind::PhiLike => use_loc.block,
+        // `is_stack_covered_phi` proves the value is on the stack on entry to
+        // the block holding the local's one use. Virtual forwarding may move
+        // the effective use into a later block; the walk below must then cover
+        // every block from that entry to the use, so that a branch, or another
+        // value carried above this one, in between keeps this local in a slot.
+        StackCarryKind::PhiLike => raw_use.block,
         StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand => {
             let Some(def) = &du.def else {
                 return false;
