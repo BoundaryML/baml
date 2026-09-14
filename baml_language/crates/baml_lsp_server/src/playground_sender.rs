@@ -17,7 +17,7 @@ use std::{
 
 use tokio::sync::broadcast;
 
-use crate::playground_ws::WsOutMessage;
+use crate::{playground_notify::PlaygroundNotification, playground_ws::WsOutMessage};
 
 /// The playground target most recently requested via `OpenPlayground`.
 ///
@@ -42,7 +42,7 @@ const BROWSER_SPAWN_DEBOUNCE: Duration = Duration::from_secs(5);
 
 pub struct NativePlaygroundSender {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
-    lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
+    lsp_sender: Arc<dyn baml_lsp::ClientSender>,
     playground_port: u16,
     open_in_browser: bool,
     /// Last requested open target, shared with the WS server for replay.
@@ -54,7 +54,7 @@ pub struct NativePlaygroundSender {
 impl NativePlaygroundSender {
     pub fn new(
         broadcast_tx: broadcast::Sender<WsOutMessage>,
-        lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
+        lsp_sender: Arc<dyn baml_lsp::ClientSender>,
         playground_port: u16,
         open_in_browser: bool,
         current_open_target: SharedOpenTarget,
@@ -84,14 +84,18 @@ impl NativePlaygroundSender {
     }
 }
 
-impl bex_project::PlaygroundSender for NativePlaygroundSender {
-    fn send_playground_notification(&self, notification: bex_project::PlaygroundNotification) {
-        if let bex_project::PlaygroundNotification::OpenPlayground {
+impl NativePlaygroundSender {
+    /// Push one notification: `openPlayground` navigates (browser) or goes to
+    /// the editor as `baml/openPlayground` (editor mode); `listProjects` is
+    /// mirrored to the editor for its status-bar links; everything else is
+    /// broadcast to connected playground pages.
+    pub fn send_playground_notification(&self, notification: &PlaygroundNotification) {
+        if let PlaygroundNotification::OpenPlayground {
             ref project,
             ref function_name,
             ref test_name,
             ref testset_name,
-        } = notification
+        } = *notification
         {
             if self.open_in_browser {
                 // Remember where to navigate so a page that connects after this
@@ -107,7 +111,7 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
                 // Navigate any already-open page in place rather than spawning a
                 // new window: pages listen on this broadcast and react to the
                 // `openPlayground` notification.
-                let json = serde_json::to_value(&notification).unwrap_or_default();
+                let json = serde_json::to_value(notification).unwrap_or_default();
                 let _ = self
                     .broadcast_tx
                     .send(WsOutMessage::PlaygroundNotification { notification: json });
@@ -134,9 +138,10 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
                     "testName": test_name,
                     "testsetName": testset_name,
                 });
-                let notif =
-                    lsp_server::Notification::new("baml/openPlayground".to_string(), params);
-                if let Err(e) = self.lsp_sender.send_notification(notif) {
+                if let Err(e) = self
+                    .lsp_sender
+                    .send_notification("baml/openPlayground", params)
+                {
                     tracing::error!("Failed to send baml/openPlayground notification: {}", e);
                 }
             }
@@ -145,15 +150,17 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
 
         // Forward project list to the LSP client so the extension can
         // show per-project playground links in the status bar tooltip.
-        if let bex_project::PlaygroundNotification::ListProjects { ref projects } = notification {
+        if let PlaygroundNotification::ListProjects { ref projects } = *notification {
             let params = serde_json::json!({ "projects": projects });
-            let notif = lsp_server::Notification::new("baml/listProjects".to_string(), params);
-            if let Err(e) = self.lsp_sender.send_notification(notif) {
+            if let Err(e) = self
+                .lsp_sender
+                .send_notification("baml/listProjects", params)
+            {
                 tracing::error!("Failed to send baml/listProjects notification: {}", e);
             }
         }
 
-        let json = serde_json::to_value(&notification).unwrap_or_default();
+        let json = serde_json::to_value(notification).unwrap_or_default();
         let _ = self
             .broadcast_tx
             .send(WsOutMessage::PlaygroundNotification { notification: json });
@@ -162,22 +169,15 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
 
 #[cfg(test)]
 mod tests {
-    use bex_project::PlaygroundSender;
-
     use super::*;
 
     struct NoopLspSender;
-    impl bex_project::LspClientSenderTrait for NoopLspSender {
+    impl baml_lsp::ClientSender for NoopLspSender {
         fn send_notification(
             &self,
-            _: lsp_server::Notification,
-        ) -> Result<(), bex_project::LspError> {
-            Ok(())
-        }
-        fn send_response_impl(&self, _: lsp_server::Response) -> Result<(), bex_project::LspError> {
-            Ok(())
-        }
-        fn make_request(&self, _: lsp_server::Request) -> Result<(), bex_project::LspError> {
+            _: &str,
+            _: serde_json::Value,
+        ) -> Result<(), baml_lsp::LspError> {
             Ok(())
         }
     }
@@ -195,7 +195,7 @@ mod tests {
         )
     }
 
-    /// Browser-mode OpenPlayground navigates the already-open page in place and
+    /// Browser-mode `OpenPlayground` navigates the already-open page in place and
     /// records the target for replay — the core of B-808. Holding a live
     /// receiver keeps `receiver_count() > 0`, which both exercises the reuse
     /// path and guarantees the test never launches a real browser.
@@ -205,7 +205,7 @@ mod tests {
         let target: SharedOpenTarget = Arc::new(Mutex::new(None));
         let sender = browser_sender(tx, target.clone());
 
-        sender.send_playground_notification(bex_project::PlaygroundNotification::OpenPlayground {
+        sender.send_playground_notification(&PlaygroundNotification::OpenPlayground {
             project: "/tmp/proj".to_string(),
             function_name: Some("Foo".to_string()),
             test_name: None,
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(recorded.function_name.as_deref(), Some("Foo"));
     }
 
-    /// Two OpenPlaygrounds arriving before the first window connects must not
+    /// Two `OpenPlayground`s arriving before the first window connects must not
     /// spawn two browser windows.
     #[test]
     fn claim_browser_open_debounces_rapid_spawns() {

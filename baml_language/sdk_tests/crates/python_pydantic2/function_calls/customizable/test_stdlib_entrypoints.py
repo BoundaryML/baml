@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from baml_sdk.baml.fs import exists
-from baml_sdk.baml.sys import now_ms
+from baml_sdk.baml.sys import argv
 
 
 def _generated_sdk_file(rel_path: str) -> str | None:
@@ -15,11 +15,13 @@ def _generated_sdk_file(rel_path: str) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
-# `baml.sys.now_ms() -> int` is a `$rust_function` → `FunctionKind::Native`.
-# Calling it as an entry point should run the native and return a positive
-# millisecond timestamp, not reject with `NotInvokableAsEntry`.
-def test_stdlib_entrypoints_native_now_ms_callable_as_entry_point():
-    assert now_ms() > 0
+# `baml.sys.argv() -> string[]` is a `$rust_function` → `FunctionKind::Native`.
+# Calling it as an entry point should run the native and return the argument
+# array, not reject with `NotInvokableAsEntry`. The fixture host passes no
+# program arguments, so the array is legitimately empty — the shape is what
+# this asserts.
+def test_stdlib_entrypoints_native_argv_callable_as_entry_point():
+    assert isinstance(argv(), list)
 
 
 # `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →

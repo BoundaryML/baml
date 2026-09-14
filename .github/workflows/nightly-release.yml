@@ -92,44 +92,49 @@ jobs:
             echo "Local time is $local_now, not the midnight hour; the other cron entry owns tonight."
           fi
 
-      - name: Select the newest green canary commit
+      - name: Check out the nightly selection script
+        if: ${{ steps.clock.outputs.proceed == 'true' }}
+        uses: actions/checkout@v7.0.1
+        with:
+          path: nightly-dispatch-tools
+          sparse-checkout: scripts/baml_nightly_select.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Validate CI run freshness and select the newest green canary commit
         id: select
         if: ${{ steps.clock.outputs.proceed == 'true' }}
         run: |
           set -euo pipefail
-          # Off the workspace: this job never checks the repo out.
-          green="$RUNNER_TEMP/green-ci-runs.json"
-          commits="$RUNNER_TEMP/canary-commits.txt"
-          # The release attests its source against a successful `CI - BAML
-          # Language` push run on canary, so only such a commit is releasable.
+          runs="$RUNNER_TEMP/canary-ci-runs.json"
+          commits="$RUNNER_TEMP/canary-commits.json"
+          # Snapshot ancestry first so a push between requests cannot make the
+          # commits query demand a run newer than the runs query could see.
+          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" > "$commits"
+          echo "::group::100 most recent canary commits"
+          jq . "$commits"
+          echo "::endgroup::"
+          # Fetch the latest GitHub workflow runs, but cross-check the results
+          # against the 100 most recent commits on canary before selecting a
+          # release source. The output of `gh run list` is highly unreliable,
+          # especially with server-side success filtering: requests can succeed
+          # while returning stale or incomplete runs, even without that filter.
+          # See https://github.com/orgs/community/discussions/24626
+          # Fetch all states and filter for success locally. The Python selector
+          # below hard-fails if any commit older than 10 minutes lacks a run.
+          # Allow 1,000 runs so duplicates do not crowd out the 100 commits.
           gh run list --workflow ci.yaml --branch canary --event push \
-            --status success --limit 100 \
-            --json headSha,databaseId > "$green"
-          # Walk canary newest-first rather than trusting run order: runs are
-          # ordered by creation, which is not commit ancestry.
-          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" \
-            --jq '.[].sha' > "$commits"
-          sha=""
-          run_id=""
-          while IFS= read -r commit; do
-            id="$(jq -r --arg commit "$commit" \
-              '[.[] | select(.headSha == $commit) | .databaseId] | max // empty' \
-              "$green")"
-            if [[ -n "$id" ]]; then
-              sha="$commit"
-              run_id="$id"
-              break
-            fi
-          done < "$commits"
-          if [[ -z "$sha" ]]; then
-            echo "::error::no canary commit in the last 100 has a successful CI run, so nothing is releasable tonight"
-            exit 1
-          fi
-          {
-            echo "sha=$sha"
-            echo "run_id=$run_id"
-          } >> "$GITHUB_OUTPUT"
-          echo "Newest green canary commit: $sha (CI run $run_id)"
+            --limit 1000 \
+            --json headSha,databaseId,conclusion,createdAt > "$runs"
+          # Check age when the snapshot is complete; slow API requests must
+          # not extend the ten-minute visibility grace period.
+          observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "::group::Unfiltered canary push CI runs"
+          jq . "$runs"
+          echo "::endgroup::"
+          python3 nightly-dispatch-tools/scripts/baml_nightly_select.py \
+            --commits "$commits" --runs "$runs" \
+            --observed-at "$observed_at" --output "$GITHUB_OUTPUT"
 
       - name: Decide whether canary moved since the last nightly
         id: decide
@@ -230,6 +235,16 @@ jobs:
               ;;
           esac
 
+      - name: Check out the nightly release source
+        if: ${{ steps.decide.outputs.dispatch == 'true' }}
+        uses: actions/checkout@v7.0.1
+        with:
+          # Compute the requested version from the exact source the release
+          # workflow will independently plan and verify.
+          ref: ${{ steps.select.outputs.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
       - name: Dispatch the nightly release
         if: ${{ steps.decide.outputs.dispatch == 'true' }}
         env:
@@ -252,6 +267,12 @@ jobs:
             echo "::error::$release_ref resolves to $ref_type $ref_sha, expected commit $SOURCE_SHA"
             exit 1
           fi
+          release_plan="$RUNNER_TEMP/nightly-release-plan.json"
+          scripts/baml-language-version plan \
+            --channel nightly \
+            --out "$release_plan"
+          release_version="$(jq -r .canonical_version "$release_plan")"
+          echo "Requested nightly release version: $release_version"
           # The release names the night itself, from the Seattle date at plan
           # time. That is stable however long this run queues -- it would take a
           # 24-hour delay to land on a different local date.
@@ -259,6 +280,7 @@ jobs:
             --ref "$release_ref" \
             -f channel=nightly \
             -f dry_run=false \
+            -f version="$release_version" \
             -f source_sha="$SOURCE_SHA" \
             -f source_ci_run_id="$SOURCE_CI_RUN_ID"
           echo "Dispatched a nightly release for $SOURCE_SHA (CI run $SOURCE_CI_RUN_ID)."
@@ -274,7 +296,7 @@ jobs:
     if: ${{ always() && github.repository == 'BoundaryML/baml' && needs.dispatch-nightly.result == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: boundary-tools-dev
+    environment: infisical-github-baml-language-release
     permissions:
       actions: read
       contents: read
@@ -284,7 +306,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-mise
             mise.toml
-            tools/notify-release-failure.py
+            tools/
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/setup-mise

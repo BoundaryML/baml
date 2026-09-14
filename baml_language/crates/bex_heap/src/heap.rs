@@ -16,7 +16,7 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     sync::{
-        Arc, Mutex, RwLock,
+        Arc, Mutex, RwLock, Weak,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -29,12 +29,6 @@ use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
     tlab::TlabChunk,
 };
-
-/// Minimum Gen1 live count before a Minor GC is triggered by Gen1 pressure.
-pub(crate) const GEN1_FLOOR: usize = 10_000;
-
-/// Minimum Gen2 live count before a Major GC is triggered by Gen2 pressure.
-pub(crate) const GEN2_FLOOR: usize = 50_000;
 
 /// Which generation of the heap an object lives in.
 ///
@@ -79,12 +73,12 @@ impl Generation {
 /// For optimal memory locality, TLAB size should divide evenly into the chunk size:
 ///
 /// - `DEFAULT_CHUNK_SIZE = 4096` (storage chunks)
-/// - `DEFAULT_TLAB_SIZE = 1024` (TLAB allocation unit)
-/// - Result: 4 TLABs fit per storage chunk
+/// - `DEFAULT_TLAB_SIZE = 32` (TLAB allocation unit)
+/// - Result: 128 initial reservations fit per storage chunk
 ///
 /// This isn't strictly required (TLABs can span chunk boundaries), but aligned
 /// TLABs have better cache behavior since all objects in a TLAB are contiguous.
-pub const DEFAULT_TLAB_SIZE: usize = 1024;
+pub const DEFAULT_TLAB_SIZE: usize = crate::gc_policy::FIRST_TLAB_SLOTS;
 
 // Compile-time assertion that default TLAB size divides evenly into chunk size
 const _: () = assert!(
@@ -103,8 +97,10 @@ pub struct HeapStats {
     pub runtime_objects: usize,
     /// Number of active handles.
     pub active_handles: usize,
-    /// Number of TLAB chunks allocated.
+    /// Gen0 reservations in default-sized TLAB units (rounded up).
     pub tlab_chunks: usize,
+    /// Exact Gen0 reservations, including unused slots and debug canaries.
+    pub reserved_slots: usize,
 }
 
 /// Unified heap for the BEX virtual machine.
@@ -178,6 +174,27 @@ pub struct BexHeap {
     /// updates after GC moves objects.
     pub(crate) handles: RwLock<HashMap<usize, HeapPtr>>,
 
+    /// The live handle for each held object, so one object has one key.
+    ///
+    /// [`Handle`]'s `Eq` is its slab key plus its issuing heap, so a key that
+    /// is unique *per object* rather than per call makes handle equality mean
+    /// "the same object" — which is what lets a host compare two references to
+    /// one runtime declaration. Minting per call instead would make a type
+    /// mentioning the same class twice look like two classes.
+    ///
+    /// Held weakly: the entry must not keep alive the very [`HandleInner`]
+    /// whose drop releases it. A [`Weak`] that fails to upgrade is a handle
+    /// mid-drop, and the mint path treats it as absent.
+    ///
+    /// LOCK ORDER: any path taking both maps takes `handles` first, then this
+    /// — mint, release, and GC fix-up all agree. A handle can drop on any
+    /// thread at any moment (its `Drop` takes `handles` then this), so a path
+    /// holding this lock while wanting `handles` is an AB-BA deadlock waiting
+    /// for exactly that drop.
+    ///
+    /// [`HandleInner`]: bex_external_types::HandleInner
+    handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
+
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
@@ -210,6 +227,10 @@ pub struct BexHeap {
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
+    pub(crate) max_tlab_size: usize,
+    pub(crate) gc_policy: crate::gc_policy::AllocationBudget,
+    root_release_epoch: AtomicUsize,
+    gc_activity: Arc<tokio::sync::Notify>,
 
     /// Lock for growing Gen0 (rare operation).
     ///
@@ -218,30 +239,8 @@ pub struct BexHeap {
     /// lock-free within a TLAB.
     growth_lock: Mutex<()>,
 
-    /// Allocations since last GC (for triggering heuristic).
+    /// Actual object allocations since last GC (profiling only).
     allocs_since_gc: AtomicUsize,
-
-    /// Number of live Gen1 objects after the last collection (minor or major).
-    ///
-    /// Used to compute the adaptive Gen1 collection threshold.
-    gen1_live_after_last_collection: AtomicUsize,
-
-    /// Number of live Gen2 objects after the last collection.
-    ///
-    /// Used to compute the adaptive Gen2 collection threshold.
-    gen2_live_after_last_collection: AtomicUsize,
-
-    /// Gen1 size threshold that triggers a Minor GC.
-    ///
-    /// Starts at 10,000 objects; updated after each collection to 2× the live
-    /// Gen1 count (floor 10,000).
-    gen1_collection_threshold: AtomicUsize,
-
-    /// Gen2 size threshold that triggers a Major GC.
-    ///
-    /// Starts at 50,000 objects; updated after each collection to 2× the live
-    /// Gen2 count (floor 50,000).
-    gen2_collection_threshold: AtomicUsize,
 
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
@@ -272,7 +271,19 @@ impl WriteBarrier for BexHeap {
 impl WeakHeapRef for BexHeap {
     fn release_handle(&self, handle_key: usize) {
         let mut handles = self.handles.write().expect("handles lock poisoned");
-        handles.remove(&handle_key);
+        let Some(ptr) = handles.remove(&handle_key) else {
+            return;
+        };
+        // Only clear the reverse entry if it still names *this* key: a handle
+        // for the same object may already have been re-minted between the last
+        // clone dropping and this release running.
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
+        if by_ptr.get(&ptr).is_some_and(|(key, _)| *key == handle_key) {
+            by_ptr.remove(&ptr);
+        }
+        drop(by_ptr);
+        drop(handles);
+        self.notify_root_released();
     }
 
     fn resolve_handle_ptr(&self, slab_key: usize) -> Option<HeapPtr> {
@@ -287,11 +298,7 @@ impl BexHeap {
     /// The provided objects become permanent (never garbage collected).
     /// Runtime allocations will start after these objects.
     pub fn new(compile_time_objects: Vec<Object>) -> Arc<Self> {
-        Self::with_tlab_size_and_debug(
-            compile_time_objects,
-            DEFAULT_TLAB_SIZE,
-            HeapDebuggerConfig::from_env(),
-        )
+        Self::build_unsealed_default(compile_time_objects).seal()
     }
 
     /// Create a new heap with custom TLAB size.
@@ -346,17 +353,18 @@ impl BexHeap {
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
+            handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
             tlab_size,
+            max_tlab_size: tlab_size,
+            gc_policy: crate::gc_policy::AllocationBudget::new(),
+            root_release_epoch: AtomicUsize::new(0),
+            gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
-            gen1_live_after_last_collection: AtomicUsize::new(0),
-            gen2_live_after_last_collection: AtomicUsize::new(0),
-            gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
-            gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
@@ -364,11 +372,13 @@ impl BexHeap {
     /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
     /// config (the same defaults [`Self::new`] uses).
     pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
-        Self::build_unsealed(
+        let mut heap = Self::build_unsealed(
             compile_time_objects,
             DEFAULT_TLAB_SIZE,
             HeapDebuggerConfig::from_env(),
-        )
+        );
+        heap.max_tlab_size = crate::gc_policy::MAX_TLAB_SLOTS;
+        heap
     }
 
     /// Freeze the heap behind the shared `Arc`. After this the compile-time
@@ -391,7 +401,9 @@ impl BexHeap {
         self.compile_time[index] = object;
     }
 
-    /// Resolve bytecode constants for all Function objects.
+    /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
+    /// heap is sealed: bytecode constants of every `Function`, and each
+    /// interface's default-method bodies.
     ///
     /// Converts ConstValue (compile-time, with ObjectIndex) to Value (runtime, with HeapPtr).
     /// Must be called before wrapping in Arc since we need mutable access.
@@ -424,16 +436,122 @@ impl BexHeap {
                     .iter()
                     .map(|cv| match cv {
                         bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::NULL,
-                        // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
-                        // directly from `constants` at execution time.
-                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
-                            bex_vm_types::Value::NULL
-                        }
+                        // ClassWithTypeArgs and Literal are NOT pre-resolved:
+                        // `IsType` reads them directly from `constants` at
+                        // execution time.
+                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. }
+                        | bex_vm_types::ConstValue::Literal(_) => bex_vm_types::Value::NULL,
                         other => other.to_value(resolve_idx),
                     })
                     .collect();
+            } else if let Object::Interface(interface) = obj {
+                // The one place a static interface's default body becomes a
+                // pointer: from here on, a witness reads `default_fn` and never
+                // resolves a name.
+                for method in &mut interface.methods {
+                    if let Some(default) = method.default {
+                        method.default_fn = resolve_idx(default);
+                    }
+                }
             }
         }
+    }
+
+    /// Bind every [`bex_vm_types::TypeHead`] in the compile-time image to the
+    /// declaration it names.
+    ///
+    /// This is the loader's one-time serialization boundary: emit mints heads
+    /// tag-only (`TypeHead::of_name`), and this pass fills each head's pointer
+    /// off the declaration carrying that tag. The tag→pointer index is built
+    /// here and dropped here — pointer-first lookup means no tag index survives
+    /// into the VM.
+    ///
+    /// Must run after every placeholder slot is filled (impl rules carry heads
+    /// in their patterns) and before the heap seals. The closing assertion is
+    /// deliberately total and active in release builds: an unresolved head is
+    /// not a degraded mode, it is a pointer the collector cannot trace and a
+    /// dispatch that cannot resolve, so a program image that cannot bind
+    /// completely must not run at all.
+    pub fn bind_type_heads(&mut self) {
+        let mut by_tag: HashMap<baml_type::typetag::TypeTag, HeapPtr> =
+            HashMap::with_capacity(self.compile_time.len() / 4);
+        for index in 0..self.compile_time.len() {
+            let Some(tag) = Self::declaration_tag(&self.compile_time[index]) else {
+                continue;
+            };
+            let previous = by_tag.insert(tag, self.compile_time_ptr(index));
+            // A release build must fail closed here: with two claimants the
+            // insert silently keeps the last one, and every head carrying this
+            // tag would bind to it — cross-wired dispatch, not an error state
+            // anything downstream can detect.
+            assert!(
+                previous.is_none(),
+                "two compile-time declarations carry the tag {tag:?}: the pool must \
+                 hold each declaration exactly once for heads to have one referent",
+            );
+        }
+        for object in &mut self.compile_time {
+            bex_vm_types::head_walk::visit_object_heads_mut(object, &mut |head| {
+                if !head.is_resolved()
+                    && let Some(&declaration) = by_tag.get(&head.tag())
+                {
+                    head.resolve(declaration);
+                }
+            });
+        }
+        let mut unbound: Vec<String> = Vec::new();
+        for object in &self.compile_time {
+            bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
+                if head.is_resolved() {
+                    return;
+                }
+                let context = match object {
+                    Object::Class(class) => format!("class {}", class.name),
+                    Object::Enum(enm) => format!("enum {}", enm.name),
+                    Object::Interface(interface) => format!("interface {}", interface.name),
+                    Object::TypeAlias(alias) => format!("type alias {}", alias.name),
+                    Object::Function(function) => format!("function {}", function.name),
+                    Object::ImplRule(rule) => format!("impl rule at {:?}", rule.interface_head),
+                    other => format!("{:?} object", bex_vm_types::ObjectType::of(other)),
+                };
+                unbound.push(format!(
+                    "  {context}: head {:?} (tag {:?})",
+                    head.declared_name(),
+                    head.tag(),
+                ));
+            });
+        }
+        assert!(
+            unbound.is_empty(),
+            "compile-time image contains heads nothing declares:\n{}",
+            unbound.join("\n"),
+        );
+    }
+
+    /// The tag under which `object` can head a nominal type, or `None` when it
+    /// is not a declaration.
+    pub fn declaration_tag(object: &Object) -> Option<baml_type::typetag::TypeTag> {
+        match object {
+            Object::Class(class) => Some(class.type_tag),
+            Object::Enum(enm) => Some(enm.type_tag),
+            Object::Interface(interface) => Some(interface.type_tag),
+            Object::TypeAlias(alias) => Some(alias.type_tag),
+            _ => None,
+        }
+    }
+
+    /// A transient tag → declaration index over the compile-time pool, for a
+    /// caller running its own bind over freshly grafted objects (the runtime
+    /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
+    /// caller: pointer-first lookup means no tag index survives into the VM.
+    pub fn compile_time_declaration_index(&self) -> HashMap<baml_type::typetag::TypeTag, HeapPtr> {
+        let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
+        for index in 0..self.compile_time.len() {
+            if let Some(tag) = Self::declaration_tag(&self.compile_time[index]) {
+                by_tag.insert(tag, self.compile_time_ptr(index));
+            }
+        }
+        by_tag
     }
 
     /// Get the number of compile-time objects.
@@ -649,28 +767,13 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `vec`'s chunk layout is not growing concurrently.
-    /// `ChunkedVec` never moves existing chunks, but its internal chunk
-    /// `Vec<Box<[UnsafeCell<T>]>>` can reallocate its buffer on growth, and
-    /// `num_chunks`/`chunk_start_ptr` are non-atomic reads of that buffer. Only
-    /// call this for spaces that grow exclusively at GC safepoints (Gen1/Gen2),
-    /// or while holding exclusive access to the space being scanned.
+    /// When `vec` comes from a generation's `UnsafeCell`, the caller must keep
+    /// that generation from being swapped/cleared by GC while it is borrowed
+    /// (a heap permit or exclusive GC access). `ChunkedVec` itself synchronizes
+    /// access to its storage descriptors, including concurrent growth.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        // `num_chunks` and `chunk_start_ptr` now serialize on the
-        // ChunkedVec's internal RwLock, so the brief window is safe even
-        // under a concurrent grower. `chunk_start_ptr` is still `unsafe`
-        // for the bounds precondition.
-        let num_chunks = vec.num_chunks();
-        for chunk_idx in 0..num_chunks {
-            // SAFETY: `chunk_idx < num_chunks` by loop bound.
-            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
-            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
-            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
-                return true;
-            }
-        }
-        false
+        vec.contains_ptr(raw_ptr)
     }
 
     /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
@@ -744,6 +847,24 @@ impl BexHeap {
         None
     }
 
+    /// Monotonic change token for GC roots disappearing, including after
+    /// the last engine call. No heap permit is required to read this token.
+    pub fn root_release_epoch(&self) -> usize {
+        self.root_release_epoch.load(Ordering::Acquire)
+    }
+
+    /// Record a removed root and wake idle cleanup, including when no work ends.
+    /// Call after removing the root; registry callers must still hold their heap permit.
+    pub fn notify_root_released(&self) {
+        self.root_release_epoch.fetch_add(1, Ordering::Release);
+        self.gc_activity.notify_one();
+    }
+
+    /// Dedicated wake signal for the engine's single idle-GC coordinator.
+    pub fn gc_activity(&self) -> Arc<tokio::sync::Notify> {
+        Arc::clone(&self.gc_activity)
+    }
+
     /// Get the TLAB chunk size.
     pub fn tlab_size(&self) -> usize {
         self.tlab_size
@@ -814,15 +935,22 @@ impl BexHeap {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
+        self.alloc_tlab_chunk_sized(self.tlab_size)
+    }
+
+    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize) -> TlabChunk {
+        assert!(size > 0);
+        self.gc_policy
+            .charge(size.saturating_mul(size_of::<Object>()));
         self.debug_verify_tlab_canaries();
 
         let use_canary = self.debug_config().enabled;
         let canary_slots = if use_canary { 1 } else { 0 };
 
         // Atomically reserve a chunk range within Gen0
-        let step = self.tlab_size + canary_slots;
+        let step = size + canary_slots;
         let runtime_start = self.gen0_next_chunk.fetch_add(step, Ordering::SeqCst);
-        let runtime_end = runtime_start + self.tlab_size;
+        let runtime_end = runtime_start + size;
         let reserve_end = runtime_end + canary_slots;
 
         // The chunk-allocation policy mutex still serializes the
@@ -910,15 +1038,13 @@ impl BexHeap {
             runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
+            reserved_slots: self.gen0_next_chunk.load(Ordering::Relaxed),
         }
     }
 
-    /// Check if GC should run based on allocation pressure (legacy, alloc-count only).
-    ///
-    /// Use [`BexHeap::should_collect`] for the full adaptive triggering policy.
+    /// Whether the heap has spent its allocation allowance since the last full GC.
     pub fn should_gc(&self) -> bool {
-        const GC_THRESHOLD: usize = 10_000; // Tune based on profiling
-        self.allocs_since_gc.load(Ordering::Relaxed) >= GC_THRESHOLD
+        self.gc_policy.due()
     }
 
     /// Reset the allocation counter after GC.
@@ -932,52 +1058,9 @@ impl BexHeap {
     }
 
     /// Load the current allocation count since last GC.
+    #[cfg(feature = "gc_profiling")]
     pub(crate) fn allocs_since_gc(&self) -> usize {
         self.allocs_since_gc.load(Ordering::Relaxed)
-    }
-
-    /// Load the Gen1 collection threshold.
-    pub(crate) fn gen1_collection_threshold(&self) -> usize {
-        self.gen1_collection_threshold.load(Ordering::Relaxed)
-    }
-
-    /// Load the Gen2 collection threshold.
-    pub(crate) fn gen2_collection_threshold(&self) -> usize {
-        self.gen2_collection_threshold.load(Ordering::Relaxed)
-    }
-
-    /// Update thresholds after a Minor (Gen0+Gen1) collection.
-    ///
-    /// Sets the Gen1 threshold to `max(2 * live_gen1, GEN1_FLOOR)` and updates
-    /// Gen2 tracking if objects were promoted.
-    pub(crate) fn update_thresholds_after_minor(&self, live_gen1: usize, live_gen2: usize) {
-        self.gen1_live_after_last_collection
-            .store(live_gen1, Ordering::Relaxed);
-        self.gen1_collection_threshold
-            .store((live_gen1 * 2).max(GEN1_FLOOR), Ordering::Relaxed);
-
-        // Also update Gen2 tracking (objects may have been promoted to Gen2).
-        self.gen2_live_after_last_collection
-            .store(live_gen2, Ordering::Relaxed);
-        self.gen2_collection_threshold
-            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
-    }
-
-    /// Update thresholds after a Major (full) collection.
-    ///
-    /// All survivors are in Gen2. Resets Gen1 tracking to zero (Gen1 is empty
-    /// after a full GC) and sets Gen2 threshold to `max(2 * live_gen2, GEN2_FLOOR)`.
-    pub(crate) fn update_thresholds_after_major(&self, live_gen2: usize) {
-        // Gen1 is empty after a full GC.
-        self.gen1_live_after_last_collection
-            .store(0, Ordering::Relaxed);
-        self.gen1_collection_threshold
-            .store(GEN1_FLOOR, Ordering::Relaxed);
-
-        self.gen2_live_after_last_collection
-            .store(live_gen2, Ordering::Relaxed);
-        self.gen2_collection_threshold
-            .store((live_gen2 * 2).max(GEN2_FLOOR), Ordering::Relaxed);
     }
 
     /// Reset the Gen0 TLAB allocation pointer (called by GC after collection).
@@ -1025,6 +1108,14 @@ impl BexHeap {
         for ptr in handles.values_mut() {
             *ptr = forwarding[ptr];
         }
+        // The reverse index is keyed by the pointers that just moved, so it is
+        // rebuilt rather than mutated in place. Keys are untouched: a handle's
+        // identity does not change when its object does.
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
+        *by_ptr = std::mem::take(&mut *by_ptr)
+            .into_iter()
+            .map(|(ptr, entry)| (forwarding[&ptr], entry))
+            .collect();
     }
 
     /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
@@ -1072,17 +1163,40 @@ impl BexHeap {
     /// access to heap objects. Handles are GC roots - objects reachable
     /// from handles will not be collected.
     pub fn create_handle(self: &Arc<Self>, ptr: HeapPtr) -> Handle {
-        // Get a unique key for this handle
-        let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
-
-        // Insert into the handle table
+        // One key per object, not per call — see `handles_by_ptr`. Both write
+        // locks span the check and the mint so a concurrent release cannot
+        // retire the entry in between and leave two keys for one object.
+        //
+        // LOCK ORDER: `handles` before `handles_by_ptr` — the order every
+        // other two-lock path takes (`release_handle`, `update_handles`).
+        // Taking `handles_by_ptr` first here deadlocked against a concurrent
+        // `Handle` drop (AB-BA), which the future-cleanup stress test caught.
+        let mut handles = self.handles.write().expect("handles lock poisoned");
+        let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
+        if let Some((_, weak)) = by_ptr.get(&ptr)
+            && let Some(inner) = weak.upgrade()
         {
-            let mut handles = self.handles.write().expect("handles lock poisoned");
-            handles.insert(handle_key, ptr);
+            // A live handle already names this object; sharing its `Arc` is
+            // what counts the new reference.
+            return Handle::from_inner(inner);
         }
 
+        let handle_key = self.next_handle_key.fetch_add(1, Ordering::Relaxed);
+        handles.insert(handle_key, ptr);
         // Handle no longer stores idx - always resolves through table
-        Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>)
+        let handle = Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>);
+        by_ptr.insert(ptr, (handle_key, handle.downgrade_inner()));
+        handle
+    }
+
+    /// Whether `handle` was issued by this heap.
+    ///
+    /// A slab key indexes one heap's handle table, so a handle from another
+    /// engine must be rejected rather than resolved — see
+    /// [`Handle::is_of_heap`].
+    #[must_use]
+    pub fn owns_handle(self: &Arc<Self>, handle: &Handle) -> bool {
+        handle.is_of_heap(&(Arc::clone(self) as Arc<dyn WeakHeapRef>))
     }
 
     /// Collect all handle roots for garbage collection.
@@ -1144,6 +1258,69 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One object, one key — so a host comparing two references to the same
+    /// declaration sees one identity.
+    #[test]
+    fn handles_to_one_object_share_a_key() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let second = heap.create_handle(ptr);
+        assert_eq!(first, second, "one object must yield one handle identity");
+        assert_eq!(
+            heap.handles.read().unwrap().len(),
+            1,
+            "a shared handle occupies one slot, not one per request"
+        );
+    }
+
+    /// The shared key outlives any single holder, and retires with the last.
+    #[test]
+    fn a_shared_handle_releases_once_every_holder_drops() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let second = heap.create_handle(ptr);
+        let key = first.slab_key();
+
+        drop(first);
+        assert_eq!(
+            heap.resolve_handle_ptr(key),
+            Some(ptr),
+            "the object is still held by `second`"
+        );
+
+        drop(second);
+        assert_eq!(
+            heap.resolve_handle_ptr(key),
+            None,
+            "the last holder releases the object"
+        );
+        assert!(heap.handles_by_ptr.read().unwrap().is_empty());
+    }
+
+    /// A key retired by its last holder is not resurrected: the next request
+    /// mints a fresh one rather than handing back a released slot.
+    #[test]
+    fn a_released_object_mints_a_new_handle() {
+        let heap = BexHeap::new(vec![Object::String("shared".into())]);
+        let ptr = heap.compile_time_ptr(0);
+
+        let first = heap.create_handle(ptr);
+        let first_key = first.slab_key();
+        drop(first);
+
+        let second = heap.create_handle(ptr);
+        assert_ne!(
+            second.slab_key(),
+            first_key,
+            "a fresh handle must not reuse a released key"
+        );
+        assert_eq!(heap.resolve_handle_ptr(second.slab_key()), Some(ptr));
+    }
 
     #[test]
     fn test_new_heap_empty() {

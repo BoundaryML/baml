@@ -9,7 +9,7 @@ use crate::{
         Token, Type, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
-    trivia_classifier::{EmittableTrivia, TriviaSliceExt},
+    trivia_classifier::{EmittableTrivia, TriviaInfo, TriviaSliceExt},
 };
 
 #[derive(Debug)]
@@ -305,7 +305,7 @@ impl Printable for Expression {
             | Expression::OptionalIndex(_)
             | Expression::OptionalCall(_)) => {
                 // These are all chains of postfix expressions
-                let chain = PrintChain::new(chain);
+                let chain = PrintChain::new(chain, printer.trivia);
                 chain.print(shape, printer)
             }
             Expression::GenericApply(ga) => ga.print(shape, printer),
@@ -509,7 +509,14 @@ pub struct PathExpr {
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
     matches!(
         kind,
-        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_FUNCTION
     )
 }
 
@@ -775,6 +782,21 @@ impl ParenExpr {
             .sum::<Option<usize>>()?;
         Some(const { "()".len() } + inner + trivia_len)
     }
+
+    /// Whether no comments are attached to either paren token or to the inner
+    /// expression's boundary. Peeling a transparent paren cannot lose trivia:
+    /// every span a parent context queries around it is empty.
+    fn is_transparent(&self, trivia: &TriviaInfo) -> bool {
+        let (open_leading, open_trailing) = trivia.get_for_range_split(self.open_paren.span());
+        let (close_leading, close_trailing) = trivia.get_for_range_split(self.close_paren.span());
+        let (expr_leading, expr_trailing) = trivia.get_for_element(&*self.expr);
+        open_leading.is_empty()
+            && open_trailing.is_empty()
+            && close_leading.is_empty()
+            && close_trailing.is_empty()
+            && expr_leading.is_empty()
+            && expr_trailing.is_empty()
+    }
 }
 
 impl PrintMultiLine for ParenExpr {
@@ -855,6 +877,119 @@ impl Printable for ParenExpr {
     }
 }
 
+impl Expression {
+    /// Strips nested [`ParenExpr`] wrappers that are transparent (no comments
+    /// attached to the parens or the inner expression's boundary), returning
+    /// the innermost expression. Callers decide per context whether printing
+    /// the peeled expression instead of `self` is safe.
+    fn peel_transparent_parens(&self, trivia: &TriviaInfo) -> &Expression {
+        let mut expr = self;
+        while let Expression::Paren(paren) = expr {
+            if !paren.is_transparent(trivia) {
+                break;
+            }
+            expr = &paren.expr;
+        }
+        expr
+    }
+
+    /// Whether this expression binds at least as tightly as a postfix
+    /// operator, i.e. it can sit directly in a receiver position (`X.f`,
+    /// `X(..)`, `X[i]`) or as a unary operand with no parens around it.
+    ///
+    /// Numeric and keyword literals are excluded: the `.` in `(1).to_string()`
+    /// re-lexes as part of a float once the parens come off. Object and map
+    /// literals are excluded because a bare leading `{` is ambiguous with a
+    /// block, and [`Expression::GenericApply`] because its `<` is ambiguous
+    /// with a comparison.
+    ///
+    /// An optional-chain link anywhere on the spine also disqualifies it —
+    /// see [`Self::has_optional_chain_link`].
+    fn binds_as_postfix_operand(&self) -> bool {
+        match self {
+            Expression::Call(_) | Expression::Index(_) | Expression::FieldAccess(_) => {
+                !self.has_optional_chain_link()
+            }
+            Expression::Path(_)
+            | Expression::EnvAccess(_)
+            | Expression::ArrayInitializer(_)
+            | Expression::RawString(_)
+            | Expression::BacktickString(_)
+            | Expression::ByteString(_) => true,
+            Expression::Literal(lit) => matches!(lit, Literal::String(_)),
+            _ => false,
+        }
+    }
+
+    /// Whether this expression's postfix spine contains a `?.` link.
+    ///
+    /// Parens around such a receiver are load-bearing, not decoration: they
+    /// **end the short-circuit region**. `(a?.b).c` evaluates `(null).c` when
+    /// `a` is null — a `TypeError` — where `a?.b.c` short-circuits to null. So
+    /// peeling them would silently change runtime behavior and these parens
+    /// always stay.
+    ///
+    /// Only the spine counts. A `?.` inside a call argument or index operand
+    /// (`f(a?.b).c`) belongs to a separate chain and is unaffected.
+    fn has_optional_chain_link(&self) -> bool {
+        match self {
+            Expression::OptionalFieldAccess(_)
+            | Expression::OptionalIndex(_)
+            | Expression::OptionalCall(_) => true,
+            Expression::Call(call) => call.callee.has_optional_chain_link(),
+            Expression::Index(index) => index.base.has_optional_chain_link(),
+            Expression::FieldAccess(fa) => fa.base.has_optional_chain_link(),
+            Expression::Paren(paren) => paren.expr.has_optional_chain_link(),
+            _ => false,
+        }
+    }
+
+    /// The expression a postfix-receiver or unary-operand position actually
+    /// prints: transparent parens peel while what they wrap still stands on
+    /// its own here, so the parens delimit nothing.
+    /// `((xs).join(` `)).includes(x)` prints as `xs.join(` `).includes(x)`.
+    ///
+    /// A receiver that binds looser than postfix keeps *one* paren — removing
+    /// it would re-parse against a different base (`(a ?? b).length()`) — but
+    /// the redundant layers around it still peel, so `((a + b)).f()` prints as
+    /// `(a + b).f()` rather than keeping the whole stack.
+    pub(crate) fn effective_postfix_operand(&self, trivia: &TriviaInfo) -> &Expression {
+        self.peel_to_needed_paren(trivia, false)
+    }
+
+    /// [`Self::effective_postfix_operand`] for a unary operand.
+    ///
+    /// Identical except that literals peel here. The literal restriction exists
+    /// only to keep `(1).to_string()` from re-lexing its `.` into a float, and
+    /// no `.` follows a unary operand — so `-((1))` prints as `-1` and
+    /// `!((true))` as `!true`. A literal that *is* a postfix receiver
+    /// (`-(1).to_string()`) sits in the receiver position, not this one, and
+    /// still keeps its parens.
+    pub(crate) fn effective_unary_operand(&self, trivia: &TriviaInfo) -> &Expression {
+        self.peel_to_needed_paren(trivia, true)
+    }
+
+    fn peel_to_needed_paren(&self, trivia: &TriviaInfo, unary: bool) -> &Expression {
+        let mut expr = self;
+        while let Expression::Paren(paren) = expr {
+            if !paren.is_transparent(trivia) {
+                break;
+            }
+            // Peel only down to the last paren this position still needs: an
+            // inner paren is reconsidered on the next turn, so a stack around
+            // a looser-binding receiver collapses to exactly one.
+            let stands_alone = paren.expr.binds_as_postfix_operand()
+                || matches!(&*paren.expr, Expression::Paren(_))
+                || (unary && matches!(&*paren.expr, Expression::Literal(_)));
+            if !stands_alone {
+                break;
+            }
+            expr = &paren.expr;
+        }
+        expr
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::BINARY_EXPR`] node.
 #[derive(Debug)]
 pub struct BinaryExpr {
@@ -915,7 +1050,8 @@ impl BinaryExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let (left, right) = &*self.sides;
+        let left = self.effective_left(input.trivia);
+        let right = &self.sides.1;
         let left_width = left.single_line_width(input)?;
         let right_width = right.single_line_width(input)?;
         // Must match trivia handled by try_print_single_line
@@ -936,24 +1072,54 @@ impl BinaryExpr {
         Some(len)
     }
 
+    /// The left operand with redundant parens peeled.
+    ///
+    /// `(a && b) && c` and `a && b && c` parse to different trees but mean
+    /// the same thing and print identically, so a transparent paren around
+    /// the left operand is dropped when the inner operator sits in the same
+    /// precedence row as this one (reparsing the output yields the printed
+    /// tree, keeping the formatter idempotent). Right operands are never
+    /// peeled: removing those parens would re-associate, as in `a - (b - c)`.
+    /// Mixed-precedence parens like `(a * b) + c` are kept: they are
+    /// redundant to the parser but carry clarity for the reader.
+    fn effective_left(&self, trivia: &TriviaInfo) -> &Expression {
+        let Some(row) = BinaryOpPrecedenceRow::row_for_op(&self.op) else {
+            return &self.sides.0;
+        };
+        let peeled = self.sides.0.peel_transparent_parens(trivia);
+        match peeled {
+            Expression::Binary(inner)
+                if BinaryOpPrecedenceRow::row_for_op(&inner.op) == Some(row) =>
+            {
+                peeled
+            }
+            _ => &self.sides.0,
+        }
+    }
+
     /// Recursively lifts binary expressions in the same chaining group to the top level.
     /// For ops that are not in any chaining groups, return will be the same as the original.
+    /// Redundant parens around left operands are peeled (see [`Self::effective_left`])
+    /// so a fully parenthesized chain flattens like an unparenthesized one.
     ///
     /// The vec will never be empty.
-    fn get_chaining_members(&self) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
+    fn get_chaining_members(
+        &self,
+        trivia: &TriviaInfo,
+    ) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
         let mut members = Vec::new();
         let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(&self.op) else {
             members.push((&self.op, &self.sides.1));
             return (&self.sides.0, members);
         };
 
-        match &*self.sides {
+        match (self.effective_left(trivia), &self.sides.1) {
             (Expression::Binary(left), Expression::Binary(right))
                 if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group)
                     && BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
             {
-                let (left_first, left_rest) = left.get_chaining_members();
-                let (right_first, right_rest) = right.get_chaining_members();
+                let (left_first, left_rest) = left.get_chaining_members(trivia);
+                let (right_first, right_rest) = right.get_chaining_members(trivia);
 
                 members.extend(left_rest);
                 members.push((&self.op, right_first));
@@ -964,7 +1130,7 @@ impl BinaryExpr {
             (Expression::Binary(left), right)
                 if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group) =>
             {
-                let (first, left_rest) = left.get_chaining_members();
+                let (first, left_rest) = left.get_chaining_members(trivia);
 
                 members.extend(left_rest);
                 members.push((&self.op, right));
@@ -973,7 +1139,7 @@ impl BinaryExpr {
             (left, Expression::Binary(right))
                 if BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
             {
-                let (right_first, right_rest) = right.get_chaining_members();
+                let (right_first, right_rest) = right.get_chaining_members(trivia);
 
                 members.push((&self.op, right_first));
                 members.extend(right_rest);
@@ -1021,7 +1187,7 @@ impl PrintMultiLine for BinaryExpr {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
-        let (first, chain_members) = self.get_chaining_members();
+        let (first, chain_members) = self.get_chaining_members(printer.trivia);
         printer.print(first, shape);
         printer.print_trivia_all_trailing_for(first.rightmost_token());
         let num_chain_members = chain_members.len();
@@ -1051,7 +1217,8 @@ impl BinaryExpr {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the binary expression on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let (left, right) = &*self.sides;
+        let left = self.effective_left(printer.trivia);
+        let right = &self.sides.1;
 
         if printer
             .print(left, Shape::unlimited_single_line())
@@ -1123,6 +1290,42 @@ impl BinaryOpChainingGroup {
             }
             BinaryOp::And(_) | BinaryOp::Pipe(_) | BinaryOp::Caret(_) => Some(Self::Bitwise),
             BinaryOp::AndAnd(_) | BinaryOp::OrOr(_) => Some(Self::Logical),
+            _ => None,
+        }
+    }
+}
+
+/// Precedence rows whose redundant left-operand parens the formatter strips
+/// (see [`BinaryExpr::effective_left`]). Ops within a row share one binding
+/// power in the parser (`infix_binding_power`), so `(a OP b) OP c` reparses
+/// identically without the parens. Comparisons, equality, shifts, `??`, and
+/// assignments are deliberately absent: chains of those are unusual enough
+/// that explicit parens read as intent.
+///
+/// Finer-grained than [`BinaryOpChainingGroup`], which mixes precedence
+/// levels (`&&` with `||`, `&` with `|`) because it only groups layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BinaryOpPrecedenceRow {
+    AddSubtract,
+    MultiplyDivideModulo,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LogicalAnd,
+    LogicalOr,
+}
+impl BinaryOpPrecedenceRow {
+    fn row_for_op(op: &BinaryOp) -> Option<Self> {
+        match op {
+            BinaryOp::Plus(_) | BinaryOp::Minus(_) => Some(Self::AddSubtract),
+            BinaryOp::Star(_) | BinaryOp::Slash(_) | BinaryOp::Percent(_) => {
+                Some(Self::MultiplyDivideModulo)
+            }
+            BinaryOp::And(_) => Some(Self::BitwiseAnd),
+            BinaryOp::Pipe(_) => Some(Self::BitwiseOr),
+            BinaryOp::Caret(_) => Some(Self::BitwiseXor),
+            BinaryOp::AndAnd(_) => Some(Self::LogicalAnd),
+            BinaryOp::OrOr(_) => Some(Self::LogicalOr),
             _ => None,
         }
     }
@@ -1266,7 +1469,10 @@ impl UnaryExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let expr = self.expr.single_line_width(input)?;
+        let expr = self
+            .expr
+            .effective_unary_operand(input.trivia)
+            .single_line_width(input)?;
         Some(usize::from(self.op.span().len()) + expr)
     }
 }
@@ -1275,7 +1481,8 @@ impl Printable for UnaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
-        multi_lined |= printer.print(&*self.expr, shape).multi_lined;
+        let expr = self.expr.effective_unary_operand(printer.trivia);
+        multi_lined |= printer.print(expr, shape).multi_lined;
 
         PrintInfo { multi_lined }
     }
@@ -2464,7 +2671,10 @@ impl CallExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self.callee.single_line_width(input)?;
+        let callee = self
+            .callee
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         let args = self.args.single_line_width(input)?;
         Some(callee + args)
     }
@@ -2475,7 +2685,8 @@ impl Printable for CallExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         let line_len_before = printer.current_line_len();
-        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        let callee = self.callee.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
         // Account for the callee on the call line so the args' hug layout
         // (see `CallArgs::try_print_hug`) budgets its first line correctly.
         let args_shape = Shape {
@@ -2594,12 +2805,27 @@ impl CallArg {
         matches!(self.expr, Expression::Lambda(_) | Expression::Spawn(_))
     }
 
+    /// The argument expression with redundant parens peeled: the call's own
+    /// parens already delimit the argument, so a transparent paren wrapping
+    /// the whole expression carries nothing. Lambdas and `spawn` keep their
+    /// parens: peeling one would flip [`Self::is_huggable`] between passes
+    /// and break idempotency.
+    fn effective_expr(&self, trivia: &TriviaInfo) -> &Expression {
+        let peeled = self.expr.peel_transparent_parens(trivia);
+        if matches!(peeled, Expression::Lambda(_) | Expression::Spawn(_)) {
+            &self.expr
+        } else {
+            peeled
+        }
+    }
+
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let expr = self.effective_expr(input.trivia);
         let mut len = 0;
         if let Some((name, equals)) = &self.label {
             let (_, name_trailing) = input.trivia.get_for_range_split(name.span());
             let (equals_leading, equals_trailing) = input.trivia.get_for_range_split(equals.span());
-            let expr_leading = input.trivia.get_leading_for_element(&self.expr);
+            let expr_leading = input.trivia.get_leading_for_element(expr);
             len += usize::from(name.span().len())
                 + name_trailing.try_squished_len(input.input)?
                 + equals_leading.try_squished_len(input.input)?
@@ -2607,26 +2833,27 @@ impl CallArg {
                 + equals_trailing.try_squished_len(input.input)?
                 + expr_leading.try_squished_len(input.input)?;
         }
-        len += self.expr.single_line_width(input)?;
+        len += expr.single_line_width(input)?;
         Some(len)
     }
 }
 
 impl Printable for CallArg {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let expr = self.effective_expr(printer.trivia);
         if let Some((name, equals)) = &self.label {
             printer.print_raw_token(name);
             let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
             let (equals_leading, equals_trailing) =
                 printer.trivia.get_for_range_split(equals.span());
-            let expr_leading = printer.trivia.get_leading_for_element(&self.expr);
+            let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(name_trailing);
             printer.print_trivia_squished(equals_leading);
             printer.print_str(" = ");
             printer.print_trivia_squished(equals_trailing);
             printer.print_trivia_squished(expr_leading);
         }
-        printer.print(&self.expr, shape)
+        printer.print(expr, shape)
     }
 
     fn leftmost_token(&self) -> TextRange {
@@ -3039,27 +3266,31 @@ impl IndexExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(base + self.args().single_line_width(input)?)
     }
 }
 
 impl PrintMultiLine for IndexExpr {
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape.clone());
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        printer.print(base, shape.clone());
         self.args().print_multi_line(shape, printer)
     }
 }
 
 impl IndexExpr {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let base_len = self.base.single_line_width(printer)?;
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        let base_len = base.single_line_width(printer)?;
         let args_len = self.args().single_line_width(printer)?;
         if base_len + args_len > shape.width {
             return None;
         }
-        if self
-            .base
+        if base
             .print(Shape::unlimited_single_line(), printer)
             .multi_lined
         {
@@ -3132,7 +3363,10 @@ impl FieldAccessExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(base + usize::from(self.dot.span().len()) + usize::from(self.field.span().len()))
     }
 }
@@ -3177,7 +3411,10 @@ impl KnownKind for OptionalFieldAccessExpr {
 
 impl OptionalFieldAccessExpr {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(
             base + usize::from(self.question_dot.span().len())
                 + usize::from(self.field.span().len()),
@@ -3242,7 +3479,10 @@ impl OptionalIndexExpr {
     }
 
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self.base.single_line_width(input)?;
+        let base = self
+            .base
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         Some(
             base + usize::from(self.question_dot.span().len())
                 + self.args().single_line_width(input)?,
@@ -3253,7 +3493,8 @@ impl OptionalIndexExpr {
 impl Printable for OptionalIndexExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
-        multi_lined |= printer.print(&*self.base, shape.clone()).multi_lined;
+        let base = self.base.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(base, shape.clone()).multi_lined;
         printer.print_raw_token(&self.question_dot);
         multi_lined |= printer.print(&self.args(), shape).multi_lined;
         PrintInfo { multi_lined }
@@ -3306,7 +3547,10 @@ impl KnownKind for OptionalCallExpr {
 
 impl OptionalCallExpr {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self.callee.single_line_width(input)?;
+        let callee = self
+            .callee
+            .effective_postfix_operand(input.trivia)
+            .single_line_width(input)?;
         let args = self.args.single_line_width(input)?;
         Some(callee + usize::from(self.question_dot.span().len()) + args)
     }
@@ -3315,7 +3559,8 @@ impl OptionalCallExpr {
 impl Printable for OptionalCallExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
-        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        let callee = self.callee.effective_postfix_operand(printer.trivia);
+        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
         printer.print_raw_token(&self.question_dot);
         multi_lined |= printer.print(&self.args, shape).multi_lined;
         PrintInfo { multi_lined }
@@ -3464,18 +3709,11 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // An empty block with no comment trapped inside collapses to `{}`
-        // (e.g. an empty match arm `null => {},` or an empty `if` body).
-        if self.stmts.is_empty() && self.expr.is_none() {
-            let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-            let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-            if !open_trailing.iter().any(EmittableTrivia::is_comment)
-                && !close_leading.iter().any(EmittableTrivia::is_comment)
-            {
-                printer.print_raw_token(&self.open_brace);
-                printer.print_raw_token(&self.close_brace);
-                return PrintInfo::default_single_line();
-            }
+        if self.stmts.is_empty()
+            && self.expr.is_none()
+            && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+        {
+            return PrintInfo::default_single_line();
         }
 
         printer.print_raw_token(&self.open_brace);
@@ -3745,7 +3983,9 @@ impl Printable for ArrayInitializer {
 pub struct ObjectInitializer {
     pub name: PathExpr,
     pub open_brace: t::LBrace,
-    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
+    /// Fields and `...spread` members, in source order. Order is significant:
+    /// later members win at runtime, so it must be preserved verbatim.
+    pub fields: Vec<(ObjectMember, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -3771,8 +4011,8 @@ impl FromCST for ObjectInitializer {
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
                 }
-                SyntaxKind::OBJECT_FIELD => {
-                    let field = ObjectField::from_cst(elem)?;
+                SyntaxKind::OBJECT_FIELD | SyntaxKind::SPREAD_ELEMENT => {
+                    let field = ObjectMember::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
@@ -3781,7 +4021,7 @@ impl FromCST for ObjectInitializer {
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "OBJECT_FIELD or R_BRACE".into(),
+                        expected_desc: "OBJECT_FIELD, SPREAD_ELEMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -3967,6 +4207,7 @@ impl Printable for ObjectInitializer {
 /// Corresponds to a [`SyntaxKind::MAP_LITERAL`] node.
 #[derive(Debug)]
 pub struct MapLiteral {
+    pub prefix: Option<t::Word>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -3979,6 +4220,10 @@ impl FromCST for MapLiteral {
 
         let mut it = SyntaxNodeIter::new(&node);
 
+        let prefix = it
+            .next_if_kind(SyntaxKind::WORD)
+            .map(t::Word::from_cst)
+            .transpose()?;
         let open_brace = it.expect_parse()?;
 
         let mut fields = Vec::new();
@@ -4011,6 +4256,7 @@ impl FromCST for MapLiteral {
         it.expect_end()?;
 
         Ok(MapLiteral {
+            prefix,
             open_brace,
             fields,
             close_brace,
@@ -4041,6 +4287,18 @@ impl PrintMultiLine for MapLiteral {
             first_line_offset: 0,
         };
 
+        if let Some(prefix) = &self.prefix {
+            printer.print_raw_token(prefix);
+            let (_, line_comment) = printer.print_trivia_all_trailing_for(prefix.span());
+            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
+            if line_comment || !leading.is_empty() {
+                printer.print_newline();
+                printer.print_trivia_with_newline(leading, shape.indent);
+                printer.print_spaces(shape.indent);
+            } else {
+                printer.print_str(" ");
+            }
+        }
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
@@ -4086,6 +4344,20 @@ impl MapLiteral {
         } else {
             const { "{}".len() }
         };
+        if let Some(prefix) = &self.prefix {
+            len += const { "map ".len() };
+            let (_, trailing) = input.trivia.get_for_range_split(prefix.span());
+            let (leading, _) = input.trivia.get_for_range_split(self.open_brace.span());
+            len += trailing.try_squished_len(input.input)?;
+            len += leading.try_squished_len(input.input)?;
+            if trailing
+                .iter()
+                .chain(leading)
+                .any(EmittableTrivia::is_comment)
+            {
+                len += 1;
+            }
+        }
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
@@ -4143,6 +4415,21 @@ impl MapLiteral {
             || open_trailing.iter().any(EmittableTrivia::is_comment)
             || close_leading.iter().any(EmittableTrivia::is_comment);
 
+        if let Some(prefix) = &self.prefix {
+            printer.print_raw_token(prefix);
+            let (_, trailing) = printer.trivia.get_for_range_split(prefix.span());
+            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
+            printer.print_str(" ");
+            printer.try_print_trivia_single_line_squished(trailing)?;
+            printer.try_print_trivia_single_line_squished(leading)?;
+            if trailing
+                .iter()
+                .chain(leading)
+                .any(EmittableTrivia::is_comment)
+            {
+                printer.print_str(" ");
+            }
+        }
         printer.print_raw_token(&self.open_brace);
         if has_content {
             printer.print_str(" ");
@@ -4202,7 +4489,9 @@ impl Printable for MapLiteral {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_brace.span()
+        self.prefix
+            .as_ref()
+            .map_or(self.open_brace.span(), t::Word::span)
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
@@ -4300,6 +4589,132 @@ impl Printable for ObjectField {
             .as_ref()
             .map(Printable::rightmost_token)
             .unwrap_or_else(|| self.name.rightmost_token())
+    }
+}
+
+/// A member of an [`ObjectInitializer`]: either a `name: value` field or a
+/// `...expr` spread element.
+///
+/// Only [`SyntaxKind::OBJECT_LITERAL`] admits spreads; map literals and array
+/// literals keep using [`ObjectField`] directly.
+#[derive(Debug)]
+pub enum ObjectMember {
+    Field(ObjectField),
+    Spread(SpreadElement),
+}
+
+impl FromCST for ObjectMember {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::OBJECT_FIELD => Ok(ObjectMember::Field(ObjectField::from_cst(elem)?)),
+            SyntaxKind::SPREAD_ELEMENT => Ok(ObjectMember::Spread(SpreadElement::from_cst(elem)?)),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "OBJECT_FIELD or SPREAD_ELEMENT".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl ObjectMember {
+    /// Returns the width of the member if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            ObjectMember::Field(field) => field.single_line_width(input),
+            ObjectMember::Spread(spread) => spread.single_line_width(input),
+        }
+    }
+}
+
+impl Printable for ObjectMember {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ObjectMember::Field(field) => field.print(shape, printer),
+            ObjectMember::Spread(spread) => spread.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.leftmost_token(),
+            ObjectMember::Spread(spread) => spread.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.rightmost_token(),
+            ObjectMember::Spread(spread) => spread.rightmost_token(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::SPREAD_ELEMENT`] node.
+///
+/// Struct-update spread inside an object literal: `Type { ...base, field: v }`.
+#[derive(Debug)]
+pub struct SpreadElement {
+    pub dot_dot_dot: t::DotDotDot,
+    pub value: Expression,
+}
+
+impl FromCST for SpreadElement {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::SPREAD_ELEMENT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let dot_dot_dot = it.expect_parse()?;
+        let value = it.expect_next("spread value")?;
+        let value = Expression::from_cst(value)?;
+
+        it.expect_end()?;
+
+        Ok(SpreadElement { dot_dot_dot, value })
+    }
+}
+
+impl KnownKind for SpreadElement {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SPREAD_ELEMENT
+    }
+}
+
+impl SpreadElement {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        // Must match the trivia handled by `print`: dots_trailing + value_leading.
+        let mut trivia_len = 0usize;
+        let (_, dots_trailing) = input.trivia.get_for_range_split(self.dot_dot_dot.span());
+        for t in dots_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_width = self.value.single_line_width(input)?;
+        Some(const { "...".len() } + value_width + trivia_len)
+    }
+}
+
+impl Printable for SpreadElement {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // No space after `...` — it binds tightly to its operand.
+        printer.print_raw_token(&self.dot_dot_dot);
+        let (_, dots_trailing) = printer.trivia.get_for_range_split(self.dot_dot_dot.span());
+        printer.print_trivia_squished(dots_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(&self.value, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.dot_dot_dot.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
     }
 }
 
@@ -4539,9 +4954,14 @@ impl Printable for GenericParamBounds {
 #[derive(Debug)]
 pub struct GenericArgs {
     pub open_angle: t::Less,
-    /// Comma-separated type arguments.
-    pub args: Vec<(crate::ast::Type, Option<t::Comma>)>,
+    /// Comma-separated static or contextual runtime type arguments.
+    pub args: Vec<(GenericArg, Option<t::Comma>)>,
     pub close_angle: t::Greater,
+}
+
+#[derive(Debug)]
+pub enum GenericArg {
+    Type(crate::ast::Type),
 }
 
 impl FromCST for GenericArgs {
@@ -4563,12 +4983,12 @@ impl FromCST for GenericArgs {
                     break t::Greater::from_cst(elem)?;
                 }
                 SyntaxKind::TYPE_EXPR => {
-                    let ty = crate::ast::Type::from_cst(elem)?;
+                    let arg = GenericArg::Type(crate::ast::Type::from_cst(elem)?);
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
                         .transpose()?;
-                    args.push((ty, comma));
+                    args.push((arg, comma));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
@@ -4600,8 +5020,11 @@ impl GenericArgs {
     /// upper bound and tracks what the printer actually emits.
     pub(crate) fn formatted_single_line_width(&self) -> usize {
         let mut len: usize = 2; // `<` and `>`
-        for (i, (ty, _)) in self.args.iter().enumerate() {
-            let arg_span = ty.rightmost_token().end() - ty.leftmost_token().start();
+        for (i, (arg, _)) in self.args.iter().enumerate() {
+            let (left, right) = match arg {
+                GenericArg::Type(ty) => (ty.leftmost_token(), ty.rightmost_token()),
+            };
+            let arg_span = right.end() - left.start();
             len += usize::from(arg_span);
             if i + 1 < self.args.len() {
                 len += 2; // `, `
@@ -4620,8 +5043,10 @@ impl KnownKind for GenericArgs {
 impl Printable for GenericArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.open_angle);
-        for (i, (ty, _comma)) in self.args.iter().enumerate() {
-            printer.print(ty, shape.clone());
+        for (i, (arg, _comma)) in self.args.iter().enumerate() {
+            match arg {
+                GenericArg::Type(ty) => printer.print(ty, shape.clone()),
+            };
             if i + 1 < self.args.len() {
                 printer.print_str(", ");
             }
@@ -4670,7 +5095,12 @@ impl Printable for ThrowsClause {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
+        printer.print_separator(
+            self.keyword.span(),
+            Some(self.ty.leftmost_token()),
+            shape.indent + printer.config.indent_width,
+            " ",
+        );
         multi_lined |= printer.print(&self.ty, shape).multi_lined;
         PrintInfo { multi_lined }
     }
@@ -4716,32 +5146,7 @@ impl FunctionArrow {
         continuation_indent: usize,
         printer: &mut Printer,
     ) {
-        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.span());
-        let next_leading = next_leftmost
-            .map(|range| printer.trivia.get_for_range_split(range).0)
-            .unwrap_or(&[]);
-        let mut printed_comment = false;
-        let mut continued_on_newline = false;
-
-        for trivia in arrow_trailing.iter().chain(next_leading) {
-            if !trivia.is_comment() {
-                continue;
-            }
-            if !continued_on_newline {
-                printer.print_spaces(1);
-            }
-            printer.print_trivia(trivia);
-            printed_comment = true;
-            continued_on_newline = trivia.single_line_len(printer.input).is_none();
-            if continued_on_newline {
-                printer.print_newline();
-                printer.print_spaces(continuation_indent);
-            }
-        }
-
-        if !printed_comment || !continued_on_newline {
-            printer.print_spaces(1);
-        }
+        printer.print_separator(self.span(), next_leftmost, continuation_indent, " ");
     }
 }
 
@@ -5188,8 +5593,16 @@ pub struct PrintChain<'a> {
     chain_members: Vec<PrintChainItem<'a>>,
 }
 impl<'a> PrintChain<'a> {
+    /// Builds the flat chain for a postfix spine.
+    ///
+    /// Every receiver is taken through `Expression::effective_postfix_operand`
+    /// so redundant parens around it peel and the walk continues through them.
+    /// A paren that survives (looser-binding receiver, or one carrying a
+    /// comment) still terminates the walk and becomes `first`, which is what
+    /// puts it on its own indent level.
     #[must_use]
-    pub fn new(from: &'a Expression) -> Self {
+    pub fn new(from: &'a Expression, trivia: &TriviaInfo) -> Self {
+        let from = from.effective_postfix_operand(trivia);
         match from {
             Expression::Path(path_expr) => {
                 let mut chain_members: Vec<PrintChainItem<'a>> = path_expr
@@ -5206,7 +5619,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::Call(call_expr) => {
-                let mut chain = Self::new(&call_expr.callee);
+                let mut chain = Self::new(&call_expr.callee, trivia);
                 if chain.chain_members.is_empty() {
                     // included in `first` if not following a field access
                     Self {
@@ -5221,7 +5634,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::Index(index_expr) => {
-                let mut chain = Self::new(&index_expr.base);
+                let mut chain = Self::new(&index_expr.base, trivia);
                 if chain.chain_members.is_empty() {
                     // included in `first` if not following a field access
                     Self {
@@ -5236,7 +5649,7 @@ impl<'a> PrintChain<'a> {
                 }
             }
             Expression::FieldAccess(field_access_expr) => {
-                let mut chain = Self::new(&field_access_expr.base);
+                let mut chain = Self::new(&field_access_expr.base, trivia);
                 chain.chain_members.push(PrintChainItem::FieldAccess(
                     &field_access_expr.dot,
                     &field_access_expr.field,
@@ -5244,7 +5657,7 @@ impl<'a> PrintChain<'a> {
                 chain
             }
             Expression::OptionalFieldAccess(ofa) => {
-                let mut chain = Self::new(&ofa.base);
+                let mut chain = Self::new(&ofa.base, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalFieldAccess(
@@ -5254,14 +5667,14 @@ impl<'a> PrintChain<'a> {
                 chain
             }
             Expression::OptionalIndex(oi) => {
-                let mut chain = Self::new(&oi.base);
+                let mut chain = Self::new(&oi.base, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalIndex(&oi.question_dot, oi.args()));
                 chain
             }
             Expression::OptionalCall(oc) => {
-                let mut chain = Self::new(&oc.callee);
+                let mut chain = Self::new(&oc.callee, trivia);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalCall(&oc.question_dot, &oc.args));

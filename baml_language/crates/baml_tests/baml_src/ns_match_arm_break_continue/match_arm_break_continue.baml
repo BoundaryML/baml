@@ -26,7 +26,7 @@ function sum_skip_three_break_at_six() -> int {
 
 test "bare_break_and_continue_arms_control_the_loop" {
     // Adds 1 + 2 + 4 + 5 (skips 3, breaks before 6) = 12.
-    assert.is_true(baml.deep_equals(sum_skip_three_break_at_six(), 12))
+    assert.equal(sum_skip_three_break_at_six(), 12)
 }
 
 // ── value position (never unifies with the other arm) ────────────────────────
@@ -50,7 +50,7 @@ function countdown_sum(start: int) -> int {
 
 test "bare_break_in_value_position_unifies_and_breaks" {
     // 4 + 3 + 2 + 1 = 10, then i == 0 breaks.
-    assert.is_true(baml.deep_equals(countdown_sum(4), 10))
+    assert.equal(countdown_sum(4), 10)
 }
 
 // The bare `continue` arm in value position: its `never` unifies with the `int`
@@ -71,5 +71,5 @@ function sum_1_to_5_skip_3() -> int {
 
 test "bare_continue_in_value_position_unifies_and_skips" {
     // 1 + 2 + 4 + 5 (skips 3) = 12.
-    assert.is_true(baml.deep_equals(sum_1_to_5_skip_3(), 12))
+    assert.equal(sum_1_to_5_skip_3(), 12)
 }

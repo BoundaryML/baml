@@ -17,7 +17,7 @@ function arb_rest_binds_middle_values() -> int {
 
 test "rest_binds_middle_values" {
     // a=1, r=[2,3,4], z=5
-    assert.is_true(baml.deep_equals(arb_rest_binds_middle_values(), 51234))
+    assert.equal(arb_rest_binds_middle_values(), 51234)
 }
 
 function arb_rest_with_no_suffix_takes_tail() -> int {
@@ -29,7 +29,7 @@ function arb_rest_with_no_suffix_takes_tail() -> int {
 
 test "rest_with_no_suffix_takes_tail" {
     // r=[8,9]: 2*10 + 8 - 7
-    assert.is_true(baml.deep_equals(arb_rest_with_no_suffix_takes_tail(), 21))
+    assert.equal(arb_rest_with_no_suffix_takes_tail(), 21)
 }
 
 function arb_rest_is_empty_when_nothing_remains() -> int {
@@ -40,7 +40,7 @@ function arb_rest_is_empty_when_nothing_remains() -> int {
 }
 
 test "rest_is_empty_when_nothing_remains" {
-    assert.is_true(baml.deep_equals(arb_rest_is_empty_when_nothing_remains(), 0))
+    assert.equal(arb_rest_is_empty_when_nothing_remains(), 0)
 }
 
 function arb_rest_is_empty_between_exact_prefix_and_suffix() -> int {
@@ -52,7 +52,7 @@ function arb_rest_is_empty_between_exact_prefix_and_suffix() -> int {
 
 test "rest_is_empty_between_exact_prefix_and_suffix" {
     // r=[], a=1, z=2
-    assert.is_true(baml.deep_equals(arb_rest_is_empty_between_exact_prefix_and_suffix(), 12))
+    assert.equal(arb_rest_is_empty_between_exact_prefix_and_suffix(), 12)
 }
 
 function arb_too_short_array_falls_through_rest_arm() -> int {
@@ -63,7 +63,7 @@ function arb_too_short_array_falls_through_rest_arm() -> int {
 }
 
 test "too_short_array_falls_through_rest_arm" {
-    assert.is_true(baml.deep_equals(arb_too_short_array_falls_through_rest_arm(), 2))
+    assert.equal(arb_too_short_array_falls_through_rest_arm(), 2)
 }
 
 function arb_rest_only_copies_whole_array() -> int {
@@ -72,7 +72,7 @@ function arb_rest_only_copies_whole_array() -> int {
 }
 
 test "rest_only_copies_whole_array" {
-    assert.is_true(baml.deep_equals(arb_rest_only_copies_whole_array(), 313))
+    assert.equal(arb_rest_only_copies_whole_array(), 313)
 }
 
 // ─── the rest binding is a copy, not a view ──────────────────────────────────
@@ -90,7 +90,7 @@ function arb_pushing_to_rest_does_not_mutate_source() -> int {
 
 test "pushing_to_rest_does_not_mutate_source" {
     // xs stays [1,2,3]; r becomes [2,3,99]
-    assert.is_true(baml.deep_equals(arb_pushing_to_rest_does_not_mutate_source(), 33))
+    assert.equal(arb_pushing_to_rest_does_not_mutate_source(), 33)
 }
 
 function arb_pushing_to_source_does_not_mutate_rest() -> int {
@@ -105,7 +105,7 @@ function arb_pushing_to_source_does_not_mutate_rest() -> int {
 }
 
 test "pushing_to_source_does_not_mutate_rest" {
-    assert.is_true(baml.deep_equals(arb_pushing_to_source_does_not_mutate_rest(), 2))
+    assert.equal(arb_pushing_to_source_does_not_mutate_rest(), 2)
 }
 
 class ArbCell {
@@ -126,7 +126,7 @@ function arb_rest_copy_is_shallow_elements_are_shared() -> int {
 
 test "rest_copy_is_shallow_elements_are_shared" {
     // r=[c]; mutating c is visible through the copied slice.
-    assert.is_true(baml.deep_equals(arb_rest_copy_is_shallow_elements_are_shared(), 5))
+    assert.equal(arb_rest_copy_is_shallow_elements_are_shared(), 5)
 }
 
 // ─── or-arm rest bindings across a union scrutinee ───────────────────────────
@@ -156,15 +156,15 @@ function arb_empty_branch() -> int {
 }
 
 test "or_arm_rest_binding_dispatches_class_branch" {
-    assert.is_true(baml.deep_equals(arb_class_branch(), 7))
+    assert.equal(arb_class_branch(), 7)
 }
 
 test "or_arm_rest_binding_dispatches_array_branch" {
-    assert.is_true(baml.deep_equals(arb_array_branch(), 5))
+    assert.equal(arb_array_branch(), 5)
 }
 
 test "or_arm_rest_binding_falls_through_empty_array" {
-    assert.is_true(baml.deep_equals(arb_empty_branch(), 0))
+    assert.equal(arb_empty_branch(), 0)
 }
 
 // ─── rest bindings in other binding positions ────────────────────────────────
@@ -178,7 +178,7 @@ function arb_rest_binding_in_nested_element_pattern() -> int {
 
 test "rest_binding_in_nested_element_pattern" {
     // inner=[1,2]
-    assert.is_true(baml.deep_equals(arb_rest_binding_in_nested_element_pattern(), 22))
+    assert.equal(arb_rest_binding_in_nested_element_pattern(), 22)
 }
 
 function arb_grab(xs: int[]) -> int {
@@ -194,7 +194,7 @@ function arb_rest_binding_in_if_let() -> int {
 
 test "rest_binding_in_if_let" {
     // grab([4,5,6]) = 42; grab([]) = -1
-    assert.is_true(baml.deep_equals(arb_rest_binding_in_if_let(), 4199))
+    assert.equal(arb_rest_binding_in_if_let(), 4199)
 }
 
 function arb_rest_only_binding_in_for_loop() -> int {
@@ -208,7 +208,7 @@ function arb_rest_only_binding_in_for_loop() -> int {
 }
 
 test "rest_only_binding_in_for_loop" {
-    assert.is_true(baml.deep_equals(arb_rest_only_binding_in_for_loop(), 4))
+    assert.equal(arb_rest_only_binding_in_for_loop(), 4)
 }
 
 function arb_tail_len<T>(xs: T[]) -> int {
@@ -224,7 +224,7 @@ function arb_rest_binding_generic_element_type() -> int {
 
 test "rest_binding_generic_element_type" {
     // 2*10 + 0
-    assert.is_true(baml.deep_equals(arb_rest_binding_generic_element_type(), 20))
+    assert.equal(arb_rest_binding_generic_element_type(), 20)
 }
 
 function arb_rest_bind_chain_aliases_same_slice() -> int {
@@ -239,5 +239,5 @@ function arb_rest_bind_chain_aliases_same_slice() -> int {
 test "rest_bind_chain_aliases_same_slice" {
     // Mutating one chained binding is observed through the other, proving `r`
     // and `s` reference the same slice rather than two equal-length copies.
-    assert.is_true(baml.deep_equals(arb_rest_bind_chain_aliases_same_slice(), 44))
+    assert.equal(arb_rest_bind_chain_aliases_same_slice(), 44)
 }

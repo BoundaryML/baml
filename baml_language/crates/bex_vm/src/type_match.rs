@@ -15,8 +15,8 @@
 //! per argument via [`class_type_arg_matches`] — invariantly, since BAML
 //! generics are invariant.
 
-use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
-use bex_vm_types::{Value, errors::VmInternalError};
+use baml_type::normalize;
+use bex_vm_types::{RealizedTy, Ty, TyTemplate, Value, errors::VmInternalError};
 
 use crate::BexVm;
 
@@ -44,12 +44,15 @@ pub(crate) fn value_matches_template(
     // realized frame the value carries (a bound method's drops the applied
     // receiver), so one minted in a generic frame is as precise as any other;
     // futures reconstruct at the `Future<T, E>` their spawn site was typed at.
-    let Some(value_ty) = vm.value_concrete_ty(value) else {
+    //
+    // The reconstruction is the singleton-precise one: a literal type holds a
+    // single value, so nothing decides membership in it short of the value
+    // reporting the type of exactly itself.
+    let Some(value_ty) = vm.value_singleton_ty(value) else {
         return Ok(false);
     };
-    // The canonical algebra operates over `Ty`; a value's concrete type widens
-    // into it (a shallow structural conversion — `ConcreteRealizedTy` is not a
-    // deep, transmute-compatible family member with a borrowed upcast).
+    // The canonical algebra operates over `Ty`; a value's realized type widens
+    // into it.
     let value_ty: Ty = value_ty.into();
     // Resolve frame references into a realized type, then let the canonical
     // algebra do the work.
@@ -66,11 +69,11 @@ pub(crate) fn value_matches_template(
 /// `ClassWithTypeArgs` check. BAML generics are invariant, so the relation is
 /// canonical equivalence, not membership. A substitution failure is a broken
 /// invariant, exactly as in [`value_matches_template`].
-pub(crate) fn class_type_arg_matches<C: normalize::TypeContext>(
+pub(crate) fn class_type_arg_matches<H: baml_type::Head, C: normalize::TypeContext<H>>(
     ctx: &C,
-    template: &TyTemplate,
-    frame_type_args: &[RealizedTy],
-    actual: &Ty,
+    template: &baml_type::TyTemplate<H>,
+    frame_type_args: &[baml_type::RealizedTy<H>],
+    actual: &baml_type::Ty<H>,
 ) -> Result<bool, VmInternalError> {
     let expected = template.substitute(frame_type_args, ctx).map_err(|e| {
         VmInternalError::TypeSubstitution {
@@ -95,33 +98,55 @@ mod tests {
     /// that don't need program facts. Nominal facts (a class implementing an
     /// interface) are validated by the VM-backed e2e tests.
     struct EmptyCtx;
-    impl TypeContext for EmptyCtx {
-        fn alias_def(&self, _: &QualifiedTypeName) -> Option<baml_type::Ty> {
+    impl TypeContext<QualifiedTypeName> for EmptyCtx {
+        /// A name-based context represents a declaration by its own name, so a
+        /// well-known declaration is its spelled name — no lookup, never `None`.
+        fn well_known(
+            &self,
+            head: baml_type::normalize::WellKnownHead,
+        ) -> Option<QualifiedTypeName> {
+            use baml_type::normalize::SpelledHead as _;
+            Some(QualifiedTypeName::well_known(head))
+        }
+
+        fn alias_def(&self, _: &QualifiedTypeName) -> Option<baml_type::Ty<QualifiedTypeName>> {
             None
         }
-        fn implements_interface(&self, _: &baml_type::Ty, _: &Interface) -> bool {
+        fn implements_interface(
+            &self,
+            _: &baml_type::Ty<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
+        ) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface<QualifiedTypeName>> {
             Vec::new()
         }
-        fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
+        fn interface_requires(
+            &self,
+            _: &Interface<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
+        ) -> bool {
             false
         }
         fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
             None
         }
-        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+        fn associated_type_bound(
+            &self,
+            _: &Interface<QualifiedTypeName>,
+            _: Name,
+        ) -> Vec<Interface<QualifiedTypeName>> {
             // Context-free: no interface declarations, so no declared bounds.
             Vec::new()
         }
         fn project(
             &self,
-            _: &baml_type::Ty,
-            _: &Interface,
+            _: &baml_type::Ty<QualifiedTypeName>,
+            _: &Interface<QualifiedTypeName>,
             _: &Name,
             _fuel: u32,
-        ) -> baml_type::normalize::ProjectionStep {
+        ) -> baml_type::normalize::ProjectionStep<QualifiedTypeName> {
             // Context-free: no impls to reduce through; projections stay opaque.
             baml_type::normalize::ProjectionStep::Opaque
         }
@@ -199,16 +224,16 @@ mod tests {
     #[test]
     fn class_type_args_are_invariant() {
         let tn = user_class("Foo");
-        let foo_int = TyTemplate::class(tn.clone(), vec![leaf(RealizedTy::int())]);
+        let foo_int = TyTemplate::class(tn.clone(), Box::new([leaf(RealizedTy::int())]));
         assert!(matches(
             &foo_int,
             &[],
-            &RuntimeTy::class_with_args(tn.clone(), vec![RuntimeTy::int()])
+            &RuntimeTy::class_with_args(tn.clone(), Box::new([RuntimeTy::int()]))
         ));
         assert!(!matches(
             &foo_int,
             &[],
-            &RuntimeTy::class_with_args(tn, vec![RuntimeTy::string()])
+            &RuntimeTy::class_with_args(tn, Box::new([RuntimeTy::string()]))
         ));
     }
 
@@ -266,6 +291,53 @@ mod tests {
             baml_type::TyAttr::default(),
         );
         assert!(matches(&int_arm, &[], &one));
+    }
+
+    /// The algebra half of literal membership: the relation
+    /// `ConstValue::Literal` specializes must give the same answers the
+    /// specialization does, or the fast path and the general path disagree.
+    ///
+    /// Each case below is exactly one `value_is_literal` arm: a singleton
+    /// admits itself, no other value of its base type, and — the B-1073 case —
+    /// nothing from a neighbouring rung of the numeric tower, which the `==`
+    /// operator deliberately widens across and this relation deliberately does
+    /// not.
+    #[test]
+    fn literal_membership_agrees_with_algebra() {
+        fn lit(l: baml_type::Literal) -> RuntimeTy {
+            RuntimeTy::Literal(
+                l,
+                baml_type::Freshness::Regular,
+                baml_type::TyAttr::default(),
+            )
+        }
+        fn lit_realized(l: baml_type::Literal) -> RealizedTy {
+            RealizedTy::Literal(
+                l,
+                baml_type::Freshness::Regular,
+                baml_type::TyAttr::default(),
+            )
+        }
+        let one = leaf(lit_realized(baml_type::Literal::Int(1)));
+
+        // A singleton admits exactly itself.
+        assert!(matches(&one, &[], &lit(baml_type::Literal::Int(1))));
+        assert!(!matches(&one, &[], &lit(baml_type::Literal::Int(2))));
+
+        // ...and nothing from another rung of the tower, at either precision.
+        assert!(!matches(&one, &[], &RuntimeTy::float()));
+        assert!(!matches(
+            &one,
+            &[],
+            &lit(baml_type::Literal::Bigint(1.into()))
+        ));
+        assert!(!matches(&one, &[], &lit(baml_type::Literal::Bool(true))));
+
+        // The base type is not a member of its own singleton: `int` includes
+        // values other than `1`. This is why the value matcher must reconstruct
+        // the *singleton* type of a value (`value_singleton_ty`) rather than
+        // its base — with the base it reports, no value inhabits any literal.
+        assert!(!matches(&one, &[], &RuntimeTy::int()));
     }
 
     // ── Class-arg (invariant) checks — the `ClassWithTypeArgs` per-arg relation ──

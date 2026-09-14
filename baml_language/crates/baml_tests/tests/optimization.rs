@@ -4,18 +4,18 @@
 //! Each test compiles the same BAML source twice and snapshots both versions
 //! so the optimization effect is visible at a glance in the source file.
 
-use baml_tests::engine::{OptLevel, compile_source_with_opt, display_user_functions};
+use baml_tests::engine::{OptLevel, compile_source_with_opt, display_user_functions_bound};
 
 /// Compile source at OptLevel::One (no constant folding) and return textual bytecode.
 fn unoptimized(source: &str) -> String {
     let program = compile_source_with_opt(source, OptLevel::One);
-    display_user_functions(&program)
+    display_user_functions_bound(&program)
 }
 
 /// Compile source at OptLevel::Two (with constant folding) and return textual bytecode.
 fn optimized(source: &str) -> String {
     let program = compile_source_with_opt(source, OptLevel::Two);
-    display_user_functions(&program)
+    display_user_functions_bound(&program)
 }
 
 // ============================================================================

@@ -5,8 +5,8 @@ use std::{
 };
 
 use anyhow::Result;
+use baml_db::discover_baml_files;
 use baml_fmt::FormatOptions;
-use baml_workspace::discover_baml_files;
 use clap::Args;
 
 use crate::{project_load::resolve_project_layout, reporter::Reporter};

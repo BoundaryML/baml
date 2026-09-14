@@ -5,6 +5,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { compositionBar } from '../composition';
 import {
   dispatchGoto,
   flash,
@@ -12,35 +13,27 @@ import {
   SymbolIndex,
 } from '../navigation';
 import { bamlSignature, tsSignature } from '../signature';
-import type {
-  BamlSymbol,
-  Judgement,
-  Links,
-  Side,
-  SymbolMatrix,
-  TreeNode,
-  TsSymbol,
+import {
+  type BamlSymbol,
+  type Judgement,
+  type Links,
+  type Side,
+  type SymbolMatrix,
+  type SymbolState,
+  stateOf,
+  type TreeNode,
+  type TsSymbol,
 } from '../types';
 
 // One symbol row, seen from whichever side the reader is viewing.
 //
-// The swatch answers "does this exist in the other language": striped when it
-// has a counterpart, otherwise the viewing language's own colour.
+// The swatch answers "what does the other language do about this" — see
+// `swatchFor`.
 //
 // A row is only handed a `target` when it is on the path to one — its parent
 // passes it down to the one child that leads there — so holding it at all means
 // "open, and if the path ends here, this is the destination".
 
-/**
- * What the square says, before anything is opened.
- *
- * Four states, because the run distinguishes four. Striped is present in both
- * and reached the same way; split is present in both and reached differently;
- * solid is examined and found to have no counterpart; hollow is nothing has
- * looked yet. Hollow reads as empty and so as unknown, solid as a settled
- * finding — which is the distinction a reader most needs and the one the view
- * could not previously make at all.
- */
 /** A heading over one part of an opened row. */
 const SECTION = (label: string) => html`<h4
   class="mt-3 mb-1 text-[0.68rem] font-semibold tracking-wider text-zinc-500 uppercase"
@@ -51,18 +44,45 @@ const SECTION = (label: string) => html`<h4
 /** What a judgement rests on, said in words rather than in the report's slug. */
 const BASIS: Record<string, string> = {
   model: 'judged by a model',
-  name: 'names and owners agree',
   'no-candidates': 'nothing comparable exists to consider',
 };
 
-const SWATCH = {
-  baml: ['swatch-baml', 'no TypeScript counterpart'],
-  both: ['swatch-both', 'present in both'],
-  divergent: ['swatch-divergent', 'present in both, reached differently'],
-  ts: ['swatch-ts', 'no BAML counterpart'],
-  unjudgedBaml: ['swatch-unjudged-baml', 'not yet judged'],
-  unjudgedTs: ['swatch-unjudged-ts', 'not yet judged'],
-} as const;
+/**
+ * The square, chosen by what was concluded and by where the reader stands.
+ *
+ * A solid square is one language, and it is always the *other* one when the
+ * symbol exists in both: from the TypeScript view, purple says "this is in BAML
+ * too" and yellow says "this is TypeScript's alone". The viewing side's own
+ * colour therefore always means "only here", which is the reading a scan wants.
+ *
+ * Stripes are both languages interleaved: the same operation, reached
+ * differently. Red belongs to neither surface — it says BAML answers the
+ * question in the language, so the API does not arise.
+ */
+function swatchFor(state: SymbolState, side: Side): readonly [string, string] {
+  const own = side === 'ts' ? 'swatch-ts' : 'swatch-baml';
+  const other = side === 'ts' ? 'swatch-baml' : 'swatch-ts';
+  switch (state) {
+    case 'match':
+      return [other, 'present in both'];
+    case 'divergent':
+      return ['swatch-striped', 'present in both, reached differently'];
+    case 'unnecessary':
+      return ['swatch-unnecessary', 'unnecessary in BAML'];
+    case 'none':
+      return [own, 'no BAML counterpart'];
+    default:
+      // An absence names no BAML symbol, so it never indexes from that end: a
+      // BAML symbol is either named by a judgement or not, and "not" is silence
+      // rather than a finding. Only the TypeScript side can tell "examined,
+      // nothing does this" from "nothing has looked yet", so only it gets the
+      // hollow square; on the BAML side the same state is solid, and means no
+      // judgement happens to name this symbol.
+      return side === 'ts'
+        ? ['swatch-unjudged-ts', 'not yet judged']
+        : [own, 'no judgement names it'];
+  }
+}
 
 export class MatrixSymbolElement extends LitElement {
   static properties = {
@@ -71,6 +91,7 @@ export class MatrixSymbolElement extends LitElement {
     matrix: { attribute: false },
     node: { attribute: false },
     open: { state: true, type: Boolean },
+    scale: { type: Number },
     side: {},
     target: { attribute: false },
   };
@@ -82,6 +103,9 @@ export class MatrixSymbolElement extends LitElement {
   declare target: GotoTarget | null;
   declare depth: number;
   declare open: boolean;
+  /** The largest member-holding row's size, which this row's bar is drawn as a
+   *  fraction of. Rows are scaled against rows, never against the groups. */
+  declare scale: number;
   /** The last request this row scrolled for, so a repeat request scrolls again
    *  but a re-render for any other reason does not. */
   #focused = -1;
@@ -92,6 +116,7 @@ export class MatrixSymbolElement extends LitElement {
     this.target = null;
     this.depth = 0;
     this.open = false;
+    this.scale = 0;
   }
 
   protected willUpdate(changed: PropertyValues) {
@@ -153,19 +178,10 @@ export class MatrixSymbolElement extends LitElement {
   }
 
   private get swatch(): readonly [string, string] {
-    const counterparts = this.counterparts;
-    if (counterparts.length > 0) {
-      // Any divergence colours the square: a reader scanning for the places the
-      // two libraries disagree should not have to open a row to find them.
-      return counterparts.some((judgement) => judgement.verdict === 'divergent')
-        ? SWATCH.divergent
-        : SWATCH.both;
-    }
-    // An absence is only recorded against the BAML symbol — it carries
-    // `ts: null` and never indexes from the TypeScript end — so that side has
-    // no unjudged state to show. After a sweep, unclaimed is the finding.
-    if (this.side === 'ts') return SWATCH.ts;
-    return this.own.length > 0 ? SWATCH.baml : SWATCH.unjudgedBaml;
+    return swatchFor(
+      stateOf(this.links, this.side, this.node.index),
+      this.side,
+    );
   }
 
   private signatureOf(symbol: BamlSymbol | TsSymbol, side: Side): string {
@@ -221,16 +237,25 @@ export class MatrixSymbolElement extends LitElement {
           aria-label=${swatchLabel}
           title=${swatchLabel}
         ></span>
-        <span class="min-w-0">
+        <span class="flex min-w-0 items-baseline gap-3">
+          <span class="min-w-0 flex-1">
+            ${
+              this.side === 'baml'
+                ? bamlSignature(this.symbol as BamlSymbol, this.matrix)
+                : tsSignature(this.symbol as TsSymbol, this.matrix)
+            }
+          </span>
           ${
-            this.side === 'baml'
-              ? bamlSignature(this.symbol as BamlSymbol, this.matrix)
-              : tsSignature(this.symbol as TsSymbol, this.matrix)
-          }${
+            // A row that holds members gets the same bar its group does, so a
+            // class and the module around it are read the same way.
             this.node.children.length > 0
-              ? html`<span class="ml-2 text-[0.7rem] text-zinc-500"
-                >${this.node.children.length} members</span
-              >`
+              ? compositionBar(
+                  this.node.children,
+                  this.links,
+                  this.side,
+                  this.scale,
+                  'row',
+                )
               : nothing
           }
         </span>
@@ -247,6 +272,7 @@ export class MatrixSymbolElement extends LitElement {
                   .node=${child}
                   .links=${this.links}
                   .matrix=${this.matrix}
+                  .scale=${this.scale}
                   .target=${this.targetFor(child)}
                   .depth=${this.depth + 1}
                 ></matrix-symbol>
@@ -262,6 +288,11 @@ export class MatrixSymbolElement extends LitElement {
    *  symbol's job. Each carries the reasoning that makes it worth reading. */
   private get absences(): Judgement[] {
     return this.own.filter((judgement) => judgement.verdict === 'none');
+  }
+
+  /** The judgements recording that BAML makes the question not arise. */
+  private get unnecessary(): Judgement[] {
+    return this.own.filter((judgement) => judgement.verdict === 'unnecessary');
   }
 
   // What the run concluded, and why. A pairing without its reasoning is a bare
@@ -284,12 +315,49 @@ export class MatrixSymbolElement extends LitElement {
           this.counterparts.length > 0
             ? html`
               ${SECTION(other)}
-              ${this.counterparts.map((link) => this.counterpart(link))}
+              ${this.counterparts.map((link) => this.judgement(link))}
+            `
+            : nothing
+        }
+        ${
+          this.unnecessary.length > 0
+            ? html`
+              ${SECTION('unnecessary in BAML')}
+              ${this.unnecessary.map((link) => this.judgement(link))}
             `
             : nothing
         }
         ${this.absences.map((judgement) => this.absence(judgement, other))}
       </div>
+    `;
+  }
+
+  /**
+   * The same job written in each language, side by side.
+   *
+   * Shown wherever a judgement carries one, not only for the unnecessary ones:
+   * a divergence is exactly the case where prose is weakest and two lines of
+   * code are clearest.
+   */
+  private example(judgement: Judgement): TemplateResult | typeof nothing {
+    const example = judgement.example;
+    if (!example) return nothing;
+    const pane = (label: string, code: string) => html`<div class="min-w-0">
+      <div class="mb-0.5 text-[0.62rem] tracking-wider text-zinc-500 uppercase">${label}</div>
+      <pre
+        class="overflow-x-auto rounded bg-zinc-100 px-2 py-1.5 font-mono
+               text-[0.75rem] whitespace-pre dark:bg-zinc-900"
+      ><code>${code}</code></pre>
+    </div>`;
+    return html`
+      <div class="my-1.5 grid gap-2 sm:grid-cols-2">
+        ${pane('TypeScript', example.typescript)} ${pane('BAML', example.baml)}
+      </div>
+      ${
+        example.note
+          ? html`<p class="my-1 text-xs text-zinc-500">${example.note}</p>`
+          : nothing
+      }
     `;
   }
 
@@ -319,7 +387,7 @@ export class MatrixSymbolElement extends LitElement {
           </div>`
           : nothing
       }
-      ${this.provenance(judgement)}
+      ${this.example(judgement)} ${this.provenance(judgement)}
     `;
   }
 
@@ -327,9 +395,9 @@ export class MatrixSymbolElement extends LitElement {
    * How much weight a judgement carries: what established it, how sure it was,
    * and whether anything checked it.
    *
-   * Shown for every judgement rather than only model ones. A name match that no
-   * judge has examined and a pairing an adversarial judge upheld are different
-   * claims, and they used to render identically.
+   * Shown for every judgement, because a proposal no judge has examined and a
+   * pairing an adversarial judge upheld are different claims, and they used to
+   * render identically.
    */
   private provenance(judgement: Judgement): TemplateResult {
     const parts: string[] = [BASIS[judgement.basis] ?? judgement.basis];
@@ -338,23 +406,50 @@ export class MatrixSymbolElement extends LitElement {
     return html`<p class="my-1 text-[0.68rem] text-zinc-500">${parts.join(' · ')}</p>`;
   }
 
-  private counterpart(link: Judgement): TemplateResult | typeof nothing {
+  /**
+   * The ids on the far side of a judgement, from wherever the reader is.
+   *
+   * Plural in one direction and singular in the other, because the relation is:
+   * a judgement answers for one TypeScript symbol and may name several BAML
+   * ones — `child_process.spawn` is `baml.sys.exec` together with the
+   * `ShellOutput` it returns.
+   */
+  private facing(link: Judgement): string[] {
+    return this.side === 'baml' ? [link.ts] : link.baml;
+  }
+
+  /**
+   * One judgement: everything it points at, then why — each said once.
+   *
+   * Structured around the judgement rather than around its endpoints, because
+   * the reasoning belongs to the judgement. Rendering per endpoint repeated the
+   * reason, the example and the provenance once per symbol named, which for the
+   * 173 judgements naming more than one read as several separate findings that
+   * happened to agree.
+   */
+  private judgement(link: Judgement): TemplateResult {
     const otherSide: Side = this.side === 'baml' ? 'ts' : 'baml';
-    // A judgement names its ends by id; the views address rows by index.
-    const wanted = this.side === 'baml' ? link.ts : link.baml;
     const symbols: Array<BamlSymbol | TsSymbol> =
       otherSide === 'ts' ? this.matrix.ts : this.matrix.baml;
-    const index = symbols.findIndex((candidate) => candidate.id === wanted);
-    const symbol = symbols[index];
-    if (!symbol) return nothing;
+    const found = this.facing(link)
+      .map((wanted) =>
+        symbols.findIndex((candidate) => candidate.id === wanted),
+      )
+      .filter((index) => index >= 0);
     return html`
       <div class="my-1">
-        <div class="font-mono text-[0.8rem]">
-          ${this.crossLink(otherSide, index, symbol.display)}
-        </div>
-        <div class="font-mono text-xs text-zinc-500">
-          ${this.signatureOf(symbol, otherSide)}
-        </div>
+        ${found.map((index) => {
+          const symbol = symbols[index];
+          if (!symbol) return nothing;
+          return html`<div class="mb-1">
+            <div class="font-mono text-[0.8rem]">
+              ${this.crossLink(otherSide, index, symbol.display)}
+            </div>
+            <div class="font-mono text-xs text-zinc-500">
+              ${this.signatureOf(symbol, otherSide)}
+            </div>
+          </div>`;
+        })}
         ${
           link.verdict === 'divergent'
             ? html`<p
@@ -367,10 +462,10 @@ export class MatrixSymbolElement extends LitElement {
         }
         ${
           link.reason
-            ? html`<p class="my-1 text-xs text-zinc-500">${link.reason}</p>`
+            ? html`<p class="my-1 text-sm text-zinc-600 dark:text-zinc-400">${link.reason}</p>`
             : nothing
         }
-        ${this.provenance(link)}
+        ${this.example(link)} ${this.provenance(link)}
       </div>
     `;
   }

@@ -133,7 +133,7 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
       type: 'hello',
     });
     socket.receive({
-      notification: { projects: ['/stale'], type: 'listProjects' },
+      notification: { projects: [{ path: '/stale' }], type: 'listProjects' },
       type: 'playgroundNotification',
     });
     socket.receive({ type: 'ready' });

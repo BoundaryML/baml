@@ -1,0 +1,37 @@
+schemaVersion: 1
+id: typescript
+compatibility:
+  - concern: Calls
+    behavior: Generated methods are asynchronous and return promises.
+  - concern: Names
+    behavior: BAML function and type names remain visible in generated code.
+  - concern: Regeneration
+    behavior: Generated files are replaced; application edits belong elsewhere.
+types:
+  - baml: string
+    host: string
+    notes: Text values map directly.
+  - baml: int / float
+    host: number
+    notes: Keep integer constraints in mind at runtime boundaries.
+  - baml: T[]
+    host: T[]
+    notes: Element types remain explicit.
+  - baml: T?
+    host: Nullable generated type
+    notes: Do not use truthiness when zero or empty text is valid.
+  - baml: class
+    host: Generated object type
+    notes: Fields preserve their declared names and types.
+  - baml: enum
+    host: Generated enum
+    notes: Import the generated symbol instead of duplicating literals.
+transitions:
+  - Generated client calls return promises; await them before using the typed result.
+  - Regenerate after changing a BAML function, class, enum, or generator configuration.
+  - Treat partial streaming values separately from the final typed result.
+gotchas:
+  - Never edit generated client files by hand.
+  - Keep secret-bearing client construction on the server side of web applications.
+  - Do not use truthiness to test nullable numbers or strings when zero or empty text is valid.
+  - Import generated enum symbols instead of duplicating their literal values.

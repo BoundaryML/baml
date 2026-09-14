@@ -1,0 +1,27 @@
+<!--
+  One-shot build of every C# fixture consumer plus the union-generator tool.
+
+  setup.sh / setup.ps1 build this solution once before the test suite runs:
+  a single MSBuild invocation compiles the projects in parallel across cores
+  and builds the shared Baml.Bridge project exactly once. The tests then
+  execute in no-build mode, so no MSBuild processes race on the bridge's
+  obj/ at test time and nextest can run the tests concurrently.
+
+  The documentation consumer is NOT part of this solution: it needs the
+  BamlBridgeProjectReference / BamlGeneratedSourceRoot properties, so setup
+  builds it with a dedicated invocation carrying those same properties.
+-->
+<Solution>
+  <Project Path="basic_calls/BasicCalls.csproj" />
+  <Project Path="dynamic_values/DynamicValues.csproj" />
+  <Project Path="failures_and_cancellation/FailuresAndCancellation.csproj" />
+  <Project Path="generics/Generics.csproj" />
+  <Project Path="host_callables/HostCallables.csproj" />
+  <Project Path="media/Media.csproj" />
+  <Project Path="primitive_edges/PrimitiveEdges.csproj" />
+  <Project Path="stdlib_resources/StdlibResources.csproj" />
+  <Project Path="stdlib_structurals/StdlibStructurals.csproj" />
+  <Project Path="streaming/Streaming.csproj" />
+  <Project Path="type_roundtrips/TypeRoundtrips.csproj" />
+  <Project Path="../../../sdks/csharp/bridge_csharp/tools/Baml.UnionGenerator/Baml.UnionGenerator.csproj" />
+</Solution>

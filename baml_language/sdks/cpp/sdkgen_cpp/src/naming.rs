@@ -32,6 +32,9 @@ use baml_codegen_types::Name;
 /// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
 pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
     let mut out: Vec<Box<str>> = Vec::new();
+    if symbol.is_stream() {
+        out.push(Box::from("stream_types"));
+    }
     match symbol.package().as_str() {
         "user" => {}
         "baml" => out.push(Box::from("baml")),
@@ -355,6 +358,19 @@ fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
 const CPP_KEYWORDS: &[&str] = &[
     "alignas",
     "alignof",
+    // Alternative operator tokens ([lex.key] — `or` et al. are full keywords;
+    // a method named `or` fails to parse, which `baml.env.Ref.or` proved).
+    "and",
+    "and_eq",
+    "bitand",
+    "bitor",
+    "compl",
+    "not",
+    "not_eq",
+    "or",
+    "or_eq",
+    "xor",
+    "xor_eq",
     "asm",
     "auto",
     "bool",

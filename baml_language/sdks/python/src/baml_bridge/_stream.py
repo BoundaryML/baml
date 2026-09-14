@@ -1,4 +1,4 @@
-"""`BamlStream` — pure-Python wrapper for `baml.llm.Stream`.
+"""`BamlStream` — pure-Python wrapper for a BAML stream handle.
 
 Holds a `BamlPyHandle` whose `HANDLE_TABLE` row is a
 `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`.
@@ -19,28 +19,33 @@ Python.
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+import asyncio
+from typing import Any, Generic, TypeVar, cast
 
 from .baml_py import BamlPyHandle
 
-_STREAM_NEXT_FN = "baml.llm.Stream.next"
-_STREAM_FINAL_FN = "baml.llm.Stream.final"
-
-TStream = TypeVar("TStream")
+TNext = TypeVar("TNext")
+TYield = TypeVar("TYield")
 TFinal = TypeVar("TFinal")
 
+# Terminal marker FQN for async iteration; resolved lazily through the
+# installed typemap so the bridge never imports the generated package.
+_DONE_FQN = "ai.stream.Done"
 
-class BamlStream(Generic[TStream, TFinal]):
+
+class BamlStream(Generic[TNext, TYield, TFinal]):
     """Opaque wrapper around a streaming-call handle.
 
-    `TStream` / `TFinal` are erased at runtime — `BamlStream[TStream, TFinal]`
-    is just a `typing.Generic` subscription, handled natively by Python.
-    Codegen emits `Stream[X, Y]` annotations in generated leaves; they
+    The type arguments are erased at runtime. `TNext` is the complete return
+    type of `next` (including null and the generated `ai.stream.Done` terminal
+    marker), `TYield` is the non-null partial produced by async iteration, and
+    `TFinal` is the settled return type of `final`.
+    Codegen emits those concrete annotations in generated leaves; they
     evaluate to a parameterized alias whose `isinstance` falls back to the
     unparameterized origin, which is what `proto.py` checks against.
 
-    The positional order mirrors the BAML signature
-    `Stream<TStream, TFinal>` (stream type first, final type second).
+    BAML's `Stream<Partial, Final>` supplies all three host views: raw next,
+    filtered iteration, and final.
     """
 
     def __init__(self, handle: BamlPyHandle) -> None:
@@ -50,24 +55,42 @@ class BamlStream(Generic[TStream, TFinal]):
     def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> "BamlStream":
         """Internal: build a `BamlStream` from a `BamlPyHandle`. Used by
         `proto.py::_decode_handle`, which has already dispatched on the
-        wire `handle_type` tag — no further validation needed here."""
+        trusted stream handle tag."""
         return cls(pyhandle)
 
     def _to_pyhandle(self) -> BamlPyHandle:
         """Internal: expose the inner `BamlPyHandle` for inbound encode."""
         return self._handle
 
-    def next(self) -> Any:
-        return self._call_sync(_STREAM_NEXT_FN)
+    def __aiter__(self) -> "BamlStream[TNext, TYield, TFinal]":
+        return self
 
-    async def next_async(self) -> Any:
-        return await self._call_async(_STREAM_NEXT_FN)
+    async def __anext__(self) -> TYield:
+        """Async-iteration sugar over the sentinel protocol: yields each
+        non-null partial, translating the `ai.stream.Done` terminal marker
+        into `StopAsyncIteration`. `final()` / `final_async()` remain the
+        way to obtain the settled value after the loop."""
+        from .typemap import get_type_map
 
-    def final(self) -> Any:
-        return self._call_sync(_STREAM_FINAL_FN)
+        done_cls = get_type_map().get_class(_DONE_FQN)
+        while True:
+            item = await self.next_async()
+            if isinstance(item, done_cls):
+                raise StopAsyncIteration
+            if item is not None:
+                return cast(TYield, item)
 
-    async def final_async(self) -> Any:
-        return await self._call_async(_STREAM_FINAL_FN)
+    def next(self) -> TNext:
+        return self._call_sync("ai.stream.Stream.next")
+
+    async def next_async(self) -> TNext:
+        return await self._call_async("ai.stream.Stream.next")
+
+    def final(self) -> TFinal:
+        return self._call_sync("ai.stream.Stream.final")
+
+    async def final_async(self) -> TFinal:
+        return await self._call_async("ai.stream.Stream.final")
 
     # `proto.py` imports `BamlStream` at module load, so the call-path
     # imports (`get_runtime`, `encode_call_args`, `decode_call_result`)
@@ -83,22 +106,30 @@ class BamlStream(Generic[TStream, TFinal]):
             new_function_call(),
             function_name=fqn,
         )
-        result_bytes = rt.call_function_sync(args_proto, None, None)
+        result_bytes = rt.call_function_sync(args_proto, None)
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str) -> Any:
-        from . import get_runtime
+        from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call
-        from .proto import decode_call_result, encode_call_args
+        from .proto import encode_call_args
 
         rt = get_runtime()
+        call_id = new_function_call()
         args_proto = encode_call_args(
             {"self": self},
-            new_function_call(),
+            call_id,
             function_name=fqn,
         )
-        result_bytes = await rt.call_function(args_proto, None, None)
-        return decode_call_result(result_bytes)
+        try:
+            result_bytes = await rt.call_function(args_proto, None)
+        except asyncio.CancelledError:
+            try:
+                cancel_function_call(call_id)
+            except Exception:
+                pass
+            raise
+        return _decode_call_result_async(result_bytes)
 
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> Any:

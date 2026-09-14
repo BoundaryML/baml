@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10972
----
-=== PPIR ===
-function user.MyAwsClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "MyAwsClient", provider: "aws-bedrock", options: baml.llm.PrimitiveClientOptions { model: "anthropic.claude-...", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-1234", provider_options: baml.llm.BedrockOptions { region: null, endpoint_url: null, access_key_id: null, secret_access_key: null, session_token: null, profile: null, stop_sequences: null, max_tokens: 100, temperature: 0.7, top_p: null }, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
-}

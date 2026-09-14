@@ -38,8 +38,10 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
             // Heap-boxed floats compare by content (the post-tagged-pointer
             // encoding allocates a fresh `Object::Float` per float, so two
             // semantically-equal floats land at distinct `HeapPtr`s and
-            // would otherwise miss the reference-equality fallback).
-            (Object::Float(lf), Object::Float(rf)) => lf == rf,
+            // would otherwise miss the reference-equality fallback), through
+            // the same reflexive equality `==` uses — so `[nan].includes(nan)`
+            // agrees with `nan == nan`.
+            (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
             _ => la == rb,
         }
     } else {
@@ -87,14 +89,14 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
 /// `.first()` — that is the receiver's `T` — it is the first of the method's two
 /// own generics, i.e. the second-to-last arg. Counting from the back makes it
 /// correct whether or not the prepend fired (e.g. an `unknown`-typed receiver).
-fn map_result_element_ty(vm: &BexVm) -> baml_type::RealizedTy {
+fn map_result_element_ty(vm: &BexVm) -> bex_vm_types::RealizedTy {
     let type_args = vm.current_call_type_args();
     type_args
         .len()
         .checked_sub(2)
         .and_then(|u_index| type_args.get(u_index))
         .cloned()
-        .unwrap_or_else(baml_type::RealizedTy::unknown)
+        .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
 }
 
 /// Extract the callback `HeapPtr` from a `Value` carrying a heap
@@ -122,25 +124,15 @@ fn expect_bool(vm: &BexVm, value: Value) -> Result<bool, NativeCallResult> {
     }
 }
 
-fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
-    if let Some(i) = value.as_int() {
-        Ok(i)
-    } else {
-        Err(NativeCallResult::from(VmInternalError::TypeError {
-            expected: bex_vm_types::types::Type::Int,
-            got: vm.type_of(&value),
-        }))
-    }
-}
-
 // ── Natural-order sort machinery (`baml._rust_sort` fast path) ───────────────
 //
 // `Sortable.sort` routes homogeneous primitive arrays (int/bigint/string/
 // float) here via the `_is_primitive_array` guard; everything else goes
-// through `sort_by` + `_compare_shim`. The float domain orders by
-// `f64::total_cmp` — a total order over all doubles including NaN — kept
-// bit-exact with `_float_total_cmp` (which backs `Comparable for float`), so
-// the fast path and the comparator path can never disagree on an ordering.
+// through `sort_by` with an `a.cmp(b)` comparator. The float domain orders by
+// `float_order::cmp` — BAML's total float order, which gives NaN a defined
+// position — the same definition `baml.ops.Compare for float` and the
+// comparison opcodes use, so the fast path and the comparator path can never
+// disagree on an ordering.
 // The mixed-domain / null / non-primitive rejections below are defensive:
 // `_rust_sort` is only reached for arrays the type system already proved
 // homogeneous primitive.
@@ -180,8 +172,14 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     "unknown".to_string()
 }
 
+/// A natural-order sort saw a value its domain cannot order.
+///
+/// `baml._rust_sort` declares `throws never`, and `Sortable.sort` only reaches
+/// it behind the `_is_primitive_array` guard on a homogeneous `T[]`, so every
+/// rejection here is a guard/element-type inconsistency rather than anything
+/// user code can provoke.
 fn invalid_sort(context: &str, message: impl Into<String>) -> VmRustFnError {
-    VmBamlError::InvalidArgument {
+    VmInternalError::BridgeFailure {
         message: format!("{context}: {}", message.into()),
     }
     .into()
@@ -207,8 +205,8 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
         ));
     };
     match vm.get_object(ptr) {
-        // NaN is *not* rejected: the float domain orders by `total_cmp`,
-        // which gives NaN a defined position.
+        // NaN is *not* rejected: the float domain orders by BAML's total
+        // float order, which gives NaN a defined position.
         Object::Float(_) => Ok(NaturalKind::Float),
         Object::Bigint(_) => Ok(NaturalKind::Bigint),
         Object::String(_) => Ok(NaturalKind::String),
@@ -317,9 +315,10 @@ pub(super) fn compare_natural_values(
                     .as_int()
                     .expect("validated int sort value should be int"),
             ),
-        NaturalDomain::Float => {
-            value_as_float_for_sort(vm, left).total_cmp(&value_as_float_for_sort(vm, right))
-        }
+        NaturalDomain::Float => bex_vm_types::float_order::cmp(
+            value_as_float_for_sort(vm, left),
+            value_as_float_for_sort(vm, right),
+        ),
         NaturalDomain::Bigint => {
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
         }
@@ -413,7 +412,7 @@ struct MapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's return type `U` from
     /// `map<U, E>(self, f: (T) -> U) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for MapContinuation {
@@ -447,7 +446,7 @@ struct FilterContinuation {
     results: Vec<Value>,
     /// The receiver array's element type `T`, captured at dispatch — `filter`
     /// preserves it (`T[] -> T[]`).
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FilterContinuation {
@@ -663,7 +662,7 @@ struct FlatMapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's element return type `U` from
     /// `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FlatMapContinuation {
@@ -694,73 +693,117 @@ impl Continuation for FlatMapContinuation {
 
 // ─── Array.sort_by continuation ─────────────────────────────────────────────
 
-/// CPS insertion sort: builds `sorted` one element at a time, yielding to the
-/// BAML comparator for each `(current, sorted[insert_idx])` pair. The receiver
-/// is only written back once the whole sort completes, so a throwing
-/// comparator leaves the array in its pre-sort state.
+/// CPS bottom-up merge sort. A native Rust `slice::sort_by` cannot be used here
+/// because a BAML comparator may yield back into the VM. Each merge comparison
+/// therefore crosses the VM trampoline, while the merge passes retain stable
+/// O(n log n) behavior.
+///
+/// `source` is the immutable input for the current pass and `merged` receives
+/// complete runs. The two vectors are swapped only after a pass completes. The
+/// buffers are reused for every pass, keeping auxiliary storage at O(n). The
+/// receiver is written back only once the entire sort succeeds, so a throwing
+/// comparator leaves it in its pre-sort state.
 struct SortByContinuation {
     receiver: Value,
     f_ptr: HeapPtr,
-    items: Vec<Value>,
-    next_idx: usize,
-    sorted: Vec<Value>,
-    insert_idx: usize,
-    current: Value,
+    source: Vec<Value>,
+    merged: Vec<Value>,
+    width: usize,
+    run_start: usize,
+    left: usize,
+    middle: usize,
+    right: usize,
+    run_end: usize,
 }
 
 impl SortByContinuation {
-    fn advance_or_finish(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
-        if self.next_idx >= self.items.len() {
-            return write_back_array_result(vm, self.receiver, self.sorted);
+    /// Advance through already-exhausted runs and yield the next comparison.
+    /// Equal elements are taken from the left run by `call`, preserving the
+    /// original relative order.
+    fn advance(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
+        loop {
+            if self.left < self.middle && self.right < self.run_end {
+                return NativeCallResult::YieldToCall {
+                    callee: self.f_ptr,
+                    args: vec![self.source[self.left], self.source[self.right]],
+                    type_args: vec![],
+                    continuation: self,
+                };
+            }
+
+            self.merged
+                .extend_from_slice(&self.source[self.left..self.middle]);
+            self.merged
+                .extend_from_slice(&self.source[self.right..self.run_end]);
+
+            self.run_start = self.run_end;
+            if self.run_start < self.source.len() {
+                self.set_current_run();
+                continue;
+            }
+
+            std::mem::swap(&mut self.source, &mut self.merged);
+            self.merged.clear();
+            self.width = self.width.saturating_mul(2);
+            if self.width >= self.source.len() {
+                return write_back_array_result(vm, self.receiver, self.source);
+            }
+
+            self.run_start = 0;
+            self.set_current_run();
         }
-        self.current = self.items[self.next_idx];
-        self.next_idx += 1;
-        self.insert_idx = 0;
-        self.yield_compare()
     }
 
-    fn yield_compare(self: Box<Self>) -> NativeCallResult {
-        NativeCallResult::YieldToCall {
-            callee: self.f_ptr,
-            args: vec![self.current, self.sorted[self.insert_idx]],
-            type_args: vec![],
-            continuation: self,
-        }
+    fn set_current_run(&mut self) {
+        self.left = self.run_start;
+        self.middle = self
+            .run_start
+            .saturating_add(self.width)
+            .min(self.source.len());
+        self.right = self.middle;
+        self.run_end = self
+            .middle
+            .saturating_add(self.width)
+            .min(self.source.len());
     }
 }
 
 impl Continuation for SortByContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let cmp = match expect_int(vm, value) {
-            Ok(i) => i,
-            Err(e) => return e,
+        // The comparator is typed `-> baml.ops.Ordering throws never`, so a
+        // non-`Ordering` return is a compiler/VM invariant break rather than a
+        // possible runtime value.
+        let Some(cmp) = super::ops::ordering_from_value(vm, value) else {
+            return NativeCallResult::from(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                got: vm.type_of(&value),
+            });
         };
-        if cmp < 0 {
-            self.sorted.insert(self.insert_idx, self.current);
-            return self.advance_or_finish(vm);
+        // Stability: take the left run's element unless it strictly follows the
+        // right one, so `Equal` preserves the original relative order.
+        if cmp.is_gt() {
+            self.merged.push(self.source[self.right]);
+            self.right += 1;
+        } else {
+            self.merged.push(self.source[self.left]);
+            self.left += 1;
         }
-        self.insert_idx += 1;
-        if self.insert_idx >= self.sorted.len() {
-            self.sorted.push(self.current);
-            return self.advance_or_finish(vm);
-        }
-        self.yield_compare()
+        self.advance(vm)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = vec![self.f_ptr];
-        collect_value_roots(&[self.receiver, self.current], &mut roots);
-        collect_value_roots(&self.items, &mut roots);
-        collect_value_roots(&self.sorted, &mut roots);
+        collect_value_roots(std::slice::from_ref(&self.receiver), &mut roots);
+        collect_value_roots(&self.source, &mut roots);
+        collect_value_roots(&self.merged, &mut roots);
         roots
     }
 
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         forward_ptr(&mut self.f_ptr, forwarding);
         forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
-        forward_values(std::slice::from_mut(&mut self.current), forwarding);
-        forward_values(&mut self.items, forwarding);
-        forward_values(&mut self.sorted, forwarding);
+        forward_values(&mut self.source, forwarding);
+        forward_values(&mut self.merged, forwarding);
     }
 }
 
@@ -826,20 +869,6 @@ impl BamlClassArray for PackageBamlImpl {
         // An `end` resolving before `start` yields an empty slice.
         let end = resolve_slice_bound(end, array.len()).max(start);
         array[start..end].to_vec()
-    }
-
-    fn join(vm: &BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> bex_str::BexStr {
-        let sep = separator.as_str();
-        let joined = array
-            .iter()
-            .map(|v| {
-                vm.as_string(v)
-                    .map(|s| s.as_str().to_owned())
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>()
-            .join(sep);
-        bex_str::BexStr::from(joined)
     }
 
     #[allow(clippy::unused_unit)]
@@ -913,22 +942,20 @@ impl BamlClassArray for PackageBamlImpl {
         if items.len() <= 1 {
             return write_back_array_result(vm, *array, items);
         }
-        let first_sorted = items[0];
-        let first_current = items[1];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_current, first_sorted],
-            type_args: vec![],
-            continuation: Box::new(SortByContinuation {
-                receiver: *array,
-                f_ptr,
-                items,
-                next_idx: 2,
-                sorted: vec![first_sorted],
-                insert_idx: 0,
-                current: first_current,
-            }),
-        }
+        let capacity = items.len();
+        Box::new(SortByContinuation {
+            receiver: *array,
+            f_ptr,
+            source: items,
+            merged: Vec::with_capacity(capacity),
+            width: 1,
+            run_start: 0,
+            left: 0,
+            middle: 1,
+            right: 1,
+            run_end: 2,
+        })
+        .advance(vm)
     }
 
     fn map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {

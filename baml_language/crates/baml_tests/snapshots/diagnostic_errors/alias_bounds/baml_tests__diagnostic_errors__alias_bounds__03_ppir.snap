@@ -20,6 +20,7 @@ function user.bare_alias_bound(t: T, v: unknown) -> bool  [expr] {
 function user.chained_alias_bound(t: T) -> int  [expr] {
   {  } 0
 }
+function user.id(self: ?) -> int  [missing]
 function user.pinning_alias_bound(t: T) -> int  [expr] {
   {  } 0
 }

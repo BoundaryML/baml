@@ -15,6 +15,13 @@ class StreamingDoc {
   word_count int
 }
 
+// Static host model used only as a same-name trap for HS-7. The runtime test
+// mints a distinct class named `Hs7Collision` with document fields; decoding
+// that live nominal through this generated class would silently discard them.
+class Hs7Collision {
+  compiled_marker string?
+}
+
 // Return shape for `stream_e2e_collect`: every value produced by
 // `stream.next()` (the `S` side of `Stream<T, S>` — `null | string` for
 // the `stream_e2e_extract$stream` instantiation) plus the single `T`
@@ -24,4 +31,21 @@ class StreamingDoc {
 class StreamE2ECollectResult {
   next_calls (null | string)[]
   final_call string
+}
+
+// Runtime-neutral host-projection coverage for LLM methods. SDK tests only
+// inspect the generated bindings; they never invoke these provider-backed
+// methods.
+class MethodProjectionProbe {
+  prefix string
+
+  function extract(self, text: string) -> Resume {
+    client: "openai/gpt-4o-mini"
+    prompt: `${self.prefix}: ${text} ${ctx.output_format()}`
+  }
+
+  function summarize(text: string) -> Resume {
+    client: "openai/gpt-4o-mini"
+    prompt: `Summarize ${text} ${ctx.output_format()}`
+  }
 }

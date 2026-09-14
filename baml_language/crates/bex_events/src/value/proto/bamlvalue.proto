@@ -16,20 +16,8 @@ enum ValueAvailability {
   VALUE_AVAILABILITY_LOST = 5;
 }
 
-enum ValueCaptureKind {
-  VALUE_CAPTURE_KIND_UNSPECIFIED = 0;
-  VALUE_CAPTURE_KIND_ROOT_INPUT = 1;
-  VALUE_CAPTURE_KIND_ROOT_OUTPUT = 2;
-  VALUE_CAPTURE_KIND_ROOT_ERROR = 3;
-  VALUE_CAPTURE_KIND_LOG_BODY = 4;
-  VALUE_CAPTURE_KIND_CALL_OUTPUT = 5;
-  VALUE_CAPTURE_KIND_CALL_ERROR = 6;
-  VALUE_CAPTURE_KIND_CALL_INPUT = 7;
-}
-
 enum CaptureLossKind {
   CAPTURE_LOSS_KIND_UNSPECIFIED = 0;
-  CAPTURE_LOSS_KIND_VALUE = 1;
   CAPTURE_LOSS_KIND_LOG = 2;
 }
 
@@ -86,11 +74,6 @@ message SourceLocationV1 {
   optional uint32 end_column = 6;
   optional uint32 start_offset = 7;
   optional uint32 end_offset = 8;
-}
-
-message ValueCaptureV1 {
-  ValueCaptureKind kind = 1;
-  TraceCallKeyV1 call = 2;
 }
 
 message LogEventV1 {
@@ -183,7 +166,7 @@ message RunCompletedV1 {
 message ValueRecordV1 {
   ValueMetadataV1 metadata = 1;
   bytes body = 2;
-  ValueCaptureV1 capture = 3;
+  reserved 3;
   RunStartedV1 run_started = 10;
   RunCompletedV1 run_completed = 11;
   LogEventV1 log_event = 12;

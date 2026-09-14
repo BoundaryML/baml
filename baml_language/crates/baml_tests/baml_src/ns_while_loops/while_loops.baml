@@ -24,7 +24,7 @@ function while_loops_gcd(a: int, b: int) -> int {
 }
 
 test "while_loop_gcd" {
-    assert.is_true(baml.deep_equals(while_loops_gcd(21, 15), 3))
+    assert.equal(while_loops_gcd(21, 15), 3)
 }
 
 // ── while_with_scope (Fibonacci) ──────────────────────────────────────────────
@@ -44,7 +44,7 @@ function while_loops_fib(n: int) -> int {
 }
 
 test "while_with_scope" {
-    assert.is_true(baml.deep_equals(while_loops_fib(5), 5))
+    assert.equal(while_loops_fib(5), 5)
 }
 
 // ── while_with_break ──────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ function while_loops_break_at_two() -> int {
 }
 
 test "while_with_break" {
-    assert.is_true(baml.deep_equals(while_loops_break_at_two(), 2))
+    assert.equal(while_loops_break_at_two(), 2)
 }
 
 // ── break_factorial ───────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ function while_loops_factorial_break(limit: int) -> int {
 }
 
 test "break_factorial" {
-    assert.is_true(baml.deep_equals(while_loops_factorial_break(5), 120))
+    assert.equal(while_loops_factorial_break(5), 120)
 }
 
 // ── break_nested ──────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ function while_loops_break_nested() -> int {
 }
 
 test "break_nested" {
-    assert.is_true(baml.deep_equals(while_loops_break_nested(), 7))
+    assert.equal(while_loops_break_nested(), 7)
 }
 
 // ── break_nested_with_variable_conditions ─────────────────────────────────────
@@ -122,7 +122,7 @@ function while_loops_break_nested_var(x: bool, y: bool) -> int {
 }
 
 test "break_nested_with_variable_conditions" {
-    assert.is_true(baml.deep_equals(while_loops_break_nested_var(true, true), 7))
+    assert.equal(while_loops_break_nested_var(true, true), 7)
 }
 
 // ── while_with_conditional_break ──────────────────────────────────────────────
@@ -140,7 +140,7 @@ function while_loops_count_down(n: int) -> int {
 }
 
 test "while_with_conditional_break" {
-    assert.is_true(baml.deep_equals(while_loops_count_down(3), 6))
+    assert.equal(while_loops_count_down(3), 6)
 }
 
 // ── continue_factorial ────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ function while_loops_factorial_continue(limit: int) -> int {
 }
 
 test "continue_factorial" {
-    assert.is_true(baml.deep_equals(while_loops_factorial_continue(5), 120))
+    assert.equal(while_loops_factorial_continue(5), 120)
 }
 
 // ── continue_nested ───────────────────────────────────────────────────────────
@@ -184,5 +184,5 @@ function while_loops_continue_nested() -> int {
 }
 
 test "continue_nested" {
-    assert.is_true(baml.deep_equals(while_loops_continue_nested(), 5))
+    assert.equal(while_loops_continue_nested(), 5)
 }

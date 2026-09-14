@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// VM would refuse to allocate.
 pub(crate) use baml_type::MAX_BIGINT_BITS;
 use bex_str::BexStr;
+use bex_vm_types::Value;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::{BamlClassBigint, PackageBamlImpl};
@@ -20,20 +21,8 @@ impl BamlClassBigint for PackageBamlImpl {
         }
     }
 
-    fn min(bigint: Arc<BigInt>, other: Arc<BigInt>) -> Arc<BigInt> {
-        if bigint <= other { bigint } else { other }
-    }
-
-    fn max(bigint: Arc<BigInt>, other: Arc<BigInt>) -> Arc<BigInt> {
-        if bigint >= other { bigint } else { other }
-    }
-
-    fn clamp(bigint: Arc<BigInt>, min: Arc<BigInt>, max: Arc<BigInt>) -> Arc<BigInt> {
-        // Two-step clamp: first cap at max, then floor at min.
-        // Matches int.clamp's behaviour when min > max (lower-clamp wins).
-        let v = if bigint <= max { bigint } else { max };
-        if v >= min { v } else { min }
-    }
+    // No `min` / `max` / `clamp` here: `bigint` gets them from
+    // `baml.ops.Compare`. See the note in `bigint.baml`.
 
     fn isqrt(bigint: Arc<BigInt>) -> Result<Arc<BigInt>, VmRustFnError> {
         if bigint.sign() == Sign::Minus {
@@ -149,6 +138,29 @@ impl BamlClassBigint for PackageBamlImpl {
         Ok(Arc::new(BigInt::from(lo)))
     }
 
+    fn to_int(bigint: Arc<BigInt>) -> Result<i64, VmRustFnError> {
+        // BAML int is i63 (low bit reserved for the Value tag), so the
+        // representable range is narrower than i64's and `i64::try_from` alone
+        // is not the right gate: the codegen wraps this return in `Value::int`,
+        // which only debug-asserts the i63 range and truncates in release.
+        //
+        // The message reports the operand's bit width rather than the operand:
+        // a bigint is unbounded and has no business inside a diagnostic string.
+        i64::try_from(bigint.as_ref())
+            .ok()
+            .filter(|i| (Value::INT_MIN..=Value::INT_MAX).contains(i))
+            .ok_or_else(|| {
+                VmBamlError::InvalidArgument {
+                    message: format!(
+                        "bigint.to_int: a {}-bit value is outside int's range \
+                         (int is 63-bit signed)",
+                        bigint.bits()
+                    ),
+                }
+                .into()
+            })
+    }
+
     fn parse(text: &BexStr) -> Result<Arc<BigInt>, VmRustFnError> {
         // Accept an optional leading sign followed by ASCII digits, matching the
         // documented behaviour: no whitespace, no underscores, no other formats.
@@ -199,42 +211,64 @@ impl BamlClassBigint for PackageBamlImpl {
             })
     }
 
-    fn random(lower: Arc<BigInt>, upper: Arc<BigInt>) -> Result<Arc<BigInt>, VmRustFnError> {
+    fn _random_byte_count(lower: Arc<BigInt>, upper: Arc<BigInt>) -> i64 {
         if lower >= upper {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "bigint.random: lower ({lower}) must be less than upper ({upper}); range is empty"
-                ),
-            }
-            .into());
+            return 0;
+        }
+        i64::try_from(random_draw_bits(&lower, &upper).div_ceil(8)).unwrap_or_else(|_| {
+            unreachable!("bigint._random_byte_count: a range that wide cannot be allocated")
+        })
+    }
+
+    fn _random_in_range(draw: &[u8], lower: Arc<BigInt>, upper: Arc<BigInt>) -> Arc<BigInt> {
+        if lower >= upper {
+            return upper;
+        }
+        let bits = random_draw_bits(&lower, &upper);
+        let width = usize::try_from(bits.div_ceil(8)).unwrap_or_else(|_| {
+            unreachable!("bigint._random_in_range: a range that wide cannot be allocated")
+        });
+        if draw.len() < width {
+            return upper;
         }
 
-        // range = upper - lower, always positive.
-        let range: BigUint = (upper.as_ref() - lower.as_ref())
-            .to_biguint()
-            .expect("range is always positive because lower < upper");
+        // Mask unused high bits so rejection stays below one half.
+        let mut buf = draw[..width].to_vec();
+        if let Some(top) = buf.first_mut() {
+            let excess = width as u64 * 8 - bits;
+            *top &= 0xFF_u8 >> excess;
+        }
 
-        // Number of bytes needed to represent `range`.
-        let range_bytes = range.to_bytes_be();
-        let byte_len = range_bytes.len();
-
-        // Rejection sampling: generate `byte_len` random bytes, interpret as a
-        // big-endian unsigned integer, accept if < range. This gives a uniform
-        // distribution with no modular bias.
-        let mut buf = vec![0u8; byte_len];
-        loop {
-            getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
-                resource: "entropy".to_string(),
-                message: format!("getrandom failed in bigint.random: {e}"),
-            })?;
-
-            let sample = BigUint::from_bytes_be(&buf);
-            if sample < range {
-                let result = BigInt::from(sample) + lower.as_ref();
-                return Ok(Arc::new(result));
-            }
+        let sample = BigUint::from_bytes_be(&buf);
+        let range = random_range(&lower, &upper);
+        if sample < range {
+            Arc::new(BigInt::from(sample) + lower.as_ref())
+        } else {
+            upper
         }
     }
+}
+
+/// `upper - lower`, the count of values in `[lower, upper)`. Always at least 1;
+/// callers are required to have rejected an empty range.
+fn random_range(lower: &BigInt, upper: &BigInt) -> BigUint {
+    debug_assert!(
+        lower < upper,
+        "bigint.random: empty range is the caller's to reject"
+    );
+    (upper - lower)
+        .to_biguint()
+        .unwrap_or_else(|| unreachable!("bigint.random: lower < upper makes the range positive"))
+}
+
+/// Number of random bits one draw over `[lower, upper)` needs: the bit length of
+/// `range - 1`, i.e. the smallest `b` with `2^b >= range`.
+///
+/// Taking `range - 1` rather than `range` is what makes a power-of-two range
+/// (including a single-value range, which needs no bits at all) reject nothing;
+/// every other range then rejects less than half the time.
+fn random_draw_bits(lower: &BigInt, upper: &BigInt) -> u64 {
+    (random_range(lower, upper) - 1_u32).bits()
 }
 
 /// Build a [`VmRustFnError::Panic`] carrying [`VmPanic::AllocFailure`] with

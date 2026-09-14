@@ -44,7 +44,7 @@ jobs:
     outputs:
       matrix: ${{ steps.derive.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
@@ -76,22 +76,23 @@ jobs:
     name: verify ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bridge-cffi-${{ matrix.target }}
           path: runtime-dist
 
-      - name: Resolve expected version
+      - name: Stamp release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
           expected="$(jq -r .canonical_version release-plan.json)"
           echo "BAML_EXPECTED_VERSION=$expected" >> "$GITHUB_ENV"
 

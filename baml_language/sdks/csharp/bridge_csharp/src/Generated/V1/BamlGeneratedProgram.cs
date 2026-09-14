@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Baml.Cffi;
 using Baml.Proto;
 using Baml.Runtime;
+using BamlBridge.Cffi.V1;
 
 namespace Baml.Generated.V1;
 
@@ -58,7 +59,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         BamlGeneratedFunction<TFinal> function,
         BamlGeneratedArguments<TFinal> arguments,
         BamlGeneratedType<TPartial> partialType,
@@ -86,7 +87,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         BamlGeneratedBoundFunction<TFinal> function,
         BamlGeneratedGenericArguments<TFinal> arguments,
         BamlGeneratedType<TPartial> partialType,
@@ -115,7 +116,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    private async Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    private async Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         string functionIdentity,
         TypeDeclaration<TPartial> partialType,
         TypeDeclaration<TFinal> finalType,
@@ -133,6 +134,26 @@ public sealed class BamlGeneratedProgram
             finalType.Metadata,
             functionIdentity,
             nativeState.Api);
+    }
+
+    internal Task<BamlGeneratedValue> CallRuntimeMethodAsync(
+        string functionIdentity,
+        IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionIdentity);
+        ArgumentNullException.ThrowIfNull(arguments);
+        NativeFunctionCall call = nativeState.Api.StartOwnedFunction(
+            functionIdentity,
+            callId => PrimitiveProtocol.EncodeOwnedHandleArguments(
+                arguments,
+                callId,
+                nativeState.Api),
+            cancellationToken);
+        return DecodeRuntimeMethodResultAsync(
+            functionIdentity,
+            call,
+            cancellationToken);
     }
 
     public TResult Call<TResult>(
@@ -206,4 +227,40 @@ public sealed class BamlGeneratedProgram
             HostValueRegistry.Shared.CompleteFunctionCall(call.FunctionCallId);
         }
     }
+
+    private async Task<BamlGeneratedValue> DecodeRuntimeMethodResultAsync(
+        string functionIdentity,
+        NativeFunctionCall call,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = await call.Completion.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException error)
+                when (cancellationToken.IsCancellationRequested
+                    && error.CancellationToken == cancellationToken)
+            {
+                throw new BamlOperationCanceledException(
+                    "The BAML call was canceled by the caller.",
+                    BamlCancellationOrigin.Caller,
+                    cancellationToken,
+                    functionIdentity,
+                    trace: null);
+            }
+
+            return PrimitiveProtocol.DecodeCallResult(
+                bytes,
+                functionIdentity,
+                nativeState.Api);
+        }
+        finally
+        {
+            HostValueRegistry.Shared.CompleteFunctionCall(call.FunctionCallId);
+        }
+    }
+
 }

@@ -65,13 +65,13 @@ function is_name_char(c: string) -> bool {
 function trim_dots(name: string) -> string {
     let start = 0;
     let end = name.length();
-    while (start < end && name.char_at(start) == ".") {
+    while (start < end && name.at(start) == ".") {
         start += 1;
     }
-    while (end > start && name.char_at(end - 1) == ".") {
+    while (end > start && name.at(end - 1) == ".") {
         end -= 1;
     }
-    name.substring(start, end)
+    name.slice(start, end)
 }
 
 /// Every name a rendered type mentions, in order.
@@ -156,7 +156,7 @@ function resolve_all(
 function generic_param_name(declared: string) -> string {
     let out = declared;
     if let cut: int = declared.index_of(":") {
-        out = declared.substring(0, cut);
+        out = declared.slice(0, cut);
     }
     out.trim()
 }
@@ -165,7 +165,7 @@ function generic_param_name(declared: string) -> string {
 function generic_param_bound(declared: string) -> string {
     let out = "";
     if let cut: int = declared.index_of(":") {
-        out = declared.substring(cut + 1, declared.length()).trim();
+        out = declared.slice(cut + 1, declared.length()).trim();
     }
     out
 }
@@ -173,11 +173,12 @@ function generic_param_bound(declared: string) -> string {
 // ── the BAML side ───────────────────────────────────────────────────────────
 
 /// The dotted path an id addresses, or the empty string when it addresses
-/// something no name can reach. An impl entry's id is a block address
-/// (`X:baml.impl[…]::compare`), which is not a path a signature could mention.
+/// something no name can reach. An impl entry is addressed through its block
+/// (`M:(baml.Foo as baml.Comparable).compare`), which is a way to *call* the
+/// method rather than a path a signature could mention.
 function id_path(id: string) -> string {
     let path = strip_kind_prefix(id);
-    if (path.includes("[") || path.includes("::")) {
+    if (path.includes("[") || path.starts_with("(")) {
         ""
     } else {
         path
@@ -198,7 +199,7 @@ function baml_name_index(symbols: BamlSymbol[]) -> NameIndex {
         if (symbol.display != last_segment(path)) {
             let _ = index_put(index.types, symbol.display, symbol.id);
             if let open: int = symbol.display.index_of("<") {
-                let _ = index_put(index.types, symbol.display.substring(0, open), symbol.id);
+                let _ = index_put(index.types, symbol.display.slice(0, open), symbol.id);
             }
         }
     }
@@ -296,14 +297,25 @@ function attach_baml_references(symbols: BamlSymbol[]) -> null {
 
 // ── the TypeScript side ─────────────────────────────────────────────────────
 
-/// A container has no record of its own — it is a grouping — so its name
-/// resolves to the container, and members resolve by their dotted path.
+/// Containers are records of their own, so a type name in a signature points at
+/// one. Everything is registered under its id; a container additionally claims
+/// its bare name, but only when it is global.
+///
+/// That restriction is TypeScript's own rule rather than a tie-break. `node:url`
+/// exports a `URL` class and so does the web platform, but a signature that
+/// writes `URL` without importing it means the global one — so the bare name
+/// belongs to `(globals)` and `(web)`, and a module's container is reached by
+/// its qualified id.
 function ts_name_index(symbols: TsSymbol[]) -> NameIndex {
     let index = NameIndex { types: {}, all: {} };
     for (let symbol in symbols) {
         let _ = index_put(index.all, symbol.id, symbol.id);
-        if let container: string = symbol.symbol.at(0) {
-            let _ = index_put(index.types, container, container);
+        if (symbol.origin == "container") {
+            let _ = index_put(index.types, symbol.id, symbol.id);
+            let module = symbol.symbol.at(0) ?? "";
+            if (module == "(globals)" || module == "(web)") {
+                let _ = index_put(index.types, symbol.symbol.at(1) ?? "", symbol.id);
+            }
         }
     }
     index
@@ -315,11 +327,24 @@ function ts_name_index(symbols: TsSymbol[]) -> NameIndex {
 /// point at the `Error.message` property.
 function attach_ts_references(symbols: TsSymbol[]) -> null {
     let index = ts_name_index(symbols);
-    let no_scope: string[] = [];
     let nothing: string[] = [];
     for (let symbol in symbols) {
         let texts: string[] = [symbol.signature];
-        symbol.references = resolve_all(index, texts, no_scope, nothing, symbol.id);
+        // The module is the scope. A node signature writes `Readable`, not
+        // `node:stream.Readable`, and only global containers claim a bare name
+        // — so without this, none of the 59 node containers was reachable from
+        // any signature and every node symbol's `references` came back empty.
+        // That is not a cosmetic gap: `is_fresh` reads references to decide
+        // whether a judgement may be carried, so a node symbol looked fresh
+        // even when a type it names had changed.
+        //
+        // `resolve_reference` walks the scope by joining with a dot, so this
+        // tries `node:stream.Readable` before falling back to the bare name.
+        // Cross-module bare matching is not reintroduced: `(globals)` and
+        // `(web)` prefixes match nothing, and those containers are found by the
+        // bare-name fallback they already own.
+        let scope: string[] = [symbol.symbol.at(0) ?? ""];
+        symbol.references = resolve_all(index, texts, scope, nothing, symbol.id);
     }
     null
 }

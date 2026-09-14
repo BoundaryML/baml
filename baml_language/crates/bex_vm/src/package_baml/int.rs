@@ -3,37 +3,27 @@ use bex_vm_types::Value;
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
+/// Number of values in the BAML `int` domain.
+const INT_DOMAIN_SPAN: u128 = (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
+
 impl BamlClassInt for PackageBamlImpl {
-    // ── Comparisons / clamping ────────────────────────────────────────────────
+    // ── Magnitude ─────────────────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {
         // BAML int is i63 (low bit reserved for the Value tag). The
         // absolute value of `Value::INT_MIN` (`-2^62`) is `2^62`, which is
         // ONE PAST `Value::INT_MAX` and therefore not representable.
         if int == Value::INT_MIN {
-            return Err(VmBamlError::InvalidArgument {
-                message: "int.abs: cannot represent the absolute value of int.min_value() (would overflow)".to_string(),
+            return Err(VmPanic::IntegerOverflow {
+                message: format!("abs({int}) overflows int"),
             }
             .into());
         }
         Ok(int.wrapping_abs())
     }
 
-    fn min(int: i64, other: i64) -> i64 {
-        std::cmp::min(int, other)
-    }
-
-    fn max(int: i64, other: i64) -> i64 {
-        std::cmp::max(int, other)
-    }
-
-    fn clamp(int: i64, min: i64, max: i64) -> i64 {
-        // Two-step (clamp) so we do not panic when min > max — Rust's
-        // `i64::clamp` debug-asserts `min <= max`. The behavior matches:
-        // first cap at max, then floor at min.
-        let v = std::cmp::min(int, max);
-        std::cmp::max(v, min)
-    }
+    // No `min` / `max` / `clamp` here: `int` gets them from
+    // `baml.ops.Compare`. See the note in `int.baml`.
 
     // ── Math ──────────────────────────────────────────────────────────────────
 
@@ -106,42 +96,20 @@ impl BamlClassInt for PackageBamlImpl {
         Ok(v)
     }
 
-    #[allow(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_wrap,
-        clippy::cast_possible_truncation
-    )]
-    fn random(lower: i64, upper: i64) -> Result<i64, VmRustFnError> {
+    fn _random_in_range(draw: i64, lower: i64, upper: i64) -> i64 {
         if lower >= upper {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "int.random: lower ({lower}) must be less than upper ({upper}); range [{lower}, {upper}) is empty"
-                ),
-            }
-            .into());
+            return upper;
         }
-        // range fits in u128; for valid lower < upper as i64, range ∈ [1, 2^64 - 1].
-        // The i128 difference is provably positive, so the cast to u128 is safe.
-        let range = (i128::from(upper) - i128::from(lower)) as u128;
-        // Rejection sampling for an unbiased result: accept r only if it lies
-        // below the largest multiple of `range` that fits in 2^64. This rejects
-        // the (typically tiny) tail that would otherwise modulo-bias toward
-        // smaller values.
-        let threshold = (1u128 << 64) / range * range;
-        let mut buf = [0u8; 8];
-        loop {
-            getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
-                resource: "entropy".to_string(),
-                message: format!("getrandom failed in int.random: {e}"),
-            })?;
-            let r = u128::from(u64::from_le_bytes(buf));
-            if r < threshold {
-                // r % range < range ≤ 2^64 - 1 < i64 width when added to lower,
-                // and lower + offset reconstructs a value in [lower, upper) ⊂ i64.
-                let offset = (r % range) as i128;
-                return Ok((i128::from(lower) + offset) as i64);
-            }
+        let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
+        let u = (i128::from(draw) - i128::from(Value::INT_MIN)).cast_unsigned();
+
+        // Reject the remainder above the largest multiple of `range`.
+        let zone = INT_DOMAIN_SPAN / range * range;
+        if u >= zone {
+            return upper;
         }
+        i64::try_from(i128::from(lower) + (u % range).cast_signed())
+            .unwrap_or_else(|_| unreachable!("int._random_in_range: offset is below upper - lower"))
     }
 
     fn ilog(int: i64, base: i64) -> Result<i64, VmRustFnError> {

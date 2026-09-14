@@ -64,9 +64,14 @@ impl OutputType {
 
     /// Conventional generated directory for this target.
     pub const fn generated_directory(self) -> &'static str {
+        "baml_sdk"
+    }
+
+    /// The naming convention currently implemented by this generator.
+    pub const fn required_naming_convention(self) -> NamingConvention {
         match self {
-            Self::CSharp => "baml_client",
-            _ => "baml_sdk",
+            Self::Go | Self::CSharp => NamingConvention::Language,
+            _ => NamingConvention::PreserveCase,
         }
     }
 }
@@ -102,15 +107,10 @@ pub struct Generator {
 
 impl From<OutputType> for Generator {
     fn from(output_type: OutputType) -> Self {
-        let naming_convention = match output_type {
-            OutputType::Go | OutputType::CSharp => NamingConvention::Language,
-            _ => NamingConvention::PreserveCase,
-        };
-
         Self {
             output_type,
             output_dir: None,
-            naming_convention,
+            naming_convention: output_type.required_naming_convention(),
             sdk_import_path: None,
             max_typed_union_arity: None,
         }
@@ -119,28 +119,26 @@ impl From<OutputType> for Generator {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr as _;
-
     use super::{Generator, NamingConvention, OutputType};
-
-    #[test]
-    fn csharp_generator_identity_is_canonical() {
-        assert_eq!(OutputType::from_str("csharp"), Ok(OutputType::CSharp));
-        assert_eq!(OutputType::CSharp.to_string(), "csharp");
-        assert_eq!(OutputType::CSharp.generated_directory(), "baml_client");
-        assert_eq!(OutputType::Rust.generated_directory(), "baml_sdk");
-    }
 
     #[test]
     fn every_output_type_has_add_defaults() {
         for &output_type in OutputType::all() {
             let generator = Generator::from(output_type);
             assert_eq!(generator.output_type, output_type);
+            assert_eq!(
+                generator.naming_convention,
+                output_type.required_naming_convention()
+            );
             assert!(!output_type.add_name().is_empty());
         }
 
         assert_eq!(
             Generator::from(OutputType::Go).naming_convention,
+            NamingConvention::Language
+        );
+        assert_eq!(
+            Generator::from(OutputType::CSharp).naming_convention,
             NamingConvention::Language
         );
         assert_eq!(

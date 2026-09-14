@@ -32,6 +32,10 @@ Every run-time value is of exactly one concrete type. They are the types that de
 
 As of writing, no concrete types have subtyping relationships with each other. This is because doing so would require a physical conversion-- they cannot be statically cast as their memory layouts differ. So where we could statically upcast an `int` to `baml.ops.Equals` (which accepts any implementing concrete type), we cannot statically convert an `int` to a `float`. Additionally, since the concrete types represent different things, static conversion would generally not be well-defined (e.g. `int`/`float` conversion will always be lossy and/or fallible in either direction). For this reason, it's best to require explicit conversions. To avoid this being too inconvenient, we define operators like `int + float` that do the conversions while still clearly being a computation point.
 
+The stdlib declares _companion carrier classes_ for the builtins: `baml.Int`, `baml.Bigint`, `baml.Float`, `baml.Bool`, `baml.String`, `baml.Null`, `baml.Uint8Array`, `baml.Array<T>`, and `baml.Map<K, V>`. A carrier is a stand-in for declaring inherent members on a builtin type (morally `implement int { ... }`, which the syntax does not support yet) and **effectively does not exist as a type**: every occurrence of the spelling denotes the builtin type itself — `baml.Int` _is_ `int`, `baml.Array<T>` _is_ `T[]` — in every position, including `Self` inside the carrier's own methods and `implements` blocks and an impl's `for` target. No value ever inhabits a nominal carrier class.
+
+Two companions are the opposite case — the class name IS the builtin type's canonical spelling: `reflect.Type` (the metatype) and `baml.future.Future<V, E>`. Each denotes its dedicated type kind; the class declaration exists to carry members and documentation. Their long-term shape is undecided (perhaps a magic-builtin-backed alias with an inherent `implement` block), but the invariant holds either way: the spelling denotes the builtin kind, and the declaration only attaches members.
+
 ### Abstract Types
 
 Abstract types can generally be viewed as set unions of different groups of concrete (and literal) types:
@@ -49,6 +53,16 @@ Literal types (here named due to currently all corresponding to literals) repres
 `never` is BAML's bottom type. It represents the empty set: there are no values of this type. As the empty set is a subset of all other sets, `never` is a subtype of all types in BAML.
 
 As an empty set, `never` can always be omitted from union types: `int | never` is equivalent to `int`. A function that returns `never` cannot return, and a function with `throws never` can never throw an error (though it can still panic).
+
+## Declarations, Packages, and Names
+
+A declaration (class, enum, interface) and a type are different things. A declaration is a type _head_: it may be polymorphic (a [type constructor](#generics-on-types-type-constructors) over its parameters) and is not itself a type. A nominal type is a head applied to realized type arguments, and is therefore monomorphic: `Box` is a declaration, `Box<int>` is a type. Two nominal types are the same type only if they have the same head applied to the same type arguments, and a head's identity _is_ its declaration. A declaration belongs to at most one package: a declaration created at run time through `reflect` may be anonymous, belonging to no package and reachable only by reference (its name, if it has one, is for display). A name is how source spells a head from somewhere; it is never the identity.
+
+A package has no intrinsic name. It may declare one (`[package].name`, or the fixed name of a standard-library package), but that is display metadata and the default a dependent spells it by, not its identity. Names live on dependency edges: a package reaches another under the name its own manifest gives that edge, so two packages may reach one package under different names, and a package can name only itself, the packages it lists, and the prelude (the implicitly available standard-library packages). Everything else is invisible to it. Today (09/2026) a user package declares no dependencies and reaches exactly the prelude.
+
+Source always references declarations fully namespaced as `<package>.<namespace*>.<item>` where `<package>` is the name of a dependency graph edge (including `root` which is always the edge to its own package, similar to Rust's `crate`). The only exception is when referencing local items within the same namespace, which may be referenced by their item name (`<item>`) alone.
+
+Every rendering of a type is from a viewpoint: the canonical rendering spells every package fully; the user-facing rendering elides the viewer's own package and writes `root.` for its other namespaces. Canonical order of union members and throw sets is deterministic within a program but is not a stable key across programs; nothing may persist it as an identity.
 
 ## Subtyping Rules
 
@@ -224,18 +238,18 @@ Internally, when we call the specialized function `foo<int>(123)`, the bound typ
 This is best illustrated by BAML's runtime reflection:
 
 ```baml
-function asdf<T>() -> type {
-	reflect.type_of<T>() // `type_of` basically takes the type-parameter and returns it as a value
+function asdf<T>() -> reflect.Type {
+	reflect.Type.of<T>() // `Type.of` takes the type parameter and returns it as a value
 }
 
 ////////
 
 asdf<int>() // should return type `int`
-// we passed type-parameter `int` into `asdf`, which passed it into `reflect.type_of`, which returned it as a value.
+// we passed type parameter `int` into `asdf`, which passed it into `reflect.Type.of`, which returned it as a value.
 ```
 
 **How does this actually get run under the hood?**
-For the function call `foo<int>(123)`, the run time `foo` function effectively receive two parameters: type `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
+For the function call `foo<int>(123)`, the run time `foo` function effectively receives two parameters: type argument `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
 
 - The constructor for `Box` is called, with type parameter `T -> int` (inferred and filled in by the compiler) and value `a -> 123`.
 - The value is assigned to `out`.
@@ -344,6 +358,31 @@ There are a few different positions where `Self` might be used, which have diffe
 3. In interface `implements` methods: refers to the `for`-target type, accepting its type args.
 4. In `interface` default method bodies: the implementor for which the current call occurred. Since we do not expect the compiler to be able to fully monomorphize, this is typically not known until dynamically at call-time. As such, it is emitted as its own type arg.
 
+### Scoped runtime type bindings
+
+Because type parameters are real run-time values, a body can introduce one of its own. Inside a function, lambda, or block body, the statement
+
+```baml
+type T = unreflect(e);   // `e: reflect.Type | reflect.TypeView`, evaluated once when the statement runs
+                         // (a `reflect.class.PendingType` is accepted too, and resolves when the builder is built)
+type S = Wrapper<int>;   // a static right-hand side fills the slot with its realized template
+```
+
+binds `T` as a **rigid, unbounded type parameter of the enclosing frame** for the remainder of the block. `unreflect(e)` is legal in exactly this position: it lifts the `type` value `e` evaluates to into the frame's type-argument slot for `T`. In both forms `T` is opaque to static checking. It is not an alias of its right-hand side, and it carries no bounds.
+
+- Within its block, `T` behaves exactly as a declared generic parameter does: `f<T>(x)`, `Wrapper<T>`, `T[]`, annotations, and `reflect.Type.of<T>()` (which returns the bound value) all type-check statically. No check is deferred to run time and no occurrence of `T` is widened.
+- Because `T` is rigid, a value has type `T` only if it came from a `T`-typed source. A literal or an `int` is not a `T`. The explicit downcast is `match (v) { let x: T => …, _ => … }` (or `v is T`), which tests membership against the bound type at run time, exactly as it would for any other generic parameter.
+- A bounded slot (`f<U extends I>`) instantiated with a scoped `T` is an ordinary static obligation, and an unbounded `T` does not satisfy it. A bounded binding form that carries static bound evidence is future work.
+- `T` is nameable only from its statement to the end of its block; a shadowed static name is restored at the closing brace.
+- Nothing typed by `T` may be observable outside the block. The binding statement re-executes on every pass through its block (a loop, a re-entered lambda) and rebinds the same parameter to a possibly different type, so a `T`-typed value that outlived its block could enter a container whose element type it no longer satisfies. Concretely:
+  - **The block's value.** A block whose value type mentions `T` is a compile error unless the block's expected type is ground, does not mention `T`, and admits the value (so a `-> unknown` body or `let v: unknown = { … }` is fine; a discarded value, such as a statement's, is fine too).
+  - **`return`.** A `return` leaves every block of its function or lambda at once, so a returned value whose type mentions `T` is judged at the `return` by the same rule against the frame's declared return type; a lambda whose return type is inferred cannot return a `T`.
+  - **Flow narrowings** that mention `T` end at the closing brace.
+  - **Thrown types.** A thrown type naming `T` that an inferred `throws` clause or an enclosing `catch` would publish is an error at the throw: catch it inside the block, or declare the clause. A declared clause - closed or partial - may name the thrown type's **nearest relaxation**, the closest type free of `T` that is still a supertype of it under the variance rules, and a name that already admits the thrown type publishes it whichever spelling was used. `T` itself relaxes to `unknown`; a union relaxes its members and simplifies (`T | int` is `unknown`); a function type keeps the direction for its return and throws and flips it for its parameters (`() -> T throws never` relaxes to `() -> unknown throws never`, `(T) -> void` to `(never) -> void`); an invariant constructor has nothing closer than `unknown` itself, so `T[]`, `Boom<T>`, and `Future<T, E>` relax to `unknown`, never to `unknown[]`. The relaxation is computed over the structural rules only: an interface existential that happens to be a closer supertype (a blanket implementation covering every `Boom<T>`) is not considered. A declared `throws unknown` is therefore precise when *something* thrown relaxes to exactly `unknown`, and imprecise (E0097) only when a closer relaxation covers everything thrown.
+  - **Inference variables.** The relaxation is never applied for the author: an unannotated slot, an inferred clause, or an outer inference variable does not silently take it, because the closest slot type is not determined in general (an outer `Wrapper<…>` committed by its own initializer has no argument that holds a `T[]`). A variable introduced outside the block is never solved to a type that mentions `T` (an outer `let xs = []` cannot become `T[]` through a `push` inside the block), and neither is one the block introduced *before* the binding statement, because a value's type is fixed when the value is created and `T`'s slot is bound only when the statement runs. A variable introduced after the statement that is still open at the closing brace is decided there, while `T` is still nameable: if its bounds name `T` it becomes `T` and is judged as the block's value is, and otherwise it moves out to the enclosing scope, where it can never become `T` (so a callee's still-open instantiation cannot carry a `T` bound out of the block to a later context, where a rigid `T` fits nothing and the conflict could no longer be reported).
+  - **Invariance is why erasure is not an option.** Generics are invariant, so a `Stream<T?, T>` cannot leave as `Stream<unknown, unknown>` either; hand such a value to a host as `unknown`.
+- `unreflect(…)` anywhere else, whether a type argument (`f<unreflect(t)>()`), an annotation, a pattern, an item signature, a top-level alias, or nested inside a binding's static right-hand side, is a compile error (E0168): name the type first, then use the name.
+
 ## Functions
 
 A function signature in BAML includes:
@@ -371,7 +410,22 @@ function foo/*<E>*/(arg: () -> void /* throws E */) -> void /* throws E */ {
 }
 ```
 
-5. Otherwise, the `throws` clause MUST be declared.
+   - An **optional** callback argument is a callback slot too, so it opens the
+     same way: `arg: (() -> void)?` (and its longhand `(() -> void) | null`)
+     gets the same implicit effect parameter, instantiated per call site.
+     Passing `null` leaves it unconstrained, which defaults to `never`.
+
+```baml
+function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws E */ {
+	if (arg != null) { arg() }
+}
+```
+
+5. Otherwise, the `throws` clause MUST be declared. In particular, a function
+   type nested any deeper than an argument's callback root — a list element, a
+   map value, a class field, an alias body, a returned function type, or a
+   callback's own parameter — is a stored/structural position with no single
+   call site to instantiate an effect against, and must declare its `throws`.
 
 As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 
@@ -451,6 +505,10 @@ function add_makes_int<O, T extends baml.ops.Add<O, Output=int>>(
 	lhs + rhs
 }
 ```
+
+### Members of union-typed receivers
+
+The member surface of a union-typed receiver is exactly the interface methods of the interfaces that _every_ member implements (at one shared instantiation), and nothing else. Inherent methods never participate: two classes each declaring their own `execute` give `A | B` no callable `execute`, even with identical signatures — only a shared interface that declares the member does. A call through the union then dispatches open-world on that shared interface, resolving against the runtime member's own implementation. This is effectively a call via upcasting to the shared interface-existential (thus requiring common associated-type pins) but provides a narrower callsite receiver type.
 
 ### Interface Implementations
 

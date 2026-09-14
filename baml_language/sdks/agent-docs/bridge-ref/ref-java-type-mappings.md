@@ -182,7 +182,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `BamlType.list(D)` | :136–139 |
 | `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
-| `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
+| `Ty::Unknown { … }` | `Ty::Unknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
 | `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
 | `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
@@ -193,10 +193,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | (no TIR row in Python) | `Ty::Interface` | interface type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::Resource` | resource type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
-| `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
-| `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `BamlType.list(D)` | n/a |
-| `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `map<…>` | n/a |
 
 Per-row deviation flags:
 
@@ -224,14 +221,13 @@ Per-row deviation flags:
 > (`BamlType.map(BamlType.STRING, …)`), since `descriptor_expr` recurses on the real key (in
 > practice `String`) — a map union arm matches on it.
 
-> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::BuiltinUnknown`, and the
+> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::Unknown`, and the
 > not-yet-modeled `Ty::Type` / `Ty::Never` / `Ty::Future` / `Ty::Interface` / `Ty::Resource` /
 > `Ty::PromptAst`, all fall back to `java.lang.Object` (translate_ty.rs:147, :157–162; descriptor
 > `unknown`, lib.rs:401–407). Python drops `Type`/`Never`/`Future` as **unreachable / n/a** for a
 > Python type; Java gives them an explicit `Object` fallback so surrounding generated code still
-> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Unknown` /
-> `Ty::Error` have **no CodegenTy variant at all** in Java, matching Python's "never reaches
-> codegen".
+> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Error` has
+> **no CodegenTy variant at all** in Java, matching Python's "never reaches codegen".
 
 > ⚠ **Deviation from Python (options plumbing):** Python has a codegen `Ty::BamlOptions` →
 > `baml.Options`. Java has no such Ty; per-call options ride the AWS-SDK-v2-style **trailing
@@ -250,7 +246,7 @@ Per-row deviation flags:
   `Arm0..Arm{n-1}`, **one per positional arm in BAML declaration order** (post-normalization, null
   arm stripped), arms boxed (translate_ty.rs:226–230). Java 21+ consumers get exhaustive `switch`
   with record patterns; Java 17 uses `instanceof`. Verified:
-  `baml_bridge.Union2<baml_sdk.baml.csv.CsvRecord, baml_sdk.baml.iter.Done>`.
+  `baml_bridge.Union2<baml_sdk.baml.csv.Record, baml_sdk.baml.iter.Done>`.
 - **Arm selection is type-directed at decode time**, matching the wire value against the *declared*
   arm list in source order — the wire's `value_option_name` / arm order is never trusted. So **no
   nominal type is minted** for anonymous unions and the `UnionSink` stays empty (it is vestigial,
@@ -445,7 +441,6 @@ discriminator resolved from the per-call handle table.
 | `Union { value, metadata }` | `union_variant_value` (`BamlValueUnionVariant`) | **type-directed reconstruction**: `self_type` tokenized to the sorted `\|`-signature, arm picked structurally from the inner value, `TypeRegistry.constructUnion` returns the generated arm record (`Union{n}` arm or recursive-alias sealed record); unregistered signature / unmatched arm → bare decoded inner value; `value_option_name` never trusted (:355, :452–484) |
 | `Handle(Handle)` | `handle_value` (`BamlOutboundHandle` — handle table) | media handle types → typed stdlib class wrapping `BamlHandle` (`Image` / `Audio` / `Video` / `Pdf`, dispatched on `ADT_MEDIA_*`); every other handle type → bare `baml_bridge.BamlHandle` (:360, :109–110) |
 | `FunctionRef { global_index }` | `handle_value` (`FUNCTION_REF`) | bare `baml_bridge.BamlHandle` — no wrapper, not callable back (parity with Python) |
-| `Adt(Collector(CollectorRef))` | `handle_value` (`ADT_COLLECTOR`) | bare `baml_bridge.BamlHandle` |
 | `Adt(Type(RuntimeTy))` | `ty_value` (`BamlTy`) | lenient path → `null` (`OV_TY` skipped, :361–368); strict path → throws `unsupported`. BAML type-reference values do not round-trip. |
 | `Adt(PromptAst(Arc<PromptAst>))` | handle table (`ADT_PROMPT_AST`) on the FFI path; inline `prompt_ast_value` never used | bare `baml_bridge.BamlHandle`; an inline `prompt_ast_value` (`OV_PROMPT_AST`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |
 | `Adt(Media(Arc<MediaValue>))` | handle table (`ADT_MEDIA_*`) on the FFI path; inline `media_value` never used | typed media stdlib class via the `Handle(...)` row; inline `media_value` (`OV_MEDIA`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |

@@ -1,0 +1,32 @@
+[package]
+name = "baml_artifact"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Versioned envelope for BAML compiler artifacts"
+build = "build.rs"
+
+[lib]
+doctest = false
+
+[features]
+test-support = [  ]
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_version = { workspace = true }
+borsh = { workspace = true }
+log = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+baml_version = { workspace = true }

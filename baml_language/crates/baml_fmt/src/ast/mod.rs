@@ -1,6 +1,7 @@
 mod attributes;
 mod declarations;
 mod expressions;
+mod interfaces;
 mod pattern;
 mod statements;
 mod tokens;
@@ -12,6 +13,7 @@ pub use attributes::*;
 use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
 pub use expressions::*;
+pub use interfaces::*;
 pub use pattern::*;
 use rowan::TextRange;
 pub use statements::*;
@@ -456,7 +458,6 @@ impl Printable for SourceFile {
 #[cfg(test)]
 mod tests {
     use baml_db::{baml_compiler_parser::parse_green, baml_compiler_syntax::SyntaxNode};
-    use baml_project::ProjectDatabase;
 
     use super::*;
 
@@ -476,8 +477,7 @@ mod tests {
             }
             "#;
 
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let source_file = SourceFile::from_cst(SyntaxElement::Node(syntax_tree)).unwrap();
@@ -494,8 +494,7 @@ mod tests {
             }
             "#;
 
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let result = SourceFile::from_cst(SyntaxElement::Node(syntax_tree));

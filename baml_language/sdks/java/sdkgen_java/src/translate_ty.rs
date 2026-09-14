@@ -32,6 +32,7 @@
 
 use std::collections::BTreeMap;
 
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 
 use crate::routing::{PackagePath, java_identifier, route};
@@ -178,7 +179,7 @@ pub(crate) fn translate_ty(
             )
         ),
         Ty::Union(items, _) => translate_union(items, ctx, sink),
-        Ty::BuiltinUnknown { .. } => "java.lang.Object".to_string(),
+        Ty::Unknown { .. } => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::Void { .. } => match pos {
             TyPosition::TopLevel => "void".to_string(),
@@ -286,18 +287,23 @@ fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
 }
 
 /// FQN of a generated (or runtime-owned) named type:
-/// `baml_sdk.<package>.<Ident>`. The runtime-owned `baml.llm.Stream`
+/// `baml_sdk.<package>.<Ident>`. The runtime-owned `ai.stream.Stream`
 /// resolves to the runtime library's `baml_bridge.BamlStream` (no
 /// generated class exists for it; the media classes keep their
 /// `baml_sdk.baml.media.*` paths because the runtime jar provides
 /// classes at exactly those packages).
 fn qualified_type(name: &Name) -> String {
-    if name.package().as_str() == "baml"
-        && name.namespace().len() == 1
-        && name.namespace()[0].as_str() == "llm"
-        && name.name().as_str() == "Stream"
-    {
+    if name.to_string() == "ai.Prompt" {
+        return "baml_bridge.BamlPrompt".to_string();
+    }
+    if name.to_string() == AI_STREAM_STREAM {
         return "baml_bridge.BamlStream".to_string();
+    }
+    if name.to_string() == AI_FUNCTION_SPEC {
+        return "baml_bridge.BamlFunctionSpec".to_string();
+    }
+    if name.to_string() == AI_STREAM_DONE {
+        return "baml_sdk.ai.stream.Done".to_string();
     }
     let pkg = route(name);
     format!(
@@ -676,7 +682,7 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
                 }
             }
         },
-        Ty::BuiltinUnknown { .. } => "Unknown".to_string(),
+        Ty::Unknown { .. } => "Unknown".to_string(),
         Ty::Function { .. } => "Callable".to_string(),
         Ty::Void { .. } => "Void".to_string(),
         Ty::Never { .. } => "Never".to_string(),
@@ -905,7 +911,7 @@ mod tests {
         Ty::Void { attr: a() }
     }
     fn unknown() -> Ty {
-        Ty::BuiltinUnknown { attr: a() }
+        Ty::Unknown { attr: a() }
     }
     fn rust_type() -> Ty {
         Ty::RustType { attr: a() }
@@ -927,10 +933,10 @@ mod tests {
         }
     }
     fn union(items: Vec<Ty>) -> Ty {
-        Ty::Union(items, a())
+        Ty::Union(items.into(), a())
     }
     fn class_ty(n: Name, args: Vec<Ty>) -> Ty {
-        Ty::Class(n, args, a())
+        Ty::Class(n, args.into(), a())
     }
     fn enum_ty(n: Name) -> Ty {
         Ty::Enum(n, a())
@@ -943,7 +949,7 @@ mod tests {
     }
     fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
         Ty::Function {
-            params,
+            params: params.into(),
             ret: Box::new(ret),
             throws: Box::new(Ty::Never { attr: a() }),
             attr: a(),
@@ -988,6 +994,14 @@ mod tests {
         assert_eq!(tr(&e, TyPosition::TopLevel), "baml_sdk.ipsum.Sentiment");
         let s = class_ty(name("user", &["lorem"], "Resume$stream"), vec![]);
         assert_eq!(tr(&s, TyPosition::TopLevel), "baml_sdk.lorem.Resume$stream");
+
+        let stream = class_ty(name("ai", &["stream"], "Stream"), vec![string(), string()]);
+        assert_eq!(
+            tr(&stream, TyPosition::TopLevel),
+            "baml_bridge.BamlStream<java.lang.String, java.lang.String>"
+        );
+        let done = class_ty(name("ai", &["stream"], "Done"), vec![]);
+        assert_eq!(tr(&done, TyPosition::TopLevel), "baml_sdk.ai.stream.Done");
     }
 
     #[test]

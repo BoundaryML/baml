@@ -71,10 +71,6 @@ impl Buf {
         Self { bytes }
     }
 
-    pub(crate) fn capacity(&self) -> usize {
-        self.bytes.len()
-    }
-
     /// Calls `f` with a mutable view of `[offset, offset + len)` so the
     /// producer can serialize a record *directly into the ring*, skipping the
     /// intermediate stack buffer and the extra copy that encoding into a

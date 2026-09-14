@@ -11,7 +11,7 @@ import { Sentiment } from "./baml_sdk/enums/index.js";
 import { Wrapper, Wrapper$stream } from "./baml_sdk/generics/index.js";
 import { Resume, Resume$stream } from "./baml_sdk/lorem/index.js";
 import { Audio$stream, Image$stream, Pdf$stream, Video$stream } from "./baml_sdk/baml/media/index.js";
-import { Stream$stream } from "./baml_sdk/baml/llm/index.js";
+import { Stream$stream } from "./baml_sdk/ai/stream/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("generated SDK typemap", () => {
@@ -25,7 +25,7 @@ describe("generated SDK typemap", () => {
       ["baml.media.Audio", generatedSdk.baml.media.Audio, BamlAudio],
       ["baml.media.Video", generatedSdk.baml.media.Video, BamlVideo],
       ["baml.media.Pdf", generatedSdk.baml.media.Pdf, BamlPdf],
-      ["baml.llm.Stream", generatedSdk.baml.llm.Stream, BamlStream],
+      ["ai.stream.Stream", generatedSdk.ai.stream.Stream, BamlStream],
     ] as const;
     for (const [fqn, generatedConstructor, bridgeConstructor] of cases) {
       expect(generatedConstructor).toBe(bridgeConstructor);
@@ -49,7 +49,7 @@ describe("generated SDK typemap", () => {
       ["baml.media.Audio$stream", Audio$stream, BamlAudio],
       ["baml.media.Video$stream", Video$stream, BamlVideo],
       ["baml.media.Pdf$stream", Pdf$stream, BamlPdf],
-      ["baml.llm.Stream$stream", Stream$stream, BamlStream],
+      ["ai.stream.Stream$stream", Stream$stream, BamlStream],
     ] as const) {
       expect(getTypeMap().getClass(fqn)).toBe(companion);
       expect(companion).not.toBe(base);

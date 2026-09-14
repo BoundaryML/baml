@@ -37,8 +37,8 @@
         pythonEnv = pkgs.python3.withPackages (ps: [ ]);
 
         toolchain = fenix.packages.${system}.fromToolchainFile {
-          file = ./rust-toolchain.toml;
-          sha256 = "sha256-vra6TkHITpwRyA5oBKAHSX0Mi6CBDNQD+ryPSpxFsfg=";
+          file = ./engine/rust-toolchain.toml;
+          sha256 = "sha256-P30Tm3O7vQAE725YtDCDHGjNrSsfZO4us11UwJGZSJo=";
         };
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;

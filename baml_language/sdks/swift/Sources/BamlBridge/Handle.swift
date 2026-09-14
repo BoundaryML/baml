@@ -4,16 +4,30 @@ import Foundation
 /// An engine-owned resource riding in a generated model's `$rust_type`
 /// field (`File._handle`, `Response._body`, media `_data`, …). The
 /// wire carries only a key into the engine's handle table; the Swift
-/// object owns that key: deinit releases it, and encoding clones a
-/// fresh key for the wire so this instance stays independently
-/// droppable (Python's `_clone_key_for_wire` semantics).
+/// object owns one release of that key: deinit performs it, and
+/// encoding clones one more ownership for the wire (a fresh key for
+/// media, the same refcounted key for an engine-heap handle) so this
+/// instance stays independently droppable (Python's
+/// `_clone_key_for_wire` semantics).
 public final class BamlHandle: @unchecked Sendable {
     let key: UInt64
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
+    /// Root class identity carried by an outbound tagged handle's `ty`.
+    let classFQN: String?
+    /// Media handles cache their portable wire value when they are created or
+    /// decoded. Encoding never has to perform a fallible native read.
+    let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
 
-    init(key: UInt64, handleType: BamlBridge_Cffi_V1_BamlHandleType) {
+    init(
+        key: UInt64,
+        handleType: BamlBridge_Cffi_V1_BamlHandleType,
+        classFQN: String? = nil,
+        portableMedia: BamlBridge_Cffi_V1_BamlValueMedia? = nil
+    ) {
         self.key = key
         self.handleType = handleType
+        self.classFQN = classFQN
+        self.portableMedia = portableMedia
     }
 
     deinit {
@@ -28,10 +42,13 @@ public final class BamlHandle: @unchecked Sendable {
 }
 
 extension BamlHandle: Equatable {
-    /// Identity is the table key. Two handles to the same resource
-    /// minted separately compare unequal — generated structs holding
-    /// handles compare by resource identity, mirroring Python where
-    /// private handle attrs sit outside pydantic equality.
+    /// Identity is the table key. For an engine-heap handle the table
+    /// issues one key per heap object, so two handles to the same object
+    /// compare EQUAL however they were minted; identity-free rows (media)
+    /// get a key per minting and compare unequal even for the same
+    /// resource. Generated structs holding handles compare by this key,
+    /// mirroring Python where private handle attrs sit outside pydantic
+    /// equality.
     public static func == (lhs: BamlHandle, rhs: BamlHandle) -> Bool {
         lhs.key == rhs.key
     }
@@ -39,6 +56,9 @@ extension BamlHandle: Equatable {
 
 extension BamlHandle: BamlEncodable {
     public func _bamlEncode() -> BamlInboundValue {
+        if let portableMedia {
+            return BamlMedia.encodePortable(portableMedia)
+        }
         // Clone a fresh key for the wire; the engine drains it while
         // this instance keeps its own.
         var wireKey: UInt64 = 0
@@ -59,13 +79,36 @@ extension BamlHandle: BamlEncodable {
 extension BamlHandle: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlHandle {
         let raw = value.normalized
+        if case .mediaValue(let media) = raw.value {
+            return try BamlMedia.decodePortable(media)
+        }
         guard case .handleValue(let handle) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "handle", got: wireArmName(raw))
         }
         guard handle.handleType != .handleUnspecified else {
             throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HANDLE_UNSPECIFIED")
         }
-        return BamlHandle(key: handle.key, handleType: handle.handleType)
+        let classFQN: String?
+        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty {
+            classFQN = classType.name.isEmpty ? nil : classType.name
+        } else {
+            classFQN = nil
+        }
+        let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
+        if BamlMedia.isPortableHandle(handle.handleType) {
+            portableMedia = try BamlMedia.snapshotPortable(
+                key: handle.key,
+                handleType: handle.handleType
+            )
+        } else {
+            portableMedia = nil
+        }
+        return BamlHandle(
+            key: handle.key,
+            handleType: handle.handleType,
+            classFQN: classFQN,
+            portableMedia: portableMedia
+        )
     }
 }
 
@@ -112,7 +155,7 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     }
 
     public func callRaw(
-        args: [(String, (any BamlEncodable)?)]
+        args: [(String, (any BamlEncodable)?)],
     ) async throws -> BamlOutboundValue {
         try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
     }

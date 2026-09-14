@@ -113,9 +113,14 @@ impl AddGeneratorArgs {
 
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("failed to read {}", toml_path.display()))?;
-        let manifest = crate::manifest::parse(&content)
+        let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-        crate::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::package_name(&manifest, &toml_path)?;
+        // Every other manifest reader rejects these, so accepting them here
+        // would write a generator into a file that the next build refuses to
+        // load, reporting a failure that names neither this command nor the
+        // table it choked on.
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
 
         let mut generator = Generator::from(self.output_type);
         match (self.output_type, self.sdk_import_path.as_deref()) {
@@ -170,7 +175,7 @@ fn add_output_type_parser() -> impl TypedValueParser<Value = OutputType> {
 }
 
 fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(String, String)> {
-    let manifest = crate::manifest::parse(content).context("invalid baml.toml")?;
+    let manifest = baml_db::manifest::parse(content).context("invalid baml.toml")?;
     let name = (1..)
         .map(|index| format!("client{index}"))
         .find(|name| !manifest.generator.contains_key(name))
@@ -256,15 +261,20 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
+        // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
+        // the root too so Windows short paths and `\\?\` paths can be relativized.
+        let from = from
+            .canonicalize()
+            .with_context(|| format!("failed to resolve project root {}", from.display()))?;
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db);
+        let source_files = package.files(&db).clone();
+        let diagnostics = baml_db::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
@@ -332,14 +342,35 @@ impl GenerateArgs {
         let embedded_baml_toml = build_embedded_baml_toml(&from)?;
 
         // Build the codegen SymbolPool from the compiler database.
-        let pool = baml_project::build_symbol_pool(&db);
+        let pool = baml_ide::build_symbol_pool(&db);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
-            .get_bytecode()
+            .get_bytecode(package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        let baml_bytecode = borsh::to_vec(&program)
+        let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
+        let source_root = from.join("baml_src");
+        let user_baml_files = source_files
+            .iter()
+            .map(|source_file| {
+                let path = source_file.path(&db);
+                let relative_path = path
+                    .strip_prefix(&source_root)
+                    .or_else(|_| path.strip_prefix(&from))
+                    .with_context(|| {
+                        format!(
+                            "BAML source {} is outside project root {}",
+                            path.display(),
+                            from.display()
+                        )
+                    })?;
+                Ok((
+                    relative_path.to_path_buf(),
+                    source_file.text(&db).to_string(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut total_files = 0;
 
@@ -371,7 +402,7 @@ impl GenerateArgs {
                 reporter.status(
                     "Generated",
                     format!(
-                        "{} ({count} file(s) → {})",
+                        "{} ({count} file(s), 0 identifier renames → {})",
                         generator.name,
                         output_dir.display()
                     ),
@@ -383,14 +414,18 @@ impl GenerateArgs {
             // Unified to bytes at the write boundary: python/TS emit text
             // only; the rust generator also ships the embedded bytecode as
             // a binary file.
+            let mut identifier_renames = Vec::new();
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata(
+                    let generated = sdkgen_python_pydantic2::generate_with_bytecode_and_metadata_and_source_files(
                         &pool,
                         &baml_bytecode,
                         &embedded_baml_toml,
+                        &user_baml_files,
                         generator.naming_convention,
-                    )
+                    );
+                    identifier_renames = generated.renames;
+                    generated.files
                     .into_iter()
                     .map(|(path, content)| (path, content.into_bytes()))
                     .collect()
@@ -510,6 +545,18 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
+            for rename in &identifier_renames {
+                crate::reporter::print_verbose(format_args!(
+                    "Renamed {} `{}`: `{}` → `{}` ({})",
+                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
+                ));
+            }
+            let rename_count = identifier_renames.len();
+            let rename_label = if rename_count == 1 {
+                "identifier rename"
+            } else {
+                "identifier renames"
+            };
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo
@@ -518,7 +565,7 @@ impl GenerateArgs {
             reporter.status(
                 "Generated",
                 format!(
-                    "{} ({count} file(s) → {})",
+                    "{} ({count} file(s), {rename_count} {rename_label} → {})",
                     generator.name,
                     output_dir.display()
                 ),
@@ -588,7 +635,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let Ok(content) = std::fs::read_to_string(root.join("baml.toml")) else {
         return (generators, diags);
     };
-    let Ok(manifest) = crate::manifest::parse(&content) else {
+    let Ok(manifest) = baml_db::manifest::parse(&content) else {
         return (generators, diags);
     };
 
@@ -669,10 +716,9 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             }
             sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
         };
-
         // `output_dir` is resolved relative to the project root and defaults
-        // to "..", with the target-owned generated directory appended.
-        let raw_output_dir = generator.output_dir.as_deref().unwrap_or("..");
+        // to the project root, with the target-owned generated directory appended.
+        let raw_output_dir = generator.output_dir.as_deref().unwrap_or(".");
         let generated_directory = output_type.map_or("baml_sdk", OutputType::generated_directory);
         let output_dir = root.join(raw_output_dir).join(generated_directory);
 
@@ -681,34 +727,33 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
         };
-        if output_type == OutputType::Go {
-            if naming_convention != NamingConvention::Language {
-                let range = generator
-                    .naming_convention
-                    .as_ref()
-                    .map(|value| to_text_range(value.span()))
-                    .unwrap_or(table_range);
-                diags.push(
-                    Diagnostic::error(
-                        DiagnosticId::InvalidGeneratorPropertyValue,
-                        format!(
-                            "Go generator `{name}` requires `naming_convention = \"language\"`"
-                        ),
-                    )
-                    .with_primary(
-                        Span {
-                            file_id: manifest_file_id(),
-                            range,
-                        },
-                        "Go identifiers use the canonical language projection",
-                    )
-                    .with_phase(DiagnosticPhase::Validation),
-                );
-                continue;
-            }
-            if sdk_import_path.is_none() {
-                continue;
-            }
+        let required_naming_convention = output_type.required_naming_convention();
+        if naming_convention != required_naming_convention {
+            let range = generator
+                .naming_convention
+                .as_ref()
+                .map(|value| to_text_range(value.span()))
+                .unwrap_or(table_range);
+            diags.push(
+                Diagnostic::error(
+                    DiagnosticId::InvalidGeneratorPropertyValue,
+                    format!(
+                        "generator `{name}` with `output_type = \"{output_type}\"` requires `naming_convention = \"{required_naming_convention}\"`"
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id: manifest_file_id(),
+                        range,
+                    },
+                    format!("use `{required_naming_convention}` for `{output_type}`"),
+                )
+                .with_phase(DiagnosticPhase::Validation),
+            );
+            continue;
+        }
+        if output_type == OutputType::Go && sdk_import_path.is_none() {
+            continue;
         }
 
         generators.push(GeneratorDef {
@@ -880,6 +925,36 @@ mod tests {
     }
 
     #[test]
+    fn generator_output_directories_use_the_shared_convention() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.csharp_default]\noutput_type = \"csharp\"\nnaming_convention = \"language\"\n\n[generator.csharp_explicit]\noutput_type = \"csharp\"\noutput_dir = \"generated\"\nnaming_convention = \"language\"\n\n[generator.python]\noutput_type = \"python/pydantic\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let output_for = |name: &str| {
+            &generators
+                .iter()
+                .find(|generator| generator.name == name)
+                .unwrap()
+                .output_dir
+        };
+        assert_eq!(
+            output_for("csharp_default"),
+            &directory.path().join("baml_sdk")
+        );
+        assert_eq!(
+            output_for("csharp_explicit"),
+            &directory.path().join("generated").join("baml_sdk")
+        );
+        assert_eq!(output_for("python"), &directory.path().join("baml_sdk"));
+    }
+
+    #[test]
     fn embedded_manifest_preserves_project_content_and_appends_owned_metadata() {
         let directory = tempfile::tempdir().unwrap();
         let original = "# keep this byte-for-byte\n[package]\nname = \"test\"";
@@ -934,7 +1009,7 @@ mod tests {
 
         assert_eq!(name, "client2");
         assert!(updated.contains("# keep this comment"));
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client2"].get_ref();
         assert_eq!(
             added.output_type.as_ref().unwrap().get_ref(),
@@ -955,7 +1030,7 @@ mod tests {
             add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
 
         assert_eq!(name, "client1");
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client1"].get_ref();
         assert_eq!(added.output_type.as_ref().unwrap().get_ref(), "go");
         assert_eq!(
@@ -987,7 +1062,7 @@ mod tests {
 
         assert!(matches!(result, crate::ExitCode::Success));
         let updated = fs::read_to_string(directory.path().join("baml.toml")).unwrap();
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         assert_eq!(
             manifest.generator["client1"]
                 .get_ref()
@@ -997,6 +1072,22 @@ mod tests {
                 .get_ref(),
             "typescript/node"
         );
+    }
+
+    #[test]
+    fn generator_output_defaults_to_project_root() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[generator.rust]\noutput_type = \"rust\"\nnaming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let (generators, diagnostics) = discover_generators(directory.path());
+
+        assert!(diagnostics.is_empty());
+        assert_eq!(generators.len(), 1);
+        assert_eq!(generators[0].output_dir, directory.path().join("baml_sdk"));
     }
 
     #[test]
@@ -1041,12 +1132,54 @@ mod tests {
 
     #[test]
     fn go_union_threshold_on_non_go_generator_is_rejected() {
-        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"language\"\nmax_typed_union_arity = 3\n";
+        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"preserve-case\"\nmax_typed_union_arity = 3\n";
         let (_, diagnostics) = discover_with_manifest(manifest);
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(
             format!("{diagnostics:?}").contains("Go-only property"),
             "{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn naming_convention_is_validated_for_every_output_type() {
+        for &output_type in OutputType::all() {
+            let required = output_type.required_naming_convention();
+            let unsupported = match required {
+                baml_codegen_types::NamingConvention::PreserveCase => "language",
+                baml_codegen_types::NamingConvention::Language => "preserve-case",
+            };
+            let sdk_import_path = if output_type == OutputType::Go {
+                "sdk_import_path = \"example.com/test/baml_sdk\"\n"
+            } else {
+                ""
+            };
+            let valid_manifest = format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{required}\"\n{sdk_import_path}"
+            );
+            let (generators, diagnostics) = discover_with_manifest(&valid_manifest);
+            assert_eq!(generators.len(), 1, "{output_type}: {diagnostics:?}");
+            assert!(diagnostics.is_empty(), "{output_type}: {diagnostics:?}");
+
+            let manifest = format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{unsupported}\"\n{sdk_import_path}"
+            );
+
+            let (generators, diagnostics) = discover_with_manifest(&manifest);
+
+            assert!(generators.is_empty(), "{output_type}");
+            assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].id,
+                baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
+            );
+            assert_eq!(
+                diagnostics[0].message,
+                format!(
+                    "generator `client` with `output_type = \"{output_type}\"` requires `naming_convention = \"{}\"`",
+                    required
+                )
+            );
+        }
     }
 }

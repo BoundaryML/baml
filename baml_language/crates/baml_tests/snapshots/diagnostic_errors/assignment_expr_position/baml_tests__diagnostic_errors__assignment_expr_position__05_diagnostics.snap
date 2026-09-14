@@ -2,14 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-   ╭─[main.baml:8:5]
- 8 │     let y = (x = 5);
-   ·     ────────────────
-   ╰────
-
   [hir] E0010
 
   × assignment is not allowed in expression position; assignment is a statement

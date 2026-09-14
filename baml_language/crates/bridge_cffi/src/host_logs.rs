@@ -18,7 +18,7 @@
 
 use std::{io::Write as _, time::Duration};
 
-use bex_project::{CaptureDefaults, FunctionCallContext, TraceCaptureConfig, TraceCaptureProducer};
+use bex_project::{FunctionCallContext, TraceLogger};
 
 /// Environment variable that opts a host process into BAML log delivery.
 pub const BAML_LOG_ENV_VAR: &str = "BAML_LOG";
@@ -94,7 +94,7 @@ fn env_level() -> Option<HostLogLevel> {
 /// A per-call stderr log sink: the capture producer this call publishes into
 /// plus the host-selected level filter.
 pub(crate) struct HostLogSink {
-    producer: TraceCaptureProducer,
+    logger: TraceLogger,
     level: HostLogLevel,
 }
 
@@ -102,7 +102,7 @@ impl HostLogSink {
     /// Drain every captured log event, writing lines that pass the level
     /// filter to stderr.
     fn drain(&self) {
-        let report = self.producer.drain_rendered_logs();
+        let report = self.logger.drain_rendered_logs();
         if report.logs.is_empty() && report.failures.is_empty() {
             return;
         }
@@ -131,24 +131,20 @@ impl HostLogSink {
 /// Attach a stderr log sink to a call context when `BAML_LOG` requests one.
 ///
 /// Leaves the context untouched when logs are off or when the caller already
-/// configured its own capture (a non-default `CaptureDefaults` means another
-/// owner is draining this call's producer).
+/// configured its own logger (an enabled `TraceLogger` means another owner is
+/// draining this call's logs).
 pub(crate) fn attach_env_log_sink(
     mut ctx: FunctionCallContext,
 ) -> (FunctionCallContext, Option<HostLogSink>) {
-    if ctx.boundary.capture_defaults != CaptureDefaults::disabled() {
+    if ctx.logger.is_enabled() {
         return (ctx, None);
     }
     let Some(level) = env_level() else {
         return (ctx, None);
     };
-    let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(MAX_PENDING_LOGS));
-    ctx.boundary.capture_defaults = CaptureDefaults {
-        values_enabled: false,
-        logs_enabled: true,
-    };
-    ctx.value_capture = producer.clone();
-    (ctx, Some(HostLogSink { producer, level }))
+    let logger = TraceLogger::bounded(MAX_PENDING_LOGS);
+    ctx.logger = logger.clone();
+    (ctx, Some(HostLogSink { logger, level }))
 }
 
 /// Await `future`, draining the sink to stderr on an interval while it runs
@@ -219,15 +215,12 @@ mod tests {
     #[test]
     fn attach_respects_caller_owned_capture() {
         let ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(1))
-            .with_capture_defaults(CaptureDefaults {
-                values_enabled: false,
-                logs_enabled: true,
-            })
+            .with_logger(TraceLogger::bounded(1))
             .build();
-        // Even with BAML_LOG set in the environment, a context whose capture
-        // defaults are already configured is returned unchanged.
+        // Even with BAML_LOG set in the environment, a context whose logger
+        // is already enabled is returned unchanged.
         let (ctx, sink) = attach_env_log_sink(ctx);
         assert!(sink.is_none());
-        assert!(ctx.boundary.capture_defaults.logs_enabled);
+        assert!(ctx.logger.is_enabled());
     }
 }

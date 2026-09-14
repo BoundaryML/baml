@@ -296,7 +296,7 @@ The compiler2 uses the [Salsa](https://salsa-rs.github.io/salsa/) incremental co
 
 ```
 salsa::Database
-  └─ baml_workspace::Db        (project root, file list)
+  └─ baml_base                 (source roots: path, package, kind, files)
       └─ baml_compiler_parser::Db  (syntax_tree query)
           └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items)
               └─ baml_compiler2_ppir::Db  (ppir_expansion_items, canonical queries)
@@ -483,19 +483,17 @@ When you write `let x = 42`, you don't want `x` to have type `literal 42` — yo
 - If a variable is explicitly typed as a literal type (e.g., `let x: 42 = 42`), the literal is already bound to a regular literal type and does not widen.
 - Widening also applies when collecting into containers: an array of fresh literals becomes an array of the widened type.
 
-### Unknown, Missing, and Error Types
+### `Unknown`, `Error`, and `Infer`
 
-The TIR uses three distinct "failure" types internally:
+Three `Ty` variants are easy to confuse. Only two of them are failure states:
 
 | Type | Meaning |
 |---|---|
-| `BuiltinUnknown` | A type that genuinely represents "unknown" in user code (e.g., a function parameter typed as `unknown`). |
-| `Missing` | The type checker could not determine the type — this represents a **typing hole** and is almost certainly a bug if encountered unexpectedly. |
-| `Error` | A type error was detected and recorded. |
+| `Unknown` | The **top type** — the user-denotable `unknown` keyword, `T <: unknown` for all `T`. Not a failure: a parameter typed `unknown` is well-typed. |
+| `Error` | The error-recovery sentinel: a hard type error was already reported here, so downstream checks suppress rather than cascade. Compiler-only — it has no `RuntimeTy`, and reaching runtime lowering with one is a compiler bug. |
+| `Infer` | An inference hole (written `_`) or an inference variable. Compiler-only; every one must be filled or reported before finalize. |
 
-**Known serialization issue:** The snapshot printer currently renders all three of `Missing`, `Error`, and `BuiltinUnknown` as the string `unknown`. This is a serialization bug (not a representation bug). Internally they are distinct. When debugging, if you see `unknown` in snapshot output, investigate which variant it actually is.
-
-**Debugging heuristic:** In snapshot test output, search for `unknown`. If the code has no compilation errors, every `unknown` should correspond to a genuine `BuiltinUnknown` (e.g., from a standard library function that intentionally accepts `unknown`). Any unexpected `unknown` is a bug that needs investigation.
+**Debugging heuristic:** in snapshot output, `Unknown` renders as `unknown` and so does a genuine user-written `unknown`, so the two are indistinguishable on sight. If the source has no compile errors, every `unknown` should be a real top type. An unexpected one is worth tracing — `Error` is laundered to the top type at the MIR boundary today (see the `// BUG:` on `erase_compiler_only_ty`), so an `unknown` that should have been a diagnostic can appear here.
 
 ---
 

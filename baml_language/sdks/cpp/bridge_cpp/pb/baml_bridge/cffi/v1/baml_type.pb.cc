@@ -25,6 +25,36 @@ namespace baml_bridge {
 namespace cffi {
 namespace v1 {
 
+inline constexpr BamlWitnessFieldLink::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        interface_field_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        class_field_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlWitnessFieldLink::BamlWitnessFieldLink(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlWitnessFieldLink_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlWitnessFieldLinkDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlWitnessFieldLinkDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlWitnessFieldLinkDefaultTypeInternal() {}
+  union {
+    BamlWitnessFieldLink _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlWitnessFieldLinkDefaultTypeInternal _BamlWitnessFieldLink_default_instance_;
+
 inline constexpr BamlTyVoid::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0} {}
@@ -353,6 +383,40 @@ struct BamlTyEnumDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlTyEnumDefaultTypeInternal _BamlTyEnum_default_instance_;
+
+inline constexpr BamlTyMetadata::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        other_{},
+        description_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        alias_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        docstring_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlTyMetadata::BamlTyMetadata(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlTyMetadata_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlTyMetadataDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlTyMetadataDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlTyMetadataDefaultTypeInternal() {}
+  union {
+    BamlTyMetadata _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlTyMetadataDefaultTypeInternal _BamlTyMetadata_default_instance_;
 
 inline constexpr BamlTy::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -705,6 +769,182 @@ struct BamlTyUnionDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlTyUnionDefaultTypeInternal _BamlTyUnion_default_instance_;
+
+inline constexpr BamlWitnessDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        interface_args_{},
+        associated_types_{},
+        field_links_{},
+        interface_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlWitnessDef::BamlWitnessDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlWitnessDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlWitnessDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlWitnessDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlWitnessDefDefaultTypeInternal() {}
+  union {
+    BamlWitnessDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlWitnessDefDefaultTypeInternal _BamlWitnessDef_default_instance_;
+
+inline constexpr BamlEnumVariantDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        metadata_{nullptr},
+        skip_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlEnumVariantDef::BamlEnumVariantDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlEnumVariantDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlEnumVariantDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlEnumVariantDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlEnumVariantDefDefaultTypeInternal() {}
+  union {
+    BamlEnumVariantDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlEnumVariantDefDefaultTypeInternal _BamlEnumVariantDef_default_instance_;
+
+inline constexpr BamlClassFieldDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ty_{nullptr},
+        metadata_{nullptr},
+        skip_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlClassFieldDef::BamlClassFieldDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlClassFieldDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlClassFieldDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlClassFieldDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlClassFieldDefDefaultTypeInternal() {}
+  union {
+    BamlClassFieldDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlClassFieldDefDefaultTypeInternal _BamlClassFieldDef_default_instance_;
+
+inline constexpr BamlEnumDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        variants_{},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        metadata_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlEnumDef::BamlEnumDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlEnumDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlEnumDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlEnumDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlEnumDefDefaultTypeInternal() {}
+  union {
+    BamlEnumDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlEnumDefDefaultTypeInternal _BamlEnumDef_default_instance_;
+
+inline constexpr BamlClassDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        fields_{},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        metadata_{nullptr},
+        generic_param_count_{0u} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlClassDef::BamlClassDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlClassDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlClassDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlClassDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlClassDefDefaultTypeInternal() {}
+  union {
+    BamlClassDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlClassDefDefaultTypeInternal _BamlClassDef_default_instance_;
+
+inline constexpr BamlTyDef::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        classes_{},
+        enums_{},
+        witnesses_{},
+        root_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BamlTyDef::BamlTyDef(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(BamlTyDef_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BamlTyDefDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BamlTyDefDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BamlTyDefDefaultTypeInternal() {}
+  union {
+    BamlTyDef _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlTyDefDefaultTypeInternal _BamlTyDef_default_instance_;
 }  // namespace v1
 }  // namespace cffi
 }  // namespace baml_bridge
@@ -2272,6 +2512,2908 @@ void BamlTy::InternalSwap(BamlTy* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_.ty_, other->_impl_.ty_);
   swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+// ===================================================================
+
+class BamlTyDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlTyDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_._has_bits_);
+};
+
+BamlTyDef::BamlTyDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlTyDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlTyDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlTyDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlTyDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        classes_{visibility, arena, from.classes_},
+        enums_{visibility, arena, from.enums_},
+        witnesses_{visibility, arena, from.witnesses_} {}
+
+BamlTyDef::BamlTyDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlTyDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlTyDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlTyDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.root_ = ((cached_has_bits & 0x00000001u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.root_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlTyDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlTyDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        classes_{visibility, arena},
+        enums_{visibility, arena},
+        witnesses_{visibility, arena} {}
+
+inline void BamlTyDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.root_ = {};
+}
+BamlTyDef::~BamlTyDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlTyDef)
+  SharedDtor(*this);
+}
+inline void BamlTyDef::SharedDtor(MessageLite& self) {
+  BamlTyDef& this_ = static_cast<BamlTyDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.root_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlTyDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlTyDef(arena);
+}
+constexpr auto BamlTyDef::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.classes_) +
+          decltype(BamlTyDef::_impl_.classes_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.enums_) +
+          decltype(BamlTyDef::_impl_.enums_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.witnesses_) +
+          decltype(BamlTyDef::_impl_.witnesses_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(BamlTyDef), alignof(BamlTyDef), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlTyDef::PlacementNew_,
+                                 sizeof(BamlTyDef),
+                                 alignof(BamlTyDef));
+  }
+}
+constexpr auto BamlTyDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<30>{
+      {
+          &_BamlTyDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlTyDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlTyDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlTyDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlTyDef>(), &BamlTyDef::ByteSizeLong,
+              &BamlTyDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlTyDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<30> BamlTyDef_class_data_ =
+    BamlTyDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlTyDef::GetClassData() const {
+  return BamlTyDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 4, 0, 2>
+BamlTyDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    4,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlTyDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
+    {::_pbi::TcParser::FastMtR1,
+     {34, 63, 3, PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.witnesses_)}},
+    // .baml_bridge.cffi.v1.BamlTy root = 1;
+    {::_pbi::TcParser::FastMtS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.root_)}},
+    // repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
+    {::_pbi::TcParser::FastMtR1,
+     {18, 63, 1, PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.classes_)}},
+    // repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
+    {::_pbi::TcParser::FastMtR1,
+     {26, 63, 2, PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.enums_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // .baml_bridge.cffi.v1.BamlTy root = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.root_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.classes_), -1, 1,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.enums_), -1, 2,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlTyDef, _impl_.witnesses_), -1, 3,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlClassDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlEnumDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlWitnessDef>()},
+  }},
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void BamlTyDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlTyDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.classes_.Clear();
+  _impl_.enums_.Clear();
+  _impl_.witnesses_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(_impl_.root_ != nullptr);
+    _impl_.root_->Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlTyDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlTyDef& this_ = static_cast<const BamlTyDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlTyDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlTyDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlTyDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy root = 1;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.root_, this_._impl_.root_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_classes_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_classes().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            2, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_enums_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_enums().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            3, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_witnesses_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_witnesses().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            4, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlTyDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlTyDef::ByteSizeLong(const MessageLite& base) {
+  const BamlTyDef& this_ = static_cast<const BamlTyDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlTyDef::ByteSizeLong() const {
+  const BamlTyDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlTyDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
+    {
+      total_size += 1UL * this_._internal_classes_size();
+      for (const auto& msg : this_._internal_classes()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
+    {
+      total_size += 1UL * this_._internal_enums_size();
+      for (const auto& msg : this_._internal_enums()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
+    {
+      total_size += 1UL * this_._internal_witnesses_size();
+      for (const auto& msg : this_._internal_witnesses()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+   {
+    // .baml_bridge.cffi.v1.BamlTy root = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.root_);
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlTyDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlTyDef*>(&to_msg);
+  auto& from = static_cast<const BamlTyDef&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlTyDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_classes()->MergeFrom(
+      from._internal_classes());
+  _this->_internal_mutable_enums()->MergeFrom(
+      from._internal_enums());
+  _this->_internal_mutable_witnesses()->MergeFrom(
+      from._internal_witnesses());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(from._impl_.root_ != nullptr);
+    if (_this->_impl_.root_ == nullptr) {
+      _this->_impl_.root_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.root_);
+    } else {
+      _this->_impl_.root_->MergeFrom(*from._impl_.root_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlTyDef::CopyFrom(const BamlTyDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlTyDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlTyDef::InternalSwap(BamlTyDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.classes_.InternalSwap(&other->_impl_.classes_);
+  _impl_.enums_.InternalSwap(&other->_impl_.enums_);
+  _impl_.witnesses_.InternalSwap(&other->_impl_.witnesses_);
+  swap(_impl_.root_, other->_impl_.root_);
+}
+
+// ===================================================================
+
+class BamlWitnessDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlWitnessDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_._has_bits_);
+};
+
+BamlWitnessDef::BamlWitnessDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlWitnessDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlWitnessDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlWitnessDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlWitnessDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        interface_args_{visibility, arena, from.interface_args_},
+        associated_types_{visibility, arena, from.associated_types_},
+        field_links_{visibility, arena, from.field_links_},
+        interface_(arena, from.interface_) {}
+
+BamlWitnessDef::BamlWitnessDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlWitnessDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlWitnessDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlWitnessDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlWitnessDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlWitnessDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        interface_args_{visibility, arena},
+        associated_types_{visibility, arena},
+        field_links_{visibility, arena},
+        interface_(arena) {}
+
+inline void BamlWitnessDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BamlWitnessDef::~BamlWitnessDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlWitnessDef)
+  SharedDtor(*this);
+}
+inline void BamlWitnessDef::SharedDtor(MessageLite& self) {
+  BamlWitnessDef& this_ = static_cast<BamlWitnessDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.interface_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlWitnessDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlWitnessDef(arena);
+}
+constexpr auto BamlWitnessDef::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.interface_args_) +
+          decltype(BamlWitnessDef::_impl_.interface_args_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.associated_types_) +
+          decltype(BamlWitnessDef::_impl_.associated_types_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.field_links_) +
+          decltype(BamlWitnessDef::_impl_.field_links_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(BamlWitnessDef), alignof(BamlWitnessDef), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlWitnessDef::PlacementNew_,
+                                 sizeof(BamlWitnessDef),
+                                 alignof(BamlWitnessDef));
+  }
+}
+constexpr auto BamlWitnessDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<35>{
+      {
+          &_BamlWitnessDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlWitnessDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlWitnessDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlWitnessDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlWitnessDef>(), &BamlWitnessDef::ByteSizeLong,
+              &BamlWitnessDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlWitnessDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<35> BamlWitnessDef_class_data_ =
+    BamlWitnessDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlWitnessDef::GetClassData() const {
+  return BamlWitnessDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 3, 52, 2>
+BamlWitnessDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    3,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlWitnessDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlWitnessDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
+    {::_pbi::TcParser::FastMtR1,
+     {34, 63, 2, PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.field_links_)}},
+    // string interface = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.interface_)}},
+    // repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
+    {::_pbi::TcParser::FastMtR1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.interface_args_)}},
+    // repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
+    {::_pbi::TcParser::FastMtR1,
+     {26, 63, 1, PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.associated_types_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string interface = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.interface_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.interface_args_), -1, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.associated_types_), -1, 1,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessDef, _impl_.field_links_), -1, 2,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlWitnessFieldLink>()},
+  }},
+  {{
+    "\42\11\0\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlWitnessDef"
+    "interface"
+  }},
+};
+PROTOBUF_NOINLINE void BamlWitnessDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlWitnessDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.interface_args_.Clear();
+  _impl_.associated_types_.Clear();
+  _impl_.field_links_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    _impl_.interface_.ClearNonDefaultToEmpty();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlWitnessDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlWitnessDef& this_ = static_cast<const BamlWitnessDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlWitnessDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlWitnessDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlWitnessDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string interface = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_interface().empty()) {
+      const ::std::string& _s = this_._internal_interface();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlWitnessDef.interface");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_interface_args_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_interface_args().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            2, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_associated_types_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_associated_types().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            3, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_field_links_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_field_links().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            4, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlWitnessDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlWitnessDef::ByteSizeLong(const MessageLite& base) {
+  const BamlWitnessDef& this_ = static_cast<const BamlWitnessDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlWitnessDef::ByteSizeLong() const {
+  const BamlWitnessDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlWitnessDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
+    {
+      total_size += 1UL * this_._internal_interface_args_size();
+      for (const auto& msg : this_._internal_interface_args()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
+    {
+      total_size += 1UL * this_._internal_associated_types_size();
+      for (const auto& msg : this_._internal_associated_types()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
+    {
+      total_size += 1UL * this_._internal_field_links_size();
+      for (const auto& msg : this_._internal_field_links()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+   {
+    // string interface = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_interface().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_interface());
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlWitnessDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlWitnessDef*>(&to_msg);
+  auto& from = static_cast<const BamlWitnessDef&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlWitnessDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_interface_args()->MergeFrom(
+      from._internal_interface_args());
+  _this->_internal_mutable_associated_types()->MergeFrom(
+      from._internal_associated_types());
+  _this->_internal_mutable_field_links()->MergeFrom(
+      from._internal_field_links());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    if (!from._internal_interface().empty()) {
+      _this->_internal_set_interface(from._internal_interface());
+    } else {
+      if (_this->_impl_.interface_.IsDefault()) {
+        _this->_internal_set_interface("");
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlWitnessDef::CopyFrom(const BamlWitnessDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlWitnessDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlWitnessDef::InternalSwap(BamlWitnessDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.interface_args_.InternalSwap(&other->_impl_.interface_args_);
+  _impl_.associated_types_.InternalSwap(&other->_impl_.associated_types_);
+  _impl_.field_links_.InternalSwap(&other->_impl_.field_links_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.interface_, &other->_impl_.interface_, arena);
+}
+
+// ===================================================================
+
+class BamlWitnessFieldLink::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlWitnessFieldLink>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_._has_bits_);
+};
+
+BamlWitnessFieldLink::BamlWitnessFieldLink(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlWitnessFieldLink_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+}
+PROTOBUF_NDEBUG_INLINE BamlWitnessFieldLink::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlWitnessFieldLink& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        interface_field_(arena, from.interface_field_),
+        class_field_(arena, from.class_field_) {}
+
+BamlWitnessFieldLink::BamlWitnessFieldLink(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlWitnessFieldLink& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlWitnessFieldLink_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlWitnessFieldLink* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+}
+PROTOBUF_NDEBUG_INLINE BamlWitnessFieldLink::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        interface_field_(arena),
+        class_field_(arena) {}
+
+inline void BamlWitnessFieldLink::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BamlWitnessFieldLink::~BamlWitnessFieldLink() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  SharedDtor(*this);
+}
+inline void BamlWitnessFieldLink::SharedDtor(MessageLite& self) {
+  BamlWitnessFieldLink& this_ = static_cast<BamlWitnessFieldLink&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.interface_field_.Destroy();
+  this_._impl_.class_field_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlWitnessFieldLink::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlWitnessFieldLink(arena);
+}
+constexpr auto BamlWitnessFieldLink::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BamlWitnessFieldLink),
+                                            alignof(BamlWitnessFieldLink));
+}
+constexpr auto BamlWitnessFieldLink::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<41>{
+      {
+          &_BamlWitnessFieldLink_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlWitnessFieldLink::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlWitnessFieldLink>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlWitnessFieldLink::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlWitnessFieldLink>(), &BamlWitnessFieldLink::ByteSizeLong,
+              &BamlWitnessFieldLink::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlWitnessFieldLink",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<41> BamlWitnessFieldLink_class_data_ =
+    BamlWitnessFieldLink::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlWitnessFieldLink::GetClassData() const {
+  return BamlWitnessFieldLink_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 75, 2>
+BamlWitnessFieldLink::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    BamlWitnessFieldLink_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlWitnessFieldLink>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string class_field = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_.class_field_)}},
+    // string interface_field = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_.interface_field_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string interface_field = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_.interface_field_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string class_field = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlWitnessFieldLink, _impl_.class_field_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\50\17\13\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlWitnessFieldLink"
+    "interface_field"
+    "class_field"
+  }},
+};
+PROTOBUF_NOINLINE void BamlWitnessFieldLink::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.interface_field_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      _impl_.class_field_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlWitnessFieldLink::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlWitnessFieldLink& this_ = static_cast<const BamlWitnessFieldLink&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlWitnessFieldLink::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlWitnessFieldLink& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string interface_field = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_interface_field().empty()) {
+      const ::std::string& _s = this_._internal_interface_field();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string class_field = 2;
+  if ((this_._impl_._has_bits_[0] & 0x00000002u) != 0) {
+    if (!this_._internal_class_field().empty()) {
+      const ::std::string& _s = this_._internal_class_field();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlWitnessFieldLink::ByteSizeLong(const MessageLite& base) {
+  const BamlWitnessFieldLink& this_ = static_cast<const BamlWitnessFieldLink&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlWitnessFieldLink::ByteSizeLong() const {
+  const BamlWitnessFieldLink& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    // string interface_field = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_interface_field().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_interface_field());
+      }
+    }
+    // string class_field = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (!this_._internal_class_field().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_class_field());
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlWitnessFieldLink::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlWitnessFieldLink*>(&to_msg);
+  auto& from = static_cast<const BamlWitnessFieldLink&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_interface_field().empty()) {
+        _this->_internal_set_interface_field(from._internal_interface_field());
+      } else {
+        if (_this->_impl_.interface_field_.IsDefault()) {
+          _this->_internal_set_interface_field("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (!from._internal_class_field().empty()) {
+        _this->_internal_set_class_field(from._internal_class_field());
+      } else {
+        if (_this->_impl_.class_field_.IsDefault()) {
+          _this->_internal_set_class_field("");
+        }
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlWitnessFieldLink::CopyFrom(const BamlWitnessFieldLink& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlWitnessFieldLink)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlWitnessFieldLink::InternalSwap(BamlWitnessFieldLink* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.interface_field_, &other->_impl_.interface_field_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.class_field_, &other->_impl_.class_field_, arena);
+}
+
+// ===================================================================
+
+// ===================================================================
+
+class BamlTyMetadata::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlTyMetadata>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_._has_bits_);
+};
+
+BamlTyMetadata::BamlTyMetadata(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlTyMetadata_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlTyMetadata)
+}
+PROTOBUF_NDEBUG_INLINE BamlTyMetadata::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlTyMetadata& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        other_{visibility, arena, from.other_},
+        description_(arena, from.description_),
+        alias_(arena, from.alias_),
+        docstring_(arena, from.docstring_) {}
+
+BamlTyMetadata::BamlTyMetadata(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlTyMetadata& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlTyMetadata_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlTyMetadata* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlTyMetadata)
+}
+PROTOBUF_NDEBUG_INLINE BamlTyMetadata::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        other_{visibility, arena},
+        description_(arena),
+        alias_(arena),
+        docstring_(arena) {}
+
+inline void BamlTyMetadata::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BamlTyMetadata::~BamlTyMetadata() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlTyMetadata)
+  SharedDtor(*this);
+}
+inline void BamlTyMetadata::SharedDtor(MessageLite& self) {
+  BamlTyMetadata& this_ = static_cast<BamlTyMetadata&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.description_.Destroy();
+  this_._impl_.alias_.Destroy();
+  this_._impl_.docstring_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlTyMetadata::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlTyMetadata(arena);
+}
+constexpr auto BamlTyMetadata::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.other_) +
+          decltype(BamlTyMetadata::_impl_.other_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(BamlTyMetadata), alignof(BamlTyMetadata), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlTyMetadata::PlacementNew_,
+                                 sizeof(BamlTyMetadata),
+                                 alignof(BamlTyMetadata));
+  }
+}
+constexpr auto BamlTyMetadata::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<35>{
+      {
+          &_BamlTyMetadata_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlTyMetadata::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlTyMetadata>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlTyMetadata::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlTyMetadata>(), &BamlTyMetadata::ByteSizeLong,
+              &BamlTyMetadata::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlTyMetadata",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<35> BamlTyMetadata_class_data_ =
+    BamlTyMetadata::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlTyMetadata::GetClassData() const {
+  return BamlTyMetadata_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 1, 73, 2>
+BamlTyMetadata::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlTyMetadata_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetadata>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // optional string description = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.description_)}},
+    // optional string alias = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.alias_)}},
+    // optional string docstring = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 2, 0, PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.docstring_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // optional string description = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.description_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // optional string alias = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.alias_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // optional string docstring = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.docstring_), _Internal::kHasBitsOffset + 2, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // map<string, string> other = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlTyMetadata, _impl_.other_), -1, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+  }},
+  {{
+      {::_pbi::TcParser::GetMapAuxInfo(1, 0, 0,
+                                       9, 9,
+                                       1)},
+  }},
+  {{
+    "\42\13\5\11\5\0\0\0"
+    "baml_bridge.cffi.v1.BamlTyMetadata"
+    "description"
+    "alias"
+    "docstring"
+    "other"
+  }},
+};
+PROTOBUF_NOINLINE void BamlTyMetadata::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlTyMetadata)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.other_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.description_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      _impl_.alias_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      _impl_.docstring_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlTyMetadata::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlTyMetadata& this_ = static_cast<const BamlTyMetadata&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlTyMetadata::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlTyMetadata& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlTyMetadata)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // optional string description = 1;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    const ::std::string& _s = this_._internal_description();
+    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+        _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.description");
+    target = stream->WriteStringMaybeAliased(1, _s, target);
+  }
+
+  // optional string alias = 2;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    const ::std::string& _s = this_._internal_alias();
+    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+        _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.alias");
+    target = stream->WriteStringMaybeAliased(2, _s, target);
+  }
+
+  // optional string docstring = 3;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    const ::std::string& _s = this_._internal_docstring();
+    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+        _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.docstring");
+    target = stream->WriteStringMaybeAliased(3, _s, target);
+  }
+
+  // map<string, string> other = 4;
+  if (!this_._internal_other().empty()) {
+    using MapType = ::google::protobuf::Map<std::string, std::string>;
+    using WireHelper = _pbi::MapEntryFuncs<std::string, std::string,
+                                   _pbi::WireFormatLite::TYPE_STRING,
+                                   _pbi::WireFormatLite::TYPE_STRING>;
+    const auto& field = this_._internal_other();
+
+    if (stream->IsSerializationDeterministic() && field.size() > 1) {
+      for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+        target = WireHelper::InternalSerialize(
+            4, entry.first, entry.second, target, stream);
+        ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+            entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.other");
+        ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+            entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.other");
+      }
+    } else {
+      for (const auto& entry : field) {
+        target = WireHelper::InternalSerialize(
+            4, entry.first, entry.second, target, stream);
+        ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+            entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.other");
+        ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+            entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlTyMetadata.other");
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlTyMetadata)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlTyMetadata::ByteSizeLong(const MessageLite& base) {
+  const BamlTyMetadata& this_ = static_cast<const BamlTyMetadata&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlTyMetadata::ByteSizeLong() const {
+  const BamlTyMetadata& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlTyMetadata)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // map<string, string> other = 4;
+    {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_other_size());
+      for (const auto& entry : this_._internal_other()) {
+        total_size += _pbi::MapEntryFuncs<std::string, std::string,
+                                       _pbi::WireFormatLite::TYPE_STRING,
+                                       _pbi::WireFormatLite::TYPE_STRING>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    // optional string description = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_description());
+    }
+    // optional string alias = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_alias());
+    }
+    // optional string docstring = 3;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_docstring());
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlTyMetadata::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlTyMetadata*>(&to_msg);
+  auto& from = static_cast<const BamlTyMetadata&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlTyMetadata)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.other_.MergeFrom(from._impl_.other_);
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _this->_internal_set_description(from._internal_description());
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      _this->_internal_set_alias(from._internal_alias());
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      _this->_internal_set_docstring(from._internal_docstring());
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlTyMetadata::CopyFrom(const BamlTyMetadata& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlTyMetadata)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlTyMetadata::InternalSwap(BamlTyMetadata* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.other_.InternalSwap(&other->_impl_.other_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.alias_, &other->_impl_.alias_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.docstring_, &other->_impl_.docstring_, arena);
+}
+
+// ===================================================================
+
+class BamlClassDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlClassDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_._has_bits_);
+};
+
+BamlClassDef::BamlClassDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlClassDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlClassDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlClassDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlClassDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        fields_{visibility, arena, from.fields_},
+        name_(arena, from.name_) {}
+
+BamlClassDef::BamlClassDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlClassDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlClassDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlClassDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.metadata_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_)
+                : nullptr;
+  _impl_.generic_param_count_ = from._impl_.generic_param_count_;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlClassDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlClassDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        fields_{visibility, arena},
+        name_(arena) {}
+
+inline void BamlClassDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, metadata_),
+           0,
+           offsetof(Impl_, generic_param_count_) -
+               offsetof(Impl_, metadata_) +
+               sizeof(Impl_::generic_param_count_));
+}
+BamlClassDef::~BamlClassDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlClassDef)
+  SharedDtor(*this);
+}
+inline void BamlClassDef::SharedDtor(MessageLite& self) {
+  BamlClassDef& this_ = static_cast<BamlClassDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.metadata_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlClassDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlClassDef(arena);
+}
+constexpr auto BamlClassDef::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.fields_) +
+          decltype(BamlClassDef::_impl_.fields_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(BamlClassDef), alignof(BamlClassDef), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlClassDef::PlacementNew_,
+                                 sizeof(BamlClassDef),
+                                 alignof(BamlClassDef));
+  }
+}
+constexpr auto BamlClassDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<33>{
+      {
+          &_BamlClassDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlClassDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlClassDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlClassDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlClassDef>(), &BamlClassDef::ByteSizeLong,
+              &BamlClassDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlClassDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<33> BamlClassDef_class_data_ =
+    BamlClassDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlClassDef::GetClassData() const {
+  return BamlClassDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 2, 45, 2>
+BamlClassDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlClassDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlClassDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // uint32 generic_param_count = 4;
+    {::_pbi::TcParser::FastV32S1,
+     {32, 2, 0, PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.generic_param_count_)}},
+    // string name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.name_)}},
+    // repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
+    {::_pbi::TcParser::FastMtR1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.fields_)}},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 1, 1, PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.metadata_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string name = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.fields_), -1, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.metadata_), _Internal::kHasBitsOffset + 1, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // uint32 generic_param_count = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.generic_param_count_), _Internal::kHasBitsOffset + 2, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlClassFieldDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetadata>()},
+  }},
+  {{
+    "\40\4\0\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlClassDef"
+    "name"
+  }},
+};
+PROTOBUF_NOINLINE void BamlClassDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlClassDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.fields_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.metadata_ != nullptr);
+      _impl_.metadata_->Clear();
+    }
+  }
+  _impl_.generic_param_count_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlClassDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlClassDef& this_ = static_cast<const BamlClassDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlClassDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlClassDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlClassDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string name = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlClassDef.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_fields_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_fields().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            2, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.metadata_, this_._impl_.metadata_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 generic_param_count = 4;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    if (this_._internal_generic_param_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_generic_param_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlClassDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlClassDef::ByteSizeLong(const MessageLite& base) {
+  const BamlClassDef& this_ = static_cast<const BamlClassDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlClassDef::ByteSizeLong() const {
+  const BamlClassDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlClassDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
+    {
+      total_size += 1UL * this_._internal_fields_size();
+      for (const auto& msg : this_._internal_fields()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    // string name = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.metadata_);
+    }
+    // uint32 generic_param_count = 4;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (this_._internal_generic_param_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_generic_param_count());
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlClassDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlClassDef*>(&to_msg);
+  auto& from = static_cast<const BamlClassDef&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlClassDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_fields()->MergeFrom(
+      from._internal_fields());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.metadata_ != nullptr);
+      if (_this->_impl_.metadata_ == nullptr) {
+        _this->_impl_.metadata_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_);
+      } else {
+        _this->_impl_.metadata_->MergeFrom(*from._impl_.metadata_);
+      }
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (from._internal_generic_param_count() != 0) {
+        _this->_impl_.generic_param_count_ = from._impl_.generic_param_count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlClassDef::CopyFrom(const BamlClassDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlClassDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlClassDef::InternalSwap(BamlClassDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.fields_.InternalSwap(&other->_impl_.fields_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.generic_param_count_)
+      + sizeof(BamlClassDef::_impl_.generic_param_count_)
+      - PROTOBUF_FIELD_OFFSET(BamlClassDef, _impl_.metadata_)>(
+          reinterpret_cast<char*>(&_impl_.metadata_),
+          reinterpret_cast<char*>(&other->_impl_.metadata_));
+}
+
+// ===================================================================
+
+class BamlClassFieldDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlClassFieldDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_._has_bits_);
+};
+
+BamlClassFieldDef::BamlClassFieldDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlClassFieldDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlClassFieldDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlClassFieldDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlClassFieldDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+BamlClassFieldDef::BamlClassFieldDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlClassFieldDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlClassFieldDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlClassFieldDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.ty_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_)
+                : nullptr;
+  _impl_.metadata_ = ((cached_has_bits & 0x00000004u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_)
+                : nullptr;
+  _impl_.skip_ = from._impl_.skip_;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlClassFieldDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlClassFieldDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void BamlClassFieldDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, ty_),
+           0,
+           offsetof(Impl_, skip_) -
+               offsetof(Impl_, ty_) +
+               sizeof(Impl_::skip_));
+}
+BamlClassFieldDef::~BamlClassFieldDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlClassFieldDef)
+  SharedDtor(*this);
+}
+inline void BamlClassFieldDef::SharedDtor(MessageLite& self) {
+  BamlClassFieldDef& this_ = static_cast<BamlClassFieldDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.ty_;
+  delete this_._impl_.metadata_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlClassFieldDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlClassFieldDef(arena);
+}
+constexpr auto BamlClassFieldDef::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BamlClassFieldDef),
+                                            alignof(BamlClassFieldDef));
+}
+constexpr auto BamlClassFieldDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<38>{
+      {
+          &_BamlClassFieldDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlClassFieldDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlClassFieldDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlClassFieldDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlClassFieldDef>(), &BamlClassFieldDef::ByteSizeLong,
+              &BamlClassFieldDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlClassFieldDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<38> BamlClassFieldDef_class_data_ =
+    BamlClassFieldDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlClassFieldDef::GetClassData() const {
+  return BamlClassFieldDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 2, 50, 2>
+BamlClassFieldDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlClassFieldDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlClassFieldDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // bool skip = 4;
+    {::_pbi::TcParser::FastV8S1,
+     {32, 3, 0, PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.skip_)}},
+    // string name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.name_)}},
+    // .baml_bridge.cffi.v1.BamlTy ty = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.ty_)}},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 2, 1, PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.metadata_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string name = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .baml_bridge.cffi.v1.BamlTy ty = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.ty_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.metadata_), _Internal::kHasBitsOffset + 2, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // bool skip = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.skip_), _Internal::kHasBitsOffset + 3, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetadata>()},
+  }},
+  {{
+    "\45\4\0\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlClassFieldDef"
+    "name"
+  }},
+};
+PROTOBUF_NOINLINE void BamlClassFieldDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlClassFieldDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.ty_ != nullptr);
+      _impl_.ty_->Clear();
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      ABSL_DCHECK(_impl_.metadata_ != nullptr);
+      _impl_.metadata_->Clear();
+    }
+  }
+  _impl_.skip_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlClassFieldDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlClassFieldDef& this_ = static_cast<const BamlClassFieldDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlClassFieldDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlClassFieldDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlClassFieldDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string name = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlClassFieldDef.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy ty = 2;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.ty_, this_._impl_.ty_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.metadata_, this_._impl_.metadata_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool skip = 4;
+  if ((cached_has_bits & 0x00000008u) != 0) {
+    if (this_._internal_skip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_skip(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlClassFieldDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlClassFieldDef::ByteSizeLong(const MessageLite& base) {
+  const BamlClassFieldDef& this_ = static_cast<const BamlClassFieldDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlClassFieldDef::ByteSizeLong() const {
+  const BamlClassFieldDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlClassFieldDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    // string name = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlTy ty = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.ty_);
+    }
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.metadata_);
+    }
+    // bool skip = 4;
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      if (this_._internal_skip() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlClassFieldDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlClassFieldDef*>(&to_msg);
+  auto& from = static_cast<const BamlClassFieldDef&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlClassFieldDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.ty_ != nullptr);
+      if (_this->_impl_.ty_ == nullptr) {
+        _this->_impl_.ty_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_);
+      } else {
+        _this->_impl_.ty_->MergeFrom(*from._impl_.ty_);
+      }
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      ABSL_DCHECK(from._impl_.metadata_ != nullptr);
+      if (_this->_impl_.metadata_ == nullptr) {
+        _this->_impl_.metadata_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_);
+      } else {
+        _this->_impl_.metadata_->MergeFrom(*from._impl_.metadata_);
+      }
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      if (from._internal_skip() != 0) {
+        _this->_impl_.skip_ = from._impl_.skip_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlClassFieldDef::CopyFrom(const BamlClassFieldDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlClassFieldDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlClassFieldDef::InternalSwap(BamlClassFieldDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.skip_)
+      + sizeof(BamlClassFieldDef::_impl_.skip_)
+      - PROTOBUF_FIELD_OFFSET(BamlClassFieldDef, _impl_.ty_)>(
+          reinterpret_cast<char*>(&_impl_.ty_),
+          reinterpret_cast<char*>(&other->_impl_.ty_));
+}
+
+// ===================================================================
+
+class BamlEnumDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlEnumDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_._has_bits_);
+};
+
+BamlEnumDef::BamlEnumDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlEnumDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlEnumDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlEnumDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlEnumDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        variants_{visibility, arena, from.variants_},
+        name_(arena, from.name_) {}
+
+BamlEnumDef::BamlEnumDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlEnumDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlEnumDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlEnumDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.metadata_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlEnumDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlEnumDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        variants_{visibility, arena},
+        name_(arena) {}
+
+inline void BamlEnumDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.metadata_ = {};
+}
+BamlEnumDef::~BamlEnumDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlEnumDef)
+  SharedDtor(*this);
+}
+inline void BamlEnumDef::SharedDtor(MessageLite& self) {
+  BamlEnumDef& this_ = static_cast<BamlEnumDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.metadata_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlEnumDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlEnumDef(arena);
+}
+constexpr auto BamlEnumDef::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.variants_) +
+          decltype(BamlEnumDef::_impl_.variants_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(BamlEnumDef), alignof(BamlEnumDef), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BamlEnumDef::PlacementNew_,
+                                 sizeof(BamlEnumDef),
+                                 alignof(BamlEnumDef));
+  }
+}
+constexpr auto BamlEnumDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<32>{
+      {
+          &_BamlEnumDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlEnumDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlEnumDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlEnumDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlEnumDef>(), &BamlEnumDef::ByteSizeLong,
+              &BamlEnumDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlEnumDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<32> BamlEnumDef_class_data_ =
+    BamlEnumDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlEnumDef::GetClassData() const {
+  return BamlEnumDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 3, 2, 44, 2>
+BamlEnumDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_._has_bits_),
+    0, // no _extensions_
+    3, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlEnumDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlEnumDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.name_)}},
+    // repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
+    {::_pbi::TcParser::FastMtR1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.variants_)}},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 1, 1, PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.metadata_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string name = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.variants_), -1, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumDef, _impl_.metadata_), _Internal::kHasBitsOffset + 1, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlEnumVariantDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetadata>()},
+  }},
+  {{
+    "\37\4\0\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlEnumDef"
+    "name"
+  }},
+};
+PROTOBUF_NOINLINE void BamlEnumDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlEnumDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.variants_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.metadata_ != nullptr);
+      _impl_.metadata_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlEnumDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlEnumDef& this_ = static_cast<const BamlEnumDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlEnumDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlEnumDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlEnumDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string name = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlEnumDef.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_variants_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_variants().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            2, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.metadata_, this_._impl_.metadata_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlEnumDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlEnumDef::ByteSizeLong(const MessageLite& base) {
+  const BamlEnumDef& this_ = static_cast<const BamlEnumDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlEnumDef::ByteSizeLong() const {
+  const BamlEnumDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlEnumDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
+    {
+      total_size += 1UL * this_._internal_variants_size();
+      for (const auto& msg : this_._internal_variants()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    // string name = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.metadata_);
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlEnumDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlEnumDef*>(&to_msg);
+  auto& from = static_cast<const BamlEnumDef&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlEnumDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_variants()->MergeFrom(
+      from._internal_variants());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.metadata_ != nullptr);
+      if (_this->_impl_.metadata_ == nullptr) {
+        _this->_impl_.metadata_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_);
+      } else {
+        _this->_impl_.metadata_->MergeFrom(*from._impl_.metadata_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlEnumDef::CopyFrom(const BamlEnumDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlEnumDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlEnumDef::InternalSwap(BamlEnumDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.variants_.InternalSwap(&other->_impl_.variants_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  swap(_impl_.metadata_, other->_impl_.metadata_);
+}
+
+// ===================================================================
+
+class BamlEnumVariantDef::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<BamlEnumVariantDef>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_._has_bits_);
+};
+
+BamlEnumVariantDef::BamlEnumVariantDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlEnumVariantDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlEnumVariantDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlEnumVariantDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::BamlEnumVariantDef& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+BamlEnumVariantDef::BamlEnumVariantDef(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BamlEnumVariantDef& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, BamlEnumVariantDef_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BamlEnumVariantDef* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.metadata_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_)
+                : nullptr;
+  _impl_.skip_ = from._impl_.skip_;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlEnumVariantDef)
+}
+PROTOBUF_NDEBUG_INLINE BamlEnumVariantDef::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void BamlEnumVariantDef::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, metadata_),
+           0,
+           offsetof(Impl_, skip_) -
+               offsetof(Impl_, metadata_) +
+               sizeof(Impl_::skip_));
+}
+BamlEnumVariantDef::~BamlEnumVariantDef() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  SharedDtor(*this);
+}
+inline void BamlEnumVariantDef::SharedDtor(MessageLite& self) {
+  BamlEnumVariantDef& this_ = static_cast<BamlEnumVariantDef&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.metadata_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL BamlEnumVariantDef::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BamlEnumVariantDef(arena);
+}
+constexpr auto BamlEnumVariantDef::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BamlEnumVariantDef),
+                                            alignof(BamlEnumVariantDef));
+}
+constexpr auto BamlEnumVariantDef::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<39>{
+      {
+          &_BamlEnumVariantDef_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &BamlEnumVariantDef::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<BamlEnumVariantDef>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BamlEnumVariantDef::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<BamlEnumVariantDef>(), &BamlEnumVariantDef::ByteSizeLong,
+              &BamlEnumVariantDef::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.BamlEnumVariantDef",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<39> BamlEnumVariantDef_class_data_ =
+    BamlEnumVariantDef::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BamlEnumVariantDef::GetClassData() const {
+  return BamlEnumVariantDef_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 3, 1, 51, 2>
+BamlEnumVariantDef::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_._has_bits_),
+    0, // no _extensions_
+    3, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    BamlEnumVariantDef_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlEnumVariantDef>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.name_)}},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.metadata_)}},
+    // bool skip = 3;
+    {::_pbi::TcParser::FastV8S1,
+     {24, 2, 0, PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.skip_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string name = 1;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.metadata_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // bool skip = 3;
+    {PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.skip_), _Internal::kHasBitsOffset + 2, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetadata>()},
+  }},
+  {{
+    "\46\4\0\0\0\0\0\0"
+    "baml_bridge.cffi.v1.BamlEnumVariantDef"
+    "name"
+  }},
+};
+PROTOBUF_NOINLINE void BamlEnumVariantDef::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.metadata_ != nullptr);
+      _impl_.metadata_->Clear();
+    }
+  }
+  _impl_.skip_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BamlEnumVariantDef::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BamlEnumVariantDef& this_ = static_cast<const BamlEnumVariantDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BamlEnumVariantDef::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BamlEnumVariantDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string name = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.BamlEnumVariantDef.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.metadata_, this_._impl_.metadata_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool skip = 3;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    if (this_._internal_skip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_skip(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BamlEnumVariantDef::ByteSizeLong(const MessageLite& base) {
+  const BamlEnumVariantDef& this_ = static_cast<const BamlEnumVariantDef&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BamlEnumVariantDef::ByteSizeLong() const {
+  const BamlEnumVariantDef& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    // string name = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.metadata_);
+    }
+    // bool skip = 3;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (this_._internal_skip() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void BamlEnumVariantDef::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BamlEnumVariantDef*>(&to_msg);
+  auto& from = static_cast<const BamlEnumVariantDef&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000007u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.metadata_ != nullptr);
+      if (_this->_impl_.metadata_ == nullptr) {
+        _this->_impl_.metadata_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.metadata_);
+      } else {
+        _this->_impl_.metadata_->MergeFrom(*from._impl_.metadata_);
+      }
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (from._internal_skip() != 0) {
+        _this->_impl_.skip_ = from._impl_.skip_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void BamlEnumVariantDef::CopyFrom(const BamlEnumVariantDef& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlEnumVariantDef)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BamlEnumVariantDef::InternalSwap(BamlEnumVariantDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.skip_)
+      + sizeof(BamlEnumVariantDef::_impl_.skip_)
+      - PROTOBUF_FIELD_OFFSET(BamlEnumVariantDef, _impl_.metadata_)>(
+          reinterpret_cast<char*>(&_impl_.metadata_),
+          reinterpret_cast<char*>(&other->_impl_.metadata_));
 }
 
 // ===================================================================

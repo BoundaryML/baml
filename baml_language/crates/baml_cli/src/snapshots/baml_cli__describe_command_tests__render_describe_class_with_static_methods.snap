@@ -9,9 +9,12 @@ class Counter {
 }
 
 methods:
-  function increment(self) -> Counter  methods.baml:18-20
+  function increment(self) -> Counter throws never  methods.baml:18-20
 
 static_methods:
-  function make() -> Counter  methods.baml:22-24
+  function make() -> Counter throws never  methods.baml:22-24
+
+implementations (1):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
 
 references (0):

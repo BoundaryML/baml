@@ -5,6 +5,11 @@ use std::collections::HashMap;
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase};
 use baml_db::{FileId, baml_compiler_syntax::SyntaxNode};
 
+// Test-database conveniences, re-exported so the generated project tests
+// (`use crate::utils::*`) and the in-crate test modules share the one
+// definition with the integration tests (`baml_tests::engine::TestDbExt`).
+pub use crate::engine::{TestDbExt, db_with_root};
+
 /// Assert that no diagnostic annotation span begins or ends on a whitespace
 /// character.
 ///

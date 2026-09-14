@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/type_spec/pattern_corpus.rs
+expression: "corpus_verdicts(\"projects/compiles/patterns_new/patterns_new.baml\")"
+---
+or_with_repeated_typed_binding: hir_ty=0
+or_with_repeated_bare_binding: hir_ty=0
+chain_narrow_then_wildcard: hir_ty=0
+bare_type_arm: hir_ty=0
+call_int_callback: hir_ty=0
+call_optional_callback: hir_ty=0
+literal_widens_to_int: hir_ty=0
+fn_return_widens: hir_ty=0
+int_widens_to_alias: hir_ty=0
+paren_chains_in_or: hir_ty=0
+fn_pattern: hir_ty=0
+for_let_with_narrow: hir_ty=0
+for_let_ascription: hir_ty=0
+for_let_fn_narrow: hir_ty=0
+risky_error: hir_ty=0
+catch_chain_union: hir_ty=0
+catch_paren_or_chain: hir_ty=0
+catch_widening_chain: hir_ty=0
+nested_paren_union_array_one: hir_ty=0
+nested_paren_union_array_two: hir_ty=0
+nested_paren_union_array_three: hir_ty=0
+nested_paren_union_array_optional: hir_ty=0
+match_nested_paren_union: hir_ty=0

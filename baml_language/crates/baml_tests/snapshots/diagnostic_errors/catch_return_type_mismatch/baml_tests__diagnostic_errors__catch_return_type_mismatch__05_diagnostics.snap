@@ -1,13 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 29138
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0097
 
   ⚠ extraneous throws declaration: Errors
-    ╭─[catch_return_type_mismatch.baml:10:34]
- 10 │ function callee() -> bool throws Errors {
-    ·                                  ──────
+    ╭─[catch_return_type_mismatch.baml:10:41]
+ 10 │ ╭─▶ function callee() -> bool throws Errors {
+ 11 │ │     return true
+ 12 │ ╰─▶ }
     ╰────
 
   [type] E0001
@@ -16,5 +18,5 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[catch_return_type_mismatch.baml:18:44]
  18 │     Errors.AuthenticationError => { return e }
     ·                                            ┬
-    ·                                            ╰── expected `bool`, found `Errors`
+    ·                                            ╰── expected `bool`, found `Errors.AuthenticationError`
     ╰────

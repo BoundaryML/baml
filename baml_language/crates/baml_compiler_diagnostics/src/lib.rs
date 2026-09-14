@@ -35,6 +35,7 @@ pub mod errors;
 pub mod highlight;
 pub mod message;
 pub mod render;
+pub mod runtime_type;
 pub mod to_diagnostic;
 
 // Re-export error types
@@ -42,8 +43,8 @@ pub mod to_diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
 pub use errors::{ErrorContext, NameError, ParseError, TypeError};
 pub use highlight::{
-    DiagnosticMessageHighlighter, HighlightAttributes, HighlightColor, HighlightSpan,
-    HighlightStyle, SourceHighlights,
+    DiagnosticMessageHighlightError, DiagnosticMessageHighlighter, HighlightAttributes,
+    HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
 };
 pub use message::{
     DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind, DiagnosticText,

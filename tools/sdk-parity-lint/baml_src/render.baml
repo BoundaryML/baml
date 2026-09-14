@@ -46,7 +46,7 @@ function escape_markdown_cell(value: string) -> string {
 }
 
 function required_label(row: ParityRow, sdk_envs: string[]) -> string {
-    if (baml.deep_equals(row.required_envs, sdk_envs)) {
+    if (row.required_envs == sdk_envs) {
         "all"
     } else {
         row.required_envs.join(", ")

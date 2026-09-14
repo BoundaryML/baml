@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.bare_array() -> null  [expr] {
+  { let values = [] } null
+}
+function user.bare_map() -> null  [expr] {
+  { let values = map {  } } null
+}
+function user.bare_map_constructor() -> null  [expr] {
+  { let values = map {  } } null
+}
+function user.catch_array() -> null  [expr] {
+  { let values = fail() catch (e) { string => [] }; for value in values {  } log.info(value) } null
+}
+function user.contextual_types_are_enough() -> null  [expr] {
+  { let array: int[] = []; let object_map: map<string, int> = map {  }; let constructor_map: map<string, int> = map {  } } null
+}
+function user.fail() -> never  [expr] {
+  { throw "boom" }
+}

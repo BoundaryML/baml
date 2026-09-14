@@ -102,7 +102,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.KitchenSink> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -121,7 +121,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -158,7 +158,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.Node> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -177,7 +177,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -214,7 +214,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.UltraComplex> {
           try {
-          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
           const __signal__ = __options__.signal;
 
           if (__signal__?.aborted) {
@@ -233,7 +233,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
           const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
           [__options__.collector]) : [];
-          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
@@ -285,7 +285,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.KitchenSink, types.KitchenSink>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -314,7 +314,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -359,7 +359,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.Node, types.Node>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -388,7 +388,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
@@ -433,7 +433,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.UltraComplex, types.UltraComplex>
               {
               try {
-              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}), env: { ...(this.bamlOptions.env || {}), ...(__baml_options__?.env || {}) } }
               const __signal__ = __options__.signal;
 
               if (__signal__?.aborted) {
@@ -462,7 +462,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __rawEnv__ = __options__.env ? { ...process.env, ...__options__.env } : { ...process.env };
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );

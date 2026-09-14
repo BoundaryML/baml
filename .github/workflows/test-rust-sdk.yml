@@ -10,6 +10,8 @@ on:
       - "languages/rust/**"
       - "engine/**/*.rs"
       - "engine/**/*.proto"
+      - ".github/actions/setup-protoc/**"
+      - ".github/actions/engine-setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   push:
     branches: [canary]
@@ -17,6 +19,8 @@ on:
       - "languages/rust/**"
       - "engine/**/*.rs"
       - "engine/**/*.proto"
+      - ".github/actions/setup-protoc/**"
+      - ".github/actions/engine-setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   workflow_dispatch:
 
@@ -27,12 +31,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Setup Rust (MSRV 1.70)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Engine Rust
+        uses: ./.github/actions/engine-setup-rust
         with:
-          toolchain: "1.70"
+          toolchain: "1.83"
+          enable-cache: false
+          enable-cross: false
+          skip-protoc: true
 
       - name: Cache Rust dependencies (engine)
         uses: Swatinem/rust-cache@v2
@@ -47,7 +54,7 @@ jobs:
           prefix-key: rust-sdk
 
       - name: Setup Go (for protoc-gen-go)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "1.22"
           cache: false
@@ -59,9 +66,7 @@ jobs:
         shell: bash
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/setup-protoc
 
       - name: Build CFFI Library
         run: |
@@ -104,12 +109,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Setup Rust (MSRV 1.70)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Engine Rust
+        uses: ./.github/actions/engine-setup-rust
         with:
-          toolchain: "1.70"
+          toolchain: "1.83"
+          enable-cache: false
+          enable-cross: false
+          skip-protoc: true
 
       - name: Cache Rust dependencies (engine)
         uses: Swatinem/rust-cache@v2
@@ -124,7 +132,7 @@ jobs:
           prefix-key: rust-sdk
 
       - name: Setup Go (for protoc-gen-go)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "1.22"
           cache: false
@@ -136,9 +144,7 @@ jobs:
         shell: bash
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/setup-protoc
 
       - name: Build CFFI Library
         run: |

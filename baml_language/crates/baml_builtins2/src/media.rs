@@ -105,6 +105,11 @@ impl MediaValue {
         self.mime_type.read().unwrap().clone()
     }
 
+    pub fn read_mime_type<R>(&self, read: impl FnOnce(Option<&str>) -> R) -> R {
+        let mime_type = self.mime_type.read().unwrap();
+        read(mime_type.as_deref())
+    }
+
     /// Set the MIME type. Used by media resolution to store inferred MIME types.
     pub fn set_mime_type(&self, mime: String) {
         *self.mime_type.write().unwrap() = Some(mime);

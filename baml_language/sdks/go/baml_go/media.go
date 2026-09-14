@@ -12,7 +12,7 @@ import (
 // Image, Audio, Video, and Pdf are owned BAML media values. Copies of one Go
 // value share the same underlying handle safely. The handle remains live until
 // the last copy becomes unreachable; values may be passed back into BAML any
-// number of times because each call transfers a fresh native clone.
+// number of times because each call serializes the canonical media payload.
 type Image struct{ media mediaValue }
 type Audio struct{ media mediaValue }
 type Video struct{ media mediaValue }
@@ -39,8 +39,10 @@ type mediaValue struct {
 
 var (
 	cloneInboundHandle          = nativeHandleClone
+	accessInboundMedia          = nativeMediaAccess
 	releaseInboundHandle        = nativeHandleRelease
 	cloneOutboundMediaHandle    = nativeHandleClone
+	constructPortableMedia      = constructMedia
 	releaseMediaHandle          = nativeHandleRelease
 	releaseOutboundHandle       = nativeHandleRelease
 	validateOutboundMediaHandle = func(key uint64, handleType cffi.BamlHandleType) error {
@@ -394,15 +396,40 @@ func (media mediaValue) input(kind mediaKind) Input {
 	}
 	handle := media.handle
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		cloned, err := cloneInboundHandle(handle.key)
-		runtime.KeepAlive(handle)
+		_ = transaction // media is serialized data; no handle lifetime transfers.
+		payload := &cffi.BamlValueMedia{Media: mediaConstructorKind(kind)}
+		mimeType, err := accessInboundMedia(mediaMIMEType, handle.key, handle.handleType)
 		if err != nil {
 			return nil, err
 		}
-		transaction.own(cloned)
-		return &cffi.InboundValue{Value: &cffi.InboundValue_Handle{Handle: &cffi.BamlHandle{
-			Key: cloned, HandleType: handle.handleType,
-		}}}, nil
+		payload.MimeType = mimeType
+
+		url, err := accessInboundMedia(mediaURL, handle.key, handle.handleType)
+		if err != nil {
+			return nil, err
+		}
+		if url != nil {
+			payload.Value = &cffi.BamlValueMedia_Url{Url: *url}
+		} else {
+			file, err := accessInboundMedia(mediaFile, handle.key, handle.handleType)
+			if err != nil {
+				return nil, err
+			}
+			if file != nil {
+				payload.Value = &cffi.BamlValueMedia_File{File: *file}
+			} else {
+				base64, err := accessInboundMedia(mediaBase64, handle.key, handle.handleType)
+				if err != nil {
+					return nil, err
+				}
+				if base64 == nil {
+					return nil, fmt.Errorf("BAML media value has no portable payload")
+				}
+				payload.Value = &cffi.BamlValueMedia_Base64{Base64: *base64}
+			}
+		}
+		runtime.KeepAlive(handle)
+		return &cffi.InboundValue{Value: &cffi.InboundValue_MediaValue{MediaValue: payload}}, nil
 	}}}
 }
 
@@ -568,7 +595,7 @@ func decodeMedia(value Value, kind mediaKind) (mediaValue, error) {
 		default:
 			return mediaValue{}, fmt.Errorf("BAML media value has no content")
 		}
-		return constructMedia(operation, kind, content, item.MediaValue.MimeType)
+		return constructPortableMedia(operation, kind, content, item.MediaValue.MimeType)
 	case *cffi.BamlOutboundValue_HandleValue:
 		handle = item.HandleValue
 	case *cffi.BamlOutboundValue_ClassValue:

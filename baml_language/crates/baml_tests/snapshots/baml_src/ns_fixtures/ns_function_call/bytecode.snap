@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.function_call.Bar() -> int {
+    load_const 1
+    call user.fixtures.function_call.Foo
+    return
+}
+
+function fixtures.function_call.Foo(x: int) -> int {
+    load_var x
+    load_const 1
+    add_int
+    return
+}
+
+function fixtures.function_call.GreetBaz(n: string) -> string {
+    load_var n
+    init_instance user.fixtures.function_call.Baz .name
+    call user.fixtures.function_call.Baz.Greeting
+    return
+}

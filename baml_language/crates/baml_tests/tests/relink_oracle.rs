@@ -15,39 +15,34 @@ mod common;
 use std::collections::HashSet;
 
 use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
+    OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
     generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use bex_vm_types::{CompilationUnit, Object, Program};
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/relink-oracle";
 
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
 fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
-    generate_project_bytecode_with_stdlib(
-        &build_db(ROOT, files),
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::Two,
-        base,
-    )
-    .expect("full compile failed")
+    let db = build_db(ROOT, files);
+    generate_project_bytecode_with_stdlib(&db, package(&db), OptLevel::Two, base)
+        .expect("full compile failed")
 }
 
 /// The previous compile's symbolic image: the units the reuse path draws clean
 /// files from (in the CLI this is what `plan_reuse` loads from the cache; here
 /// it is produced in-process by `emit_units` over the previous sources).
 fn prev_units(files: &[(&str, &str)]) -> Vec<CompilationUnit> {
-    emit_units(
-        &build_db(ROOT, files),
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::Two,
-    )
-    .expect("emit_units for previous compile failed")
+    let db = build_db(ROOT, files);
+    emit_units(&db, package(&db), OptLevel::Two).expect("emit_units for previous compile failed")
 }
 
 fn relink(
@@ -69,14 +64,14 @@ fn relink_seeded(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
-    use baml_compiler2_tir::throw_inference::file_throw_facts;
+    use baml_compiler2_hir_ty::throw_facts::export_file_throw_facts;
     let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
-    for sf in prev_db.get_source_files() {
+    for sf in prev_db.workspace_files() {
         let path = sf.path(&prev_db).display().to_string();
         let rel = path.trim_start_matches(&format!("{ROOT}/")).to_string();
         if clean.contains(&rel.as_str()) {
-            seeds.insert(path, file_throw_facts(&prev_db, sf).0.clone());
+            seeds.insert(path, export_file_throw_facts(&prev_db, sf));
         }
     }
     let mut db = build_db(ROOT, files);
@@ -93,9 +88,7 @@ fn relink_with_db(
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
     generate_project_bytecode_with_reuse_units(
         &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
+        package(&db),
         OptLevel::Two,
         base,
         prev_units,
@@ -332,9 +325,7 @@ fn assert_incremental_matches(
     let _ = take_lowered_files();
     let reused = generate_project_bytecode_with_reuse_units(
         &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
+        package(&db),
         OptLevel::Two,
         base,
         prev_units,
@@ -402,32 +393,38 @@ test "t_dirty" {
     );
 }
 
-/// R2 (design §9): a dirty file with a top-level `let` (client-like). Editing it
+/// R2 (design §9): a dirty file with a client-synthesized global. Editing it
 /// re-participates in the package `$init` synthesis, resynthesized incrementally.
 #[test]
-fn incremental_dirty_top_level_let() {
+fn incremental_dirty_client_global() {
     const CLEAN: &str = r#"function clean_fn() -> int {
   7
 }
 "#;
-    const DIRTY: &str = r#"let greeting = "hi";
+    const DIRTY: &str = r#"client<llm> TestClient {
+  provider openai
+  options {
+    model "unused"
+    api_key "unused"
+  }
+}
 
-function use_greeting() -> string {
-  greeting
+function use_client() -> string {
+  TestClient.name
 }
 "#;
     let files = [("l_clean.baml", CLEAN), ("l_dirty.baml", DIRTY)];
     let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
-    let dirty_edit = DIRTY.replace("  greeting\n}", "  greeting\n  // edited\n}");
+    let dirty_edit = DIRTY.replace("  TestClient.name\n}", "  TestClient.name\n  // edited\n}");
     assert_ne!(dirty_edit, DIRTY, "edit must apply");
     let edited = [
         ("l_clean.baml", CLEAN),
         ("l_dirty.baml", dirty_edit.as_str()),
     ];
     assert_incremental_matches(
-        "dirty top-level let",
+        "dirty client global",
         &edited,
         &base,
         &prev,
@@ -482,6 +479,54 @@ fn incremental_dirty_generic_value_shadows_clean() {
         &prev,
         &["gen_a_base.baml", "gen_b_use.baml"],
         &["gen_c_use.baml"],
+    );
+}
+
+/// A CLEAN file declaring an interface WITH a default method body. The fresh
+/// (dirty-only) emit still pools every interface object (Pass 3b has no
+/// skip-clean gate), but the default body's placement is `ReusedClean` — a
+/// past-the-pool placeholder. The default backfill must not write that
+/// placeholder into the pooled interface's `default` operand: decompose's
+/// operand walk indexes `obj_owner[target]` and would panic out of bounds.
+/// The clean unit already carries the real operand, so dropping the backfill
+/// stays byte-identical.
+#[test]
+fn incremental_clean_interface_with_default_body() {
+    const IFACE: &str = r#"interface Greeter {
+  function greet(self) -> string throws never {
+    "hello"
+  }
+}
+
+class Plain {
+  implements Greeter {}
+}
+
+function greet_plain(p: Plain) -> string {
+  p.greet()
+}
+"#;
+    const DIRTY: &str = r#"function dirty_fn() -> int {
+  1
+}
+"#;
+    let files = [("i_iface.baml", IFACE), ("i_dirty.baml", DIRTY)];
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = DIRTY.replace("  1\n}", "  2\n}");
+    assert_ne!(dirty_edit, DIRTY, "edit must apply");
+    let edited = [
+        ("i_iface.baml", IFACE),
+        ("i_dirty.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "clean interface with default body",
+        &edited,
+        &base,
+        &prev,
+        &["i_iface.baml"],
+        &["i_dirty.baml"],
     );
 }
 

@@ -1,9 +1,8 @@
-/** biome-ignore-all assist/source/useSortedKeys: <explanation> */
+/** biome-ignore-all assist/source/useSortedKeys: config reads top-down, not alphabetically */
 
 import path, { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withBaml } from '@boundaryml/baml-nextjs-plugin';
-import { withPostHogConfig } from '@posthog/nextjs-config';
 
 /**
  * Define __dirname for ES modules
@@ -16,8 +15,8 @@ const nextConfig = {
   // Trace root stays at __dirname (app-website/) — the only value that builds
   // on Vercel. NFT drops some lazily-required Next runtime files from this
   // monorepo, which 500s force-dynamic routes; rather than chase those files,
-  // pages that would be force-dynamic (e.g. /changelog) are kept STATIC and
-  // fetch their data client-side through an edge rewrite (see rewrites()).
+  // pages that would be force-dynamic are kept STATIC and fetch their data
+  // client-side through an edge rewrite (see rewrites()).
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
   // The CLI deploy uploads from the monorepo root (baml/), one level above
@@ -49,6 +48,26 @@ const nextConfig = {
   poweredByHeader: false,
   async redirects() {
     return [
+      {
+        source: '/changelog',
+        destination: '/blog?tags=release',
+        permanent: true,
+      },
+      {
+        source: '/changelog.md',
+        destination: '/blog?tags=release',
+        permanent: true,
+      },
+      {
+        source: '/what-is-baml',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/explore',
+        destination: '/',
+        permanent: false,
+      },
       {
         source: '/built-with-baml',
         destination: '/',
@@ -83,7 +102,8 @@ const nextConfig = {
       // in the repo. Temporary so a real /telemetry page can replace it later.
       {
         source: '/telemetry',
-        destination: 'https://github.com/BoundaryML/baml/blob/canary/TELEMETRY.md',
+        destination:
+          'https://github.com/BoundaryML/baml/blob/canary/TELEMETRY.md',
         permanent: false,
       },
       {
@@ -194,7 +214,7 @@ const nextConfig = {
   ],
   serverExternalPackages: ['shiki', '@boundaryml/baml'],
 
-  webpack: (config, { dev, isServer, webpack, nextRuntime }) => {
+  webpack: (config, { dev, webpack, nextRuntime }) => {
     config.module.rules.push({
       test: /\.node$/,
       use: [
@@ -262,6 +282,8 @@ const configWithPlugins = withBaml()(nextConfig);
 // Error 2025-08-13T17:56:39.953052Z ERROR posthog_cli: msg="Oops! While creating release\n\nCaused by:\n    Failed to create release: "
 // Error running PostHog sourcemap plugin: Command failed with code 1
 // https://vercel.com/baml/site/KoXbpd8GYmmEoyfRKPzCoPP4zTfP
+// PostHog build wrapper is parked; re-import withPostHogConfig from
+// '@posthog/nextjs-config' when re-enabling.
 // const configWithPosthog = withPostHogConfig(configWithPlugins, {
 //   envId: process.env.POSTHOG_ENV_ID, // Environment ID
 //   personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY, // Personal API Key

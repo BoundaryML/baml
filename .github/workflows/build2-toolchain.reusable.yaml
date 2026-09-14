@@ -1,0 +1,146 @@
+name: BAML Release - Build toolchain
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        required: true
+      version:
+        description: "Canonical toolchain version used in archive names"
+        type: string
+        required: true
+      toolchain_matrix_json:
+        description: "Serialized toolchain build matrix from release/platforms.json"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+  BAML_WORKOS_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
+
+jobs:
+  build:
+    name: Build toolchain (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    env:
+      CARGO: cargo
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(inputs.toolchain_matrix_json) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v8
+        with:
+          name: baml-vscode-vsix
+          path: vsix
+      - uses: actions/download-artifact@v8
+        with:
+          name: baml-playground-dist
+          path: playground-dist
+      - name: Stamp version
+        run: scripts/baml-language-version stamp --plan release-plan.json
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
+      - name: Configure native ARM GNU build
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && matrix.container }}
+        run: echo 'CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8' >> "$GITHUB_ENV"
+      - name: Setup cross for backward-compatible GNU toolchain
+        if: ${{ matrix.cross_image }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache cargo:cross"
+      - name: Configure cross for GNU toolchain
+        if: ${{ matrix.cross_image }}
+        env:
+          CROSS_IMAGE: ${{ matrix.cross_image }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
+          passthrough='"BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"'
+          if [[ "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+            # The glibc-2.17 image's target GCC is 4.8 and cannot compile
+            # mimalloc v3's warning flags. Its host GCC is current; point that
+            # compiler at the image's 2.17 sysroot so C dependencies retain the
+            # same compatibility floor as the Rust linker. Cross sets TARGET_CC
+            # and TARGET_CXX to the old compilers, and native build scripts give
+            # those variables precedence over the target-specific overrides.
+            passthrough+=', "TARGET_CC=gcc", "TARGET_CXX=g++"'
+            passthrough+=', "CC_x86_64_unknown_linux_gnu=gcc"'
+            passthrough+=', "CXX_x86_64_unknown_linux_gnu=g++"'
+            passthrough+=', "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
+            passthrough+=', "CXXFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
+          fi
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
+            "$TARGET" "$CROSS_IMAGE" "$TARGET" "$passthrough" > "$cross_config"
+          {
+            echo 'CARGO=cross'
+            echo "CROSS_CONFIG=$cross_config"
+          } >> "$GITHUB_ENV"
+      - name: Build CLI and pack host
+        run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
+      - name: Archive layout smoke
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging/bin staging/assets
+          suffix=""
+          if [[ "$TARGET" == *windows-msvc ]]; then suffix=".exe"; fi
+          cp "baml_language/target/$TARGET/release/baml-cli$suffix" "staging/bin/baml-cli$suffix"
+          cp "baml_language/target/$TARGET/release/baml-pack-host$suffix" "staging/bin/baml-pack-host$suffix"
+          vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
+          test -n "$vsix"
+          cp "$vsix" staging/assets/baml-vscode.vsix
+          mkdir -p staging/assets/playground
+          cp -R playground-dist/. staging/assets/playground/
+          if test -f "staging/bin/baml$suffix"; then
+            exit 1
+          fi
+          test -f staging/assets/baml-vscode.vsix
+          test -f staging/assets/playground/index.html
+          test -f staging/assets/playground/assets/index.js
+          test -f staging/assets/playground/assets/index.css
+          echo "$VERSION" > staging/VERSION
+          if [[ "$TARGET" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-language-$VERSION-$TARGET.zip" .)
+          else
+            tar -C staging -czf "baml-language-$VERSION-$TARGET.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: toolchain-${{ matrix.target }}
+          path: baml-language-${{ inputs.version }}-${{ matrix.target }}.*

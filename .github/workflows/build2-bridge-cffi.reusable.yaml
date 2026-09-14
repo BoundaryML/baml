@@ -8,8 +8,8 @@ name: BAML Release - Build bridge_cffi
 # Adapts the legacy `libbaml-cffi` job shape (build -> rename to the loader's
 # expected asset name -> `.sha256` sidecar) but repointed at
 # `baml_language/crates/bridge_cffi`, stamped from the frozen plan, and built
-# with `release-bridge-cffi` (`panic = "unwind"` — the dylib loads into the
-# user's process, so `bridge_cffi`'s catch_unwind boundary must be able to
+# with `--release` (`panic = "unwind"` workspace-wide — the dylib loads into
+# the user's process, so `bridge_cffi`'s catch_unwind boundary must be able to
 # unwind). Unlike the legacy engine's `baml_cffi`, `bridge_cffi` vendors protoc
 # and has no Go bindings, so no protoc/protoc-gen-go/Go setup is needed.
 #
@@ -86,7 +86,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -119,6 +119,7 @@ jobs:
     # Experimental targets are built when possible but never block the release.
     continue-on-error: ${{ matrix._.experimental || false }}
     env:
+      BAML_GIT_SHA: ${{ inputs.source_sha || github.sha }}
       CARGO: cargo
       # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
       # runner has no NASM installed (consulted only there; harmless elsewhere).
@@ -136,7 +137,7 @@ jobs:
               Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -172,12 +173,15 @@ jobs:
           # remains the selected crypto backend and uses Windows OS entropy.
           echo 'AWS_LC_SYS_NO_JITTER_ENTROPY=1' >> "$GITHUB_ENV"
 
-      - name: Install cross (Linux targets)
+      - name: Setup cross (Linux targets)
         if: matrix._.use_cross
-        run: |
-          set -euo pipefail
-          cargo install cross --locked --version 0.2.5
-          echo 'CARGO=cross' >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache cargo:cross"
+
+      - name: Select cross (Linux targets)
+        if: matrix._.use_cross
+        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Build bridge_cffi cdylib
         working-directory: baml_language
@@ -264,7 +268,7 @@ jobs:
             export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
           fi
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
-          # release artifact. `release-bridge-cffi` = release + panic = "unwind".
+          # release artifact (`release` is panic = "unwind" workspace-wide).
           #
           # Setting RUSTFLAGS overrides target rustflags from Cargo config.
           # Preserve the x64 Windows stack reservation explicitly.
@@ -289,7 +293,7 @@ jobs:
           if [[ "$TARGET" == *-apple-darwin ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,-install_name,@rpath/libbridge_cffi.dylib"
           fi
-          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
+          ${CARGO} build -p bridge_cffi --release --target "$TARGET"
 
       - name: Rename and checksum artifact
         id: artifact
@@ -297,7 +301,7 @@ jobs:
         run: |
           set -euo pipefail
           target="${{ matrix._.target }}"
-          outdir="target/${target}/release-bridge-cffi"
+          outdir="target/${target}/release"
           case "$target" in
             *windows*) base="bridge_cffi.dll";    asset="baml_cffi-${target}.dll" ;;
             *apple*)   base="libbridge_cffi.dylib"; asset="libbaml_cffi-${target}.dylib" ;;
@@ -405,7 +409,7 @@ jobs:
           }
 
       - name: Upload cdylib artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bridge-cffi-${{ matrix._.target }}
           path: |

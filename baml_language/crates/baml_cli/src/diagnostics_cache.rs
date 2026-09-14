@@ -30,14 +30,13 @@ use std::{
 };
 
 use baml_db::{
-    FileId, SourceFile, Span,
+    FileId, ProjectDatabase, SourceFile, Span,
     baml_compiler_diagnostics::{
         Diagnostic, DiagnosticId, DiagnosticMessageHighlight, DiagnosticPhase, Severity,
         diagnostic::{Annotation, RelatedInfo},
     },
     baml_compiler2_hir,
 };
-use baml_project::ProjectDatabase;
 use text_size::{TextRange, TextSize};
 
 /// A source span keyed by project-root-relative path + byte range, so it is
@@ -438,10 +437,9 @@ mod tests {
 
     fn build_db(files: &[(&str, &str)]) -> (ProjectDatabase, std::path::PathBuf) {
         let root = std::path::PathBuf::from("/diag-cache-test");
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(&root);
+        let (mut db, workspace) = crate::project_load::workspace_db(&root);
         for (name, content) in files {
-            db.add_or_update_file(&root.join(name), content);
+            db.add_or_update_file_in(workspace, &root.join(name), content);
         }
         (db, root)
     }

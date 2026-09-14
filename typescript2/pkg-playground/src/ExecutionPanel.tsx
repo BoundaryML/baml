@@ -28,7 +28,6 @@ import {
   reconcileArgs,
   typeLookupFrom,
 } from './args-form-model';
-import { CapturedValueCard } from './CapturedValueCard';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
@@ -49,7 +48,6 @@ import {
   selectDefaultFunctionName,
   selectMainFunctionName,
 } from './default-function-selection';
-import { ExecutionProfileView } from './ExecutionProfileView';
 import { useEnvVars } from './envAtoms';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
@@ -58,6 +56,7 @@ import { setGatewayEnabled } from './gateway';
 import { GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { cn } from './lib/utils';
+import { projectLabels, toProjectEntry } from './project-label';
 import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
 import { ResultDisplay } from './ResultDisplay';
 import { RunOutputTerminal } from './RunOutputTerminal';
@@ -77,9 +76,7 @@ import {
 import {
   decodeRunResultValue,
   type RunStoreDisplayRun,
-  type RunTraceLog,
   runToDisplayRun,
-  runToTraceRows,
 } from './run-store-projections';
 import type { RuntimePort } from './runtime-port';
 import {
@@ -88,9 +85,9 @@ import {
   type SerializedTestSet,
 } from './serialized-test-tree';
 import { companionFunctionName } from './shared/companion-functions';
+import { TelemetryView } from './telemetry/TelemetryView';
+import { useTelemetry } from './telemetry/use-telemetry';
 import { collectLatestTestRunResults } from './test-run-results';
-import { ValueRenderer } from './ValueRenderer';
-import type { ValueBodyCache } from './value-body-cache';
 import { createValueBodyCache } from './value-body-cache';
 import {
   type BoundaryId,
@@ -99,11 +96,9 @@ import {
   type FetchLogEntry,
   type FunctionInfo,
   type ProjectUpdate,
-  previewTestKey,
   type Run,
   type RunStatus,
   type SourceNavigationTarget,
-  type TestInfo,
   type WorkerOutMessage,
 } from './worker-protocol';
 
@@ -112,6 +107,8 @@ registerBuiltinResultRenderers();
 const LOGS_PANEL_DEFAULT_HEIGHT = 180;
 const LOGS_PANEL_MIN_HEIGHT = 40;
 const LOGS_PANEL_MAX_HEIGHT = 620;
+/** Space the run tab keeps for the args block and a usable graph. */
+const LOGS_PANEL_RESERVED_HEIGHT = 260;
 
 const IS_MAC =
   typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
@@ -288,7 +285,7 @@ export interface ExecutionPanelProps {
   /** Called whenever the selected project changes. */
   onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
+  initialTab?: 'run' | 'graph' | 'telemetry' | 'prompt' | 'curl';
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
   /** Auto-run this test once the test tree reports it (applied once). */
@@ -490,199 +487,6 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
   );
 };
 
-const traceStatusClass = (status: Run['calls'][number]['status']): string => {
-  switch (status) {
-    case 'ok':
-      return 'bg-vsc-green';
-    case 'errored':
-      return 'bg-vsc-red';
-    case 'cancelled':
-    case 'exited':
-      return 'bg-vsc-yellow';
-    case 'running':
-      return 'bg-vsc-text-muted';
-    default:
-      status satisfies never;
-      return 'bg-vsc-text-muted';
-  }
-};
-
-function formatTraceMs(value: number | null): string {
-  if (value == null) return '';
-  if (value < 1) return `${value.toFixed(2)}ms`;
-  if (value < 100) return `${value.toFixed(1)}ms`;
-  return `${Math.round(value)}ms`;
-}
-
-function traceLogLevelClass(level: string | null): string {
-  switch (level) {
-    case 'error':
-      return 'text-vsc-red';
-    case 'warn':
-      return 'text-vsc-yellow';
-    case 'debug':
-      return 'text-vsc-text-muted';
-    case 'info':
-    case null:
-      return 'text-vsc-accent';
-    default:
-      return 'text-vsc-text-muted';
-  }
-}
-
-function traceValueStateLabel(value: {
-  state: RunTraceLog['state'];
-}): string | null {
-  switch (value.state) {
-    case 'available':
-      return null;
-    case 'loading':
-      return 'loading';
-    case 'pending':
-      return 'pending';
-    case 'omitted':
-      return 'omitted';
-    case 'truncated':
-      return 'truncated';
-    case 'missing':
-      return 'missing';
-    case 'lost':
-      return 'lost';
-    case 'error':
-      return 'error';
-    case 'unavailable':
-      return 'unavailable';
-    default:
-      value.state satisfies never;
-      return null;
-  }
-}
-
-const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
-  const stateLabel = traceValueStateLabel(log);
-  return (
-    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className={cn(
-            'font-vsc-mono text-[10px] uppercase',
-            traceLogLevelClass(log.level),
-          )}
-        >
-          {log.level ?? 'log'}
-        </span>
-        {log.sourceLine != null && (
-          <span className="text-vsc-text-faint text-[10px]">
-            :{log.sourceLine}
-          </span>
-        )}
-        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
-          {log.message}
-        </span>
-        {stateLabel && (
-          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
-            {stateLabel}
-          </span>
-        )}
-      </div>
-      {log.value !== null && (
-        <div className="mt-1 overflow-x-auto">
-          <ValueRenderer displayMode="inline" value={log.value} />
-        </div>
-      )}
-      {log.diagnostic && (
-        <div className="mt-1 text-[10px] text-vsc-text-faint">
-          {log.diagnostic}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TraceTimelineView: FC<{
-  run: Run | undefined;
-  valueBodyCache: ValueBodyCache;
-}> = ({ run, valueBodyCache }) => {
-  const rows = runToTraceRows(run, valueBodyCache);
-  if (rows.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-        No trace yet
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
-      <div className="min-w-[560px] p-2">
-        {rows.map((row) => (
-          <div
-            className="grid grid-cols-[72px_minmax(200px,1fr)_80px] gap-2 items-center border-b border-vsc-border-subtle py-1"
-            key={row.id}
-          >
-            <div className="text-[10px] text-vsc-text-faint text-right">
-              {formatTraceMs(row.offsetMs)}
-            </div>
-            <div className="min-w-0">
-              <div
-                className="flex items-center gap-1.5 min-w-0"
-                style={{ paddingLeft: Math.min(row.depth, 12) * 12 }}
-              >
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    traceStatusClass(row.status),
-                  )}
-                />
-                <span className="text-vsc-text truncate">
-                  {row.functionName}
-                </span>
-                {row.sourceLine != null && (
-                  <span className="text-vsc-text-faint text-[10px] shrink-0">
-                    :{row.sourceLine}
-                  </span>
-                )}
-              </div>
-              <div className="relative mt-1 h-1.5 rounded bg-vsc-surface overflow-hidden">
-                <div
-                  className="absolute top-0 bottom-0 rounded bg-vsc-accent"
-                  style={{
-                    left: `${row.spanLeftPct}%`,
-                    width: `${row.spanWidthPct}%`,
-                  }}
-                />
-              </div>
-              {row.logs.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.logs.map((log) => (
-                    <TraceLogView key={log.id} log={log} />
-                  ))}
-                </div>
-              )}
-              {row.callValues.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.callValues.map((value) => (
-                    <CapturedValueCard compact key={value.id} value={value} />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="text-[10px] text-vsc-text-faint">
-              {formatTraceMs(row.durationMs)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -754,6 +558,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   }, [executionStore]);
 
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
+  // Declared package names, keyed by root path. Absent for a project that
+  // names no name, which is most of them; the label falls back to the
+  // directory. See `projectLabels`.
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+  // Short, mutually distinct labels for the project tabs; the tab's tooltip
+  // carries the full path.
+  const projectTabLabels = useMemo(
+    () =>
+      projectLabels(
+        projectRoots.map((path) => ({ name: projectNames[path], path })),
+      ),
+    [projectRoots, projectNames],
+  );
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
@@ -786,9 +603,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const graphTargetName = selectedTestName ?? selectedFn;
   const [selectedGraphRunId, setSelectedGraphRunId] =
     useState<BoundaryId | null>(null);
-  const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
-    string | null
-  >(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
   // Args editor mode. 'form' renders the schema-driven ArgsForm when the
@@ -852,7 +666,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const cfgRequestIdsRef = useRef<Map<string, number>>(new Map());
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
+    'run' | 'graph' | 'telemetry' | 'prompt' | 'curl'
   >(initialTab ?? 'run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
     null,
@@ -880,6 +694,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [logsPanelHeight, setLogsPanelHeight] = useState(
     LOGS_PANEL_DEFAULT_HEIGHT,
   );
+  // The element the logs strip is positioned inside. Its height, not the
+  // window's, is what bounds how far the strip may grow.
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<
     Record<string, 'parsed' | 'raw'>
@@ -1193,7 +1010,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     // that owns the call so the top-level workflow remains the primary view.
     if (isCallSite) {
       if (sourceExprFunctionName !== currentFn) {
-        setSelectedPreviewTestKey(null);
         setSelectedFn(sourceExprFunctionName);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1225,7 +1041,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       if (root !== currentFn) {
         pendingHighlightRef.current =
           target != null ? { fn: root, nodeId: target } : null;
-        setSelectedPreviewTestKey(null);
         setSelectedFn(root);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1242,7 +1057,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
     // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
-      setSelectedPreviewTestKey(null);
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
@@ -1297,13 +1111,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           const n = data.notification;
           if (!n) break;
           switch (n.type) {
-            case 'listProjects':
-              setProjectRoots(n.projects ?? []);
-              setSelectedProject((prev) => {
-                if (prev && (n.projects ?? []).includes(prev)) return prev;
-                return (n.projects ?? [])[0] ?? null;
-              });
+            case 'listProjects': {
+              const entries = (n.projects ?? []).map(toProjectEntry);
+              const paths = entries.map((entry) => entry.path);
+              setProjectRoots(paths);
+              setProjectNames(
+                Object.fromEntries(
+                  entries.flatMap((entry) =>
+                    entry.name ? [[entry.path, entry.name] as const] : [],
+                  ),
+                ),
+              );
+              setSelectedProject((prev) =>
+                prev && paths.includes(prev) ? prev : (paths[0] ?? null),
+              );
               break;
+            }
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
               // A current build re-enables run controls automatically after a
@@ -1354,13 +1177,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               setSelectedProject(n.project);
               if (n.functionName) {
                 setWorkflowContext(null);
-                setSelectedPreviewTestKey(null);
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
               } else if (n.testName || n.testsetName) {
                 setWorkflowContext(null);
-                setSelectedPreviewTestKey(null);
                 setSelectedFn(null);
                 setViewingCollection(false);
                 setViewingTestRun(true);
@@ -1399,7 +1220,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'runSnapshot':
         case 'valueBody':
         case 'runCursorExpired':
-        case 'profileArtifactChunk':
           // RunStoreClient consumes these during the staged migration. The
           // legacy reducer keeps ignoring them until the UI cutover.
           break;
@@ -1537,6 +1357,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'logDecorations':
         case 'clearLogDecorations':
           // These are handled by MonacoEditor, ignore here
+          break;
+
+        case 'executionList':
+        case 'executionTelemetry':
+        case 'telemetryMedia':
+          // Resolved by the run store client's pending-request table.
           break;
 
         default:
@@ -1804,7 +1630,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
   const updateArgsJson = useCallback(
     (next: string) => {
-      setSelectedPreviewTestKey(null);
       setArgsJson(next);
       if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
@@ -1875,6 +1700,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     [sidebarWidth],
   );
 
+  // Clamping only while dragging is not enough: a height that was fine can
+  // become too tall when the panel itself shrinks -- the editor splitter
+  // moves, or the window gets shorter -- and the strip then covers the graph
+  // without anyone having touched it.
+  useEffect(() => {
+    const element = panelRef.current;
+    if (!element) return;
+    const clamp = () => {
+      const available = element.clientHeight;
+      if (!available) return;
+      const maxHeight = Math.max(
+        LOGS_PANEL_MIN_HEIGHT,
+        Math.min(LOGS_PANEL_MAX_HEIGHT, available - LOGS_PANEL_RESERVED_HEIGHT),
+      );
+      setLogsPanelHeight((current) => Math.min(current, maxHeight));
+    };
+    clamp();
+    const observer = new ResizeObserver(clamp);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const onLogsResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -1883,9 +1730,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
       const onMouseMove = (moveE: MouseEvent) => {
         const delta = startY - moveE.clientY;
+        // Leave room for the args block and a usable graph. Without this the
+        // strip could grow past the panel: the graph keeps its own minimum
+        // height, overflows the space left for it, and disappears behind the
+        // absolutely positioned strip.
+        const available = panelRef.current?.clientHeight ?? window.innerHeight;
         const maxHeight = Math.max(
           LOGS_PANEL_MIN_HEIGHT,
-          Math.min(LOGS_PANEL_MAX_HEIGHT, window.innerHeight - 220),
+          Math.min(
+            LOGS_PANEL_MAX_HEIGHT,
+            available - LOGS_PANEL_RESERVED_HEIGHT,
+          ),
         );
         setLogsPanelHeight(
           Math.max(
@@ -2132,7 +1987,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
-  const previewTests = currentUpdate?.tests ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
     ? functions
@@ -2143,19 +1997,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
-
-  const handleSelectPreviewTest = useCallback((test: TestInfo) => {
-    const key = previewTestKey(test);
-    typedArgsByFnRef.current[test.functionName] = test.argsJson;
-    setArgsJson(test.argsJson);
-    setSelectedTestName(null);
-    setSelectedPreviewTestKey(key);
-    setSelectedFn(test.functionName);
-    setViewingCollection(false);
-    setViewingTestRun(false);
-    setHighlightedNodeId(null);
-    setWorkflowContext(null);
-  }, []);
 
   const handleSelectTest = useCallback(
     (name: string) => {
@@ -2178,7 +2019,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       selectedTestNameRef.current = name;
       graphTargetNameRef.current = name;
       testGraphRequestsRef.current.add(name);
-      setSelectedPreviewTestKey(null);
       setSelectedFn(null);
       setSelectedTestName(name);
       setViewingCollection(false);
@@ -2189,22 +2029,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     },
     [onNavigateToSource],
   );
-
-  // Keep a selected preview case synchronized with source edits. If the test
-  // is deleted, retain the current function/args as an ordinary manual draft.
-  useEffect(() => {
-    if (!selectedPreviewTestKey) return;
-    const test = previewTests.find(
-      (candidate) => previewTestKey(candidate) === selectedPreviewTestKey,
-    );
-    if (!test) {
-      setSelectedPreviewTestKey(null);
-      return;
-    }
-    typedArgsByFnRef.current[test.functionName] = test.argsJson;
-    setArgsJson(test.argsJson);
-    setSelectedFn(test.functionName);
-  }, [previewTests, selectedPreviewTestKey]);
 
   // ── Args form wiring ─────────────────────────────────────────────────────
   // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
@@ -2350,9 +2174,53 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
-  const llmFunctionNames = new Set(
-    functions.filter((f) => f.kind === 'llm').map((f) => f.name),
+  // A fresh Set on every render invalidates the telemetry evidence memo
+  // that takes it as an input, so the whole projection is rebuilt each time
+  // anything in this panel re-renders.
+  const llmFunctionNames = useMemo(
+    () => new Set(functions.filter((f) => f.kind === 'llm').map((f) => f.name)),
+    [functions],
   );
+  // Signatures for the Telemetry inspectors: reviewers asked to see what a
+  // function takes and returns while reading its trace.
+  const functionSignatures = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const info of functions) {
+      if (info.signature) map.set(info.name, info.signature);
+    }
+    return map;
+  }, [functions]);
+
+  // Telemetry reads the profile store, so it refreshes when a run completes
+  // rather than following the in-memory run patches.
+  const completedRunCount = executionSnapshot.runs.filter(
+    (run) => run.completedAtMs != null,
+  ).length;
+  const telemetry = useTelemetry({
+    active: activeTab === 'telemetry',
+    client: runStoreClient,
+    llmFunctions: llmFunctionNames,
+    project: selectedProject,
+    revision: completedRunCount,
+  });
+  const handleOpenTelemetrySource = useCallback(
+    (file: string, line: number | null) => {
+      onNavigateToSource?.({ column: 1, filePath: file, line: line ?? 1 });
+    },
+    [onNavigateToSource],
+  );
+  // Media bytes are fetched per value, on demand: a captured image is
+  // megabytes, and the panel must open without waiting for any of them.
+  const handleLoadTelemetryMedia = useCallback(
+    (cid: string) => {
+      if (!selectedProject) {
+        return Promise.reject(new Error('no project selected'));
+      }
+      return runStoreClient.readTelemetryMedia(selectedProject, cid);
+    },
+    [runStoreClient, selectedProject],
+  );
+
   const latestGraphRunSnapshot = useMemo(
     () =>
       findLatestGraphRunSnapshot(
@@ -2380,7 +2248,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         return;
       }
       setWorkflowContext(null);
-      setSelectedPreviewTestKey(null);
       setViewingCollection(false);
       setViewingTestRun(false);
       setSelectedTestName(null);
@@ -2672,7 +2539,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               findCallSiteNode(wf, hop);
             pendingHighlightRef.current =
               target != null ? { fn: wf, nodeId: target } : null;
-            setSelectedPreviewTestKey(null);
             setSelectedFn(wf);
             setHighlightedNodeId(null);
           }}
@@ -2709,11 +2575,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (!runtimeControlsDisabled) void onRunFunction();
         }}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        ref={panelRef}
         // Panel-scoped run shortcut: fires for focus anywhere inside the
         // playground (form fields, raw input, graph) without stealing
         // Cmd/Ctrl+Enter from the host's code editor.
         value={activeTab}
       >
+        {/* ──── Project tabs ────
+            Only when the window holds more than one project: a row of one
+            says nothing, and a single project's path is already in the API
+            keys tooltip. Each tab is labelled by the package's own name when
+            it declares one and by its directory otherwise, with the full path
+            on hover. */}
+        {projectRoots.length > 1 && (
+          <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 overflow-x-auto border-b border-vsc-border bg-vsc-surface">
+            <ToggleGroup
+              onValueChange={(v) => setSelectedProject(v)}
+              options={projectRoots.map((root) => ({
+                label: (
+                  <>
+                    {projectTabLabels.get(root) ?? root}
+                    {projectUpdates[root] &&
+                      !projectUpdates[root].isBexCurrent && (
+                        <span className="ml-0.5 text-vsc-yellow">*</span>
+                      )}
+                  </>
+                ),
+                title: root,
+                value: root,
+              }))}
+              size="sm"
+              value={selectedProject ?? projectRoots[0]}
+            />
+          </div>
+        )}
+
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
           <TooltipProvider>
@@ -2759,11 +2655,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 <TabsTrigger className="py-1 h-7" value="graph">
                   Graph
                 </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="trace">
-                  Trace
-                </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="flame">
-                  Flame
+                <TabsTrigger className="py-1 h-7" value="telemetry">
+                  Telemetry
                 </TabsTrigger>
                 {canPreviewPrompt && (
                   <TabsTrigger className="py-1 h-7" value="prompt">
@@ -2785,26 +2678,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           )}
 
           <div className="flex-1" />
-
-          {projectRoots.length > 1 && (
-            <ToggleGroup
-              onValueChange={(v) => setSelectedProject(v)}
-              options={projectRoots.map((root) => ({
-                label: (
-                  <>
-                    {root}
-                    {projectUpdates[root] &&
-                      !projectUpdates[root].isBexCurrent && (
-                        <span className="ml-0.5 text-vsc-yellow">*</span>
-                      )}
-                  </>
-                ),
-                value: root,
-              }))}
-              size="sm"
-              value={selectedProject ?? projectRoots[0]}
-            />
-          )}
 
           {/* The primary Run button lives next to the args editor inside the
               Run tab; other tabs keep a compact icon so re-running while
@@ -3052,19 +2925,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   }}
                   onSelectFn={(fn) => {
                     setSelectedTestName(null);
-                    setSelectedPreviewTestKey(null);
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);
                     setWorkflowContext(null);
                     setSelectedFn(fn);
                   }}
-                  onSelectPreviewTest={handleSelectPreviewTest}
                   onSelectTest={handleSelectTest}
-                  previewTests={previewTests}
                   runtimeControlsDisabled={runtimeControlsDisabled}
                   selectedFn={selectedFn}
-                  selectedPreviewTestKey={selectedPreviewTestKey}
                   selectedTestName={selectedTestName}
                   showInternalFunctions={showInternalFunctions}
                   testRunResults={testRunResults}
@@ -3331,13 +3200,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   {workflowSwitcherBar}
                   {controlFlowGraph ? (
                     <GraphView
-                      calls={latestGraphRunSnapshot?.calls}
                       customRenderers={resultRenderers}
                       functionName={graphTargetName}
                       graph={controlFlowGraph}
-                      graphRuntimeOverlay={
-                        latestGraphRunSnapshot?.graphRuntimeOverlay
-                      }
                       onNodeClick={handleGraphNodeClick}
                       run={latestGraphRunSnapshot ?? null}
                       runError={latestGraphRunSnapshot?.error?.message ?? null}
@@ -3353,27 +3218,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   )}
                 </TabsContent>
 
-                {/* Trace timeline */}
+                {/* Telemetry: executions, and one execution's evidence */}
                 <TabsContent
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
-                  value="trace"
+                  value="telemetry"
                 >
-                  <TraceTimelineView
-                    run={latestGraphRunSnapshot}
-                    valueBodyCache={valueBodyCache}
+                  <TelemetryView
+                    error={telemetry.error}
+                    evidence={telemetry.evidence}
+                    executions={telemetry.executions}
+                    loading={telemetry.loading}
+                    onLoadMedia={handleLoadTelemetryMedia}
+                    onOpenSource={handleOpenTelemetrySource}
+                    onRefresh={telemetry.refresh}
+                    onSelect={telemetry.select}
+                    selectedId={telemetry.selectedId}
+                    signatures={functionSignatures}
+                    storeMissing={telemetry.storeMissing}
                   />
-                </TabsContent>
-
-                {/* Profile flamegraph */}
-                <TabsContent
-                  className="flex-1 min-h-0 mt-0 flex flex-col"
-                  style={{ minHeight: 300 }}
-                  value="flame"
-                >
-                  {activeTab === 'flame' && (
-                    <ExecutionProfileView run={latestGraphRunSnapshot} />
-                  )}
                 </TabsContent>
 
                 {/* Prompt preview */}
@@ -3531,13 +3394,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {workflowSwitcherBar}
                     {controlFlowGraph ? (
                       <GraphView
-                        calls={latestGraphRunSnapshot?.calls}
                         customRenderers={resultRenderers}
                         functionName={graphTargetName}
                         graph={controlFlowGraph}
-                        graphRuntimeOverlay={
-                          latestGraphRunSnapshot?.graphRuntimeOverlay
-                        }
                         onNodeClick={handleGraphNodeClick}
                         run={latestGraphRunSnapshot ?? null}
                         runError={

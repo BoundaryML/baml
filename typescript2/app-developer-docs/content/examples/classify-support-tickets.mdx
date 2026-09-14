@@ -1,0 +1,28 @@
+---
+title: Classify support tickets
+description: A focused BAML example that maps an incoming message to one known support category.
+breadcrumbs:
+  - href: /examples
+    label: Examples
+  - label: Classify support tickets
+---
+
+## Source
+
+<BamlSnippet id="examples/classify-support-tickets" />
+
+## Call it
+
+```typescript
+import { b } from "./baml_client"
+
+const category = await b.ClassifyMessage(
+  "I was charged twice for my order",
+)
+```
+
+## Why this shape
+
+An enum makes the output space explicit and gives generated clients a named result type. The application can switch on known values instead of normalizing arbitrary model text.
+
+Read the [function reference](/baml/language/functions) for syntax details or expand the same pattern in the [structured extraction tutorial](/tutorials/structured-extraction).

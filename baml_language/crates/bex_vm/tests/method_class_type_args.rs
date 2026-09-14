@@ -11,7 +11,7 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
@@ -57,15 +57,19 @@ fn inject_function(
         param_types: vec![],
         param_has_default: vec![false; arity],
         display_type_params: vec![],
+        generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
         throws_type: baml_type::TyTemplate::Never {
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::UserDefined,
+        is_interface_body: false,
+        native_key: None,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0,
+        runtime_package: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     let global_slot = program.globals.len();
@@ -107,14 +111,17 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     // Add a synthetic class to the object pool.
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("TestBox")),
+        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestBox"))),
         fields: vec![],
         description: None,
         alias: None,
-        type_tag: 100,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
+        type_tag: baml_type::typetag::TypeTag::from_i64(100),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
+        owner: bex_vm_types::HeapPtr::null(),
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
@@ -159,14 +166,17 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
 
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("MonoClass")),
+        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MonoClass"))),
         fields: vec![],
         description: None,
         alias: None,
-        type_tag: 101,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
+        type_tag: baml_type::typetag::TypeTag::from_i64(101),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
+        owner: bex_vm_types::HeapPtr::null(),
     })));
 
     let fn_name = "user.test_mono_alloc";
@@ -249,9 +259,9 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
@@ -299,9 +309,9 @@ fn method_frame_type_args_seeded_string() {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );

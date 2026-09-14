@@ -15,11 +15,15 @@ mod future;
 mod interface;
 mod object;
 mod package;
+mod type_alias;
+mod type_value;
 mod value;
 
 use std::collections::HashMap;
 
-use baml_type::RuntimeTy;
+/// Re-exported from `baml_type`, which owns the naming vocabulary; the
+/// runtime spells it unqualified everywhere it builds a declaration.
+pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
 pub use const_value::*;
@@ -32,6 +36,8 @@ pub use interface::*;
 pub use object::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_alias::*;
+pub use type_value::*;
 pub use value::*;
 
 use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
@@ -71,10 +77,25 @@ pub struct Program {
     pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
+    ///
+    /// Interface-machinery bodies — impl-block methods (in-class or free) and
+    /// interface default-method bodies — are excluded: such a body is pooled
+    /// and
+    /// slotted like any function but is not a table-addressable item (each
+    /// body's [`Function::is_interface_body`](crate::Function::is_interface_body)
+    /// marks it). Where a compile boundary needs a body's coordinates, it
+    /// reads them structurally: the declaration-keyed placement registry
+    /// (unit decomposition — same process, same emit), the Pass-1 slot
+    /// replay over the artifact's globals (the stdlib splice, the one
+    /// genuine cross-process boundary), or the impl-rule tables / the
+    /// interface's `default` operand (rule baking, dispatch).
     pub function_indices: HashMap<String, usize>,
 
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
+    ///
+    /// Interface-machinery bodies are excluded (see
+    /// [`Self::function_indices`]).
     pub function_global_indices: HashMap<String, usize>,
 
     /// Maps let-binding fully-qualified names to their global slot indices.
@@ -82,16 +103,9 @@ pub struct Program {
     /// until `$init` runs at load time via `StoreGlobal`.
     pub let_global_indices: HashMap<String, usize>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to function prompt templates by `get_jinja_template`.
-    pub template_strings_macros: String,
-
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,
-
-    /// Compiled test cases.
-    pub test_cases: Vec<TestCase>,
 
     /// Ordered list of `$init` function names to run at load time.
     /// E.g., `["baml.$init", "$init"]` — builtins before user package.
@@ -107,6 +121,22 @@ pub struct Program {
     /// references are order-independent). The single source of truth for interface
     /// dispatch, named-item lookup, and recursive-alias rendering.
     pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+
+    /// Conservative source-content identity of the compiled file set
+    /// (streams spec §2.3): SHA-256 over the domain string, compiler
+    /// version, and every (path, bytes) pair. `None` when the compiling
+    /// host chose not to provide one (e.g. mounted-unit links) — the
+    /// profiler then falls back to a random per-engine `ProgramId`, which
+    /// over-splits (the safe direction).
+    ///
+    /// In-memory metadata, NOT compiled content: it is `borsh(skip)`ped so
+    /// program/unit byte-identity oracles compare compiled output only,
+    /// and per-file `CompilationUnit`s never carry project-wide state. A
+    /// host that materializes a `Program` from stored bytes restamps it
+    /// (the CLI bytecode cache recomputes from the project files it just
+    /// validated); a host that cannot leaves `None`.
+    #[borsh(skip)]
+    pub source_content_hash: Option<[u8; 32]>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -154,20 +184,35 @@ impl Program {
         idx
     }
 
-    /// Flatten every package's recursive type aliases into one
-    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
-    /// ones are expanded inline), reconstructing each qualified name from its
+    /// Flatten every package's recursive type aliases into one map keyed by
+    /// declaration identity (only recursive aliases survive; non-recursive ones
+    /// are expanded inline), reconstructing each alias's declared name from its
     /// package + `LocalName`. The shape output-format rendering consumes.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+    ///
+    /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
+    /// through the object pool rather than reading a side map — which is also
+    /// where the identity comes from.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
         for (pkg_name, package) in &self.packages {
-            for (local, ty) in &package.recursive_type_aliases {
+            for (local, idx) in &package.type_aliases {
+                let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
+                    // An index that does not resolve to an alias means the pool
+                    // and the package map disagree — skip rather than guess.
+                    continue;
+                };
                 let qtn = baml_type::TypeName::new(
                     pkg_name.clone(),
                     local.namespace.clone(),
                     local.name.clone(),
                 );
-                out.insert(qtn, ty.clone());
+                out.insert(
+                    baml_type::TaggedTypeName::new(
+                        alias.type_tag,
+                        baml_type::DeclarationName::Declared(qtn),
+                    ),
+                    alias.definition.clone(),
+                );
             }
         }
         out
@@ -206,13 +251,13 @@ pub enum SysOpErrorCategory {
     /// stream we tried to parse are malformed".
     ParseError,
     Unsupported,
-    NotImplemented,
     AccessError,
     RenderPrompt,
     LlmClient,
-    /// Wildcard for development convenience. Must be explicitly declared in
-    /// `#[throws(DevOther)]` and should be migrated to named categories.
-    DevOther,
+    /// Runtime source compilation was rejected with compiler diagnostics.
+    CompilationError,
+    /// A live Session already has an evaluation in flight.
+    SessionBusy,
     /// A host-language callable raised an exception or invalid-argument error.
     HostCallable,
 }
@@ -225,11 +270,11 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::InvalidArgument => write!(f, "InvalidArgument"),
             Self::ParseError => write!(f, "ParseError"),
             Self::Unsupported => write!(f, "Unsupported"),
-            Self::NotImplemented => write!(f, "NotImplemented"),
             Self::AccessError => write!(f, "AccessError"),
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
-            Self::DevOther => write!(f, "DevOther"),
+            Self::CompilationError => write!(f, "CompilationError"),
+            Self::SessionBusy => write!(f, "SessionBusy"),
             Self::HostCallable => write!(f, "HostCallable"),
         }
     }
@@ -360,51 +405,6 @@ include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
-// ============================================================================
-// Test Cases
-// ============================================================================
-
-/// A constant value for test arguments.
-///
-/// Self-contained type with no dependency on HIR or external types.
-/// Converted from HIR's `TestArgValue` during emission, and converted
-/// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
-    Array {
-        element_type: RuntimeTy,
-        items: Vec<TestArgValue>,
-    },
-    Map {
-        key_type: RuntimeTy,
-        value_type: RuntimeTy,
-        entries: IndexMap<String, TestArgValue>,
-    },
-}
-
-/// A compiled test case, ready for execution.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct TestCase {
-    /// Test name (e.g., "`TestAddOne`").
-    pub name: String,
-    /// Function names this test targets.
-    pub function_names: Vec<String>,
-    /// Test arguments, keyed by parameter name.
-    pub args: IndexMap<String, TestArgValue>,
-    /// Project-root-relative path of the file that *defines* this test block.
-    ///
-    /// Recorded so `baml test --list` reports the test-defining file
-    /// identically whether the program was freshly compiled or served from the
-    /// bytecode cache. Empty only for programs compiled before this field
-    /// existed.
-    pub source_file: String,
-}
-
 /// Media value.
 ///
 /// Kept as a type alias for compatibility with downstream crates that still use it.
@@ -413,19 +413,6 @@ pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
 
 /// Prompt AST tree node.
 pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
-
-/// Opaque handle to a `Collector` object from `bex_events`.
-///
-/// Uses `Arc<dyn Any + Send + Sync>` to avoid a dependency from `bex_vm_types` on `bex_events`.
-/// Downcast to `bex_events::Collector` at the `bex_engine` layer.
-#[derive(Clone, Debug)]
-pub struct CollectorRef(pub std::sync::Arc<dyn std::any::Any + Send + Sync>);
-
-impl PartialEq for CollectorRef {
-    fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
-    }
-}
 
 /// A mutable cell wrapping a single captured value.
 ///

@@ -15,10 +15,12 @@ pub mod debug;
 pub mod errors;
 pub mod indexable;
 pub mod kperf;
+pub mod package_ai;
 pub mod package_baml;
 pub mod package_boundary;
 pub mod package_load;
 pub mod package_reflect;
+pub mod reachable;
 mod type_context;
 mod type_match;
 pub mod types;
@@ -29,6 +31,6 @@ pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
-    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmEventSourceLocation, VmExecState,
-    convert_program,
+    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmErrorCaptureEvent,
+    VmEventSourceLocation, VmExecState, convert_program,
 };

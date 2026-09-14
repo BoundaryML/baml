@@ -120,7 +120,15 @@ impl BindingId {
 pub struct LocalBinding {
     pub name: Name,
     pub site: DefinitionSite,
+    /// The ROOT pattern the binding was registered under (the whole
+    /// destructure for `let Pack { value }`). MIR's binding lookups key on
+    /// this.
     pub pattern: PatId,
+    /// The `Pattern::Bind` node that introduces THIS name - equal to
+    /// `pattern` for a bare `let x`, the inner bind for destructures. The
+    /// per-name identity type inference keys binding types on. For an
+    /// or-pattern, the first alternative's bind is representative.
+    pub bind_pattern: PatId,
     pub name_range: TextRange,
     pub visible_from: TextSize,
 }
@@ -270,6 +278,12 @@ pub struct FileSemanticIndex<'db> {
     /// arena-safe expression key for binary-search lookup.
     pub path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
 
+    /// Lambda expression -> the `Lambda` scope it opened, sorted by the
+    /// arena-safe expression key - the SPAN-FREE join (the
+    /// `lambda_scope_for*` span matches tie consumers to source maps;
+    /// type inference must not depend on spans).
+    pub lambda_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
+
     /// Environment variable references (`env.X`) found in this file's expression bodies.
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
@@ -403,6 +417,14 @@ impl FileSemanticIndex<'_> {
             .binary_search_by_key(&key, |(candidate, _)| *candidate)
             .ok()
             .map(|idx| self.expr_scopes[idx].1)
+    }
+
+    /// The `Lambda` scope a lambda expression opened (span-free).
+    pub fn lambda_scope(&self, key: ExprMetadataKey) -> Option<FileScopeId> {
+        self.lambda_scopes
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
+            .ok()
+            .map(|idx| self.lambda_scopes[idx].1)
     }
 
     pub fn path_resolution(&self, key: ExprMetadataKey) -> Option<PathResolution> {

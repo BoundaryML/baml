@@ -286,13 +286,15 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
 /// The TS-side bare identifier for a callable's BAML name, used as the LHS
 /// of the sync binding (the async sibling appends `_async`).
 ///
-/// spec2: the BAML name — including any `$<suffix>` companion marker — is
-/// preserved verbatim, because `$` is a valid TypeScript identifier
-/// character. So `foo` → `foo`, `foo$stream` → `foo$stream`,
-/// `foo$build_request` → `foo$build_request`. (Python must translate these
-/// to `_stream` / `__build_request`; TypeScript does not.)
+/// A `@stream` companion becomes `$stream` (`$` is a valid TypeScript
+/// identifier character), and every other `@` becomes `_`. Thus `foo` stays
+/// `foo`, `foo@stream` becomes `foo$stream`, and `foo@spec` becomes `foo_spec`.
 fn bare_callable_name(name: &str) -> String {
-    name.to_string()
+    if let Some(base) = name.strip_suffix("@stream") {
+        format!("{base}$stream")
+    } else {
+        name.replace('@', "_")
+    }
 }
 
 /// Shared fan-out for free functions. Calls `emit` twice: once for the sync
@@ -344,4 +346,16 @@ fn expand_callable<F>(
 
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bare_callable_name;
+
+    #[test]
+    fn bare_callable_name_maps_companion_suffixes() {
+        assert_eq!(bare_callable_name("foo"), "foo");
+        assert_eq!(bare_callable_name("foo@stream"), "foo$stream");
+        assert_eq!(bare_callable_name("foo@spec"), "foo_spec");
+    }
 }

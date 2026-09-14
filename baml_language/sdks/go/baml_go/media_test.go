@@ -214,6 +214,40 @@ func TestDecodeMediaValidatesActualNativeKeyKindBeforeClone(t *testing.T) {
 	runtime.SetFinalizer(image.media.handle, nil)
 }
 
+func TestDecodePortableMediaReconstructsTheTypedWrapper(t *testing.T) {
+	previous := constructPortableMedia
+	defer func() { constructPortableMedia = previous }()
+	constructPortableMedia = func(operation mediaConstructor, kind mediaKind, value string, mimeType *string) (mediaValue, error) {
+		if operation != mediaFromURL || kind != mediaKindImage || value != "https://example.test/cat.png" {
+			t.Fatalf("portable media constructor = %v / %v / %q", operation, kind, value)
+		}
+		if mimeType == nil || *mimeType != "image/png" {
+			t.Fatalf("portable media MIME type = %#v", mimeType)
+		}
+		return mediaValue{
+			handle: &mediaHandle{key: 77, handleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE},
+			kind:   mediaKindImage,
+		}, nil
+	}
+
+	value := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_MediaValue{
+		MediaValue: &cffi.BamlValueMedia{
+			Media:    cffi.MediaTypeEnum_IMAGE,
+			MimeType: stringPointer("image/png"),
+			Value:    &cffi.BamlValueMedia_Url{Url: "https://example.test/cat.png"},
+		},
+	}}}
+	image, err := value.Image()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image.media.handle == nil || image.media.handle.key != 77 {
+		t.Fatalf("decoded portable media = %#v", image)
+	}
+}
+
+func stringPointer(value string) *string { return &value }
+
 func TestNativeMediaBufferValidationRejectsImpossibleShapes(t *testing.T) {
 	if err := validateNativeMediaBuffer(false, 1); err == nil {
 		t.Fatal("nil pointer with nonzero length was accepted")

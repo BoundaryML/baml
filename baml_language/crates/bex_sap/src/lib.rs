@@ -1,5 +1,5 @@
-use baml_type::TypeName;
 use ouroboros::self_referencing;
+use sys_types::DefKey;
 
 pub use crate::jsonish::parse;
 use crate::sap_model::{AnnotatedTy, TypeRefDb};
@@ -18,7 +18,7 @@ pub enum StreamingMode {
     Streaming,
 }
 
-/// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`baml_type::RuntimeTy`]
+/// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`sys_types::SapTy`]
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 pub struct CompiledSapModel {
     inner: CompiledSapModelInner,
@@ -27,8 +27,8 @@ pub struct CompiledSapModel {
 impl CompiledSapModel {
     pub fn from_type_ctx(
         type_ctx: sap_model::TypeCtx,
-        target: baml_type::RuntimeTy,
-        stream_target: baml_type::RuntimeTy,
+        target: sys_types::SapTy,
+        stream_target: sys_types::SapTy,
     ) -> Result<Self, sap_model::ConvertError> {
         // A generic `T` can materialize as a union after the context's declared
         // types were simplified. Normalize both runtime targets at the SAP
@@ -47,22 +47,22 @@ impl CompiledSapModel {
     }
     pub fn from_sys_op_context(
         ctx: &::sys_types::SysOpContext,
-        target: baml_type::RuntimeTy,
-        stream_target: baml_type::RuntimeTy,
+        target: sys_types::SapTy,
+        stream_target: sys_types::SapTy,
     ) -> Result<Self, sap_model::ConvertError> {
         let type_ctx = sap_model::TypeCtx::from_sys_op_context(ctx);
         Self::from_type_ctx(type_ctx, target, stream_target)
     }
 
-    pub fn db(&self) -> &TypeRefDb<'_, TypeName> {
+    pub fn db(&self) -> &TypeRefDb<'_, DefKey> {
         self.inner.borrow_db()
     }
 
-    pub fn ty(&self) -> &AnnotatedTy<'_, TypeName> {
+    pub fn ty(&self) -> &AnnotatedTy<'_, DefKey> {
         self.inner.borrow_ty()
     }
 
-    pub fn stream_ty(&self) -> &AnnotatedTy<'_, TypeName> {
+    pub fn stream_ty(&self) -> &AnnotatedTy<'_, DefKey> {
         self.inner.borrow_stream_ty()
     }
 }
@@ -71,15 +71,15 @@ impl CompiledSapModel {
 struct CompiledSapModelInner {
     pub type_ctx: sap_model::TypeCtx,
     /// The target type
-    pub parse_ty: baml_type::RuntimeTy,
-    pub parse_stream_ty: baml_type::RuntimeTy,
+    pub parse_ty: sys_types::SapTy,
+    pub parse_stream_ty: sys_types::SapTy,
     #[borrows(type_ctx)]
     #[covariant]
-    pub db: TypeRefDb<'this, TypeName>,
+    pub db: TypeRefDb<'this, DefKey>,
     #[borrows(type_ctx, parse_ty)]
     #[covariant]
-    pub ty: AnnotatedTy<'this, TypeName>,
+    pub ty: AnnotatedTy<'this, DefKey>,
     #[borrows(type_ctx, parse_stream_ty)]
     #[covariant]
-    pub stream_ty: AnnotatedTy<'this, TypeName>,
+    pub stream_ty: AnnotatedTy<'this, DefKey>,
 }

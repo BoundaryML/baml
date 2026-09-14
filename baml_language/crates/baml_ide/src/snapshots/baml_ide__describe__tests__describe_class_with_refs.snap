@@ -1,0 +1,13 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 1976
+expression: "project.format_description(&descs[0])"
+---
+class Person  types.baml:7
+shape: class Person {
+    name: string,
+    age: int,
+}
+refs: 2
+  funcs.baml:8  function make_person(n: string, a: int) -> Person {
+  funcs.baml:9  return Person { name: n, age: a };

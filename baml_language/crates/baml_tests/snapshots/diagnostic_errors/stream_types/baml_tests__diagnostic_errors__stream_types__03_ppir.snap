@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 56253
 ---
 === PPIR ===
 class user.AttrFoo {
@@ -219,12 +218,6 @@ class user.Container$stream {
   matrix: int[][]
   grid: user.TreeNode$stream[][]
   groups: map<string, user.TreeNode$stream[]>
-}
-class user.DynamicClass {
-  name: string
-}
-class user.DynamicClass$stream {
-  name: string | null
 }
 class user.Education {
   school: string

@@ -3,7 +3,7 @@
 //
 // Converted from crates/baml_tests/tests/operators.rs. Each Rust test becomes a
 // `test` block with the `function main()` body inlined. Results are compared
-// with `baml.deep_equals`.
+// with `assert.equal`.
 //
 // Compound-assignment tests read the final value of a mutated local (`x`).
 // In a test block, a local compares unequal to a literal (VM bug), so these
@@ -13,90 +13,143 @@
 // ─── Arithmetic ──────────────────────────────────────────────────────────────
 
 test "add" {
-    assert.is_true(baml.deep_equals(1 + 2, 3))
+    assert.equal(1 + 2, 3)
 }
 
 test "subtract" {
-    assert.is_true(baml.deep_equals(1 - 2, -1))
+    assert.equal(1 - 2, -1)
 }
 
 test "multiply" {
-    assert.is_true(baml.deep_equals(1 * 2, 2))
+    assert.equal(1 * 2, 2)
 }
 
 test "divide" {
-    assert.is_true(baml.deep_equals(10 / 2, 5))
+    assert.equal(10 / 2, 5)
 }
 
 test "modulo" {
-    assert.is_true(baml.deep_equals(10 % 3, 1))
+    assert.equal(10 % 3, 1)
 }
 
 // ─── Bitwise ─────────────────────────────────────────────────────────────────
 
 test "bitwise_and" {
-    assert.is_true(baml.deep_equals(10 & 3, 2))
+    assert.equal(10 & 3, 2)
 }
 
 test "bitwise_or" {
-    assert.is_true(baml.deep_equals(10 | 3, 11))
+    assert.equal(10 | 3, 11)
 }
 
 test "bitwise_xor" {
-    assert.is_true(baml.deep_equals(10 ^ 3, 9))
+    assert.equal(10 ^ 3, 9)
 }
 
 test "shift_left" {
-    assert.is_true(baml.deep_equals(10 << 3, 80))
+    assert.equal(10 << 3, 80)
+}
+
+// `<<` discards the bits pushed past the 63-bit width instead of overflowing,
+// so bit 62 lands on the sign and anything above it falls off entirely.
+// `ops_shl` takes its operands at runtime so the VM's shift opcode is
+// exercised; the literal forms next to it go through the constant folder, and
+// the two must agree.
+function ops_shl(x: int, n: int) -> int { x << n }
+
+test "shift_left_truncates" {
+    assert.equal(ops_shl(1, 61), 2305843009213693952)
+    assert.equal(1 << 61, 2305843009213693952)
+
+    // Bit 62 is the i63 sign bit, so `1 << 62` is `int.min_value()`.
+    assert.equal(ops_shl(1, 62), int.min_value())
+    assert.equal(1 << 62, int.min_value())
+
+    // Every bit is gone at 63 and beyond, whatever the left operand.
+    assert.equal(ops_shl(1, 63), 0)
+    assert.equal(1 << 63, 0)
+    assert.equal(ops_shl(-1, 100), 0)
+    assert.equal((-1) << 100, 0)
+
+    // Truncation keeps the low bits: `-1` is all-ones, so shifting it left by
+    // one clears bit 0 and leaves the rest, i.e. `-2`.
+    assert.equal(ops_shl(-1, 1), -2)
+    assert.equal((-1) << 1, -2)
 }
 
 test "shift_right" {
-    assert.is_true(baml.deep_equals(10 >> 3, 1))
+    assert.equal(10 >> 3, 1)
+}
+
+// `>>` is arithmetic: it propagates the sign rather than feeding in zeros, so a
+// count at or past the 63-bit width saturates to the sign bit: 0 for a
+// non-negative operand, -1 for a negative one. Regression for a VM arm that
+// returned 0 for both, which disagreed with the constant folder.
+function ops_shr(x: int, n: int) -> int { x >> n }
+
+test "shift_right_saturates_to_sign" {
+    assert.equal(ops_shr(-1, 63), -1)
+    assert.equal((-1) >> 63, -1)
+    assert.equal(ops_shr(-1, 200), -1)
+    assert.equal((-1) >> 200, -1)
+
+    assert.equal(ops_shr(1, 63), 0)
+    assert.equal(1 >> 63, 0)
+    assert.equal(ops_shr(1, 200), 0)
+    assert.equal(1 >> 200, 0)
+
+    // Below the width the sign still propagates: -8 >> 2 is -2, not a large
+    // positive value.
+    assert.equal(ops_shr(-8, 2), -2)
+    assert.equal((-8) >> 2, -2)
+
+    let negative = ops_shr(1, 0 - 1) catch (e) { baml.panics.NegativeBitShift => 7 };
+    assert.equal(negative, 7)
 }
 
 // Bitwise NOT (`~`) is two's-complement complement: `~x == -x - 1`. Regression
 // for B-766, where `~` silently lowered to the identity (`~x == x`).
 test "bitwise_not" {
-    assert.is_true(baml.deep_equals(~0, -1))
-    assert.is_true(baml.deep_equals(~1, -2))
-    assert.is_true(baml.deep_equals(~255, -256))
-    assert.is_true(baml.deep_equals(~(-1), 0))
+    assert.equal(~0, -1)
+    assert.equal(~1, -2)
+    assert.equal(~255, -256)
+    assert.equal(~(-1), 0)
 }
 
 // ─── Unary ───────────────────────────────────────────────────────────────────
 
 test "unary_negate" {
-    assert.is_true(baml.deep_equals(-1, -1))
+    assert.equal(-1, -1)
 }
 
 test "unary_not" {
-    assert.is_true(baml.deep_equals(!true, false))
+    assert.is_true(!(!true))
 }
 
 // `let x = -5; x` — local read, so bind expected to a local too.
 test "negative_int_in_let" {
     let x = -5;
     let expected = -5;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "negative_int_arithmetic" {
-    assert.is_true(baml.deep_equals(-5 + 3, -2))
+    assert.equal(-5 + 3, -2)
 }
 
 test "negative_int_comparison" {
-    assert.is_true(baml.deep_equals(-5 < 0, true))
+    assert.is_true(-5 < 0)
 }
 
 // `let x = -2.5; x` — local read, so bind expected to a local too.
 test "negative_float_in_let" {
     let x = -2.5;
     let expected = -2.5;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "double_negation" {
-    assert.is_true(baml.deep_equals(--5, 5))
+    assert.equal(--5, 5)
 }
 
 // `let x = -10; --x` — `x` is a test-block local (boxed); applying unary `-`
@@ -108,43 +161,43 @@ function ops_double_neg_var() -> int {
 }
 
 test "double_negation_variable" {
-    assert.is_true(baml.deep_equals(ops_double_neg_var(), -10))
+    assert.equal(ops_double_neg_var(), -10)
 }
 
 // ─── Comparison ──────────────────────────────────────────────────────────────
 
 test "equal" {
-    assert.is_true(baml.deep_equals(1 == 2, false))
+    assert.is_true(1 != 2)
 }
 
 test "not_equal" {
-    assert.is_true(baml.deep_equals(1 != 2, true))
+    assert.is_true(1 != 2)
 }
 
 test "greater_than" {
-    assert.is_true(baml.deep_equals(1 > 2, false))
+    assert.is_true(!(1 > 2))
 }
 
 test "greater_than_or_equal" {
-    assert.is_true(baml.deep_equals(1 >= 2, false))
+    assert.is_true(!(1 >= 2))
 }
 
 test "less_than" {
-    assert.is_true(baml.deep_equals(1 < 2, true))
+    assert.is_true(1 < 2)
 }
 
 test "less_than_or_equal" {
-    assert.is_true(baml.deep_equals(1 <= 2, true))
+    assert.is_true(1 <= 2)
 }
 
 // ─── Logical ─────────────────────────────────────────────────────────────────
 
 test "logical_and" {
-    assert.is_true(baml.deep_equals(true && false, false))
+    assert.is_true(!(true && false))
 }
 
 test "logical_or" {
-    assert.is_true(baml.deep_equals(true || false, true))
+    assert.is_true(true || false)
 }
 
 // Helper called by short_circuit tests — named with prefix to avoid collisions.
@@ -153,11 +206,11 @@ function ops_ret_bool() -> bool {
 }
 
 test "short_circuit_and" {
-    assert.is_true(baml.deep_equals(true && ops_ret_bool(), true))
+    assert.is_true(true && ops_ret_bool())
 }
 
 test "short_circuit_or" {
-    assert.is_true(baml.deep_equals(true || ops_ret_bool(), true))
+    assert.is_true(true || ops_ret_bool())
 }
 
 // ─── Compound assignment ──────────────────────────────────────────────────────
@@ -169,56 +222,56 @@ test "assign_add" {
     let x = 1;
     x += 2;
     let expected = 3;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_subtract" {
     let x = 1;
     x -= 2;
     let expected = -1;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_multiply" {
     let x = 1;
     x *= 2;
     let expected = 2;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_divide" {
     let x = 10;
     x /= 2;
     let expected = 5;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_modulo" {
     let x = 10;
     x %= 3;
     let expected = 1;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_bitwise_and" {
     let x = 10;
     x &= 3;
     let expected = 2;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_bitwise_or" {
     let x = 10;
     x |= 3;
     let expected = 11;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 test "assign_bitwise_xor" {
     let x = 10;
     x ^= 3;
     let expected = 9;
-    assert.is_true(baml.deep_equals(x, expected))
+    assert.equal(x, expected)
 }
 
 // ─── Operator dispatch through `baml.ops` interfaces ──────────────────────────
@@ -251,14 +304,11 @@ function ops_neg_vec(a: Vec2) -> Vec2 {
 }
 
 test "operator_add_user_class" {
-    assert.is_true(baml.deep_equals(
-        ops_add_vecs(Vec2 { x: 1, y: 2 }, Vec2 { x: 3, y: 4 }),
-        Vec2 { x: 4, y: 6 },
-    ))
+    assert.equal(ops_add_vecs(Vec2 { x: 1, y: 2 }, Vec2 { x: 3, y: 4 }), Vec2 { x: 4, y: 6 })
 }
 
 test "operator_negate_user_class" {
-    assert.is_true(baml.deep_equals(ops_neg_vec(Vec2 { x: 1, y: -2 }), Vec2 { x: -1, y: 2 }))
+    assert.equal(ops_neg_vec(Vec2 { x: 1, y: -2 }), Vec2 { x: -1, y: 2 })
 }
 
 // Left operand is a union: the impl is chosen from its runtime concrete type.
@@ -287,8 +337,8 @@ function ops_add_to_unit(u: Meters | Feet, n: int) -> Meters | Feet {
 }
 
 test "operator_union_dispatch" {
-    assert.is_true(baml.deep_equals(ops_add_to_unit(Meters { v: 1 }, 2), Meters { v: 3 }))
-    assert.is_true(baml.deep_equals(ops_add_to_unit(Feet { v: 10 }, 5), Feet { v: 15 }))
+    assert.equal(ops_add_to_unit(Meters { v: 1 }, 2), Meters { v: 3 })
+    assert.equal(ops_add_to_unit(Feet { v: 10 }, 5), Feet { v: 15 })
 }
 
 // Compound assignment desugars to the same interface dispatch: `v += w` on a
@@ -300,7 +350,7 @@ function ops_compound_add_vec() -> Vec2 {
 }
 
 test "operator_compound_assign_user_class" {
-    assert.is_true(baml.deep_equals(ops_compound_add_vec(), Vec2 { x: 11, y: 22 }))
+    assert.equal(ops_compound_add_vec(), Vec2 { x: 11, y: 22 })
 }
 
 // ─── User-type dispatch: the four remaining binary drivers ────────────────────
@@ -341,10 +391,10 @@ function ops_scaled_div(a: Scaled, b: Scaled) -> Scaled { a / b }
 function ops_scaled_rem(a: Scaled, b: Scaled) -> Scaled { a % b }
 
 test "operator_sub_mul_div_rem_user_class" {
-    assert.is_true(baml.deep_equals(ops_scaled_sub(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 7 }))
-    assert.is_true(baml.deep_equals(ops_scaled_mul(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 30 }))
-    assert.is_true(baml.deep_equals(ops_scaled_div(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 3 }))
-    assert.is_true(baml.deep_equals(ops_scaled_rem(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 1 }))
+    assert.equal(ops_scaled_sub(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 7 })
+    assert.equal(ops_scaled_mul(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 30 })
+    assert.equal(ops_scaled_div(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 3 })
+    assert.equal(ops_scaled_rem(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 1 })
 }
 
 // ─── Multi-instantiation dispatch: impl chosen by the rhs runtime type ────────
@@ -374,8 +424,8 @@ function ops_poly_add_int(p: Poly, n: int) -> Poly { p + n }
 function ops_poly_add_float(p: Poly, f: float) -> Poly { p + f }
 
 test "operator_multi_instantiation_selects_by_rhs_type" {
-    assert.is_true(baml.deep_equals(ops_poly_add_int(Poly { v: 1 }, 5), Poly { v: 6 }))
-    assert.is_true(baml.deep_equals(ops_poly_add_float(Poly { v: 1 }, 0.5), Poly { v: 1001 }))
+    assert.equal(ops_poly_add_int(Poly { v: 1 }, 5), Poly { v: 6 })
+    assert.equal(ops_poly_add_float(Poly { v: 1 }, 0.5), Poly { v: 1001 })
 }
 
 // ─── Output != Self at runtime ────────────────────────────────────────────────
@@ -391,7 +441,7 @@ class Counter {
 function ops_counter_add(c: Counter, n: int) -> int { c + n }
 
 test "operator_output_differs_from_self" {
-    assert.is_true(baml.deep_equals(ops_counter_add(Counter { n: 2 }, 1), 3))
+    assert.equal(ops_counter_add(Counter { n: 2 }, 1), 3)
 }
 
 // Negate's Output can also differ from Self (like Rust's Neg::Output).
@@ -406,7 +456,7 @@ class Debt {
 function ops_neg_debt(d: Debt) -> int { -d }
 
 test "operator_negate_output_differs_from_self" {
-    assert.is_true(baml.deep_equals(ops_neg_debt(Debt { amount: 5 }), -5))
+    assert.equal(ops_neg_debt(Debt { amount: 5 }), -5)
 }
 
 // ─── Driver/opcode parity for primitives ──────────────────────────────────────
@@ -442,32 +492,32 @@ function drv_float_add_int(a: float, b: int) -> float { drv_add_int_rhs(a, b) }
 function drv_bigint_add_int(a: bigint, b: int) -> bigint { drv_add_int_rhs(a, b) }
 
 test "driver_int_arithmetic_matches_opcodes" {
-    assert.is_true(baml.deep_equals(drv_int_add(1, 2), 1 + 2))
-    assert.is_true(baml.deep_equals(drv_int_sub(1, 2), 1 - 2))
-    assert.is_true(baml.deep_equals(drv_int_mul(3, 4), 3 * 4))
-    assert.is_true(baml.deep_equals(drv_int_div(10, 3), 10 / 3))
-    assert.is_true(baml.deep_equals(drv_int_rem(10, 3), 10 % 3))
-    assert.is_true(baml.deep_equals(drv_int_neg(5), -5))
+    assert.equal(drv_int_add(1, 2), 1 + 2)
+    assert.equal(drv_int_sub(1, 2), 1 - 2)
+    assert.equal(drv_int_mul(3, 4), 3 * 4)
+    assert.equal(drv_int_div(10, 3), 10 / 3)
+    assert.equal(drv_int_rem(10, 3), 10 % 3)
+    assert.equal(drv_int_neg(5), -5)
 }
 
 test "driver_float_arithmetic_matches_opcodes" {
-    assert.is_true(baml.deep_equals(drv_float_add(1.5, 2.25), 1.5 + 2.25))
-    assert.is_true(baml.deep_equals(drv_float_div(1.0, 4.0), 1.0 / 4.0))
-    assert.is_true(baml.deep_equals(drv_float_neg(2.5), -2.5))
+    assert.equal(drv_float_add(1.5, 2.25), 1.5 + 2.25)
+    assert.equal(drv_float_div(1.0, 4.0), 1.0 / 4.0)
+    assert.equal(drv_float_neg(2.5), -2.5)
 }
 
 test "driver_bigint_arithmetic_matches_opcodes" {
-    assert.is_true(baml.deep_equals(drv_bigint_add(10n, 3n), 10n + 3n))
-    assert.is_true(baml.deep_equals(drv_bigint_div(10n, 3n), 10n / 3n))
+    assert.equal(drv_bigint_add(10n, 3n), 10n + 3n)
+    assert.equal(drv_bigint_div(10n, 3n), 10n / 3n)
 }
 
 test "driver_string_add_matches_opcode" {
-    assert.is_true(baml.deep_equals(drv_string_add("hello", " world"), "hello" + " world"))
+    assert.equal(drv_string_add("hello", " world"), "hello" + " world")
 }
 
 test "driver_mixed_widening_matches_opcodes" {
-    assert.is_true(baml.deep_equals(drv_float_add_int(1.5, 2), 1.5 + 2))
-    assert.is_true(baml.deep_equals(drv_bigint_add_int(10n, 3), 10n + 3))
+    assert.equal(drv_float_add_int(1.5, 2), 1.5 + 2)
+    assert.equal(drv_bigint_add_int(10n, 3), 10n + 3)
 }
 
 // Mixed-kind primitive unions dispatch through the driver: the old fast-path
@@ -482,8 +532,8 @@ function ops_mixed_union_add(n: int) -> int | float {
 }
 
 test "operator_mixed_primitive_union_add" {
-    assert.is_true(baml.deep_equals(ops_mixed_union_add(1), 2))
-    assert.is_true(baml.deep_equals(ops_mixed_union_add(-1), 3.5))
+    assert.equal(ops_mixed_union_add(1), 2)
+    assert.equal(ops_mixed_union_add(-1), 3.5)
 }
 
 // Panic parity (B-266): the driver natives must throw the same catchable
@@ -508,22 +558,29 @@ function drv_catch_int_div_zero() -> int {
 function drv_catch_int_rem_zero() -> int {
     drv_int_rem(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
-function drv_catch_float_div_zero() -> float {
-    drv_float_div(1.0, 0.0) catch (e) { baml.panics.DivisionByZero => -1.0 }
+// `float` division by zero is IEEE-754 on every path — no panic to catch — so
+// this checks all three produce the same `inf`: the interface-bound driver, the
+// specialized `DivFloat` opcode (`float / float`), and the generic opcode that
+// a mixed `int`/`float` pair lowers to.
+function drv_float_div_zero_is_infinite() -> bool {
+    drv_float_div(1.0, 0.0).is_infinite()
+        && (1.0 / 0.0).is_infinite()
+        && (1 / 0.0).is_infinite()
+        && (1.0 / 0).is_infinite()
 }
 function drv_catch_bigint_div_zero() -> bigint {
     drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }
 }
 
 test "driver_panics_match_opcodes" {
-    assert.is_true(baml.deep_equals(drv_catch_add_overflow(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_mul_overflow(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_neg_overflow(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_div_min_by_minus_one(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_int_div_zero(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_int_rem_zero(), -1))
-    assert.is_true(baml.deep_equals(drv_catch_float_div_zero(), -1.0))
-    assert.is_true(baml.deep_equals(drv_catch_bigint_div_zero(), -1n))
+    assert.equal(drv_catch_add_overflow(), -1)
+    assert.equal(drv_catch_mul_overflow(), -1)
+    assert.equal(drv_catch_neg_overflow(), -1)
+    assert.equal(drv_catch_div_min_by_minus_one(), -1)
+    assert.equal(drv_catch_int_div_zero(), -1)
+    assert.equal(drv_catch_int_rem_zero(), -1)
+    assert.is_true(drv_float_div_zero_is_infinite())
+    assert.equal(drv_catch_bigint_div_zero(), -1n)
 }
 
 // ─── Ordering dispatch through baml.ops.Compare ───────────────────────────────
@@ -550,15 +607,18 @@ test "ordering_on_bool_dispatches_compare" {
     assert.is_true(!ord_bool_ge(false, true))
 }
 
-// A user class implementing only the required `lt`; `le`/`gt`/`ge` resolve to the
-// interface defaults, which are merged into the impl's method table at bake time.
+// A user class implementing only the required `cmp`; `lt`/`le`/`gt`/`ge` resolve
+// to the interface defaults, which are merged into the impl's method table at
+// bake time.
 class Ranked {
     rank int
     implements baml.ops.Equals {
         function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.rank < other.rank }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.rank.cmp(other.rank)
+        }
     }
 }
 
@@ -577,16 +637,18 @@ test "ordering_on_user_class_dispatches_compare" {
 }
 
 // Each operator dispatches its own method, so an override beats the default it
-// replaces. `gt` here is deliberately inconsistent with `!le`: the default would
+// replaces. `gt` here is deliberately inconsistent with `cmp`: the default would
 // make `a > a` false, the override makes it true. This fails if `>` is lowered as
-// `!(a <= b)` or as a swapped `b.lt(a)`.
+// `!(a <= b)`, as a swapped `b.lt(a)`, or as a `cmp` call.
 class OddOrder {
     n int
     implements baml.ops.Equals {
         function eq(self, other: Self) -> bool throws never { self.n == other.n }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.n < other.n }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.n.cmp(other.n)
+        }
         function gt(self, other: Self) -> bool throws never { true }
     }
 }
@@ -596,7 +658,7 @@ function ord_odd_le(a: OddOrder, b: OddOrder) -> bool { a <= b }
 
 test "ordering_override_beats_default" {
     assert.is_true(ord_odd_gt(OddOrder { n: 1 }, OddOrder { n: 1 }))
-    // The un-overridden `le` still follows the default (`lt || eq`).
+    // The un-overridden `le` still follows the default (`cmp != Greater`).
     assert.is_true(ord_odd_le(OddOrder { n: 1 }, OddOrder { n: 1 }))
 }
 
@@ -624,28 +686,70 @@ function ord_rank_generic_lt(a: Ranked, b: Ranked) -> bool { ord_lt(a, b) }
 // Named for the generic (interface) route rather than a driver: unlike the
 // arithmetic block above, ordering reaches no baml.ops driver function.
 test "generic_ordering_matches_opcodes" {
-    assert.is_true(baml.deep_equals(ord_int_lt(1, 2), 1 < 2))
-    assert.is_true(baml.deep_equals(ord_int_lt(2, 1), 2 < 1))
-    assert.is_true(baml.deep_equals(ord_int_le(1, 1), 1 <= 1))
-    assert.is_true(baml.deep_equals(ord_int_gt(2, 1), 2 > 1))
-    assert.is_true(baml.deep_equals(ord_int_ge(1, 2), 1 >= 2))
-    assert.is_true(baml.deep_equals(ord_float_lt(1.5, 2.5), 1.5 < 2.5))
-    assert.is_true(baml.deep_equals(ord_string_lt("a", "b"), "a" < "b"))
-    assert.is_true(baml.deep_equals(ord_bigint_lt(1n, 2n), 1n < 2n))
-    // NaN is unordered in every direction on both paths.
+    assert.equal(ord_int_lt(1, 2), 1 < 2)
+    assert.equal(ord_int_lt(2, 1), 2 < 1)
+    assert.equal(ord_int_le(1, 1), 1 <= 1)
+    assert.equal(ord_int_gt(2, 1), 2 > 1)
+    assert.equal(ord_int_ge(1, 2), 1 >= 2)
+    assert.equal(ord_float_lt(1.5, 2.5), 1.5 < 2.5)
+    assert.equal(ord_string_lt("a", "b"), "a" < "b")
+    assert.equal(ord_bigint_lt(1n, 2n), 1n < 2n)
+    // NaN sorts above every number, identically on both paths.
     assert.is_true(!ord_float_lt(float.nan(), 1.0))
-    assert.is_true(!ord_float_ge(float.nan(), 1.0))
+    assert.is_true(ord_float_ge(float.nan(), 1.0))
     assert.is_true(!(float.nan() < 1.0))
-    assert.is_true(!(float.nan() >= 1.0))
+    assert.is_true(float.nan() >= 1.0)
     // The generic path reaches a user class too.
     assert.is_true(ord_rank_generic_lt(Ranked { rank: 1 }, Ranked { rank: 2 }))
 }
 
+// ─── Compare's derived min / max / clamp ─────────────────────────────────────
+// These are interface defaults over `cmp`, so they exist for any implementor
+// and are reached through a `T extends Compare` bound. `clamp` is the
+// `min`/`max` chain rather than a three-way match, which is what makes it agree
+// with `int.clamp` / `float.clamp` when a caller passes `min > max`.
+
+function ord_min<T extends baml.ops.Compare>(a: T, b: T) -> T { a.min(b) }
+function ord_max<T extends baml.ops.Compare>(a: T, b: T) -> T { a.max(b) }
+function ord_clamp<T extends baml.ops.Compare>(v: T, lo: T, hi: T) -> T { v.clamp(lo, hi) }
+
+function ord_int_min(a: int, b: int) -> int { ord_min(a, b) }
+function ord_int_max(a: int, b: int) -> int { ord_max(a, b) }
+function ord_int_clamp(v: int, lo: int, hi: int) -> int { ord_clamp(v, lo, hi) }
+function ord_rank_min(a: Ranked, b: Ranked) -> Ranked { ord_min(a, b) }
+function ord_rank_clamp(v: Ranked, lo: Ranked, hi: Ranked) -> Ranked { ord_clamp(v, lo, hi) }
+
+test "generic_min_max_clamp_match_the_primitive_methods" {
+    assert.equal(ord_int_min(1, 2), 1)
+    assert.equal(ord_int_min(2, 1), 1)
+    assert.equal(ord_int_max(1, 2), 2)
+    assert.equal(ord_int_max(2, 1), 2)
+    assert.equal(ord_int_clamp(5, 0, 10), (5).clamp(0, 10))
+    assert.equal(ord_int_clamp(-3, 0, 10), (-3).clamp(0, 10))
+    assert.equal(ord_int_clamp(15, 0, 10), (15).clamp(0, 10))
+    // Degenerate `lo > hi`: the lower clamp runs last, so both give `lo`.
+    assert.equal(ord_int_clamp(15, 10, 0), (15).clamp(10, 0))
+    assert.equal(ord_int_clamp(15, 10, 0), 10)
+}
+
+test "generic_min_clamp_reach_a_user_class" {
+    assert.equal(ord_rank_min(Ranked { rank: 1 }, Ranked { rank: 2 }).rank, 1)
+    assert.equal(ord_rank_min(Ranked { rank: 2 }, Ranked { rank: 1 }).rank, 1)
+    assert.equal(
+        ord_rank_clamp(Ranked { rank: 15 }, Ranked { rank: 0 }, Ranked { rank: 10 }).rank,
+        10,
+    )
+    assert.equal(
+        ord_rank_clamp(Ranked { rank: 5 }, Ranked { rank: 0 }, Ranked { rank: 10 }).rank,
+        5,
+    )
+}
+
 // ─── Ordering: panics propagate and unwind, like the arithmetic drivers ───────
 // The virtual call carries the enclosing catch's unwind edge. `Compare` methods
-// are `throws never`, so the only thing that can escape a user `lt` is a panic —
+// are `throws never`, so the only thing that can escape a user `cmp` is a panic —
 // which must still reach an enclosing catch arm, including through an inherited
-// default that nests another dispatch (`le` = `lt || eq`).
+// default that nests another dispatch (`le` = `cmp != Greater`).
 
 class Boom {
     n int
@@ -653,7 +757,9 @@ class Boom {
         function eq(self, other: Self) -> bool throws never { self.n == other.n }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { (1 / self.n) < other.n }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            (1 / self.n).cmp(other.n)
+        }
     }
 }
 
@@ -729,8 +835,8 @@ function ord_in_short_circuit() -> bool {
 }
 
 test "ordering_in_condition_position" {
-    assert.is_true(baml.deep_equals(ord_as_if_cond(), 10))
-    assert.is_true(baml.deep_equals(ord_as_while_cond(), 1))
+    assert.equal(ord_as_if_cond(), 10)
+    assert.equal(ord_as_while_cond(), 1)
     assert.is_true(ord_in_short_circuit())
 }
 
@@ -747,7 +853,9 @@ class Tier {
         function eq(self, other: Self) -> bool throws never { self.level == other.level }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.level < other.level }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.level.cmp(other.level)
+        }
     }
     implements Ordered {}
 }
@@ -758,7 +866,9 @@ class Wrapped<T> {
         function eq(self, other: Self) -> bool throws never { self.weight == other.weight }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.weight < other.weight }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.weight.cmp(other.weight)
+        }
     }
 }
 

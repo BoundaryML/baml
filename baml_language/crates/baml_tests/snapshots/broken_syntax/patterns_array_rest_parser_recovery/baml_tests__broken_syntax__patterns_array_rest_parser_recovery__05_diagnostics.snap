@@ -11,22 +11,6 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                    ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
    ╰────
 
-  [type] E0003
-
-  × unresolved name: `b`
-   ╭─[patterns_array_rest_parser_recovery.baml:8:44]
- 8 │         [..let a, ..let b] => a.length() + b.length(),
-   ·                                            ─
-   ╰────
-
-  [type] E0063
-
-  × unreachable arm
-   ╭─[patterns_array_rest_parser_recovery.baml:9:14]
- 9 │         _ => 0
-   ·              ─
-   ╰────
-
   [parse] E0010
 
   × unexpected token
@@ -53,14 +37,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                 ─
     ╰────
 
-  [type] E0003
-
-  × unresolved name: `r`
-    ╭─[patterns_array_rest_parser_recovery.baml:16:23]
- 16 │         [...let r] => r.length(),
-    ·                       ─
-    ╰────
-
   [parse] E0010
 
   × unexpected token
@@ -68,23 +44,6 @@ source: crates/baml_tests/src/generated_tests.rs
  24 │         [..let] => 1,
     ·               ┬
     ·               ╰── expected `identifier after 'let'`, found `']'`
-    ╰────
-
-  [type] E0063
-
-  × unreachable arm
-    ╭─[patterns_array_rest_parser_recovery.baml:25:14]
- 25 │         _ => 0
-    ·              ─
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[patterns_array_rest_parser_recovery.baml:32:9]
- 32 │         [.. : int[]] => 1,
-    ·         ──────┬─────
-    ·               ╰── expected `int[]`, found `never[][]`
     ╰────
 
   [parse] E0010
@@ -105,24 +64,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                ╰── expected `',' or ']' after array pattern element`, found `identifier`
     ╰────
 
-  [type] E0001
-
-  × mismatched types
-    ╭─[patterns_array_rest_parser_recovery.baml:32:18]
- 32 │         [.. : int[]] => 1,
-    ·                  ─┬
-    ·                   ╰── expected `int`, found `never[]`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[patterns_array_rest_parser_recovery.baml:40:9]
- 40 │         [.._ : int[]] => 1,
-    ·         ──────┬──────
-    ·               ╰── expected `int[]`, found `int[][]`
-    ╰────
-
   [parse] E0010
 
   × unexpected token
@@ -130,23 +71,6 @@ source: crates/baml_tests/src/generated_tests.rs
  40 │         [.._ : int[]] => 1,
     ·              ┬
     ·              ╰── expected `',' or ']' after array pattern element`, found `':'`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[patterns_array_rest_parser_recovery.baml:40:16]
- 40 │         [.._ : int[]] => 1,
-    ·                ──┬──
-    ·                  ╰── expected `int`, found `int[]`
-    ╰────
-
-  [type] E0001
-
-  × rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`
-    ╭─[patterns_array_rest_parser_recovery.baml:48:12]
- 48 │         [..[.., ..]] => 1,
-    ·            ────────
     ╰────
 
   [parse] E0010

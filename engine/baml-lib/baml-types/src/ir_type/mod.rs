@@ -780,12 +780,8 @@ impl<T> TypeGeneric<T> {
                 TypeGeneric::Union(inner, _) => match inner.view() {
                     UnionTypeViewGeneric::Null => {}
                     UnionTypeViewGeneric::Optional(field_type) => queue.push(field_type),
-                    UnionTypeViewGeneric::OneOf(field_types) => {
-                        queue.extend(field_types.into_iter())
-                    }
-                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                        queue.extend(field_types.into_iter())
-                    }
+                    UnionTypeViewGeneric::OneOf(field_types) => queue.extend(field_types),
+                    UnionTypeViewGeneric::OneOfOptional(field_types) => queue.extend(field_types),
                 },
                 TypeGeneric::Tuple(inner, _) => {
                     queue.extend(inner.iter());

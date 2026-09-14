@@ -29,6 +29,21 @@ pub(crate) fn rust_field_ident(name: &str) -> Ident {
     Ident::new(&encoded, Span::call_site())
 }
 
+/// Map a BAML class name to the Rust type identifier that represents it.
+///
+/// The stdlib marks internal items with a leading `_` (there is no `private`
+/// yet), but in Rust a leading underscore means "intentionally unused" and
+/// trips `non_camel_case_types` on a type name. The marker is a BAML-side
+/// visibility convention with no Rust meaning, so it is stripped: BAML
+/// `_ParseCache` generates Rust `ParseCache`.
+///
+/// Stripping is injective within a namespace as long as no namespace declares
+/// both `Foo` and `_Foo`; if one ever does, the two collapse to the same ident
+/// and the generated code fails to compile rather than silently aliasing.
+pub(crate) fn rust_class_type_ident(class: &str) -> Ident {
+    Ident::new(class.trim_start_matches('_'), Span::call_site())
+}
+
 /// Internal local used while converting a generated field back to a VM value.
 /// Always encode these bindings: they are implementation details, so readability
 /// is less important than avoiding another identifier-concatenation edge case.

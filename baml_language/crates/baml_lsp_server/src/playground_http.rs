@@ -25,7 +25,7 @@ pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     run_store: Arc<InMemoryRunStore>,
     next_fetch_id: AtomicU64,
-    /// Maps response body pointer → (host_call_id, fetch_id) for response body tracking.
+    /// Maps response body pointer → (`host_call_id`, `fetch_id`) for response body tracking.
     response_to_fetch: Mutex<HashMap<usize, (CallId, u64)>>,
 }
 
@@ -46,7 +46,7 @@ impl PlaygroundHttpState {
 pub struct PlaygroundHttp(pub Arc<PlaygroundHttpState>);
 
 fn response_body_key(resp: &owned::http::Response) -> usize {
-    Arc::as_ptr(&resp._body) as *const () as usize
+    Arc::as_ptr(&resp._body).cast::<()>() as usize
 }
 
 fn extract_headers_as_hashmap(
@@ -80,7 +80,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             response,
@@ -113,7 +113,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
                     });
                     Ok(text)
                 }),
-                other => other,
+                other @ SysOpOutput::Ready(_) => other,
             },
             None => native_result,
         }
@@ -131,7 +131,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             response,
@@ -164,7 +164,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
                     });
                     Ok(bytes)
                 }),
-                other => other,
+                other @ SysOpOutput::Ready(_) => other,
             },
             None => native_result,
         }
@@ -267,6 +267,7 @@ impl io::IoClassHttpServer for PlaygroundHttp {
         _call_id: CallId,
         _server: owned::http::Server,
         _handler: sys_types::Handle,
+        _websocket: sys_types::Handle,
         _tls_config: Option<owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -291,7 +292,7 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
         ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
         <sys_native::NativeSysOps as io::IoClassHttpSseStream>::next(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             sse_stream,
@@ -307,7 +308,7 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
         ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         <sys_native::NativeSysOps as io::IoClassHttpSseStream>::close(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             sse_stream,
@@ -350,7 +351,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         });
 
         let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::_send(
-            &sys_native::NativeSysOps,
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             request,
@@ -361,7 +362,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         match native_result {
             SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 let result = fut.await;
-                let elapsed = start.elapsed().as_millis() as u64;
+                let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
                         state
@@ -420,7 +421,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                 result
             }),
             SysOpOutput::Ready(result) => {
-                let elapsed = start.elapsed().as_millis() as u64;
+                let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
                         state
@@ -498,19 +499,23 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         self._send(heap, call_id, req, timeout_nanos, ctx)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         // Delegate to native implementation — playground doesn't need SSE logging yet.
-        <sys_native::NativeSysOps as io::IoNamespaceHttp>::fetch_sse(
-            &sys_native::NativeSysOps,
+        <sys_native::NativeSysOps as io::IoNamespaceHttp>::_fetch_sse(
+            &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             request,
+            timeout_nanos,
+            first_event_timeout_nanos,
             ctx,
         )
     }

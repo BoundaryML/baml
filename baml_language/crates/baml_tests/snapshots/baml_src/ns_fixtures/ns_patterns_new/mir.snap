@@ -1,0 +1,72 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.patterns_new.or_with_repeated_typed_binding(v: int | string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int | string // v // param
+    let _2: int | string
+    let _3: int // x
+    let _4: int | string
+    let _5: int // x
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _5 = copy _4;
+        _0 = copy _5;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _3 = copy _2;
+        _0 = copy _3;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int | string | bool // v // param
+    let _2: int | string | bool
+    let _3: int // n
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = copy _2;
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

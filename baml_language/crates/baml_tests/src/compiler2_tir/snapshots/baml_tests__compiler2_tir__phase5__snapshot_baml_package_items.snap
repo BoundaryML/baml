@@ -3,32 +3,26 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
-  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
-  class Bool { methods: [] }
-  type Comparable
+  class Bigint { methods: [abs, isqrt, pow, ilog, to_int, parse, random, _random_byte_count, _random_in_range] }
+  class Bool { methods: [random] }
   type Concrete
-  class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
+  class Float { methods: [is_nan, is_infinite, is_finite, abs, signum, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, exp, ln, log2, log10, cbrt, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf, max_finite, min_finite, epsilon] }
   type FloatStats
   type FromJson
-  class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value] }
+  class Int { methods: [abs, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, _random_in_range, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
   class Null { methods: [] }
   type Sortable
-  class String { methods: [from, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, substring, replace, index_of, char_at, code_point_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
+  class String { methods: [from, length, char_count, is_empty, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
   type Summable
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_string] }
-  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
+  class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
-  function _compare_shim<T>
-  function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
-  function _mean_float
   function _median_float
   function _rust_sort<A>
   function _sum_float
@@ -36,24 +30,32 @@ namespace baml:
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
-  function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
-  function deep_equals<T>
+namespace baml.crypto:
+  type Aead
+  class Aes128GcmSiv { methods: [new] }
+  class Aes256GcmSiv { methods: [new] }
+  class ChaCha20Poly1305 { methods: [new] }
+  class DecryptionFailure { methods: [] }
+  type GenerateKey
+  type Hasher
+  class Sha256 { methods: [new] }
+  class XChaCha20Poly1305 { methods: [new] }
 namespace baml.csv:
-  class CsvError { methods: [] }
-  enum CsvErrorKind
-  class CsvHeaders { methods: [] }
-  class CsvNeedData { methods: [] }
-  class CsvPosition { methods: [] }
-  class CsvReader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk, iter, next] }
-  class CsvRecord { methods: [get, get_at, fields, length, position, decode, to_map] }
-  class CsvRows<T> { methods: [iter, next] }
-  class CsvSkip { methods: [] }
-  type CsvValue
-  class CsvWriter { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
+  class Error { methods: [] }
+  enum ErrorKind
+  class Position { methods: [] }
+  class Reader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk] }
   class ReaderOptions { methods: [] }
+  class Record { methods: [get, get_at, fields, length, position, decode, to_map] }
+  class Rows<T> { methods: [] }
+  type Value
+  class Writer { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
   class WriterOptions { methods: [] }
+  class _Headers { methods: [] }
+  class _NeedData { methods: [] }
+  class _Skip { methods: [] }
   function _buffer
   function _cell_by_index<T>
   function _cell_by_name<T>
@@ -83,33 +85,34 @@ namespace baml.csv:
   function write<T>
   function writer
 namespace baml.env:
+  class Ref { methods: [get, get_or_panic, or] }
   function get
   function get_or_panic
   function get_or_panic_lenient
+  function ref
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
-  class DevOther { methods: [] }
-  class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
+  class Context { methods: [root_cause, _to_string_impl] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
   class Io { methods: [] }
   class LlmClient { methods: [] }
-  class NotImplemented { methods: [] }
   class ParseError { methods: [] }
   class RenderPrompt { methods: [] }
   class StackFrame { methods: [] }
-  class StackTrace { methods: [_to_string_impl, to_string] }
+  class StackTrace { methods: [_to_string_impl] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
-  class UnknownError { methods: [] }
+  class UnknownError { methods: [from, with_message, _preserve_context] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
-  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class File { methods: [text, bytes, close, seek_from, write] }
   class MkdirOptions { methods: [] }
+  function chmod
   function exists
   function mkdir
   function open
@@ -119,23 +122,28 @@ namespace baml.fs:
   function remove_dir
   function remove_dir_all
   function size
+  function symlink
   function write
   function write_bytes
 namespace baml.future:
   class AllFailed<E> { methods: [] }
+  class Failure<E> { methods: [] }
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state] }
-  enum FutureState
+  class Panicked { methods: [] }
+  enum State
+  class Success<T> { methods: [] }
   function __await_any<T, E>
   function all<T, E>
-  function all_complete<T, E>
+  function all_settled<T, E>
   function any<T, Err>
   function race<T, E>
+  function with_timeout<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches] }
   class ScanOptions { methods: [] }
   function new
 namespace baml.host:
-  class HostValue { methods: [] }
+  class Value { methods: [] }
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [] }
@@ -143,43 +151,52 @@ namespace baml.http:
   class Server { methods: [bind, serve, _serve] }
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
+  type WsAccept
   function _fetch
+  function _fetch_sse
   function _send
   function _timeout_nanos
   function fetch
   function fetch_sse
+  function reject_websocket
   function send
 namespace baml.id:
   function current
   function new
   function set
 namespace baml.io:
+  type Read
+  type Write
   function eprint
   function eprintln
   function input
   function print
   function println
 namespace baml.iter:
-  class ArrayIterator<T> { methods: [new, iter, next] }
-  class Chain<T, E, E2> { methods: [iter, next] }
+  class ArrayIterator<T> { methods: [new] }
+  class Chain<T, E, E2> { methods: [] }
   class Done { methods: [] }
-  class Filter<T, E, E2> { methods: [iter, next] }
-  class FilterMap<T, R, E, E2> { methods: [iter, next] }
-  class FlatMap<T, R, E, E2, E3> { methods: [iter, next] }
-  class Flatten<I, R, E, E3> { methods: [iter, next] }
+  class Filter<T, E, E2> { methods: [] }
+  class FilterMap<T, R, E, E2> { methods: [] }
+  class FlatMap<T, R, E, E2, E3> { methods: [] }
+  class Flatten<I, R, E, E3> { methods: [] }
   type Iterable
   type Iterator
-  class Map<T, R, E, E2> { methods: [iter, next] }
-  class Peekable<T, E> { methods: [peek, iter, next] }
-  class Range { methods: [new, iter, next] }
-  class Repeat<T> { methods: [new, iter, next] }
-  class StepBy<T, E> { methods: [iter, next] }
+  class Map<T, R, E, E2> { methods: [] }
+  class Peekable<T, E> { methods: [peek] }
+  class Range { methods: [new] }
+  class Repeat<T> { methods: [new] }
+  class Skip<T, E> { methods: [] }
+  class SkipWhile<T, E, E2> { methods: [] }
+  class StepBy<T, E> { methods: [] }
+  class Take<T, E> { methods: [] }
+  class TakeWhile<T, E, E2> { methods: [] }
   function flatten<R, E, E3, I>
 namespace baml.json:
-  class JsonDecodeError { methods: [] }
-  class JsonParseError { methods: [] }
-  class JsonPathError { methods: [] }
-  class JsonSerializationError { methods: [] }
+  class DecodeError { methods: [] }
+  class ParseError { methods: [] }
+  class PathError { methods: [] }
+  class SerializationError { methods: [] }
   type json
   function _path_field
   function _path_index
@@ -191,55 +208,13 @@ namespace baml.json:
   function parse
   function path<T>
   function path_or<T>
+  function schema
   function serialize<T>
   function stringify
   function stringify_pretty
   function to<T>
-  function to_json<T>
-  function to_string<T>
-namespace baml.llm:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
-  enum ClientType
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class ExecutionContext { methods: [] }
-  class GoogleAiOptions { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OrchestrationStep { methods: [] }
-  class OutputFormat { methods: [] }
-  class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
-  class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [text, messages, to_string] }
-  class PromptMessage { methods: [] }
-  class RetryPolicy { methods: [initial_delay_or_default, multiplier_or_default, max_delay_or_default] }
-  class Role { methods: [] }
-  class Stream<TStream, TFinal> { methods: [next, final] }
-  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
-  class StreamCache<TStream, TFinal> { methods: [new] }
-  class VertexAiOptions { methods: [] }
-  function __new_stream_cache<TStream, TFinal>
-  function __sap_parse_final<TStream, TFinal>
-  function __sap_parse_partial<TStream, TFinal>
-  function assemble_prompt_ast
-  function build_output_format
-  function build_prompt_context
-  function build_request
-  function build_request_stream
-  function call_llm_function<T>
-  function from_shorthand
-  function get_jinja_template
-  function get_return_type
-  function make_role
-  function parse<TStream, TFinal>
-  function prompt
-  function prompt_template_for
-  function render_output_format
-  function render_prompt
-  function stream_llm_function<TStream, TFinal>
+  function to_json
+  function to_string
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -248,17 +223,23 @@ namespace baml.media:
 namespace baml.net:
   class Datagram { methods: [] }
   class TcpListener { methods: [bind, accept, close] }
-  class TcpStream { methods: [connect, _connect, read, _read, write, _write, close] }
+  class TcpStream { methods: [connect, _connect, close] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
-  function _timeout_nanos
 namespace baml.ops:
   type Add
+  type BitAnd
+  type BitOr
+  type BitXor
   type Compare
   type Divide
   type Equals
+  type Index
   type Multiply
   type Negate
+  enum Ordering
   type Remainder
+  type ShiftLeft
+  type ShiftRight
   type Subtract
   function __union_add
   function __union_div
@@ -286,61 +267,69 @@ namespace baml.panics:
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
 namespace baml.random:
-  class ChaCha20 { methods: [new, _new, random, random_int] }
+  class ChaCha20 { methods: [new, _new] }
   type Rng
-  class SystemRandom { methods: [get, random, random_int] }
-  class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+  class SystemRandom { methods: [get] }
+  class Xoshiro256PlusPlus { methods: [new, _new] }
 namespace baml.sap:
+  class _NoYield { methods: [] }
+  class _ParseCache<TStream, TFinal> { methods: [_parse_final, _parse_partial] }
+  function _new_parse_cache<TStream, TFinal>
   function parse<T>
   function parse_type
-namespace baml.schema:
-  function json_schema
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
-  class SpawnParams<T, E> { methods: [] }
+  class Params<T, E> { methods: [] }
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
-namespace baml.stream:
-  class StreamFinished { methods: [] }
-  class StreamNoYield { methods: [] }
 namespace baml.sys:
+  class Process { methods: [wait, kill, close] }
+  class ProcessExit { methods: [ok] }
   class ProcessOptions { methods: [] }
+  class ReadPipe { methods: [close, lines] }
+  class ReadPipeLines { methods: [] }
   class ShellOutput { methods: [ok] }
+  enum StderrMode
+  class WritePipe { methods: [close] }
+  function _strip_carriage_return
   function argv
   function collect_garbage
   function exec
   function exit
-  function now_ms
   function panic
+  function pid
   function shell
   function sleep
+  function start_process
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
   type Disambiguation
   class Duration { methods: [abs, from_nanoseconds, from_microseconds, from_milliseconds, from_seconds, from_minutes, from_hours, to_nanoseconds, to_microseconds, to_milliseconds, to_seconds, to_minutes, to_hours] }
-  class Instant { methods: [now, elapsed, parse, _to_string_impl, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch, to_string, from_json, to_json] }
-  class PlainDate { methods: [from_components, parse, _to_string_impl, to_plain_datetime, _to_plain_datetime, year, month, day, to_string, from_json, to_json] }
-  class PlainDateTime { methods: [from_components, _from_components, parse, _to_string_impl, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json] }
-  class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond, to_string, from_json, to_json] }
+  class Instant { methods: [now, elapsed, parse, _to_string_impl, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch] }
+  class PlainDate { methods: [from_components, parse, _to_string_impl, to_plain_datetime, _to_plain_datetime, year, month, day] }
+  class PlainDateTime { methods: [from_components, _from_components, parse, _to_string_impl, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond] }
+  class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond] }
   class TimeZoneOffset { methods: [utc, new, from_timezone, local, from_duration, to_duration, hours, minutes] }
   class UnknownTimezoneError { methods: [] }
-  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json] }
+  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond] }
   function _format_zoned
   function _tz_offset_at
   function _tz_to_instant
+  function _wrap_into_day
   function system_timezone
 namespace baml.toml:
   type Item
-  class Table { methods: [parse, to_json, from_json] }
-  class TomlParseError { methods: [] }
+  class ParseError { methods: [] }
+  class Table { methods: [parse] }
   function item_from_json
   function item_to_json
   function table_from_json
 namespace baml.ws:
-  class WsStream { methods: [send, next, close] }
+  class CloseEvent { methods: [] }
+  class WebSocket { methods: [send, next, close] }
   function _connect
   function connect
 namespace baml.yaml:
-  class YamlParseError { methods: [] }
+  class ParseError { methods: [] }
   function deserialize<T>
   function parse

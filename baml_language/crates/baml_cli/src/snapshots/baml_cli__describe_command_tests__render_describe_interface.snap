@@ -5,9 +5,11 @@ expression: output
 interface Named  interfaces.baml:2-5
 
 interface Named {
-    name: string
-    function label(self) -> string
+    name: string,
+    function label(self) -> string throws _
 }
 
-references (1):
-  interfaces.baml:9  implements Named {
+implementations (1):
+  implement Named for Person  interfaces.baml:9
+
+references (0):

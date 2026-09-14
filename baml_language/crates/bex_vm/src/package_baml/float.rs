@@ -1,5 +1,5 @@
 use super::{BamlClassFloat, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
+use crate::errors::{VmBamlError, VmRustFnError};
 
 // BAML int is i63 (the runtime reserves one bit for the tagged-pointer
 // Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
@@ -41,26 +41,25 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // Note: `is_finite` is implemented directly in `float.baml`.
 
-    // ── Comparisons / clamping ────────────────────────────────────────────────
+    // ── Magnitude ─────────────────────────────────────────────────────────────
 
     fn abs(float: f64) -> f64 {
         float.abs()
     }
 
-    fn min(float: f64, other: f64) -> f64 {
-        // `f64::min` returns the non-NaN operand if exactly one is NaN
-        // (NaN-suppressing). See doc on the .baml side.
-        float.min(other)
-    }
+    // No `min` / `max` / `clamp` here: `float` gets them from
+    // `baml.ops.Compare`, whose defaults are driven by the total float order
+    // (`bex_vm_types::float_order`). See the note in `float.baml`.
 
-    fn max(float: f64, other: f64) -> f64 {
-        float.max(other)
-    }
-
-    fn clamp(float: f64, min: f64, max: f64) -> f64 {
-        // Two-step (cap then floor) to avoid `f64::clamp`'s `min <= max`
-        // requirement. NaN propagates through `f64::min`/`max`.
-        float.min(max).max(min)
+    fn signum(float: f64) -> f64 {
+        // Native because BAML cannot observe the sign of a zero: the total
+        // order treats `-0.0` and `0.0` as one value (`==` says equal, and
+        // `-0.0 < 0.0` is false), and `1.0 / 0.0` throws rather than yielding
+        // a signed infinity. `f64::signum` already gives ±1.0 for ±0.0; only
+        // the NaN case is overridden, to +1.0, so signum is total and never
+        // returns NaN — matching the order, which ranks NaN above every
+        // number.
+        if float.is_nan() { 1.0 } else { float.signum() }
     }
 
     // ── Rounding (returns float) ──────────────────────────────────────────────
@@ -115,6 +114,24 @@ impl BamlClassFloat for PackageBamlImpl {
 
     fn log(float: f64, base: f64) -> f64 {
         float.log(base)
+    }
+
+    // Note: `exp`, `ln` and `log2` are implemented directly in `float.baml`.
+    // `log10` is native because the `.baml`-level `self.log(10.0)` is a ratio
+    // of logarithms and loses the last bits at clean inputs (`1000.0` gives
+    // `2.9999999999999996`). Rust bounds the precision of neither, so this
+    // buys a measured improvement on the cases tested, not a guarantee.
+
+    fn log10(float: f64) -> f64 {
+        float.log10()
+    }
+
+    fn cbrt(float: f64) -> f64 {
+        // Native because `pow(1.0 / 3.0)` is NaN for every negative base (a
+        // non-integer exponent) and misses perfect cubes (`1000.0` ->
+        // `9.999999999999998`). The NaN half is definitional; the accuracy
+        // half is measured.
+        float.cbrt()
     }
 
     fn hypot(float: f64, other: f64) -> f64 {
@@ -190,19 +207,14 @@ impl BamlClassFloat for PackageBamlImpl {
         })
     }
 
-    #[allow(clippy::cast_precision_loss)]
-    fn random() -> Result<f64, VmRustFnError> {
-        // Uniform draw on [0, 1) using 53 mantissa bits. Standard construction:
-        // take a u64, drop the top 11 bits, multiply by 2^-53.
-        let mut buf = [0u8; 8];
-        getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
-            resource: "entropy".to_string(),
-            message: format!("getrandom failed in float.random: {e}"),
-        })?;
-        let bits = u64::from_le_bytes(buf) >> 11; // 53-bit value, ≤ 2^53 - 1
-        // 2^-53 = 1.0 / (1u64 << 53). The cast `bits as f64` is lossless
-        // because bits ≤ 2^53 - 1 fits in f64's 53-bit mantissa.
-        Ok(bits as f64 * (1.0 / (1u64 << 53) as f64))
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "bits <= 2^53 - 1 fits f64's mantissa exactly"
+    )]
+    fn _unit_from_draw(draw: i64) -> f64 {
+        // Bit 63 only repeats the i63 sign bit, so use bits 10..=62.
+        let bits = (draw.cast_unsigned() >> 10) & ((1u64 << 53) - 1); // <= 2^53 - 1
+        bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────
@@ -226,5 +238,17 @@ impl BamlClassFloat for PackageBamlImpl {
 
     fn inf() -> f64 {
         f64::INFINITY
+    }
+
+    fn max_finite() -> f64 {
+        f64::MAX
+    }
+
+    fn min_finite() -> f64 {
+        f64::MIN
+    }
+
+    fn epsilon() -> f64 {
+        f64::EPSILON
     }
 }

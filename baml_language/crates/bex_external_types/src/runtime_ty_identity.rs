@@ -1,4 +1,4 @@
-use baml_type::RuntimeTy;
+use baml_type::{Name, RuntimeTy};
 
 /// Exact semantic identity for runtime types, ignoring source-only attributes
 /// and union member ordering.
@@ -12,7 +12,7 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
         | (T::Bool { .. }, T::Bool { .. })
         | (T::Null { .. }, T::Null { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
-        (T::BuiltinUnknown { .. }, T::BuiltinUnknown { .. })
+        (T::Unknown { .. }, T::Unknown { .. })
         | (T::RustType { .. }, T::RustType { .. })
         | (T::Type { .. }, T::Type { .. })
         | (T::Resource { .. }, T::Resource { .. })
@@ -39,6 +39,14 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
         }
         (T::Class(left_name, left_args, _), T::Class(right_name, right_args, _)) => {
             left_name == right_name && structurally_equal_slices(left_args, right_args)
+        }
+        (
+            T::Interface(left_name, left_args, left_bindings, _),
+            T::Interface(right_name, right_args, right_bindings, _),
+        ) => {
+            left_name == right_name
+                && structurally_equal_slices(left_args, right_args)
+                && structurally_equal_named_types(left_bindings, right_bindings)
         }
         (T::Enum(left, _), T::Enum(right, _)) => left == right,
         (
@@ -99,6 +107,29 @@ fn structurally_equal_unordered_slices(left: &[RuntimeTy], right: &[RuntimeTy]) 
     })
 }
 
+fn structurally_equal_named_types(left: &[(Name, RuntimeTy)], right: &[(Name, RuntimeTy)]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+
+    let mut matched_right = vec![false; right.len()];
+    left.iter().all(|(left_name, left_ty)| {
+        let Some(index) = right
+            .iter()
+            .enumerate()
+            .position(|(index, (right_name, right_ty))| {
+                !matched_right[index]
+                    && left_name == right_name
+                    && runtime_ty_structurally_equal(left_ty, right_ty)
+            })
+        else {
+            return false;
+        };
+        matched_right[index] = true;
+        true
+    })
+}
+
 /// Compare a selected union arm while tolerating the legacy root-level
 /// representation where a non-null arm may be wrapped in `T | null`.
 pub fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
@@ -128,7 +159,7 @@ mod tests {
     use super::runtime_ty_structurally_equal;
 
     fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(members, TyAttr::default())
+        RuntimeTy::Union(members.into(), TyAttr::default())
     }
 
     #[test]

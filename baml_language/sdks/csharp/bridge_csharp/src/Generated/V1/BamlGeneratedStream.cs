@@ -144,24 +144,21 @@ public static partial class BamlGeneratedContract
 internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
     : IBamlStreamDriver<TPartial, TFinal>
 {
-    private const string NextIdentity = "baml.llm.Stream.next";
-    private const string FinalIdentity = "baml.llm.Stream.final";
-
     private readonly Lazy<BamlGeneratedProgram> deferredProgram;
-    private readonly Func<BamlGeneratedProgram, CancellationToken, Task<BamlSafeHandle>> start;
+    private readonly Func<BamlGeneratedProgram, CancellationToken, Task<BamlStreamNativeHandle>> start;
     private readonly TypeDeclaration<TPartial> partialType;
     private readonly TypeDeclaration<TFinal> finalType;
     private readonly string partialOptionName;
     private readonly string streamFunctionIdentity;
     private IDisposable? argumentOwnership;
     private BamlGeneratedProgram? program;
-    private BamlSafeHandle? stream;
+    private BamlStreamNativeHandle? stream;
     private bool started;
     private bool disposed;
 
     internal NativeBamlStreamDriver(
         Lazy<BamlGeneratedProgram> deferredProgram,
-        Func<BamlGeneratedProgram, CancellationToken, Task<BamlSafeHandle>> start,
+        Func<BamlGeneratedProgram, CancellationToken, Task<BamlStreamNativeHandle>> start,
         IDisposable argumentOwnership,
         TypeDeclaration<TPartial> partialType,
         TypeDeclaration<TFinal> finalType,
@@ -209,17 +206,18 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
     public async Task<BamlStreamPull<TPartial>> PullAsync(
         CancellationToken cancellationToken)
     {
-        (BamlGeneratedProgram activeProgram, BamlSafeHandle activeStream) = RequireStarted();
+        (BamlGeneratedProgram activeProgram, BamlStreamNativeHandle activeStream) = RequireStarted();
+        string nextIdentity = $"{activeStream.ClassIdentity}.next";
         Task<byte[]> completion = activeProgram.NativeState.Api.InvokeOwnedFunctionAsync(
-            NextIdentity,
-            callId => PrimitiveProtocol.EncodeStreamHandleArguments(activeStream, callId),
+            nextIdentity,
+            callId => PrimitiveProtocol.EncodeStreamHandleArguments(activeStream.Handle, callId),
             cancellationToken);
         byte[] bytes = await completion.ConfigureAwait(false);
         BamlStreamPull<BamlGeneratedValue> wire = PrimitiveProtocol.DecodeStreamPull(
             bytes,
             partialType.Metadata,
             partialOptionName,
-            NextIdentity,
+            nextIdentity,
             activeProgram.NativeState.Api);
         return wire.HasPartial
             ? BamlStreamPull<TPartial>.FromPartial(
@@ -230,10 +228,11 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
     public async Task<TFinal> GetFinalResponseAsync(
         CancellationToken cancellationToken)
     {
-        (BamlGeneratedProgram activeProgram, BamlSafeHandle activeStream) = RequireStarted();
+        (BamlGeneratedProgram activeProgram, BamlStreamNativeHandle activeStream) = RequireStarted();
+        string finalIdentity = $"{activeStream.ClassIdentity}.final";
         Task<byte[]> completion = activeProgram.NativeState.Api.InvokeOwnedFunctionAsync(
-            FinalIdentity,
-            callId => PrimitiveProtocol.EncodeStreamHandleArguments(activeStream, callId),
+            finalIdentity,
+            callId => PrimitiveProtocol.EncodeStreamHandleArguments(activeStream.Handle, callId),
             cancellationToken);
         byte[] bytes = await completion.ConfigureAwait(false);
         BamlGeneratedValue value = PrimitiveProtocol.DecodeCallResult(
@@ -256,7 +255,7 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
         return ValueTask.CompletedTask;
     }
 
-    private (BamlGeneratedProgram Program, BamlSafeHandle Stream) RequireStarted()
+    private (BamlGeneratedProgram Program, BamlStreamNativeHandle Stream) RequireStarted()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (!started || program is null || stream is null)

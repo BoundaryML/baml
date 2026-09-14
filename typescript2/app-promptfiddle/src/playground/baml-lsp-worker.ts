@@ -38,8 +38,10 @@ onWasmPanic((message) => {
   self.postMessage({ message, type: 'wasmPanic' });
 });
 
+import * as bridgeWasm from '@b/bridge_wasm';
 import initWasm, {
   BamlWasmRuntime,
+  version as bamlVersion,
   getBuildTime,
   type LspNotification,
   type LspRequest,
@@ -49,6 +51,7 @@ import initWasm, {
 } from '@b/bridge_wasm';
 
 import type {
+  WebSocketOutMessage,
   WorkerInitMessage,
   WorkerInMessage,
   WorkerOutMessage,
@@ -59,6 +62,13 @@ import { BamlVfsAdapter } from './baml-vfs-adapter';
 import { BamlVfs } from './vfs';
 
 declare const self: DedicatedWorkerGlobalScope;
+
+type RuntimePlaygroundNotification =
+  | WorkerPlaygroundNotification
+  | Exclude<
+      WebSocketOutMessage,
+      { type: 'hello' | 'playgroundNotification' | 'ready' }
+    >;
 
 // ---------------------------------------------------------------------------
 // State
@@ -214,7 +224,7 @@ async function executeExec(
   // Build the command line: program + args joined. just-bash executes this
   // as a shell script so we must quote args to prevent shell splitting.
   const quotedArgs = (args ?? [])
-    .map((a) => "'" + a.replace(/'/g, "'\\''") + "'")
+    .map((a) => `'${a.replace(/'/g, "'\\''")}'`)
     .join(' ');
   const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
 
@@ -404,7 +414,9 @@ export function mapsToRecordsDeep<T>(input: T): T {
   return input;
 }
 
-function onPlaygroundNotification(notification: PlaygroundNotification): void {
+function onPlaygroundNotification(
+  notification: RuntimePlaygroundNotification,
+): void {
   // Request-response messages get unwrapped to top-level WorkerOutMessage.
   // Only unsolicited push notifications stay wrapped in playgroundNotification.
   switch (notification.type) {
@@ -436,9 +448,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         patch: notification.patch,
         type: 'runPatch',
       } as WorkerOutMessage);
-      break;
-    case 'profileArtifactChunk':
-      postOut(notification as WorkerOutMessage);
       break;
     case 'runSnapshot':
       postOut({
@@ -502,7 +511,7 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
       // while the protocol narrows it to a literal union; the runtime values are always valid.
       postOut({
-        notification: notification as unknown as WorkerPlaygroundNotification,
+        notification: notification as WorkerPlaygroundNotification,
         type: 'playgroundNotification',
       });
   }
@@ -628,7 +637,9 @@ self.onmessage = async (event: MessageEvent) => {
       },
       playground_send_notification: (notification: PlaygroundNotification) => {
         notification = mapsToRecordsDeep(notification);
-        onPlaygroundNotification(notification);
+        onPlaygroundNotification(
+          notification as unknown as RuntimePlaygroundNotification,
+        );
       },
       shell: executeShell,
     } as unknown as Parameters<typeof BamlWasmRuntime.create>[0];
@@ -724,7 +735,12 @@ self.onmessage = async (event: MessageEvent) => {
     connection.listen();
 
     // 7. Notify main thread and push initial state
-    postOut({ type: 'ready' });
+    const commitHash = Reflect.get(bridgeWasm, 'commitHash');
+    postOut({
+      commit: typeof commitHash === 'function' ? commitHash() : undefined,
+      type: 'ready',
+      version: bamlVersion(),
+    });
     postOut({ type: 'buildTime', value: getBuildTime() });
     // notifySourceChanged();
 
@@ -1046,11 +1062,20 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case 'requestControlFlowGraph':
-      runtime?.requestControlFlowGraph(
-        msg.project,
-        msg.functionName,
-        msg.requestId,
-      );
+      if (runtime) {
+        const requestControlFlowGraph =
+          runtime.requestControlFlowGraph as unknown as (
+            project: string,
+            functionName: string,
+            requestId?: number,
+          ) => void;
+        requestControlFlowGraph.call(
+          runtime,
+          msg.project,
+          msg.functionName,
+          msg.requestId,
+        );
+      }
       return;
 
     case 'cursorPosition':
@@ -1063,6 +1088,21 @@ self.onmessage = async (event: MessageEvent) => {
 
     case 'expandTestSet':
       runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
+      return;
+
+    // Telemetry reads `.baml/profiles-v1` on disk, which only the local
+    // toolchain server can reach. The WASM runtime has no such store, so
+    // these say so rather than failing silently or timing out.
+    case 'listExecutions':
+    case 'openExecution':
+    case 'readTelemetryMedia':
+      postOut({
+        code: 'telemetryUnavailable',
+        message:
+          'Telemetry needs the local profile store, which the in-browser runtime does not have.',
+        requestId: msg.requestId,
+        type: 'commandError',
+      });
       return;
 
     case 'dispose':

@@ -65,6 +65,44 @@ pub fn impl_block_data<'db>(db: &'db dyn crate::Db, block: ImplLoc<'db>) -> Impl
     lower(db, block).0
 }
 
+/// The enclosing class of an in-body `implements` block — the class whose
+/// declared fields satisfy the interface's field obligations (E0126 keeps
+/// out-of-body impls field-less) and whose generics form the block's frame.
+/// `None` for out-of-body blocks. Downstream consumers ask this SEMANTIC
+/// question instead of matching the subject: the in-body-vs-free split is
+/// HIR's business.
+pub fn impl_enclosing_class<'db>(
+    db: &'db dyn crate::Db,
+    block: ImplLoc<'db>,
+) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+    match impl_block_data(db, block).subject {
+        ImplSubjectData::InClass { class, .. } => Some(class),
+        ImplSubjectData::Free { .. } => None,
+    }
+}
+
+/// The declared generic parameters scoping an impl block's methods, with the
+/// `TypeRefStore` their bound refs live in: the block's own generics for an
+/// out-of-body impl, the enclosing class's for an in-body one. The
+/// signature-metadata counterpart of `impl_enclosing_class` — downstream
+/// consumers stay subject-blind.
+pub fn impl_declared_generics<'db>(
+    db: &'db dyn crate::Db,
+    block: ImplLoc<'db>,
+) -> (
+    &'db [GenericParamData],
+    &'db baml_compiler2_hir::type_ref::TypeRefStore,
+) {
+    let data = impl_block_data(db, block);
+    match &data.subject {
+        ImplSubjectData::InClass { class, .. } => {
+            let class = super::class_data(db, *class);
+            (&class.generic_params, &class.type_refs)
+        }
+        ImplSubjectData::Free { generics, .. } => (generics, &data.type_refs),
+    }
+}
+
 /// Spans for one `implements` block. Kept separate from [`impl_block_data`] so
 /// that a whitespace-only edit invalidates this but not the semantic data.
 #[salsa::tracked(returns(ref))]

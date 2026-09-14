@@ -96,25 +96,3 @@ pub(crate) mod map {
             .collect()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use bytesize::ByteSize;
-
-    use super::{format, parse};
-
-    #[test]
-    fn uses_bytesize_iec_display() {
-        assert_eq!("518.0 GiB", ByteSize::gib(518).display().iec().to_string());
-        assert_eq!("14.8 MiB", format(15_519_843));
-        assert_eq!("1.0 KiB", format(1_024));
-        assert_eq!("0 B", format(0));
-    }
-
-    #[test]
-    fn parses_bytesize_strings() {
-        assert_eq!(parse("1.5 KiB").unwrap(), 1_536);
-        assert_eq!(parse("2 GiB").unwrap(), 2_147_483_648);
-        assert!(parse("not a size").is_err());
-    }
-}

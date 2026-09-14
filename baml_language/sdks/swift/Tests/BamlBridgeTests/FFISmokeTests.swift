@@ -32,6 +32,55 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
     }
 
+    func testPromptJSONRejectsDuplicateMapKeys() {
+        var value = BamlBridge_Cffi_V1_BamlOutboundValue()
+        value.stringValue = "value"
+        var first = BamlBridge_Cffi_V1_BamlOutboundMapEntry()
+        first.key = "duplicate"
+        first.value = value
+        var second = BamlBridge_Cffi_V1_BamlOutboundMapEntry()
+        second.key = "duplicate"
+        second.value = value
+        var map = BamlBridge_Cffi_V1_BamlValueMap()
+        map.entries = [first, second]
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.mapValue = map
+
+        XCTAssertThrowsError(try BamlPromptJSON._bamlDecode(BamlOutboundValue(raw)))
+    }
+
+    func testStreamHandleRetainsCarriedClassIdentity() throws {
+        var classType = BamlBridge_Cffi_V1_BamlTyClass()
+        classType.name = "ai.stream.Stream"
+        classType.typeArgs = [BamlTypeDescriptor.string.raw, BamlTypeDescriptor.string.raw]
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.classTy = classType
+
+        var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+        handle.key = 101
+        handle.handleType = .adtTaggedHeapHandle
+        handle.ty = ty
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.handleValue = handle
+
+        let stream = try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+        XCTAssertEqual(stream.bamlClassFQN, "ai.stream.Stream")
+        XCTAssertEqual(stream.nextFQN, "ai.stream.Stream.next")
+        XCTAssertEqual(stream.finalFQN, "ai.stream.Stream.final")
+    }
+
+    func testStreamHandleRequiresCarriedClassIdentity() {
+        var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+        handle.key = 102
+        handle.handleType = .adtTaggedHeapHandle
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.handleValue = handle
+
+        XCTAssertThrowsError(
+            try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+        )
+    }
+
     /// A static Swift union knows which empty-list arm was constructed. The
     /// selected child carries that exact list type while the payload stays a
     /// bare list value; no recursive scan of runtime entries is needed.
@@ -94,5 +143,23 @@ final class FFISmokeTests: XCTestCase {
             return XCTFail("selected type should select the compact int[] arm")
         }
         XCTAssertEqual(ints, [])
+    }
+
+    func testTyDefReportsUnsupportedReflection() {
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.tyDefValue = BamlBridge_Cffi_V1_BamlTyDef()
+
+        XCTAssertThrowsError(
+            try Int._bamlDecode(BamlOutboundValue(raw))
+        ) { error in
+            guard case BamlDecodeError.typeMismatch(let expected, let got) = error else {
+                return XCTFail(
+                    "expected BamlDecodeError.typeMismatch, got \(error)"
+                )
+            }
+            XCTAssertEqual(expected, "Int")
+            XCTAssertTrue(got.contains("requires BEP-066 reflection support"))
+            XCTAssertTrue(got.contains("Swift SDK does not provide"))
+        }
     }
 }

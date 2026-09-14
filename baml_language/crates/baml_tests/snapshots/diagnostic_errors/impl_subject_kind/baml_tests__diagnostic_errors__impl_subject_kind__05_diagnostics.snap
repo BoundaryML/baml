@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0138
+
+  × cannot implement an interface for true | false — the target must be a single concrete type
+    ╭─[impl_subject_kind.baml:26:23]
+ 26 │ implement Flagged for true | false {
+    ·                       ────────────
+    ╰────
+
+  [type] E0138
+
+  × cannot implement an interface for int | null — the target must be a single concrete type
+    ╭─[impl_subject_kind.baml:33:23]
+ 33 │ implement Flagged for int? {
+    ·                       ────
+    ╰────

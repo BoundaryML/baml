@@ -1,0 +1,40 @@
+---
+title: Connection Pooling
+subtitle: Reuse HTTP connections across requests
+---
+
+BAML disables HTTP connection pooling by default. This preserves compatibility
+with applications that create a BAML runtime before using Python's `fork()`
+start method.
+
+Enable connection reuse for a leaf client with the `http` option:
+
+```baml
+client<llm> MyClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    http {
+      enable_connection_pooling true
+    }
+  }
+}
+```
+
+Pooling avoids a new TCP and TLS handshake for every request. It is useful for
+asyncio, threaded, and multiprocessing applications that use the `spawn` start
+method.
+
+<Warning>
+Do not enable pooling when child processes inherit an existing BAML runtime or
+client through `fork()`. Create the BAML runtime inside each child process, or
+use the `spawn` start method instead.
+</Warning>
+
+Connection pooling is not available for
+[fallback](/ref/llm-client-strategies/fallback) or
+[round-robin](/ref/llm-client-strategies/round-robin) clients. Set it on
+their leaf clients instead. It is also not available for
+[AWS Bedrock](/ref/llm-client-providers/aws-bedrock) clients, whose HTTP
+transport is managed by the AWS SDK.

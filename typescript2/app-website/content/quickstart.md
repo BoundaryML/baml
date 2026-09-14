@@ -155,7 +155,6 @@ After changing project toolchain versions, run `baml agent install` again if the
 - [Explore the language](https://boundaryml.com/explore.md)
 - [See how `baml describe` works](https://boundaryml.com/explore.md#baml-describe-ast-aware-discovery)
 - [Open the demo repository](https://github.com/boundaryml/baml-demos)
-- [Read the changelog](https://boundaryml.com/changelog.md)
 - [Join the BAML Discord](https://boundaryml.com/discord)
 - [Book a free 45-minute onboarding session](https://boundaryml.com/eap)
 

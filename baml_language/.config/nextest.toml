@@ -19,16 +19,28 @@ rust-sdk-fixture = { max-threads = 2 }
 # forgiving but not immune under CI load. Funnel the whole package through one
 # in-flight gradle at a time (see the package-wide override below).
 java-gradle-serial = { max-threads = 1 }
-# C# fixtures share the bridge project's MSBuild obj directory.
-csharp-sdk-fixture = { max-threads = 1 }
+# C# needs no test group: the fixtures share the bridge project's MSBuild
+# obj directory, but setup.sh/setup.ps1 build all of them in one solution
+# build and the tests execute with `dotnet run --no-build`, so no MSBuild
+# runs at test time. The only test-time builders are the trimmed-publish
+# test (sole writer to the shared obj) and the generics compile-negative
+# matrix (isolated via --artifacts-path).
+typescript-web-workers = { max-threads = 1 }
+
+# These tests use a private four-worker Rayon pool for independent compiler
+# databases. Reserve matching slots instead of treating them as single-core.
+# Keep aligned with FIXTURE_WORKERS in type_spec/fixtures.rs.
+[[profile.default.overrides]]
+filter = 'package(=baml_tests) & test(/^type_spec::fixtures::(conforming_fixtures|bounded_pool_preserves_order_and_results)$/)'
+threads-required = 4
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
 
 [[profile.default.overrides]]
-filter = 'package(=sdk_test_csharp)'
-test-group = 'csharp-sdk-fixture'
+filter = 'package(=sdk_test_typescript_web) & test(/::vitest_workers$/)'
+test-group = 'typescript-web-workers'
 
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
@@ -114,6 +126,29 @@ filter = 'package(=baml_bridge)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_bridge_engine_win'
 
+# `pack_e2e` needs the `baml-pack-host` executable from another Cargo package.
+# Build it once before nextest fans the individual cases out into separate
+# processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
+# test helper validates the prebuilt sibling instead of recursively invoking
+# Cargo once per case. CI prebuilds both binaries in its outer Cargo invocation
+# and sets BAML_PACK_HOST_PREBUILT=1, making setup a no-build pass-through.
+# Plain `cargo test` retains its one-process fallback.
+[scripts.setup.baml_pack_host_unix]
+command = './crates/baml_cli/tests/build-pack-host.sh'
+
+[scripts.setup.baml_pack_host_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(unix)' }
+setup = 'baml_pack_host_unix'
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(windows)' }
+setup = 'baml_pack_host_win'
+
 # java tests need the shared Gradle home staged (and, once the Java
 # bridge lands, the native bridge library built + per-fixture Gradle
 # dependency resolution warmed). fire only when a java sdk-test is
@@ -143,7 +178,7 @@ setup = 'java_gradle_win'
 # out connecting to its forked daemon). A single package-wide override funnels
 # the entire sdk_test_java suite through the one-slot `java-gradle-serial` group,
 # which closes both races; it subsumes the old per-fixture groups. The two
-# non-gradle gates (`build_diagnostics`, `setup_guard`) ride along harmlessly.
+# non-gradle gates (`setup_guard`, `fixture_manifest`) ride along harmlessly.
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java)'
 test-group = 'java-gradle-serial'
@@ -196,6 +231,25 @@ filter = 'package(=sdk_test_go)'
 platform = { host = 'cfg(windows)' }
 setup = 'go_bridge_win'
 
+# Ruby bridge tests use the same SDK-test lanes as the generated clients will.
+# Setup builds bridge_cffi, compiles the malformed-library and foreign-thread
+# fixtures, emits real function_calls bytecode, and installs the locked ffi gem.
+[scripts.setup.ruby_sorbet_bridge_unix]
+command = './sdk_tests/crates/ruby_sorbet/setup.sh'
+
+[scripts.setup.ruby_sorbet_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/ruby_sorbet/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(unix)' }
+setup = 'ruby_sorbet_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(windows)' }
+setup = 'ruby_sorbet_bridge_win'
+
 # cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
 # when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte
 # equivalent — same cargo build in the host shell of each platform.
@@ -230,3 +284,23 @@ setup = 'csharp_cdylib_unix'
 filter = 'package(=sdk_test_csharp)'
 platform = { host = 'cfg(windows)' }
 setup = 'csharp_cdylib_win'
+
+# JUnit reporting for Trunk Flaky Tests uploads. The test-groups and setup
+# scripts on profile.default above still apply: nextest resolves both against
+# the default profile for every named profile.
+#
+# No retries: retrying masks the flakes this reporting exists to find, and
+# quarantining is the intended replacement.
+[profile.ci.junit]
+path = "junit.xml"
+
+# baml_bridge runs after the sdk suite in the same job, so it needs a
+# separate report: sharing `ci` would republish the stale sdk report
+# under the bridge outcome whenever the bridge run dies before writing.
+[profile.ci-bridge.junit]
+path = "junit.xml"
+
+# The windows CLI e2e step runs after the job's `ci` report is already
+# uploaded, so it reports separately for the same reason as the bridge.
+[profile.ci-cli-e2e.junit]
+path = "junit.xml"

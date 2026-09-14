@@ -43,7 +43,7 @@ use std::{
 };
 
 use once_cell::sync::{Lazy, OnceCell};
-use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError};
+use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmInternalError};
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
@@ -180,7 +180,7 @@ pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
         );
         completion.complete(Err(OpError::new(
             SysOp::BamlHostCallHostValue,
-            VmBamlError::DevOther {
+            VmInternalError::BridgeFailure {
                 message: format!("host-call id {call_id} collided with a live in-flight call"),
             },
         )));
@@ -425,8 +425,8 @@ mod tests {
         };
         assert!(matches!(
             second_err.payload,
-            sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::BamlError(
-                VmBamlError::DevOther { message: _ }
+            sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::InternalError(
+                VmInternalError::BridgeFailure { message: _ }
             ))
         ));
     }

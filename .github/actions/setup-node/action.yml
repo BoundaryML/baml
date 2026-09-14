@@ -26,18 +26,12 @@ inputs:
     description: 'Path for Turbo cache directory'
     required: false
     default: '.turbo'
-  node-action-version:
-    description: 'Version of actions/setup-node to use (v4 or v6)'
-    required: false
-    # Default to v4 for backwards compatibility.
-    default: 'v4'
-
 runs:
   using: 'composite'
   steps:
     - name: Cache Turbo build setup
       if: inputs.enable-turbo-cache == 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ inputs.turbo-cache-path }}
         key: ${{ runner.os }}-turbo-${{ github.sha }}
@@ -45,23 +39,13 @@ runs:
           ${{ runner.os }}-turbo-
 
     - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@v6
       with:
         version: ${{ inputs.pnpm-version }}
         run_install: false
 
-    - name: Setup Node.js (v4)
-      if: inputs.node-action-version == 'v4'
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache: pnpm
-        cache-dependency-path: pnpm-lock.yaml
-        registry-url: "https://registry.npmjs.org"
-
-    - name: Setup Node.js (v6)
-      if: inputs.node-action-version == 'v6'
-      uses: actions/setup-node@v6
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm

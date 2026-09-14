@@ -58,8 +58,10 @@ impl FunctionParameterDefaults {
 /// Canonical callable-signature view used by TIR.
 ///
 /// This keeps the user-written top-level throws contract optional (inferred
-/// from the body, `TYPE_SYSTEM.md` rule 3). Immediate callback parameter roots
-/// with omitted throws are opened to a fresh synthetic effect parameter
+/// from the body, `TYPE_SYSTEM.md` rule 3). Callback parameter roots — the
+/// parameter type itself, or the function type reached through optionality
+/// (`T?` / `T | null`) — with omitted throws are opened to a fresh synthetic
+/// effect parameter
 /// (rule 4). Every other function type must declare its `throws` explicitly
 /// (rule 5) — an omitted clause is left as `None` here and rejected during TIR
 /// lowering (`FunctionTypeMissingThrows`, E0151).
@@ -80,8 +82,14 @@ pub struct ElaboratedFunctionSignature {
 /// `function_signature`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureSourceMap {
-    /// One span per parameter, parallel to `FunctionSignature::params`.
+    /// One span per parameter, parallel to `FunctionSignature::params`:
+    /// the whole `name: Type`, which is what a diagnostic underlines.
     pub param_spans: Vec<TextRange>,
+    /// One span per parameter's NAME token. Distinct from
+    /// [`Self::param_spans`] because a rename replaces an identifier and
+    /// go-to-definition should land on one, neither of which is the
+    /// annotated parameter.
+    pub param_name_spans: Vec<TextRange>,
     /// One span per parameter's type expression (just the type, not the name).
     /// `None` when the parameter has no explicit type annotation.
     pub param_type_spans: Vec<Option<TextRange>>,
@@ -107,7 +115,7 @@ fn function_signature_with_source_map<'db>(
         .iter()
         .map(|p| {
             let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
             });
             SignatureParam {
                 name: p.name.clone(),
@@ -129,6 +137,7 @@ fn function_signature_with_source_map<'db>(
     // Build source map — spans only (separate for early-cutoff)
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()
@@ -177,6 +186,70 @@ fn elaborate_immediate_callback_param(
     .at(TextRange::default())
 }
 
+/// Open one parameter's callback root to a synthetic effect param.
+///
+/// The callback root is the parameter type itself, or the function type
+/// reached from it through optionality only — `((v: int) -> int)?`, and the
+/// longhand `((v: int) -> int) | null` that denotes the same type. An
+/// optional callback is still a *callback slot* the caller fills at the call
+/// site, so it participates in the same per-call-site effect inference as the
+/// immediate form (rule 4); passing `null` simply leaves the effect variable
+/// unconstrained, which defaults to `never`.
+///
+/// Every other nesting (list element, map value, class field, alias body, a
+/// returned function type, a callback's own parameter, a union with a
+/// non-null arm) is deliberately NOT opened — those are stored/structural
+/// positions with no single call site to instantiate against, and an omitted
+/// `throws` there stays an E0151.
+fn elaborate_callback_param_root(
+    ty: TypeExpr,
+    used_names: &mut FxHashSet<Name>,
+    synthetic_effect_params: &mut Vec<Name>,
+) -> TypeExpr {
+    match ty.kind {
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws: None,
+            attrs,
+        } => {
+            let effect_param = fresh_effect_param_name(used_names);
+            synthetic_effect_params.push(effect_param.clone());
+            elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
+        }
+        TypeExprKind::Optional { inner, attrs } => {
+            let inner = elaborate_callback_param_root(*inner, used_names, synthetic_effect_params);
+            TypeExprKind::Optional {
+                inner: Box::new(inner),
+                attrs,
+            }
+            .at(ty.span)
+        }
+        // `T | null` is the same type as `T?`, so it opens the same way. A
+        // union carrying any other arm is not an optional callback and is
+        // left alone.
+        TypeExprKind::Union { variants, attrs }
+            if variants
+                .iter()
+                .filter(|variant| !matches!(variant.kind, TypeExprKind::Null { .. }))
+                .count()
+                == 1 =>
+        {
+            let variants = variants
+                .into_iter()
+                .map(|variant| match variant.kind {
+                    TypeExprKind::Null { .. } => variant,
+                    _ => {
+                        elaborate_callback_param_root(variant, used_names, synthetic_effect_params)
+                    }
+                })
+                .collect();
+            TypeExprKind::Union { variants, attrs }.at(ty.span)
+        }
+        other => other.at(ty.span),
+    }
+}
+
 pub fn elaborate_function_signature_parts(
     name: Name,
     user_generic_params: Vec<Name>,
@@ -192,19 +265,11 @@ pub fn elaborate_function_signature_parts(
     let params = params
         .into_iter()
         .map(|param| {
-            let elaborated = match param.ty.kind {
-                TypeExprKind::Function {
-                    params,
-                    ret,
-                    throws: None,
-                    attrs,
-                } => {
-                    let effect_param = fresh_effect_param_name(&mut used_names);
-                    synthetic_effect_params.push(effect_param.clone());
-                    elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
-                }
-                other => other.at(param.ty.span),
-            };
+            let elaborated = elaborate_callback_param_root(
+                param.ty,
+                &mut used_names,
+                &mut synthetic_effect_params,
+            );
             SignatureParam {
                 name: param.name,
                 ty: elaborated,
@@ -236,7 +301,7 @@ fn elaborated_function_signature_with_source_map<'db>(
         .iter()
         .map(|p| {
             let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
             });
             SignatureParam {
                 name: p.name.clone(),
@@ -268,6 +333,7 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()

@@ -13,7 +13,7 @@
 13:1-75      "// like the one below work because TIR persists inferred instantiations in" source.baml comment.line.double-slash.baml
 14:1-70      "// `CallPlan.type_args` (including phase-0 reverse inference from the" source.baml comment.line.double-slash.baml
 15:1-74      "// expected return type) and MIR materializes them into the callee frame," source.baml comment.line.double-slash.baml
-16:1-79      "// where `__make_stream` reifies them via `reflect.type_of<TStream/TFinal>()`." source.baml comment.line.double-slash.baml
+16:1-79      "// where `__make_stream` reifies them via `reflect.Type.of<TStream/TFinal>()`." source.baml comment.line.double-slash.baml
 17:1-72      "// There is no name-keyed registry fallback anymore — a propagation gap" source.baml comment.line.double-slash.baml
 18:1-69      "// would surface as \"Non-parsable type: ...\" from `StreamCache.new`." source.baml comment.line.double-slash.baml
 19:1-72      "// Runtime coverage: `streaming_parsing::stream_string_final_value` and" source.baml comment.line.double-slash.baml

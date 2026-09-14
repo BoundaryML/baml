@@ -14,12 +14,13 @@ uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+clang-format = "22.1.7"
 cmake = "4.3.3"
 ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
-"cargo:cross" = "latest"
+"cargo:cross" = "0.2.5"
 "cargo:cargo-watch" = "latest"
 "github:rustwasm/wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"
@@ -27,7 +28,8 @@ ninja = "1.13.2"
 "cargo:prek" = "0.3.13"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
-"cargo:cargo-shear" = "latest"
+# Build cargo-shear with the engine's pinned Rust toolchain.
+"cargo:cargo-shear" = { version = "latest", install_env = { RUSTUP_TOOLCHAIN = "1.98.0" } }
 "cargo:https://github.com/astral-sh/hawk" = { version = "rev:42b09e72b2bf79f75aa8ce5f4563576f2dedf4c1", crate = "cargo-hawk", locked = true, install_env = { RUSTC_BOOTSTRAP = "1", RUSTUP_TOOLCHAIN = "1.97.1" } }
 
 # Go tools

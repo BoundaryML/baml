@@ -35,7 +35,7 @@ function cleanup_explicit_double_call_main() -> string[] {
 }
 
 test "cleanup_runs_once_on_explicit_double_call" {
-    assert.is_true(baml.deep_equals(cleanup_explicit_double_call_main(), ["cleaned"]))
+    assert.equal(cleanup_explicit_double_call_main(), ["cleaned"])
 }
 
 // `defer { r.cleanup() }` invokes the finalizer at scope exit — after the
@@ -50,7 +50,7 @@ function cleanup_via_defer_main() -> string[] {
 }
 
 test "cleanup_runs_via_defer" {
-    assert.is_true(baml.deep_equals(cleanup_via_defer_main(), ["body", "cleaned"]))
+    assert.equal(cleanup_via_defer_main(), ["body", "cleaned"])
 }
 
 // An explicit `cleanup()` runs the body and sets the latch; a later
@@ -66,7 +66,7 @@ function cleanup_explicit_then_defer_main() -> string[] {
 }
 
 test "cleanup_explicit_then_defer_shares_one_latch" {
-    assert.is_true(baml.deep_equals(cleanup_explicit_then_defer_main(), ["cleaned"]))
+    assert.equal(cleanup_explicit_then_defer_main(), ["cleaned"])
 }
 
 // The latch is per-instance: cleaning `a` (twice) does not flip `b`'s latch,
@@ -103,5 +103,5 @@ function cleanup_throws_never_main() -> string[] {
 }
 
 test "cleanup_with_explicit_throws_never_is_accepted" {
-    assert.is_true(baml.deep_equals(cleanup_throws_never_main(), ["cleaned"]))
+    assert.equal(cleanup_throws_never_main(), ["cleaned"])
 }

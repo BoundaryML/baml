@@ -1,95 +1,86 @@
-// Tests for `Object::Type` structural equality via `baml.llm.get_return_type`.
+// Tests for `Object::Type` structural equality via `ai.internal.get_return_type`.
 //
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
-// `baml.llm.get_return_type(name)` is a pure static lookup — it does NOT
-// make an actual LLM network call. The client block is required by the
+// `ai.internal.get_return_type(name)` is a pure static lookup — it does NOT
+// make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
-// Each test body is lifted into a top-level helper function to avoid the
-// test-block local-boxing VM bug (locals holding `type` values misbehave
-// when compared inside a test block).
+// The direct test-block comparisons below also guard the local-boxing fix.
 
-client<llm> TestClient {
-    provider openai
-    options {
-        model "gpt-4o-mini"
-        api_key "test-key"
-        base_url "http://localhost:1234"
-    }
-}
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
 class Foo { x int }
 class Bar { y string }
 
 function GetFoo() -> Foo {
-    client TestClient
-    prompt #"hi"#
+    client: TestClient
+    prompt: `hi`
 }
 
 function GetBar() -> Bar {
-    client TestClient
-    prompt #"hi"#
+    client: TestClient
+    prompt: `hi`
 }
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────
 
 function eq_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a == b
 }
 
 test "eq_type_values_same" {
-    assert.is_true(baml.deep_equals(eq_type_values_same_fn(), true))
+    assert.is_true(eq_type_values_same_fn())
 }
 
 function eq_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a == b
 }
 
 test "eq_type_values_different" {
-    assert.is_true(baml.deep_equals(eq_type_values_different_fn(), false))
+    assert.is_true(!eq_type_values_different_fn())
 }
 
 function neq_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a != b
 }
 
 test "neq_type_values_same" {
-    assert.is_true(baml.deep_equals(neq_type_values_same_fn(), false))
+    assert.is_true(!neq_type_values_same_fn())
 }
 
 function neq_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a != b
 }
 
 test "neq_type_values_different" {
-    assert.is_true(baml.deep_equals(neq_type_values_different_fn(), true))
+    assert.is_true(neq_type_values_different_fn())
 }
 
-function deep_equals_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
-    baml.deep_equals(a, b)
+// Type equality is equivalence of canonical forms, so union order is
+// irrelevant in both function and test-block contexts.
+function union_order_eq_fn() -> bool {
+    reflect.Type.of<int | string>() == reflect.Type.of<string | int>()
 }
 
-test "deep_equals_type_values_same" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_same_fn(), true))
+test "union_order_eq_canonical_in_function" {
+    assert.is_true(union_order_eq_fn())
 }
 
-function deep_equals_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
-    baml.deep_equals(a, b)
-}
-
-test "deep_equals_type_values_different" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_different_fn(), false))
+test "union_order_eq_canonical_in_test_block" {
+    let a = reflect.Type.of<int | string>();
+    let b = reflect.Type.of<string | int>();
+    assert.is_true(a == b)
 }

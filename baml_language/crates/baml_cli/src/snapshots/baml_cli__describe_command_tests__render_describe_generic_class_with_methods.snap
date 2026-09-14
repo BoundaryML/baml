@@ -9,10 +9,13 @@ class Wrapper<T> {
 }
 
 methods:
-  function get_value(self) -> T  methods.baml:34-36
-  function get_or_marker(self) -> T | WrapperMarker  methods.baml:38-40
+  function get_value(self) -> T throws never  methods.baml:34-36
+  function get_or_marker(self) -> T | WrapperMarker throws never  methods.baml:38-40
 
 dependencies:
   class            WrapperMarker                    methods.baml:27
+
+implementations (1):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
 
 references (0):

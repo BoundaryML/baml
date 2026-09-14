@@ -17,11 +17,12 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ADT_MEDIA_PDF: _ClassVar[BamlHandleType]
     ADT_MEDIA_GENERIC: _ClassVar[BamlHandleType]
     ADT_PROMPT_AST: _ClassVar[BamlHandleType]
-    ADT_COLLECTOR: _ClassVar[BamlHandleType]
     ADT_TYPE: _ClassVar[BamlHandleType]
     ADT_TAGGED_HEAP_HANDLE: _ClassVar[BamlHandleType]
     HOST_VALUE_CALLABLE: _ClassVar[BamlHandleType]
     HOST_VALUE_OPAQUE: _ClassVar[BamlHandleType]
+    ADT_FUNCTION_SPEC: _ClassVar[BamlHandleType]
+    ADT_RUNTIME_VALUE: _ClassVar[BamlHandleType]
 HANDLE_UNSPECIFIED: BamlHandleType
 UNTAGGED_RUST_DATA: BamlHandleType
 UNTAGGED_BEX_HEAP: BamlHandleType
@@ -32,11 +33,12 @@ ADT_MEDIA_VIDEO: BamlHandleType
 ADT_MEDIA_PDF: BamlHandleType
 ADT_MEDIA_GENERIC: BamlHandleType
 ADT_PROMPT_AST: BamlHandleType
-ADT_COLLECTOR: BamlHandleType
 ADT_TYPE: BamlHandleType
 ADT_TAGGED_HEAP_HANDLE: BamlHandleType
 HOST_VALUE_CALLABLE: BamlHandleType
 HOST_VALUE_OPAQUE: BamlHandleType
+ADT_FUNCTION_SPEC: BamlHandleType
+ADT_RUNTIME_VALUE: BamlHandleType
 
 class BamlHandle(_message.Message):
     __slots__ = ("key", "handle_type")

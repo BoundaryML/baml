@@ -4,18 +4,10 @@
 .unit {
   max-width: 560px;
   overflow: hidden;
-  font-family:
-    var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo,
-    Consolas, monospace;
+  font-family: inherit;
   background: #fffdf7;
   border: 1px solid #d8cfbd;
   border-radius: 10px;
-}
-
-/* Compact variant (top of /explore): drops the tabbed header and the tall
-   min-height so it reads as a quick install pointer, not the full unit. */
-.compact .body {
-  min-height: 0;
 }
 
 .head {
@@ -75,6 +67,11 @@
   line-height: 1.75;
   color: #1a1612;
 }
+/* Compact variant (top of /explore): drops the tabbed header and the tall
+   min-height so it reads as a quick install pointer, not the full unit. */
+.compact .body {
+  min-height: 0;
+}
 
 .opt {
   display: flex;
@@ -133,7 +130,35 @@
   outline-offset: 2px;
 }
 
+/* host-language logos in the "call from" row, sized to match the inline svgs */
+.optBtn .logo {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+/* Footer on the compact unit: where to go once BAML runs. */
+.next {
+  padding: 7px 0.95rem 8px;
+  margin: 0;
+  font-size: 11px;
+  color: #6f6a63;
+  letter-spacing: 0.02em;
+  background: #f6f1e4;
+  border-top: 1px solid #e7e2d6;
+}
+.next a {
+  color: #6d28d9;
+  text-decoration: none;
+}
+.next a:hover {
+  text-decoration: underline;
+}
+
 .row {
+  font-family:
+    var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Consolas, monospace;
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -141,6 +166,13 @@
   color: #6d28d9;
 }
 .cmt {
+  color: #8a8580;
+}
+
+/* Terminal output under a command. Indented to the width of the `$ ` prompt so
+   it reads as a reply rather than another thing to run. */
+.out {
+  padding-left: 2ch;
   color: #8a8580;
 }
 

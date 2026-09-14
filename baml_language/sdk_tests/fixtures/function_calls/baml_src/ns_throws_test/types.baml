@@ -17,8 +17,8 @@ function ThrowMyError() -> int throws MyError {
   throw MyError { code: 42, detail: "boom" }
 }
 
-// stdlib error arm: bad input throws `baml.json.JsonParseError`.
-function ParseJson(s: string) -> baml.json.json throws baml.json.JsonParseError {
+// stdlib error arm: bad input throws `baml.json.ParseError`.
+function ParseJson(s: string) -> baml.json.json throws baml.json.ParseError {
   baml.json.parse(s)
 }
 
@@ -35,4 +35,15 @@ function DoExit(code: int) -> never {
 // cancellation arm: a sleep long enough to abort mid-flight.
 function SleepMs(ms: int) -> null throws baml.errors.Io {
   baml.sys.sleep(baml.time.Duration.from_nanoseconds(ms * 1000000n))
+}
+
+// Multi-step cancellation arm: marks entry, sleeps long enough to abort
+// mid-flight, then performs a *second* observable step. A cancel delivered
+// during the sleep must prevent `later_path` from ever appearing — proving the
+// runtime stops walking the function rather than merely returning early to the
+// host. Marker files are the only channel the host can observe mid-call.
+function SleepThenMarkMs(ms: int, entry_path: string, later_path: string) -> null throws baml.errors.Io {
+  baml.fs.write(entry_path, "entered");
+  baml.sys.sleep(baml.time.Duration.from_nanoseconds(ms * 1000000n));
+  baml.fs.write(later_path, "later")
 }

@@ -1,9 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-// Negative cases for the `reflect.type_of` compiler intrinsic itself.
+// Negative cases for the `reflect.Type.of` compiler intrinsic itself.
 // These complement `strict_normalization.baml` (which exercises Ty::Type
-// strictness via `baml.llm.get_return_type`) by hitting the intrinsic path
+// strictness via `ai.internal.get_return_type`) by hitting the intrinsic path
 // directly.
 
 class User {
@@ -14,18 +14,18 @@ class User {
 // to a non-`type` slot. Validates Phase 2's strictness all the way through
 // Phase 4's `LoadType` lowering.
 function reflect_type_to_int() -> int {
-    let x: int = reflect.type_of<User>();
+    let x: int = reflect.Type.of<User>();
     return x;
 }
 
-// Unknown type referenced inside `reflect.type_of<...>`.
-function unknown_type_in_reflect() -> type {
-    reflect.type_of<NonExistent>()
+// Unknown type referenced inside `reflect.Type.of<...>`.
+function unknown_type_in_reflect() -> reflect.Type {
+    reflect.Type.of<NonExistent>()
 }
 
 // Arity mismatch on the intrinsic: it declares one type parameter, caller
 // passes two. Validates Phase 1's `WrongTypeArgArity` against the new
 // builtin.
-function too_many_type_args() -> type {
-    reflect.type_of<int, string>()
+function too_many_type_args() -> reflect.Type {
+    reflect.Type.of<int, string>()
 }

@@ -38,7 +38,6 @@ mod lets;
 mod retry_policies;
 mod scopes;
 mod template_strings;
-mod test_items;
 mod type_aliases;
 
 pub use classes::*;
@@ -53,5 +52,4 @@ pub use lets::*;
 pub use retry_policies::*;
 pub use scopes::*;
 pub use template_strings::*;
-pub use test_items::*;
 pub use type_aliases::*;

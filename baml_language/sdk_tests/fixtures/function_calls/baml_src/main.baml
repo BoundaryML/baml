@@ -6,6 +6,14 @@ function hello_world() -> "hello world" {
   "hello world"
 }
 
+// A real provider call records its start time before opening the HTTP request.
+// Keep that Web capability in the configured Worker regression without making
+// the test depend on network access or provider credentials.
+function worker_runtime_smoke() -> "hello world" {
+  let _started = baml.time.Instant.now();
+  "hello world"
+}
+
 // One required positional argument: the host passes a single value and it
 // round-trips through the engine unchanged. The one-arg step up from the
 // nullary `hello_world`.

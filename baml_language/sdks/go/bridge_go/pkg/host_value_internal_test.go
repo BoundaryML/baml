@@ -271,3 +271,46 @@ func TestEncodeCallArgsAlwaysSetsFunctionTarget(t *testing.T) {
 		t.Fatalf("call ID = %d, want 7", got)
 	}
 }
+
+func TestPortableMediaAndPromptRoundTripWithoutHandles(t *testing.T) {
+	media := &pb.BamlValueMedia{
+		Media: pb.MediaTypeEnum_IMAGE,
+		Value: &pb.BamlValueMedia_Url{Url: "https://example.com/cat.png"},
+	}
+	prompt := &pb.BamlValuePromptAst{
+		Value: &pb.BamlValuePromptAst_Simple{
+			Simple: &pb.BamlValuePromptAstSimple{
+				Value: &pb.BamlValuePromptAstSimple_String_{String_: "hello"},
+			},
+		},
+	}
+
+	for name, outbound := range map[string]*pb.BamlOutboundValue{
+		"media":  {Value: &pb.BamlOutboundValue_MediaValue{MediaValue: media}},
+		"prompt": {Value: &pb.BamlOutboundValue_PromptAstValue{PromptAstValue: prompt}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			decoded, err := outboundToGo(outbound)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inbound, err := goToInboundValueTracking(decoded, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := inbound.Value.(*pb.InboundValue_Handle); ok {
+				t.Fatal("portable payload was converted to a handle")
+			}
+			switch name {
+			case "media":
+				if !proto.Equal(inbound.GetMediaValue(), media) {
+					t.Fatalf("media payload changed: got %v", inbound.GetMediaValue())
+				}
+			case "prompt":
+				if !proto.Equal(inbound.GetPromptAstValue(), prompt) {
+					t.Fatalf("prompt payload changed: got %v", inbound.GetPromptAstValue())
+				}
+			}
+		})
+	}
+}

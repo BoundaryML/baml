@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity, render};
-use baml_project::ProjectDatabase;
+use baml_db::{
+    ProjectDatabase,
+    baml_compiler_diagnostics::{Diagnostic, Severity, render},
+};
 use clap::Args;
 
 use crate::reporter::Reporter;
@@ -52,7 +54,7 @@ impl CheckArgs {
         // of leaving it on the full-compile path forever.
         let warmth = session.warm_prep();
         let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
-        let (db, cache) = (&session.db, &session.cache);
+        let (db, package, cache) = (&session.db, session.package, &session.cache);
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
         // With a cache, collect through the incremental collector so the fresh
@@ -60,13 +62,14 @@ impl CheckArgs {
         // identical to the read-only collector's.
         let (diagnostics, fresh_diagnostics) = match cache {
             Some(ctx) => {
-                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+                let incremental =
+                    ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
-            None => (baml_project::collect_diagnostics(db), None),
+            None => (baml_db::collect_diagnostics(db), None),
         };
         if let Some(cache) = cache {
-            cache.verify_diagnostics(db)?;
+            cache.verify_diagnostics(db, package)?;
             cache.verify_stdlib_diagnostics(db)?;
             // Sampled field verification (rustc-style 1-in-32): `baml check`
             // serves clean files' cached diagnostics and seeds their throws, so
@@ -86,8 +89,8 @@ impl CheckArgs {
         // cache serving clean user files and the stdlib blob serving builtins,
         // this counts only the dirty files' scopes; a cold check walks every one.
         crate::bytecode_cache::cache_debug(format_args!(
-            "scope inferences: {} this process",
-            baml_db::baml_compiler2_tir::inference::scope_inferences()
+            "body inferences: {} this process",
+            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
         ));
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(db, &diagnostics);
@@ -122,9 +125,7 @@ impl CheckArgs {
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
                     db,
-                    &baml_db::baml_compiler2_emit::CompileOptions {
-                        emit_test_cases: false,
-                    },
+                    package,
                     cache.as_ref(),
                     reuse_plan.as_ref(),
                 ) {
@@ -133,12 +134,11 @@ impl CheckArgs {
                             .as_ref()
                             .expect("a cache is present, so fresh diagnostics were computed");
                         ctx.verify_and_store(
-                            db,
+                            &session,
                             &compiled,
                             fresh,
                             reuse_plan.as_ref(),
                             stdlib_interface_hit,
-                            || session.honest_db(),
                         )?;
                     }
                     Err(err) => {
@@ -159,26 +159,21 @@ pub(crate) fn render_project_diagnostics(
     db: &ProjectDatabase,
     diagnostics: &[Diagnostic],
 ) -> String {
+    // Sources and paths for every file in the database (workspace, stdlib):
+    // a diagnostic in one file may carry related spans into another.
     let mut sources = std::collections::HashMap::new();
     let mut file_paths = std::collections::HashMap::new();
     let mut source_files = std::collections::HashMap::new();
-    for source_file in db.get_source_files() {
+    for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
         let file_id = source_file.file_id(db);
         sources.insert(file_id, source_file.text(db).to_string());
         file_paths.insert(file_id, source_file.path(db));
         source_files.insert(file_id, source_file);
     }
-    for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
-        let file_id = source_file.file_id(db);
-        sources
-            .entry(file_id)
-            .or_insert_with(|| source_file.text(db).to_string());
-        file_paths
-            .entry(file_id)
-            .or_insert_with(|| source_file.path(db));
-        source_files.entry(file_id).or_insert(source_file);
-    }
     let config = crate::output::policy().diagnostic_render_config();
+    // Colorized human output classifies the offending sources through the
+    // same compiler classifier the editor uses; every other preset renders
+    // plain, so the highlighting work is skipped entirely.
     let mut highlights = baml_db::baml_compiler_diagnostics::SourceHighlights::new();
     if config.color && config.format == render::DiagnosticFormat::Human {
         let file_ids = diagnostics

@@ -20,7 +20,7 @@ function caps_active_and_queues_rest() -> int {
 }
 
 test "caps_active_and_queues_rest" {
-    assert.is_true(baml.deep_equals(caps_active_and_queues_rest(), 202))
+    assert.equal(caps_active_and_queues_rest(), 202)
 }
 
 // More spawns than the limit all complete — the queued ones start as slots free.
@@ -35,7 +35,7 @@ function queues_excess_and_all_complete() -> int {
 }
 
 test "queues_excess_and_all_complete" {
-    assert.is_true(baml.deep_equals(queues_excess_and_all_complete(), 5))
+    assert.equal(queues_excess_and_all_complete(), 5)
 }
 
 // `group.cancel()` fires its members' tokens; awaiting a cancelled member
@@ -48,7 +48,7 @@ function group_cancel_cancels_member() -> int {
 }
 
 test "group_cancel_cancels_member" {
-    assert.is_true(baml.deep_equals(group_cancel_cancels_member(), 0))
+    assert.equal(group_cancel_cancels_member(), 0)
 }
 
 // `limit()` / `set_limit()` round-trip.
@@ -60,5 +60,5 @@ function set_limit_updates_limit() -> int {
 }
 
 test "set_limit_updates_limit" {
-    assert.is_true(baml.deep_equals(set_limit_updates_limit(), 10))
+    assert.equal(set_limit_updates_limit(), 10)
 }

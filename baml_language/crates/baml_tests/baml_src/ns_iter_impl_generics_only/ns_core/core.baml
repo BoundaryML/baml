@@ -197,7 +197,7 @@ class Repeat<T> {
 }
 
 interface OutOfBodyValue<T> {
-  function get(self) -> T throws unknown
+  function get(self) -> T throws never
 }
 
 class OutOfBodyBox<T> {
@@ -209,7 +209,7 @@ class OutOfBodyBox<T> {
 }
 
 implements<T> OutOfBodyValue<T> for OutOfBodyBox<T> {
-  function get(self) -> T throws unknown {
+  function get(self) -> T {
     self.value
   }
 }

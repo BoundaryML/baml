@@ -1,0 +1,153 @@
+// ═══════════════════════════════════════════════════════════════════
+// AUTH NAMESPACE — defines Config, Error, Role
+//
+// Config and Error have the SAME names as root and llm types.
+// Bare references here must resolve to the AUTH versions.
+// ═══════════════════════════════════════════════════════════════════
+
+class Config {
+    provider string
+    secret string
+}
+
+class Error {
+    realm string
+    expired bool
+}
+
+enum Role {
+    Admin
+    User
+    Guest
+}
+
+class Token {
+    value string
+    role Role
+}
+
+type TokenAlias = Token
+
+// ── Bare name usage (must resolve to auth.* NOT root.fixtures.namespaces_type_resolution.*) ─────────
+
+// Bare Config param: must be auth.Config (.provider), not root (.key) or llm (.model)
+function AuthIdentity(cfg: Config) -> Config {
+    cfg
+}
+
+// Bare constructor: must build auth.Config
+function AuthConstruct(provider: string) -> Config {
+    Config { provider: provider, secret: "s3cret" }
+}
+
+// Bare enum return: must be auth.Role.Admin
+function AuthEnumReturn() -> Role {
+    Role.Admin
+}
+
+// Bare enum match: must match against auth.Role variants
+function AuthEnumMatch(r: Role) -> string {
+    match (r) {
+        Role.Admin => "admin",
+        Role.User => "user",
+        Role.Guest => "guest"
+    }
+}
+
+// Bare alias: must be auth.TokenAlias = auth.Token
+function AuthAliasParam(t: TokenAlias) -> string {
+    t.value
+}
+
+// Bare class in throw
+function AuthThrowClass(x: int) -> string {
+    match (x) {
+        0 => throw Error { realm: "auth failed", expired: true },
+        _ => "ok"
+    }
+}
+
+// Bare enum in throw
+function AuthThrowEnum(x: int) -> string {
+    match (x) {
+        0 => throw Role.Guest,
+        _ => "ok"
+    }
+}
+
+// Token constructor with nested enum field
+function AuthMakeToken(v: string) -> Token {
+    Token { value: v, role: Role.User }
+}
+
+// ── Cross-namespace: root.fixtures.namespaces_type_resolution.X ─────────────────────────────────────
+
+function AuthUsesRootConfig(cfg: root.fixtures.namespaces_type_resolution.Config) -> string {
+    cfg.key
+}
+
+function AuthUsesRootStatus() -> root.fixtures.namespaces_type_resolution.Status {
+    root.fixtures.namespaces_type_resolution.Status.Pending
+}
+
+function AuthMatchesRootStatus(s: root.fixtures.namespaces_type_resolution.Status) -> string {
+    match (s) {
+        root.fixtures.namespaces_type_resolution.Status.Ok => "ok",
+        root.fixtures.namespaces_type_resolution.Status.Failed => "failed",
+        root.fixtures.namespaces_type_resolution.Status.Pending => "pending"
+    }
+}
+
+function AuthThrowsRootError(x: int) -> string {
+    match (x) {
+        0 => throw root.fixtures.namespaces_type_resolution.Error { code: 403, message: "forbidden" },
+        _ => "ok"
+    }
+}
+
+// ── Cross-namespace: sibling (root.fixtures.namespaces_type_resolution.llm.X) ───────────────────────
+
+function AuthUsesLlmConfig(cfg: root.fixtures.namespaces_type_resolution.llm.Config) -> string {
+    cfg.model
+}
+
+function AuthUsesLlmResponse(r: root.fixtures.namespaces_type_resolution.llm.Response) -> string {
+    r.text
+}
+
+function AuthUsesLlmStatus() -> root.fixtures.namespaces_type_resolution.llm.Status {
+    root.fixtures.namespaces_type_resolution.llm.Status.Ready
+}
+
+function AuthMatchesLlmStatus(s: root.fixtures.namespaces_type_resolution.llm.Status) -> string {
+    match (s) {
+        root.fixtures.namespaces_type_resolution.llm.Status.Ready => "ready",
+        root.fixtures.namespaces_type_resolution.llm.Status.Generating => "generating",
+        root.fixtures.namespaces_type_resolution.llm.Status.Done => "done"
+    }
+}
+
+// ── Cross-namespace: nested (root.fixtures.namespaces_type_resolution.llm.openai.X) ────────────────
+
+function AuthUsesNestedClient(c: root.fixtures.namespaces_type_resolution.llm.openai.Client) -> string {
+    c.api_key
+}
+
+// ── Mixed: auth + root + llm types ──────────────────────────────
+
+function AuthMixedConfigs(
+    auth_cfg: Config,
+    root_cfg: root.fixtures.namespaces_type_resolution.Config,
+    llm_cfg: root.fixtures.namespaces_type_resolution.llm.Config
+) -> string {
+    auth_cfg.provider
+}
+
+// auth.Error + root.fixtures.namespaces_type_resolution.Error + llm.Error — three different types
+function AuthMixedErrors(
+    auth_err: Error,
+    root_err: root.fixtures.namespaces_type_resolution.Error,
+    llm_err: root.fixtures.namespaces_type_resolution.llm.Error
+) -> string {
+    auth_err.realm
+}

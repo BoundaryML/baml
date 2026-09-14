@@ -2,10 +2,11 @@
 //!
 //! One ring per `(engine, os-thread)` pair. Exactly one producer thread (the
 //! claimant — see [`crate::prof::registry`] for the claim protocol) and one
-//! process-wide consumer thread. Lossless by growth: a full segment links a
-//! fresh or recycled segment; nothing ever drops or blocks. Rings are
-//! allocated once and never freed (`&'static`), which is what makes the
-//! orphan/drain/claim lifecycle race-free without epochs or hazard pointers.
+//! process-wide consumer thread. A full segment links a fresh or recycled
+//! segment while shared General/Transport capacity is available; otherwise
+//! the concrete record is rejected without blocking. Rings are allocated once
+//! and never freed (`&'static`), which makes the orphan/drain/claim lifecycle
+//! race-free without epochs or hazard pointers.
 //!
 //! # Memory-ordering map (the loom checklist, plan §3.7)
 //!
@@ -20,11 +21,12 @@
 //! # Invariants enforced here (plan §6)
 //!
 //! - The producer never blocks: no mutex, no condvar, no park, no unbounded
-//!   spin anywhere reachable from [`Ring::push`]. It runs holding an
+//!   spin anywhere reachable from [`OSThreadMarkerRing::push`]. It runs holding an
 //!   `ActiveHeapPermit`; a blocked producer is an engine-wide GC stall.
 //! - The consumer never touches the GC heap or permits.
-//! - Hitting the live-memory cap is a hard process error with a clear
-//!   message (D6), never a silent drop.
+//! - Hitting the live-memory cap rejects the concrete record without blocking
+//!   or aborting BAML execution. The producer reports that loss through the
+//!   boundary's preallocated health path.
 #![allow(unsafe_code)]
 // On wasm32 there is no background consumer thread. The consumer-side helpers
 // are compiled for the cooperative drain path, but not all native-only entry
@@ -35,12 +37,14 @@ use std::{marker::PhantomData, ptr::null_mut};
 
 use crossbeam_utils::CachePadded;
 
+#[cfg(not(baml_loom))]
+use crate::prof::backend::{Owner, ProfilerMemoryGovernor, Reservation, ReservationClass};
 use crate::prof::{
     sync::{AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Buf, Ordering, UnsafeCell},
     wake::Wake,
 };
 
-/// Ring lifecycle states (design D5b).
+/// `OSThreadMarkerRing` lifecycle states (design D5b).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum RingState {
@@ -63,18 +67,38 @@ impl RingState {
     }
 }
 
+/// What one bounded [`OSThreadMarkerRing::drain`] call accomplished.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DrainOutcome {
+    /// Whether any bytes were consumed.
+    pub(crate) progress: bool,
+    /// Whether the drain reached the producer's open segment. `false` means
+    /// the per-call segment bound stopped the chase with published bytes
+    /// still queued — the ring must be drained again before it can be
+    /// considered empty.
+    pub(crate) caught_up: bool,
+}
+
 /// Process-wide context shared by all rings: the live-memory budget and the
 /// consumer wake state.
 pub(crate) struct RingCtx {
-    budget: MemBudget,
+    budget: RingBudget,
     wake: Wake,
+}
+
+enum RingBudget {
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
+    Fixed(MemBudget),
+    #[cfg(not(baml_loom))]
+    Governor(ProfilerMemoryGovernor),
 }
 
 impl RingCtx {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
     pub(crate) const fn new(max_overflow_bytes: usize) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: RingBudget::Fixed(MemBudget::new(max_overflow_bytes)),
             wake: Wake::new(),
         }
     }
@@ -82,7 +106,15 @@ impl RingCtx {
     #[cfg(baml_loom)]
     pub(crate) fn new(max_overflow_bytes: usize) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: RingBudget::Fixed(MemBudget::new(max_overflow_bytes)),
+            wake: Wake::new(),
+        }
+    }
+
+    #[cfg(not(baml_loom))]
+    pub(crate) fn with_governor(memory: ProfilerMemoryGovernor) -> Self {
+        Self {
+            budget: RingBudget::Governor(memory),
             wake: Wake::new(),
         }
     }
@@ -96,11 +128,57 @@ impl RingCtx {
     /// only writes the budget.
     #[cfg_attr(not(test), allow(dead_code, reason = "test/telemetry accessor"))]
     pub(crate) fn live_bytes(&self) -> usize {
-        self.budget.live()
+        match &self.budget {
+            RingBudget::Fixed(budget) => budget.live(),
+            #[cfg(not(baml_loom))]
+            RingBudget::Governor(memory) => {
+                usize::try_from(memory.used_bytes(ReservationClass::General)).unwrap_or(usize::MAX)
+            }
+        }
+    }
+
+    fn try_charge(&'static self, bytes: usize) -> Option<RingCharge> {
+        match &self.budget {
+            RingBudget::Fixed(budget) => budget.try_charge(bytes).then(|| RingCharge::Fixed {
+                _charge: FixedCharge { budget, bytes },
+            }),
+            #[cfg(not(baml_loom))]
+            RingBudget::Governor(memory) => memory
+                .try_reserve(
+                    ReservationClass::General,
+                    Owner::Transport,
+                    u64::try_from(bytes).unwrap_or(u64::MAX),
+                )
+                .ok()
+                .map(|reservation| RingCharge::Governor {
+                    _reservation: reservation,
+                }),
+        }
     }
 }
 
-/// Live-memory accounting against `BAML_RING_MAX_OVERFLOW_BYTES` (D6).
+struct FixedCharge {
+    budget: &'static MemBudget,
+    bytes: usize,
+}
+
+impl Drop for FixedCharge {
+    fn drop(&mut self) {
+        self.budget.credit(self.bytes);
+    }
+}
+
+enum RingCharge {
+    Fixed {
+        _charge: FixedCharge,
+    },
+    #[cfg(not(baml_loom))]
+    Governor {
+        _reservation: Reservation,
+    },
+}
+
+/// Live-memory accounting against the sizing policy's transport reserve.
 pub(crate) struct MemBudget {
     live: AtomicUsize,
     cap: usize,
@@ -108,6 +186,7 @@ pub(crate) struct MemBudget {
 
 impl MemBudget {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-only fixed budget"))]
     const fn new(cap: usize) -> Self {
         Self {
             live: AtomicUsize::new(0),
@@ -123,10 +202,22 @@ impl MemBudget {
         }
     }
 
-    fn charge(&self, bytes: usize) {
-        let live = self.live.fetch_add(bytes, Ordering::Relaxed) + bytes;
-        if live > self.cap {
-            overflow_abort(live, self.cap);
+    fn try_charge(&self, bytes: usize) -> bool {
+        let mut live = self.live.load(Ordering::Relaxed);
+        loop {
+            let Some(next) = live.checked_add(bytes) else {
+                return false;
+            };
+            if next > self.cap {
+                return false;
+            }
+            match self
+                .live
+                .compare_exchange_weak(live, next, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(_) => return true,
+                Err(observed) => live = observed,
+            }
         }
     }
 
@@ -140,23 +231,6 @@ impl MemBudget {
     }
 }
 
-/// D6: exceeding the cap means the consumer cannot keep up with the
-/// sustained event rate — a hard process error, stated plainly, never a
-/// silent drop (and never an opaque OOM kill later).
-#[cold]
-#[expect(clippy::print_stderr, reason = "process-fatal diagnostic")]
-fn overflow_abort(live: usize, cap: usize) -> ! {
-    eprintln!(
-        "FATAL: BAML profiling ring memory ({live} bytes) exceeded \
-         BAML_RING_MAX_OVERFLOW_BYTES ({cap} bytes).\n\
-         The profile consumer cannot keep up with the sustained event rate. \
-         Raise BAML_RING_MAX_OVERFLOW_BYTES, lower the event rate, or disable \
-         profiling (BAML_PROFILE=0). Aborting instead of growing without \
-         bound or silently dropping events."
-    );
-    std::process::abort();
-}
-
 struct SegSync {
     /// Bytes of the segment published so far. Producer `Release`-stores after
     /// each record's bytes are written; monotonic for the lifetime of one
@@ -166,48 +240,52 @@ struct SegSync {
     /// the segment sits in the free list — the next free-list node. A
     /// segment is never in both places, and in-list nodes are immutable
     /// until popped, so the dual use cannot be observed concurrently.
-    next: AtomicPtr<Segment>,
+    next: AtomicPtr<OSThreadMarkerRingSegment>,
 }
 
-struct Segment {
+struct OSThreadMarkerRingSegment {
     /// D3: `{commit_len, next}` get their own cache line so producer commits
     /// and consumer polls don't false-share with the buffer pointer reads.
     sync: CachePadded<SegSync>,
     buf: Buf,
+    _charge: RingCharge,
 }
 
-fn segment_footprint(seg_bytes: usize) -> usize {
-    seg_bytes + size_of::<Segment>()
+pub(crate) fn segment_footprint(seg_bytes: usize) -> usize {
+    seg_bytes + size_of::<OSThreadMarkerRingSegment>()
 }
 
-fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
-    ctx.budget.charge(segment_footprint(seg_bytes));
-    Box::into_raw(Box::new(Segment {
+fn alloc_segment(
+    seg_bytes: usize,
+    ctx: &'static RingCtx,
+) -> Option<*mut OSThreadMarkerRingSegment> {
+    let charge = ctx.try_charge(segment_footprint(seg_bytes))?;
+    Some(Box::into_raw(Box::new(OSThreadMarkerRingSegment {
         sync: CachePadded::new(SegSync {
             commit_len: AtomicU32::new(0),
             next: AtomicPtr::new(null_mut()),
         }),
         buf: Buf::new(seg_bytes),
-    }))
+        _charge: charge,
+    })))
 }
 
 /// # Safety
 /// `seg` came from [`alloc_segment`], is reachable from neither the live
 /// chain nor the free list, and no thread will touch it again.
-unsafe fn free_segment(seg: *mut Segment, ctx: &RingCtx) {
-    let boxed = unsafe { Box::from_raw(seg) };
-    ctx.budget.credit(segment_footprint(boxed.buf.capacity()));
+unsafe fn free_segment(seg: *mut OSThreadMarkerRingSegment) {
+    drop(unsafe { Box::from_raw(seg) });
 }
 
 /// Producer-only position fields (D3 group 1).
 struct RingProducer {
-    head: *mut Segment,
+    head: *mut OSThreadMarkerRingSegment,
     head_pos: usize,
 }
 
 /// Consumer-only position fields (D3 group 2).
 struct RingConsumer {
-    tail: *mut Segment,
+    tail: *mut OSThreadMarkerRingSegment,
     tail_pos: usize,
 }
 
@@ -216,8 +294,8 @@ struct RingShared {
     state: AtomicU8,
     /// Treiber free list of recycled segments. Single pusher (the consumer)
     /// and single popper (the producer) — see the no-ABA argument on
-    /// [`Ring::free_pop`].
-    free_head: AtomicPtr<Segment>,
+    /// [`OSThreadMarkerRing::free_pop`].
+    free_head: AtomicPtr<OSThreadMarkerRingSegment>,
     /// Approximate free-list length (Relaxed; D7). Transient off-by-one —
     /// including the brief wrap-below-zero when a pop's decrement lands
     /// between a push's CAS and its increment — only skews the recycle/free
@@ -230,7 +308,7 @@ struct RingShared {
 }
 
 /// The segmented SPSC ring. See the module docs.
-pub struct Ring {
+pub struct OSThreadMarkerRing {
     p: CachePadded<UnsafeCell<RingProducer>>,
     c: CachePadded<UnsafeCell<RingConsumer>>,
     s: CachePadded<RingShared>,
@@ -246,10 +324,10 @@ pub struct Ring {
 // publish-by-first-commit rule — with the Release/Acquire edges in the
 // module-docs table providing the happens-before. The loom suite
 // model-checks exactly these claims.
-unsafe impl Send for Ring {}
-unsafe impl Sync for Ring {}
+unsafe impl Send for OSThreadMarkerRing {}
+unsafe impl Sync for OSThreadMarkerRing {}
 
-impl Ring {
+impl OSThreadMarkerRing {
     /// Allocates a ring with one open segment, `Active` and owned by the
     /// calling thread (the creator is the claimant). The returned pointer is
     /// conceptually `&'static`: production code never frees rings
@@ -259,9 +337,9 @@ impl Ring {
         seg_bytes: usize,
         freelist_cap: usize,
         engine_id: u64,
-    ) -> *mut Ring {
-        let seg = alloc_segment(seg_bytes, ctx);
-        Box::into_raw(Box::new(Ring {
+    ) -> Option<*mut OSThreadMarkerRing> {
+        let seg = alloc_segment(seg_bytes, ctx)?;
+        Some(Box::into_raw(Box::new(OSThreadMarkerRing {
             p: CachePadded::new(UnsafeCell::new(RingProducer {
                 head: seg,
                 head_pos: 0,
@@ -279,7 +357,7 @@ impl Ring {
             seg_bytes,
             freelist_cap,
             ctx,
-        }))
+        })))
     }
 
     /// The producer hot path (§3.2): bounds check + `memcpy` + one `Release`
@@ -292,13 +370,11 @@ impl Ring {
     /// Caller is the ring's unique producer thread (it claimed the ring and
     /// the ring is `Active`), and `rec` is a whole encoded record with
     /// `0 < rec.len() <= seg_bytes`.
-    pub unsafe fn push(&self, rec: &[u8]) {
+    pub unsafe fn push(&self, rec: &[u8]) -> bool {
         debug_assert!(!rec.is_empty());
         // SAFETY: same producer contract as `push_with`; the closure copies
         // exactly `rec.len()` bytes into the (uninitialized) slot.
-        unsafe {
-            self.push_with(rec.len(), |slot| slot.copy_from_slice(rec));
-        }
+        unsafe { self.push_with(rec.len(), |slot| slot.copy_from_slice(rec)) }
     }
 
     /// Reserve `len` bytes in the ring and let the producer serialize a record
@@ -311,7 +387,7 @@ impl Ring {
     /// Same contract as [`Self::push`]: this OS thread is the ring's live producer
     /// (D5a refresh), and exec does not cross an `.await` (plan §6 inv. 4).
     #[inline]
-    pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) {
+    pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) -> bool {
         debug_assert!(len > 0);
         self.p.with_mut(|p| {
             let p = unsafe { &mut *p };
@@ -329,7 +405,10 @@ impl Ring {
                 // Slow path: link a recycled or fresh segment.
                 let seg = match unsafe { self.free_pop() } {
                     Some(seg) => seg,
-                    None => alloc_segment(self.seg_bytes, self.ctx),
+                    None => match alloc_segment(self.seg_bytes, self.ctx) {
+                        Some(segment) => segment,
+                        None => return false,
+                    },
                 };
                 unsafe {
                     // D2: the producer owns the reset, for recycled and fresh
@@ -347,8 +426,8 @@ impl Ring {
                 }
                 p.head = seg;
                 p.head_pos = 0;
-                // D4: wake only on segment fill, only if the consumer is
-                // parked. Wake, not wait — this cannot block.
+                // Wake on segment fill, only if the consumer is parked. This
+                // is a one-way notification and cannot block the producer.
                 self.ctx.wake.wake_if_parked();
             }
             unsafe {
@@ -363,20 +442,29 @@ impl Ring {
                     .commit_len
                     .store(p.head_pos as u32, Ordering::Release);
             }
-        });
+            true
+        })
     }
 
     /// Consumer-side drain (§3.3, with D1 baked in). Hands `sink` each newly
     /// published byte range — always a whole number of records, because the
-    /// producer commits whole records. Returns whether any bytes were
-    /// consumed.
+    /// producer commits whole records.
+    ///
+    /// The segment chase is bounded: a producer outpacing this consumer
+    /// keeps linking fresh segments, and an unbounded loop here starves the
+    /// consumer's control messages and session maintenance for as long as
+    /// the flood lasts. A drain that stops at the bound reports
+    /// `caught_up: false`; rollover wakes and the park timeout re-arm the
+    /// next pass.
     ///
     /// # Safety
     /// Caller is the process's single consumer thread.
-    pub(crate) unsafe fn drain(&self, sink: &mut impl FnMut(&[u8])) -> bool {
+    pub(crate) unsafe fn drain(&self, sink: &mut impl FnMut(&[u8])) -> DrainOutcome {
+        const MAX_SEGMENTS_PER_DRAIN: usize = 16;
         self.c.with_mut(|c| {
             let c = unsafe { &mut *c };
             let mut progress = false;
+            let mut retired = 0;
             loop {
                 let seg = c.tail;
                 let seg_ref = unsafe { &*seg };
@@ -385,7 +473,11 @@ impl Ring {
                     unsafe { consume_range(seg_ref, &mut c.tail_pos, committed as usize, sink) };
                 let next = seg_ref.sync.next.load(Ordering::Acquire);
                 if next.is_null() {
-                    return progress; // still the open segment; caught up for now
+                    // Still the open segment; caught up for now.
+                    return DrainOutcome {
+                        progress,
+                        caught_up: true,
+                    };
                 }
                 // D1: a non-null `next` means the producer is done with `seg`
                 // forever, and the Acquire above (pairing with the link
@@ -397,6 +489,13 @@ impl Ring {
                 unsafe { self.retire(seg) };
                 c.tail = next;
                 c.tail_pos = 0;
+                retired += 1;
+                if retired >= MAX_SEGMENTS_PER_DRAIN {
+                    return DrainOutcome {
+                        progress,
+                        caught_up: false,
+                    };
+                }
             }
         })
     }
@@ -412,7 +511,7 @@ impl Ring {
     ///
     /// # Safety
     /// Caller is the ring's unique producer thread.
-    unsafe fn free_pop(&self) -> Option<*mut Segment> {
+    unsafe fn free_pop(&self) -> Option<*mut OSThreadMarkerRingSegment> {
         let mut head = self.s.free_head.load(Ordering::Acquire);
         loop {
             if head.is_null() {
@@ -446,9 +545,9 @@ impl Ring {
     /// Caller is the consumer thread, has fully drained `seg`, and has
     /// already advanced `tail` past it (the producer linked past it, so
     /// neither side can reach it again).
-    unsafe fn retire(&self, seg: *mut Segment) {
+    unsafe fn retire(&self, seg: *mut OSThreadMarkerRingSegment) {
         if self.s.free_len.load(Ordering::Relaxed) >= self.freelist_cap {
-            unsafe { free_segment(seg, self.ctx) };
+            unsafe { free_segment(seg) };
             return;
         }
         let mut head = self.s.free_head.load(Ordering::Relaxed);
@@ -507,7 +606,7 @@ impl Ring {
     /// New-producer claim: CAS `Pooled → Active`. On success the caller is
     /// the unique producer and may push from the calling thread only.
     ///
-    /// Acquire on success: pairs with [`Ring::mark_pooled`]'s Release, so the
+    /// Acquire on success: pairs with [`OSThreadMarkerRing::mark_pooled`]'s Release, so the
     /// consumer's final drain — and, through the orphan edge before it, the
     /// dead producer's last `head`/`head_pos` writes — happen-before the new
     /// producer touches them.
@@ -536,7 +635,7 @@ impl Ring {
     /// Which engine the bytes most recently drained from this ring belong to.
     ///
     /// # Safety
-    /// Consumer thread only, and only after a [`Ring::drain`] on this ring
+    /// Consumer thread only, and only after a [`OSThreadMarkerRing::drain`] on this ring
     /// reported progress in the current sweep (that drain's Acquire is what
     /// publishes a new claimant's write).
     pub(crate) unsafe fn engine_id(&self) -> u64 {
@@ -549,7 +648,7 @@ impl Ring {
     }
 }
 
-impl Drop for Ring {
+impl Drop for OSThreadMarkerRing {
     /// Production rings are never dropped (invariant 7: `&'static`, reuse
     /// don't reclaim). This exists for tests, which reclaim rings after all
     /// producer/consumer activity has quiesced; then the live chain
@@ -560,13 +659,13 @@ impl Drop for Ring {
             let mut seg = self.c.with_mut(|c| (*c).tail);
             while !seg.is_null() {
                 let next = (&*seg).sync.next.load(Ordering::Relaxed);
-                free_segment(seg, self.ctx);
+                free_segment(seg);
                 seg = next;
             }
             let mut free = self.s.free_head.load(Ordering::Relaxed);
             while !free.is_null() {
                 let next = (&*free).sync.next.load(Ordering::Relaxed);
-                free_segment(free, self.ctx);
+                free_segment(free);
                 free = next;
             }
         }
@@ -576,18 +675,18 @@ impl Drop for Ring {
 /// The producer-side write handle: living proof that the holding thread
 /// claimed the ring. Created only by the claim/acquire paths on the claiming
 /// thread, and `!Send + !Sync` so it cannot leave it — which is what makes
-/// [`RingHandle::push`] safe to expose.
+/// [`OSThreadMarkerRingHandle::push`] safe to expose.
 #[derive(Clone, Copy)]
-pub struct RingHandle {
-    ring: &'static Ring,
+pub struct OSThreadMarkerRingHandle {
+    ring: &'static OSThreadMarkerRing,
     _not_send_sync: PhantomData<*mut ()>,
 }
 
-impl RingHandle {
+impl OSThreadMarkerRingHandle {
     /// # Safety
     /// `ring` is `Active` and was claimed by (or created on) the calling
     /// thread, which makes that thread the unique producer.
-    pub(crate) unsafe fn new(ring: &'static Ring) -> Self {
+    pub(crate) unsafe fn new(ring: &'static OSThreadMarkerRing) -> Self {
         Self {
             ring,
             _not_send_sync: PhantomData,
@@ -608,16 +707,16 @@ impl RingHandle {
     /// (D5a): handles are re-fetched from live TLS each exec resume and
     /// never used from destructors.
     #[inline]
-    pub unsafe fn push(self, rec: &[u8]) {
+    pub unsafe fn push(self, rec: &[u8]) -> bool {
         // SAFETY: !Send pins us to the claiming thread; the caller vouches
         // the claim is still live (contract above).
         unsafe { self.ring.push(rec) }
     }
 
     /// The underlying ring, for D5a snapshots: the engine stores this
-    /// `&'static Ring` in the VM and refreshes it once per exec resume.
+    /// `&'static OSThreadMarkerRing` in the VM and refreshes it once per exec resume.
     #[must_use]
-    pub fn ring(self) -> &'static Ring {
+    pub fn ring(self) -> &'static OSThreadMarkerRing {
         self.ring
     }
 }
@@ -626,7 +725,7 @@ impl RingHandle {
 /// committed)` and advances `tail_pos`. Bytes below `committed` were
 /// published by the Acquire that read it and are immutable until recycle.
 unsafe fn consume_range(
-    seg: &Segment,
+    seg: &OSThreadMarkerRingSegment,
     tail_pos: &mut usize,
     committed: usize,
     sink: &mut impl FnMut(&[u8]),

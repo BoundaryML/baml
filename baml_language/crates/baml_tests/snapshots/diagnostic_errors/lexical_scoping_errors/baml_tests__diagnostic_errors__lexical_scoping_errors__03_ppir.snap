@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 49845
 ---
 === PPIR ===
 function user.block_does_not_leak(b: bool) -> int  [expr] {

@@ -8,9 +8,10 @@
 import { BamlHandle } from './native.js';
 export declare class BamlStream<TStream, TFinal> {
     private _handle;
-    constructor(handle: BamlHandle);
+    private _classFqn;
+    constructor(handle: BamlHandle, classFqn: string);
     /** Internal: produce a fresh BamlStream from a BamlHandle. Used by proto decode. */
-    static _fromHandle<TStream, TFinal>(handle: BamlHandle): BamlStream<TStream, TFinal>;
+    static _fromHandle<TStream, TFinal>(handle: BamlHandle, classFqn: string): BamlStream<TStream, TFinal>;
     /** Internal: expose the inner BamlHandle for inbound encode. */
     _toHandle(): BamlHandle;
     next(): TStream;

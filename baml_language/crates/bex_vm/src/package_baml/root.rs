@@ -5,18 +5,18 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    FutureRead, HeapPtr, ObjectType, ValueKind,
+    HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
 
 use super::{
-    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl, PassThroughContinuation,
+    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
     array::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee,
+    make_to_string_callee,
 };
 use crate::{
     BexVm, VmPanic,
@@ -27,23 +27,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
-    }
-
-    fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool {
-        let mut visited = HashMap::new();
-        deep_equals_recursive(vm, *a, *b, &mut visited)
-    }
-
-    /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
-    /// comparison backing `Comparable for float`. Kept in lockstep with the
-    /// float domain of `compare_natural_values` (the `_rust_sort` fast path)
-    /// so the two sort paths can never disagree on a float ordering.
-    fn _float_total_cmp(a: f64, b: f64) -> i64 {
-        match a.total_cmp(&b) {
-            std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Equal => 0,
-            std::cmp::Ordering::Greater => 1,
-        }
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
@@ -57,7 +40,8 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// Stable natural-order sort of a homogeneous primitive array, in place
     /// (the receiver's backing `Vec` is sorted or replaced; the returned value
     /// IS the receiver). The comparator is pure Rust — no per-pair yield to
-    /// BAML — and the float domain uses `f64::total_cmp`, so no domain throws.
+    /// BAML — and the float domain uses BAML's total float order, so no domain
+    /// throws.
     /// The validation rejections are defensive only: the `_is_primitive_array`
     /// guard plus `T[]` homogeneity make them unreachable from `Sortable.sort`.
     fn _rust_sort(vm: &mut BexVm, arr: &Value) -> NativeCallResult {
@@ -108,53 +92,28 @@ impl BamlPackageBaml for PackageBamlImpl {
         NativeCallResult::Done(*arr)
     }
 
-    /// `baml._compare_shim(a, b)` — the dispatch shim for the `Sortable`
-    /// blanket `sort`'s comparator path. Resolves `Comparable.compare` on
-    /// `a`'s runtime class and yields to it with `b`; the comparison's `int`
-    /// result (or thrown error) is returned straight through. See
-    /// `make_compare_callee` for why the sort cannot dispatch `compare`
-    /// itself.
-    fn _compare_shim(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        let callee = match make_compare_callee(vm, *a) {
-            Ok(ptr) => ptr,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![*b],
-            type_args: vec![],
-            continuation: Box::new(PassThroughContinuation),
-        }
-    }
-
-    /// `baml._to_string_default(value)` and `baml._to_string_shim(value)` both
-    /// render `value` for `string.from`, honoring `baml.ToString` overrides at
-    /// every depth: `value`'s own override (if any) wins, and any *nested* value
+    /// `baml._to_string_default(value)` renders `value` for `string.from`,
+    /// honoring `baml.ToString` overrides at every depth: `value`'s own override (if any) wins, and any *nested* value
     /// whose runtime class overrides `to_string` is rendered via that override
     /// rather than structurally. Everything else renders structurally (primitives
     /// naturally; containers/instances as `[a, b]` / `Class { f: v }`, with nested
     /// strings quoted). Total — `string.from` is `throws never`.
     ///
     /// `_to_string_default` is the `baml.ToString` interface's default body and
-    /// the structural fallback; `_to_string_shim` backs `string.from`. They are
-    /// identical: the walker already applies `value`'s own override when present,
-    /// so an empty `implements baml.ToString {}` (whose runtime class carries no
-    /// in-body override) still serializes structurally with nested overrides
-    /// honored.
+    /// the structural fallback: the walker already applies `value`'s own
+    /// override when present, so an empty `implements baml.ToString {}` (whose
+    /// runtime class carries no in-body override) still serializes
+    /// structurally with nested overrides honored.
     fn _to_string_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        render_to_string_honoring_overrides(vm, *value)
-    }
-
-    fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         render_to_string_honoring_overrides(vm, *value)
     }
 
     /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
-    /// overrides at every depth. The json analog of `_to_string_default` /
-    /// `_to_string_shim`; both delegate to the override-honoring walker in
-    /// `json.rs`. Unlike the string shims, this can throw `JsonSerializationError`
-    /// for values with no json representation.
+    /// overrides at every depth. The json analog of `_to_string_default`; both
+    /// delegate to the override-honoring walker in `json.rs`. Unlike the string
+    /// renderer, this can throw `SerializationError` for values with no json
+    /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)
     }
@@ -233,26 +192,11 @@ impl BamlPackageBaml for PackageBamlImpl {
             .sum()
     }
 
-    /// `baml._mean_float(values)` — native backing for `float[].mean()`.
-    ///
-    /// Throws `InvalidArgument` when `values` is empty.
-    #[allow(clippy::cast_precision_loss)]
-    fn _mean_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
-        if values.is_empty() {
-            return Err(VmBamlError::InvalidArgument {
-                message: "float[].mean: cannot take the mean of an empty array".to_string(),
-            }
-            .into());
-        }
-        let n = values.len() as f64;
-        Ok(Self::_sum_float(vm, values) / n)
-    }
-
     /// `baml._median_float(values)` — native backing for `float[].median()`.
     ///
-    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
-    /// `float[].sort()`) so the caller's array is left untouched. Throws
-    /// `InvalidArgument` when `values` is empty.
+    /// Sorts a copy in BAML's total float order (matching `float[].sort()`) so
+    /// the caller's array is left untouched. Throws `InvalidArgument` when
+    /// `values` is empty.
     fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
         if values.is_empty() {
             return Err(VmBamlError::InvalidArgument {
@@ -265,7 +209,7 @@ impl BamlPackageBaml for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
             .collect();
-        sorted.sort_by(f64::total_cmp);
+        sorted.sort_by(|a, b| bex_vm_types::float_order::cmp(*a, *b));
         let mid = sorted.len() / 2;
         if sorted.len() % 2 == 1 {
             Ok(sorted[mid])
@@ -283,15 +227,21 @@ impl BamlPackageBaml for PackageBamlImpl {
     }
 }
 
-/// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
-/// Shares `make_to_string_callee`'s resolution (so the two agree on every value
-/// kind, including the non-instance `type` / `uint8array` implementors) but
-/// allocates nothing on the VM heap, so it is safe to call during the
-/// allocation-free pre-order collection pass.
-fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
-    super::to_string_override_fn_name(vm, value)
-        .and_then(|name| vm.find_function_by_name(&name))
-        .is_some()
+/// Whether `value`'s runtime type carries a `baml.ToString` override.
+/// Shares `make_to_string_callee`'s rule resolution (so the two agree on every
+/// value kind) but allocates nothing on the VM heap, so it is safe to call
+/// during the allocation-free pre-order collection pass. A resolver error
+/// PROPAGATES (`shim_rule_method`'s own contract: never a silent structural
+/// fallback) — swallowing it here would let the collection pass disagree
+/// with the dispatch pass.
+fn has_to_string_override(
+    vm: &BexVm,
+    value: Value,
+) -> Result<bool, crate::errors::VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -302,13 +252,17 @@ fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
 /// the two stay index-aligned. (Like the structural renderer, this does not
 /// guard against reference cycles — recursive *data* would already loop in the
 /// pre-existing walker; recursive *types* such as trees are acyclic.)
-pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+pub(super) fn collect_to_string_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), crate::errors::VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_string_override(vm, value) {
+    if has_to_string_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
@@ -321,24 +275,31 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_string_overrides(vm, v, out);
+        collect_to_string_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
-/// Entry point shared by `_to_string_default` and `_to_string_shim`. Collects the
+/// Entry point for `_to_string_default`. Collects the
 /// override-bearing sub-values (pass 1, sync), dispatches `to_string` on each in
 /// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
 /// then renders structurally splicing in the override results (pass 3). When the
 /// value tree contains no overrides at all, renders fully structurally inline.
-fn render_to_string_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+pub(crate) fn render_to_string_honoring_overrides(
+    vm: &mut BexVm,
+    value: Value,
+) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_string_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_done(vm, value, &pending, &[]);
     };
     match make_to_string_callee(vm, Value::object(first_ptr)) {
-        Some(callee) => NativeCallResult::YieldToCall {
+        Err(e) => NativeCallResult::Error(e.into()),
+        Ok(Some(callee)) => NativeCallResult::YieldToCall {
             callee,
             args: vec![],
             type_args: vec![],
@@ -348,7 +309,13 @@ fn render_to_string_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCa
                 results: Vec::new(),
             }),
         },
-        None => render_done(vm, value, &pending, &[]),
+        // Pass 1 collected `first_ptr` as an override; pass 2 must agree.
+        Ok(None) => NativeCallResult::Error(
+            crate::errors::VmInternalError::OverrideWalkSkew {
+                interface: "ToString",
+            }
+            .into(),
+        ),
     }
 }
 
@@ -387,15 +354,24 @@ impl Continuation for ToStringWalkContinuation {
                 .unwrap_or_default(),
         );
 
-        // Dispatch the next override, if any (and resolvable); otherwise render.
-        if let Some(&next_ptr) = self.pending.get(self.results.len())
-            && let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr))
-        {
-            return NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
+        // Dispatch the next override, if any; otherwise render. Every pending
+        // pointer was collected as an override by pass 1, so a pass-2 miss is
+        // a skew between the two passes, not a fallback case.
+        if let Some(&next_ptr) = self.pending.get(self.results.len()) {
+            return match make_to_string_callee(vm, Value::object(next_ptr)) {
+                Err(e) => NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => NativeCallResult::YieldToCall {
+                    callee,
+                    args: vec![],
+                    type_args: vec![],
+                    continuation: self,
+                },
+                Ok(None) => NativeCallResult::Error(
+                    crate::errors::VmInternalError::OverrideWalkSkew {
+                        interface: "ToString",
+                    }
+                    .into(),
+                ),
             };
         }
         render_done(vm, self.root, &self.pending, &self.results)
@@ -425,7 +401,7 @@ impl Continuation for ToStringWalkContinuation {
 
 /// Owned snapshot of a heap object, captured so the recursive walker never
 /// holds a heap borrow or a container lock across a recursive call (mirrors the
-/// snapshot-before-recurse discipline in `deep_equals_recursive`).
+/// snapshot-before-recurse discipline in `deep_copy_value_recursive`).
 enum DisplaySnap {
     /// A finished leaf rendering (`5.0`, `null`, an enum variant name, ...).
     Leaf(String),
@@ -648,7 +624,7 @@ pub(super) fn render_to_sink(
                     let name = if state.qualified_class_names {
                         class.name.to_string()
                     } else {
-                        class.name.name().to_string()
+                        class.name.item_name().to_string()
                     };
                     let fields = inst
                         .fields
@@ -898,13 +874,15 @@ fn deep_copy_value_recursive(
                 Object::ImplRule(r) => vm.tlab.alloc(Object::ImplRule(r)),
                 Object::Class(c) => vm.tlab.alloc(Object::Class(c)),
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
+                Object::TypeAlias(a) => vm.tlab.alloc(Object::TypeAlias(a)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
                 // `Object::Future(_)` is short-circuited above; it can't
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
-                Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
+                // A deep copy denotes the same type: clone the `TypeValue`
+                // whole, definition overlay and owner edge included.
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
                 // state is shared by design (mutation semantics).
@@ -924,145 +902,6 @@ fn deep_copy_value_recursive(
 
             Value::object(new_ptr)
         }
-    }
-}
-
-#[allow(clippy::float_cmp)]
-fn deep_equals_recursive(
-    vm: &BexVm,
-    a: Value,
-    b: Value,
-    visited: &mut HashMap<(HeapPtr, HeapPtr), bool>,
-) -> bool {
-    match (a.kind(), b.kind()) {
-        (ValueKind::OmittedArg, ValueKind::OmittedArg) => true,
-        (ValueKind::Null, ValueKind::Null) => true,
-        (ValueKind::Int(a), ValueKind::Int(b)) => a == b,
-        (ValueKind::Bool(a), ValueKind::Bool(b)) => a == b,
-
-        (ValueKind::Object(a_ptr), ValueKind::Object(b_ptr)) => {
-            if a_ptr == b_ptr {
-                return true;
-            }
-
-            let key = if a_ptr < b_ptr {
-                (a_ptr, b_ptr)
-            } else {
-                (b_ptr, a_ptr)
-            };
-
-            if let Some(&result) = visited.get(&key) {
-                return result;
-            }
-
-            visited.insert(key, true);
-
-            let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
-                (Object::Float(a), Object::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,
-                (Object::String(a), Object::String(b)) => a == b,
-                (Object::Uint8Array(a), Object::Uint8Array(b)) => {
-                    let a_snap = a.to_vec();
-                    let b_snap = b.to_vec();
-                    a_snap == b_snap
-                }
-
-                // Different `Arc`s with the same numeric value must compare equal.
-                (Object::Bigint(a), Object::Bigint(b)) => a == b,
-
-                (Object::Array(a_values), Object::Array(b_values)) => {
-                    // Snapshot under each lock before recursing; deep_equals
-                    // is mutator code so we cannot hold the lock across
-                    // recursive lookups that may also lock containers.
-                    let a_snap = a_values.to_vec();
-                    let b_snap = b_values.to_vec();
-                    a_snap.len() == b_snap.len()
-                        && a_snap
-                            .iter()
-                            .zip(b_snap.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
-                }
-
-                (Object::Map(a_map), Object::Map(b_map)) => {
-                    let a_snap = a_map.to_index_map();
-                    let b_snap = b_map.to_index_map();
-                    a_snap.len() == b_snap.len()
-                        && a_snap.iter().all(|(key, a_val)| {
-                            b_snap.get(key).is_some_and(|b_val| {
-                                deep_equals_recursive(vm, *a_val, *b_val, visited)
-                            })
-                        })
-                }
-
-                (Object::Instance(a_inst), Object::Instance(b_inst)) => {
-                    a_inst.class == b_inst.class
-                        && a_inst.fields.len() == b_inst.fields.len()
-                        && a_inst
-                            .fields
-                            .iter()
-                            .zip(b_inst.fields.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, a.load(), b.load(), visited))
-                }
-
-                (Object::Variant(a_var), Object::Variant(b_var)) => {
-                    a_var.enm == b_var.enm && a_var.index == b_var.index
-                }
-
-                (Object::Type(a_ty), Object::Type(b_ty)) => a_ty == b_ty,
-
-                (Object::Enum(a_enum), Object::Enum(b_enum)) => {
-                    a_enum.name == b_enum.name
-                        && a_enum.variants.len() == b_enum.variants.len()
-                        && a_enum
-                            .variants
-                            .iter()
-                            .zip(b_enum.variants.iter())
-                            .all(|(a, b)| a.name == b.name)
-                }
-
-                (Object::Class(a_class), Object::Class(b_class)) => {
-                    a_class.name == b_class.name
-                        && a_class.fields.len() == b_class.fields.len()
-                        && a_class
-                            .fields
-                            .iter()
-                            .zip(b_class.fields.iter())
-                            .all(|(a, b)| a.name == b.name)
-                }
-
-                (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
-
-                // GenericFunction values compare structurally (same base
-                // function + same type args). The interned/pooled case already
-                // short-circuits via the `a_ptr == b_ptr` fast path above; this
-                // arm covers non-pooled copies (e.g. from `baml.deep_copy`).
-                (Object::GenericFunction(a_gf), Object::GenericFunction(b_gf)) => {
-                    a_gf.function == b_gf.function && a_gf.type_args == b_gf.type_args
-                }
-
-                (Object::Future(a_fut), Object::Future(b_fut)) => {
-                    match (a_fut.read(), b_fut.read()) {
-                        (FutureRead::Ready(a_val), FutureRead::Ready(b_val)) => {
-                            deep_equals_recursive(vm, a_val, b_val, visited)
-                        }
-                        (FutureRead::Pending(a_id), FutureRead::Pending(b_id)) => a_id == b_id,
-                        _ => false,
-                    }
-                }
-
-                (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    a_fut.closure == b_fut.closure
-                        && a_fut.name == b_fut.name
-                        && a_fut.config == b_fut.config
-                }
-
-                _ => false,
-            };
-
-            visited.insert(key, result);
-            result
-        }
-
-        _ => false,
     }
 }
 

@@ -32,10 +32,10 @@ final class TestHandles: XCTestCase {
     func test_handles_file_cursor_state_persists_across_calls() throws {
         let path = try makeTempFile(contents: "0123456789")
         let f = try Baml.baml.fs.open(path: path, mode: "r")
-        XCTAssertEqual(try f.read(n: 3), "012")
-        XCTAssertEqual(try f.read(n: 3), "345")
+        XCTAssertEqual(try f.seek_from(whence: "current", offset: 3), 3)
+        XCTAssertEqual(try f.seek_from(whence: "current", offset: 3), 6)
         XCTAssertEqual(try f.seek_from(whence: "start", offset: 0), 0)
-        XCTAssertEqual(try f.read(n: 2), "01")
+        XCTAssertEqual(try f.seek_from(whence: "current", offset: 2), 2)
         XCTAssertEqual(try f.text(), "23456789")
         try f.close()
     }

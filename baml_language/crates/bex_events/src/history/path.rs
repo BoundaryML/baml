@@ -5,7 +5,12 @@ use crate::{
     run::{RunTarget, StartRunContext},
 };
 
-pub const HISTORY_DIR_NAME: &str = "history";
+/// Root of the log/lifecycle history tree under `.baml/`.
+///
+/// `history-v1` is a fresh tree: the reader only ever meets files this
+/// writer produced. The pre-cutover `.baml/history/` tree mixed captured
+/// values with logs and is never discovered, read, or cleaned here.
+pub const HISTORY_DIR_NAME: &str = "history-v1";
 const BAML_TOML: &str = "baml.toml";
 const BAML_SRC_DIR: &str = "baml_src";
 
@@ -19,12 +24,6 @@ impl BoundaryHistoryPath {
     #[must_use]
     pub fn thread_dir(&self, thread_id: u64) -> PathBuf {
         self.boundary_dir.join(format!("thread-{thread_id}"))
-    }
-
-    #[must_use]
-    pub fn stack_segment_path(&self, thread_id: u64, segment: u64) -> PathBuf {
-        self.thread_dir(thread_id)
-            .join(format!("stack-{segment}.bamlprof"))
     }
 
     #[must_use]
@@ -229,7 +228,7 @@ mod tests {
     fn list_boundary_dirs_searches_manifestless_nested_projects() {
         let workspace = temp_dir("nested-manifestless");
         let project = workspace.join("demo");
-        let history = project.join(".baml/history/1-Test-baml_id_1_AAAAAAAAAAAAAAAAAAAAAA");
+        let history = project.join(".baml/history-v1/1-Test-baml_id_1_AAAAAAAAAAAAAAAAAAAAAA");
         fs::create_dir_all(project.join("baml_src")).unwrap();
         fs::create_dir_all(&history).unwrap();
 
@@ -253,6 +252,51 @@ mod tests {
             }),
             "boundary"
         );
+    }
+
+    #[test]
+    fn history_root_is_v1_and_never_legacy() {
+        let root = temp_dir("history-v1-root");
+        fs::create_dir_all(root.join("baml_src")).unwrap();
+        let legacy = root.join(".baml/history/1-Test-baml_id_1_AAAAAAAAAAAAAAAAAAAAAA");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(legacy.join("value-1.bamlvalue"), b"legacy").unwrap();
+
+        let start = StartRunContext {
+            boundary_id: BoundaryId::from_bytes([1; 16]),
+            request_id: crate::run::RequestId(1),
+            request: crate::run::RunRequestSummary {
+                project_id: crate::run::ProjectId("project".to_string()),
+                project_generation: crate::run::ProjectGeneration(1),
+                target: RunTarget::Function {
+                    function_name: "main".to_string(),
+                },
+                args_summary: None,
+                options_summary: None,
+            },
+            created_at_ms: 10,
+            time_anchor: crate::run::RunTimeAnchor {
+                epoch_created_at_ms: 10,
+                trace_zero_ns: 0,
+            },
+            start_guard: crate::run::StartGuard::new(),
+        };
+        let path = build_boundary_history_path(&root, &start);
+        assert!(
+            path.boundary_dir
+                .starts_with(root.join(".baml").join("history-v1")),
+            "{}",
+            path.boundary_dir.display()
+        );
+
+        let roots = candidate_history_roots(&root);
+        assert!(roots.contains(&root.join(".baml").join("history-v1")));
+        assert!(
+            !roots.contains(&root.join(".baml").join("history")),
+            "legacy history must never be a search root: {roots:?}"
+        );
+        assert!(list_boundary_dirs(std::slice::from_ref(&root)).is_empty());
+        assert!(find_boundary_dir(&[root], BoundaryId::from_bytes([1; 16])).is_none());
     }
 
     #[test]

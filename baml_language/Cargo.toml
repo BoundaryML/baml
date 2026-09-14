@@ -13,30 +13,24 @@ members = [
   "sdks/python/rust/*",
   "sdks/swift/rust/*",
   "sdks/rust/*",
-  "sdk_tests/harness_setup",
+  # SDK codegen, as a normal binary rather than a build script: as a
+  # `[build-dependencies]` its compiler and sdkgen closure was *built*, not
+  # merely checked, by every `cargo check` of the workspace. Each generator
+  # crate below runs it from its own `setup.sh`, so a workspace build
+  # generates nothing and needs no SDK toolchain installed.
+  "sdk_tests/codegen",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
-  # `sdk_tests/crates/java` follows typescript_node's soft-fail model
-  # (see below); its per-fixture tests are `#[ignore]`d while
-  # `sdkgen_java` is a stub.
   "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
-  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
-  # (sdkgen_swift is early); the swift toolchain tests themselves are
-  # macOS-only and setup.sh (xcframework assembly) is bound in
-  # .config/nextest.toml for macOS hosts.
+  "sdk_tests/crates/ruby_sorbet",
+  # Swift's toolchain tests are macOS-only, and its setup.sh (codegen +
+  # xcframework assembly) is bound in .config/nextest.toml for macOS hosts
+  # alone — so CI, which drops every macOS matrix entry, does not run them.
   "sdk_tests/crates/swift",
   "sdk_tests/crates/go",
-  # `sdk_tests/crates/typescript`'s build.rs runs codegen +
-  # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
-  # if pnpm is missing or install fails (see
-  # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
-  # package name `sdk_test_harness_setup`), so a workspace
-  # `cargo build` / `cargo doc` succeeds without pnpm installed.
-  # The failures surface via `cargo test`'s
-  # `build_diagnostics::no_build_failures` test.
   "sdk_tests/crates/typescript",
   "sdk_tests/crates/typescript_web",
   "sdk_tests/crates/rust",
@@ -75,6 +69,7 @@ version = "0.0.0-beta"
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
+baml_artifact = { path = "crates/baml_artifact" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
@@ -93,7 +88,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -104,21 +99,18 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
+sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
-sys_jinja = { path = "crates/sys_jinja" }
-sys_jinja_types = { path = "crates/sys_jinja_types" }
-sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
-baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
-baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
+baml_ide = { path = "crates/baml_ide" }
+baml_lsp = { path = "crates/baml_lsp" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
-baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
-baml_surface = { path = "crates/baml_surface" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -129,23 +121,15 @@ bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
+baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
+bex_prof_store = { path = "crates/bex_prof_store" }
+baml_query = { path = "crates/baml_query" }
+baml_query_profiles = { path = "crates/baml_query_profiles" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
-
-# External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
-  "macros",
-  "builtins",
-  "debug",
-  "preserve_order",
-  "serde",
-  "unstable_machinery",
-] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
-baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
@@ -159,7 +143,6 @@ askama = { version = "0.14.0" }
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
-aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -187,7 +170,9 @@ crossbeam-utils = { version = "0.8" }
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
-eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -199,8 +184,8 @@ hyper = { version = "1", features = [ "server", "http1", "http2" ] }
 hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
-infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
@@ -267,6 +252,15 @@ tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
+# Pinned exactly: DataFusion minor bumps change planner behaviour
+# (TASK/baml-query-scope.md §3.1); the conformance corpus re-runs on bumps.
+datafusion = { version = "=54.1.0", default-features = false, features = [
+  "sql",
+  "nested_expressions",
+  "unicode_expressions",
+  "regex_expressions",
+  "datetime_expressions",
+] }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
@@ -281,7 +275,6 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
-url = "2.5.2"
 uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
@@ -320,6 +313,25 @@ rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
 # be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
+# `baml.crypto`'s AEAD ciphers. `getrandom` is off (it is on by default): keys
+# and nonces come from a caller-supplied `baml.random.Rng`, never from the
+# crate's own entropy source, so the VM keeps building for
+# `wasm32-unknown-unknown` without a JS shim. `zeroize` is on (it is off by
+# default) so the per-message subkeys AES-GCM-SIV derives are wiped after use.
+aes-gcm-siv = { version = "0.12", default-features = false, features = [
+  "aes",
+  "alloc",
+  "zeroize",
+] }
+# The other `baml.crypto` AEAD family. Same `aead` 0.6 generation as
+# `aes-gcm-siv` above, which is what lets both share one set of seal/open
+# helpers. `getrandom` off and `zeroize` on for the same reasons; the
+# `reduced-round` ChaCha8/ChaCha12 variants stay off, since they trade security
+# margin for speed and no RFC covers them.
+chacha20poly1305 = { version = "0.11", default-features = false, features = [
+  "alloc",
+  "zeroize",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"
@@ -388,7 +400,9 @@ lto = "fat"
 codegen-units = 1
 opt-level = "s"   # smallest; try "s" if perf matters
 strip = "symbols" # still keep your strip -x in packaging
-panic = "abort"
+# `unwind` for every artifact — see the "Why panic = unwind" note below the
+# profile overrides.
+panic = "unwind"
 
 # Some crates don't change as much but benefit more from
 # more expensive optimization passes, so we selectively
@@ -396,10 +410,35 @@ panic = "abort"
 [profile.release.package.salsa]
 codegen-units = 1
 
+# Fast test runs: release-grade codegen for our own crates without the
+# release profile's ship-oriented costs — fat LTO and codegen-units=1 make
+# the BUILD dwarf the test-time win, and panic=abort breaks should_panic
+# tests. Debug assertions and overflow checks stay ON: the corpus and the
+# lowering tripwires (debug_assert) are load-bearing for correctness runs.
+# Usage: cargo nextest run --cargo-profile fasttest ...
+[profile.fasttest]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+opt-level = 2
+strip = false
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.insta]
 opt-level = 3
 
 [profile.dev.package.similar]
+opt-level = 3
+
+# Syntax trees and type interning are hot in every compiler check. Neither
+# package depends on the embedded stdlib, so stdlib-only edits reuse these
+# optimized artifacts. Keep the dev profile's assertions and overflow checks.
+[profile.dev.package.rowan]
+opt-level = 3
+
+[profile.dev.package.baml_type]
 opt-level = 3
 
 # Salsa is the compiler's query engine: it only recompiles on a lockfile or
@@ -438,62 +477,32 @@ lto = "fat"
 [profile.dist]
 inherits = "release"
 
-# Embedded-SDK profiles: identical to `release`, but `panic = "unwind"`.
+# Why `panic = "unwind"` everywhere (release profile above)
 #
-# The Python and Node SDKs load the engine as a native library *inside the
-# user's own process* (`baml_py.abi3.so` via PyO3, the `.node` addon via napi).
-# Under `panic = "abort"` (our `release` default, chosen for binary size) a raw
-# Rust panic anywhere in the engine — e.g. a stdlib slice bounds check — calls
-# `process::abort()` and SIGABRTs the *user's* interpreter: their whole server
-# dies, uncatchable even by `except BaseException`.
+# `panic` is a whole-artifact setting: it cannot be overridden per crate and one
+# binary cannot mix strategies. `release` used to be `abort` (chosen for binary
+# size) with a family of `release-bridge-*` profiles that re-enabled `unwind`
+# for the artifacts loaded into a user's process (PyO3 `baml_py.abi3.so`, the
+# napi `.node` addon, the Swift/Java cdylibs, the standalone `bridge_cffi`
+# cdylib that dylib-loader SDKs dlopen). Those need `unwind` because their
+# `catch_unwind` -> `baml.panics.SdkPanic` boundary in `bridge_cffi` (and
+# tokio's per-task isolation in the in-engine HTTP server) only fires when the
+# stack can unwind; under `abort` a stdlib slice bounds check anywhere in the
+# engine `process::abort()`s the user's interpreter/JVM/server, uncatchable.
 #
-# The bridges already have the machinery to contain such a panic — a
-# `catch_unwind` -> `baml.panics.SdkPanic` boundary in `bridge_cffi`, and
-# tokio's per-task isolation in the in-engine HTTP server — but all of it only
-# runs when the stack can *unwind*, which `abort` forbids. Building just these
-# two artifacts with `unwind` turns an engine panic into a catchable
-# `BamlPanic` / JS error instead of killing the host process.
+# The CLI now needs `unwind` for the same structural reason: the language
+# server runs reads on Salsa snapshots and relies on Salsa's unwind-based
+# cancellation (`salsa::Cancelled`) to abandon in-flight queries when sources
+# change, and on `catch_unwind` at request dispatch to survive a query panic.
+# Neither exists under `abort`. Making `release` itself `unwind` also gives
+# `baml run`/`baml test` the same panic containment the SDKs have (previously
+# the CLI SIGABRT'd where an SDK reported a catchable panic).
 #
-# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
-# target, language-neutral) that dylib-loader SDKs — the Rust `baml_bridge`
-# crate today, the Go bridge when it migrates — dlopen at runtime, again
-# *inside the user's process*. It needs `unwind` for the same reason:
-# `bridge_cffi`'s `catch_unwind` -> `SdkPanic` boundary only fires when the
-# stack can unwind. Host-process safety over the ~+5 MB of unwind tables (the
-# contract mandates `panic = "unwind"` for a library loaded into a user's
-# server).
-#
-# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
-# process. Its `catch_unwind` boundary turns an engine panic into a catchable
-# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
-# recover), so it needs `panic = "unwind"` for exactly the same reason as
-# `bridge_cffi` — the 8-target Java native matrix selects
-# `--profile release-bridge-java`.
-#
-# `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
-# binary can't mix strategies), so these artifacts need their own profile rather
-# than a package override. maturin (`--profile release-bridge-python`), napi
-# (`--profile release-bridge-node`), the standalone cdylib matrix
-# (`--profile release-bridge-cffi`), and the Java native matrix
-# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
-# stay on `release`/`abort`: each owns its own process and is size-gated, so an
-# abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
-[profile.release-bridge-python]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-node]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-swift]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-cffi]
-inherits = "release"
-panic = "unwind"
-
-[profile.release-bridge-java]
-inherits = "release"
-panic = "unwind"
+# Measured cost on `baml-cli`, aarch64-apple-darwin, identical release settings
+# except `panic` (2026-08-18): 24.65 MiB (abort) -> 30.87 MiB (unwind),
+# +6.23 MiB / +25%: `__text` +2.63 MB (landing pads), `__eh_frame` +2.32 MB,
+# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. Nothing else in the
+# profile can shave this — LTO, opt-level and strip are already at their
+# size-minimizing settings — so the size-gate ceilings carry it explicitly
+# (`.cargo/size-gate.toml`). wasm32 is unaffected: it has no unwinding and
+# behaves as `abort` regardless of this setting.

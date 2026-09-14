@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Boom {
+  payload: T
+}
+class user.Boom$stream {
+  payload: T | null
+}
+function user.as_t(v: unknown) -> T  [expr] {
+  {  } match (v) { x: T => x, _ => throw "not a T" }
+}
+function user.declared_clause_reads_the_binding(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } risky(as_t("x"), false)
+}
+function user.echo(v: T) -> T  [expr] {
+  {  } v
+}
+function user.literal_is_not_a_t(t: reflect.Type) -> unknown  [expr] {
+  { type T = unreflect(t) } echo(42)
+}
+function user.needs_bound() -> string  [expr] {
+  {  } "ok"
+}
+function user.risky(v: T, fail: bool) -> int  [expr] {
+  { if (fail) { throw user.Boom { payload: v } } } 0
+}
+function user.unbounded_binding_fails_a_bound(t: reflect.Type) -> string  [expr] {
+  { type T = unreflect(t) } needs_bound()
+}

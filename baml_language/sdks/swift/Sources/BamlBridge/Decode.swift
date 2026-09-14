@@ -136,6 +136,9 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     case .uint8ArrayValue: return "uint8array"
     case .bigintValue: return "bigint"
     case .tyValue: return "type reference"
+    case .tyDefValue:
+        return "runtime type definition (requires BEP-066 reflection support, "
+            + "which the Swift SDK does not provide)"
     }
 }
 

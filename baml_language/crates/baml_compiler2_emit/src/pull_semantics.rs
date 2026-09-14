@@ -16,19 +16,22 @@ use baml_type::TyTemplate;
 use crate::analysis::{LocalClassification, LocalDefUse};
 
 /// What to do when pulling a local.
-pub(crate) enum LocalPullAction {
+pub(crate) enum LocalPullAction<'db> {
     /// Local pull fully handled by the sink.
     Done,
     /// Inline this local by recursively pulling its defining rvalue.
-    Inline(Box<Rvalue>),
+    Inline(Box<Rvalue<'db>>),
 }
 
 /// Backend for pull-model traversal.
-pub(crate) trait PullSink {
+///
+/// `'db` is the lifetime of the MIR the sink traverses (the inlined rvalues a
+/// [`LocalPullAction::Inline`] hands back are clones out of that MIR).
+pub(crate) trait PullSink<'db> {
     type Error;
 
-    fn pull_constant(&mut self, constant: &Constant) -> Result<(), Self::Error>;
-    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error>;
+    fn pull_constant(&mut self, constant: &Constant<'db>) -> Result<(), Self::Error>;
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction<'db>, Self::Error>;
 
     fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
@@ -69,6 +72,8 @@ pub(crate) trait PullSink {
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
+    /// Reify the package statically selected at this call site.
+    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -95,7 +100,7 @@ pub(crate) trait PullSink {
     /// preceding `load_type` calls) and resolves `item` to a function global.
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef,
+        item: &baml_compiler2_mir::ItemRef<'db>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error>;
 
@@ -117,7 +122,7 @@ pub(crate) trait PullSink {
 }
 
 /// Stack-effect callbacks for statement/terminator helpers.
-pub(crate) trait StackEffectSink: PullSink {
+pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
@@ -183,10 +188,10 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
 ///
 /// Returns `Ok(true)` when `destination` is a projection and was handled here.
 /// Returns `Ok(false)` for `Place::Local(_)` or `Place::Capture(_)`.
-pub(crate) fn walk_projection_store<S: StackEffectSink>(
+pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
     sink: &mut S,
     destination: &Place,
-    value: &Rvalue,
+    value: &Rvalue<'db>,
 ) -> Result<bool, S::Error> {
     match destination {
         Place::Field { base, field } => {
@@ -210,7 +215,7 @@ pub(crate) fn walk_projection_store<S: StackEffectSink>(
 }
 
 /// Shared evaluation for `Drop(place)`.
-pub(crate) fn walk_drop_statement<S: StackEffectSink>(
+pub(crate) fn walk_drop_statement<'db, S: StackEffectSink<'db>>(
     sink: &mut S,
     place: &Place,
 ) -> Result<(), S::Error> {
@@ -219,9 +224,9 @@ pub(crate) fn walk_drop_statement<S: StackEffectSink>(
 }
 
 /// Shared pull order for direct calls: each arg only.
-pub(crate) fn walk_call_direct_args<S: PullSink>(
+pub(crate) fn walk_call_direct_args<'db, S: PullSink<'db>>(
     sink: &mut S,
-    args: &[Operand],
+    args: &[Operand<'db>],
 ) -> Result<(), S::Error> {
     for arg in args {
         walk_operand_pull(sink, arg)?;
@@ -230,33 +235,33 @@ pub(crate) fn walk_call_direct_args<S: PullSink>(
 }
 
 /// Shared pull order for indirect calls: `args..., callee`.
-pub(crate) fn walk_call_indirect_operands<S: PullSink>(
+pub(crate) fn walk_call_indirect_operands<'db, S: PullSink<'db>>(
     sink: &mut S,
-    callee: &Operand,
-    args: &[Operand],
+    callee: &Operand<'db>,
+    args: &[Operand<'db>],
 ) -> Result<(), S::Error> {
     walk_call_direct_args(sink, args)?;
     walk_operand_pull(sink, callee)
 }
 
-/// Resolve a call operand to a statically-known function name through
+/// Resolve a call operand to a statically-known function item through
 /// `Virtual`/`CopyOf` forwarding chains.
-pub(crate) fn resolve_constant_function_name(
-    operand: &Operand,
+pub(crate) fn resolve_constant_function_item<'db>(
+    operand: &Operand<'db>,
     classifications: &HashMap<Local, LocalClassification>,
-    def_use: &HashMap<Local, LocalDefUse>,
-) -> Option<String> {
-    resolve_constant_function_name_inner(operand, classifications, def_use, &mut HashSet::new())
+    def_use: &HashMap<Local, LocalDefUse<'db>>,
+) -> Option<baml_compiler2_mir::ItemRef<'db>> {
+    resolve_constant_function_item_inner(operand, classifications, def_use, &mut HashSet::new())
 }
 
-fn resolve_constant_function_name_inner(
-    operand: &Operand,
+fn resolve_constant_function_item_inner<'db>(
+    operand: &Operand<'db>,
     classifications: &HashMap<Local, LocalClassification>,
-    def_use: &HashMap<Local, LocalDefUse>,
+    def_use: &HashMap<Local, LocalDefUse<'db>>,
     visited_locals: &mut HashSet<Local>,
-) -> Option<String> {
+) -> Option<baml_compiler2_mir::ItemRef<'db>> {
     match operand {
-        Operand::Constant(Constant::Function(item_ref)) => Some(item_ref.to_string()),
+        Operand::Constant(Constant::Function(item_ref)) => Some(item_ref.clone()),
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
             if !visited_locals.insert(*local) {
                 return None;
@@ -268,7 +273,7 @@ fn resolve_constant_function_name_inner(
                     let Rvalue::Use(inner) = &def.rvalue else {
                         return None;
                     };
-                    resolve_constant_function_name_inner(
+                    resolve_constant_function_item_inner(
                         inner,
                         classifications,
                         def_use,
@@ -288,7 +293,7 @@ fn resolve_constant_function_name_inner(
                     if source == *local {
                         return None;
                     }
-                    resolve_constant_function_name_inner(
+                    resolve_constant_function_item_inner(
                         &Operand::copy_local(source),
                         classifications,
                         def_use,
@@ -303,19 +308,22 @@ fn resolve_constant_function_name_inner(
 }
 
 /// Shared pull for `Return` value place (`_0`).
-pub(crate) fn walk_return_value<S: PullSink>(sink: &mut S) -> Result<(), S::Error> {
+pub(crate) fn walk_return_value<'db, S: PullSink<'db>>(sink: &mut S) -> Result<(), S::Error> {
     walk_place_pull(sink, &Place::Local(Local(0)))
 }
 
 /// Shared pull for `Await` future place.
-pub(crate) fn walk_await_future<S: PullSink>(sink: &mut S, future: &Place) -> Result<(), S::Error> {
+pub(crate) fn walk_await_future<'db, S: PullSink<'db>>(
+    sink: &mut S,
+    future: &Place,
+) -> Result<(), S::Error> {
     walk_place_pull(sink, future)
 }
 
 /// Walk an operand in pull order.
-pub(crate) fn walk_operand_pull<S: PullSink>(
+pub(crate) fn walk_operand_pull<'db, S: PullSink<'db>>(
     sink: &mut S,
-    operand: &Operand,
+    operand: &Operand<'db>,
 ) -> Result<(), S::Error> {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => walk_place_pull(sink, place),
@@ -324,7 +332,10 @@ pub(crate) fn walk_operand_pull<S: PullSink>(
 }
 
 /// Walk a place read in pull order.
-pub(crate) fn walk_place_pull<S: PullSink>(sink: &mut S, place: &Place) -> Result<(), S::Error> {
+pub(crate) fn walk_place_pull<'db, S: PullSink<'db>>(
+    sink: &mut S,
+    place: &Place,
+) -> Result<(), S::Error> {
     match place {
         Place::Local(local) => match sink.pull_local(*local)? {
             LocalPullAction::Done => Ok(()),
@@ -345,7 +356,10 @@ pub(crate) fn walk_place_pull<S: PullSink>(sink: &mut S, place: &Place) -> Resul
 }
 
 /// Walk an rvalue in pull order.
-pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Result<(), S::Error> {
+pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
+    sink: &mut S,
+    rvalue: &Rvalue<'db>,
+) -> Result<(), S::Error> {
     match rvalue {
         Rvalue::Use(operand) => walk_operand_pull(sink, operand),
         Rvalue::BinaryOp { op, left, right } => {
@@ -457,6 +471,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::MakeVirtualFunction { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualFunction must be handled in emit_rvalue_pull")
+        }
         Rvalue::VirtualFieldAccess { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
@@ -486,5 +504,6 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
+        Rvalue::CurrentPackage(package) => sink.load_current_package(package),
     }
 }

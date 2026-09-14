@@ -117,6 +117,13 @@ class VersionToolTests(unittest.TestCase):
             f'[package]\nversion = "{version}"\n',
         )
         self.write(
+            "baml_language/sdks/ruby/bridge_ruby/lib/baml/bridge/version.rb",
+            f'module Baml\n  module Bridge\n'
+            f'    TOOLCHAIN_VERSION = "{version}"\n'
+            f'    BRIDGE_RUNTIME_VERSION = "{version}"\n'
+            "    VERSION = TOOLCHAIN_VERSION\n  end\nend\n",
+        )
+        self.write(
             "baml_language/crates/baml/Cargo.toml",
             '[package]\nversion = "1.0.0"\n',
         )
@@ -241,6 +248,14 @@ if "build:debug" in sys.argv:
                 "baml_language/sdks/go/baml_go/version.go",
                 r'^const ToolchainVersion = "([^"]+)"$',
             ),
+            "ruby": match(
+                "baml_language/sdks/ruby/bridge_ruby/lib/baml/bridge/version.rb",
+                r'^    TOOLCHAIN_VERSION = "([^"]+)"$',
+            ),
+            "ruby_runtime": match(
+                "baml_language/sdks/ruby/bridge_ruby/lib/baml/bridge/version.rb",
+                r'^    BRIDGE_RUNTIME_VERSION = "([^"]+)"$',
+            ),
             "csharp": match(
                 "baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj",
                 r"^    <Version>([^<]+)</Version>$",
@@ -296,7 +311,16 @@ if "build:debug" in sys.argv:
         self.run_tool("stamp", "--plan", str(plan_path))
         versions = self.surface_versions()
         self.assertEqual(versions["python"], "1.2.4.dev2026072307")
-        for sdk in ("node", "web", "rust", "go", "csharp", "vsix"):
+        for sdk in (
+            "node",
+            "web",
+            "rust",
+            "go",
+            "ruby",
+            "ruby_runtime",
+            "csharp",
+            "vsix",
+        ):
             self.assertEqual(versions[sdk], canonical)
         # Restoring committed Canary metadata exercises sync after a
         # prerelease stamp and proves nightly values do not remain behind.

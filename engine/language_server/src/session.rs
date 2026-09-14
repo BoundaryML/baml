@@ -318,7 +318,7 @@ impl Session {
 
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
-        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
+        for project in self.baml_src_projects.lock().values_mut() {
             project.lock().baml_project.unsaved_files.clear();
         }
     }
@@ -358,7 +358,7 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
+        for project in self.baml_src_projects.lock().values_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
                 .lock()

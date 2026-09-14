@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.missing_pin(l: Loose) -> void  [expr] {
+  {  } wants_int_key(l)
+}
+function user.pinned_exact(e: Entity) -> void  [expr] {
+  {  } wants_string_key(e)
+}
+function user.wants_int_key(e: HasKey<Key = int>) -> void  [expr] {
+  {  }
+}
+function user.wants_string_key(e: HasKey<Key = string>) -> void  [expr] {
+  {  }
+}
+function user.wrong_pin(e: Entity) -> void  [expr] {
+  {  } wants_int_key(e)
+}

@@ -125,7 +125,7 @@ pub enum TypeExprKind {
         attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type
-    BuiltinUnknown {
+    Unknown {
         attrs: Vec<RawAttribute>,
     },
     /// The `type` meta-type keyword
@@ -140,14 +140,15 @@ pub enum TypeExprKind {
     Error {
         attrs: Vec<RawAttribute>,
     },
-    /// Unknown/missing type
-    Unknown {
+    /// No type was written at this slot (an omitted annotation), as distinct
+    /// from the written `unknown` keyword above.
+    Missing {
         attrs: Vec<RawAttribute>,
     },
     /// The wildcard `_` — an inference hole. Valid only where the type at this
     /// slot can be inferred from context (a generic type argument whose binding
     /// is fixed by an initializer, or a `throws`-clause member). Lowered to
-    /// `Ty::Infer` and filled during TIR checking.
+    /// an inference hole and filled during TIR checking.
     Infer {
         attrs: Vec<RawAttribute>,
     },
@@ -234,11 +235,11 @@ impl TypeExprKind {
             | Self::Union { attrs, .. }
             | Self::Literal { attrs, .. }
             | Self::Function { attrs, .. }
-            | Self::BuiltinUnknown { attrs }
+            | Self::Unknown { attrs }
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs }
+            | Self::Missing { attrs }
             | Self::Infer { attrs } => attrs,
         }
     }
@@ -264,11 +265,11 @@ impl TypeExprKind {
             | Self::Union { attrs, .. }
             | Self::Literal { attrs, .. }
             | Self::Function { attrs, .. }
-            | Self::BuiltinUnknown { attrs }
+            | Self::Unknown { attrs }
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs }
+            | Self::Missing { attrs }
             | Self::Infer { attrs } => attrs,
         }
     }
@@ -406,11 +407,11 @@ impl std::fmt::Display for TypeExprKind {
                 }
                 Ok(())
             }
-            TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
-            TypeExprKind::Type { .. } => write!(f, "type"),
+            TypeExprKind::Unknown { .. } => write!(f, "unknown"),
+            TypeExprKind::Type { .. } => write!(f, "reflect.Type"),
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
-            TypeExprKind::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::Missing { .. } => write!(f, "?"),
             TypeExprKind::Infer { .. } => write!(f, "_"),
         }
     }
@@ -523,6 +524,11 @@ impl ExprBody {
             Expr::Upcast { base, target } => {
                 format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
             }
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            } => format!("({qself} as {interface}).{member}"),
             Expr::Index { base, index } => {
                 format!(
                     "{}[{}]",
@@ -615,10 +621,22 @@ pub struct AstSourceMap {
     pub expr_spans: Arena<TextRange>,
     pub stmt_spans: Arena<TextRange>,
     pub pattern_spans: Arena<TextRange>,
+    /// The NAME token of each `Pattern::Bind`, as distinct from
+    /// [`Self::pattern_spans`], which covers the whole pattern (`x: T`, and
+    /// for a `let` the keyword too). A rename replaces an identifier and
+    /// nothing else, and go-to-definition should land on the name rather
+    /// than highlight the binding, so the two spans cannot be the same
+    /// entry. Absent for binds the compiler synthesizes, which have no name
+    /// token to point at.
+    pub bind_name_spans: HashMap<PatId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
-    /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    /// For `MemberAccess` and `QualifiedPath` expressions, the span of just
+    /// the member name (after the dot). Both name one member of one
+    /// receiver, differing only in how the receiver is written, so both
+    /// record it here — an editor asking "what name is at this offset"
+    /// must not have to know which spelling produced it.
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
@@ -629,12 +647,8 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
-    /// Value expressions synthesized from property shorthand. For example,
-    /// `{ options }` lowers to the same key/value shape as
-    /// `{ options: options }`, while this set preserves that the user wrote the
-    /// shorthand so diagnostics can explain its exact-name requirement.
-    pub property_shorthand_exprs: HashSet<ExprId>,
-
+    /// For lambda expressions, the spans of their parameter names in declaration order.
+    pub lambda_parameter_spans: HashMap<ExprId, Vec<TextRange>>,
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -655,6 +669,7 @@ impl AstSourceMap {
             expr_spans: Arena::new(),
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
+            bind_name_spans: HashMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
@@ -662,7 +677,7 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
-            property_shorthand_exprs: HashSet::new(),
+            lambda_parameter_spans: HashMap::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -677,12 +692,6 @@ impl AstSourceMap {
     /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
-    }
-
-    /// Whether `id` is the value expression synthesized for a shorthand
-    /// property such as the `options` value in `{ options }`.
-    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
-        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up a span in an arena that is index-parallel to the arena `id`
@@ -716,12 +725,22 @@ impl AstSourceMap {
         Self::span_at(&self.expr_spans, id)
     }
 
-    /// Look up the member-name span for a `MemberAccess` expression.
+    /// The member-name span recorded for `id`, or `None` when this
+    /// expression names no member.
+    ///
+    /// Prefer this over [`Self::member_access_member_span`] wherever the
+    /// answer must be a NAME — a rename or a reference highlight. The
+    /// fallback that accessor applies is the whole expression, which is
+    /// never a name.
+    pub fn member_name_span(&self, id: ExprId) -> Option<TextRange> {
+        self.member_access_member_spans.get(&id).copied()
+    }
+
+    /// Look up the member-name span for a `MemberAccess` or `QualifiedPath`
+    /// expression.
     /// Returns the full expression span as fallback if no member span was recorded.
     pub fn member_access_member_span(&self, id: ExprId) -> TextRange {
-        self.member_access_member_spans
-            .get(&id)
-            .copied()
+        self.member_name_span(id)
             .unwrap_or_else(|| self.expr_span(id))
     }
 
@@ -744,7 +763,21 @@ impl AstSourceMap {
             .unwrap_or_else(|| self.expr_span(value_id))
     }
 
+    /// Look up a lambda parameter-name span by declaration index.
+    /// Returns the full lambda expression span as fallback.
+    pub fn lambda_parameter_span(&self, id: ExprId, parameter_index: usize) -> TextRange {
+        self.lambda_parameter_spans
+            .get(&id)
+            .and_then(|spans| spans.get(parameter_index).copied())
+            .unwrap_or_else(|| self.expr_span(id))
+    }
+
     /// Look up the source span of a pattern by its `PatId`.
+    /// The name token of a `Pattern::Bind`, when it was written in source.
+    pub fn bind_name_span(&self, id: PatId) -> Option<TextRange> {
+        self.bind_name_spans.get(&id).copied()
+    }
+
     pub fn pattern_span(&self, id: PatId) -> TextRange {
         Self::span_at(&self.pattern_spans, id)
     }
@@ -768,6 +801,66 @@ impl AstSourceMap {
 impl Default for AstSourceMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// How a property value was written in source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PropertySyntax {
+    /// An explicit key/value pair such as `{ "name": value }` or
+    /// `Config { name: value }`.
+    Explicit,
+    /// A shorthand property such as `{ name }` or `Config { name }`.
+    Shorthand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectExprField {
+    pub name: Name,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl ObjectExprField {
+    pub fn explicit(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(name: Name, value: ExprId) -> Self {
+        Self {
+            name,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapExprEntry {
+    pub key: ExprId,
+    pub value: ExprId,
+    pub syntax: PropertySyntax,
+}
+
+impl MapExprEntry {
+    pub fn explicit(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Explicit,
+        }
+    }
+
+    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
+        Self {
+            key,
+            value,
+            syntax: PropertySyntax::Shorthand,
+        }
     }
 }
 
@@ -884,14 +977,14 @@ pub enum Expr {
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
-        fields: Vec<(Name, ExprId)>,
+        fields: Vec<ObjectExprField>,
         spreads: Vec<SpreadField>,
     },
     Array {
         elements: Vec<ExprId>,
     },
     Map {
-        entries: Vec<(ExprId, ExprId)>,
+        entries: Vec<MapExprEntry>,
     },
     Block {
         stmts: Vec<StmtId>,
@@ -908,6 +1001,21 @@ pub enum Expr {
     Upcast {
         base: ExprId,
         target: TypeExpr,
+    },
+    /// Fully-qualified item reference: `(Base as Interface).item`.
+    ///
+    /// The one spelling that pins BOTH halves of the `(Self type, interface,
+    /// item)` triple. `Base.item` and `Interface.item` denote the same triple
+    /// with one half left to inference and stay ordinary [`Expr::Path`]s —
+    /// the three forms unify in resolution, not in syntax, exactly as
+    /// rustc's `<T as Trait>::item` / `T::item` / `Trait::item` do.
+    ///
+    /// Neither half is an expression: `qself` is a type and `interface` names
+    /// an interface, so there is no base [`ExprId`] to traverse.
+    QualifiedPath {
+        qself: TypeExpr,
+        interface: TypeExpr,
+        member: Name,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
@@ -1058,10 +1166,29 @@ impl CallArg {
     }
 }
 
+/// The right-hand side of a body-level `type T = …;` binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeBindingValue {
+    /// `unreflect(expr)`: the runtime type is the `reflect.Type` value the
+    /// operand evaluates to, evaluated once when the statement runs.
+    Runtime(ExprId),
+    /// A static type: the runtime type is its template, realized in the
+    /// enclosing frame when the statement runs.
+    Static(TypeExpr),
+}
+
 /// Statements — modeled after `Stmt` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
+    /// `type T = …;` inside a body: bind a rigid, block-scoped type parameter
+    /// `T` for the remainder of the enclosing block. The parameter is opaque
+    /// to static checking either way; only where its runtime type comes from
+    /// differs (see [`TypeBindingValue`]).
+    TypeBinding {
+        name: Name,
+        value: TypeBindingValue,
+    },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
         /// as the bind's sub-pattern slot, not as a separate field on
@@ -1489,7 +1616,6 @@ pub enum Item {
     Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
-    Test(TestDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
@@ -1500,8 +1626,9 @@ pub enum Item {
 pub enum DeclarativeMeta {
     /// LLM function metadata (client name, prompt template).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
+    /// The body is desugared to a synthetic `Expr` that constructs an
+    /// `ai.FunctionSpec` and runs it through `ai.Agent`, while this field
+    /// preserves the original declaration metadata.
     Llm(LlmBodyDef),
 }
 
@@ -1619,44 +1746,41 @@ pub enum BuiltinKind {
     AwaitAny,
 }
 
+/// Source geometry of an LLM function's prompt literal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlmPromptSpans {
+    /// The whole literal (backtick or quoted), delimiters included.
+    pub literal: TextRange,
+    /// Every `${…}` construct inside it — interpolations and
+    /// `${for}`/`${if}`/`${end…}` block tags. Offsets outside these (and
+    /// inside `literal`) are prompt prose.
+    pub code: Vec<TextRange>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    pub prompt: Option<RawPrompt>,
-    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
-    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
-    /// argument is the synthesized prompt closure. Built in `lower_cst` while
-    /// the CST backtick literal is still in hand (the AST must stay CST-free for
-    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
-    /// materializes the `$stream` companion. The closure must capture the
-    /// companion's params, so it can't be shared with the oneshot body by
-    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
-    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
-    pub stream_body: Option<(ExprBody, AstSourceMap)>,
-    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
-    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
-    /// keyed by target name. Each is a `<target>(client, fn, args,
-    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
-    /// the static preview/cURL render through the closure exactly like execution.
-    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
-    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
-    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    /// Pre-lowered companion bodies keyed by target name. The single-path
+    /// world stashes exactly one: `"spec"` — the `<Fn>@spec` body, built in
+    /// `lower_cst` while the CST backtick is still in hand (the AST must stay
+    /// CST-free for Salsa: a rowan node is `!Send`), and read back by
+    /// `companions::llm_spec`. Absent when the prompt or client is unusable
+    /// (a migration diagnostic was emitted instead).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawPrompt {
-    pub text: std::string::String,
-    /// Interpolation locations within the template.
-    pub interpolations: Vec<Interpolation>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interpolation {
-    pub content: std::string::String,
-    /// Span of the full interpolation, including delimiters.
+    /// The prompt literal's source geometry, recorded while the CST is in
+    /// hand: hover/navigation classify prompt PROSE (addressed to the
+    /// `ai.prompt` driver) versus `${…}` code without re-deriving the
+    /// desugared spec body's aliased spans. `None` when the prompt was
+    /// unusable.
+    pub prompt_spans: Option<LlmPromptSpans>,
+    /// True when the function's `tools` field can hold tools at runtime:
+    /// any value other than an absent field or a literal empty list (`tools
+    /// []`). A non-literal expression (`tools: shared()`) counts as `true`
+    /// even if it evaluates empty — the compile-time signal is conservative.
+    /// PPIR skips `$stream` synthesis when set (streaming does not run the
+    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
+    /// dynamic cases.
+    pub has_tools: bool,
     pub span: TextRange,
 }
 
@@ -1867,42 +1991,9 @@ pub struct ConfigItemDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestDef {
-    pub name: Name,
-    /// Functions targeted by this legacy config-block test.
-    pub function_refs: Vec<Name>,
-    /// Statically declared test arguments.
-    pub args: Vec<(Name, TestArgValue)>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-/// A JSON-compatible value declared in a legacy test's `args` block.
-///
-/// Floats are stored as bit patterns so the AST remains `Eq`, which is
-/// required by the incremental compiler's early-cutoff comparisons.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    FloatBits(u64),
-    Bool(bool),
-    String(std::string::String),
-    Array(Vec<TestArgValue>),
-    Map(Vec<(std::string::String, TestArgValue)>),
-}
-
-impl TestArgValue {
-    pub fn float(value: f64) -> Self {
-        Self::FloatBits(value.to_bits())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateStringDef {
     pub name: Name,
     pub params: Vec<Param>,
-    pub body: Option<RawPrompt>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1915,7 +2006,8 @@ pub struct RetryPolicyDef {
     pub name_span: TextRange,
 }
 
-/// A top-level let binding — compiler-generated, not user syntax.
+/// A top-level let binding. Source `let` declarations and compiler-generated
+/// client/retry-policy bindings share the same `$init` pipeline.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {

@@ -16,9 +16,10 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtMediaPdf => "pdf",
         BamlHandleType::AdtMediaGeneric => "media",
         BamlHandleType::AdtPromptAst => "prompt_ast",
-        BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
+        BamlHandleType::AdtFunctionSpec => "function_spec",
+        BamlHandleType::AdtRuntimeValue => "runtime_value",
         // Host-owned callables are tracked per-bridge, not in HANDLE_TABLE.
         // The key here is the bridge-side identity passed in from the host.
         BamlHandleType::HostValueCallable => "host_value_callable",
@@ -56,7 +57,9 @@ impl BamlHandle {
         }
     }
 
-    /// Clone this handle — new key, same underlying value.
+    /// Take one more ownership of this handle's row: a new key for
+    /// identity-free values, the same (refcounted) key for an engine-heap
+    /// handle.
     #[wasm_bindgen(js_name = "cloneHandle")]
     pub fn clone_handle(&self) -> Result<BamlHandle, JsError> {
         let new_key = HANDLE_TABLE
@@ -123,5 +126,16 @@ impl Drop for BamlHandle {
                 let _ = HANDLE_TABLE.release(self.key);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capability_handle_type_names_are_stable() {
+        assert_eq!(type_name(BamlHandleType::AdtFunctionSpec), "function_spec");
+        assert_eq!(type_name(BamlHandleType::AdtRuntimeValue), "runtime_value");
     }
 }

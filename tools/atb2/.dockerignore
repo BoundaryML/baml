@@ -1,0 +1,8 @@
+# Only the package and startup scripts belong in the runner image.
+*
+!baml.toml
+!baml_src
+!deploy/entrypoint.sh
+!deploy/bootstrap.sh
+!deploy/build-cli.sh
+!deploy/launch-runtime.py

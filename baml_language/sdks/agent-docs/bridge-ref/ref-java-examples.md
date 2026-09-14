@@ -620,7 +620,7 @@ public static baml_sdk.baml.http.Request build_request( … ) { … }
 public static baml_sdk.baml.llm.PromptAst render_prompt( … ) { … }
 ```
 
-The runtime-owned `Stream` is re-exported: `baml.llm.Stream` resolves to
+The runtime-owned `Stream` is re-exported: `ai.stream.Stream` resolves to
 `baml_bridge.BamlStream` (`translate_ty.rs:180-186`).
 
 > ⚠ **Deviation from Python:** Python re-exports handle-backed types with import
@@ -633,16 +633,16 @@ The runtime-owned `Stream` is re-exported: `baml.llm.Stream` resolves to
 capability). `baml_bridge/BamlStream.java` is a **real**
 `BamlStream<TPartial, TFinal>` wrapping the tagged-heap handle:
 `next()` / `get_final()` (and their `_async` siblings) re-enter the engine via
-ordinary `BamlFfi.callSync`/`callAsync` on `baml.llm.Stream.next` /
-`baml.llm.Stream.final`, passing `this` as the `self` receiver with a **`null`
-(wire-driven) descriptor** — exactly like Python (`BamlStream.java:38-99`).
-Generated code returns it directly (`baml.llm.Client.execute_stream` →
-`baml_bridge.BamlStream<TStream, TFinal>`, `llm_functions` fixture). Exhaustion
-returns a runtime-owned `baml_sdk.baml.stream.StreamFinished` **value** (no
-`null`, no exception — Python's contract), registered in the typemap as a
-`RUNTIME_OWNED` FQN (`TypeRegistry.java:82-94`). Decode gains the
-`ADT_TAGGED_HEAP_HANDLE` arm → `BamlStream.fromHandle` and encode delegates to
-the `BamlHandle` arm (cloned key per the drain contract). `final`/`final_async`
+ordinary `BamlFfi.callSync`/`callAsync`. Decode retains the tagged handle's
+concrete `ty.class_ty.name`; the wrapper derives `<FQN>.next` / `<FQN>.final`
+from that identity and passes `this` as the `self` receiver with a **`null`
+(wire-driven) descriptor**. Generated `$stream` companions return
+`baml_bridge.BamlStream<TStream, TFinal>` directly. Exhaustion returns a
+runtime-owned `baml_sdk.ai.stream.Done` **value** (no `null`, no exception),
+registered in the typemap under `ai.stream.Done`. Decode maps
+`ADT_TAGGED_HEAP_HANDLE` to `BamlStream.fromHandle` after retaining its class
+FQN; encode delegates to the `BamlHandle` arm (cloned key per the drain
+contract). `final`/`final_async`
 escape to `get_final`/`get_final_async` (Java reserved word; OWNER decision
 2026-07-18). (See `ref-java-outbound-decoding.md` "Handles" and `ref-java-type-mappings.md`.)
 

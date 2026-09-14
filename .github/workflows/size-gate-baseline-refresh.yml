@@ -6,8 +6,7 @@ name: Size Gate — Daily Baseline Refresh
 # Key idea: it does NOT rebuild anything. Every canary CI run already builds
 # and measures the artifacts and uploads `size-gate-<platform>.json`. This
 # job just adopts the newest of those reports as the new baseline and opens
-# a PR. (Rebuilding here would re-pay the mac/windows release builds that are
-# already CI's long pole — no reason to pay them twice.)
+# a PR, without repeating the Linux/WASM release builds.
 #
 # What the PR changes:
 #   * .ci/size-gate/<platform>.toml  — exact recorded sizes (the relative
@@ -52,7 +51,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: canary
           persist-credentials: false
@@ -74,7 +73,7 @@ jobs:
         working-directory: baml_language
         env:
           # `bake --branch` shells out to `gh` to find the newest completed
-          # CI run on the branch that has all four size-gate reports, download
+          # CI run on the branch that has the enabled Linux/WASM reports, download
           # them, and adopt them. This is the SAME path a developer runs
           # locally to fix a stale baseline — one tool, one code path.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,7 +114,7 @@ jobs:
 
       - name: "Open/update baseline-refresh PR"
         id: cpr
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           # PAT (not GITHUB_TOKEN) so the PR triggers its own CI, including
           # the size-gate check that confirms the new baseline is green.
@@ -130,15 +129,22 @@ jobs:
             baml_language/.ci/size-gate/*.toml
             baml_language/.cargo/size-gate.toml
 
-      - name: "Enable auto-merge"
-        # Only when a PR actually exists (no diff → no PR → nothing to do).
-        # With canary's required checks, auto-merge waits for this PR's own
-        # size-gate CI to pass before merging, so a refresh that would
-        # regress never lands. Uses the PAT (the GITHUB_TOKEN can't enable
-        # auto-merge on a PR it didn't author).
+      - name: "Enqueue to merge queue"
+        # No diff means no PR number and nothing to enqueue.
+        # We want "merge when ready" immediately after filing the PR. While
+        # checks are pending, `gh pr merge` tries repository auto-merge instead;
+        # `enqueuePullRequest` directly enrolls the PR in canary's merge queue.
         if: steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
         run: |
-          gh pr merge "${{ steps.cpr.outputs.pull-request-number }}" \
-            --squash --auto
+          pr_id=$(gh api \
+            "repos/${{ github.repository }}/pulls/${{ steps.cpr.outputs.pull-request-number }}" \
+            --jq .node_id)
+          gh api graphql \
+            -f query='mutation($prId: ID!) {
+              enqueuePullRequest(input: {pullRequestId: $prId}) {
+                mergeQueueEntry { position }
+              }
+            }' \
+            -F prId="$pr_id"

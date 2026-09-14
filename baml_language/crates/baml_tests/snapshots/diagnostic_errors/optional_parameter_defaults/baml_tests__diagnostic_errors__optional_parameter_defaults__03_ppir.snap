@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 52309
 ---
 === PPIR ===
 function user.BadDefaultPositional() -> string  [expr] {
@@ -51,6 +50,9 @@ function user.Current(self: ? = null) -> int  [expr] {
 }
 function user.Filtered(query: string, filter: string? = null) -> int  [expr] {
   {  } query.length()
+}
+function user.Greeting(name: string = "world") -> string  [expr] {
+  {  } `...`
 }
 function user.LambdaDefault() -> int  [expr] {
   { let f = (x: int = 1) -> int { {  } x } } f(2)

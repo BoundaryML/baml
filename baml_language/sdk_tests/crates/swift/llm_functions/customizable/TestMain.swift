@@ -23,33 +23,7 @@ final class TestMain: XCTestCase {
         )
     }
 
-    func test_main_extract_resume_build_request_includes_openai_api_key() throws {
-        setenv("OPENAI_API_KEY", "sk-openai-shorthand-test", 1)
-        defer { unsetenv("OPENAI_API_KEY") }
-        let request = try Baml.lorem.ExtractResume_build_request(text: "Some resume text")
-        let headers = Dictionary(
-            uniqueKeysWithValues: request.headers.map { ($0.key.lowercased(), $0.value) }
-        )
-        XCTAssertEqual(headers["authorization"], "Bearer sk-openai-shorthand-test")
-    }
 
-    func test_main_streaming_extract_build_request_includes_openai_api_key() throws {
-        setenv("OPENAI_API_KEY", "sk-openai-responses-test", 1)
-        defer { unsetenv("OPENAI_API_KEY") }
-        let request = try Baml.lorem.StreamingExtract_build_request(text: "Some text to summarize")
-        let headers = Dictionary(
-            uniqueKeysWithValues: request.headers.map { ($0.key.lowercased(), $0.value) }
-        )
-        XCTAssertEqual(headers["authorization"], "Bearer sk-openai-responses-test")
-    }
-
-    func test_main_classify_sentiment_build_request_includes_anthropic_api_key() throws {
-        setenv("ANTHROPIC_API_KEY", "sk-ant-shorthand-test", 1)
-        defer { unsetenv("ANTHROPIC_API_KEY") }
-        let request = try Baml.ipsum.ClassifySentiment_build_request(text: "I love this!")
-        let headers = Dictionary(
-            uniqueKeysWithValues: request.headers.map { ($0.key.lowercased(), $0.value) }
-        )
-        XCTAssertEqual(headers["x-api-key"], "sk-ant-shorthand-test")
-    }
+    // NOTE: the legacy `*_build_request` binding is gone. Request previews now
+    // start with `Fn_spec(...)` and call `buildRequest()` on that value.
 }

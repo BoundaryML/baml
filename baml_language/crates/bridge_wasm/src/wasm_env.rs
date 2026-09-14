@@ -68,7 +68,7 @@ impl IoNamespaceEnv for WasmEnv {
     ) -> SysOpOutput<Option<String>> {
         let env_fn = self.env_fn().clone();
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-        let host_call_id = crate::wasm_host_call_id(call_id);
+        let host_call_id = crate::runs::wasm_host_call_id(call_id);
         #[allow(clippy::cast_precision_loss)]
         let js_request_id = wasm_bindgen::JsValue::from_f64(request_id as f64);
         let result = env_fn
@@ -92,7 +92,7 @@ impl IoNamespaceEnv for WasmEnv {
                 self.run_store
                     .ingest_env_requested(host_call_id, request_id, key.clone())
         {
-            crate::send_run_patch(&self.notification_callback, &patch);
+            crate::runs::send_run_patch(&self.notification_callback, &patch);
         }
 
         if result.is_instance_of::<Promise>() {
@@ -153,14 +153,14 @@ fn publish_env_resolved(
         if result.outcome == RequestCommandOutcome::Accepted
             && let Some(patch) = result.patch
         {
-            crate::send_run_patch(notification_callback, &patch);
+            crate::runs::send_run_patch(notification_callback, &patch);
         }
         return;
     }
 
     if let Some(patch) = run_store.ingest_env_resolved(host_call_id, request_id, key, status, None)
     {
-        crate::send_run_patch(notification_callback, &patch);
+        crate::runs::send_run_patch(notification_callback, &patch);
     }
 }
 

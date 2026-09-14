@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.ambiguous() -> void  [expr] {
+  { throw [] }
+}
+function user.isolatedCatch() -> void  [expr] {
+  { { throw [] } catch (e) { _ => throw [1] } }
+}
+function user.isolatedLambda() -> void  [expr] {
+  { let f = () -> { { throw [] } }; throw [1] }
+}
+function user.openClause() -> void  [expr] {
+  { throw [] }
+}
+function user.unannotated() -> void  [expr] {
+  { throw [] }
+}
+function user.wrongEffect() -> void  [expr] {
+  { throw "wrong" }
+}
+function user.wrongElement() -> void  [expr] {
+  { throw ["wrong"] }
+}
+function user.wrongExplicitMapValue() -> void  [expr] {
+  { throw map { "value": "wrong" } }
+}
+function user.wrongImplicitMapValue() -> void  [expr] {
+  { throw map { "value": "wrong" } }
+}

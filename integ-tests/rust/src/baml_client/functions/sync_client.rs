@@ -547,6 +547,10 @@ baml_function_sync!(TestOpenAIResponsesWithOpenAIResponseType(input: impl AsRef<
 
 baml_function_sync!(TestOpenAIShorthand(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
+baml_function_sync!(TestOpenAITranscription(audio: &types::Audio, ) -> (String, String));
+
+baml_function_sync!(TestOpenAITranscriptionMultipartChat(audio: &types::Audio, ) -> (String, String));
+
 baml_function_sync!(TestOpenAIWithFinishReasonError(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_sync!(TestOpenAIWithMaxTokens(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
@@ -1142,6 +1146,10 @@ pub struct BamlSyncClient {
     pub TestOpenAIResponsesWithOpenAIResponseType: TestOpenAIResponsesWithOpenAIResponseType,
 
     pub TestOpenAIShorthand: TestOpenAIShorthand,
+
+    pub TestOpenAITranscription: TestOpenAITranscription,
+
+    pub TestOpenAITranscriptionMultipartChat: TestOpenAITranscriptionMultipartChat,
 
     pub TestOpenAIWithFinishReasonError: TestOpenAIWithFinishReasonError,
 
@@ -1740,6 +1748,10 @@ impl BamlSyncClient {
                 TestOpenAIResponsesWithOpenAIResponseType::new(),
 
             TestOpenAIShorthand: TestOpenAIShorthand::new(),
+
+            TestOpenAITranscription: TestOpenAITranscription::new(),
+
+            TestOpenAITranscriptionMultipartChat: TestOpenAITranscriptionMultipartChat::new(),
 
             TestOpenAIWithFinishReasonError: TestOpenAIWithFinishReasonError::new(),
 
@@ -2756,6 +2768,14 @@ impl BamlSyncClient {
             },
 
             TestOpenAIShorthand: TestOpenAIShorthand {
+                options: options.clone(),
+            },
+
+            TestOpenAITranscription: TestOpenAITranscription {
+                options: options.clone(),
+            },
+
+            TestOpenAITranscriptionMultipartChat: TestOpenAITranscriptionMultipartChat {
                 options: options.clone(),
             },
 

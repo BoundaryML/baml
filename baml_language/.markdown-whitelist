@@ -3,6 +3,10 @@
 # Supports glob patterns (*, **)
 # Only long-term informational .md files should be listed here
 
+# Release documentation
+CHANGELOG.md
+RELEASING.md
+
 # Test documentation
 crates/baml_tests/BENCHMARKS.md
 crates/baml_tests/benches/incremental/*/description.md
@@ -21,6 +25,7 @@ crates/baml_type/tests/simplify_sap_tests.md
 # Architecture
 ARCHITECTURE_MINI.md
 ARCHITECTURE.md
+FUNCTION_SPEC_STREAMING_DESIGN.md
 architecture/test-profiles.md
 
 # Type System Documentation

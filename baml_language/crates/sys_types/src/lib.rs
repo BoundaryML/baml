@@ -91,11 +91,10 @@ pub fn resolve_name<'a, T>(
     ResolveOutcome::Found(first.0.as_str(), first.1)
 }
 
-/// Types generated from `llm_types.baml`.
+/// Types generated from the stdlib `.baml` sources.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that
-/// defines the SysOps struct (orphan rule). The owned structs here are used by
-/// sys_llm for provider option types.
+/// defines the SysOps struct (orphan rule).
 #[allow(warnings, clippy::all, clippy::pedantic)]
 pub mod generated {
 
@@ -360,7 +359,9 @@ impl std::fmt::Display for ContractViolation {
 pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
     let baml_err = match err {
         VmRustFnError::BamlError(b) => b,
-        VmRustFnError::Panic(_) | VmRustFnError::Thrown(_) | VmRustFnError::InternalError(_) => {
+        VmRustFnError::Panic(_)
+        | VmRustFnError::Thrown { .. }
+        | VmRustFnError::InternalError(_) => {
             return Ok(());
         }
     };
@@ -610,10 +611,6 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Used by `resolve_client` to return `FunctionRef` values.
     pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to templates by `get_jinja_template`.
-    pub template_strings_macros: Arc<String>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
@@ -621,17 +618,17 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     pub cancel: CancellationToken,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
@@ -646,7 +643,6 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
         Self {
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
-            template_strings_macros: self.template_strings_macros.clone(),
             cancel: self.cancel.clone(),
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
@@ -669,22 +665,18 @@ pub struct EngineSysOpContext {
     /// Used by `resolve_client` to return `FunctionRef` values.
     pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to templates by `get_jinja_template`.
-    pub template_strings_macros: Arc<String>,
-
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Typed async IO interface, built from the `SysOps` table at engine init.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -695,19 +687,40 @@ pub struct EngineSysOpContext {
 /// This is built during engine construction by reading function objects from the heap,
 /// so that LLM `sys_ops` don't need to access raw heap pointers.
 pub struct LlmFunctionInfo {
-    /// The Jinja prompt template for this function.
-    pub prompt_template: String,
     /// The client name (e.g., `"MyClient"`) declared in the function.
     pub client_name: String,
     /// The expected return type, used for response parsing.
-    pub return_type: baml_type::RuntimeTy,
+    pub return_type: SapTy,
 }
+
+/// A type as the sys-op / SAP lane carries it: heads are
+/// [`TaggedTypeName`](baml_type::TaggedTypeName), so a definition table can be
+/// keyed by declaration identity while still rendering the name a user wrote.
+///
+/// Plain owned data with no heap pointers, which is what lets SAP hold one
+/// across the permit release.
+pub type SapTy = baml_type::RuntimeTy<baml_type::TaggedTypeName>;
+
+/// How the lane's definition tables are keyed: by declaration identity, never
+/// by name. Two declarations a user spelled alike are different keys; a runtime
+/// declaration can no longer shadow a compiled one.
+///
+/// The key is the whole head rather than a bare tag because its `Eq`/`Hash` are
+/// already tag-only, so lookups compare identity — while `Display` still yields
+/// the name, which SAP and the output-format renderer put in front of users. A
+/// bare tag would key correctly and render `#4713`.
+pub type DefKey = baml_type::TaggedTypeName;
+
+/// [`SapTy`]'s symbolic twin: a field's template with class-level generic
+/// references (`TypeArgRef`) preserved, headed by the same lane identity.
+pub type SapTyTemplate = baml_type::TyTemplate<baml_type::TaggedTypeName>;
 
 /// Pre-extracted class definition for output format rendering.
 #[derive(Clone, Debug)]
 pub struct ClassDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub fields: Vec<ClassFieldDefinition>,
 }
@@ -716,8 +729,16 @@ pub struct ClassDefinition {
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
-    pub field_type: baml_type::RuntimeTy,
+    pub field_type: SapTy,
+    /// Symbolic field type with class-level generic references preserved.
+    ///
+    /// `field_type` is intentionally erased for some runtime paths, so
+    /// output-format rendering uses this template when a class is visited
+    /// with concrete type arguments. `None` is retained for synthetic/test
+    /// definitions that only provide an already-realized `field_type`.
+    pub field_template: Option<SapTyTemplate>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
 }
@@ -727,6 +748,7 @@ pub struct ClassFieldDefinition {
 pub struct EnumDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub variants: Vec<EnumVariantDefinition>,
 }
@@ -736,6 +758,7 @@ pub struct EnumDefinition {
 pub struct EnumVariantDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
 }
 
@@ -770,18 +793,10 @@ impl SysOpContext {
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
-            template_strings_macros: Arc::new(String::new()),
             cancel: CancellationToken::new(),
-            class_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
-            ),
-            enum_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, EnumDefinition>::new(),
-            ),
-            type_alias_definitions: Arc::new(indexmap::IndexMap::<
-                baml_type::TypeName,
-                baml_type::RuntimeTy,
-            >::new()),
+            class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
+            enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
         }
@@ -798,7 +813,6 @@ impl EngineSysOpContext {
         SysOpContext {
             llm_functions: self.llm_functions.clone(),
             function_global_indices: self.function_global_indices.clone(),
-            template_strings_macros: self.template_strings_macros.clone(),
             cancel,
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
@@ -1022,23 +1036,6 @@ mod tests {
         assert_eq!(violation.actual_category, SysOpErrorCategory::LlmClient);
     }
 
-    #[test]
-    fn contract_allows_devother_when_declared() {
-        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
-        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
-        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
-        let err: bex_vm_types::errors::VmRustFnError =
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "some debug detail".into(),
-            }
-            .into();
-        let result = validate_sys_op_error(op, &err);
-        assert!(
-            result.is_err(),
-            "DevOther should be rejected when not in #[throws]"
-        );
-    }
-
     /// `Panic` / `Thrown` / `InternalError` variants of `VmRustFnError` are
     /// outside the `#[throws(...)]` contract surface; validation must let
     /// them pass even on an op that declares no throws categories.
@@ -1047,7 +1044,7 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
         for err in [
             bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
-            bex_vm_types::errors::VmRustFnError::Thrown(bex_vm_types::Value::NULL),
+            bex_vm_types::errors::VmRustFnError::thrown_fresh(bex_vm_types::Value::NULL),
             bex_vm_types::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
             ),
@@ -1080,9 +1077,6 @@ mod tests {
             },
             bex_vm_types::errors::VmBamlError::Unsupported {
                 message: "u".into(),
-            },
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "x".into(),
             },
         ] {
             let rust_err: bex_vm_types::errors::VmRustFnError = err.into();
@@ -1137,14 +1131,8 @@ mod tests {
             VmBamlError::RenderPrompt {
                 message: "r".into(),
             },
-            VmBamlError::NotImplemented {
-                message: "n".into(),
-            },
             VmBamlError::LlmClient {
                 message: "l".into(),
-            },
-            VmBamlError::DevOther {
-                message: "test".into(),
             },
             VmBamlError::HostCallable {
                 class_name: "C".into(),

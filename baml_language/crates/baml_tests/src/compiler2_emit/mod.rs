@@ -4,8 +4,10 @@
 //! compiler2 pipeline through `generate_project_bytecode`, and verifies
 //! the resulting `Program` has the expected structure.
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
+use baml_compiler2_emit::generate_project_bytecode;
+use baml_db::ProjectDatabase;
+
+use crate::engine::TestDbExt;
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
@@ -20,18 +22,15 @@ function main() -> int {
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
+    db.workspace(std::path::Path::new("."));
     db
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("compilation should succeed")
+    let package = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
+    generate_project_bytecode(db, package).expect("compilation should succeed")
 }
 
 #[test]
@@ -39,7 +38,7 @@ fn typed_pattern_emits_atomic_narrow_bind() {
     use bex_vm_types::Instruction;
 
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -93,7 +92,7 @@ fn explicit_local_id_selects_runtime_id_bytecodes_only_for_tagged_calls() {
     use bex_vm_types::Instruction;
 
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 function leaf(n: int) -> int { n }
@@ -137,7 +136,7 @@ fn explicit_local_id_selects_indirect_optional_and_virtual_bytecodes() {
     use bex_vm_types::Instruction;
 
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Speaker {
@@ -203,7 +202,7 @@ macro_rules! emit_snapshot {
 #[test]
 fn simple_function_compiles() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         "function greet(name: string) -> string { return name; }",
     );
@@ -218,7 +217,7 @@ fn simple_function_compiles() {
 #[test]
 fn builtin_functions_included() {
     let mut db = make_db();
-    db.add_file("test.baml", "function f() -> string { return \"x\"; }");
+    db.file("test.baml", "function f() -> string { return \"x\"; }");
     let program = compile(&db);
     // Builtins from the baml and env packages should be present
     let has_baml = program
@@ -244,7 +243,7 @@ fn builtin_functions_included() {
 #[test]
 fn enum_variant_lookup() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
         enum Color { Red Green Blue }
@@ -262,7 +261,7 @@ fn enum_variant_lookup() {
 #[test]
 fn class_field_lookup() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
         class Point { x int  y int }
@@ -280,7 +279,7 @@ fn class_field_lookup() {
 #[test]
 fn optional_param_metadata_and_omitted_sentinel_emit() {
     let mut db = make_db();
-    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
+    db.file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
     let program = compile(&db);
 
     let add_idx = program.function_indices["user.add"];
@@ -312,7 +311,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
 #[test]
 fn optional_defaults_emit_snapshot() {
     let mut db = make_db();
-    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
+    db.file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
     let program = compile(&db);
     emit_snapshot!(
         "optional_defaults_emit_snapshot",
@@ -324,8 +323,8 @@ fn optional_defaults_emit_snapshot() {
 //
 // Note: `set_synthetic_items_for_file` was removed from the DB trait as part of
 // the compiler2 migration (Phase 2). These tests now use actual BAML source
-// declarations (clients, retry_policy) which produce `Item::Let` bindings and
-// exercise the same let-binding infrastructure.
+// declarations (`client Name = <expr>;`) which produce `Item::Let` bindings
+// and exercise the same let-binding infrastructure.
 
 /// Verify that a client declaration:
 /// - Produces a let binding with a global slot (appears in `let_global_indices`)
@@ -334,13 +333,10 @@ fn optional_defaults_emit_snapshot() {
 #[test]
 fn let_binding_global_slot_and_init_function() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
-        client<llm> MyClient {
-          provider openai
-          options { model "gpt-4" }
-        }
+        client MyClient = openai.ResponsesClient.new(model = "gpt-4");
         function f() -> string { return "x"; }
         "#,
     );
@@ -381,7 +377,7 @@ fn let_binding_global_slot_and_init_function() {
 #[test]
 fn init_test_chainer_synthesized_when_tests_present() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
         test "foo" {
@@ -431,7 +427,7 @@ fn init_test_chainer_synthesized_when_tests_present() {
 #[test]
 fn no_init_test_chainer_when_no_tests() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         "function greet(name: string) -> string { return name; }",
     );
@@ -451,17 +447,11 @@ fn no_init_test_chainer_when_no_tests() {
 #[test]
 fn multiple_let_bindings_with_valid_dependencies() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
-        client<llm> ClientA {
-          provider openai
-          options { model "gpt-4" }
-        }
-        client<llm> ClientB {
-          provider openai
-          options { model "gpt-3.5-turbo" }
-        }
+        client ClientA = openai.ResponsesClient.new(model = "gpt-4");
+        client ClientB = openai.ResponsesClient.new(model = "gpt-3.5-turbo");
         function f() -> string { return "x"; }
         "#,
     );
@@ -506,7 +496,7 @@ fn multiple_let_bindings_with_valid_dependencies() {
 #[test]
 fn interface_field_index_space_keeps_every_declared_field() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Shelf {
@@ -571,7 +561,7 @@ function main() -> int { 0 }
 #[test]
 fn impl_rule_field_links_are_ordered_by_the_interface() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Shelf {
@@ -601,7 +591,7 @@ function main() -> int { 0 }
     let class = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Class(c) if c.name.name().as_str() == "Book" => Some(c),
+            bex_vm_types::Object::Class(c) if c.name.item_name().as_str() == "Book" => Some(c),
             _ => None,
         })
         .expect("Book class object should be emitted");
@@ -639,7 +629,7 @@ function main() -> int { 0 }
 #[test]
 fn impl_rule_field_links_fill_the_same_name_default() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Named {

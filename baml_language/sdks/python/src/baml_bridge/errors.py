@@ -95,7 +95,7 @@ def attach_baml_traceback(exc: _E) -> _E:
 def _format_message(class_name: Optional[str], value: Any) -> str:
     """A non-empty message for `str(e)` (the `@trace` / telemetry path records
     it). `class_name` is the thrown value's BAML FQN when known (e.g.
-    `baml.json.JsonParseError`); `{value!r}` works for arbitrary user-thrown
+    `baml.json.ParseError`); `{value!r}` works for arbitrary user-thrown
     types that have no `message` field."""
     name = class_name or type(value).__name__
     return f"{name}: {value!r}"
@@ -133,10 +133,6 @@ class BamlError(Exception):
         return self._class_name
 
 
-class BamlCancelledError(BamlError):
-    """Structured BAML cancellation reason carried by host cancellation."""
-
-
 class BamlPanic(BaseException):
     """Raised for a BAML panic (incl. cancellation).
 
@@ -166,6 +162,11 @@ class BamlPanic(BaseException):
     @property
     def class_name(self) -> Optional[str]:
         return self._class_name
+
+
+class BamlCancelledError(BamlPanic):
+    """Structured BAML cancellation surfaced by sync calls and carried as the
+    ``reason`` on native ``asyncio.CancelledError`` for async calls."""
 
 
 def make_sdk_panic(message: str) -> BamlPanic:

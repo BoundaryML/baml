@@ -10,6 +10,25 @@
 //! retargeted per member: deep members (`child: Self`) recurse into themselves;
 //! the shallow `Concrete*` members nest their declared `child`.
 //!
+//! Every member is parameterized by `N`, the representation of a *nominal type
+//! head* — the name a `Class`, `Enum`, `Interface`, or `TypeAlias` refers to.
+//! Each member declares the default its layer works in: the compile-time
+//! members (`Ty`, `LoweringTy`, `InferTy`, and the master's satellites) default
+//! to [`DeclName`], whose package is the declaring source root, so a bare `Ty`
+//! in the compiler is root-headed and cannot be spelled without a viewpoint;
+//! the wire members default to [`TypeName`], the name-based head an artifact
+//! carries. The parameter exists so the runtime can carry interned or
+//! heap-anchored heads instead, without a parallel type family.
+//! Note that `N` covers *heads only*: [`Name`] positions (a field, an enum
+//! variant, an associated-type binding) are member names, not type references,
+//! and stay concrete.
+//!
+//! `N: Clone` is required at the declaration because a family member is a
+//! cloneable value tree — the derived `Clone` needs it, and so does
+//! `BorshDeserialize` for the `Box<Ty<N>>` positions (via `ToOwned`). Any head
+//! representation worth having (a name, an interned id, a heap handle) is
+//! cloneable, so this rules out nothing real.
+//!
 //! The semantic impls (`render_with`, `Display`, `validate_runtime`, the
 //! conversions, and the `lower_to_runtime` boundary)
 //! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
@@ -17,13 +36,27 @@
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
+use crate::{
+    DeclName, Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
+};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, projection, tir, special, frame }
+    axes { concrete, abstract, literal, never, typevar, projection, lower, infer, error, special, frame }
 
-    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
-    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    // The FINALIZED compiler type: what type checking hands downstream (TIR
+    // facts, throw-facts persistence, the normalize oracle, MIR input). It can
+    // carry the `Error` sentinel — a diagnosed failure is a legitimate final
+    // answer — but not an inference hole: a `_` is a question, and finalized
+    // types are answers. Holes live in `LoweringTy` only.
+    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, error, special],        child: Self, head: DeclName }
+    // The pre-inference lowering type: `Ty` plus the `_` hole (`Infer`). The
+    // output vocabulary of pure type-expression lowering, consumed by the two
+    // policy folds — signatures reject holes (`reject_holes`), inference
+    // instantiates them as fresh table variables (`instantiate_holes`). The
+    // widest plain member, so the hand-written renderer lives here and every
+    // narrower member renders through its upcast.
+    type LoweringTy         { includes: [concrete, abstract, literal, never, typevar, projection, lower, error, special], child: Self, head: DeclName }
+    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],               child: Self }
     // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
     // excludes unresolved associated-type projections; unlike `RealizedTy`, it
     // retains named type variables for generic declarations. Type aliases are
@@ -41,13 +74,23 @@ ty_family! {
     // `RealizedTy` is a valid `TyTemplate`; narrowing back proves no template
     // leaf survives), giving the "is fully realized" check for free.
     type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, frame],        child: Self }
+    // The INTERNED member: the hash-cons pool's kind (see `crate::interned`).
+    // Children are pool handles, so this is the one-level-deep structural
+    // layer a handle dereferences to. It is the inference engine's working
+    // representation: the finalized axes plus `infer` — a live table variable
+    // is representable, the syntactic `_` hole is not (`lower` excluded), so
+    // the F1 ruling ("during inference there are never var-less holes") holds
+    // by construction. Excluded from the conversion matrix and walkers; its
+    // boundary conversions (total interning, fallible finalization) are
+    // hand-written in `interned.rs` alongside the pool.
+    type InferTy            { includes: [concrete, abstract, literal, never, typevar, projection, infer, error, special], child: interned(crate::interned::Ty), head: DeclName }
 
-    satellite FunctionParamTy {
+    satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
-        pub ty: Ty,
+        pub ty: Ty<N>,
         pub mode: FunctionParamMode,
     } methods {
-        pub fn required(name: Option<Name>, ty: Ty) -> Self {
+        pub fn required(name: Option<Name>, ty: Ty<N>) -> Self {
             Self {
                 name,
                 ty,
@@ -55,7 +98,7 @@ ty_family! {
             }
         }
 
-        pub fn optional(name: Option<Name>, ty: Ty) -> Self {
+        pub fn optional(name: Option<Name>, ty: Ty<N>) -> Self {
             Self {
                 name,
                 ty,
@@ -78,17 +121,17 @@ ty_family! {
     // generic bound — distinct from `Ty::Interface`, the interface *existential*
     // type, which requires every associated type to be specified. (A `//` comment,
     // not `///`: the `ty_family!` satellite grammar has no slot for a leading doc.)
-    satellite Interface {
-        pub name: TypeName,
+    satellite Interface<N: Clone = TypeName> {
+        pub name: N,
         /// The interface's generic *input* arguments, in declaration order.
         /// Resolved from context; never defaulted away — they are part of the
         /// interface's identity (`Converter<int>` ≠ `Converter<float>`).
-        pub generics: Vec<Ty>,
+        pub generics: Box<[Ty<N>]>,
         /// Associated-type bindings that further constrain the implementor (the
         /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
-        pub associated_types: Vec<(Name, Ty)>,
+        pub associated_types: Box<[(Name, Ty<N>)]>,
     } methods {
         /// Build an interface constraint, sorting `associated_types` by name so the
         /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
@@ -97,13 +140,35 @@ ty_family! {
         /// for every family member (`Interface`, `RuntimeInterface`, …), so every
         /// construction site — including the untrusted ctypes decode boundary —
         /// can route through it instead of sorting by hand.
-        pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
+        pub fn new(
+            name: N,
+            generics: Box<[Ty<N>]>,
+            mut associated_types: Box<[(Name, Ty<N>)]>,
+        ) -> Self {
             associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
             Self {
                 name,
                 generics,
                 associated_types,
             }
+        }
+
+        /// The interface *existential* type (`Ty::Interface`) denoted by this
+        /// constraint, with default attributes.
+        ///
+        /// A constraint may pin only some associated types whereas a
+        /// fully-specified existential pins all of them; this lifts the
+        /// constraint verbatim, so the result carries exactly the bindings the
+        /// constraint holds. Generated for every member, so each member's
+        /// renderer (and any other consumer of the existential view) reads it
+        /// from its own satellite.
+        pub fn to_ty(&self) -> Ty<N> {
+            Ty::Interface(
+                self.name.clone(),
+                self.generics.clone(),
+                self.associated_types.clone(),
+                TyAttr::default(),
+            )
         }
     }
 
@@ -119,7 +184,7 @@ ty_family! {
     /// non-default values.
     #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
     #[borsh(use_discriminant = true)]
-    pub enum Ty {
+    pub enum Ty<N: Clone = TypeName> {
         #[axis(concrete)]
         Int {
             attr: TyAttr,
@@ -156,33 +221,33 @@ ty_family! {
         #[axis(literal)]
         Literal(Literal, Freshness, TyAttr) = 8,
         #[axis(concrete)]
-        Class(TypeName, Vec<Ty>, TyAttr) = 9,
+        Class(N, Box<[Ty<N>]>, TyAttr) = 9,
         /// An interface existential type, equivalent to Rust `dyn Trait`.
         /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
-        Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr) = 10,
+        Interface(N, Box<[Ty<N>]>, Box<[(Name, Ty<N>)]>, TyAttr) = 10,
         #[axis(concrete)]
-        Enum(TypeName, TyAttr) = 11,
+        Enum(N, TyAttr) = 11,
         /// A specific enum variant — `Status.HttpError`.
         #[axis(literal)]
-        EnumVariant(TypeName, Name, TyAttr) = 12,
+        EnumVariant(N, Name, TyAttr) = 12,
         #[axis(concrete)]
-        List(Box<Ty>, TyAttr) = 13,
+        List(Box<Ty<N>>, TyAttr) = 13,
         #[axis(concrete)]
         Map {
-            key: Box<Ty>,
-            value: Box<Ty>,
+            key: Box<Ty<N>>,
+            value: Box<Ty<N>>,
             attr: TyAttr,
         } = 14,
         #[axis(abstract)]
-        Union(Vec<Ty>, TyAttr) = 15,
+        Union(Box<[Ty<N>]>, TyAttr) = 15,
 
         /// Function/arrow type: `(T1, T2, ...) -> R throws E`.
         #[axis(concrete)]
         Function {
-            params: Vec<FunctionParamTy>,
-            ret: Box<Ty>,
-            throws: Box<Ty>,
+            params: Box<[FunctionParamTy<N>]>,
+            ret: Box<Ty<N>>,
+            throws: Box<Ty<N>>,
             attr: TyAttr,
         } = 16,
         /// A future handle — the result of `schedule_future` or `spawn`
@@ -192,7 +257,7 @@ ty_family! {
         /// type the future may throw. A future whose body statically cannot
         /// throw has error type `never`.
         #[axis(concrete)]
-        Future(Box<Ty>, Box<Ty>, TyAttr) = 17,
+        Future(Box<Ty<N>>, Box<Ty<N>>, TyAttr) = 17,
         /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
         /// e.g. `Media._data`). A leaf concrete type with no inner structure.
         ///
@@ -201,10 +266,8 @@ ty_family! {
         RustType {
             attr: TyAttr,
         } = 18,
-        /// The `type` metatype keyword — a runtime value that wraps a `Ty`
+        /// The `reflect.Type` metatype — a runtime value that wraps a `Ty`
         /// (reflection). A leaf concrete type.
-        ///
-        /// Renders as the `type` keyword (qualified name `baml.reflect.Type`).
         #[axis(concrete)]
         Type {
             attr: TyAttr,
@@ -213,7 +276,7 @@ ty_family! {
         /// concrete type whose *values* are concrete Rust types on the VM heap; the
         /// type system treats it nominally (no structural decomposition).
         ///
-        /// Renders as its qualified name `baml.llm.Resource`.
+        /// Renders as its qualified name `ai.Resource`.
         #[axis(concrete)]
         Resource {
             attr: TyAttr,
@@ -222,7 +285,7 @@ ty_family! {
         /// *values* are concrete Rust types on the VM heap; the type system treats
         /// it nominally (no structural decomposition).
         ///
-        /// Renders as its qualified name `baml.llm.PromptAst`.
+        /// Renders as its qualified name `ai.Prompt`.
         #[axis(concrete)]
         PromptAst {
             attr: TyAttr,
@@ -236,7 +299,7 @@ ty_family! {
         // reserved = 23
         /// Only recursive aliases survive lower_ty; non-recursive are expanded.
         #[axis(special)]
-        TypeAlias(TypeName, TyAttr) = 24,
+        TypeAlias(N, TyAttr) = 24,
         /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
         /// during inference; can survive at runtime only inside reflective generic
         /// metadata.
@@ -249,20 +312,20 @@ ty_family! {
         /// a name-based `TypeVar`.
         #[axis(projection)]
         AssociatedTypeProjection {
-            base: Box<Ty>,
+            base: Box<Ty<N>>,
             /// The declaring interface of this projection — always known: the TIR
             /// resolves `(base as I).member` to its interface `I` (or lowers to
             /// `Ty::Error` when it cannot be determined), so a resolved projection
             /// never lacks its qualifier. This is what lets a realized-base
             /// projection reduce to the impl's binding at substitution time.
-            interface: Box<Interface>,
+            interface: Box<Interface<N>>,
             member: Name,
             attr: TyAttr,
         } = 26,
         /// The top type - may have any concrete value.
         ///
         /// Similar to TypeScript's `unknown` - any value can be passed where
-        /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
+        /// `Unknown` is expected, but `Unknown` cannot be used
         /// where a specific type is required.
         ///
         /// Used in llm.baml for functions like:
@@ -270,7 +333,7 @@ ty_family! {
         /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
         /// ```
         #[axis(abstract)]
-        BuiltinUnknown {
+        Unknown {
             attr: TyAttr,
         } = 27,
         /// The bottom type — an expression that never produces a value (`return`,
@@ -280,33 +343,32 @@ ty_family! {
             attr: TyAttr,
         } = 28,
 
-        // --- TIR-only: present during type checking, erased at the runtime
-        // boundary (`lower_to_runtime`). Carried only by `Ty` (the `tir` axis).
-        /// Error-recovery sentinel: the type is structurally unknown (e.g. an
-        /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
-        #[axis(tir)]
-        Unknown {
-            attr: TyAttr,
-        } = 29,
+        // --- Compiler-only sentinels: present during type checking, erased at
+        // the runtime boundary (`lower_to_runtime`). Each sits on its own axis
+        // because the pipeline's stages admit them differently: `error` is
+        // carried by every compiler-side member (a diagnosed failure is a
+        // legitimate final answer), while `lower` exists only in `LoweringTy`
+        // (a finalized type is an answer, never a question).
+        // reserved: 29 was `Unknown`, the TIR-era second error-recovery
+        // sentinel. The inference engine has exactly one (`Error`); TIR's other
+        // uses of `Unknown` are an absent expectation and a fresh inference
+        // variable, neither of which is a type.
         /// Error sentinel: a hard type error was emitted for this expression.
-        #[axis(tir)]
+        #[axis(error)]
         Error {
             attr: TyAttr,
         } = 30,
-        /// Evolving list — an empty `[]` literal at a mutable binding whose element
-        /// type is refined by mutations. Frozen to `List` at the runtime boundary.
-        #[axis(tir)]
-        EvolvingList(Box<Ty>, TyAttr) = 31,
-        /// Evolving map — the map analogue of [`Ty::EvolvingList`].
-        #[axis(tir)]
-        EvolvingMap(Box<Ty>, Box<Ty>, TyAttr) = 32,
+        // reserved: 31 and 32 were `EvolvingList`/`EvolvingMap`, the TIR-era
+        // empty-container refinement helpers. The inference engine expresses the
+        // same thing honestly as `List`/`Map` over inference variables.
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
-        /// of a `let`, or the inferred effective throw set). Filled during TIR
-        /// checking; like the other `tir`-axis sentinels it must never survive to
-        /// the runtime boundary (`lower_to_runtime` rejects it).
-        #[axis(tir)]
+        /// of a `let`, or the inferred effective throw set). Lowering mints it;
+        /// the policy folds consume it — signatures reject survivors, inference
+        /// instantiates each hole as a fresh table variable. It must never
+        /// survive to a finalized `Ty` (the narrowing conversion rejects it).
+        #[axis(lower)]
         Infer {
             attr: TyAttr,
         } = 33,
@@ -324,6 +386,21 @@ ty_family! {
         TypeArgRef(u32) = 34,
         // reserved = 35 (the removed `TypeArgRefOrWildcard` dispatch-guard ref)
         // reserved = 36 (the removed `Wildcard` match-any hole)
+
+        /// A live inference-table variable. ALWAYS a variable: the syntactic
+        /// `_` hole is unrepresentable here (it lives on the `lower` axis,
+        /// which the interned member excludes) — lowering never interns, so by
+        /// the time a type is interned every hole has been instantiated
+        /// (`ingest_lowered`) or rejected (`reject_holes`). Present only in
+        /// [`InferTy`] (the `infer` axis): inference-engine-internal, must
+        /// never survive `resolve_all`. The discriminant is nominal — the
+        /// interned member is never transmuted or serialized — but stays
+        /// unique so declaration order keeps `Ord` parity meaningful.
+        #[axis(infer)]
+        InferVar {
+            var: crate::interned::InferVar,
+            attr: TyAttr,
+        } = 37,
     }
 }
 
@@ -332,8 +409,9 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use crate::{
-        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotCodegenTy,
-        NotRealizedTy, NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
+        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, LoweringTy, MediaKind, Name,
+        NotCodegenTy, NotRealizedTy, NotRuntimeTy, NotTy, RealizedTy, RuntimeTy, Ty, TyAttr,
+        TyTemplate, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -347,25 +425,25 @@ mod tests {
     /// A deeply-nested type that is realized (no type variables) and has a
     /// concrete top-level variant, so it is representable in every member.
     /// Exercises `Map`/`List`/`Union`, the `Function` satellite +
-    /// `Vec<Option<_>>` bound, and the `Interface` `Vec<(Name, _)>` binding.
-    fn deep_concrete() -> Ty {
+    /// `Vec<Option<_>>` bound, and the `Interface<TypeName>` `Vec<(Name, _)>` binding.
+    fn deep_concrete() -> Ty<TypeName> {
         Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::Function {
-                params: vec![
+                params: Box::new([
                     FunctionParamTy::required(Some(Name::new("x")), Ty::Int { attr: a() }),
                     FunctionParamTy::optional(
                         Some(Name::new("y")),
                         Ty::List(Box::new(Ty::Bool { attr: a() }), a()),
                     ),
-                ],
+                ]),
                 ret: Box::new(Ty::Interface(
                     qtn("Iterator"),
-                    vec![Ty::Union(
-                        vec![Ty::Int { attr: a() }, Ty::Null { attr: a() }],
+                    Box::new([Ty::Union(
+                        Box::new([Ty::Int { attr: a() }, Ty::Null { attr: a() }]),
                         a(),
-                    )],
-                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    )]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -375,9 +453,176 @@ mod tests {
         }
     }
 
+    /// A stand-in for the interned/heap-anchored head the runtime will carry:
+    /// a `Copy` id, laid out nothing like the default [`TypeName`].
+    type Interned = Ty<u32>;
+
+    /// The family is genuinely parameterized, not `TypeName` with a parameter
+    /// bolted on. Worth its own test because the guarantees the generated code
+    /// rests on are *per monomorphization*: each conversion carries a `const`
+    /// size + align assert that is only evaluated at the instantiations actually
+    /// used, so a family that silently only worked at `TypeName` would look
+    /// perfectly healthy until the runtime introduced its own head. Exercising a
+    /// second `N` end-to-end — every conversion shape, in both directions — is
+    /// what makes that failure a compile error here rather than there.
+    #[test]
+    fn conversions_hold_at_a_non_default_head() {
+        let t: Interned = Ty::Map {
+            key: Box::new(Ty::Class(7, Box::new([Ty::Int { attr: a() }]), a())),
+            value: Box::new(Ty::Function {
+                params: Box::new([FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::Enum(9, a()),
+                )]),
+                ret: Box::new(Ty::Interface(
+                    11,
+                    Box::new([Ty::Bool { attr: a() }]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
+                    a(),
+                )),
+                throws: Box::new(Ty::Void { attr: a() }),
+                attr: a(),
+            }),
+            attr: a(),
+        };
+
+        // Deep, equal-size pairs: the reinterpreting conversions and the
+        // borrowed upcast.
+        let rt = RuntimeTy::<u32>::try_from(&t).unwrap();
+        let rz = RealizedTy::<u32>::try_from(&t).unwrap();
+        assert_eq!(Ty::from(&rt), t);
+        assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(rt.as_ty(), &t);
+        assert_eq!(rz.as_runtime_ty(), &rt);
+        assert_eq!(<&RealizedTy<u32>>::try_from(&t), Ok(&rz));
+
+        // A shallow member, whose conversions take the structural walk instead.
+        let ct = ConcreteTy::<u32>::try_from(&rt).unwrap();
+        assert_eq!(RuntimeTy::from(&ct), rt);
+        assert_eq!(Ty::from(&ct), t);
+
+        // Narrowing still rejects by name at a nested depth.
+        let bad: Interned = Ty::List(Box::new(Ty::Error { attr: a() }), a());
+        assert_eq!(
+            RuntimeTy::<u32>::try_from(&bad),
+            Err(NotRuntimeTy { variant: "Error" })
+        );
+
+        // And the wire format round-trips over the substituted head.
+        assert_eq!(
+            Ty::<u32>::try_from_slice(&borsh::to_vec(&t).unwrap()).unwrap(),
+            t
+        );
+    }
+
+    /// Every head is reachable through `visit_heads`, at every nesting depth and
+    /// through every shape that can carry one.
+    ///
+    /// This is the property a relocating collector rests on: a head the walk
+    /// misses is a pointer that never gets forwarded, i.e. a dangling reference
+    /// after the next move. The walk is generated from the same variant list as
+    /// the enum, so it cannot drift — this test pins that the *shapes* are all
+    /// descended into (behind `Box`, through `Vec`, through the recursive field
+    /// of a satellite, and through the `Vec<(Name, _)>` associated-type binding,
+    /// whose head sits in a tuple element).
+    #[test]
+    fn visit_heads_reaches_every_head() {
+        let t: Interned = Ty::Map {
+            // Behind a `Box`, with a head nested inside its generic arguments.
+            key: Box::new(Ty::Class(1, Box::new([Ty::Enum(2, a())]), a())),
+            value: Box::new(Ty::Function {
+                // Through a satellite's recursive field.
+                params: Box::new([FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::EnumVariant(3, Name::new("V"), a()),
+                )]),
+                ret: Box::new(Ty::Interface(
+                    4,
+                    // Through a `Vec` of nested types...
+                    Box::new([Ty::TypeAlias(5, a())]),
+                    // ...and through the tuple element of a binding list.
+                    Box::new([(Name::new("Item"), Ty::Class(6, Box::new([]), a()))]),
+                    a(),
+                )),
+                throws: Box::new(Ty::Void { attr: a() }),
+                attr: a(),
+            }),
+            attr: a(),
+        };
+
+        let mut seen = Vec::new();
+        t.visit_heads(&mut |head| seen.push(*head));
+        assert_eq!(seen, vec![1, 2, 3, 4, 5, 6]);
+
+        // The unique-borrow walk reaches exactly the same positions, and writes
+        // through them — the forwarding step a moving collector performs.
+        let mut forwarded = t.clone();
+        forwarded.visit_heads_mut(&mut |head| *head += 100);
+        let mut seen_after = Vec::new();
+        forwarded.visit_heads(&mut |head| seen_after.push(*head));
+        assert_eq!(seen_after, vec![101, 102, 103, 104, 105, 106]);
+
+        // A head-free type yields nothing rather than being skipped entirely.
+        let leaf: Interned = Ty::List(Box::new(Ty::Int { attr: a() }), a());
+        let mut none = Vec::new();
+        leaf.visit_heads(&mut |head| none.push(*head));
+        assert!(none.is_empty());
+    }
+
+    /// `map_heads` rebuilds the whole tree at a different head type, carrying
+    /// every head-free payload across unchanged.
+    ///
+    /// This is how the runtime will re-anchor a serialized `RuntimeTy<TypeName>`
+    /// onto heap-backed heads at load, so the properties that matter are that no
+    /// head is missed (the mapped-back value equals the original) and that
+    /// nothing *but* the heads changes — a dropped `Name` or `TyAttr` would be a
+    /// silent loss the head walkers cannot catch.
+    #[test]
+    fn map_heads_rebuilds_at_a_new_head() {
+        // Covers a satellite inside a `Vec` (`Function::params`), a satellite
+        // behind a `Box` (the projection's `interface`), a head in a `Vec` of
+        // nested types, and one in a `Vec<(Name, _)>` tuple element.
+        let t: Interned = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::Function {
+                params: Box::new([FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::Class(1, Box::new([Ty::Enum(2, a())]), a()),
+                )]),
+                ret: Box::new(Ty::Void { attr: a() }),
+                throws: Box::new(Ty::Never { attr: a() }),
+                attr: a(),
+            }),
+            interface: Box::new(crate::Interface::new(
+                3,
+                Box::new([Ty::TypeAlias(4, a())]),
+                Box::new([(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))]),
+            )),
+            member: Name::new("Out"),
+            attr: a(),
+        };
+
+        let renamed: Ty<String> = t.map_heads(&mut |head| format!("h{head}"));
+        let mut seen = Vec::new();
+        renamed.visit_heads(&mut |head| seen.push(head.clone()));
+        assert_eq!(seen, ["h1", "h2", "h3", "h4", "h5"]);
+
+        // Mapping back is the identity: every head was reached, and every
+        // non-head field survived the round trip.
+        let back: Interned = renamed.map_heads(&mut |head| head[1..].parse().unwrap());
+        assert_eq!(back, t);
+
+        // The fallible form stops at the first head it cannot resolve — a
+        // failed head lookup must surface, not leave a stand-in behind.
+        let rejected: Result<Ty<String>, u32> = t.try_map_heads(&mut |head| match head {
+            3 => Err(*head),
+            _ => Ok(format!("h{head}")),
+        });
+        assert_eq!(rejected, Err(3));
+    }
+
     /// A type variable nested inside a concrete container: representable in
-    /// `RuntimeTy` but not `RealizedTy`.
-    fn with_typevar() -> Ty {
+    /// `RuntimeTy<TypeName>` but not `RealizedTy<TypeName>`.
+    fn with_typevar() -> Ty<TypeName> {
         Ty::List(Box::new(Ty::type_var("T")), a())
     }
 
@@ -392,7 +637,7 @@ mod tests {
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
 
-        // RealizedTy ≤ RuntimeTy ≤ Ty (deep), by ref + owned move.
+        // RealizedTy<TypeName> ≤ RuntimeTy<TypeName> ≤ Ty<TypeName> (deep), by ref + owned move.
         assert_eq!(Ty::from(&rt), t);
         assert_eq!(Ty::from(rt.clone()), t);
         assert_eq!(RuntimeTy::from(&cg), rt);
@@ -402,12 +647,12 @@ mod tests {
         assert_eq!(RuntimeTy::from(&rz), rt);
         assert_eq!(RuntimeTy::from(rz.clone()), rt);
 
-        // ConcreteTy ≤ RuntimeTy ≤ Ty (ConcreteTy→RuntimeTy is shallow: same child).
+        // ConcreteTy<TypeName> ≤ RuntimeTy<TypeName> ≤ Ty<TypeName> (ConcreteTy<TypeName>→RuntimeTy<TypeName> is shallow: same child).
         assert_eq!(RuntimeTy::from(&ct), rt);
         assert_eq!(RuntimeTy::from(ct.clone()), rt);
         assert_eq!(Ty::from(&ct), t);
 
-        // ConcreteRealizedTy ≤ {ConcreteTy, RealizedTy, RuntimeTy, Ty}.
+        // ConcreteRealizedTy<TypeName> ≤ {ConcreteTy<TypeName>, RealizedTy<TypeName>, RuntimeTy<TypeName>, Ty<TypeName>}.
         assert_eq!(RealizedTy::from(&crz), rz);
         assert_eq!(ConcreteTy::from(&crz), ct);
         assert_eq!(ConcreteTy::from(crz.clone()), ct);
@@ -421,7 +666,27 @@ mod tests {
         assert_eq!(ConcreteRealizedTy::try_from(&t).unwrap(), crz);
     }
 
-    /// `RealizedTy` deeply rejects type variables (by name); `RuntimeTy` keeps
+    /// The finalized `Ty<TypeName>` ⊂ `LoweringTy<TypeName>` pair: widening is the zero-cost
+    /// reinterpretation (every answer is a valid question-stage value), and
+    /// narrowing rejects a hole at any depth — the type-level form of "a
+    /// finalized type is an answer, never a question".
+    #[test]
+    fn finalized_ty_rejects_holes() {
+        let t = deep_concrete();
+        let lt = LoweringTy::from(&t);
+        assert_eq!(t.as_lowering_ty(), &lt);
+        assert_eq!(Ty::try_from(&lt).unwrap(), t);
+
+        let open: LoweringTy<TypeName> =
+            LoweringTy::List(Box::new(LoweringTy::Infer { attr: a() }), a());
+        assert_eq!(Ty::try_from(&open), Err(NotTy { variant: "Infer" }));
+        // An `Error` is a finalized answer, so it narrows fine.
+        let errored: LoweringTy<TypeName> =
+            LoweringTy::List(Box::new(LoweringTy::Error { attr: a() }), a());
+        assert!(Ty::try_from(&errored).is_ok());
+    }
+
+    /// `RealizedTy<TypeName>` deeply rejects type variables (by name); `RuntimeTy<TypeName>` keeps
     /// them.
     #[test]
     fn realized_rejects_type_variables() {
@@ -446,8 +711,8 @@ mod tests {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(crate::Interface::new(
                 qtn("Iterator"),
-                Vec::new(),
-                Vec::new(),
+                Box::new([]),
+                Box::new([]),
             )),
             member: Name::new("Item"),
             attr: a(),
@@ -493,47 +758,46 @@ mod tests {
         );
     }
 
+    /// Serialize at an explicitly named member. Variant construction alone
+    /// leaves the head parameter `N` open, and these assertions are about one
+    /// member at the default head — so each names the member it locks.
+    fn tag<T: borsh::BorshSerialize>(value: T) -> u8 {
+        borsh::to_vec(&value).unwrap()[0]
+    }
+
     /// Lock the Borsh wire format. Every family member uses the explicit master
-    /// discriminants, with slot 23 reserved for the removed `WatchAccessor`.
+    /// discriminants, with slots 23, 31, and 32 reserved for removed variants.
+    /// `Infer`'s tag of 33 is what proves a removed variant leaves a gap rather
+    /// than renumbering the tail.
     #[test]
     fn borsh_uses_explicit_discriminants() {
-        let tag = |bytes: Vec<u8>| bytes[0];
-        assert_eq!(tag(borsh::to_vec(&Ty::Int { attr: a() }).unwrap()), 0);
+        assert_eq!(tag::<Ty<TypeName>>(Ty::Int { attr: a() }), 0);
+        assert_eq!(tag::<Ty<TypeName>>(Ty::Media(MediaKind::Image, a())), 7);
         assert_eq!(
-            tag(borsh::to_vec(&Ty::Media(MediaKind::Image, a())).unwrap()),
-            7
-        );
-        assert_eq!(
-            tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
+            tag::<Ty<TypeName>>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
         assert_eq!(
-            tag(borsh::to_vec(&Ty::EvolvingMap(
-                Box::new(Ty::Never { attr: a() }),
-                Box::new(Ty::Never { attr: a() }),
-                a()
-            ))
-            .unwrap()),
-            32
+            tag::<LoweringTy<TypeName>>(LoweringTy::Infer { attr: a() }),
+            33
         );
-        assert_eq!(tag(borsh::to_vec(&Ty::Infer { attr: a() }).unwrap()), 33);
         assert_eq!(
-            tag(borsh::to_vec(&RuntimeTy::TypeAlias(qtn("Alias"), a())).unwrap()),
+            tag::<RuntimeTy<TypeName>>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
             24
         );
         // Filtered family members use the same master tags rather than local
         // declaration-order indices.
         assert_eq!(
-            tag(borsh::to_vec(&RealizedTy::BuiltinUnknown { attr: a() }).unwrap()),
+            tag::<RealizedTy<TypeName>>(RealizedTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            tag(borsh::to_vec(&TyTemplate::TypeAlias(qtn("Alias"), a())).unwrap()),
+            tag::<TyTemplate<TypeName>>(TyTemplate::TypeAlias(qtn("Alias"), a())),
             24
         );
-        assert_eq!(tag(borsh::to_vec(&TyTemplate::TypeArgRef(0)).unwrap()), 34);
+        assert_eq!(tag::<TyTemplate<TypeName>>(TyTemplate::TypeArgRef(0)), 34);
         assert_eq!(
-            tag(borsh::to_vec(&ConcreteTy::Never { attr: a() }).unwrap()),
+            tag::<ConcreteTy<TypeName>>(ConcreteTy::Never { attr: a() }),
             28
         );
     }
@@ -550,23 +814,53 @@ mod tests {
 
     #[test]
     fn in_memory_discriminants_are_consistent_across_members() {
-        // `BuiltinUnknown` is master variant #27; `RealizedTy` drops the
+        // `Unknown` is master variant #27; `RealizedTy<TypeName>` drops the
         // `typevar` and `projection` variants before it, yet its tag stays 27.
-        assert_eq!(in_memory_tag(&Ty::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&RuntimeTy::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&CodegenTy::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&RealizedTy::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(
+            in_memory_tag::<Ty<TypeName>>(&Ty::Unknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<RuntimeTy<TypeName>>(&RuntimeTy::Unknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Unknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<RealizedTy<TypeName>>(&RealizedTy::Unknown { attr: a() }),
+            27
+        );
         // `Never` (#28) is shared and tag-stable across the deep members.
-        assert_eq!(in_memory_tag(&Ty::Never { attr: a() }), 28);
-        assert_eq!(in_memory_tag(&CodegenTy::Never { attr: a() }), 28);
-        assert_eq!(in_memory_tag(&RealizedTy::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag::<Ty<TypeName>>(&Ty::Never { attr: a() }), 28);
+        assert_eq!(
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Never { attr: a() }),
+            28
+        );
+        assert_eq!(
+            in_memory_tag::<RealizedTy<TypeName>>(&RealizedTy::Never { attr: a() }),
+            28
+        );
         // A leaf concrete variant present in every member, shallow ones included.
-        assert_eq!(in_memory_tag(&Ty::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&CodegenTy::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag::<Ty<TypeName>>(&Ty::Int { attr: a() }), 0);
+        assert_eq!(
+            in_memory_tag::<CodegenTy<TypeName>>(&CodegenTy::Int { attr: a() }),
+            0
+        );
+        assert_eq!(
+            in_memory_tag::<ConcreteTy<TypeName>>(&ConcreteTy::Int { attr: a() }),
+            0
+        );
+        assert_eq!(
+            in_memory_tag::<ConcreteRealizedTy<TypeName>>(&ConcreteRealizedTy::Int { attr: a() }),
+            0
+        );
         // The template-only frame leaf keeps its master tag.
-        assert_eq!(in_memory_tag(&TyTemplate::TypeArgRef(0)), 34);
+        assert_eq!(
+            in_memory_tag::<TyTemplate<TypeName>>(&TyTemplate::TypeArgRef(0)),
+            34
+        );
     }
 
     /// The borrowed upcast (`RuntimeTy::as_ty`, `RealizedTy::as_runtime_ty`, …)
@@ -606,11 +900,11 @@ mod tests {
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
-        assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
-        assert_eq!(<&CodegenTy>::try_from(&t), Ok(&cg));
-        assert_eq!(<&CodegenTy>::try_from(&rt), Ok(&cg));
-        assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
-        assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
+        assert_eq!(<&RuntimeTy<TypeName>>::try_from(&t), Ok(&rt));
+        assert_eq!(<&CodegenTy<TypeName>>::try_from(&t), Ok(&cg));
+        assert_eq!(<&CodegenTy<TypeName>>::try_from(&rt), Ok(&cg));
+        assert_eq!(<&RealizedTy<TypeName>>::try_from(&t), Ok(&rz));
+        assert_eq!(<&RealizedTy<TypeName>>::try_from(&rt), Ok(&rz));
 
         // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
         assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
@@ -626,40 +920,40 @@ mod tests {
     /// discriminant.
     #[test]
     fn downcast_rejects_unrepresentable_at_depth() {
-        // `TypeVar` under a `List`: a valid `RuntimeTy` (keeps `typevar`), not a
-        // valid `RealizedTy` (drops it) — the error names the culprit.
+        // `TypeVar` under a `List`: a valid `RuntimeTy<TypeName>` (keeps `typevar`), not a
+        // valid `RealizedTy<TypeName>` (drops it) — the error names the culprit.
         let tv = with_typevar();
-        let tv_rt = <&RuntimeTy>::try_from(&tv).unwrap();
+        let tv_rt = <&RuntimeTy<TypeName>>::try_from(&tv).unwrap();
         assert_eq!(
-            <&RealizedTy>::try_from(&tv),
+            <&RealizedTy<TypeName>>::try_from(&tv),
             Err(NotRealizedTy { variant: "TypeVar" })
         );
         assert_eq!(
-            <&RealizedTy>::try_from(tv_rt),
+            <&RealizedTy<TypeName>>::try_from(tv_rt),
             Err(NotRealizedTy { variant: "TypeVar" })
         );
 
-        // A `tir`-only `Unknown` buried in a map value: not even a `RuntimeTy`.
+        // A `tir`-only `Error` buried in a map value: not even a `RuntimeTy<TypeName>`.
         let bad = Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
-            value: Box::new(Ty::List(Box::new(Ty::Unknown { attr: a() }), a())),
+            value: Box::new(Ty::List(Box::new(Ty::Error { attr: a() }), a())),
             attr: a(),
         };
         assert_eq!(
-            <&RuntimeTy>::try_from(&bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            <&RuntimeTy<TypeName>>::try_from(&bad),
+            Err(NotRuntimeTy { variant: "Error" })
         );
         assert_eq!(
-            <&CodegenTy>::try_from(&bad),
-            Err(NotCodegenTy { variant: "Unknown" })
+            <&CodegenTy<TypeName>>::try_from(&bad),
+            Err(NotCodegenTy { variant: "Error" })
         );
         assert_eq!(
-            <&RealizedTy>::try_from(&bad),
-            Err(NotRealizedTy { variant: "Unknown" })
+            <&RealizedTy<TypeName>>::try_from(&bad),
+            Err(NotRealizedTy { variant: "Error" })
         );
         assert_eq!(
             RuntimeTy::try_from(bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
     }
 }

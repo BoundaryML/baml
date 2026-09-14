@@ -7,34 +7,34 @@
 interface Rng {
     /// Produces `bytes` uniformly random bytes.
     ///
-    /// ## Panics
+    /// # Panics
     ///
     /// - If `bytes` is negative.
     /// - If `bytes` bytes cannot be allocated (`baml.panics.AllocFailure`).
     /// - If the implementation fails to produce the requested number of bytes
     ///   (for example, if the underlying system random number generator is unavailable)
-    function random(self, bytes: int) -> uint8array throws never
+    function random(self, bytes: int) -> uint8array throws never;
 
     /// Returns a uniformly random `int` over the full `[int.min_value(),
     /// int.max_value()]` range.
     ///
     /// BAML `int` is 63-bit, so this discards a single bit of the 64 drawn (the
-    /// top bit of the first byte). The remaining 63 bits give a uniform value:
-    /// the low 62 bits form the magnitude and the 63rd is the sign.
+    /// top bit of the first byte). The remaining 63 bits are uniform, and so is
+    /// the value they spell.
     function random_int(self) -> int throws never {
         let bytes = self.random(8);
-        // A uniform 62-bit magnitude in `[0, int.max_value()]`. The first byte
-        // is masked to 6 bits (`& 63`) so its top contribution lands at bit 61,
-        // never bit 62 — the i63 sign bit — which would overflow.
-        let magnitude = ((bytes[0] & 63) << 56) | (bytes[1] << 48) | (bytes[2] << 40) | (bytes[3] << 32) | (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-        // Use bit 6 of the first byte as a sign bit. `0 - magnitude - 1` maps
-        // `[0, 2^62)` onto `[int.min_value(), -1]`, so the two branches together
-        // tile the whole signed range with no overlap or overflow.
-        if ((bytes[0] & 64) == 0) {
-            magnitude
-        } else {
-            0 - magnitude - 1
-        }
+        // `<<` truncates to the 63-bit width, so the first byte's top bit falls
+        // off the end and its bit 6 lands on bit 62, the sign. No branch on
+        // the sign is needed: the 63 surviving bits already tile the whole
+        // signed range, one draw per value.
+        (bytes[0] << 56)
+            | (bytes[1] << 48)
+            | (bytes[2] << 40)
+            | (bytes[3] << 32)
+            | (bytes[4] << 24)
+            | (bytes[5] << 16)
+            | (bytes[6] << 8)
+            | bytes[7]
     }
 }
 
@@ -45,7 +45,7 @@ interface Rng {
 class SystemRandom {
     /// Returns a new `SystemRandom` instance using the global system random number generator.
     function get() -> SystemRandom throws never {
-        SystemRandom {}
+        SystemRandom {  }
     }
 
     implements Rng {
@@ -67,16 +67,16 @@ class SystemRandom {
 /// `SystemRandom` or a well-seeded `ChaCha20` instead.
 class Xoshiro256PlusPlus {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `Xoshiro256PlusPlus` pseudo-random number generator.
     ///
-    /// ## Parameters
+    /// # Parameters
     /// - `seed`: The seed for the random number generator.
     ///   If no seed is provided, a random seed is generated using the system random number generator.
     ///   The seed must be at least 32 bytes long.
     ///
-    /// ## Panics
+    /// # Panics
     /// If `seed` is shorter than 32 bytes.
     function new(
         seed: uint8array = SystemRandom.get().random(32),
@@ -113,20 +113,18 @@ class Xoshiro256PlusPlus {
 /// its output predictable.
 class ChaCha20 {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `ChaCha20` pseudo-random number generator.
     ///
-    /// ## Parameters
+    /// # Parameters
     /// - `seed`: The seed for the random number generator.
     ///   If no seed is provided, a random seed is generated using the system random number generator.
     ///   The seed must be at least 32 bytes long.
     ///
-    /// ## Panics
+    /// # Panics
     /// If `seed` is shorter than 32 bytes.
-    function new(
-        seed: uint8array = SystemRandom.get().random(32),
-    ) -> ChaCha20 throws never {
+    function new(seed: uint8array = SystemRandom.get().random(32)) -> ChaCha20 throws never {
         // A `$rust_function` builtin can't fill omitted default args, so this
         // thin wrapper resolves the default seed and forwards to `_new` (whose
         // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.

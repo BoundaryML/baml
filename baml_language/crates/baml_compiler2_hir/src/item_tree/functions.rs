@@ -49,15 +49,14 @@ pub struct Function {
 /// per lookup, and with the class/interface halves drifting between copies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MethodOwner {
-    /// A class-level method, *including* methods declared inside an in-body
-    /// `implements I { … }` block — those are flattened into `Class::methods`,
-    /// and their impl relationship lives in `method_to_iface_target` /
-    /// `class_to_impls`.
+    /// A class-LEVEL method only. A method declared inside an in-body
+    /// `implements I { … }` block belongs to its impl block (`Impl`) — the
+    /// in-class spelling is pure syntax.
     Class(LocalItemId<crate::ids::ClassMarker>),
     /// An interface default method.
     Interface(LocalItemId<crate::ids::InterfaceMarker>),
-    /// A method of an out-of-body `implements<…> I for T { … }` block.
-    FreeImpl(LocalItemId<crate::ids::ImplMarker>),
+    /// A method of an `implements` block — in-class and out-of-body alike.
+    Impl(LocalItemId<crate::ids::ImplMarker>),
 }
 
 /// A function parameter entry in the `ItemTree`.
@@ -66,7 +65,11 @@ pub struct FunctionParam {
     pub name: Name,
     pub type_expr: Option<ast::TypeExpr>,
     pub default: Option<DefaultExprRef>,
+    /// The whole `name: Type`, which is what a diagnostic underlines.
     pub span: TextRange,
+    /// The NAME token alone — what go-to-definition lands on and what a
+    /// rename replaces.
+    pub name_span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -375,6 +375,8 @@ public sealed class BamlGeneratedRegistry
         RequireFactory(nameof(CreateMapType));
     private static readonly MethodInfo CreateUnion2TypeMethod =
         RequireFactory(nameof(CreateUnion2Type));
+    private static readonly MethodInfo CreateFunctionSpecTypeMethod =
+        RequireFactory(nameof(CreateFunctionSpecType));
 
     private readonly RegistryOwner owner;
     private readonly IReadOnlyDictionary<int, TypeDeclaration> types;
@@ -384,6 +386,7 @@ public sealed class BamlGeneratedRegistry
     private readonly IReadOnlyDictionary<Type, TypeDeclaration> genericBindings;
     private readonly IReadOnlyDictionary<Type, GenericTypeFactoryDeclaration> genericTypeFactories;
     private readonly ConcurrentDictionary<Type, IResolvedGeneratedType> dynamicTypes = [];
+    private BamlGeneratedProgram? program;
     private int nextDynamicTypeId;
 
     internal BamlGeneratedRegistry(
@@ -545,6 +548,23 @@ public sealed class BamlGeneratedRegistry
     }
 
     internal RegistryOwner Owner => owner;
+
+    internal void AttachProgram(BamlGeneratedProgram value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (!ReferenceEquals(value.Registry, this))
+        {
+            throw new InvalidOperationException(
+                "A generated program cannot attach to another registry.");
+        }
+
+        Volatile.Write(ref program, value);
+    }
+
+    internal BamlGeneratedProgram RequireProgram() =>
+        Volatile.Read(ref program)
+        ?? throw new InvalidOperationException(
+            "The generated registry is not attached to an initialized BAML program.");
 
     internal TypeDeclaration<T> RequireType<T>(BamlGeneratedType<T> type)
     {
@@ -794,6 +814,18 @@ public sealed class BamlGeneratedRegistry
                 [option0, option1]);
         }
 
+        if (definition == typeof(global::Baml.BamlFunctionSpec<>))
+        {
+            IResolvedGeneratedType final = ResolveCanonicalType(
+                arguments[0],
+                position,
+                $"{path}.final");
+            return InvokeFactory(
+                CreateFunctionSpecTypeMethod,
+                arguments,
+                [final]);
+        }
+
         if (genericTypeFactories.TryGetValue(
                 definition,
                 out GenericTypeFactoryDeclaration? generatedFactory))
@@ -944,6 +976,25 @@ public sealed class BamlGeneratedRegistry
                 optionName0,
                 optionName1));
         return new ResolvedGeneratedType<global::Baml.BamlUnion<T0, T1>>(
+            declaration,
+            codec);
+    }
+
+    private IResolvedGeneratedType CreateFunctionSpecType<TFinal>(
+        IResolvedGeneratedType final)
+    {
+        TypeDeclaration<TFinal> finalDeclaration = RequireResolved<TFinal>(final);
+        TypeDeclaration[] arguments = [finalDeclaration];
+        byte[] metadata = BamlGeneratedTypeMetadata.Class("ai.FunctionSpec", arguments);
+        var declaration = new TypeDeclaration<global::Baml.BamlFunctionSpec<TFinal>>(
+            Interlocked.Decrement(ref nextDynamicTypeId),
+            $"ai.FunctionSpec<{finalDeclaration.Identity}>",
+            metadata);
+        var codec = new CodecBox<global::Baml.BamlFunctionSpec<TFinal>>(
+            new BamlGeneratedFunctionSpecCodec<TFinal>(
+                new BamlGeneratedType<TFinal>(owner, finalDeclaration),
+                metadata));
+        return new ResolvedGeneratedType<global::Baml.BamlFunctionSpec<TFinal>>(
             declaration,
             codec);
     }

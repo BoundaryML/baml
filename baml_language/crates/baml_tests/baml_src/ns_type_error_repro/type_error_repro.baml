@@ -4,8 +4,8 @@
 //
 // Tests that mutate locals or use multi-step indexed writes go through a
 // top-level `function` helper so they aren't affected by the test-block
-// local-boxing VM behavior (a `let` local compared against a literal with
-// `deep_equals` in a test block can mismatch; code inside a function is fine).
+// local-boxing VM behavior (a `let` local compared against a literal in a test
+// block can mismatch; code inside a function is fine).
 //
 // Bytecode-snapshot-only tests are structured with test-running functions so
 // the test passes if the body compiles and runs without error.

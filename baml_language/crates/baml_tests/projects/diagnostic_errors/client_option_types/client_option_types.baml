@@ -1,7 +1,12 @@
-// Type checking for client config options.
+// Legacy client configuration constructs produce removal diagnostics.
+//
+// The `client<llm>` config block (and with it per-provider option type
+// checking) and the `retry_policy` block are removed: clients are plain
+// values now, and retry composes at the client boundary via `ai.Retry.new`.
+// Each legacy block below must be flagged with its removal error.
 
-// Valid: all types correct.
-client<llm> ValidOpenAI {
+// Removed: `client<llm>` config block.
+client<llm> LegacyOpenAI {
     provider openai
     options {
         model "gpt-4"
@@ -11,48 +16,37 @@ client<llm> ValidOpenAI {
     }
 }
 
-// Invalid: max_tokens should be int, not string.
-client<llm> BadMaxTokens {
-    provider openai
-    options {
-        model "gpt-4"
-        max_tokens "not a number"
-    }
+// Removed: `retry_policy` block.
+retry_policy LegacyRetry {
+    max_retries 3
 }
 
-// Invalid: temperature should be float, not string.
-client<llm> BadTemperature {
-    provider openai
-    options {
-        model "gpt-4"
-        temperature "warm"
-    }
+// Jinja prompt migrated to a backtick prompt.
+function MigratedPrompt(input: string) -> string {
+    client: ValidClient
+    prompt: `Echo: ${input}`
 }
 
-// Valid: Azure with resource_name + deployment_id.
-client<llm> ValidAzure {
-    provider azure-openai
-    options {
-        resource_name "my-resource"
-        deployment_id "gpt-4o"
-        api_version "2024-02-15-preview"
-    }
+// Structural role markers remain valid while the surrounding fixture checks
+// the independently removed client forms.
+function LegacyRoleMarker(input: string) -> string {
+    client: ValidClient
+    prompt: `${role("system")}Be terse. ${input}`
 }
 
-// Valid: Azure with base_url.
-client<llm> ValidAzureBaseUrl {
-    provider azure-openai
-    options {
-        base_url "https://my-resource.openai.azure.com/openai/deployments/gpt-4o"
-        api_version "2024-02-15-preview"
-    }
+// Removed: only a known "provider/model" prefix works as a client string.
+function UnknownProviderPrefix(input: string) -> string {
+    client: "aws-bedrock/anthropic.claude-3-haiku"
+    prompt: `${input}`
 }
 
-// Invalid: Azure missing both base_url and resource_name + deployment_id.
-client<llm> BadAzureMissingUrl {
-    provider azure-openai
-    options {
-        api_version "2024-02-15-preview"
-        model "gpt-4o"
-    }
+// Control: the new-world replacement compiles cleanly.
+client ValidClient = openai.ResponsesClient.new(
+    model = "gpt-4",
+    api_key = "test-key",
+);
+
+function ValidFunction(input: string) -> string {
+    client: ValidClient
+    prompt: `Echo: ${input}`
 }

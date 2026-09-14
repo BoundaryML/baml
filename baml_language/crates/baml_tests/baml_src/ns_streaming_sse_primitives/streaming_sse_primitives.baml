@@ -276,7 +276,7 @@ function sse_event_fields_in_json_fn() -> bool {
     assert.equal(parsed.length(), 1);
     assert.equal(parsed[0].event, "custom");
     assert.equal(parsed[0].data, "payload");
-    assert.is_true(baml.deep_equals(parsed[0].id, "42"));
+    assert.equal(parsed[0].id, "42");
     true
 }
 

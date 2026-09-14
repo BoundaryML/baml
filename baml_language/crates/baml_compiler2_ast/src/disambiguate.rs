@@ -12,12 +12,20 @@ use crate::ast::{
     TypeExpr, TypeExprKind,
 };
 
-/// The canonical set of field attribute names.
-const FIELD_ATTR_NAMES: &[&str] = &["alias", "description", "skip"];
+/// The canonical set of field attribute names. Public so completion can
+/// enumerate exactly what [`is_field_attr`] accepts.
+pub const FIELD_ATTR_NAMES: &[&str] = &["alias", "description", "skip"];
 
 /// Check if an attribute name is a field attribute.
 pub fn is_field_attr(name: &str) -> bool {
     FIELD_ATTR_NAMES.contains(&name)
+}
+
+/// Whether a direct outer attribute on a class field belongs to field metadata.
+/// Known type transforms stay on the type; unknown names are user schema
+/// annotations and are hoisted for reflection read-back.
+pub(crate) fn should_hoist_field_attr(name: &str) -> bool {
+    is_field_attr(name) || !name.starts_with("stream.")
 }
 
 /// Post-lowering validation: report field attrs that appear in nested type

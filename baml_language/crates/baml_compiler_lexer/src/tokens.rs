@@ -8,7 +8,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// The lexer recognizes keywords as distinct tokens per the BAML specification.
 ///
-/// # Note on Unquoted Strings and Raw Strings
+/// # Note on Unquoted Strings and Legacy Hash Strings
 ///
 /// **Unquoted Strings**: BAML supports unquoted strings in config contexts like:
 /// ```baml
@@ -18,7 +18,8 @@ use text_size::{TextRange, TextSize};
 /// The lexer tokenizes normally: `"gpt-4o"` → `WORD("gpt"), MINUS, INTEGER("4"), WORD("o")`
 /// The parser assembles these into unquoted strings in appropriate contexts.
 ///
-/// **Raw Strings**: Raw strings like `#"..."#` and `##"..."##` are assembled by the parser:
+/// **Legacy Hash Strings**: Removed hash strings are still assembled by the parser for
+/// lossless error recovery:
 /// ```baml
 /// #"Hello {{name}}"#  → Hash, Quote, Word("Hello"), ..., Quote, Hash
 /// ##"Contains "#""##  → Hash, Hash, Quote, Word("Contains"), ..., Quote, Hash, Hash
@@ -71,9 +72,6 @@ pub enum TokenKind {
     RetryPolicy,
     #[token("template_string")]
     TemplateString,
-    #[token("type_builder")]
-    TypeBuilder,
-
     // Control flow keywords
     #[token("if")]
     If,
@@ -115,9 +113,6 @@ pub enum TokenKind {
     Instanceof,
     #[token("is")]
     Is,
-    #[token("dynamic")]
-    Dynamic,
-
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers and `$`-separated names.
@@ -136,8 +131,8 @@ pub enum TokenKind {
     #[token("\"")]
     Quote,
 
-    /// Hash symbol - used for raw string delimiters
-    /// Parser combines Hash + Quote + tokens + Quote + Hash to form raw strings
+    /// Hash symbol - retained for removed hash string delimiter recovery
+    /// Parser combines Hash + Quote + tokens + Quote + Hash for diagnostics
     /// E.g., #"hello"# → Hash, Quote, Word("hello"), Quote, Hash
     #[token("#")]
     Hash,
@@ -365,7 +360,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
-            TokenKind::TypeBuilder => "type_builder",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -385,8 +379,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Defer => "defer",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
-            TokenKind::Dynamic => "dynamic",
-
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
@@ -487,6 +479,32 @@ pub struct Token {
     pub kind: TokenKind,
     pub text: String,
     pub span: Span,
+}
+
+/// Return whether `value` is one complete, non-keyword BAML identifier token.
+///
+/// Lexer keywords are rejected automatically by their dedicated [`TokenKind`].
+/// The additional spellings are contextual parser keywords: they intentionally
+/// remain `Word` tokens so the parser can recognize them only in the grammar
+/// positions where they are meaningful.
+pub fn is_baml_identifier(value: &str) -> bool {
+    const CONTEXTUAL_KEYWORDS: &[&str] = &[
+        "as",
+        "catch_all_panics",
+        "const",
+        "false",
+        "map",
+        "null",
+        "true",
+        "type",
+        "unreflect",
+        "with",
+    ];
+
+    let mut lexer = TokenKind::lexer(value);
+    matches!(lexer.next(), Some(Ok(TokenKind::Word)))
+        && lexer.next().is_none()
+        && !CONTEXTUAL_KEYWORDS.contains(&value)
 }
 
 /// Lossless lexer that preserves all source text.
@@ -592,6 +610,11 @@ mod tests {
             .map(|t| t.text.as_str())
             .collect();
         assert_eq!(words, vec!["gpt-4o", "model-name"]);
+    }
+
+    #[test]
+    fn dynamic_is_an_identifier() {
+        assert_eq!(lex_no_whitespace("dynamic"), vec![TokenKind::Word]);
     }
 
     #[test]
@@ -754,7 +777,7 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_string_with_jinja() {
+    fn test_raw_string_with_braces() {
         let source = r##"#"Hello {{ name }}"#"##;
         let tokens = lex_no_whitespace(source);
 
@@ -779,7 +802,7 @@ mod tests {
 
     #[test]
     fn test_raw_string_unclosed() {
-        // Unclosed raw string - lexer just emits Hash, Quote, and words
+        // Unclosed legacy hash string - lexer just emits Hash, Quote, and words
         // Parser will detect the error
         let source = r##"#"Unclosed"##;
         let file_id = FileId::new(0);
@@ -1037,6 +1060,38 @@ mod tests {
     }
 
     #[test]
+    fn baml_identifiers_exclude_lexer_and_contextual_keywords() {
+        for keyword in [
+            "class",
+            "test",
+            "return",
+            "is",
+            "as",
+            "catch_all_panics",
+            "const",
+            "false",
+            "map",
+            "null",
+            "true",
+            "type",
+            "unreflect",
+            "with",
+        ] {
+            assert!(
+                !is_baml_identifier(keyword),
+                "keyword {keyword:?} must not be accepted as an identifier"
+            );
+        }
+
+        for identifier in ["Thing", "field_name", "get_client", "$companion", "Foo$bar"] {
+            assert!(
+                is_baml_identifier(identifier),
+                "ordinary spelling {identifier:?} must remain a valid identifier"
+            );
+        }
+    }
+
+    #[test]
     fn test_exception_keywords() {
         let tokens = lex_no_whitespace("throw catch");
         assert_eq!(tokens, vec![TokenKind::Throw, TokenKind::Catch,]);
@@ -1048,8 +1103,8 @@ mod tests {
 
     #[test]
     fn test_path_with_keyword_segment() {
-        // `baml.llm.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
-        let tokens = lex_no_whitespace("baml.llm.get_client");
+        // `ai.internal.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
+        let tokens = lex_no_whitespace("ai.internal.get_client");
         assert_eq!(
             tokens,
             vec![

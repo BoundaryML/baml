@@ -34,7 +34,7 @@ final class TestErrors: XCTestCase {
     func test_errors_stdlib_error_surfaces_as_baml_error() throws {
         let err = expectBamlError { _ = try Baml.throws_test.ParseJson(s: badJSON) }
         // Typed decode succeeding IS the isinstance assertion.
-        _ = try XCTUnwrap(err).value(as: Baml.baml.json.JsonParseError.self)
+        _ = try XCTUnwrap(err).value(as: Baml.baml.json.ParseError.self)
     }
 
     func test_errors_user_throw_surfaces_declared_instance() throws {

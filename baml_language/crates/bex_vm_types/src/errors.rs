@@ -9,7 +9,10 @@
 
 use thiserror::Error;
 
-use crate::{BinOp, CmpOp, SysOpErrorCategory, UnaryOp, Value, types::Type};
+use crate::{
+    BinOp, CmpOp, SysOpErrorCategory, UnaryOp, Value,
+    types::{ObjectType, Type},
+};
 
 /// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
 ///
@@ -28,8 +31,8 @@ pub enum VmPanic {
     #[error("integer overflow: {message}")]
     IntegerOverflow { message: String },
 
-    // Raised by array/byte-array subscripting and `string.char_at`, so the
-    // message stays generic ("index", not "array index").
+    // Raised by array and byte-array subscripting, so the message stays generic
+    // ("index", not "array index").
     #[error("index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 
@@ -54,7 +57,9 @@ pub enum VmPanic {
     #[error("operation cancelled")]
     Cancelled,
 
-    /// A user-caused panic from `baml.sys.panic`.
+    /// A user-caused panic from `baml.sys.panic`, and the stdlib's panic of
+    /// record for a user-violated native invariant (e.g. a reflection kind
+    /// view's `_ty` field overwritten with a type of a different kind).
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
 
@@ -129,14 +134,8 @@ pub enum VmBamlError {
     #[error("render prompt: {message}")]
     RenderPrompt { message: String },
 
-    #[error("not implemented: {message}")]
-    NotImplemented { message: String },
-
     #[error("LLM client error: {message}")]
     LlmClient { message: String },
-
-    #[error("developer error: {message}")]
-    DevOther { message: String },
 
     /// An error value from the host language that has no direct BAML
     /// representation. The `handle` is the load-bearing field — it
@@ -183,9 +182,7 @@ impl VmBamlError {
             Self::Unsupported { .. } => SysOpErrorCategory::Unsupported,
             Self::AccessError { .. } => SysOpErrorCategory::AccessError,
             Self::RenderPrompt { .. } => SysOpErrorCategory::RenderPrompt,
-            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClient { .. } => SysOpErrorCategory::LlmClient,
-            Self::DevOther { .. } => SysOpErrorCategory::DevOther,
             Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }
@@ -245,6 +242,14 @@ pub enum VmInternalError {
     #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
     StoreGlobalAfterInit,
 
+    /// A native resource handle (SSE stream, WebSocket stream, …) did not
+    /// resolve in the registry that owns it. The sysop holds a live
+    /// `ResourceHandle` for the whole call and the registry entry is removed
+    /// only when the last handle drops, so a missing entry is a registry
+    /// invariant violation rather than anything user code can provoke.
+    #[error("resource handle {key} of kind `{kind}` did not resolve in its registry")]
+    UnresolvedResourceHandle { kind: &'static str, key: usize },
+
     /// A bridge-layer fault that prevented a host operation from
     /// proceeding — e.g. `external_to_outbound` could not serialize a
     /// `BexExternalValue` (engine→bridge wire-encoding bug), or the
@@ -256,13 +261,56 @@ pub enum VmInternalError {
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
 
-    /// A `VirtualCall` could not resolve an implementation of `method` for the
-    /// receiver's runtime concrete type. The type checker only emits a virtual
-    /// call once it has proved the receiver implements the interface, so the
-    /// baked interface-impl registry being unable to resolve the method is a
-    /// compiler/VM inconsistency, not a user-reachable condition.
+    /// A `VirtualCall` found no `implements` rule for the receiver's runtime
+    /// concrete type and the call's interface. The type checker only emits a
+    /// virtual call once it has proved the receiver implements the interface,
+    /// so the baked interface-impl registry having no rule for the pair is a
+    /// compiler/VM inconsistency, not a user-reachable condition. (Resolving
+    /// the METHOD off a found rule is total; the four variants below are its
+    /// failure kinds.)
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
+
+    /// An impl rule's `interface_head` does not point at an `Object::Interface`.
+    /// The head is bound to the rule's interface declaration at load/graft, so
+    /// any other object kind is a corrupt or stale rule — never "no interface".
+    #[error(
+        "impl rule's interface head is a {found} object, not an interface (resolving `{method}`)"
+    )]
+    ImplRuleHeadNotInterface { found: ObjectType, method: String },
+
+    /// Method resolution off an impl rule was asked for a method the rule's
+    /// interface does not declare. The compiler checks every virtual call
+    /// against the interface's declaration, and the stdlib shims and operators
+    /// name declared methods, so a miss is a mis-targeted lookup — never an
+    /// absent method to fall back from. A reflective "does this impl have
+    /// `m`?" must ask the interface's declaration first, not this resolution.
+    #[error("interface `{interface}` declares no method `{method}`")]
+    UndeclaredInterfaceMethod { interface: String, method: String },
+
+    /// The interface declares `method` as required (no default body) and the
+    /// impl provides no row for it. The compiler rejects such an impl, so a
+    /// rule reaching the VM in this shape is a corrupt or stale table.
+    #[error(
+        "required method `{method}` of `{interface}` is neither provided by the impl nor defaulted"
+    )]
+    UnprovidedRequiredMethod { interface: String, method: String },
+
+    /// The interface declares a default body for `method` (wire `default:
+    /// Some(..)`) but its runtime pointer was never bound at load/graft. A
+    /// binding bug, never "no default": resolution must not read it as an
+    /// absent method and fall through to a structural rendering.
+    #[error("interface default `{interface}.{method}` is declared but was never bound")]
+    UnboundInterfaceDefault { interface: String, method: String },
+
+    /// A value-position shim's two passes disagreed: the allocation-free
+    /// pre-order collection recorded a value as carrying a provided
+    /// `{interface}` method, but the dispatch pass could not resolve one for
+    /// it. The two share one resolver, so this is an invariant break — the
+    /// walker must not render the remaining nodes structurally as if nothing
+    /// had been collected.
+    #[error("value collected as a provided `{interface}` override no longer resolves to one")]
+    OverrideWalkSkew { interface: &'static str },
 
     /// A `VirtualLoadField`/`VirtualStoreField` could not resolve interface field
     /// `field_index` of `interface` for the receiver's runtime concrete type — either
@@ -286,6 +334,97 @@ pub enum VmInternalError {
     /// rather than erased to `unknown`.
     #[error("could not realize type template: {message}")]
     TypeSubstitution { message: String },
+
+    /// A call site's value slots cannot be laid over the callee's parameter
+    /// list. The checker guarantees the fit for every checked call, so this is
+    /// a compiler/VM inconsistency or a native passing the wrong arguments.
+    #[error("call arguments do not fit the callee: {0}")]
+    CallLayout(baml_type::LayoutMismatch),
+}
+
+/// Any kind of virtual machine error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfilerErrorKind {
+    Fresh,
+    Rethrow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VmUnwindSource {
+    Bytecode,
+    NativeCall,
+    EngineCall,
+    FutureResume,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmThrowSite {
+    pub file_id: u32,
+    pub line: u32,
+    pub start_offset: u32,
+    pub end_offset: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmUnwindOrigin {
+    pub throw_call_id: u64,
+    pub throw_function_id: u32,
+    pub throw_site: Option<VmThrowSite>,
+    pub source: VmUnwindSource,
+    pub selected_error: bool,
+    pub manual_eligible: bool,
+    pub origin_span_already_terminated: bool,
+}
+
+impl VmUnwindOrigin {
+    #[must_use]
+    pub const fn unresolved(source: VmUnwindSource) -> Self {
+        Self {
+            throw_call_id: 0,
+            throw_function_id: 0,
+            throw_site: None,
+            source,
+            selected_error: false,
+            manual_eligible: false,
+            origin_span_already_terminated: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VmThrown {
+    pub value: Value,
+    pub profiler_kind: ProfilerErrorKind,
+    pub language_is_rethrow: bool,
+    pub origin: VmUnwindOrigin,
+}
+
+impl VmThrown {
+    #[must_use]
+    pub const fn fresh(value: Value, source: VmUnwindSource) -> Self {
+        Self {
+            value,
+            profiler_kind: ProfilerErrorKind::Fresh,
+            language_is_rethrow: false,
+            origin: VmUnwindOrigin::unresolved(source),
+        }
+    }
+
+    #[must_use]
+    pub const fn rethrow(value: Value, source: VmUnwindSource, language_is_rethrow: bool) -> Self {
+        Self {
+            value,
+            profiler_kind: ProfilerErrorKind::Rethrow,
+            language_is_rethrow,
+            origin: VmUnwindOrigin::unresolved(source),
+        }
+    }
+
+    #[must_use]
+    pub const fn with_origin(mut self, origin: VmUnwindOrigin) -> Self {
+        self.origin = origin;
+        self
+    }
 }
 
 /// Any kind of virtual machine error.
@@ -293,7 +432,7 @@ pub enum VmInternalError {
 pub enum VmError {
     /// Catchable (panics and error values) — internal signal for exception unwinding.
     #[error("uncaught throw: {0:?}")]
-    Thrown(Value),
+    Thrown(VmThrown),
     /// An exception that escaped all catch handlers, with captured stack trace.
     #[error("uncaught throw: {value:?}")]
     ThrownUnhandled {
@@ -312,6 +451,13 @@ pub enum VmError {
     },
 }
 
+impl VmError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown(VmThrown::fresh(value, VmUnwindSource::Bytecode))
+    }
+}
+
 /// An error returned by a Rust function. Will generally be turned into a [`VmError`].
 /// This is separate from [`VmError`] so native Rust functions can return standard errors
 /// without needing to handle heap allocation.
@@ -326,20 +472,60 @@ pub enum VmRustFnError {
     /// A pre-built exception `Value` to throw directly as a catchable error.
     ///
     /// Used by native functions that need to throw user-defined class instances
-    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
-    Thrown(Value),
+    Thrown {
+        value: Value,
+        profiler_kind: ProfilerErrorKind,
+    },
 }
+
+impl VmRustFnError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            profiler_kind: ProfilerErrorKind::Fresh,
+        }
+    }
+
+    #[must_use]
+    pub const fn thrown_rethrow(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            profiler_kind: ProfilerErrorKind::Rethrow,
+        }
+    }
+}
+
+/// Project-relative path prefix carried by every standard-library source
+/// file. User files never start with it, so it is the one test for "is this
+/// frame / unit part of the stdlib".
+pub const BUILTIN_SOURCE_PREFIX: &str = "<builtin>/";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackFrame {
     pub function_name: String,
-    /// Filesystem path of the source file containing this function.
-    /// Empty string for builtins and synthesized functions.
+    /// Project-relative path of the source file containing this function:
+    /// `<builtin>/…` for standard-library functions, empty for synthesized
+    /// functions with no source at all.
     pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
+}
+
+impl StackFrame {
+    /// Whether this frame executes standard-library code.
+    ///
+    /// A user-facing traceback omits these frames: a `<builtin>/…` line is
+    /// nothing the caller can act on, and it is exactly what a native builtin
+    /// (which pushes no frame at all) never showed. A builtin whose body is
+    /// written in BAML rather than Rust therefore presents identically.
+    #[must_use]
+    pub fn is_builtin(&self) -> bool {
+        self.file_path.starts_with(BUILTIN_SOURCE_PREFIX)
+    }
 }
 
 fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String {

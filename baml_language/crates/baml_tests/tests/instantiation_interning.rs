@@ -2,7 +2,7 @@
 //! (`let f = foo<int>`).
 //!
 //! The runtime fixtures in `baml_src/ns_instantiation_expr/` assert *value*
-//! equality via `baml.deep_equals`, which (by design) also holds for distinct
+//! equality via `==`, which (by design) also holds for distinct
 //! but structurally-equal copies — so it can't prove the pooled, pointer-stable
 //! identity that `foo<int> === foo<int>` is supposed to guarantee. BAML has no
 //! in-language identity operator, so the guarantee is verified here instead, by
@@ -15,21 +15,26 @@ use baml_tests::engine::compile_source;
 use bex_vm_types::Object;
 
 /// Collect the pool indices of every `Object::GenericFunction` whose type
-/// arguments (by display) mention `needle`.
+/// arguments reach a head with `fq_name`'s tag. An emitted program's heads
+/// are tag-only until the loader binds them, so mentions are found by
+/// identity rather than by rendered name.
 fn generic_function_indices_mentioning(
     program: &bex_vm_types::Program,
-    needle: &str,
+    fq_name: &str,
 ) -> Vec<usize> {
+    let needle = baml_type::typetag::TypeTag::of_head(fq_name);
     let mut indices = Vec::new();
     for i in 0..program.objects.len() {
         if let Some(Object::GenericFunction(gf)) = program.objects.get(i) {
-            let args = gf
-                .type_args
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(",");
-            if args.contains(needle) {
+            let mut mentions = false;
+            for arg in &gf.type_args {
+                arg.visit_heads(&mut |head| {
+                    if head.tag() == needle {
+                        mentions = true;
+                    }
+                });
+            }
+            if mentions {
                 indices.push(i);
             }
         }
@@ -49,24 +54,24 @@ class Other { id int }
 
 function identity<T>(x: T) -> T { x }
 
-// Two references to the SAME specialization. Returned via deep_equals so the
+// Two references to the SAME specialization. Compared with `==` so the
 // bindings stay live through optimization.
 function marker_pair() -> bool {
     let a = identity<Marker>;
     let b = identity<Marker>;
-    baml.deep_equals(a, b)
+    a == b
 }
 
 // A DIFFERENT specialization.
 function other_one() -> bool {
     let c = identity<Other>;
-    baml.deep_equals(c, c)
+    c == c
 }
 "#,
     );
 
-    let marker = generic_function_indices_mentioning(&program, "Marker");
-    let other = generic_function_indices_mentioning(&program, "Other");
+    let marker = generic_function_indices_mentioning(&program, "user.Marker");
+    let other = generic_function_indices_mentioning(&program, "user.Other");
 
     // Interning: two `identity<Marker>` references share ONE pooled object.
     assert_eq!(

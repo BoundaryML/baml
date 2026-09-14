@@ -2,23 +2,33 @@
 //!
 //! These assert properties of the data the runtime resolver consumes for a case
 //! the resolver's only live caller (reflection) can't observe: that an impl
-//! rule's method table is *complete* — it carries the interface's inherited
-//! default methods, not just the methods the impl overrides, with an override
-//! winning over the default.
+//! rule's method table is PROVIDED-ONLY — exactly the methods the impl block
+//! declares, never a baked copy of an adopted interface default (the resolver
+//! adopts defaults at dispatch through the interface's `default_fn`), and a
+//! provided method for a defaulted name is the impl's own body.
 
-use baml_project::testing::compile_source;
-use baml_type::TyTemplate;
-use bex_vm_types::{Object, types::Program};
+use baml_db::testing::compile_source;
+use bex_vm_types::{Object, TyTemplate, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for
 /// `Wrap<T>`). Matching on this — rather than a substring of the rendered
 /// pattern — keeps distinct names like `Dog` and `HotDog` (and `$stream`
 /// companions, which have a distinct head name) from colliding.
-fn for_ty_head_name(pat: &TyTemplate) -> Option<&str> {
-    match pat {
-        TyTemplate::Class(qtn, ..) | TyTemplate::Enum(qtn, ..) => Some(qtn.name().as_str()),
+///
+/// A head in a not-yet-loaded `Program` is a tag with no pointer, so the name
+/// comes from the pooled declaration carrying that tag — the same association
+/// the loader's bind pass makes.
+fn for_ty_head_name<'a>(program: &'a Program, pat: &TyTemplate) -> Option<&'a str> {
+    let (TyTemplate::Class(head, ..) | TyTemplate::Enum(head, ..)) = pat else {
+        return None;
+    };
+    program.objects.iter().find_map(|object| match object {
+        Object::Class(class) if class.type_tag == head.tag() => {
+            Some(class.name.item_name().as_str())
+        }
+        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.name.item_name().as_str()),
         _ => None,
-    }
+    })
 }
 
 /// The `(method name, fn FQN)` pairs recorded for `<for_type> implements <iface>`.
@@ -37,7 +47,7 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
                 .as_interface()
                 .is_some_and(|def| def.name.name().as_str() == iface)
         })
-        .find(|rule| for_ty_head_name(&rule.for_ty_pattern) == Some(for_type))
+        .find(|rule| for_ty_head_name(program, &rule.for_ty_pattern) == Some(for_type))
         .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"));
     rule.methods
         .iter()
@@ -52,10 +62,12 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
 }
 
 #[test]
-fn impl_rule_methods_include_inherited_interface_defaults() {
+fn impl_rule_methods_are_provided_only() {
     // `Greeter` has a required method (`greet`) and a default method
-    // (`greet_loud`). `Dog` overrides only `greet`, inheriting the default — both
-    // must appear in the baked method table so the resolver can dispatch either.
+    // (`greet_loud`). `Dog` provides only `greet` — the baked table carries
+    // exactly that row. The adopted default is NOT baked: the resolver adopts
+    // it at dispatch through the interface object's `default_fn`, so the rule
+    // stays a pure function of the impl block.
     let program = compile_source(
         r#"
         interface Greeter {
@@ -73,19 +85,37 @@ fn impl_rule_methods_include_inherited_interface_defaults() {
     let methods = impl_methods(&program, "Greeter", "Dog");
     assert!(
         methods.iter().any(|(m, _)| m == "greet"),
-        "overridden method missing: {methods:?}"
+        "provided method missing: {methods:?}"
     );
     assert!(
-        methods.iter().any(|(m, _)| m == "greet_loud"),
-        "inherited default method missing: {methods:?}"
+        !methods.iter().any(|(m, _)| m == "greet_loud"),
+        "adopted default must not be baked into the rule table: {methods:?}"
+    );
+    // The adoption channel: the interface object carries the default body.
+    let iface = program
+        .objects
+        .iter()
+        .find_map(|object| match object {
+            Object::Interface(def) if def.name.name().as_str() == "Greeter" => Some(def),
+            _ => None,
+        })
+        .expect("Greeter pooled");
+    let greet_loud = iface
+        .methods
+        .iter()
+        .find(|m| m.name.as_str() == "greet_loud")
+        .expect("greet_loud declared");
+    assert!(
+        greet_loud.default.is_some(),
+        "interface must carry its default body for resolution-time adoption"
     );
 }
 
 #[test]
-fn impl_rule_override_wins_over_inherited_default() {
-    // `Cat` overrides BOTH methods, including the defaulted one. The recorded
-    // `greet_loud` must be Cat's override (its FQN names `Cat`), not the
-    // interface default — the merge must not clobber an override.
+fn impl_rule_provided_method_shadows_interface_default() {
+    // `Cat` provides BOTH methods, including the defaulted one. The recorded
+    // `greet_loud` must be Cat's own body (its FQN names `Cat`), not the
+    // interface default — a provided row always wins over adoption.
     let program = compile_source(
         r#"
         interface Greeter {
@@ -108,6 +138,6 @@ fn impl_rule_override_wins_over_inherited_default() {
         .expect("greet_loud recorded");
     assert!(
         greet_loud_fqn.contains("Cat"),
-        "override should win: greet_loud FQN should be Cat's, got {greet_loud_fqn:?}"
+        "provided method should win: greet_loud FQN should be Cat's, got {greet_loud_fqn:?}"
     );
 }

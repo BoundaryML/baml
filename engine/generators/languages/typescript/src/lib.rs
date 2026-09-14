@@ -553,6 +553,9 @@ mod tests {
         assert!(!async_client.contains("const raw = this.runtime.streamFunction"));
         assert!(!async_client.contains("const stream = this.stream."));
         assert!(async_client.contains("const __options__ ="));
+        assert!(async_client.contains("...(this.bamlOptions.env || {})"));
+        assert!(async_client.contains("...(__baml_options__?.env || {})"));
+        assert!(async_client.contains("__options__.env"));
 
         let sync_client = include_str!("./_templates/sync_client.ts.j2");
         assert!(!sync_client.contains("const options ="));
@@ -562,6 +565,9 @@ mod tests {
         assert!(!sync_client.contains("const env: Record<string, string> ="));
         assert!(!sync_client.contains("const raw = this.runtime.callFunctionSync"));
         assert!(sync_client.contains("const __options__ ="));
+        assert!(sync_client.contains("...(this.bamlOptions.env || {})"));
+        assert!(sync_client.contains("...(__baml_options__?.env || {})"));
+        assert!(sync_client.contains("__options__.env"));
 
         let async_request = include_str!("./_templates/async_request.ts.j2");
         assert!(!async_request.contains("const rawEnv ="));
@@ -580,5 +586,24 @@ mod tests {
         assert!(!parser.contains("const env: Record<string, string> ="));
         assert!(parser.contains("const __rawEnv__ ="));
         assert!(parser.contains("const __env__: Record<string, string> ="));
+    }
+
+    #[test]
+    fn templates_merge_client_and_call_env_with_call_precedence() {
+        for template in [
+            include_str!("./_templates/async_client.ts.j2"),
+            include_str!("./_templates/sync_client.ts.j2"),
+        ] {
+            let client_env = template
+                .find("...(this.bamlOptions.env || {})")
+                .expect("client-level env should be preserved");
+            let call_env = template
+                .find("...(__baml_options__?.env || {})")
+                .expect("per-call env should be merged");
+            assert!(
+                client_env < call_env,
+                "per-call env must be spread last so overlapping keys take precedence"
+            );
+        }
     }
 }

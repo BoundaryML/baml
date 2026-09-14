@@ -769,18 +769,34 @@ public final class BamlFfi {
      * {@link CompletableFuture}) or the thrown value. Wrapped so a dropped
      * dispatch can never leave the engine awaiting: any thrown value routes to
      * {@link #completeHostError}, and the call is always completed exactly once.
+     *
+     * <p>A callable registered wrapped in a {@link BamlTypedCallable} (the
+     * generated SDK's carrier) is unwrapped here: its declared parameter
+     * descriptors drive a type-directed arg decode — so the user's typed lambda
+     * receives the generated types its slot declares (e.g. the sealed
+     * {@code baml.json.json} union), never the raw wire value — and its return
+     * descriptor types the encode of the result.
      */
     private static void runHostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
-        Object callable = HOST_VALUES.get(hostValueKey);
-        if (callable == null) {
+        Object registered = HOST_VALUES.get(hostValueKey);
+        if (registered == null) {
             // The engine dispatched a key the bridge no longer holds — a bridge
             // fault, not a user exception → BridgeFailure (empty error payload).
             safeComplete(callId, true, EMPTY_PAYLOAD);
             return;
         }
+        BamlTypedCallable typed = registered instanceof BamlTypedCallable t ? t : null;
+        Object callable = typed != null ? typed.callable() : registered;
+        BamlType returnDesc = typed != null ? typed.returnDesc() : null;
         Object result;
         try {
-            ProtoReader.HostCallArgs args = ProtoReader.decodeBamlToHostCall(bamlToHostCall);
+            ProtoReader.HostCallArgs args = typed != null
+                    ? ProtoReader.decodeBamlToHostCall(
+                            bamlToHostCall,
+                            typed.positionalDescs(),
+                            typed.optionalNames(),
+                            typed.optionalDescs())
+                    : ProtoReader.decodeBamlToHostCall(bamlToHostCall);
             result = invokeHostCallable(callable, args);
         } catch (Throwable userError) {
             completeHostError(callId, userError);
@@ -795,11 +811,11 @@ public final class BamlFfi {
                         if (err != null) {
                             completeHostError(callId, unwrapCompletion(err));
                         } else {
-                            completeHostSuccess(callId, value);
+                            completeHostSuccess(callId, value, returnDesc);
                         }
                     });
         } else {
-            completeHostSuccess(callId, result);
+            completeHostSuccess(callId, result, returnDesc);
         }
     }
 
@@ -852,11 +868,20 @@ public final class BamlFfi {
                 "host-value key resolved to a non-callable object: " + callable.getClass());
     }
 
-    /** Encode a successful callable result and complete the call. */
-    private static void completeHostSuccess(long callId, Object value) {
+    /**
+     * Encode a successful callable result and complete the call.
+     * {@code returnDesc} (nullable) is the declared return-type descriptor a
+     * {@link BamlTypedCallable} carries; it types the encode exactly like a
+     * generated binding's argument descriptor ({@link BamlTypedValue}).
+     */
+    private static void completeHostSuccess(long callId, Object value, BamlType returnDesc) {
         byte[] payload;
         try {
-            payload = ProtoWriter.encodeInboundValue(value);
+            Object encodable =
+                    returnDesc != null && value != null
+                            ? new BamlTypedValue(value, returnDesc)
+                            : value;
+            payload = ProtoWriter.encodeInboundValue(encodable);
         } catch (Throwable encodeError) {
             // The callable returned a value the encoder can't map to a BAML value:
             // a bridge fault (the declared return type should have matched).

@@ -1,0 +1,94 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.lambda_basic.test_capture() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // offset [captured]
+    let _2: (int) -> int throws never // add_offset
+    let _3: (int) -> int throws never
+
+    bb0: {
+        _1 = const 10_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 32_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_capture, 0)>(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: int
+
+    bb0: {
+        _2 = copy capture[0];
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.lambda_basic.test_nested() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: (int) -> int throws never // outer
+    let _2: (int) -> int throws never
+
+    bb0: {
+        _1 = make_closure lambda[0]();
+        _2 = copy _1;
+        _0 = call copy _2(const 41_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(test_nested, 0)>(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param [captured]
+    let _2: (int) -> int throws never // inner
+    let _3: (int) -> int throws never
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // y // param
+    let _2: int
+
+    bb0: {
+        _2 = copy capture[0];
+        _0 = copy _2 + copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

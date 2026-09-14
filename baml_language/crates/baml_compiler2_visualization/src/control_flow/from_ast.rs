@@ -253,6 +253,14 @@ impl<'a> AstGraphBuilder<'a> {
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
             }
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Runtime(operand),
+                ..
+            } => self.visit_expr(*operand),
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Static(_),
+                ..
+            } => {}
             ast::Stmt::Throw { value } => {
                 self.visit_expr(*value);
             }
@@ -951,8 +959,8 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         ast::Expr::Object {
             fields, spreads, ..
         } => {
-            for (_, field_expr) in fields {
-                collect_callee_names_expr(body, *field_expr, names);
+            for field in fields {
+                collect_callee_names_expr(body, field.value, names);
             }
             for spread in spreads {
                 collect_callee_names_expr(body, spread.expr, names);
@@ -964,9 +972,9 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Map { entries } => {
-            for (key, value) in entries {
-                collect_callee_names_expr(body, *key, names);
-                collect_callee_names_expr(body, *value, names);
+            for entry in entries {
+                collect_callee_names_expr(body, entry.key, names);
+                collect_callee_names_expr(body, entry.value, names);
             }
         }
         ast::Expr::Block { stmts, tail_expr } => {
@@ -1010,6 +1018,10 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         | ast::Expr::ByteStringLiteral(_)
         | ast::Expr::Null
         | ast::Expr::Path(_)
+        // A qualified item reference names a callee but holds no callee
+        // EXPRESSION — the enclosing `Call` records the name, exactly as it
+        // does for the `Path` spellings of the same reference.
+        | ast::Expr::QualifiedPath { .. }
         | ast::Expr::Lambda(_)
         | ast::Expr::Missing => {}
     }
@@ -1018,6 +1030,14 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
 fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut Vec<String>) {
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
+        ast::Stmt::TypeBinding {
+            value: ast::TypeBindingValue::Runtime(operand),
+            ..
+        } => collect_callee_names_expr(body, *operand, names),
+        ast::Stmt::TypeBinding {
+            value: ast::TypeBindingValue::Static(_),
+            ..
+        } => {}
         ast::Stmt::Defer { body: defer_body } => {
             collect_callee_names_expr(body, *defer_body, names);
         }
@@ -1218,6 +1238,14 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 "[...]".to_string()
             }
         }
+        // Rendered in full, as the `Path` spelling of the same reference is:
+        // this is a callee name, and eliding it to `...` would leave the CFG
+        // node blank for the one call form that must be written out.
+        ast::Expr::QualifiedPath {
+            qself,
+            interface,
+            member,
+        } => format!("({qself} as {interface}).{member}"),
         _ => "...".to_string(),
     }
 }
@@ -1862,7 +1890,7 @@ mod tests {
             let obj = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("MyResponse".into()),
                 type_args: vec![],
-                fields: vec![("ok".into(), field_val)],
+                fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
                 spreads: vec![],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(obj)));
@@ -2041,7 +2069,7 @@ mod tests {
             let obj_false = exprs.alloc(ast::Expr::Object {
                 type_name: TypePath::bare("Result".into()),
                 type_args: vec![],
-                fields: vec![("err".into(), err_val)],
+                fields: vec![ast::ObjectExprField::explicit("err".into(), err_val)],
                 spreads: vec![],
             });
             let ret_false = stmts.alloc(ast::Stmt::Return(Some(obj_false)));
@@ -2081,7 +2109,7 @@ mod tests {
         let obj = exprs.alloc(ast::Expr::Object {
             type_name: TypePath::bare("Resp".into()),
             type_args: vec![],
-            fields: vec![("ok".into(), field_val)],
+            fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
             spreads: vec![],
         });
 

@@ -19,7 +19,9 @@
 
 use std::collections::HashSet;
 
-use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag};
+use crate::ast::{
+    Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag, TypeBindingValue,
+};
 
 /// A direct child of an expression or statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -41,12 +43,15 @@ impl ExprBody {
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
+            | Expr::QualifiedPath { .. }
             | Expr::Lambda(_)
             | Expr::Missing => {}
             Expr::GenericApply { base, .. }
             | Expr::MemberAccess { base, .. }
             | Expr::OptionalMemberAccess { base, .. }
-            | Expr::Upcast { base, .. } => out.push(BodyNode::Expr(*base)),
+            | Expr::Upcast { base, .. } => {
+                out.push(BodyNode::Expr(*base));
+            }
             Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
@@ -87,7 +92,8 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*base));
                 for clause in clauses {
                     for arm in &clause.arms {
-                        out.push(BodyNode::Expr(self.catch_arms[*arm].body));
+                        let arm = &self.catch_arms[*arm];
+                        out.push(BodyNode::Expr(arm.body));
                     }
                 }
             }
@@ -108,27 +114,23 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*base));
                 out.push(BodyNode::Expr(*index));
             }
-            Expr::Call { callee, args, .. } => {
-                out.push(BodyNode::Expr(*callee));
-                out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
-            }
-            Expr::OptionalCall { callee, args } => {
+            Expr::Call { callee, args, .. } | Expr::OptionalCall { callee, args } => {
                 out.push(BodyNode::Expr(*callee));
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::Object {
                 fields, spreads, ..
             } => {
-                out.extend(fields.iter().map(|(_, expr)| BodyNode::Expr(*expr)));
+                out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
             Expr::Array { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
             Expr::Map { entries } => {
-                for (key, value) in entries {
-                    out.push(BodyNode::Expr(*key));
-                    out.push(BodyNode::Expr(*value));
+                for entry in entries {
+                    out.push(BodyNode::Expr(entry.key));
+                    out.push(BodyNode::Expr(entry.value));
                 }
             }
             Expr::Block { stmts, tail_expr } => {
@@ -159,12 +161,22 @@ impl ExprBody {
     }
 
     /// Append the direct children of `id` to `out`, in source order.
+    /// Patterns are not body nodes and hide no expressions, so only the
+    /// statement's own expression slots contribute.
     pub fn stmt_children(&self, id: StmtId, out: &mut Vec<BodyNode>) {
         match &self.stmts[id] {
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
             Stmt::Expr(expr) | Stmt::Throw { value: expr } | Stmt::Defer { body: expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
+            Stmt::TypeBinding {
+                value: TypeBindingValue::Runtime(operand),
+                ..
+            } => out.push(BodyNode::Expr(*operand)),
+            Stmt::TypeBinding {
+                value: TypeBindingValue::Static(_),
+                ..
+            } => {}
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),
             Stmt::Let {
                 initializer,

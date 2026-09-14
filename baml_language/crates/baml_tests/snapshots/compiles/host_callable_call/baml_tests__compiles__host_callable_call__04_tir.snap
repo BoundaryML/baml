@@ -1,9 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== TIR2 ===
-function user.call_with_callback(callback: (int) -> string throws never, x: int) -> string throws never {
-  { : string
-    callback<__effect_param_0>(x) : string
-  }
-}

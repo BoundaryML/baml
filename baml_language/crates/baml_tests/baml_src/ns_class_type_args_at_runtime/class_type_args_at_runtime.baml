@@ -10,13 +10,13 @@ class Box<T> {
     value T
 
     function describe(self) -> string {
-        reflect.type_of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 }
 
 class Box2<T> {
     function make_describer(self) -> () -> string throws never {
-        return () -> string { reflect.type_of<T>().to_string() }
+        return () -> string { reflect.Type.of<T>().to_string() }
     }
 }
 
@@ -30,7 +30,7 @@ function method_sees_class_type_arg_int_fn() -> string {
 }
 
 test "method_sees_class_type_arg_int" {
-    assert.is_true(baml.deep_equals(method_sees_class_type_arg_int_fn(), "int"))
+    assert.equal(method_sees_class_type_arg_int_fn(), "int")
 }
 
 function method_sees_class_type_arg_string_fn() -> string {
@@ -39,7 +39,7 @@ function method_sees_class_type_arg_string_fn() -> string {
 }
 
 test "method_sees_class_type_arg_string" {
-    assert.is_true(baml.deep_equals(method_sees_class_type_arg_string_fn(), "string"))
+    assert.equal(method_sees_class_type_arg_string_fn(), "string")
 }
 
 function method_sees_composite_class_type_arg_fn() -> string {
@@ -48,10 +48,10 @@ function method_sees_composite_class_type_arg_fn() -> string {
     outer.describe()
 }
 
-// NOTE: reflect.type_of<T>().to_string() includes the namespace segment, so
+// NOTE: reflect.Type.of<T>().to_string() includes the namespace segment, so
 // the result is "class_type_args_at_runtime.Box<int>", not bare "Box<int>".
 test "method_sees_composite_class_type_arg" {
-    assert.is_true(baml.deep_equals(method_sees_composite_class_type_arg_fn(), "class_type_args_at_runtime.Box<int>"))
+    assert.equal(method_sees_composite_class_type_arg_fn(), "class_type_args_at_runtime.Box<int>")
 }
 
 // ─── Issue #9: union dispatch disambiguates by class type args ────────────────
@@ -68,7 +68,7 @@ function union_dispatch_generic_class_int_fn() -> string {
 }
 
 test "union_dispatch_generic_class_int" {
-    assert.is_true(baml.deep_equals(union_dispatch_generic_class_int_fn(), "int"))
+    assert.equal(union_dispatch_generic_class_int_fn(), "int")
 }
 
 function union_dispatch_generic_class_string_fn() -> string {
@@ -76,7 +76,7 @@ function union_dispatch_generic_class_string_fn() -> string {
 }
 
 test "union_dispatch_generic_class_string" {
-    assert.is_true(baml.deep_equals(union_dispatch_generic_class_string_fn(), "string"))
+    assert.equal(union_dispatch_generic_class_string_fn(), "string")
 }
 
 // ─── Issue #9: match-type dispatch respects class type args ──────────────────
@@ -93,7 +93,7 @@ function is_type_parametric_class_same_args_fn() -> bool {
 }
 
 test "is_type_parametric_class_same_args" {
-    assert.is_true(baml.deep_equals(is_type_parametric_class_same_args_fn(), true))
+    assert.is_true(is_type_parametric_class_same_args_fn())
 }
 
 function is_type_parametric_class_different_args_fn() -> bool {
@@ -101,7 +101,7 @@ function is_type_parametric_class_different_args_fn() -> bool {
 }
 
 test "is_type_parametric_class_different_args" {
-    assert.is_true(baml.deep_equals(is_type_parametric_class_different_args_fn(), false))
+    assert.is_true(!is_type_parametric_class_different_args_fn())
 }
 
 function check_foo_bare(f: Foo<int> | string) -> bool {
@@ -116,7 +116,7 @@ function is_type_bare_class_still_matches_fn() -> bool {
 }
 
 test "is_type_bare_class_still_matches" {
-    assert.is_true(baml.deep_equals(is_type_bare_class_still_matches_fn(), true))
+    assert.is_true(is_type_bare_class_still_matches_fn())
 }
 
 // ─── Closure inside method captures class T ──────────────────────────────────
@@ -128,7 +128,7 @@ function closure_inside_method_captures_class_type_arg_fn() -> string {
 }
 
 test "closure_inside_method_captures_class_type_arg" {
-    assert.is_true(baml.deep_equals(closure_inside_method_captures_class_type_arg_fn(), "int"))
+    assert.equal(closure_inside_method_captures_class_type_arg_fn(), "int")
 }
 
 function closure_inside_method_survives_gc_fn() -> string {
@@ -148,5 +148,5 @@ function closure_inside_method_survives_gc_fn() -> string {
 }
 
 test "closure_inside_method_survives_gc" {
-    assert.is_true(baml.deep_equals(closure_inside_method_survives_gc_fn(), "int"))
+    assert.equal(closure_inside_method_survives_gc_fn(), "int")
 }

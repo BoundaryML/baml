@@ -16,16 +16,18 @@
 //! - `ProgramMetadata` function-table derivation (owner types),
 //! - sink-independence and multi-engine scoping of minted ids.
 //!
-//! Ring-level lifecycle/linkage coverage (record balance, spawn edges,
-//! `SetFunctionId` records) lives in `prof_gate.rs` against the real
-//! `.bamlprof` artifact.
+//! Ring-level lifecycle/linkage coverage lives in the segmented-backend
+//! integration tests.
 
 mod common;
 
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_events::ids::{BoundaryId, RuntimeId};
+use bex_events::{
+    ids::{BoundaryId, RuntimeId},
+    prof::backend::{ProfilerConfig, ProfilerSession},
+};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -39,8 +41,19 @@ async fn baml_id_inside_spawn_uses_child_thread_root_call() {
     "#;
 
     let snapshot = compile_for_engine(source);
+    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+        enabled: false,
+        ..ProfilerConfig::default()
+    });
+    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+        BexEngine::new_with_profiler_session(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            profiler_session,
+        )
+        .unwrap(),
     );
 
     let boundary_id = BoundaryId::from_bytes([1; 16]);
@@ -341,6 +354,48 @@ fn function_metadata_derives_owner_type_for_class_methods() {
     );
 }
 
+#[test]
+fn program_identity_is_uuid_v7_with_or_without_a_source_hash() {
+    fn assert_uuid_v7(program_id: bex_events::ids::ProgramId) {
+        assert_eq!(program_id.0[6] >> 4, 7);
+        assert_eq!(program_id.0[8] >> 6, 2);
+    }
+
+    let with_hash = compile_for_engine("function main() -> null { null }");
+    let source_hash = with_hash
+        .source_content_hash
+        .expect("the compiler should stamp a source-content hash");
+    let with_hash_engine = BexEngine::new(
+        with_hash,
+        Arc::new(sys_native::SysOps::native()),
+        Vec::new(),
+    )
+    .unwrap();
+    assert_uuid_v7(with_hash_engine.program_metadata().program_id);
+    assert_eq!(
+        with_hash_engine.program_metadata().source_snapshot_id,
+        Some(bex_events::ids::SourceSnapshotId(source_hash))
+    );
+
+    let mut without_hash = compile_for_engine("function main() -> null { null }");
+    without_hash.source_content_hash = None;
+    let without_hash_engine = BexEngine::new(
+        without_hash,
+        Arc::new(sys_native::SysOps::native()),
+        Vec::new(),
+    )
+    .unwrap();
+    assert_uuid_v7(without_hash_engine.program_metadata().program_id);
+    assert_ne!(
+        with_hash_engine.program_metadata().program_id,
+        without_hash_engine.program_metadata().program_id
+    );
+    assert_eq!(
+        without_hash_engine.program_metadata().source_snapshot_id,
+        None
+    );
+}
+
 #[tokio::test]
 async fn baml_id_current_new_and_set_roundtrip() {
     let source = r#"
@@ -381,8 +436,7 @@ async fn baml_id_current_new_and_set_roundtrip() {
     };
     assert_ne!(root_boundary_id, override_id);
 
-    // The SetFunctionId record assertion lives in prof_gate.rs
-    // (set_function_id_recorded) against the .bamlprof stream.
+    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 #[tokio::test]
@@ -424,8 +478,7 @@ async fn baml_id_assignment_overrides_current_id() {
     };
     assert_ne!(root_boundary_id, override_id);
 
-    // The SetFunctionId record assertion lives in prof_gate.rs
-    // (set_function_id_recorded) against the .bamlprof stream.
+    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 // ── §2.2 contract: `$id` override persistence (T4-T7) ──────────────────────
@@ -626,9 +679,7 @@ async fn id_override_survives_callee_override() {
 /// T7 (adapted): the override is still in force when the overridden call
 /// returns — `$id` read at the end of `main`, after a nested call, decodes
 /// as the override UUID rather than the default `CallRef`. The per-record
-/// emission-count/ordering semantics (exactly one `SetFunctionId`, between
-/// the call's `CallFunction` and `EndFunction`) now live in the ring; see
-/// `prof_gate.rs::set_function_id_recorded`.
+/// emission-count/ordering semantics live in the segmented-backend tests.
 #[tokio::test]
 async fn id_override_read_at_return_is_override_uuid() {
     let source = r#"
@@ -662,8 +713,7 @@ async fn id_override_read_at_return_is_override_uuid() {
         panic!("expected override runtime ID, got {id}");
     };
 
-    // The SetFunctionId record assertion lives in prof_gate.rs
-    // (set_function_id_recorded) against the .bamlprof stream.
+    // Structural runtime-ID annotation coverage lives in profiling_backend.rs.
 }
 
 // ── §2.1 contract: identity across caught exceptions (T2) ──────────────────
@@ -778,8 +828,19 @@ async fn sinkless_engine_still_mints_correct_ids() {
     "#;
 
     let snapshot = compile_for_engine(source);
+    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+        enabled: false,
+        ..ProfilerConfig::default()
+    });
+    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+        BexEngine::new_with_profiler_session(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            profiler_session,
+        )
+        .unwrap(),
     );
 
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();

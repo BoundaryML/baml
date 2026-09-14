@@ -51,6 +51,22 @@ pub struct FunctionSourceMap {
     pub param_spans: Vec<TextRange>,
 }
 
+/// How many generic parameters the function's enclosing type contributes.
+///
+/// Zero for a free function, and for a method whose generics live on an
+/// out-of-body `implements` block. A method on a generic class reports the
+/// class's, which callers thread as type-arg operands alongside the function's
+/// own — see the IO-builtin arity in `baml_compiler2_mir`.
+#[salsa::tracked]
+pub fn enclosing_type_generic_param_count<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> usize {
+    crate::file_item_tree(db, function.file(db))
+        .enclosing_type_generic_params(function.id(db))
+        .len()
+}
+
 /// Semantic data for one function signature. Span-free — see the module docs.
 #[salsa::tracked(returns(ref))]
 pub fn function_data<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> FunctionData {
@@ -97,41 +113,21 @@ pub fn function_llm_meta<'db>(
         })
 }
 
-/// The span-carrying Jinja prompt of an LLM (`{ client …; prompt … }`) function,
-/// for prompt-template validation.
-///
-/// This is the body-ish sibling of [`function_llm_meta`]: because its value
-/// carries the prompt's source span, it re-runs whenever the prompt text *or its
-/// position* changes — it does not offer the span-free early cutoff
-/// `function_llm_meta` does. It mirrors [`function_body`](crate::function_body)'s
-/// span-carrying tracked shape and exists so prompt validation can front the item
-/// tree without reading it directly.
-///
-/// `None` for a non-LLM function or an LLM function without a `prompt`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlmPromptBody {
-    pub text: String,
-    pub span: TextRange,
-}
-
-/// The [`LlmPromptBody`] for one function, or `None` when it has no LLM prompt.
-#[salsa::tracked]
-pub fn function_llm_prompt<'db>(
+/// The source geometry of an LLM function's prompt literal (the literal's
+/// range plus every `${…}` construct inside it), or `None` for non-LLM
+/// functions and unusable prompts. Recorded at CST lowering — the desugared
+/// spec body's spans alias the prompt, so consumers classify prose vs code
+/// through this instead.
+#[salsa::tracked(returns(ref))]
+pub fn llm_prompt_spans<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
-) -> Option<std::sync::Arc<LlmPromptBody>> {
+) -> Option<ast::LlmPromptSpans> {
     let item_tree = crate::file_item_tree(db, function.file(db));
     item_tree[function.id(db)]
         .declarative_meta
         .as_ref()
-        .and_then(|ast::DeclarativeMeta::Llm(llm)| {
-            llm.prompt.as_ref().map(|prompt| {
-                std::sync::Arc::new(LlmPromptBody {
-                    text: prompt.text.clone(),
-                    span: prompt.span,
-                })
-            })
-        })
+        .and_then(|ast::DeclarativeMeta::Llm(llm)| llm.prompt_spans.clone())
 }
 
 /// Span-free semantic data for a function's *elaborated* signature — the
@@ -244,13 +240,14 @@ fn lower_elaborated<'db>(
 /// The item a method belongs to, as a `Loc`.
 ///
 /// Mirrors `item_tree::MethodOwner` (see its docs for the ownership rules —
-/// notably, in-body `implements I { … }` methods are owned by their *class*).
+/// notably, an in-body `implements I { … }` method is owned by its impl
+/// block, not its class — the in-class spelling is pure syntax).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
 pub enum MethodOwner<'db> {
     Class(baml_compiler2_hir::loc::ClassLoc<'db>),
     Interface(baml_compiler2_hir::loc::InterfaceLoc<'db>),
-    /// An out-of-body `implements<…> I for T { … }` block.
-    FreeImpl(baml_compiler2_hir::loc::ImplLoc<'db>),
+    /// A method of an `implements` block — in-class and out-of-body alike.
+    Impl(baml_compiler2_hir::loc::ImplLoc<'db>),
 }
 
 /// The item `method` belongs to, or `None` for a top-level function.
@@ -277,10 +274,33 @@ pub fn method_owner<'db>(
         item_tree::MethodOwner::Interface(id) => {
             MethodOwner::Interface(baml_compiler2_hir::loc::InterfaceLoc::new(db, file, id))
         }
-        item_tree::MethodOwner::FreeImpl(id) => {
-            MethodOwner::FreeImpl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
+        item_tree::MethodOwner::Impl(id) => {
+            MethodOwner::Impl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
         }
     })
+}
+
+/// Whether `function` has a body - the ONLY distinction between a
+/// default and a required interface method (r-a's shape); resolution
+/// and signatures never consult it, body lowering and the `default.`
+/// delegation gate do.
+#[salsa::tracked]
+pub fn function_has_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)].body.is_some()
+}
+
+/// A REQUIRED interface method: a bodyless function item owned by an
+/// interface. Signature/resolution consumers treat it like any other
+/// method (the r-a shape); BODY-LOWERING consumers (MIR, emit) skip it -
+/// there is nothing to compile, exactly as before it was an item.
+#[salsa::tracked]
+pub fn is_required_interface_method<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> bool {
+    !function_has_body(db, function)
+        && matches!(method_owner(db, function), Some(MethodOwner::Interface(_)))
 }
 
 /// The interface target a method was declared under, when it sits inside an

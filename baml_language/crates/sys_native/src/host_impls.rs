@@ -34,15 +34,12 @@
 
 use std::sync::Arc;
 
-use baml_type::RuntimeTy;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
 use bridge_ctypes::CffiHandleTableOptions;
 use prost::Message as _;
-use sys_ops::io::{
-    self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
-};
-use sys_types::{OpError, SysOp, SysOpResult, VmPanic};
+use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmRustFnError};
+use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError, VmPanic};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -72,8 +69,11 @@ impl io::IoNamespaceHost for NativeSysOps {
         // identity; dispatching
         // it would either find no entry in the bridge's callable registry
         // (returning a confusing "no callable for key" error) or, worse,
-        // collide with a callable that happens to share its key. Reject
-        // up front with a clear `InvalidArgument`.
+        // collide with a callable that happens to share its key. Reject up
+        // front — this sysop is reached only from compiler-synthesized wrapper
+        // closures, which always pass a callable `HostValue`, and its `throws`
+        // clause is the callable's own `E`, so neither shape is something the
+        // contract can carry.
         let host_arc = match handle {
             BexExternalValue::HostValue(arc)
                 if arc.kind == bex_external_types::HostValueKind::Callable =>
@@ -81,7 +81,7 @@ impl io::IoNamespaceHost for NativeSysOps {
                 arc
             }
             BexExternalValue::HostValue(arc) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(VmInternalError::BridgeFailure {
                     message: format!(
                         "expected a host callable, got a HostValue of kind {:?}",
                         arc.kind,
@@ -89,7 +89,7 @@ impl io::IoNamespaceHost for NativeSysOps {
                 });
             }
             other => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(VmInternalError::BridgeFailure {
                     message: format!("expected HostValue, got {other:?}"),
                 });
             }
@@ -257,11 +257,24 @@ impl io::IoNamespaceHost for NativeSysOps {
 /// recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
+/// Project a lane type into the name-headed form the contract check reads.
+///
+/// The check compares a returned wire value against the declared type, which
+/// it can only do by name. An anonymous declaration has none, so it widens to
+/// `unknown` — the check is weaker there, not wrong, and such a type cannot
+/// reach a host as a named value anyway.
+fn expected_wire_ty(expected: &RuntimeTy) -> baml_type::RuntimeTy {
+    expected
+        .clone()
+        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
+        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
+}
+
 fn validate_return_value(
     value: &BexExternalValue,
     expected: &RuntimeTy,
 ) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected).map_err(|err| {
+    validate_host_return(value, &expected_wire_ty(expected)).map_err(|err| {
         VmPanic::HostContractViolation {
             message: format!(
                 "host callable returned a value of the wrong type: {err} (expected {expected})"
@@ -275,9 +288,9 @@ fn validate_return_value(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{RuntimeTy, TyAttr};
+    use baml_type::TyAttr;
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
-    use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
+    use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
     use super::*;
     use crate::host_dispatch;
@@ -297,7 +310,7 @@ mod tests {
     // -------------------------------------------------------------------------
     #[tokio::test]
     async fn wrong_type_returns_type_error() {
-        let ops = NativeSysOps;
+        let ops = NativeSysOps::default();
         let heap = make_heap();
         let ctx = SysOpContext::empty();
         // Pass a String instead of a HostValue.
@@ -320,15 +333,15 @@ mod tests {
             }),
         };
         let err = result.expect_err("expected type error");
-        // The wrong-handle-type arg surfaces as a `VmBamlError::InvalidArgument`
-        // (which the host SDK sees as `baml.errors.InvalidArgument`), wrapped
-        // in the canonical `VmRustFnError::BamlError`.
+        // Only compiler-synthesized wrappers reach this sysop, and they always
+        // pass a callable `HostValue`, so a wrong-handle-type arg is an engine
+        // fault rather than anything the callable's `throws E` can carry.
         assert!(
             matches!(
                 err,
-                VmRustFnError::BamlError(VmBamlError::InvalidArgument { .. })
+                VmRustFnError::InternalError(VmInternalError::BridgeFailure { .. })
             ),
-            "expected InvalidArgument, got {err:?}"
+            "expected BridgeFailure, got {err:?}"
         );
     }
 
@@ -418,7 +431,7 @@ mod tests {
             u32::MAX - 3,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                VmBamlError::NotImplemented {
+                VmBamlError::Io {
                     message: "unknown id".to_string(),
                 },
             ),

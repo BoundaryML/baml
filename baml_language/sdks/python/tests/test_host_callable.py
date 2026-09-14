@@ -10,6 +10,7 @@ Run with:
     uv run maturin develop --uv
     uv run pytest tests/test_host_callable.py -v
 """
+
 from __future__ import annotations
 
 import gc
@@ -20,11 +21,17 @@ import pytest
 import baml_bridge.proto as _proto
 
 from baml_bridge import (
+    BamlPyHandle,
     BamlRuntime,
     call_function_sync,
     call_function,
     flush_events,
 )
+from baml_bridge.baml_py import (
+    _live_handle_count,
+    _seed_generic_media_handle,
+)
+from baml_bridge.errors import BamlError
 
 
 CALLBACK_BAML = """\
@@ -34,6 +41,11 @@ function CallCb(callback: (int) -> string, x: int) -> string {
 
 function CallIntCb(callback: (int) -> int, x: int) -> int {
     callback(x)
+}
+
+function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
+    let _ = callback(x);
+    x
 }
 """
 
@@ -137,8 +149,12 @@ def test_multiple_callables_have_distinct_keys():
         seen["b"] += 1
         return f"b:{x}"
 
-    assert call_function_sync(rt, "CallCb", {"callback": cb_a, "x": 1}).result() == "a:1"
-    assert call_function_sync(rt, "CallCb", {"callback": cb_b, "x": 2}).result() == "b:2"
+    assert (
+        call_function_sync(rt, "CallCb", {"callback": cb_a, "x": 1}).result() == "a:1"
+    )
+    assert (
+        call_function_sync(rt, "CallCb", {"callback": cb_b, "x": 2}).result() == "b:2"
+    )
     assert seen == {"a": 1, "b": 1}
 
 
@@ -151,6 +167,7 @@ def test_async_callable_runs_to_completion():
 
     async def cb(x: int) -> str:
         import asyncio
+
         await asyncio.sleep(0)
         return f"async-{x}"
 
@@ -208,6 +225,55 @@ def test_callable_raising_during_result_property_still_completes():
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
 
 
+def test_host_result_successful_encode_transfers_capability_clone_to_engine():
+    """The handle itself encodes successfully, so the engine receives and
+    drains its cloned key before rejecting this synthetic generic-media handle
+    against the callback contract. The original Python handle remains live."""
+    rt = _make_runtime()
+    key, handle_type = _seed_generic_media_handle()
+    handle = BamlPyHandle(key, handle_type)
+    before = _live_handle_count()
+
+    with pytest.raises(Exception, match="TypeMismatch"):
+        call_function_sync(
+            rt,
+            "ConsumeUnknownCb",
+            {"callback": lambda _x: handle, "x": 7},
+        )
+
+    assert _live_handle_count() == before
+
+
+def test_host_result_encode_failure_releases_capability_clone():
+    rt = _make_runtime()
+    key, handle_type = _seed_generic_media_handle()
+    handle = BamlPyHandle(key, handle_type)
+    before = _live_handle_count()
+
+    def cb(_x: int):
+        return [handle, object()]
+
+    with pytest.raises(Exception):
+        call_function_sync(rt, "ConsumeUnknownCb", {"callback": cb, "x": 1})
+
+    assert _live_handle_count() == before
+
+
+def test_host_throw_encode_failure_releases_capability_clone():
+    rt = _make_runtime()
+    key, handle_type = _seed_generic_media_handle()
+    handle = BamlPyHandle(key, handle_type)
+    before = _live_handle_count()
+
+    def cb(_x: int):
+        raise BamlError([handle, object()])
+
+    with pytest.raises(Exception):
+        call_function_sync(rt, "ConsumeUnknownCb", {"callback": cb, "x": 1})
+
+    assert _live_handle_count() == before
+
+
 # ---------------------------------------------------------------------------
 # Encode-error rollback releases callables registered for earlier kwargs.
 # ---------------------------------------------------------------------------
@@ -236,7 +302,7 @@ def test_encode_error_releases_registered_callables(monkeypatch):
     # order in CPython 3.7+ is insertion order, so `callback` (registered
     # first) is followed by `bad` (which fails) — exercising the rollback.
     with pytest.raises(Exception):
-        _proto.encode_call_args({"callback": cb, "bad": object()})
+        _proto.encode_call_args({"callback": cb, "bad": object()}, call_id=3)
 
     assert len(released) == 1, (
         f"expected exactly one callable to be released on rollback, got {released}"
@@ -336,5 +402,5 @@ def test_encode_success_does_not_release(monkeypatch):
     def cb(x: int) -> str:
         return str(x)
 
-    _proto.encode_call_args({"callback": cb, "x": 5})
+    _proto.encode_call_args({"callback": cb, "x": 5}, call_id=4)
     assert released == [], "successful encode should not release the callable"

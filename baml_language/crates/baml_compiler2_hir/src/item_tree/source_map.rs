@@ -3,7 +3,7 @@ use text_size::TextRange;
 
 use crate::ids::{
     ClassMarker, ClientMarker, EnumMarker, FunctionMarker, InterfaceMarker, LocalItemId,
-    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
 };
 
 /// Parallel source map for `ItemTree` — stores name spans that are
@@ -38,8 +38,6 @@ pub struct ItemTreeSourceMap {
     /// `(span, name_span)` for each client. The full span rides along because
     /// the semantic `Client` deliberately stores no span at all.
     pub client_spans: FxHashMap<LocalItemId<ClientMarker>, ItemSpans>,
-    /// `(span, name_span)` for each test — same rationale as `client_spans`.
-    pub test_spans: FxHashMap<LocalItemId<TestMarker>, ItemSpans>,
     /// `(span, name_span)` for each retry policy — same rationale as
     /// `client_spans`.
     pub retry_policy_spans: FxHashMap<LocalItemId<RetryPolicyMarker>, ItemSpans>,

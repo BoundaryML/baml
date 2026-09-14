@@ -2,9 +2,7 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## HTML and Markdown content parity
 
-The landing pages `/`, `/quickstart`, `/explore`, `/pricing`, and `/changelog`
-have checked-in Markdown representations in `content/`. Plain curl requests,
-`Accept: text/markdown`, and the corresponding `.md` URLs serve these files.
+The landing pages `/`, `/quickstart`, `/explore`, and `/pricing` have checked-in Markdown representations in `content/`. Plain curl requests, `Accept: text/markdown`, and the corresponding `.md` URLs serve these files.
 
 Treat each React page and Markdown file as two representations of the same
 content. Any substantive copy, command, claim, link, example, or availability

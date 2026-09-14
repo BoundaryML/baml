@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+   ╭─[main.baml:7:19]
+ 7 │         string => []
+   ·                   ──
+   ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+    ╭─[main.baml:16:18]
+ 16 │     let values = [];
+    ·                  ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `map<string, unknown>`
+    ╭─[main.baml:21:18]
+ 21 │     let values = {};
+    ·                  ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `map<string, unknown>`
+    ╭─[main.baml:26:18]
+ 26 │     let values = map {  };
+    ·                  ────────
+    ╰────

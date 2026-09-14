@@ -14,11 +14,12 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
+use baml_db::ProjectDatabase;
 use baml_fmt::FormatOptions;
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
 use baml_tests::{
     baml_test,
     engine::{OptLevel, compile_source_with_opt},
+    stdlib_prefix::{check_user_files, setup_multi_file_db, setup_test_db},
 };
 use bex_engine::BexExternalValue;
 use bex_vm_types::Object;
@@ -29,19 +30,15 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
 }
 
 fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    for (path, source) in files {
-        db.add_file(*path, source);
-    }
+    let db = setup_multi_file_db(files);
     collect_compile_errors_from_db(&db)
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let all_files = db.get_source_files();
+    let all_files = db.workspace_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(db)
+    check_user_files(db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
@@ -105,9 +102,9 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 
 fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<String>, String) {
     let program = compile_source_with_opt(source, OptLevel::One);
-    let matches: Vec<_> = program
-        .function_indices
-        .iter()
+    // Interface bodies live in no name map, so metadata probes walk the
+    // named functions plus the pool-enumerated bodies.
+    let matches: Vec<_> = baml_tests::engine::named_and_interface_body_functions(&program)
         .filter(|(name, _)| {
             name.strip_prefix("user.")
                 .unwrap_or(name)
@@ -125,7 +122,11 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
     );
 
     let (name, idx) = matches[0];
-    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+    let heap = baml_tests::engine::bound_pool(&program);
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was just built from, and the
+    // unsealed heap outlives every read below.
+    let Object::Function(function) = (unsafe { ptr.get() }) else {
         panic!("`{name}` did not point at a function object");
     };
 
@@ -144,9 +145,7 @@ fn compiled_function_display_metadata(
     display_name_suffix: &str,
 ) -> (Vec<String>, Vec<String>, String) {
     let program = compile_source_with_opt(source, OptLevel::One);
-    let matches: Vec<_> = program
-        .function_indices
-        .iter()
+    let matches: Vec<_> = baml_tests::engine::named_and_interface_body_functions(&program)
         .filter(|(name, _)| {
             name.strip_prefix("user.")
                 .unwrap_or(name)
@@ -164,7 +163,7 @@ fn compiled_function_display_metadata(
     );
 
     let (name, idx) = matches[0];
-    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+    let Some(Object::Function(function)) = program.objects.get(idx) else {
         panic!("`{name}` did not point at a function object");
     };
 
@@ -502,7 +501,7 @@ fn vm_metadata_resolves_self_associated_type_return_in_implements_method() {
             }
         }
         "#,
-        "UserRepository.Repository.find",
+        "<(user.UserRepository as user.Repository)>.find",
     );
 
     assert_eq!(return_type, "UserRecord");
@@ -4028,10 +4027,10 @@ async fn reflection_bounded_impl_cycle_terminates() {
 
         function main() -> int {
             let score = 0
-            if reflect.type_of<Node>().implements(reflect.type_of<A>()) {
+            if reflect.Type.of<Node>().implements(reflect.Type.of<A>()) {
                 score = score + 1
             }
-            if reflect.type_of<Node>().implements(reflect.type_of<B>()) {
+            if reflect.Type.of<Node>().implements(reflect.Type.of<B>()) {
                 score = score + 10
             }
             return score
@@ -4060,5 +4059,50 @@ fn interface_default_method_self_referencing_bound_is_rejected() {
         }
         "#,
         "E0145",
+    );
+}
+
+/// The call-site half of the shifted-bounds-cursor regression (the
+/// accepted-program half — the bound reaching the default body — lives in
+/// the corpus: `ns_interfaces_associated_types`,
+/// "own_generic_bound_after_associated_type_reaches_default_body"): with
+/// the bound keyed off `X`, a call whose `X` does not implement the bound
+/// was wrongly ACCEPTED (soundness hole). A compile ERROR cannot ride the
+/// corpus, so the rejection is pinned here.
+#[test]
+fn own_generic_bound_after_associated_type_still_rejects_at_call() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Tagged {
+            function tag_of(self) -> string throws never
+        }
+        interface Tallier {
+            type Marker
+            function tally<X extends Tagged, Y>(self, a: X, extra: Y) -> string throws never {
+                return a.tag_of()
+            }
+        }
+        class Blank {
+            x: int
+        }
+        class Sums {
+            implements Tallier {
+                type Marker = int
+            }
+        }
+        function bad_call(s: Sums, b: Blank) -> string {
+            return s.tally(b, 2)
+        }
+        function main() -> string {
+            return bad_call(Sums {}, Blank { x: 1 })
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("expected `Tagged`, found `Blank`")),
+        "a call whose `X` violates the bound must be rejected even with an \
+         associated type declared before the method; got {errors:?}"
     );
 }

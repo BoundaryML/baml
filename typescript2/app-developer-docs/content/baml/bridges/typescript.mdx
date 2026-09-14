@@ -1,0 +1,52 @@
+---
+title: TypeScript bridge
+description: Type mappings, generated client calls, streaming behavior, and TypeScript-specific boundaries.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/bridges
+    label: Language bridges
+  - label: TypeScript
+---
+
+## Compatibility
+
+Generate the TypeScript client with the same BAML toolchain selected by the project. Application code imports generated symbols locally; the runtime package provides the supporting media and execution types.
+
+<BridgeCompatibility id="typescript" view="compatibility" />
+
+## Type mappings
+
+<BridgeCompatibility id="typescript" view="types" />
+
+## Generated client
+
+Import `b` from the generated client directory and await the method matching the BAML function name.
+
+```typescript
+import { b } from "./baml_client"
+import type { Category } from "./baml_client/types"
+
+export async function classify(input: string): Promise<Category> {
+  return b.ClassifyMessage(input)
+}
+```
+
+## Streaming
+
+Streaming calls live under `b.stream`. The generated stream API exposes incremental values and a final typed result; use the adapter appropriate to the application framework at its outer boundary.
+
+```typescript
+const stream = b.stream.ClassifyMessage(input)
+const response = stream.toStreamable()
+```
+
+## Transition rules
+
+<BridgeCompatibility id="typescript" view="transitions" />
+
+## Gotchas
+
+<BridgeCompatibility id="typescript" view="gotchas" />
+
+Continue with the [function reference](/baml/language/functions) to review the source declaration behind generated calls.

@@ -28,15 +28,15 @@ defaults:
     shell: bash
 
 jobs:
-  # Target set + per-target runner/manylinux/architecture come from the platform
-  # contract (`release/platforms.json`), not a hand-copied matrix list.
+  # Targets and their runner/manylinux/architecture/container come from
+  # `release/platforms.json`, not a hand-copied matrix list.
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -45,13 +45,15 @@ jobs:
         run: |
           set -euo pipefail
           # target + python runner (as `runs_on`) + optional manylinux tag +
-          # optional python-setup architecture. maturin/setup-python treat an
-          # absent field as empty, so only-when-set matches the old matrix.
+          # optional python-setup architecture and build container.
+          # maturin/setup-python treat an absent field as empty, so
+          # only-when-set matches the old matrix.
           include="$(jq -c '[.targets[]
             | select(.artifacts.python != null)
             | .artifacts.python as $p
             | {target: .triple, runs_on: $p.runner}
               + (if $p.manylinux then {manylinux: $p.manylinux} else {} end)
+              + (if $p.container then {container: $p.container} else {} end)
               + (if $p.architecture then {architecture: $p.architecture} else {} end)]' release/platforms.json)"
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
@@ -78,7 +80,7 @@ jobs:
               Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -100,7 +102,7 @@ jobs:
       # so we want a specific Python (3.10, matching the abi3-py310 target)
       # rather than whatever mise.toml's `python` is pinned to today.
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           # abi3-py310 produces one interpreter-agnostic wheel per platform,
           # so a single Python is enough for the whole 3.10..3.13+ range.
@@ -127,13 +129,15 @@ jobs:
           # scaffolding for pyo3-stub-gen. [tool.maturin] manifest-path in
           # pyproject.toml already points at the right Cargo.toml.
           #
-          # `--profile release-bridge-python` (not `--release`): the engine is
-          # embedded in the user's process, so it must be built `panic = "unwind"`
-          # for the bridge's catch_unwind boundary to turn an engine panic into a
-          # catchable BamlPanic instead of SIGABRT'ing the host. See the profile
-          # comment in baml_language/Cargo.toml.
-          args: --profile release-bridge-python --strip --out dist
+          # `--release` is `panic = "unwind"` workspace-wide: the engine is
+          # embedded in the user's process, so the bridge's catch_unwind boundary
+          # must be able to turn an engine panic into a catchable BamlPanic
+          # instead of SIGABRT'ing the host. See the profile comment in
+          # baml_language/Cargo.toml.
+          args: --release --strip --out dist
           manylinux: ${{ matrix._.manylinux }}
+          # Explicit musl images bypass maturin-action's implicit GHCR defaults.
+          container: ${{ matrix._.container }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic

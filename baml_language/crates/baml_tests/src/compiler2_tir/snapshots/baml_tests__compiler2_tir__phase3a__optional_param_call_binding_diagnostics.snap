@@ -23,12 +23,13 @@ function user.duplicate_named() -> string throws never {
   { : string
     search(query = "cats", max = 1, max = 2) : string
   }
+  !! 242..282: expected 2 argument(s), got 3
   !! 280..281: duplicate named argument `max`
 }
 function user.unknown_named() -> string throws never {
   { : string
     search(q = "cats") : string
   }
-  !! 333..339: unknown named argument `q`
   !! 322..340: missing required argument `query`
+  !! 322..340: unknown named argument `q`
 }

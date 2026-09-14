@@ -14,9 +14,18 @@ $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 # target dir - before the fixture CARGO_TARGET_DIR assignment below -
 # which is where the emitted tests look for it (next to their own
 # binary, so ambient CARGO_TARGET_DIR/profile agree by construction).
-Write-Host "==> cargo build -p bridge_cffi (engine cdylib)"
 Push-Location $WorkspaceRoot
 try {
+    # Generate each fixture's crate first: nothing else produces it, and the
+    # pre-warm loop below silently skips any fixture whose generated/ is
+    # missing. Must stay ABOVE the CARGO_TARGET_DIR assignment - otherwise the
+    # driver would build into the fixtures' target dir and recompile the whole
+    # compiler there.
+    Write-Host "==> sdk_test_codegen rust (generate fixture crates)"
+    cargo run --quiet -p sdk_test_codegen -- rust
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    Write-Host "==> cargo build -p bridge_cffi (engine cdylib)"
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
@@ -25,7 +34,7 @@ try {
 
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
-# harness_setup/src/rust.rs).
+# codegen/src/rust.rs).
 $env:CARGO_TARGET_DIR = Join-Path $WorkspaceRoot 'target\sdk-rust-target'
 New-Item -ItemType Directory -Force -Path $env:CARGO_TARGET_DIR | Out-Null
 
@@ -33,9 +42,9 @@ Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'
     if (Test-Path $generated) {
         # Never run cargo without the generated manifest: cargo discovers
-        # manifests upward, so a missing Cargo.toml (codegen failure) would
-        # silently turn this into a workspace-wide build. The failure itself
-        # surfaces via the build_diagnostics test.
+        # manifests upward, so a missing Cargo.toml would silently turn this
+        # into a workspace-wide build. Codegen above aborts the script on
+        # failure, so reaching here without one means the tree was removed.
         $manifest = Join-Path $generated 'Cargo.toml'
         if (-not (Test-Path $manifest)) {
             Write-Host "==> skipping $($_.Name)/generated (no Cargo.toml - codegen failed?)"
@@ -57,7 +66,7 @@ Get-ChildItem -Directory | ForEach-Object {
 # processes - so `setup_guard::ran` (see harness_runner) can prove this
 # script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV, so the
 # var stays unset and the guard fails with a helpful message. Keep the
-# var name in sync with SETUP_ENV_VAR in harness_setup/src/rust.rs.
+# var name in sync with SETUP_ENV_VAR in codegen/src/rust.rs.
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_RUST_SETUP=1'
 }

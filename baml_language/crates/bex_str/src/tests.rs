@@ -361,3 +361,42 @@ fn codepoint_ops_match_std_oracle() {
         }
     }
 }
+
+// ── First / last occurrence, codepoint-indexed ─────────────────────────
+//
+// `char_index_of` and `char_last_index_of` search by *bytes* but report a
+// *codepoint* index, so any multibyte text ahead of the match is where the two
+// coordinate systems can diverge. Pinned against `str::find` / `str::rfind`
+// plus a codepoint count, which is correct by construction for valid UTF-8.
+#[test]
+fn occurrence_index_ops_match_std_oracle() {
+    let cases = [
+        "hello world",
+        "abcabc",
+        "héllo",
+        "🐑a🐑a🐑",
+        "配信サービスxyz配信",
+        "mixed_файлов_مرحبا_🪙_padding_to_force_a_flat_allocation_here!!",
+    ];
+    // Includes the empty needle (matches at both ends) and an absent one.
+    let needles = ["", "a", "o", "é", "🐑", "配信", "bc", "zzz"];
+
+    for s in cases {
+        let bex = BexStr::from(s);
+        for needle in needles {
+            // `find`/`rfind` land on a char boundary, so slicing is valid.
+            let want_first = s.find(needle).map(|b| s[..b].chars().count());
+            let want_last = s.rfind(needle).map(|b| s[..b].chars().count());
+            assert_eq!(
+                bex.char_index_of(needle),
+                want_first,
+                "char_index_of({needle:?}) for {s:?}"
+            );
+            assert_eq!(
+                bex.char_last_index_of(needle),
+                want_last,
+                "char_last_index_of({needle:?}) for {s:?}"
+            );
+        }
+    }
+}

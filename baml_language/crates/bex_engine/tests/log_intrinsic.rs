@@ -12,9 +12,10 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{
-    BexEngine, BexExternalValue, CaptureDefaults, EngineError, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer, TraceLogDrainReport},
+    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    logger::{TraceLogDrainReport, TraceLogger},
 };
+use bex_events::prof::backend::{ProfilerConfig, ProfilerSession};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -24,21 +25,27 @@ async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
     let snapshot = compile_for_engine(source);
+    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
+        enabled: false,
+        ..ProfilerConfig::default()
+    });
+    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
+        BexEngine::new_with_profiler_session(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            profiler_session,
+        )
+        .expect("Failed to create engine"),
     );
-    let logs = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(16));
+    let logs = TraceLogger::bounded(16);
     let result = engine
         .call_function(
             "main",
             vec![],
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_capture_defaults(CaptureDefaults {
-                    values_enabled: false,
-                    logs_enabled: true,
-                })
-                .with_value_capture(logs.clone())
+                .with_logger(logs.clone())
                 .build(),
             true,
         )

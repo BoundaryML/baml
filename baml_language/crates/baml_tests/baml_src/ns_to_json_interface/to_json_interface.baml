@@ -20,7 +20,7 @@ class Point {
     x int
     y int
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "pt": [baml.json.from(self.x), baml.json.from(self.y)] }
         }
     }
@@ -30,11 +30,11 @@ class Point {
 // `obj.to_json()` on a non-implementor has no real method; it desugars to
 // `baml.json.from(obj)` (structural), the json analog of `obj.to_string()`.
 
-function desugar_via_from_str() -> string throws baml.json.JsonSerializationError {
+function desugar_via_from_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(User { name: "Ada", age: 30 }))
 }
 
-function desugar_via_method_str() -> string throws baml.json.JsonSerializationError {
+function desugar_via_method_str() -> string throws baml.json.SerializationError {
     let u = User { name: "Ada", age: 30 };
     baml.json.stringify(u.to_json())
 }
@@ -47,7 +47,7 @@ test "operator_style_to_json_desugars_to_from" {
 // ─── operator_style_to_json_dispatches_override ───────────────────────────────
 // `obj.to_json()` on an implementor resolves the real interface method.
 
-function point_via_method_str() -> string throws baml.json.JsonSerializationError {
+function point_via_method_str() -> string throws baml.json.SerializationError {
     let p = Point { x: 1, y: 2 };
     baml.json.stringify(p.to_json())
 }
@@ -95,11 +95,11 @@ class PointEmptyImpl {
 
 class PointPlain { x int  y int }
 
-function point_empty_impl_str() -> string throws baml.json.JsonSerializationError {
+function point_empty_impl_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(PointEmptyImpl { x: 1, y: 2 }))
 }
 
-function point_plain_str() -> string throws baml.json.JsonSerializationError {
+function point_plain_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(PointPlain { x: 1, y: 2 }))
 }
 
@@ -126,7 +126,7 @@ test "implementor_override_is_used" {
 class Inner {
     v int
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "wrapped": baml.json.from(self.v) }
         }
     }
@@ -147,7 +147,7 @@ test "nested_override_is_honored_at_depth" {
 class Tag {
     name string
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             baml.json.from(self.name)
         }
     }
@@ -172,8 +172,8 @@ test "enum_renders_as_variant_name" {
 //
 // A class field of `enum` type or a string-literal union (`"X" | "Y"`) must
 // serialize to a plain JSON string — the variant name / the string — through
-// both the structural `baml.json.from` / `.to_json()` path and the typed
-// `baml.json.to_string<T>` path. The regression these lock in: a field whose
+// both the structural `baml.json.from` / `.to_json()` path and
+// `baml.json.to_string`. The regression these lock in: a field whose
 // declared type is a *union containing an enum* (including the optional enum
 // `E?` == `E | null`) serialized as `null` through the typed walker, whose
 // `RuntimeTy::Union` arm delegates to the untyped `value_to_serde`, which
@@ -204,10 +204,8 @@ test "string_literal_union_field_serializes_as_string" {
 
 class OptEnum { e E? }
 
-test "optional_enum_field_serializes_via_typed_to_string" {
-    // Regression: `E?` == `E | null` is a union, so the typed `to_string<T>`
-    // walker rendered it via the untyped converter, which produced `null` for
-    // the enum variant. It must be the variant name.
+test "optional_enum_field_serializes_via_to_string" {
+    // Regression: `E?` == `E | null` must preserve the held variant name.
     assert.equal(baml.json.to_string(OptEnum { e: E.A }), "{\"e\":\"A\"}")
 }
 
@@ -215,8 +213,8 @@ enum F { X  Y }
 
 class EnumUnion { v E | F }
 
-test "enum_union_field_serializes_via_typed_to_string" {
-    // Regression: a field typed as a union of two enums (`E | F`) serialized
-    // the held variant as `null` through the typed walker. It must be the name.
+test "enum_union_field_serializes_via_to_string" {
+    // Regression: a field typed as a union of two enums (`E | F`) must
+    // serialize the held variant as its name.
     assert.equal(baml.json.to_string(EnumUnion { v: F.Y }), "{\"v\":\"Y\"}")
 }

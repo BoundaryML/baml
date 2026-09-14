@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
     ╭─[chain_expr.baml:86:5]
  86 │     user.name.len();
-    ·     ─────────────
+    ·     ───────────────
     ╰────
 
   [type] E0007
@@ -15,7 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
     ╭─[chain_expr.baml:87:5]
  87 │     items.len();
-    ·     ─────────
+    ·     ───────────
     ╰────
 
   [type] E0007
@@ -23,19 +23,24 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
     ╭─[chain_expr.baml:90:5]
  90 │     user.profile.items.get(0);
-    ·     ──────────────────────
+    ·     ─────────────────────────
     ╰────
 
   [type] E0007
 
   × type `ChainItem[]` has no member `get`
-    ╭─[chain_expr.baml:94:5]
- 94 │ ╭─▶     items // 2 callee trailing
- 95 │ │       // 3 open paren leading
- 96 │ │       . // 4 dot trailing
- 97 │ │       // 5 method leading
- 98 │ ╰─▶     get // 6 method trailing
-    ╰────
+     ╭─[chain_expr.baml:94:5]
+  94 │ ╭─▶     items // 2 callee trailing
+  95 │ │       // 3 open paren leading
+  96 │ │       . // 4 dot trailing
+  97 │ │       // 5 method leading
+  98 │ │       get // 6 method trailing
+  99 │ │       ( // 7 open paren trailing
+ 100 │ │       // 8 arg leading
+ 101 │ │       0 // 9 arg trailing
+ 102 │ │       // 10 close paren leading
+ 103 │ ╰─▶     ) // 11 close paren trailing
+     ╰────
 
   [type] E0007
 
@@ -45,7 +50,12 @@ source: crates/baml_tests/src/generated_tests.rs
  109 │ │       /* 3 dot leading */
  110 │ │       . /* 4 dot trailing */
  111 │ │       /* 5 method leading */
- 112 │ ╰─▶     get /* 6 method trailing */
+ 112 │ │       get /* 6 method trailing */
+ 113 │ │       ( /* 7 open paren trailing */
+ 114 │ │       /* 8 arg leading */
+ 115 │ │       0 /* 9 arg trailing */
+ 116 │ │       /* 10 close paren leading */
+ 117 │ ╰─▶     ) /* 11 close paren trailing */
      ╰────
 
   [type] E0007
@@ -53,7 +63,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:149:5]
  149 │     user.name.len().to_string();
-     ·     ─────────────
+     ·     ───────────────
      ╰────
 
   [type] E0007
@@ -61,15 +71,55 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:152:5]
  152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ───────────────────────────────────────────
+     ·     ─────────────────────────────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:155:44]
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ─────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ·                                            ───
+     ·     ────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ──────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -77,7 +127,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:158:5]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·     ──────────────────────
+     ·     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -85,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:28]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                            ──────────────────────
+     ·                            ────────────────────────
      ╰────
 
   [type] E0007
@@ -93,7 +143,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:59]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                           ──────────────────────
+     ·                                                           ────────────────────────
      ╰────
 
   [type] E0007
@@ -101,7 +151,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:90]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                                                          ──────────────────────
+     ·                                                                                          ────────────────────────
      ╰────
 
   [type] E0005
@@ -117,7 +167,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:161:33]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     ·                                 ──────────────────────
+     ·                                 ────────────────────────
      ╰────
 
   [type] E0007
@@ -139,7 +189,43 @@ source: crates/baml_tests/src/generated_tests.rs
  177 │ │       color // 14 trailing
  178 │ │       . // 15 trailing
  179 │ │       // 16 leading
- 180 │ ╰─▶     len // 17 trailing
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ ╰─▶     ) // 19 trailing
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:165:5]
+ 165 │ ╭─▶     user // 2 trailing
+ 166 │ │       . // 3 trailing
+ 167 │ │       // 4 leading
+ 168 │ │       profile // 5 trailing
+ 169 │ │       . // 6 trailing
+ 170 │ │       // 7 leading
+ 171 │ │       settings // 8 trailing
+ 172 │ │       . // 9 trailing
+ 173 │ │       // 10 leading
+ 174 │ │       preferences // 11 trailing
+ 175 │ │       . // 12 trailing
+ 176 │ │       // 13 leading
+ 177 │ │       color // 14 trailing
+ 178 │ │       . // 15 trailing
+ 179 │ │       // 16 leading
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ │       ) // 19 trailing
+ 183 │ │       . // 20 trailing
+ 184 │ │       // 21 leading
+ 185 │ │       to_string // 22 trailing
+ 186 │ │       ( // 23 trailing
+ 187 │ │       ) // 24 trailing
+ 188 │ │       . // 25 trailing
+ 189 │ │       // 26 leading
+ 190 │ │       len // 27 trailing
+ 191 │ │       ( // 28 trailing
+ 192 │ ╰─▶     ) // 29 trailing
      ╰────
 
   [type] E0007
@@ -161,7 +247,43 @@ source: crates/baml_tests/src/generated_tests.rs
  209 │ │       color /* 14 trailing */
  210 │ │       . /* 15 trailing */
  211 │ │       /* 16 leading */
- 212 │ ╰─▶     len /* 17 trailing */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ ╰─▶     ) /* 19 trailing */
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:197:5]
+ 197 │ ╭─▶     user /* 2 trailing */
+ 198 │ │       . /* 3 trailing */
+ 199 │ │       /* 4 leading */
+ 200 │ │       profile /* 5 trailing */
+ 201 │ │       . /* 6 trailing */
+ 202 │ │       /* 7 leading */
+ 203 │ │       settings /* 8 trailing */
+ 204 │ │       . /* 9 trailing */
+ 205 │ │       /* 10 leading */
+ 206 │ │       preferences /* 11 trailing */
+ 207 │ │       . /* 12 trailing */
+ 208 │ │       /* 13 leading */
+ 209 │ │       color /* 14 trailing */
+ 210 │ │       . /* 15 trailing */
+ 211 │ │       /* 16 leading */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ │       ) /* 19 trailing */
+ 215 │ │       . /* 20 trailing */
+ 216 │ │       /* 21 leading */
+ 217 │ │       to_string /* 22 trailing */
+ 218 │ │       ( /* 23 trailing */
+ 219 │ │       ) /* 24 trailing */
+ 220 │ │       . /* 25 trailing */
+ 221 │ │       /* 26 leading */
+ 222 │ │       len /* 27 trailing */
+ 223 │ │       ( /* 28 trailing */
+ 224 │ ╰─▶     ) /* 29 trailing */
      ╰────
 
   [type] E0007
@@ -177,7 +299,11 @@ source: crates/baml_tests/src/generated_tests.rs
  235 │ │       items // 8 trailing
  236 │ │       . // 9 trailing
  237 │ │       // 10 leading
- 238 │ ╰─▶     get // 11 trailing
+ 238 │ │       get // 11 trailing
+ 239 │ │       ( // 12 trailing
+ 240 │ │       // 13 leading
+ 241 │ │       user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+ 242 │ ╰─▶     ) // 15 trailing
      ╰────
 
   [type] E0007
@@ -185,7 +311,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:5]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·     ──────────────────────
+     ·     ────────────────────────
      ╰────
 
   [type] E0007
@@ -193,7 +319,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:36]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·                                    ──────────────────────
+     ·                                    ────────────────────────
      ╰────
 
   [type] E0007
@@ -201,15 +327,15 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int[][]` has no member `len`
      ╭─[chain_expr.baml:251:17]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                 ───────────────
+     ·                 ─────────────────
      ╰────
 
   [type] E0007
 
   × type `int[]` has no member `len`
-     ╭─[chain_expr.baml:251:55]
+     ╭─[chain_expr.baml:251:40]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                                                       ───
+     ·                                        ────────────────────
      ╰────
 
   [type] E0007
@@ -217,23 +343,23 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:256:5]
  256 │     items  .  get  (  0  );
-     ·     ─────────────
+     ·     ──────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:259:18]
+     ╭─[chain_expr.baml:259:5]
  259 │     user.tags[0].len();
-     ·                  ───
+     ·     ──────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:261:20]
+     ╭─[chain_expr.baml:261:5]
  261 │     items[0].label.len();
-     ·                    ───
+     ·     ────────────────────
      ╰────
 
   [hir] E0015
@@ -254,9 +380,24 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                      ╰── unknown attribute
      ╰────
 
-  [type] E0003
+  [hir] E0010
 
-  × unresolved name: `MyRetryPolicy`
+  × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:5:1]
+  5 │ ╭─▶ client<llm> BasicClient {
+  6 │ │       provider openai,
+  7 │ │       options {
+  8 │ │           model "gpt-4",
+  9 │ │       }
+ 10 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client FullClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
     ╭─[config_decls.baml:13:1]
  13 │ ╭─▶ client<llm> FullClient {
  14 │ │       provider openai
@@ -267,37 +408,650 @@ source: crates/baml_tests/src/generated_tests.rs
  19 │ │           temperature 0.7,
  20 │ │           top_p 0.9
  21 │ │       }
- 22 │ ╰─▶ }
+ 22 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
     ╰────
 
-  [type] E0001
+  [hir] E0010
 
-  × mismatched types
-     ╭─[config_decls.baml:201:1]
- 201 │ ╭─▶ client<llm> DeeplyNestedClient {
- 202 │ │       provider openai
- 203 │ │       options {
- 204 │ │           model "gpt-4"
- 205 │ │           headers {
- 206 │ │               "X-API-Key" "my-key"
- 207 │ │               "Authorization" "Bearer token"
- 208 │ │               custom_config {
- 209 │ │                   retry_on_failure true
- 210 │ │                   timeout_ms 30000
- 211 │ │                   metadata {
- 212 │ │                       team "platform"
- 213 │ │                       environment "production"
- 214 │ │                   }
- 215 │ │               }
- 216 │ │           }
- 217 │ │       }
- 218 │ ├─▶ }
-     · ╰──── expected `string`, found `map<string, bool | int | map<string, string>>`
+  × `client<llm>` config blocks are removed; declare a client value instead: `client StringProviderClient = openai.GenericClient.new(model = "...", base_url = "...");` (compose reliability with
+  │ ai.Retry / ai.Fallback / ai.RoundRobin)
+    ╭─[config_decls.baml:25:1]
+ 25 │ ╭─▶ client<llm> StringProviderClient {
+ 26 │ │       provider "openai-generic"
+ 27 │ │       options {
+ 28 │ │           base_url "https://openrouter.ai/api/v1"
+ 29 │ │           model "mistralai/mistral-small-3.1-24b-instruct"
+ 30 │ │       }
+ 31 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client NestedConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+    ╭─[config_decls.baml:34:1]
+ 34 │ ╭─▶ client<llm> NestedConfigClient {
+ 35 │ │       provider openai
+ 36 │ │       options {
+ 37 │ │           model "gpt-4"
+ 38 │ │           headers {
+ 39 │ │               "X-API-Key" "my-key"
+ 40 │ │               "Authorization" "Bearer token"
+ 41 │ │           }
+ 42 │ │       }
+ 43 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+    ╭─[config_decls.baml:46:1]
+ 46 │ ╭─▶ client<llm> ArrayConfigClient {
+ 47 │ │       provider openai
+ 48 │ │       options {
+ 49 │ │           model "gpt-4",
+ 50 │ │           stop_sequences: ["END", "STOP", "DONE"]
+ 51 │ │       }
+ 52 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongOptionClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:55:1]
+ 55 │ ╭─▶ client<llm> LongOptionClient {
+ 56 │ │       provider openai
+ 57 │ │       options {
+ 58 │ │           model "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+ 59 │ │           base_url "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+ 60 │ │       }
+ 61 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TypedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+    ╭─[config_decls.baml:64:1]
+ 64 │ ╭─▶ client<llm> TypedValuesClient {
+ 65 │ │       provider openai
+ 66 │ │       options {
+ 67 │ │           model "gpt-4"
+ 68 │ │           temperature: 0.5
+ 69 │ │           max_tokens 2048
+ 70 │ │           stream true
+ 71 │ │       }
+ 72 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client EnvClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[config_decls.baml:75:1]
+ 75 │ ╭─▶ client<llm> EnvClient {
+ 76 │ │       provider: openai
+ 77 │ │       options {
+ 78 │ │           api_key env.OPENAI_API_KEY
+ 79 │ │           model "gpt-4"
+ 80 │ │       }
+ 81 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:84:1]
+  84 │ ╭─▶ client<llm> ArrayOfObjectsClient {
+  85 │ │       provider openai
+  86 │ │       options: {
+  87 │ │           model "gpt-4",
+  88 │ │           tools [
+  89 │ │               {
+  90 │ │                   server_label "web_search"
+  91 │ │                   server_url "https://example.com"
+  92 │ │                   type "mcp"
+  93 │ │               }
+  94 │ │               {
+  95 │ │                   server_label "calculator"
+  96 │ │                   server_url "https://calc.example.com"
+  97 │ │               }
+  98 │ │           ]
+  99 │ │       }
+ 100 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client RawStringConfigClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:103:1]
+ 103 │ ╭─▶ client<llm> RawStringConfigClient {
+ 104 │ │       provider openai,
+ 105 │ │       options: {
+ 106 │ │           model: "gpt-4"
+ 107 │ │           system_prompt "You are a helpful assistant.\nAlways be concise."
+ 108 │ │       },
+ 109 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:112:1]
+ 112 │ ╭─▶ client<llm> MixedValuesClient {
+ 113 │ │       provider openai
+ 114 │ │       options {
+ 115 │ │           model "gpt-4"
+ 116 │ │           max_tokens 100
+ 117 │ │           temperature 0.7
+ 118 │ │           stream true
+ 119 │ │           stop ["END"]
+ 120 │ │           inline_string "inline quoted"
+ 121 │ │           "string key" "value with spaces"
+ 122 │ │       }
+ 123 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:127:1]
+ 127 │ ╭─▶ client // 2 client keyword trailing
+ 128 │ │   // 3 type angle leading
+ 129 │ │   < // 4 open angle trailing
+ 130 │ │   // 5 type leading
+ 131 │ │   llm // 6 type trailing
+ 132 │ │   // 7 close angle leading
+ 133 │ │   > // 8 close angle trailing
+ 134 │ │   // 9 name leading
+ 135 │ │   TriviaClient // 10 name trailing
+ 136 │ │   // 11 open brace leading
+ 137 │ │   { // 12 open brace trailing
+ 138 │ │       // 13 provider key leading
+ 139 │ │       provider: // 14 provider key trailing
+ 140 │ │       // 15 provider value leading
+ 141 │ │       openai // 16 provider value trailing
+ 142 │ │       // 17 options key leading
+ 143 │ │       options // 18 options key trailing
+ 144 │ │       // 19 options brace leading
+ 145 │ │       { // 20 options open brace trailing
+ 146 │ │           // 21 first option leading
+ 147 │ │           model // 22 model key trailing
+ 148 │ │           // 23 model value leading
+ 149 │ │           "gpt-4" // 24 model value trailing
+ 150 │ │       // 25 options close brace leading
+ 151 │ │       } // 26 options close brace trailing
+ 152 │ │   // 27 close brace leading
+ 153 │ ├─▶ } // 28 close brace trailing
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:159:1]
+ 159 │ ╭─▶ client /* 2 client keyword trailing */
+ 160 │ │   /* 3 type angle leading */
+ 161 │ │   < /* 4 open angle trailing */
+ 162 │ │   /* 5 type leading */
+ 163 │ │   llm /* 6 type trailing */
+ 164 │ │   /* 7 close angle leading */
+ 165 │ │   > /* 8 close angle trailing */
+ 166 │ │   /* 9 name leading */
+ 167 │ │   TriviaClientBlock /* 10 name trailing */
+ 168 │ │   /* 11 open brace leading */
+ 169 │ │   { /* 12 open brace trailing */
+ 170 │ │       /* 13 provider key leading */
+ 171 │ │       provider /* 14 provider key trailing */
+ 172 │ │       /* 15 provider value leading */
+ 173 │ │       openai /* 16 provider value trailing */
+ 174 │ │       /* 17 options key leading */
+ 175 │ │       options: /* 18 options key trailing */
+ 176 │ │       /* 19 options brace leading */
+ 177 │ │       { /* 20 options open brace trailing */
+ 178 │ │           /* 21 first option leading */
+ 179 │ │           model /* 22 model key trailing */
+ 180 │ │           /* 23 model value leading */
+ 181 │ │           "gpt-4" /* 24 model value trailing */
+ 182 │ │       /* 25 options close brace leading */
+ 183 │ │       } /* 26 options close brace trailing */
+ 184 │ │   /* 27 close brace leading */
+ 185 │ ├─▶ } /* 28 close brace trailing */
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns =
+  │ openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:190:1]
+ 190 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
+ 191 │ │       provider openai
+ 192 │ │       options {
+ 193 │ │           model "gpt-4"
+ 194 │ │       }
+ 195 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:198:1]
+ 198 │ ╭─▶ client<llm> DeeplyNestedClient {
+ 199 │ │       provider openai
+ 200 │ │       options {
+ 201 │ │           model "gpt-4"
+ 202 │ │           headers {
+ 203 │ │               "X-API-Key" "my-key"
+ 204 │ │               "Authorization" "Bearer token"
+ 205 │ │               custom_config {
+ 206 │ │                   retry_on_failure true
+ 207 │ │                   timeout_ms 30000
+ 208 │ │                   metadata {
+ 209 │ │                       team "platform"
+ 210 │ │                       environment "production"
+ 211 │ │                   }
+ 212 │ │               }
+ 213 │ │           }
+ 214 │ │       }
+ 215 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:218:1]
+ 218 │ ╭─▶ client<llm> LongNestedValuesClient {
+ 219 │ │       provider openai
+ 220 │ │       options {
+ 221 │ │           model "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+ 222 │ │           base_url "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+ 223 │ │           headers {
+ 224 │ │               "Authorization" "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+ 225 │ │               "X-Custom-Header" "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+ 226 │ │           }
+ 227 │ │       }
+ 228 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:231:1]
+ 231 │ ╭─▶ client<llm> ManyOptionsClient {
+ 232 │ │       provider openai
+ 233 │ │       options {
+ 234 │ │           model "gpt-4"
+ 235 │ │           max_tokens 4096
+ 236 │ │           temperature 0.7
+ 237 │ │           top_p 0.95
+ 238 │ │           frequency_penalty 0.5
+ 239 │ │           presence_penalty 0.3
+ 240 │ │           stream true
+ 241 │ │           stop_sequences ["END", "STOP", "DONE", "COMPLETE", "FINISHED"]
+ 242 │ │           api_key env.OPENAI_API_KEY
+ 243 │ │           base_url "https://api.openai.com/v1"
+ 244 │ │       }
+ 245 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:248:1]
+ 248 │ ╭─▶ client<llm> LongArrayClient {
+ 249 │ │       provider openai
+ 250 │ │       options {
+ 251 │ │           model "gpt-4"
+ 252 │ │           stop_sequences ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"]
+ 253 │ │       }
+ 254 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:257:1]
+ 257 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
+ 258 │ │       provider openai
+ 259 │ │       options {
+ 260 │ │           model "gpt-4"
+ 261 │ │           tools [
+ 262 │ │               {
+ 263 │ │                   server_label "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+ 264 │ │                   server_url "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
+ 265 │ │                   type "mcp"
+ 266 │ │                   description "A very long description of the tool server that explains what it does and how it should be used by the model"
+ 267 │ │               }
+ 268 │ │               {
+ 269 │ │                   server_label "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+ 270 │ │                   server_url "https://another-long-domain.internal.staging.example.com/tools/v1"
+ 271 │ │               }
+ 272 │ │           ]
+ 273 │ │       }
+ 274 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:278:1]
+ 278 │ ╭─▶ client // 2 client trailing
+ 279 │ │   < // 3 angle trailing
+ 280 │ │   llm // 4 type trailing
+ 281 │ │   > // 5 close angle trailing
+ 282 │ │   // 6 name leading
+ 283 │ │   TriviaDeeplyNestedClient // 7 name trailing
+ 284 │ │   // 8 open brace leading
+ 285 │ │   { // 9 open brace trailing
+ 286 │ │       // 10 provider leading
+ 287 │ │       provider // 11 provider trailing
+ 288 │ │       // 12 value leading
+ 289 │ │       openai // 13 value trailing
+ 290 │ │       // 14 options leading
+ 291 │ │       options // 15 options trailing
+ 292 │ │       // 16 options brace leading
+ 293 │ │       { // 17 options brace trailing
+ 294 │ │           // 18 model leading
+ 295 │ │           model // 19 model trailing
+ 296 │ │           // 20 model value leading
+ 297 │ │           "gpt-4" // 21 model value trailing
+ 298 │ │           // 22 headers leading
+ 299 │ │           headers // 23 headers trailing
+ 300 │ │           // 24 headers brace leading
+ 301 │ │           { // 25 headers brace trailing
+ 302 │ │               // 26 first header leading
+ 303 │ │               "X-API-Key" // 27 first header trailing
+ 304 │ │               // 28 first value leading
+ 305 │ │               "my-key" // 29 first value trailing
+ 306 │ │               // 30 second header leading
+ 307 │ │               "Authorization" // 31 second header trailing
+ 308 │ │               // 32 second value leading
+ 309 │ │               "Bearer token" // 33 second value trailing
+ 310 │ │           // 34 headers close leading
+ 311 │ │           } // 35 headers close trailing
+ 312 │ │       // 36 options close leading
+ 313 │ │       } // 37 options close trailing
+ 314 │ │   // 38 close brace leading
+ 315 │ ├─▶ } // 39 close brace trailing
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:321:1]
+ 321 │ ╭─▶ client /* 2 client trailing */
+ 322 │ │   < /* 3 angle trailing */
+ 323 │ │   llm /* 4 type trailing */
+ 324 │ │   > /* 5 close angle trailing */
+ 325 │ │   /* 6 name leading */
+ 326 │ │   TriviaDeeplyNestedClientBlock /* 7 name trailing */
+ 327 │ │   /* 8 open brace leading */
+ 328 │ │   { /* 9 open brace trailing */
+ 329 │ │       /* 10 provider leading */
+ 330 │ │       provider /* 11 provider trailing */
+ 331 │ │       /* 12 value leading */
+ 332 │ │       openai /* 13 value trailing */
+ 333 │ │       /* 14 options leading */
+ 334 │ │       options /* 15 options trailing */
+ 335 │ │       /* 16 options brace leading */
+ 336 │ │       { /* 17 options brace trailing */
+ 337 │ │           /* 18 model leading */
+ 338 │ │           model /* 19 model trailing */
+ 339 │ │           /* 20 model value leading */
+ 340 │ │           "gpt-4" /* 21 model value trailing */
+ 341 │ │           /* 22 headers leading */
+ 342 │ │           headers /* 23 headers trailing */
+ 343 │ │           /* 24 headers brace leading */
+ 344 │ │           { /* 25 headers brace trailing */
+ 345 │ │               /* 26 first header leading */
+ 346 │ │               "X-API-Key" /* 27 first header trailing */
+ 347 │ │               /* 28 first value leading */
+ 348 │ │               "my-key" /* 29 first value trailing */
+ 349 │ │               /* 30 second header leading */
+ 350 │ │               "Authorization" /* 31 second header trailing */
+ 351 │ │               /* 32 second value leading */
+ 352 │ │               "Bearer token" /* 33 second value trailing */
+ 353 │ │           /* 34 headers close leading */
+ 354 │ │           } /* 35 headers close trailing */
+ 355 │ │       /* 36 options close leading */
+ 356 │ │       } /* 37 options close trailing */
+ 357 │ │       /* 38 comma leading */
+ 358 │ │       , /* 39 comma trailing */
+ 359 │ │   /* 40 close brace leading */
+ 360 │ ├─▶ } /* 41 close brace trailing */
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:365:1]
+ 365 │ ╭─▶ client<llm> TriviaLongValueClient {
+ 366 │ │       provider openai
+ 367 │ │       options {
+ 368 │ │           // 1 key leading
+ 369 │ │           model // 2 key trailing
+ 370 │ │           // 3 value leading
+ 371 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" // 4 value trailing
+ 372 │ │           // 5 next key leading
+ 373 │ │           base_url // 6 next key trailing
+ 374 │ │           // 7 next value leading
+ 375 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" // 8 next value trailing
+ 376 │ │       }
+ 377 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:380:1]
+ 380 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
+ 381 │ │       provider openai
+ 382 │ │       options {
+ 383 │ │           /* 1 key leading */
+ 384 │ │           model /* 2 key trailing */
+ 385 │ │           /* 3 value leading */
+ 386 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" /* 4 value trailing */
+ 387 │ │           /* 5 next key leading */
+ 388 │ │           base_url /* 6 next key trailing */
+ 389 │ │           /* 7 next value leading */
+ 390 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" /* 8 next value trailing */
+ 391 │ │       }
+ 392 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`BasicRetry` has no effect)
+     ╭─[config_decls.baml:395:1]
+ 395 │ ╭─▶ retry_policy BasicRetry {
+ 396 │ │       max_retries 3
+ 397 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`FullRetry` has no effect)
+     ╭─[config_decls.baml:400:1]
+ 400 │ ╭─▶ retry_policy FullRetry {
+ 401 │ │       max_retries 5
+ 402 │ │       backoff_multiplier 2.0
+ 403 │ │       initial_delay_ms 1000
+ 404 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);`
+  │ (`ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols` has no effect)
+     ╭─[config_decls.baml:407:1]
+ 407 │ ╭─▶ retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
+ 408 │ │       max_retries 10
+ 409 │ │       backoff_multiplier 3.0
+ 410 │ │       initial_delay_ms 5000
+ 411 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetry` has no effect)
+     ╭─[config_decls.baml:415:1]
+ 415 │ ╭─▶ retry_policy // 2 keyword trailing
+ 416 │ │   // 3 name leading
+ 417 │ │   TriviaRetry // 4 name trailing
+ 418 │ │   // 5 open brace leading
+ 419 │ │   { // 6 open brace trailing
+ 420 │ │       // 7 first item leading
+ 421 │ │       max_retries // 8 key trailing
+ 422 │ │       // 9 value leading
+ 423 │ │       3 // 10 value trailing
+ 424 │ │   // 11 close brace leading
+ 425 │ ├─▶ } // 12 close brace trailing
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetryBlock` has no effect)
+     ╭─[config_decls.baml:429:1]
+ 429 │ ╭─▶ retry_policy /* 2 keyword trailing */
+ 430 │ │   /* 3 name leading */
+ 431 │ │   TriviaRetryBlock /* 4 name trailing */
+ 432 │ │   /* 5 open brace leading */
+ 433 │ │   { /* 6 open brace trailing */
+ 434 │ │       /* 7 first item leading */
+ 435 │ │       max_retries /* 8 key trailing */
+ 436 │ │       /* 9 value leading */
+ 437 │ │       3 /* 10 value trailing */
+ 438 │ │   /* 11 close brace leading */
+ 439 │ ├─▶ } /* 12 close brace trailing */
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `BasicClient`
+     ╭─[config_decls.baml:443:13]
+ 443 │     client: BasicClient
+     ·             ───────────
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:476:1]
+ 476 │ ╭─▶ client<llm> C {
+ 477 │ │       provider openai
+ 478 │ │       options {
+ 479 │ │           model "gpt-4"
+ 480 │ │       }
+ 481 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
+     ╭─[config_decls.baml:483:1]
+ 483 │ ╭─▶ retry_policy R {
+ 484 │ │       max_retries 1
+ 485 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
+  │ ai.Fallback / ai.RoundRobin)
+     ╭─[config_decls.baml:488:1]
+ 488 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 489 │ │       provider    openai
+ 490 │ │       options    {
+ 491 │ │           model    "gpt-4"
+ 492 │ │       }
+ 493 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
+     ╭─[config_decls.baml:495:1]
+ 495 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 496 │ │       max_retries    3
+ 497 │ ├─▶ }
+     · ╰──── retry composes at the client boundary now
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:500:1]
+ 500 │ ╭─▶ client<llm> CommaClient {
+ 501 │ │       provider openai,
+ 502 │ │       options {
+ 503 │ │           model "gpt-4",
+ 504 │ │           max_tokens 100,
+ 505 │ │       }
+ 506 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
+     ╰────
+
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+     ╭─[config_decls.baml:509:1]
+ 509 │ ╭─▶ client<llm> SameLineClient {
+ 510 │ │       provider openai
+ 511 │ │       options { model "gpt-4" }
+ 512 │ ├─▶ }
+     · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [validation] E0011
 
-  × name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
+  × name `ExtraWhitespace` defined 4 times as: class, enum, function, type
      ╭─[enum_decls.baml:211:9]
  211 │ enum    ExtraWhitespace    {
      ·         ───────┬───────
@@ -312,11 +1066,6 @@ source: crates/baml_tests/src/generated_tests.rs
   │        ╭─[function_decls.baml:497:13]
   │    497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
   │        ·             ───────────────
-  │        ╰────
-  ├─▶   ☞ duplicate template_string definition
-  │        ╭─[template_string_decls.baml:364:20]
-  │    364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-  │        ·                    ───────────────
   │        ╰────
   ╰─▶   ☞ duplicate type definition
            ╭─[type_alias_decls.baml:401:9]
@@ -341,57 +1090,43 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[function_decls.baml:73:5]
- 73 │     1
-    ·     ┬
-    ·     ╰── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
+    ╭─[function_decls.baml:72:167]
+ 72 │ ╭─▶ function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
+ 73 │ │       1
+ 74 │ ├─▶ }
+    · ╰──── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
     ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:453:43]
- 453 │ ╭─▶ function LlmBasic(name: string) -> string {
- 454 │ │       client GPT4
- 455 │ │       prompt #"Say hello to {{name}}"#
- 456 │ ╰─▶ }
+     ╭─[function_decls.baml:454:13]
+ 454 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:464:47]
- 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
- 465 │ │       client GPT4
- 466 │ │       prompt #"
- 467 │ │           Analyze the following text:
- 468 │ │           {{ text }}
- 469 │ │           Return a summary.
- 470 │ │       "#
- 471 │ ╰─▶ }
+     ╭─[function_decls.baml:465:13]
+ 465 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:480:51]
- 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
- 481 │ │       prompt #"Summarize: {{ text }}"#
- 482 │ │       client GPT4
- 483 │ ╰─▶ }
+     ╭─[function_decls.baml:482:13]
+ 482 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-     ╭─[function_decls.baml:488:131]
- 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
- 489 │ │       client GPT4
- 490 │ │       prompt #"
- 491 │ │           Context: {{ first_context }} {{ second_context }} {{ third_context }}
- 492 │ │           Query: {{ user_query }}
- 493 │ │       "#
- 494 │ ╰─▶ }
+     ╭─[function_decls.baml:489:13]
+ 489 │     client: GPT4
+     ·             ────
      ╰────
 
   [type] E0146
@@ -410,6 +1145,70 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                     ─────────
      ╰────
 
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:577:5]
+ 577 │     assert x > 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:578:5]
+ 578 │     assert x < 100;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:582:5]
+ 582 │     assert // 2 assert keyword trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:589:5]
+ 589 │     assert /* 2 assert keyword trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:595:5]
+ 595 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:598:5]
+ 598 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:602:5]
+ 602 │     assert // 2 assert trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:611:5]
+ 611 │     assert /* 2 assert trailing */
+     ·     ──────
+     ╰────
+
   [type] E0001
 
   × mismatched types
@@ -417,6 +1216,22 @@ source: crates/baml_tests/src/generated_tests.rs
  161 │         "bye" => "farewell",
      ·         ──┬──
      ·           ╰── expected `"hello"`, found `"bye"`
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:161:18]
+ 161 │         "bye" => "farewell",
+     ·                  ──────────
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:162:14]
+ 162 │         _ => "other"
+     ·              ───────
      ╰────
 
   [type] E0004
@@ -513,13 +1328,22 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+     ╭─[other_exprs.baml:101:5]
+ 101 │     [];
+     ·     ──
+     ╰────
+
   [validation] E0011
 
-  × name `ManyParams` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:30:17]
- 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
-    ·                 ─────┬────
-    ·                      ╰── duplicate template_string definition
+  × duplicate function `ManyParams`
+    ╭─[template_string_decls.baml:28:10]
+ 28 │ function ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) -> string {
+    ·          ─────┬────
+    ·               ╰── duplicate function definition
     ╰────
   ╰─▶   ☞ first defined as function here
           ╭─[function_decls.baml:23:10]
@@ -527,59 +1351,26 @@ source: crates/baml_tests/src/generated_tests.rs
           ·          ──────────
           ╰────
 
-  [validation] E0011
+  [type] E0001
 
-  × name `MultiParamTrivia` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:89:17]
- 89 │ template_string MultiParamTrivia(
-    ·                 ────────┬───────
-    ·                         ╰── duplicate template_string definition
+  × cannot interpolate a value of type `string | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:7]
+ 37 │     `${name} ${age} ${items}`
+    ·       ──────
     ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:135:10]
-       135 │ function MultiParamTrivia(
-           ·          ────────────────
-           ╰────
 
-  [validation] E0011
+  [type] E0001
 
-  × name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:106:17]
- 106 │ template_string MultiParamTriviaBlock(
-     ·                 ──────────┬──────────
-     ·                           ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:152:10]
-       152 │ function MultiParamTriviaBlock(
-           ·          ─────────────────────
-           ╰────
+  × cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:15]
+ 37 │     `${name} ${age} ${items}`
+    ·               ─────
+    ╰────
 
-  [validation] E0011
+  [type] E0001
 
-  × name `SixLongParams` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:171:17]
- 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
-     ·                 ──────┬──────
-     ·                       ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-          ╭─[function_decls.baml:37:10]
-       37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int,
-      fifth_parameter_name: string, sixth_parameter_name: float) -> string {
-          ·          ─────────────
-          ╰────
-
-  [validation] E0011
-
-  × name `T` defined 2 times as: template_string, type
-     ╭─[type_alias_decls.baml:398:6]
- 398 │ type T = int
-     ·      ┬
-     ·      ╰── duplicate type definition
-     ╰────
-  ╰─▶   ☞ first defined as template_string here
-           ╭─[template_string_decls.baml:123:17]
-       123 │ template_string T(x: int) #"{{ x }}"#
-           ·                 ─
-           ╰────
+  × cannot interpolate a value of type `string[] | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:22]
+ 37 │     `${name} ${age} ${items}`
+    ·                      ───────
+    ╰────

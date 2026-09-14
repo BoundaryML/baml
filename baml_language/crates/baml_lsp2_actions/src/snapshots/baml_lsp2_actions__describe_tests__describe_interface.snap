@@ -1,8 +1,0 @@
----
-source: crates/baml_lsp2_actions/src/describe_tests.rs
-expression: "project.format_description(&descs[0])"
----
-interface Named  interfaces.baml:2
-shape: interface Named
-refs: 1
-  interfaces.baml:9  implements Named {

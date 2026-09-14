@@ -17,10 +17,11 @@ The file has three types of data:
 
 # Tooling
 
+- `bctl oncall current` prints the current `oncall-releases` assignee from the local schedule using today's Pacific date.
 - `bctl oncall check [--fix]` parses `schedule.oncall` and validates it, ensuring that the file is well-formed
 	- runs on every change to `schedule.oncall`
 - `bctl oncall notify [--post-to-slack]`
-	- post to `#oncall` with a message about who's currently oncall, who was last oncall, and upcoming oncalls
-	- runs weekly Friday 9am PT, posting to Slack to notify whoever's oncall (1h drift for PST/PDT is fine)
+	- post to `#general` with a message about who's currently oncall, who was last oncall, and upcoming oncalls, asking the current oncaller to use their agent to prepare the next release, prepare the changelog, and thank external contributors after the changelog is out
+	- runs weekly Friday 8am Pacific, including daylight saving changes
 - `bctl oncall fill-schedule [--post-to-slack]`
 	- append weekly shifts to `schedule.oncall`, assigning in a round-robin pattern

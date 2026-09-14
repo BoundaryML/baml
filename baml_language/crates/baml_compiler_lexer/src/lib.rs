@@ -6,7 +6,7 @@
 use baml_base::SourceFile;
 
 mod tokens;
-pub use tokens::{Token, TokenKind, lex_lossless, reconstruct_source};
+pub use tokens::{Token, TokenKind, is_baml_identifier, lex_lossless, reconstruct_source};
 
 /// Tracked: tokenize a source file
 /// This function performs lexical analysis on a BAML source file,

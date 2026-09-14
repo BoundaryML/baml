@@ -15,7 +15,7 @@ use crate::idents;
 
 pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
     let fqn = name.to_string();
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(name.bare_name());
     let docs = doc_attrs(enum_.docstring.as_deref());
 
     let mut variant_defs = Vec::new();

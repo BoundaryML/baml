@@ -14,14 +14,14 @@ cd ../../..
 runtime_path="${BAML_RUNTIME_PATH:-}"
 if [[ -z "$runtime_path" ]]; then
     target="${BAML_CPP_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
-    libdir="target/$target/release-bridge-cffi"
+    libdir="target/$target/release"
     case "$target" in
         *apple*) runtime_lib="libbridge_cffi.dylib" ;;
         *windows*) runtime_lib="bridge_cffi.dll" ;;
         *) runtime_lib="libbridge_cffi.so" ;;
     esac
     if [[ ! -f "$libdir/$runtime_lib" ]]; then
-        cargo build --profile release-bridge-cffi -p bridge_cffi --target "$target" \
+        cargo build --release -p bridge_cffi --target "$target" \
             ${BAML_CPP_FEATURES:+--no-default-features --features "$BAML_CPP_FEATURES"}
     fi
     runtime_path="$PWD/$libdir/$runtime_lib"

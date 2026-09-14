@@ -1,6 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
-import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.application.Application
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.ComponentManager
@@ -10,7 +10,6 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
@@ -29,8 +28,7 @@ class BamlLanguageServerService() {
 
         // Cache the plugin version to avoid repeated lookups
         private val BUNDLED_VERSION: String by lazy {
-            val pluginId = PluginId.getId("com.boundaryml.jetbrains_ext")
-            val plugin = PluginManagerCore.getPlugin(pluginId)
+            val plugin = PluginManager.getPluginByClass(BamlLanguageServerService::class.java)
             thisLogger().info("Resolved bundled plugin: $plugin")
             plugin?.version ?: "0.207.0"
         }

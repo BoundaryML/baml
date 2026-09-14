@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod js_callback_bridge;
 

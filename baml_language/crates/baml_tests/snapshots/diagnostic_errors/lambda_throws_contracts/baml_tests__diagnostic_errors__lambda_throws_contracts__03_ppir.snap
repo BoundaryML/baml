@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.UnusedError {
+}
+class user.UnusedError$stream {
+}
+type user.OpenErrors = unknown
+type user.OpenErrors$stream = unknown
+function user.Accept(callback: () -> int throws string | int) -> int  [expr] {
+  {  } 1
+}
+function user.Contextual() -> int  [expr] {
+  {  } Accept(() -> int { { throw 1 } })
+}
+function user.Lambdas(value: unknown) -> int  [expr] {
+  { let unused = () -> int throws string | int { { throw 1 } }; let imprecise = () -> int throws unknown { {  } 1 }; let mixed = () -> int throws OpenErrors | UnusedError { { throw value } }; let violation = () -> int throws string { { throw 1 } }; let covered = () -> int throws string { { throw "boom" } }; let open = () -> int throws string | _ { { throw 1 } } } 1
+}
+function user.Named() -> int  [expr] {
+  { throw 1 }
+}
+
+--- captures ---
+lambda () in Lambdas: captures [value]

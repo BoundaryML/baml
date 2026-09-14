@@ -5,7 +5,7 @@ use text_size::TextRange;
 
 use crate::loc::{
     ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-    TemplateStringLoc, TestLoc, TypeAliasLoc,
+    TemplateStringLoc, TypeAliasLoc,
 };
 
 // ── DefinitionKind ──────────────────────────────────────────────────────────
@@ -25,7 +25,6 @@ pub enum DefinitionKind {
     Function,
     TemplateString,
     Client,
-    Test,
     RetryPolicy,
     Let,
 
@@ -48,7 +47,6 @@ impl DefinitionKind {
             Self::Function => "function",
             Self::TemplateString => "template_string",
             Self::Client => "client",
-            Self::Test => "test",
             Self::RetryPolicy => "retry_policy",
             Self::Let => "let",
             Self::Field => "field",
@@ -88,7 +86,6 @@ pub enum Definition<'db> {
     Function(FunctionLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     Client(ClientLoc<'db>),
-    Test(TestLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
 }
@@ -104,7 +101,6 @@ impl<'db> Definition<'db> {
             Definition::Function(loc) => loc.file(db),
             Definition::TemplateString(loc) => loc.file(db),
             Definition::Client(loc) => loc.file(db),
-            Definition::Test(loc) => loc.file(db),
             Definition::RetryPolicy(loc) => loc.file(db),
             Definition::Let(loc) => loc.file(db),
         }
@@ -120,7 +116,6 @@ impl<'db> Definition<'db> {
             Definition::Function(_) => DefinitionKind::Function,
             Definition::TemplateString(_) => DefinitionKind::TemplateString,
             Definition::Client(_) => DefinitionKind::Client,
-            Definition::Test(_) => DefinitionKind::Test,
             Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
             Definition::Let(_) => DefinitionKind::Let,
         }

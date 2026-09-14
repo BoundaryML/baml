@@ -21,6 +21,7 @@ mod function;
 pub mod host_value;
 pub mod loader;
 pub mod runtime;
+mod spec;
 #[cfg(test)]
 pub(crate) mod test_support;
 mod version;
@@ -34,6 +35,7 @@ pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;
+pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 
 /// Order-preserving map type of BAML `map` values (the engine's own
 /// representation is insertion-ordered).

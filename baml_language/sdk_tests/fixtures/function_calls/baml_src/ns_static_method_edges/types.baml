@@ -78,7 +78,7 @@ class Edge {
     value
   }
 
-  function type_value(value: type) -> type {
+  function type_value(value: reflect.Type) -> reflect.Type {
     value
   }
 
@@ -90,7 +90,7 @@ class Edge {
     baml.http.Response.new(209, { "x-static": "true" }, body.to_utf8())
   }
 
-  function read_response(value: baml.http.Response) -> string throws baml.errors.Io {
+  function read_response(value: baml.http.Response) -> string throws baml.errors.Io | baml.errors.Timeout {
     value.text()
   }
 

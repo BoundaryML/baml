@@ -43,6 +43,16 @@ pnpm dev:wasm
 
 Then in VSCode, press `F5` and select **"Launch VS Code extension (v2)"**.
 
+### Installing the Local Extension
+
+From `typescript2/`, build, package, and install the local extension in VS Code with:
+
+```bash
+pnpm vscode:install
+```
+
+The command requires the VS Code `code` CLI on `PATH` and uses `--force` so it can replace an installed extension with the same version.
+
 ### Building a Local VSIX
 
 From `typescript2/`, build and package the VS Code extension with:
@@ -51,10 +61,10 @@ From `typescript2/`, build and package the VS Code extension with:
 pnpm vscode:package
 ```
 
-The VSIX is written to:
+The VSIX is written to `app-vscode-ext/` as:
 
 ```text
-app-vscode-ext/app-vscode-ext-0.1.0.vsix
+baml-language-<version>.vsix
 ```
 
 What `pnpm vscode:package` does:

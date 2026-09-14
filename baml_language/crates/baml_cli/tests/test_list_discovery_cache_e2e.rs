@@ -36,6 +36,7 @@ fn run_list(
     // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
     // `agent`, which disables the progress lines some assertions read.
     cmd.env("BAML_OUTPUT_PRESET", "human");
+    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
     cmd.env("BAML_HOME", &home);
     cmd.env("BAML_CACHE_DIR", cache_dir);
     cmd.env("BAML_CACHE_DEBUG", "1");

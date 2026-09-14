@@ -53,6 +53,15 @@
     },
     {
       "include": "#semicolon"
+    },
+    {
+      "include": "#associated-type"
+    },
+    {
+      "include": "#member-fragment"
+    },
+    {
+      "include": "#type-fragment"
     }
   ],
   "repository": {
@@ -3303,6 +3312,30 @@
         }
       ]
     },
+    "member-fragment": {
+      "name": "meta.member-fragment.baml",
+      "begin": "^\\s*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(\\?)?\\s*(:)",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.property.baml"
+        },
+        "2": {
+          "name": "keyword.operator.optional.baml"
+        },
+        "3": {
+          "name": "punctuation.separator.colon.baml"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
+    },
     "namespace-root": {
       "name": "support.other.namespace.baml",
       "match": "\\b(?:root|baml)\\b"
@@ -4557,6 +4590,19 @@
         },
         {
           "include": "#colon-separator"
+        }
+      ]
+    },
+    "type-fragment": {
+      "name": "meta.type-fragment.baml",
+      "begin": "^\\s*(?=\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)(?=[^:=;{}()#\"'\\r\\n]*$)(?=[^<.\\[?|\\r\\n]*[<.\\[?|]|(?:(?:int|float|bigint|string|bool|image|audio|map|json|unknown|never|Self))\\s*$)",
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type-expression"
         }
       ]
     },

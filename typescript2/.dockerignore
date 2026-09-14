@@ -1,0 +1,11 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!app-product-metrics/
+!app-product-metrics/**
+app-product-metrics/data/
+app-product-metrics/dist/
+app-product-metrics/node_modules/
+app-product-metrics/src/generated/prisma/

@@ -73,7 +73,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         match symbol {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
-                if name.name().as_str().contains('$') {
+                if name.name().as_str().contains('$') && !name.is_stream() {
                     warnings.push(SkipWarning {
                         fqn: name.to_string(),
                         reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -86,8 +86,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Function(_) => {}
         }
     }
-    classes.sort_by(|(a, _), (b, _)| a.cmp(b));
-    aliases.sort_by(|(a, _), (b, _)| a.cmp(b));
+    classes.sort_by_key(|(name, _)| *name);
+    aliases.sort_by_key(|(name, _)| *name);
 
     // Per-class field requirements: either a list of nominal types the
     // fields reference, or the reason the class is structurally
@@ -98,7 +98,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // `$`-suffixed companion types ($stream partials, …) are not
         // representable as Rust identifiers and are not emitted yet —
         // same filter the function emitter applies.
-        if name.name().as_str().contains('$') {
+        if name.name().as_str().contains('$') && !name.is_stream() {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -159,7 +159,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // types; only recursive aliases (unrepresentable as a plain Rust
     // `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
-        if name.name().as_str().contains('$') {
+        if name.name().as_str().contains('$') && !name.is_stream() {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -253,7 +253,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             type_names_by_leaf
                 .entry(leaf)
                 .or_default()
-                .insert(name.name().as_str().to_string());
+                .insert(name.bare_name().to_string());
         }
     }
 
@@ -348,11 +348,11 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
             }
         }
         Ty::Media(kind, _) => Err(format!("unsupported type: media ({kind})")),
-        Ty::BuiltinUnknown { .. } => Err("unsupported type: unknown".to_string()),
+        Ty::Unknown { .. } => Err("unsupported type: unknown".to_string()),
         Ty::Function { .. } => Err("unsupported type: function".to_string()),
         Ty::Future(..) => Err("unsupported type: future handle".to_string()),
         Ty::Interface(..) => Err("unsupported type: interface".to_string()),
-        Ty::Type { .. } => Err("unsupported type: type metatype".to_string()),
+        Ty::Type { .. } => Err("unsupported type: reflect.Type metatype".to_string()),
         Ty::Resource { .. } => Err("unsupported type: resource handle".to_string()),
         Ty::PromptAst { .. } => Err("unsupported type: prompt AST".to_string()),
         Ty::Never { .. } => Err("unsupported type: never".to_string()),
@@ -544,7 +544,7 @@ fn compute_renames(
             types_in
                 .entry(path.clone())
                 .or_default()
-                .insert(name.name().as_str().to_string());
+                .insert(name.bare_name().to_string());
         }
     }
 

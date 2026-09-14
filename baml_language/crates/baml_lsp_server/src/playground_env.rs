@@ -154,7 +154,7 @@ impl PlaygroundEnvState {
     }
 
     /// Resolve pending env waiters for a cancelled host call without adding
-    /// another RunStore payload; `cancel_run` already recorded cancellation.
+    /// another `RunStore` payload; `cancel_run` already recorded cancellation.
     pub fn cancel_for_host_call(&self, host_call_id: &HostCallId) {
         let cancelled = {
             let mut pending = self.pending.lock();
@@ -358,7 +358,7 @@ mod tests {
         let session_store = Arc::new(PlaygroundSessionStore::default());
         let state = Arc::new(PlaygroundEnvState::new(
             broadcast_tx,
-            run_store.clone(),
+            run_store,
             session_store,
         ));
         state.set_declared_keys(&["ANTHROPIC_API_KEY".to_string()]);

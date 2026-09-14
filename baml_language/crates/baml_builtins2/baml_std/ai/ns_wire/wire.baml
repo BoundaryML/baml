@@ -1,0 +1,610 @@
+// Shared helpers for client authors: transport with classification, the
+// output-format text, and tool schema lowering.
+// Mirrors _planv2/pages/02_guides/03_clients/03_writing_a_client.md.
+
+/// Collapse a client's `ai.Credential?` option to the value to put on the
+/// wire, reading the environment at REQUEST time (never at construction).
+///
+///   * a literal string resolves to itself, unless it is blank — a
+///     whitespace-only credential is treated as "not configured" so the rest of
+///     the chain can supply one;
+///   * a `baml.env.Ref` resolves to `ref.get()` — `null` when the named
+///     variable is unset, which lets the caller continue down its own chain (or
+///     raise the same error it raises for an unconfigured option);
+///   * `null` falls back to `env_fallback`, the provider's canonical variable
+///     name, looked up with `baml.env.get`. A `null` `env_fallback` means the
+///     provider has no canonical variable and the result is `null`.
+///
+/// A BLANK value is "not configured" at EVERY rung, not just the literal one:
+/// `export OPENAI_API_KEY=` otherwise resolved to `""` and every client built
+/// `Authorization: Bearer ` — a provider 401 in place of the local "no
+/// credential configured" error the same client raises when the variable is
+/// absent entirely. The two spellings of "I did not set this" now behave alike.
+///
+/// This IS the whole chain a client needs: explicit credential (a literal or an
+/// `env.NAME` ref) → the provider's canonical variable (`env_fallback`).
+function resolve_credential(cred: root.Credential?, env_fallback: string?) -> string? {
+    let explicit: string? = match (cred) {
+        let literal: string => root.internal._configured(literal),
+        let named: baml.env.Ref => root.internal._configured(named.get() ?? ""),
+        null => null,
+    };
+    if let value: string = explicit {
+        return value;
+    }
+    if let fallback: string = env_fallback {
+        return root.internal._configured(baml.env.get(fallback) ?? "");
+    }
+    null
+}
+
+/// Scrub credential-bearing query parameters out of free text before it becomes
+/// an `ai.errors.Failure.detail`.
+///
+/// Providers that authenticate through the URL — Vertex AI express mode puts
+/// the key in `?key=…` — would otherwise leak it: the native HTTP layer renders
+/// `reqwest::Error`, whose `Display` embeds the request URL, straight into the
+/// transport-failure message.
+function redact_url_secrets(text: string) -> string {
+    // "key=" also covers "api_key="/"apikey=", "token=" covers
+    // "access_token="/"id_token=": the preceding characters are kept verbatim.
+    let keys = root.internal._redact_after(text, "key=");
+    let tokens = root.internal._redact_after(keys, "token=");
+    root.internal._redact_after(tokens, "secret=")
+}
+
+/// Replace credential-bearing request headers with "REDACTED" before a
+/// request snapshot rides an `ai.events.LLMCall`. Unlike previews, the
+/// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
+/// `authorization`, Azure's `api-key`, ...), so captured requests must be
+/// scrubbed. Matching is case-insensitive; values are replaced, names kept.
+function redact_request_headers(headers: map<string, string>) -> map<string, string> {
+    let out: map<string, string> = {};
+    for (let name in headers.keys()) {
+        let lower = name.to_lower_case();
+        let sensitive = lower == "authorization"
+            || lower == "proxy-authorization"
+            || lower == "x-api-key"
+            || lower == "api-key"
+            || lower == "x-goog-api-key"
+            || lower == "x-amz-security-token"
+            || lower == "cookie";
+        if (sensitive) {
+            let _ = out.set(name, "REDACTED");
+        } else {
+            if let value: string = headers.get(name) {
+                let _ = out.set(name, value);
+            }
+        }
+    }
+    out
+}
+
+/// The environment variables a credential chain consulted, as a readable list,
+/// for the "no credential configured" error a client raises when the whole
+/// chain came back empty.
+///
+/// The point is the `Ref` arm: `api_key = env.MY_KEY` pointing at an UNSET
+/// variable resolves to `null` and falls through to the rest of the chain, so
+/// without this the error would name only the provider's canonical variable and
+/// never mention the one the caller actually asked for. Values are never
+/// included — only names.
+function credential_sources(cred: root.Credential?, canonical_env: string?) -> string {
+    let names: string[] = [];
+    if let named: baml.env.Ref = cred {
+        names.push(named.name);
+    }
+    if let canonical: string = canonical_env {
+        names.push(canonical);
+    }
+    if (names.length() == 0) {
+        "(no environment variable was named)"
+    } else {
+        names.join(", ")
+    }
+}
+
+/// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
+/// T = json-shaped envelope class; unknown fields are ignored by the decoder.
+/// A null or non-positive timeout preserves the transport's unbounded default.
+function send_as<T>(
+    req: baml.http.Request,
+    provider: string,
+    request_timeout_ms: int? = null,
+) -> T {
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            // redacted: the rendered transport error can embed the request URL,
+            // and some providers authenticate through a query parameter.
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
+            raw_body: null,
+        }
+        },
+    };
+    let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: "the response body could not be read completely",
+            raw_body: null,
+        }
+        },
+    };
+    if (!resp.ok()) {
+        // headers last: they are what fills RateLimited.retry_after_ms on a 429.
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+    }
+    baml.json.from_string<T>(text) catch_all (e) {
+        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+    }
+}
+
+/// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
+class SentAs<T> {
+    value: T,
+    call: root.events.LLMCall,
+}
+
+/// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
+/// transport failure this still throws the same classified error `send_as`
+/// throws — composite clients build failed-leg records from the error itself
+/// (`_failed_leg_call`), so no record accompanies a throw. `capture_wire`
+/// gates the request/response bodies; status, headers, and timing are always
+/// recorded. The request URL and captured response body are redacted with
+/// `redact_url_secrets` before storing.
+function send_as_with_wire<T>(
+    req: baml.http.Request,
+    provider: string,
+    client_name: string,
+    capture_wire: bool = true,
+    request_timeout_ms: int? = null,
+) -> SentAs<T> {
+    let started = baml.time.Instant.now();
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
+            raw_body: null,
+        }
+        },
+    };
+    let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: "the response body could not be read completely",
+            raw_body: null,
+        }
+        },
+    };
+    if (!resp.ok()) {
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+    }
+    let value = baml.json.from_string<T>(text) catch_all (e) {
+        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+    };
+    let call = root.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: root.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: redact_url_secrets(req.url),
+                headers: redact_request_headers(req.headers),
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: root.events.HttpResponse {
+            status: resp.status_code,
+            headers: resp.headers,
+            body: if (capture_wire) {
+                redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        // The provider parse fills the turn-level usage; the wire record does
+        // not re-derive it here.
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    SentAs { value: value, call: call }
+}
+
+/// The return type's schema as prompt text, in the standard dialect —
+/// exactly what ${ctx.output_format()} renders in an LLM function block.
+function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
+    root.internal.validate_output_type(t);
+    root.internal.render_output_format(t)
+}
+
+/// Provider-neutral media payload after resolving local files and, when
+/// requested, ordinary HTTP(S) URLs. Google Cloud `gs://` URLs remain URLs.
+class ResolvedMedia {
+    url: string?,
+    base64: string?,
+    mime_type: string,
+}
+
+/// Resolve BAML media for provider request lowering. This mirrors the media
+/// resolution pass in `sys_llm`: local files become base64, existing base64 is
+/// retained, and URL fetching is selected by the provider.
+function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
+    match (media) {
+        let image: baml.media.Image => {
+            let source = image.file() ?? image.url() ?? "";
+            root.internal._resolve_media_content(
+                image.url(),
+                image.file(),
+                image.base64(),
+                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                fetch_url,
+            )
+        },
+        let audio: baml.media.Audio => {
+            let source = audio.file() ?? audio.url() ?? "";
+            root.internal._resolve_media_content(
+                audio.url(),
+                audio.file(),
+                audio.base64(),
+                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                fetch_url,
+            )
+        },
+        let video: baml.media.Video => {
+            let source = video.file() ?? video.url() ?? "";
+            root.internal._resolve_media_content(
+                video.url(),
+                video.file(),
+                video.base64(),
+                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                fetch_url,
+            )
+        },
+        let pdf: baml.media.Pdf => {
+            let source = pdf.file() ?? pdf.url() ?? "";
+            root.internal._resolve_media_content(
+                pdf.url(),
+                pdf.file(),
+                pdf.base64(),
+                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                fetch_url,
+            )
+        },
+    }
+}
+
+/// Resolve media for a request preview without reading a file or fetching a
+/// URL. Existing base64 and `data:` payloads are preserved; provider-specific
+/// renderers decide whether an ordinary URL is supported on their wire form.
+function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
+    match (media) {
+        let image: baml.media.Image => {
+            let source = image.file() ?? image.url() ?? "";
+            root.internal._resolve_media_preview_content(
+                image.url(),
+                image.file(),
+                image.base64(),
+                root.internal._media_mime_type(image.mime_type(), source, "image"),
+            )
+        },
+        let audio: baml.media.Audio => {
+            let source = audio.file() ?? audio.url() ?? "";
+            root.internal._resolve_media_preview_content(
+                audio.url(),
+                audio.file(),
+                audio.base64(),
+                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+            )
+        },
+        let video: baml.media.Video => {
+            let source = video.file() ?? video.url() ?? "";
+            root.internal._resolve_media_preview_content(
+                video.url(),
+                video.file(),
+                video.base64(),
+                root.internal._media_mime_type(video.mime_type(), source, "video"),
+            )
+        },
+        let pdf: baml.media.Pdf => {
+            let source = pdf.file() ?? pdf.url() ?? "";
+            root.internal._resolve_media_preview_content(
+                pdf.url(),
+                pdf.file(),
+                pdf.base64(),
+                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+            )
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Request-body passthrough (PLAN P0.3).
+//
+// Every client models its request as typed classes, serializes that to `json`,
+// and then applies the user's `request_body: json?` escape hatch as the LAST
+// step before the body is stringified. The merge is deep, and it copies the
+// engine's option semantics exactly:
+//
+//   * an override value that is a MAP merges recursively into a map already at
+//     that key (keys the override does not mention survive);
+//   * an override value of NULL DELETES the key — that is how a caller removes
+//     a default the client injected (`{"max_tokens": null}` drops max_tokens);
+//   * everything else (scalars, arrays) REPLACES wholesale — arrays are never
+//     element-merged or appended;
+//   * an override key absent from the base is added;
+//   * an override map landing on a non-map base value replaces it with the
+//     override's non-null entries.
+//
+// Nothing is mutated: `base` and `overrides` are left as the caller built them.
+
+/// Deep-merge a client's `request_body` passthrough into its serialized
+/// request. Call this as the LAST step of building the wire body:
+///
+///     let body = baml.json.to_json(typed_request);
+///     let merged = ai.wire.merge_request_body(body, c.request_body);
+///     baml.json.stringify(merged)
+///
+/// Maps merge recursively, a `null` override value DELETES that key (the
+/// engine's removal contract — `{"max_tokens": null}` removes the default the
+/// client injected), and every other value replaces wholesale. A `null`
+/// `overrides` means "no passthrough configured" and returns `base` unchanged;
+/// it never deletes the whole body.
+function merge_request_body(base: baml.json.json, overrides: baml.json.json?) -> baml.json.json {
+    match (overrides) {
+        null => base,
+        _ => root.internal._merge_json(base, overrides),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Journal sanitization (PLAN P0.6).
+//
+// The replay hazards every provider shares, fixed once instead of four times.
+// pi-ai's `transform-messages.ts` is the reference behavior; what the BAML
+// journal can express is a subset, and the differences are called out here
+// because they are load-bearing for anyone porting the rest of pi's rules:
+//
+//   * ERRORED/ABORTED TURNS. `ai.Journal` has no errored-turn marker: a client
+//     failure is THROWN as an `ai.errors.Failure`, so a turn that died on the
+//     wire never reaches the log at all (`ai.Agent._attempt_turn` appends the
+//     AssistantMessage only after `invoke` returns). The residue such a turn
+//     CAN leave — an AssistantMessage carrying nothing replayable — is dropped
+//     by the empty-turn rule below. The runner's repair loop is deliberately
+//     NOT touched: a turn whose answer failed to parse is committed together
+//     with the correction UserMessage, and the model needs to see both.
+//   * REASONING SIGNATURES. `ai.content.Reasoning` is a readable summary with
+//     no signature/encrypted-payload field, so there is no signature to strip
+//     and no redacted variant to detect. What IS keyed on identity: reasoning
+//     produced by a DIFFERENT client id is dropped, since replaying one
+//     model's thinking to another is what the signature would have guarded.
+//   * TOOL-CALL ID REWRITING (pi's per-API `normalizeToolCallId`) is not done
+//     here: the id shape a provider accepts is that provider's business, and
+//     rewriting ids centrally would desynchronize them from the journal.
+//
+// Client identity is `ai.events.AssistantMessage.client_id`, which the runner
+// fills from `Client.id()` — `provider/model` for the built-in clients, so a
+// model switch inside one provider counts as a different client, exactly like
+// pi's provider+api+model comparison.
+
+// ---------------------------------------------------------------------------
+// Content blocks on the wire. Every turn a client lowers — a rendered prompt
+// message, a journal user turn, a tool result, a model turn — is a list of
+// `root.content.Block`, so each client has ONE lowering path per block
+// kind and declares, beside it, what it does with each kind at each position:
+//
+//   Accept   lower natively at that position;
+//   Degrade  keep the text in place and move the media into one `user` turn
+//            after the run of tool results it came from (`degrade_tool_media`
+//            below) — lowering stays pure, the journal keeps the original
+//            event;
+//   Reject   a typed client error before any request is sent.
+
+/// A rendered prompt message's parts as content blocks: a `string` part is
+/// `Text`, a media part is `Media` with null provenance. The rendered prompt
+/// then lowers through the same path as the journal's turns.
+function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
+    let out: root.content.Block[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                out.push(root.content.Text { text: text });
+                null
+            },
+            let media: root.MediaPart => {
+                out.push(
+                    root.content.Media { media: media, provider_id: null, revised_prompt: null },
+                );
+                null
+            },
+        };
+    }
+    out
+}
+
+/// The name of the tool a journal call id belongs to: the `ToolUse` block in
+/// the assistant turn that issued it. Null for an id no assistant turn issued.
+function tool_name(j: root.Journal, id: string) -> string? {
+    for (let event in j.entries()) {
+        if let assistant: root.events.AssistantMessage = event {
+            for (let block in assistant.content) {
+                if let use: root.content.ToolUse = block {
+                    if (use.id == id) {
+                        return use.name;
+                    }
+                }
+            }
+        }
+    }
+    null
+}
+
+/// Degrade, as a journal rewrite. A client that carries only some media
+/// kinds inside a tool result (`carries`, by `kind()`) lowers the copy of `j`
+/// this returns: every other media block has left its result and, behind a
+/// one-line note naming the tool, forms ONE `user` turn after the LAST result
+/// of the same assistant turn. The results of one turn stay contiguous (Chat
+/// Completions, Converse and Responses all reject a `user` message between
+/// two of them), `Text` stays where it was, and a result left with no text
+/// keeps the `[audio]`-style placeholder so no client sends an empty result.
+/// Lowering stays pure: the caller's journal is untouched and the trace still
+/// shows the original events.
+function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal {
+    let out: root.events.Event[] = [];
+    // moved out of the current run of tool results, each behind its note
+    let attached: root.content.Block[] = [];
+    for (let event in j.entries()) {
+        match (event) {
+            let completed: root.events.ToolCompleted => {
+                let inline: root.content.Block[] = [];
+                let moved: root.content.Block[] = [];
+                for (let block in completed.content) {
+                    match (block) {
+                        let text: root.content.Text => {
+                            inline.push(text);
+                            null
+                        },
+                        let media: root.content.Media => {
+                            if (carries.includes(media.kind())) {
+                                inline.push(media);
+                            } else {
+                                moved.push(media);
+                            }
+                            null
+                        },
+                    };
+                }
+                if (moved.length() > 0) {
+                    if (inline.length() == 0) {
+                        inline.push(root.content.Text { text: root.content.text(moved) });
+                    }
+                    let tool = tool_name(j, completed.id) ?? completed.id;
+                    attached.push(
+                        root.content.Text {
+                            text: "attached from the result of tool `" + tool + "`",
+                        },
+                    );
+                    for (let block in moved) {
+                        attached.push(block);
+                    }
+                }
+                out.push(root.events.ToolCompleted { id: completed.id, content: inline });
+                null
+            },
+            let failed: root.events.ToolFailed => {
+                out.push(failed);
+                null
+            },
+            _ => {
+                if (attached.length() > 0) {
+                    out.push(root.events.UserMessage { content: attached, metadata: {} });
+                    attached = [];
+                }
+                out.push(event);
+                null
+            },
+        };
+    }
+    if (attached.length() > 0) {
+        out.push(root.events.UserMessage { content: attached, metadata: {} });
+    }
+    root.Journal { log: out }
+}
+
+/// Make one run's journal safe to replay to `client_id`, and return the
+/// sanitized copy. Every client should lower
+/// `ai.wire.sanitize_for_client(input.journal, self.id())` instead of
+/// `input.journal`. The rules, in the order they apply per event:
+///
+///  1. An assistant turn from a DIFFERENT `client_id` loses its
+///     `ai.content.Reasoning` blocks: one model's thinking is not replayable
+///     to another (and providers that check reasoning signatures reject it).
+///  2. Empty and whitespace-only `ai.content.Text` blocks are dropped from
+///     assistant turns.
+///  3. An assistant turn left with no blocks at all is dropped entirely —
+///     the reasoning-only turn that lowers to `content: []` and makes
+///     Anthropic 400, and the same shape an aborted turn leaves behind.
+///     Such a turn never has tool calls, so nothing is orphaned by dropping it.
+///  4. A tool call with no `ToolCompleted`/`ToolFailed` before the next
+///     assistant or user message (or before the end of the journal) gets a
+///     synthesized `ToolFailed { message: "No result provided" }`, because
+///     most APIs reject a tool call that was never answered.
+///
+/// Journal-only events (`RunStarted`, `ToolRequested`, `Usage`,
+/// `FinalProduced`) pass through untouched — clients skip them anyway — and,
+/// like the clients' own lowering, they never close an open tool-result group.
+/// Nothing here mutates the journal it is given.
+function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal {
+    let out: root.events.Event[] = [];
+    // ids of tool calls emitted by the last assistant turn, still unanswered
+    let pending: string[] = [];
+    for (let event in j.entries()) {
+        match (event) {
+            let assistant: root.events.AssistantMessage => {
+                root.internal._flush_orphaned_calls(out, pending);
+                let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id == client_id);
+                if (blocks.length() > 0) {
+                    out.push(
+                        root.events.AssistantMessage {
+                            content: blocks,
+                            client_id: assistant.client_id,
+                        },
+                    );
+                    for (let block in blocks) {
+                        if let use: root.content.ToolUse = block {
+                            pending.push(use.id);
+                        }
+                    }
+                    null
+                } else {
+                    null
+                };
+                null
+            },
+            let user: root.events.UserMessage => {
+                root.internal._flush_orphaned_calls(out, pending);
+                out.push(user);
+                null
+            },
+            let completed: root.events.ToolCompleted => {
+                root.internal._resolve_pending_call(pending, completed.id);
+                out.push(completed);
+                null
+            },
+            let failed: root.events.ToolFailed => {
+                root.internal._resolve_pending_call(pending, failed.id);
+                out.push(failed);
+                null
+            },
+            _ => {
+                out.push(event);
+                null
+            },
+        };
+    }
+    root.internal._flush_orphaned_calls(out, pending);
+    root.Journal { log: out }
+}

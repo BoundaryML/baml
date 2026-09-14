@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 const CHILD_TEST_NAME: &str = "incremental_function_typing_repro_child";
 const INCOMPLETE_LOG_CHILD_TEST_NAME: &str = "incremental_incomplete_log_repro_child";
@@ -9,7 +10,7 @@ fn run_incremental_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro");
     let file = Path::new("/repro/repro.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let prefix = r#"
 function Existing() -> string {
@@ -23,7 +24,7 @@ function Existing() -> string {
     for i in 0..=typed.len() {
         let current = format!("{prefix}{}{}", &typed[..i], suffix);
         eprintln!("repro step {i}: `{}`", &typed[..i]);
-        db.add_or_update_file(file, &current);
+        db.file(file, &current);
 
         // This is the narrowest known path that reproduces the crash from
         // `textDocument/didChange`: mutate the same DB incrementally and then
@@ -62,7 +63,7 @@ fn run_incomplete_log_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro-incomplete-log");
     let file = Path::new("/repro-incomplete-log/main.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let source = r##"
 client GPT4o {
@@ -79,27 +80,27 @@ class GuessResponse {
 }
 
 function GenerateFamousPersonName(previous_names: string[]) -> string {
-  client GPT4o
-  prompt #"
-    {{ previous_names }}
-  "#
+  client: GPT4o
+  prompt: `
+    ${previous_names}
+  `
 }
 
 function SimulateHumanGuess(history: string[]) -> string {
-  client GPT4o
-  prompt #"
-    {{ history }}
-  "#
+  client: GPT4o
+  prompt: `
+    ${history}
+  `
 }
 
 function TakeGuess(user_guess: string, famous_person_name: string, history: string[]) -> GuessResponse {
-  client GPT4o
-  prompt #"
-    {{ user_guess }}
-    {{ famous_person_name }}
-    {{ history }}
-    {{ ctx.output_format }}
-  "#
+  client: GPT4o
+  prompt: `
+    ${user_guess}
+    ${famous_person_name}
+    ${history}
+    ${ctx.output_format()}
+  `
 }
 
 function GuessGameAgent() -> GuessResponse {
@@ -112,9 +113,8 @@ function GuessGameAgent() -> GuessResponse {
 }
 "##;
 
-    db.add_or_update_file(file, source);
+    db.file(file, source);
     let _ = collect_compiler2_diagnostics(&db);
-    let _ = baml_project::list_functions_with_metadata(&db);
 }
 
 #[test]
@@ -139,4 +139,58 @@ fn incremental_incomplete_log_repro_stays_alive() {
 #[ignore = "Executed by incremental_incomplete_log_repro_stays_alive in a subprocess"]
 fn incremental_incomplete_log_repro_child() {
     run_incomplete_log_repro_sequence();
+}
+
+#[test]
+fn incremental_property_syntax_change_invalidates_inference() {
+    let mut db = ProjectDatabase::new();
+    let root = Path::new("/property-syntax");
+    let file = Path::new("/property-syntax/main.baml");
+    db.workspace(root);
+
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { key }
+}
+"#,
+    );
+    let shorthand_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        shorthand_messages
+            .iter()
+            .any(|message| message.contains("property shorthand `key`")),
+        "expected shorthand diagnostic, got: {shorthand_messages:#?}"
+    );
+
+    // These forms have identical key/value expressions after desugaring, so
+    // property syntax must participate in the structural body equality.
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { "key": key }
+}
+"#,
+    );
+    let explicit_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        explicit_messages
+            .iter()
+            .any(|message| message.contains("unresolved name: `key`")),
+        "expected ordinary unresolved-name diagnostic, got: {explicit_messages:#?}"
+    );
+    assert!(
+        explicit_messages
+            .iter()
+            .all(|message| !message.contains("property shorthand")),
+        "explicit syntax reused stale shorthand inference: {explicit_messages:#?}"
+    );
 }

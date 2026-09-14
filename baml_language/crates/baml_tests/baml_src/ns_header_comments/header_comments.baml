@@ -1,21 +1,20 @@
-// Header comments (`//#`) are statement-level trivia for the visualizer.
-// They must parse in every member/arm position, not just between block
-// statements: class bodies, implements blocks, interface bodies, and
-// match arms all accept them.
+// Header comments (`//#`) are statement-level nodes for the visualizer.
+// They are only valid in expression contexts, including function bodies
+// and match arms.
 
 interface Sound {
-    //# required members
+    // Ordinary comments remain valid before interface members.
     function sound(self) -> string throws never
 }
 
 class Dog {
-    //# fields
+    // Ordinary comments remain valid before fields.
     name string
-    //# behavior
+    // Ordinary comments remain valid before implements blocks.
     implements Sound {
-        //# interface conformance
+        // Ordinary comments remain valid before implementation members.
         function sound(self) -> string {
-            //# statement position (already worked)
+            //# statement position
             "woof"
         }
     }
@@ -31,7 +30,7 @@ function classify(n: int) -> string {
     }
 }
 
-test "header comments parse in class, implements, and match positions" {
+test "header comments parse in expression positions" {
     let d = Dog { name: "rex" };
     assert.equal(d.sound(), "woof");
     assert.equal(classify(0), "zero");

@@ -33,7 +33,8 @@ beforeAll(async () => {
   await initWasm();
   setTypeMap(BamlTypeMap.fromLazyEntries({
     classes: {
-      "baml.llm.Stream": () => BamlStream,
+      "ai.stream.Stream": () => BamlStream,
+      "test.stream.Custom": () => BamlStream,
       "baml.media.Image": () => BamlImage,
     },
     enums: {},
@@ -73,12 +74,13 @@ describe("builtin typemap decoding", () => {
         handleValue: {
           key: keyHalves(originalKey),
           handleType: 14,
-          ty: { classTy: { name: "baml.llm.Stream" } },
+          ty: { classTy: { name: "ai.stream.Stream" } },
         },
       },
     });
 
     expect(stream).toBeInstanceOf(BamlStream);
+    expect((stream as unknown as { _classFqn: string })._classFqn).toBe("ai.stream.Stream");
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
     const bytes = encodeCallArgs({ self: stream }, { callId: 1n });
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);
@@ -90,7 +92,7 @@ describe("builtin typemap decoding", () => {
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
 
     const clonedHandle = (stream as BamlStream<unknown, unknown>)._toHandle().clone();
-    const clonedStream = BamlStream._fromHandle(clonedHandle);
+    const clonedStream = BamlStream._fromHandle(clonedHandle, "ai.stream.Stream");
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);
     expect((stream as BamlStream<unknown, unknown>)._toHandle()._releaseForTest()).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
@@ -100,6 +102,24 @@ describe("builtin typemap decoding", () => {
     if (cloneWireHandle === undefined || cloneWireHandle === null) throw new Error("cloned stream did not encode as a handle");
     expect(raw.releaseHandle(bigintFromWireKey(cloneWireHandle.key))).toBe(true);
     expect(clonedHandle._releaseForTest()).toBe(true);
+    expect(raw._testHandleTableEntryCount()).toBe(initialCount);
+  });
+
+  it("preserves the tagged handle class FQN on BamlStream", () => {
+    const initialCount = raw._testHandleTableEntryCount();
+    const originalKey = raw.seedFunctionRefHandle(19);
+    const stream = decode({
+      ok: {
+        handleValue: {
+          key: keyHalves(originalKey),
+          handleType: 14,
+          ty: { classTy: { name: "test.stream.Custom" } },
+        },
+      },
+    }) as BamlStream<unknown, unknown>;
+
+    expect((stream as unknown as { _classFqn: string })._classFqn).toBe("test.stream.Custom");
+    expect(stream._toHandle()._releaseForTest()).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount);
   });
 
@@ -116,7 +136,7 @@ describe("builtin typemap decoding", () => {
         handleValue: {
           key: keyHalves(originalKey),
           handleType: 14,
-          ty: { classTy: { name: "baml.llm.Stream" } },
+          ty: { classTy: { name: "ai.stream.Stream" } },
         },
       },
     }) as BamlStream<unknown, unknown>;

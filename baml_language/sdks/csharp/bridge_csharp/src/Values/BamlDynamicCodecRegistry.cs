@@ -64,7 +64,8 @@ internal static class BamlDynamicCodecRegistry
             new BamlGeneratedCodecContext(entry.Registry),
             value);
         encoded = new BamlValue(
-            generated.WithDeclaredType(entry.Declaration.Metadata));
+            generated.WithDeclaredType(entry.Declaration.Metadata),
+            entry.Registry);
         BamlValueLimits.ValidateGraph(encoded);
         return true;
     }

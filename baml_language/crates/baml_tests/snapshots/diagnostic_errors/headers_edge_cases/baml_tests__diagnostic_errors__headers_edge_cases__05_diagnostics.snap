@@ -5,8 +5,31 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-     ╭─[edge_cases.baml:132:5]
- 132 │     x
-     ·     ┬
-     ·     ╰── expected `string`, found `int`
+     ╭─[edge_cases.baml:109:47]
+ 109 │ ╭─▶ function HeadersAroundExpressions() -> string {
+ 110 │ │       //# Before Let
+ 111 │ │       let x = 5;
+ 112 │ │       //## After Let
+ 113 │ │   
+ 114 │ │       //### Before If
+ 115 │ │       if (x > 0) {
+ 116 │ │           //#### Inside If
+ 117 │ │           x
+ 118 │ │       } else {
+ 119 │ │           //#### Inside Else
+ 120 │ │           0
+ 121 │ │       }
+ 122 │ │       //### After If
+ 123 │ │   
+ 124 │ │       //## Before For
+ 125 │ │       for (let i in [1, 2, 3]) {
+ 126 │ │           //### Inside For
+ 127 │ │           i
+ 128 │ │       }
+ 129 │ │       //## After For
+ 130 │ │   
+ 131 │ │       //# Final Section
+ 132 │ │       x
+ 133 │ ├─▶ }
+     · ╰──── expected `string`, found `int`
      ╰────

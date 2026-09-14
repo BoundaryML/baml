@@ -1,105 +1,134 @@
 // Hard assertions — throw and stop execution on failure.
 
 /// Asserts that `condition` is `true`. Panics with a failure message if not.
-function is_true(condition: bool) -> null {
-  if (!condition) {
-    baml.sys.panic("assertion failed: expected true")
-  } else {
-    null
-  }
+///
+/// # Panics
+///
+/// - `baml.panics.AssertionFailed` if `condition` is `false`.
+///
+/// # Examples
+///
+/// ```baml
+/// assert.is_true(true)  // no panic
+/// assert.is_true(false)  // panic
+/// ```
+function is_true(condition: bool) -> void throws never {
+    if (!condition) {
+        throw baml.panics.AssertionFailed { message: "assertion failed: expected true" }
+    }
 }
 
 /// Asserts that `value` is not `null`. Panics if it is.
-function not_null(value: unknown?) -> null {
-  if (value == null) {
-    baml.sys.panic("assertion failed: expected non-null value")
-  } else {
-    null
-  }
-}
-
-/// Converts any assertion operand into a user-facing string.
 ///
-/// Parameters:
-/// - `value`: The operand value to render.
+/// # Panics
 ///
-/// Returns:
-/// - A JSON-style string representation for panic messages.
+/// - `baml.panics.AssertionFailed` if `value` is `null`.
 ///
-/// Errors/Panics:
-/// - Never throws. Falls back to a placeholder when serialization fails.
-function format_operand(value: unknown) -> string {
-  string.from(value)
+/// # Examples
+///
+/// ```baml
+/// assert.not_null(1)  // no panic
+/// assert.not_null(null)  // panic
+/// ```
+function not_null(value: unknown?) -> void throws never {
+    if (value == null) {
+        throw baml.panics.AssertionFailed { message: "assertion failed: expected non-null value" }
+    }
 }
 
 /// Asserts that `actual` equals `expected` exactly. Panics if they differ.
+/// Uses the `==` operator (`baml.ops.equals_equals`) to compare values.
 ///
-/// Parameters:
+/// When comparing floating-point values, use `assert.approx_equal(actual, expected, eps)`
+/// instead to compare within a tolerance.
+///
+/// # Parameters
+///
 /// - `actual`: The observed value.
 /// - `expected`: The expected value.
 ///
-/// Returns:
-/// - `null` when `actual` and `expected` are exactly equal.
+/// # Panics
 ///
-/// Errors/Panics:
-/// - Panics when `actual != expected`.
-/// - For floating-point values this comparison is exact; prefer
-///   `assert.approx_equal(actual, expected, eps)` when comparing computed
-///   results within a tolerance.
-function equal(actual: unknown, expected: unknown) -> null {
-  if (actual != expected) {
-    baml.sys.panic(
-      "assertion failed: left = " +
-      format_operand(actual) +
-      ", right = " +
-      format_operand(expected)
-    )
-  } else {
-    null
-  }
+/// - `baml.panics.AssertionFailed` when `actual != expected`.
+function equal(actual: unknown, expected: unknown) -> void throws never {
+    if (actual != expected) {
+        let actual_str = match (actual) {
+            string => `"${actual}"`,
+            _ => string.from(actual),
+        };
+        let expected_str = match (expected) {
+            string => `"${expected}"`,
+            _ => string.from(expected),
+        };
+
+        throw baml.panics.AssertionFailed {
+            message: `assertion failed: left = ${actual_str}, right = ${expected_str}`,
+        };
+    }
 }
 
 /// Asserts that two floats are within `eps` of each other.
 ///
-/// Parameters:
+/// # Parameters
+///
 /// - `actual`: The observed floating-point value.
 /// - `expected`: The expected floating-point value.
 /// - `eps`: The maximum allowed absolute difference (`|actual - expected|`).
 ///
-/// Returns:
-/// - `null` when `|actual - expected| <= eps`.
+/// # Panics
 ///
-/// Errors/Panics:
-/// - Panics when `eps` is negative or NaN.
-/// - Panics when the absolute difference exceeds `eps` or cannot be compared
+/// - `baml.panics.AssertionFailed` when `eps` is negative or NaN.
+/// - `baml.panics.AssertionFailed` when the absolute difference exceeds `eps` or cannot be compared
 ///   (for example, when `actual`/`expected` produce NaN deltas).
-function approx_equal(actual: float, expected: float, eps: float) -> null {
-  if (eps < 0.0 || eps.is_nan()) {
-    baml.sys.panic("assertion failed: epsilon must be a non-negative number")
-  } else {
-    let delta = (actual - expected).abs()
-    if (delta.is_nan() || delta > eps) {
-      baml.sys.panic(
-        "assertion failed: |left - right| = " +
-        format_operand(delta) +
-        ", eps = " +
-        format_operand(eps) +
-        ", left = " +
-        format_operand(actual) +
-        ", right = " +
-        format_operand(expected)
-      )
-    } else {
-      null
+function approx_equal(actual: float, expected: float, eps: float) -> void throws never {
+    if (eps < 0.0 || eps.is_nan()) {
+        throw baml.panics.AssertionFailed {
+            message: "assertion failed: epsilon must be a non-negative number",
+        };
     }
-  }
+    let delta = (actual - expected).abs();
+    if (delta.is_nan() || delta > eps) {
+        throw baml.panics.AssertionFailed {
+            message: `assertion failed: |left - right| = "${delta}", eps = "${eps}", left = "${actual}", right = "${expected}"`,
+        };
+    }
 }
 
-/// Asserts that `haystack` contains `needle` as a substring. Panics if not.
-function contains(haystack: string, needle: string) -> null {
-  if (!haystack.includes(needle)) {
-    baml.sys.panic("assertion failed: string does not contain expected substring")
-  } else {
-    null
-  }
+/// Asserts that `haystack` contains `needle` as a substring.
+///
+/// # Parameters
+///
+/// - `haystack`: The string to search within.
+/// - `needle`: The substring to search for.
+///
+/// # Panics
+///
+/// - `baml.panics.AssertionFailed` when `haystack` does not contain `needle` as a substring.
+function contains(haystack: string, needle: string) -> void throws never {
+    if (!haystack.includes(needle)) {
+        throw baml.panics.AssertionFailed {
+            message: "assertion failed: string does not contain expected substring",
+        };
+    }
+}
+
+/// Asserts that `actual` is of type `T`.
+///
+/// # Returns
+///
+/// `actual` if it is of type `T`. This can be used to assert the type of a value and use it in further computations.
+///
+/// # Panics
+///
+/// - `baml.panics.AssertionFailed` when `actual` is not of type `T`.
+function is_type<T>(actual: unknown) -> T throws never {
+    match (actual) {
+        T => actual,
+        _ => {
+            let t: reflect.Type = reflect.Type.of<T>();
+            throw baml.panics.AssertionFailed {
+                message: `assertion failed: expected type "${t}", got "${actual}"`,
+            };
+        },
+    }
 }

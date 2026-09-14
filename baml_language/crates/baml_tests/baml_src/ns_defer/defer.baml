@@ -93,7 +93,7 @@ function defer_call_throws_main() -> string[] {
 }
 
 test "defer_runs_when_called_function_throws" {
-    assert.is_true(baml.deep_equals(defer_call_throws_main(), ["cleanup", "caught"]))
+    assert.equal(defer_call_throws_main(), ["cleanup", "caught"])
 }
 
 // Two armed defers, then a call throws after both: they run last-first.
@@ -114,7 +114,7 @@ function defer_unwind_lifo_main() -> string[] {
 }
 
 test "defer_unwind_is_lifo_with_multiple_defers" {
-    assert.is_true(baml.deep_equals(defer_unwind_lifo_main(), ["b", "a"]))
+    assert.equal(defer_unwind_lifo_main(), ["b", "a"])
 }
 
 // A throw between two defers runs ONLY the defer armed before it (stair-step
@@ -140,7 +140,7 @@ function defer_armed_only_main() -> string[] {
 }
 
 test "defer_unwind_runs_only_armed_defers" {
-    assert.is_true(baml.deep_equals(defer_armed_only_main(), ["a"]))
+    assert.equal(defer_armed_only_main(), ["a"])
 }
 
 // ─── Stage 1: the remaining static exit paths ────────────────────────────────
@@ -161,7 +161,7 @@ function defer_early_return_main() -> string[] {
 }
 
 test "defer_runs_on_early_return" {
-    assert.is_true(baml.deep_equals(defer_early_return_main(), ["cleanup"]))
+    assert.equal(defer_early_return_main(), ["cleanup"])
 }
 
 // The defer in the loop body runs on the iteration that `break`s.
@@ -177,7 +177,7 @@ function defer_on_break_main() -> string[] {
 }
 
 test "defer_runs_on_break" {
-    assert.is_true(baml.deep_equals(defer_on_break_main(), ["i", "d", "d"]))
+    assert.equal(defer_on_break_main(), ["i", "d", "d"])
 }
 
 // The defer in the loop body runs on the iteration that `continue`s.
@@ -193,7 +193,7 @@ function defer_on_continue_main() -> string[] {
 }
 
 test "defer_runs_on_continue" {
-    assert.is_true(baml.deep_equals(defer_on_continue_main(), ["d", "body", "d"]))
+    assert.equal(defer_on_continue_main(), ["d", "body", "d"])
 }
 
 // An explicit `throw` in the deferring function runs the defer, then the
@@ -212,7 +212,7 @@ function defer_explicit_throw_main() -> string[] {
 }
 
 test "defer_runs_on_explicit_throw_in_same_function" {
-    assert.is_true(baml.deep_equals(defer_explicit_throw_main(), ["cleanup", "caught"]))
+    assert.equal(defer_explicit_throw_main(), ["cleanup", "caught"])
 }
 
 // A defer that throws mid-unwind: the remaining (earlier-declared) defers
@@ -236,7 +236,7 @@ function defer_throwing_defer_main() -> string[] {
 }
 
 test "defer_that_throws_still_runs_remaining_defers" {
-    assert.is_true(baml.deep_equals(defer_throwing_defer_main(), ["b", "a", "from_b"]))
+    assert.equal(defer_throwing_defer_main(), ["b", "a", "from_b"])
 }
 
 // `await` is allowed inside a defer body; it suspends/resumes correctly.
@@ -256,5 +256,83 @@ function defer_await_inside_main() -> string[] {
 }
 
 test "await_inside_defer" {
-    assert.is_true(baml.deep_equals(defer_await_inside_main(), ["body", "awaited"]))
+    assert.equal(defer_await_inside_main(), ["body", "awaited"])
+}
+
+// ── Unwinding panics (ported from tests/defer.rs) ────────────────────────────
+//
+// A panic reaches a defer through the unwind landing pad exactly like a typed
+// throw does. The emitter used to sink the panicking `10 / 0` past the
+// `return`'s inline defer replay, so the body ran on the way out AND again in
+// the pad. Each of these pins a "runs exactly once" property.
+
+function unwind_risky_one(log: string[]) -> int {
+    defer { log.push("D") }
+    return 10 / 0
+}
+
+function unwind_defer_runs_once() -> string[] {
+    let log: string[] = [];
+    unwind_risky_one(log) catch (e) { baml.panics.DivisionByZero => -1 };
+    log
+}
+
+test "defer_runs_once_when_a_panic_unwinds_through_it" {
+    assert.equal(unwind_defer_runs_once(), ["D"])
+}
+
+function unwind_risky_nested(log: string[]) -> int {
+    defer { log.push("outer") }
+    defer { log.push("inner") }
+    return 10 / 0
+}
+
+function unwind_nested_defers() -> string[] {
+    let log: string[] = [];
+    unwind_risky_nested(log) catch (e) { baml.panics.DivisionByZero => -1 };
+    log
+}
+
+test "nested_defers_run_once_each_when_a_panic_unwinds" {
+    assert.equal(unwind_nested_defers(), ["inner", "outer"])
+}
+
+// Same shape with a defer body that compiles to statements rather than a call,
+// so the replay lands in the returning block itself. Observed through a field
+// write, which survives the unwind.
+class UnwindCounter {
+    n: int
+}
+
+function unwind_risky_counter(c: UnwindCounter) -> int {
+    defer { c.n = c.n - 1 }
+    return 10 / 0
+}
+
+function unwind_call_free_defer_runs_once() -> int {
+    let c = UnwindCounter { n: 10 };
+    unwind_risky_counter(c) catch (e) { baml.panics.DivisionByZero => -1 };
+    c.n
+}
+
+test "defer_runs_once_when_a_call_free_body_sees_a_panic" {
+    assert.equal(unwind_call_free_defer_runs_once(), 9)
+}
+
+// The underlying emitter bug without any `defer`: `10 / 0` must panic where it
+// is bound, before the `push` that follows it.
+function unwind_risky_binding(log: string[]) -> int {
+    let x = 10 / 0;
+    log.push("after");
+    return x
+}
+
+function unwind_panicking_binding_precedes_side_effects() -> string[] {
+    let log: string[] = [];
+    unwind_risky_binding(log) catch (e) { baml.panics.DivisionByZero => -1 };
+    log
+}
+
+test "a_panicking_binding_runs_before_later_side_effects" {
+    assert.equal(unwind_panicking_binding_precedes_side_effects().length(), 0)
 }

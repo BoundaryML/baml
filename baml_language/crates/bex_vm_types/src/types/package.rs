@@ -1,9 +1,13 @@
+use std::sync::{Arc, atomic::AtomicBool};
+
 use baml_base::Name;
-use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{HeapPtr, ObjectIndex, types::interface::InterfaceBound};
+use crate::{
+    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate, Value,
+    types::interface::InterfaceBound,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]
 pub struct LocalName {
@@ -13,8 +17,11 @@ pub struct LocalName {
 
 /// A package object on the heap.
 /// Contains lookups for named items defined in the package.
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct Package {
+    /// Every source-visible exported declaration name, including aliases that
+    /// have no heap object of their own.
+    pub exported_names: Vec<LocalName>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -25,7 +32,129 @@ pub struct Package {
     /// May include implementations for interfaces in the package's dependencies.
     /// key references an `Object::Interface` and each value is an `Object::ImplRule`
     pub impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
-    pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Exported free functions, keyed by their package-local name. This is the
+    /// runtime projection of the package surface, shared by static and dynamic
+    /// packages so reflection never has to deserialize compiler IR.
+    pub functions: IndexMap<LocalName, HeapPtr>,
+    /// Recursive type aliases defined in the package, each an
+    /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
+    /// never reach here.
+    pub type_aliases: IndexMap<LocalName, HeapPtr>,
+    /// Versioned artifact containing the enriched, source-less compiler
+    /// interface for mounting this package under an alias in a later
+    /// `Package.compile` call.
+    pub interface_blob: Vec<u8>,
+    /// Compiler-synthesized test registrar for this package, when it has tests.
+    pub test_init: Option<HeapPtr>,
+    /// Exact runtime type values attached by `Package.with_types`.
+    #[borsh(skip)]
+    pub mounted_types: IndexMap<String, HeapPtr>,
+    /// Runtime-only state, discriminated so a package cannot be both an
+    /// ordinary runtime package and a Session (or a Session without an image).
+    #[borsh(skip)]
+    pub kind: PackageKind,
+}
+
+/// The three legal runtime shapes of a [`Package`].
+#[derive(Clone, Debug, Default)]
+pub enum PackageKind {
+    /// A package loaded from the serialized program image.
+    #[default]
+    Static,
+    /// A package produced by `reflect.Package.compile`.
+    Runtime(Box<RuntimePackage>),
+    /// The package-shaped runtime image and persistent state owned by a Session.
+    Session {
+        runtime: Box<RuntimePackage>,
+        state: Box<SessionState>,
+    },
+}
+
+impl Package {
+    pub fn runtime(&self) -> Option<&RuntimePackage> {
+        match &self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn runtime_mut(&mut self) -> Option<&mut RuntimePackage> {
+        match &mut self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn session(&self) -> Option<&SessionState> {
+        match &self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
+
+    pub fn session_mut(&mut self) -> Option<&mut SessionState> {
+        match &mut self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
+}
+
+/// Compiler-free persistent state of one `reflect.Session`.
+#[derive(Clone, Debug)]
+pub struct SessionState {
+    /// Committed, hygienically lowered source, replayed into every fresh DB.
+    pub history: IndexMap<String, String>,
+    /// Newest source-visible name to its persistent generated symbol.
+    pub visible: IndexMap<String, crate::SessionVisibleSymbol>,
+    /// Atomic single-eval admission bit shared with RAII compile artifacts.
+    pub busy: Arc<AtomicBool>,
+    pub submission_counter: u64,
+}
+
+/// Runtime-only package image grafted into the moving heap.
+#[derive(Clone, Debug, Default)]
+pub struct RuntimePackage {
+    /// Linked local object table. Imported entries point into static or other
+    /// runtime packages; owned entries point back into this package's graph.
+    pub objects: Box<[HeapPtr]>,
+    /// Newest-wins dynamic object link table. Old objects stay in `objects`,
+    /// while later submissions resolve a repeated source name to this entry.
+    pub object_names: IndexMap<String, HeapPtr>,
+    /// Package-local global slots, mutable only while `$init` is running.
+    pub globals: Box<[AtomicValueSlot]>,
+    /// Fully-qualified function/let name to this image's local global slot.
+    pub global_names: IndexMap<String, usize>,
+    /// Created-once reflected class, enum, and interface type values, keyed by
+    /// the declaration each one names.
+    ///
+    /// A runtime declaration is not in the program image, so a `LoadType` that
+    /// names one must reach the value allocated at package load rather than
+    /// build a fresh equal-looking one — same declaration, same `type` object.
+    /// The declaration pointer is that identity, and it is exactly what the
+    /// type's head already carries, so the lookup is the head itself. (Keying
+    /// by rendered FQN made two declarations that merely printed alike
+    /// indistinguishable.)
+    pub type_values: IndexMap<HeapPtr, HeapPtr>,
+    /// Compiler warnings retained on a successful package.
+    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
+    /// Runtime package objects imported by this image.
+    pub dependencies: Box<[HeapPtr]>,
+    /// Direct import alias to runtime package. Kept alongside the dense list so
+    /// runtime type names such as `dep.models.Base` resolve by their compiler
+    /// package identity.
+    pub dependency_names: IndexMap<String, HeapPtr>,
+    /// The candidate `$init`, if one exists.
+    pub init: Option<HeapPtr>,
+    /// False while `$init` may write package globals; true after commit. A
+    /// Session keeps this false because its globals remain mutable across evals.
+    pub initialized: bool,
+}
+
+impl RuntimePackage {
+    pub fn load_global(&self, index: usize) -> Option<Value> {
+        self.globals.get(index).map(AtomicValueSlot::load)
+    }
 }
 
 /// The serialized, global-index-keyed twin of [`Package`]. The `Program` must be
@@ -37,20 +166,28 @@ pub struct Package {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
+    pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
+    /// Exported free functions only (methods and compiler helpers are excluded).
+    pub functions: IndexMap<LocalName, ObjectIndex>,
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
-    pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Recursive type aliases defined in the package.
+    pub type_aliases: IndexMap<LocalName, ObjectIndex>,
+    /// Versioned `PackageInterface` artifact captured at build time and
+    /// embedded in generated programs.
+    pub interface_blob: Vec<u8>,
+    /// The package's synthesized `$init_test`, if present.
+    pub test_init: Option<ObjectIndex>,
 }
 
 impl ProgramPackage {
-    /// Sort every per-kind map and each impl-rule list into the content-determined
-    /// order the serialized `Program` requires, so the bytes are reproducible
-    /// regardless of the source maps' iteration order (`recursive_type_aliases` in
-    /// particular is sourced from a per-process-seeded `std::HashMap`).
+    /// Canonicalize implementation rules, whose source tables do not carry a
+    /// user-observable declaration order. Declaration maps deliberately keep
+    /// the deterministic source order established by the compiler pipeline.
     ///
     /// Impl rules key on their rendered `for_ty_pattern`; that `Display` drops
     /// module paths, so `{:?}` (module-qualified identity) breaks ties, and the
@@ -60,11 +197,7 @@ impl ProgramPackage {
     ///
     /// The full-compile emit and the incremental linker both apply this so their
     /// `Program`s stay byte-identical.
-    pub fn sort_maps(&mut self) {
-        self.classes.sort_keys();
-        self.enums.sort_keys();
-        self.recursive_type_aliases.sort_keys();
-        self.interfaces.sort_keys();
+    pub fn canonicalize_impl_rules(&mut self) {
         self.impl_rules.sort_keys();
         for rules in self.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {
@@ -72,6 +205,11 @@ impl ProgramPackage {
                     rule.for_ty_pattern.to_string(),
                     format!("{:?}", rule.for_ty_pattern),
                     format!("{:?}", rule.interface_args),
+                    // Bounds are part of the identity (`ImplCoherenceKey`):
+                    // without them, two bound-disjoint same-head rules would
+                    // sort by insertion order — nondeterministic bytes the
+                    // day coherence admits such a pair.
+                    format!("{:?}", rule.generic_param_bounds),
                     format!("{:?}", rule.interface_assoc),
                 )
             });
@@ -91,8 +229,55 @@ pub struct ProgramImplRule {
     pub methods: IndexMap<Name, ProgramMethodImpl>,
     /// See [`RuntimeImplRule::field_links`](super::RuntimeImplRule::field_links).
     /// Positional, so — unlike the name-keyed maps — it needs no canonical ordering
-    /// pass in [`ProgramPackage::sort_maps`].
+    /// pass in [`ProgramPackage::canonicalize_impl_rules`].
     pub field_links: Box<[u32]>,
+}
+
+/// The impl identity key, per interface: everything coherence's admissibility
+/// check discriminates on.
+///
+/// THE INVARIANT: this key is injective over the set of impls coherence
+/// ADMITS — which holds exactly when it carries at least coherence's full
+/// discriminant (see `interfaces::coherence` in `baml_compiler2_hir_ty`; the
+/// two carry cross-referencing contracts). Under today's open-world regime
+/// two same-head impls differing only in (positive) bounds genuinely
+/// overlap — a later package can always introduce a type satisfying both —
+/// so coherence rejects them and the constraint set never separates two
+/// admitted impls. The set is in the key anyway because the REGIME is what
+/// that argument depends on: negative bounds would make same-head
+/// disjointness provable and specialization would make same-head overlap
+/// admissible, and this key must not need rediscovering on that day. If
+/// coherence ever gains a discriminant this key lacks, the decompose
+/// link-key uniqueness hard-error fires on the first legal program that
+/// exercises it — extend BOTH together.
+///
+/// The impl's own associated BINDINGS are deliberately absent: they are
+/// outputs of the match, not inputs to admissibility. Bound-side associated
+/// pins are inputs and ride inside each [`InterfaceBound`]. The interface
+/// itself is not a field because every consumer already groups per
+/// interface; this struct is the per-interface discriminant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImplCoherenceKey {
+    pub for_ty_pattern: TyTemplate,
+    pub interface_args: Vec<TyTemplate>,
+    /// The canonical constraint set: per impl-frame param in frame order,
+    /// that param's bounds canonically sorted (a written reorder of
+    /// `A + B` cannot fork the key).
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
+}
+
+impl ProgramImplRule {
+    /// This rule's identity key. The bake stores the same canonicalized
+    /// bounds the key carries, so a rule and its declaring block compare
+    /// equal by construction.
+    #[must_use]
+    pub fn coherence_key(&self) -> ImplCoherenceKey {
+        ImplCoherenceKey {
+            for_ty_pattern: self.for_ty_pattern.clone(),
+            interface_args: self.interface_args.clone(),
+            generic_param_bounds: self.generic_param_bounds.clone(),
+        }
+    }
 }
 
 /// The global-index-keyed twin of [`MethodImpl`](super::MethodImpl); `fqn` is the

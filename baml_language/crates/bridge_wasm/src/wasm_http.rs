@@ -4,15 +4,21 @@
 //! reqwest directly for SSE streaming. Each `BamlWasmRuntime` gets its own
 //! `WasmHttp` instance, so there are no globals.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
+use std::{
+    any::{Any as _, TypeId},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use bex_events::run::{HeaderObservation, InMemoryRunStore};
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
-use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
+use sys_types::{
+    BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmInternalError, VmPanic,
+    VmRustFnError,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -66,7 +72,7 @@ impl WasmHttp {
         let run_store = self.run_store.clone();
         let notification_callback = self.notification_callback.clone();
         let fetch_id = self.next_fetch_id.fetch_add(1, Ordering::Relaxed);
-        let host_call_id = crate::wasm_host_call_id(call_id);
+        let host_call_id = crate::runs::wasm_host_call_id(call_id);
         if let Some(host_call_id) = &host_call_id
             && let Some(patch) = self.run_store.ingest_fetch_started(
                 host_call_id,
@@ -77,14 +83,15 @@ impl WasmHttp {
                 Some(request.body.len()),
             )
         {
-            crate::send_run_patch(&self.notification_callback, &patch);
+            crate::runs::send_run_patch(&self.notification_callback, &patch);
         }
 
         SysOpOutput::async_op(SendFuture(async move {
-            let headers_json =
-                serde_json::to_string(&request.headers).map_err(|e| VmBamlError::DevOther {
-                    message: format!("Failed to serialize headers: {e}"),
-                })?;
+            let headers_json = serde_json::to_string(&request.headers).map_err(|e| {
+                VmInternalError::BridgeFailure {
+                    message: format!("failed to serialize request headers: {e}"),
+                }
+            })?;
 
             let promise = fetch_fn
                 .call5(
@@ -128,7 +135,7 @@ impl WasmHttp {
                             Some(msg.clone()),
                         )
                     {
-                        crate::send_run_patch(&notification_callback, &patch);
+                        crate::runs::send_run_patch(&notification_callback, &patch);
                     }
                     return Err(VmRustFnError::from(VmBamlError::Io {
                         message: format!("HTTP request failed: {msg}"),
@@ -151,7 +158,7 @@ impl WasmHttp {
             // `as i64` for f64 is saturating: NaN → 0, +inf → i64::MAX,
             // -inf → i64::MIN, fractionals → truncated toward zero. None
             // of those make sense for an HTTP status code, and downstream
-            // consumers (`sys_llm`'s 2xx success check, auth's
+            // consumers (the stdlib's 2xx success check, auth's
             // `u16::try_from`) would misclassify them as success / 0.
             // `FromPrimitive::from_f64` returns `None` exactly when the
             // value is non-finite, out of `i64` range, or non-integer —
@@ -207,7 +214,7 @@ impl WasmHttp {
                     None,
                 )
             {
-                crate::send_run_patch(&notification_callback, &patch);
+                crate::runs::send_run_patch(&notification_callback, &patch);
             }
 
             let key = registry.store_body_promise(body_promise);
@@ -238,19 +245,21 @@ impl IoClassHttpResponse for WasmHttp {
             .downcast_ref::<WasmResponseBody>()
             .map(|b| b.key);
         let Some(key) = body else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Response body handle is not a WasmResponseBody".into(),
+            return SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: TypeId::of::<WasmResponseBody>(),
+                got: response._body.type_id(),
             });
         };
 
         SysOpOutput::async_op(SendFuture(async move {
-            let promise =
-                registry
-                    .take_body_promise(key)
-                    .ok_or_else(|| VmBamlError::InvalidArgument {
-                        message: "Response body has already been consumed or handle is invalid"
-                            .into(),
-                    })?;
+            let promise = registry
+                .take_body_promise(key)
+                // `Response.text`/`bytes` declare `throws root.errors.Io`,
+                // and the native transport reports a re-read of an
+                // already-consumed body the same way.
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response body has already been consumed".into(),
+                })?;
             let value = JsFuture::from(promise).await.map_err(|e| {
                 let msg = e
                     .as_string()
@@ -285,19 +294,21 @@ impl IoClassHttpResponse for WasmHttp {
             .downcast_ref::<WasmResponseBody>()
             .map(|b| b.key);
         let Some(key) = body else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Response body handle is not a WasmResponseBody".into(),
+            return SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: TypeId::of::<WasmResponseBody>(),
+                got: response._body.type_id(),
             });
         };
 
         SysOpOutput::async_op(SendFuture(async move {
-            let promise =
-                registry
-                    .take_body_promise(key)
-                    .ok_or_else(|| VmBamlError::InvalidArgument {
-                        message: "Response body has already been consumed or handle is invalid"
-                            .into(),
-                    })?;
+            let promise = registry
+                .take_body_promise(key)
+                // `Response.text`/`bytes` declare `throws root.errors.Io`,
+                // and the native transport reports a re-read of an
+                // already-consumed body the same way.
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "Response body has already been consumed".into(),
+                })?;
             let value = JsFuture::from(promise).await.map_err(|e| {
                 let msg = e
                     .as_string()
@@ -420,6 +431,7 @@ impl io::IoClassHttpServer for WasmHttp {
         _call_id: CallId,
         _server: io::owned::http::Server,
         _handler: sys_types::Handle,
+        _websocket: sys_types::Handle,
         _tls_config: Option<io::owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -449,8 +461,9 @@ impl io::IoClassHttpSseStream for WasmHttp {
             .downcast::<WasmSseStreamHandle>()
             .ok();
         let Some(handle) = handle else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "SSE stream handle is not a WasmSseStreamHandle".into(),
+            return SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: TypeId::of::<WasmSseStreamHandle>(),
+                got: sse_stream._handle.type_id(),
             });
         };
 
@@ -585,7 +598,7 @@ fn drain_receiver(handle: &WasmSseStreamHandle) -> DrainResult {
 }
 
 /// Serialize a batch of SSE events to JSON.
-fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String, VmBamlError> {
+fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String, VmRustFnError> {
     let json_events: Vec<serde_json::Value> = events
         .into_iter()
         .map(|e| {
@@ -596,8 +609,11 @@ fn serialize_sse_events(events: Vec<sys_types::sse::SseEvent>) -> Result<String,
             })
         })
         .collect();
-    serde_json::to_string(&json_events).map_err(|e| VmBamlError::DevOther {
-        message: format!("Failed to serialize SSE events: {e}"),
+    serde_json::to_string(&json_events).map_err(|e| {
+        VmInternalError::BridgeFailure {
+            message: format!("failed to serialize SSE events: {e}"),
+        }
+        .into()
     })
 }
 
@@ -676,11 +692,13 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, request)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {
@@ -717,6 +735,12 @@ impl IoNamespaceHttp for WasmHttp {
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             let byte_stream = Box::pin(response.bytes_stream());
 
             // Create channel and spawn background task to parse SSE events.
@@ -728,6 +752,8 @@ impl IoNamespaceHttp for WasmHttp {
 
             Ok(io::owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         }))

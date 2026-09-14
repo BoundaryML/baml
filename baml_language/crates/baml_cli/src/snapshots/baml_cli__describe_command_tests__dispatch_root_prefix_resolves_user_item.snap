@@ -9,6 +9,9 @@ class Point {
     y: int,
 }
 
+implementations (1):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
+
 references (2):
   funcs.baml:3  function ExtractPoint(text: string) -> Point {
   funcs.baml:4  let result = Point { x: 0, y: 0 };

@@ -1,7 +1,7 @@
-use baml_type::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Bytecode, HeapPtr, SysOp, Value};
+use super::InterfaceBound;
+use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///
@@ -93,10 +93,7 @@ impl BorshDeserialize for FunctionKind {
 /// LLM-specific metadata for a function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
+    Llm { client: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -264,6 +261,12 @@ pub struct Function {
     /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
 
+    /// Interface bounds for each De Bruijn type-argument slot.  Unlike
+    /// `display_type_params`, this is executable metadata: the VM substitutes
+    /// the actual call-frame types and rejects a failing bound before entering
+    /// the function body.
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
+
     /// Source/TIR-rendered parameter types in declaration order.
     pub display_param_types: Vec<String>,
 
@@ -284,6 +287,29 @@ pub struct Function {
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
 
+    /// True for interface-machinery bodies: impl-block methods (in-class or
+    /// free) and interface default-method bodies.
+    ///
+    /// An interface body is pooled and slotted like any function —
+    /// statically resolved
+    /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
+    /// item, so it has no name anywhere: bodies are excluded from
+    /// `Program::function_indices` / `function_global_indices` and every
+    /// runtime name scan skips them; compile boundaries recover a body's
+    /// coordinates structurally (Pass-1 slot replay + the globals array).
+    /// [`Self::name`] on an interface body is display-only (traces,
+    /// snapshots).
+    pub is_interface_body: bool,
+
+    /// Native-dispatch key for `$rust_function` bodies (stdlib-only): the key
+    /// `attach_builtins` resolves through each package's generated
+    /// `get_native_fn` table. `None` for every bytecode/sys-op function.
+    ///
+    /// This is deliberately separate from [`Self::name`]: the display string
+    /// is not an identity, while this key must match the codegen-produced
+    /// dispatch tables exactly.
+    pub native_key: Option<Box<str>>,
+
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
@@ -293,13 +319,18 @@ pub struct Function {
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// function table registered with the direct consumer. Assigned by the engine's
     /// interim provider at construction (plan §2.6); the M0 id table moves
     /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
     /// envelope — it is runtime-only state, and skipping it leaves the wire
     /// format unchanged.
     #[borsh(skip)]
     pub function_id: u32,
+
+    /// Owning runtime package for dynamically grafted functions. Static
+    /// functions use null and address operands through the engine image.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 impl std::fmt::Display for Function {
@@ -323,7 +354,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Box<[baml_type::RealizedTy]>,
+    pub captured_type_args: Box<[crate::RealizedTy]>,
 }
 
 /// A method bound to a specific receiver instance.
@@ -333,26 +364,27 @@ pub struct Closure {
 /// runtime `Self` at bind time). The receiver is inserted as `self` at call time
 /// by `CallIndirect`.
 ///
-/// Like every callable value, a bound method is fully realized: its complete
-/// type environment is curried in at creation via [`Self::type_args`], so the
-/// `CallIndirect` that invokes it carries no type arguments of its own.
+/// The type environment resolved when the method is bound is curried in via
+/// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
+/// See the field documentation for the ordinary-bound-method limitation around
+/// a later explicit generic application.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
-    /// The callee frame's **complete** curried type arguments, in the callee
+    /// The callee frame's canonical curried type arguments, in the callee
     /// frame's De Bruijn order — materialized at bind time and installed as
-    /// `frame.type_args` when the value is invoked by `CallIndirect`, so
-    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    /// `frame.type_args` when the value is invoked by `CallIndirect`.
     ///
     /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
     /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
     /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
-    /// frame — the impl's own generics, or the interface's args + associated
-    /// types for an inherited default (which the receiver's class args cannot
-    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
+    /// frame — the impl's own generics for a provided method,
+    /// `[Self, interface args..]` for an adopted default (which the receiver's
+    /// class args cannot express, e.g. a blanket `implement<T> I for T[]`
+    /// bound at `int[]`) —
     /// followed by any method-level type args from the reference site.
     ///
     /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
@@ -360,7 +392,7 @@ pub struct BoundMethod {
     /// type variable, but the upstream fix that stops typevars leaking into
     /// value positions is still in flight, so all three stay `RuntimeTy` and
     /// narrow to `RealizedTy` together once it lands.
-    pub type_args: Box<[baml_type::RealizedTy]>,
+    pub type_args: Box<[crate::RealizedTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.
@@ -368,15 +400,17 @@ pub struct BoundMethod {
 /// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
 /// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
 /// can live in the immutable compile-time object pool and be interned by
-/// `(function, type_args)`, giving pointer-stable identity. Both fields are
-/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+/// `(function, type_args)`, giving pointer-stable identity.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct GenericFunction {
     /// Global slot of the underlying `Object::Function` (resolved at call time
     /// via the global table, mirroring `MakeBoundMethod`).
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
-    pub type_args: Box<[baml_type::RealizedTy]>,
+    pub type_args: Box<[crate::RealizedTy]>,
+    /// Owning runtime package for resolving `function` in its local globals.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -397,17 +431,17 @@ pub struct HostClosure {
     /// The declared return type of the host-callable, threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
-    pub ret_ty: Box<baml_type::RealizedTy>,
+    pub ret_ty: Box<crate::RealizedTy>,
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
     /// checked against this contract. The FFI entry boundary (see
     /// `bex_engine::conversion`'s `HostValue` arm) normalizes an
-    /// unbounded/undeclared generic throws to `RuntimeTy::BuiltinUnknown`, which
+    /// unbounded/undeclared generic throws to `RuntimeTy::Unknown`, which
     /// accepts any thrown value — the "unknown" fallback. Concrete throws
     /// (e.g. `throws ParseError`) pass through unchanged so the contract
     /// check can reject off-type throws as `HostContractViolation`.
-    pub throws_ty: Box<baml_type::RealizedTy>,
+    pub throws_ty: Box<crate::RealizedTy>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots
@@ -421,7 +455,7 @@ pub struct HostClosure {
     /// optionals, omitted ones dropped), so each bridge can apply its calling
     /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
     /// on the wire. `Box`-ed to keep `Object` within its size budget.
-    pub params: Box<Vec<baml_type::RealizedFunctionParamTy>>,
+    pub params: Box<Vec<baml_type::RealizedFunctionParamTy<crate::TypeHead>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -449,5 +483,37 @@ impl From<&FunctionKind> for FunctionType {
         } else {
             FunctionType::Callable
         }
+    }
+}
+
+impl Function {
+    /// The name of parameter `index` when it is optional. Synthesized
+    /// functions may carry no parameter metadata; their slots are required.
+    fn optional_param_name(&self, index: usize) -> Option<&str> {
+        self.param_has_default
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+            .then(|| self.param_names.get(index).map(String::as_str))
+            .flatten()
+    }
+
+    /// The value slots the body reads, receiver included for a method.
+    pub fn argument_layout(&self) -> baml_type::CallLayout {
+        baml_type::CallLayout(
+            (0..self.arity)
+                .map(|index| self.optional_param_name(index).map(baml_type::Name::new))
+                .collect(),
+        )
+    }
+
+    /// Whether `layout` equals [`Self::argument_layout`], without building it.
+    pub fn argument_layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+        layout.len() == self.arity
+            && layout
+                .0
+                .iter()
+                .enumerate()
+                .all(|(index, slot)| slot.as_deref() == self.optional_param_name(index))
     }
 }

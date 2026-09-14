@@ -110,6 +110,35 @@ pub(crate) const JAVA_KEYWORDS: &[&str] = &[
     "_",
 ];
 
+/// Method names a generated Java method must not use:
+/// * `java.lang.Object`'s final methods (`wait`/`notify`/`notifyAll`/
+///   `getClass`) — an override cannot compile (`wait() in Process cannot
+///   override wait() in Object`) and a `static` one cannot hide them;
+/// * `equals`/`hashCode`/`toString` — every generated class already declares
+///   them (deep-equality + display), so a user method with the same name
+///   either collides outright or overloads them confusingly.
+///
+/// Escaped in method position with the same `$` suffix as keywords.
+pub(crate) const JAVA_OBJECT_FINAL_METHODS: &[&str] = &[
+    "wait",
+    "notify",
+    "notifyAll",
+    "getClass",
+    "equals",
+    "hashCode",
+    "toString",
+];
+
+/// Sanitize a *method* name: the keyword escape plus the
+/// `java.lang.Object` final-method escape (`wait` → `wait$`). The runtime
+/// binding keeps the BAML name; only the Java-visible identifier shifts.
+pub(crate) fn java_method_identifier(seg: &str) -> String {
+    if JAVA_OBJECT_FINAL_METHODS.contains(&seg) {
+        return format!("{seg}$");
+    }
+    java_identifier(seg)
+}
+
 /// Sanitize a name segment into a legal Java identifier. Reserved
 /// words get the conventions doc's `$` suffix escape (`void` →
 /// `void$`, `new` → `new$`); any character that is not a valid Java
@@ -236,5 +265,20 @@ mod tests {
         assert_eq!(java_identifier("Resume$stream"), "Resume$stream");
         assert_eq!(java_identifier("has space"), "has_space");
         assert_eq!(java_identifier("_"), "_$");
+    }
+
+    #[test]
+    fn object_final_methods_are_escaped_in_method_position() {
+        // `baml.sys.Process.wait` — `wait()` cannot override the final
+        // `java.lang.Object.wait()`, and a static `wait()` cannot hide it.
+        assert_eq!(java_method_identifier("wait"), "wait$");
+        assert_eq!(java_method_identifier("notify"), "notify$");
+        // Ordinary methods and keywords behave like `java_identifier`.
+        assert_eq!(java_method_identifier("close"), "close");
+        assert_eq!(java_method_identifier("new"), "new$");
+        // Only method position escapes: fields/classes named `wait` are legal.
+        // A value class with such a field therefore declares `wait` as the
+        // FIELD and `wait$()` as its accessor (see `render_class`).
+        assert_eq!(java_identifier("wait"), "wait");
     }
 }

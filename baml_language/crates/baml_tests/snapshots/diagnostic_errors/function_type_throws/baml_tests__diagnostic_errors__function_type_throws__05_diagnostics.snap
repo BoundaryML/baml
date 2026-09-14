@@ -32,8 +32,12 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[negative.baml:34:3]
- 34 │   local
-    ·   ──┬──
-    ·     ╰── expected `(value: int) -> int throws never`, found `(value: int) -> int throws string`
+    ╭─[negative.baml:30:62]
+ 30 │ ╭─▶ function fail_returned() -> (value: int) -> int throws never {
+ 31 │ │     let local = (value: int) -> int throws string {
+ 32 │ │       throw "boom"
+ 33 │ │     }
+ 34 │ │     local
+ 35 │ ├─▶ }
+    · ╰──── expected `(value: int) -> int throws never`, found `(value: int) -> int throws string`
     ╰────

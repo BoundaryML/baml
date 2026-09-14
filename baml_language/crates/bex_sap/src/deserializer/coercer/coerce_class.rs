@@ -384,7 +384,7 @@ where
             .db
             .resolve_with_meta(ty.as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
-        // let is_optional = ty.ty.is_optional(ctx.db);
+        let is_optional = ty.ty.is_optional(ctx.db);
         let field_entry = match entries.remove(name.as_ref()) {
             // Happy path: we have this field
             Some(Ok(some)) => some,
@@ -427,8 +427,11 @@ where
             None /*if !is_incomplete */=> {
                 let field_value = ty.ty.from_literal(missing, ctx)?;
                 let field_meta = DeserializerMeta {
-                    flags: DeserializerConditions::new()
-                        .with_flag(Flag::DefaultFromNoValue),
+                    flags: DeserializerConditions::new().with_flag(if is_optional {
+                        Flag::OptionalDefaultFromNoValue
+                    } else {
+                        Flag::DefaultFromNoValue
+                    }),
                     ty,
                 };
                 ValueWithFlags::new(field_value, field_meta)

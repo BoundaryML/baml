@@ -34,6 +34,7 @@ use std::{
     path::PathBuf,
 };
 
+use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::Engine as _;
@@ -89,13 +90,14 @@ fn to_source_code_with_optional_metadata(
     // surfaced in the generated `_BamlSkipped.swift` manifest — absent
     // API must never be silent.
     let mut skips: Vec<diagnostics::Skip> = Vec::new();
+    let free_callable_names = allocate_free_callable_names(pool);
 
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
-        // `baml.llm.Stream` is runtime-owned (BamlStream wraps the
+        // `ai.stream.Stream` is runtime-owned (BamlStream wraps the
         // engine handle) — never emitted as a generated struct.
-        if fqn == "baml.llm.Stream" {
+        if fqn == AI_STREAM_STREAM {
             continue;
         }
         let mut ns = translate_ty::namespace_for(key);
@@ -107,7 +109,9 @@ fn to_source_code_with_optional_metadata(
         }
         let rendered = match symbol {
             Symbol::Function(function) => {
-                let rendered = render_callable(&key.to_string(), function, FnKind::Free, &ctx);
+                let binding_name = &free_callable_names[&fqn];
+                let rendered =
+                    render_callable(&key.to_string(), binding_name, function, FnKind::Free, &ctx);
                 if rendered.is_none() {
                     skips.push(diagnostics::Skip {
                         fqn: fqn.clone(),
@@ -274,11 +278,11 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
                         changed = true;
                     }
                 }
-                Symbol::TypeAlias(alias) => {
-                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) {
-                        supported_aliases.remove(&fqn);
-                        changed = true;
-                    }
+                Symbol::TypeAlias(alias)
+                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) =>
+                {
+                    supported_aliases.remove(&fqn);
+                    changed = true;
                 }
                 _ => {}
             }
@@ -404,9 +408,22 @@ fn render_supported_class(
     // an unemittable method never drops the class (fields alone decide
     // supportability, matching Python).
     let mut methods = Vec::new();
+    let method_names = allocate_callable_names(
+        class
+            .static_methods
+            .iter()
+            .chain(&class.instance_methods)
+            .map(|method| method.name.as_str()),
+    );
     for method in &class.static_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
-        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Static, ctx) {
+        if let Some(rendered) = render_callable(
+            &method_fqn,
+            &method_names[method.name.as_str()],
+            method,
+            FnKind::Static,
+            ctx,
+        ) {
             methods.push(rendered);
         } else {
             skips.push(diagnostics::Skip {
@@ -419,7 +436,13 @@ fn render_supported_class(
     }
     for method in &class.instance_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
-        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Instance, ctx) {
+        if let Some(rendered) = render_callable(
+            &method_fqn,
+            &method_names[method.name.as_str()],
+            method,
+            FnKind::Instance,
+            ctx,
+        ) {
             methods.push(rendered);
         } else {
             skips.push(diagnostics::Skip {
@@ -432,6 +455,57 @@ fn render_supported_class(
     }
 
     Some(render_class(class, key, &fields, &methods))
+}
+
+fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
+    let mut scopes: BTreeMap<Vec<String>, Vec<(String, String)>> = BTreeMap::new();
+    for (name, symbol) in pool {
+        if !matches!(symbol, Symbol::Function(_)) {
+            continue;
+        }
+        let mut namespace = translate_ty::namespace_for(name);
+        if name.is_stream() {
+            namespace.remove(0);
+        }
+        scopes
+            .entry(namespace)
+            .or_default()
+            .push((name.to_string(), name.name().as_str().to_string()));
+    }
+
+    let mut allocated = HashMap::new();
+    for callables in scopes.values() {
+        let names = allocate_callable_names(callables.iter().map(|(_, raw)| raw.as_str()));
+        for (fqn, raw) in callables {
+            allocated.insert(fqn.clone(), names[raw].clone());
+        }
+    }
+    allocated
+}
+
+/// Preserve authored Swift API names and suffix only synthesized companions
+/// when replacing `@` with `_` would collide in the same declaration scope.
+fn allocate_callable_names<'a>(
+    raw_names: impl IntoIterator<Item = &'a str>,
+) -> HashMap<String, String> {
+    let mut raw_names: Vec<&str> = raw_names.into_iter().collect();
+    raw_names.sort_by_key(|name| (name.contains(['@', '$']), *name));
+
+    let mut used = BTreeSet::new();
+    let mut allocated = HashMap::new();
+    for raw in raw_names {
+        let base = raw.replace(['@', '$'], "_");
+        let mut candidate = base.clone();
+        let mut suffix = 2;
+        while used.contains(&candidate) || used.contains(&format!("{candidate}_async")) {
+            candidate = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        used.insert(candidate.clone());
+        used.insert(format!("{candidate}_async"));
+        allocated.insert(raw.to_string(), candidate);
+    }
+    allocated
 }
 
 /// `Some(non-null arms)` when this alias is a recursive union with >=2
@@ -692,6 +766,21 @@ mod tests {
         assert!(files[&PathBuf::from("BamlRoot.swift")].contains("public enum Baml"));
     }
 
+    #[test]
+    fn companion_bindings_do_not_collide_with_authored_swift_names() {
+        let allocated = allocate_callable_names([
+            "extract_spec",
+            "extract@spec",
+            "extract_stream_async",
+            "extract@stream",
+        ]);
+
+        assert_eq!(allocated["extract_spec"], "extract_spec");
+        assert_eq!(allocated["extract_stream_async"], "extract_stream_async");
+        assert_eq!(allocated["extract@spec"], "extract_spec_2");
+        assert_eq!(allocated["extract@stream"], "extract_stream_2");
+    }
+
     fn int() -> Ty {
         Ty::Int {
             attr: baml_base::TyAttr::EMPTY,
@@ -723,7 +812,7 @@ mod tests {
         }
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
     }
     fn literal(value: baml_base::Literal) -> Ty {
         Ty::Literal(
@@ -758,6 +847,21 @@ mod tests {
         assert_eq!(
             t(&list(union(vec![int(), string()]))).as_deref(),
             Some("[BamlUnion2<Swift.Int, Swift.String>]")
+        );
+
+        let stream_name = Name::new(
+            baml_base::Name::new("ai"),
+            vec![baml_base::Name::new("stream")],
+            baml_base::Name::new("Stream"),
+        );
+        let stream = Ty::Class(
+            stream_name,
+            Box::new([string(), string()]),
+            baml_base::TyAttr::EMPTY,
+        );
+        assert_eq!(
+            t(&stream).as_deref(),
+            Some("BamlStream<Swift.String, Swift.String>")
         );
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(

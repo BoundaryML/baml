@@ -1,5 +1,7 @@
 //! Instruction set and bytecode representation.
 
+use std::collections::BTreeMap;
+
 use baml_base::Span;
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -342,7 +344,8 @@ pub enum Instruction {
     SubFloat,
     /// `[left: Float, right: Float] → [Float]`
     MulFloat,
-    /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
+    /// `[left: Float, right: Float] → [Float]` — IEEE-754; a zero divisor
+    /// yields `±inf`, or `NaN` for `0.0 / 0.0`. Never panics.
     DivFloat,
 
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
@@ -534,7 +537,9 @@ pub enum Instruction {
     ///
     /// The VM pops `ntypeargs` `Object::Type` values into the new frame's
     /// `type_args` vector, then pops `nargs` regular value arguments.
-    /// `nargs` is inferred from the function's arity metadata.
+    /// `nargs` is the callee's arity, after the value lane has been mapped
+    /// from the site's recorded layout (`Bytecode::call_layouts`) when the
+    /// callee declares different optional slots.
     ///
     /// When no type arguments are threaded, set `ntypeargs = 0`.
     Call {
@@ -560,7 +565,9 @@ pub enum Instruction {
     ///
     /// Stack layout: `[arg1, ..., argN, callee]`.
     ///
-    /// Arity is read from the runtime callee function object.
+    /// N is the site's recorded layout (`Bytecode::call_layouts`), which the
+    /// VM maps onto the runtime callee's parameters; a site without one pushed
+    /// the callee's own slots and N is the callee's arity.
     CallIndirect,
 
     /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
@@ -587,8 +594,9 @@ pub enum Instruction {
     /// leaving the `nargs` value args (receiver first). It reads `Self` from the
     /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
     /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
-    /// type args (its own generics, or the interface's args + associated types for
-    /// an inherited default) followed by these method-level type args. `nargs` is
+    /// type args (its own generics for a provided
+    /// method, `[Self, interface args..]` for an adopted default — associated
+    /// types are not frame slots) followed by these method-level type args. `nargs` is
     /// the resolved method's arity.
     VirtualCall {
         /// Number of value arguments (including the receiver as the first).
@@ -678,6 +686,10 @@ pub enum Instruction {
     /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
     LoadType(usize),
 
+    /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
+    BindType(usize),
+
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
     /// Pops the type tag (from a preceding `TypeTag` instruction), computes
@@ -763,6 +775,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
     MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
+    /// Resolve an *interface* method to a callable value from a written `Self`
+    /// TYPE — the type-keyed analogue of `MakeVirtualBoundMethod`, and the only
+    /// dispatch form for a method with no `self` receiver (there is no value to
+    /// derive `Self` from). Pops the method name, the interface type
+    /// (`Object::Type`), `ntypeargs` method-level type args, and the `Self`
+    /// type (`Object::Type`, in the receiver's stack slot); resolves `Self`'s
+    /// `implements` rule (coherence guarantees at most one) and pushes a
+    /// capture-less `Object::Closure` over the resolved method, whose
+    /// `captured_type_args` carry the callee's complete frame — the impl's
+    /// realized frame followed by the method-level args.
+    ///
+    /// Stack: `[self_type, type_args…, iface_type, method_name]` -> `[closure]`
+    MakeVirtualFunction {
         /// Number of method-level `Object::Type` args on the stack (below the
         /// interface type), appended to the resolved impl frame.
         ntypeargs: u16,
@@ -860,6 +890,20 @@ pub enum Instruction {
     /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
+
+    /// Reify the package selected lexically by the compiler. The operand is a
+    /// constant-pool string naming the static package; a dynamic function's
+    /// runtime owner takes precedence.
+    LoadCurrentPackage(usize),
+
+    /// Pop the condition on both edges and branch when true.
+    PopJumpIfTrue(isize),
+    /// Keep a false value on the taken edge; pop on fallthrough.
+    JumpIfFalseOrPop(isize),
+    /// Keep a true value on the taken edge; pop on fallthrough.
+    JumpIfTrueOrPop(isize),
+    /// Keep a non-null value on the taken edge; pop on fallthrough.
+    JumpIfNotNullOrPop(isize),
 }
 
 /// Compact bytecode opcodes.
@@ -984,6 +1028,7 @@ pub enum OpCode {
     IsType,
     DenseTag,
     LoadType,
+    BindType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -1043,6 +1088,26 @@ pub enum OpCode {
     // u32 interface-field index; receiver and interface type come off the stack.
     VirtualLoadField,
     VirtualStoreField,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
+
+    // Truthiness coercion (B-1563), appended to preserve discriminants:
+    // pop a value, push its truthiness (`false`, `null`, zero, and empty
+    // string/list/map/bytes are falsy; everything else is truthy).
+    Truthy,
+
+    // Virtual interface-method value resolved from a written `Self` TYPE (the
+    // type-keyed analogue of `MakeVirtualBoundMethod`): u16 method-level type
+    // arg count; `Self` type, interface type, and method name come off the
+    // stack and the resolved capture-less closure is pushed.
+    MakeVirtualFunction,
+
+    // Conditional branches, appended to preserve serialized discriminants.
+    PopJumpIfTrue,
+    JumpIfFalseOrPop,
+    JumpIfTrueOrPop,
+    JumpIfNotNullOrPop,
 }
 
 impl OpCode {
@@ -1067,6 +1132,7 @@ impl OpCode {
             | Self::MakeCell
             | Self::SendEvent
             | Self::ContainerLen
+            | Self::Truthy
             | Self::Spawn
             | Self::AwaitAny
             | Self::Add
@@ -1153,6 +1219,7 @@ impl OpCode {
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
+            | Self::BindType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
@@ -1162,13 +1229,21 @@ impl OpCode {
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
+            | Self::PopJumpIfTrue
+            | Self::JumpIfFalseOrPop
+            | Self::JumpIfTrueOrPop
+            | Self::JumpIfNotNullOrPop
             | Self::VirtualCall
             | Self::VirtualLoadField
             | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
 
+            Self::LoadCurrentPackage => 5,
+
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
+            Self::MakeGenericFunctionFromValue
+            | Self::MakeVirtualBoundMethod
+            | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1199,6 +1274,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
+            x if x == Self::MakeVirtualFunction as u8 => Ok(Self::MakeVirtualFunction),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1207,6 +1283,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1295,6 +1372,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::BindType as u8 => Ok(Self::BindType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -1304,6 +1382,10 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Jump as u8 => Ok(Self::Jump),
             x if x == Self::PopJumpIfFalse as u8 => Ok(Self::PopJumpIfFalse),
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
+            x if x == Self::PopJumpIfTrue as u8 => Ok(Self::PopJumpIfTrue),
+            x if x == Self::JumpIfFalseOrPop as u8 => Ok(Self::JumpIfFalseOrPop),
+            x if x == Self::JumpIfTrueOrPop as u8 => Ok(Self::JumpIfTrueOrPop),
+            x if x == Self::JumpIfNotNullOrPop as u8 => Ok(Self::JumpIfNotNullOrPop),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
             x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
@@ -1318,6 +1400,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             _ => Err(byte),
         }
     }
@@ -1336,6 +1419,7 @@ impl std::fmt::Display for OpCode {
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
+            Self::MakeVirtualFunction => "MAKE_VIRTUAL_FUNCTION",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1344,6 +1428,8 @@ impl std::fmt::Display for OpCode {
             Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
+            Self::Truthy => "TRUTHY",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1433,6 +1519,7 @@ impl std::fmt::Display for OpCode {
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
+            Self::BindType => "BIND_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1442,6 +1529,10 @@ impl std::fmt::Display for OpCode {
             Self::Jump => "JUMP",
             Self::PopJumpIfFalse => "POP_JUMP_IF_FALSE",
             Self::JumpIfFalse => "JUMP_IF_FALSE",
+            Self::PopJumpIfTrue => "POP_JUMP_IF_TRUE",
+            Self::JumpIfFalseOrPop => "JUMP_IF_FALSE_OR_POP",
+            Self::JumpIfTrueOrPop => "JUMP_IF_TRUE_OR_POP",
+            Self::JumpIfNotNullOrPop => "JUMP_IF_NOT_NULL_OR_POP",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
@@ -1515,6 +1606,8 @@ pub enum CmpOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563). Appended to preserve Borsh indices.
+    Truthy,
 }
 
 impl std::fmt::Display for BinOp {
@@ -1552,6 +1645,7 @@ impl std::fmt::Display for UnaryOp {
         f.write_str(match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy",
         })
     }
 }
@@ -1576,6 +1670,10 @@ impl std::fmt::Display for Instruction {
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
+            Instruction::PopJumpIfTrue(o) => write!(f, "POP_JUMP_IF_TRUE {o:+}"),
+            Instruction::JumpIfFalseOrPop(o) => write!(f, "JUMP_IF_FALSE_OR_POP {o:+}"),
+            Instruction::JumpIfTrueOrPop(o) => write!(f, "JUMP_IF_TRUE_OR_POP {o:+}"),
+            Instruction::JumpIfNotNullOrPop(o) => write!(f, "JUMP_IF_NOT_NULL_OR_POP {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AddInt => f.write_str("ADD_INT"),
@@ -1652,6 +1750,9 @@ impl std::fmt::Display for Instruction {
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                 write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
             }
+            Instruction::MakeVirtualFunction { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_FUNCTION {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -1660,11 +1761,13 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
             }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
+            Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
@@ -1780,8 +1883,12 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Entries are stably sorted by
+/// `start_pc`; the VM picks the innermost covering entry by largest
+/// `start_pc`, then smallest `end_pc`, then latest table order (identical
+/// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a
@@ -1880,6 +1987,8 @@ impl CompactJumpTable {
 pub struct CompactCode {
     /// The encoded instruction stream.
     pub code: Vec<u8>,
+    /// `Bytecode::call_layouts` keyed by byte-offset PC.
+    pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
     /// Line table with PCs translated to byte offsets.
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
@@ -1936,6 +2045,13 @@ impl CompactCode {
 pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
+
+    /// The value slots each checked call site pushes, keyed by the index of
+    /// its `Call`/`VirtualCall`/`CallIndirect` instruction. The VM maps that
+    /// layout onto the parameter list of whichever callee the call reaches.
+    /// A call site without an entry already pushes the callee's own layout
+    /// (compiler-synthesized calls and runtime trampolines).
+    pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
 
     /// Constant pool (compile-time, serializable).
     /// Contains `ObjectIndex` for object references.
@@ -1998,6 +2114,7 @@ impl Bytecode {
     pub fn new() -> Self {
         Self {
             instructions: Vec::new(),
+            call_layouts: BTreeMap::new(),
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
@@ -2183,6 +2300,8 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::BindType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2232,7 +2351,8 @@ impl Bytecode {
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
                 Instruction::MakeGenericFunctionFromValue { ntypeargs }
-                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                | Instruction::MakeVirtualBoundMethod { ntypeargs }
+                | Instruction::MakeVirtualFunction { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2268,7 +2388,11 @@ impl Bytecode {
                 // ── Jump operands: translate to byte offsets ────────
                 Instruction::Jump(offset)
                 | Instruction::PopJumpIfFalse(offset)
-                | Instruction::JumpIfFalse(offset) => {
+                | Instruction::JumpIfFalse(offset)
+                | Instruction::PopJumpIfTrue(offset)
+                | Instruction::JumpIfFalseOrPop(offset)
+                | Instruction::JumpIfTrueOrPop(offset)
+                | Instruction::JumpIfNotNullOrPop(offset) => {
                     // In the old VM, offset is relative to the instruction
                     // itself (IP was pre-incremented before step() ran, and
                     // the jump uses instruction_ptr.checked_add_signed(offset)
@@ -2439,6 +2563,11 @@ impl Bytecode {
 
         CompactCode {
             code,
+            call_layouts: self
+                .call_layouts
+                .iter()
+                .map(|(index, layout)| (index_to_offset[*index], layout.clone()))
+                .collect(),
             line_table,
             exception_table,
             handler_context_table,
@@ -2459,6 +2588,7 @@ impl Bytecode {
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
             Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
+            Instruction::MakeVirtualFunction { .. } => OpCode::MakeVirtualFunction,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
@@ -2499,6 +2629,7 @@ impl Bytecode {
             Instruction::UnaryOp(op) => match op {
                 UnaryOp::Not => OpCode::Not,
                 UnaryOp::Neg => OpCode::Neg,
+                UnaryOp::Truthy => OpCode::Truthy,
             },
 
             // Constant specialization
@@ -2538,6 +2669,8 @@ impl Bytecode {
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::BindType(_) => OpCode::BindType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,
@@ -2594,6 +2727,10 @@ impl Bytecode {
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::PopJumpIfFalse(_) => OpCode::PopJumpIfFalse,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
+            Instruction::PopJumpIfTrue(_) => OpCode::PopJumpIfTrue,
+            Instruction::JumpIfFalseOrPop(_) => OpCode::JumpIfFalseOrPop,
+            Instruction::JumpIfTrueOrPop(_) => OpCode::JumpIfTrueOrPop,
+            Instruction::JumpIfNotNullOrPop(_) => OpCode::JumpIfNotNullOrPop,
 
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
@@ -2629,6 +2766,7 @@ mod compact_tests {
         Bytecode {
             instructions,
             constants,
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
@@ -2643,6 +2781,29 @@ mod compact_tests {
     }
 
     #[test]
+    fn call_layouts_survive_serialization_and_compact_pc_translation() {
+        let mut bytecode = make_bytecode(
+            vec![
+                Instruction::LoadConst(0), // LoadIntSmall: 2 bytes
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![ConstValue::Int(1)],
+        );
+        let layout = baml_type::CallLayout(vec![None, Some(baml_base::Name::new("prefix"))]);
+        bytecode.call_layouts.insert(1, layout.clone());
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        assert_eq!(restored.call_layouts.get(&1), Some(&layout));
+        let compact = restored.lower_to_compact();
+        assert_eq!(compact.code[2], OpCode::CallIndirect as u8);
+        assert_eq!(
+            compact.call_layouts.into_iter().collect::<Vec<_>>(),
+            vec![(2, layout)]
+        );
+    }
+
+    #[test]
     fn encode_load_int_small_and_return() {
         let bc = make_bytecode(
             vec![Instruction::LoadConst(0), Instruction::Return],
@@ -2654,6 +2815,41 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn conditional_branches_encode_both_directions_and_round_trip() {
+        let branches = [
+            (
+                Instruction::PopJumpIfTrue as fn(isize) -> Instruction,
+                OpCode::PopJumpIfTrue,
+            ),
+            (Instruction::JumpIfFalseOrPop, OpCode::JumpIfFalseOrPop),
+            (Instruction::JumpIfTrueOrPop, OpCode::JumpIfTrueOrPop),
+            (Instruction::JumpIfNotNullOrPop, OpCode::JumpIfNotNullOrPop),
+        ];
+        for (branch, opcode) in branches {
+            assert_eq!(opcode.encoded_size(), 5);
+            assert_eq!(OpCode::try_from(opcode as u8).unwrap(), opcode);
+            let bc = make_bytecode(
+                vec![
+                    branch(2),
+                    Instruction::LoadConst(0),
+                    branch(-2),
+                    Instruction::Return,
+                ],
+                vec![ConstValue::Int(42)],
+            );
+            let code = bc.lower_to_compact().code;
+            assert_eq!(code.len(), 13);
+            assert_eq!(code[0], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[1..5].try_into().unwrap()), 2);
+            assert_eq!(code[7], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[8..12].try_into().unwrap()), -12);
+            let encoded = borsh::to_vec(&bc.instructions).unwrap();
+            let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();
+            assert_eq!(format!("{decoded:?}"), format!("{:?}", bc.instructions));
+        }
     }
 
     #[test]
@@ -2689,6 +2885,7 @@ mod compact_tests {
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
             (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),
@@ -2837,6 +3034,7 @@ mod compact_tests {
                 Instruction::Return,       // i=1: 1 byte
             ],
             constants: vec![ConstValue::Int(1)],
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
@@ -2877,6 +3075,7 @@ mod compact_tests {
                 Instruction::Return,       // i=2: 1 byte (handler)
             ],
             constants: vec![ConstValue::Int(0)],
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),

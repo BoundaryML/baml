@@ -19,13 +19,19 @@
       "!node_modules/**",
       "!**/node_modules/**",
       "!**/.next/**",
+      "!app-developer-docs/next-env.d.ts",
       "!**/.react-email/**",
       "!**/baml_client/**",
+      "!app-website/lib/baml-docs/stdlib.json",
+      "!pkg-grammar/baml.tmLanguage.json",
+      "!app-vscode-ext/syntaxes/baml.tmLanguage.json",
       "!app-beps/**",
       "!**/.turbo/**",
       "!**/*.min.*",
+      "!pkg-editor/src/themes/**",
       "!bun.lock",
       "!**/.vscode-test/**",
+      "!**/tools/oxlint/anti-slop/**",
       "!**/build/**",
       "!**/.git/**",
       "!**/coverage/**",
@@ -96,6 +102,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "includes": ["pkg-editor/package.json", "pkg-grammar/src/baml.ts"]
+    }
+  ],
   "vcs": {
     "clientKind": "git",
     "defaultBranch": "canary",

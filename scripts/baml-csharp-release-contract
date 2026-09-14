@@ -26,7 +26,7 @@ VERSION_RE = re.compile(
 )
 GENERATED_SOURCE_SENTINELS = (
     "Baml/Generated/BamlProgram.g.cs",
-    "CsharpSlice/Functions.g.cs",
+    "CsharpBasicCalls/Functions.g.cs",
 )
 
 

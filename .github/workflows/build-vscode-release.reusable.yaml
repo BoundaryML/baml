@@ -49,18 +49,16 @@ jobs:
             rust-target: aarch64-unknown-linux-musl
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
 
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-action-version: 'v6'
+        uses: ./.github/actions/engine-setup-node
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           enable-wasm: true
 

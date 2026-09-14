@@ -801,24 +801,24 @@ function test_fn_is_mismatched() -> bool {
 }
 
 test "dispatches_int_callback" {
-    assert.is_true(baml.deep_equals(test_dispatches_int_callback(), "int:20"))
+    assert.equal(test_dispatches_int_callback(), "int:20")
 }
 
 test "dispatches_string_callback" {
-    assert.is_true(baml.deep_equals(test_dispatches_string_callback(), "str:x!"))
+    assert.equal(test_dispatches_string_callback(), "str:x!")
 }
 
 test "dispatches_bound_method_by_receiver_dropped_signature" {
-    assert.is_true(baml.deep_equals(test_dispatches_bound_method(), "int:102"))
+    assert.equal(test_dispatches_bound_method(), "int:102")
 }
 
 test "dispatches_closure_minted_in_generic_frame" {
-    assert.is_true(baml.deep_equals(test_dispatches_generic_frame_closure(), "int:7"))
+    assert.equal(test_dispatches_generic_frame_closure(), "int:7")
 }
 
 test "non_final_fn_arm_decides_against_wildcard" {
-    assert.is_true(baml.deep_equals(test_fn_arm_before_wildcard_fn(), "fn:4"))
-    assert.is_true(baml.deep_equals(test_fn_arm_before_wildcard_int(), "other"))
+    assert.equal(test_fn_arm_before_wildcard_fn(), "fn:4")
+    assert.equal(test_fn_arm_before_wildcard_int(), "other")
 }
 
 test "fn_is_test_discriminates_by_signature" {
@@ -1230,175 +1230,154 @@ function test_or_2d_vs_class() -> int {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 test "let_or_of_same_binding" {
-    assert.is_true(baml.deep_equals(test_let_or_same_binding(), 1))
+    assert.equal(test_let_or_same_binding(), 1)
 }
 
 test "let_or_of_six_same_bindings" {
-    assert.is_true(baml.deep_equals(test_let_or_six_same_bindings(), 1))
+    assert.equal(test_let_or_six_same_bindings(), 1)
 }
 
 test "match_or_of_bare_bindings_uses_value" {
-    assert.is_true(baml.deep_equals(test_match_or_bare_bindings(), 6))
+    assert.equal(test_match_or_bare_bindings(), 6)
 }
 
 test "match_or_of_chain_narrows_uses_value" {
-    assert.is_true(baml.deep_equals(test_match_or_chain_narrows(), 20))
+    assert.equal(test_match_or_chain_narrows(), 20)
 }
 
 test "match_chain_of_bindings_aliases_scrutinee" {
-    assert.is_true(baml.deep_equals(test_match_chain_of_bindings(), 21))
+    assert.equal(test_match_chain_of_bindings(), 21)
 }
 
 test "match_chain_trailing_binding_after_array_type_aliases_value" {
-    assert.is_true(baml.deep_equals(test_match_chain_trailing_binding(), 990))
+    assert.equal(test_match_chain_trailing_binding(), 990)
 }
 
 test "match_chain_binding_used_in_guard" {
-    assert.is_true(baml.deep_equals(test_match_chain_binding_guard(), 40))
+    assert.equal(test_match_chain_binding_guard(), 40)
 }
 
 test "for_let_chain_of_bindings" {
-    assert.is_true(baml.deep_equals(test_for_let_chain_of_bindings(), 12))
+    assert.equal(test_for_let_chain_of_bindings(), 12)
 }
 
 test "for_let_chain_trailing_binding_after_type_aliases_iteration_value" {
-    assert.is_true(baml.deep_equals(test_for_let_chain_trailing_type(), 605))
+    assert.equal(test_for_let_chain_trailing_type(), 605)
 }
 
 test "for_let_chain_alias_capture_per_iteration" {
-    assert.is_true(baml.deep_equals(test_for_let_chain_alias_capture(), 123))
+    assert.equal(test_for_let_chain_alias_capture(), 123)
 }
 
 test "for_let_or_of_same_binding" {
-    assert.is_true(baml.deep_equals(test_for_let_or_same_binding(), 10))
+    assert.equal(test_for_let_or_same_binding(), 10)
 }
 
 test "for_let_or_of_six_same_bindings" {
-    assert.is_true(baml.deep_equals(test_for_let_or_six_bindings(), 6))
+    assert.equal(test_for_let_or_six_bindings(), 6)
 }
 
 test "for_array_destructure_rest_sums_rows" {
-    assert.is_true(baml.deep_equals(test_for_rest_sums_rows(), 4))
+    assert.equal(test_for_rest_sums_rows(), 4)
 }
 
 test "for_array_destructure_rest_capture_gets_fresh_cell_per_iteration" {
-    assert.is_true(baml.deep_equals(test_for_rest_capture_fresh_cell(), 123))
+    assert.equal(test_for_rest_capture_fresh_cell(), 123)
 }
 
 test "for_array_destructure_inside_class_destructure_sums_fields" {
-    assert.is_true(baml.deep_equals(test_for_inside_class_destruct(), 3))
+    assert.equal(test_for_inside_class_destruct(), 3)
 }
 
 test "catch_or_of_same_typed_binding" {
-    assert.is_true(baml.deep_equals(
-        risky_throws_string() catch (e) {
-            (let s: string) | (let s: string) => s
-        },
-        "boom"
-    ))
+    assert.equal(risky_throws_string() catch (e) { (let s: string) | (let s: string) => s }, "boom")
 }
 
 test "let_wildcard_discards_value" {
-    assert.is_true(baml.deep_equals(test_let_wildcard_discards(), 42))
+    assert.equal(test_let_wildcard_discards(), 42)
 }
 
 test "match_bind_with_type_ascription" {
-    assert.is_true(baml.deep_equals(test_match_bind_type_ascription(), 101))
+    assert.equal(test_match_bind_type_ascription(), 101)
 }
 
 test "match_or_of_chain_bindings_swapped" {
-    assert.is_true(baml.deep_equals(test_match_or_chain_swapped(), 14))
+    assert.equal(test_match_or_chain_swapped(), 14)
 }
 
 test "chain_second_binding_capture_after_reassign" {
-    assert.is_true(baml.deep_equals(test_chain_second_binding_capture(), 2))
+    assert.equal(test_chain_second_binding_capture(), 2)
 }
 
 test "let_class_destructure_binds_shorthand_and_ignores_omitted_fields" {
-    assert.is_true(baml.deep_equals(test_let_class_destruct_shorthand(), 41))
+    assert.equal(test_let_class_destruct_shorthand(), 41)
 }
 
 test "let_class_destructure_renames_field_binding" {
-    assert.is_true(baml.deep_equals(test_let_class_destruct_rename(), 42))
+    assert.equal(test_let_class_destruct_rename(), 42)
 }
 
 test "let_class_destructure_nested_class" {
-    assert.is_true(baml.deep_equals(test_let_class_destruct_nested(), 94107))
+    assert.equal(test_let_class_destruct_nested(), 94107)
 }
 
 test "let_nested_same_field_names_are_ok_with_distinct_bindings" {
-    assert.is_true(baml.deep_equals(test_let_nested_same_field_names(), 42))
+    assert.equal(test_let_nested_same_field_names(), 42)
 }
 
 test "let_generic_class_destructure_substitutes_field_types" {
-    assert.is_true(baml.deep_equals(test_let_generic_destruct(), 43))
+    assert.equal(test_let_generic_destruct(), 43)
 }
 
 test "empty_generic_class_destructure_uses_contextual_type" {
-    assert.is_true(baml.deep_equals(test_empty_generic_destruct_contextual(), 21))
+    assert.equal(test_empty_generic_destruct_contextual(), 21)
 }
 
 test "match_generic_class_type_patterns_distinguish_type_args" {
-    assert.is_true(baml.deep_equals(test_match_generic_type_args_distinguish(), 21))
+    assert.equal(test_match_generic_type_args_distinguish(), 21)
 }
 
 test "match_generic_class_destructure_union_tests_substituted_field_type" {
-    assert.is_true(baml.deep_equals(test_match_generic_union_field(), 59))
+    assert.equal(test_match_generic_union_field(), 59)
 }
 
 test "generic_class_destructure_backfills_through_wrapped_flow_types" {
-    assert.is_true(baml.deep_equals(test_generic_backfills_wrapped(), 120))
+    assert.equal(test_generic_backfills_wrapped(), 120)
 }
 
 test "empty_generic_class_destructure_covers_union_of_same_class_instantiations" {
-    assert.is_true(baml.deep_equals(test_empty_generic_covers_union(), 77))
+    assert.equal(test_empty_generic_covers_union(), 77)
 }
 
 test "deep_generic_class_destructure_substitutes_through_nested_fields" {
-    assert.is_true(baml.deep_equals(deep_destruct_box(), 123))
+    assert.equal(deep_destruct_box(), 123)
 }
 
 test "match_class_destructure_tests_field_literal_and_falls_through" {
-    assert.is_true(baml.deep_equals(
-        match_person_as(PersonAS { age: 5, score: 99 }),
-        5
-    ))
+    assert.equal(match_person_as(PersonAS { age: 5, score: 99 }), 5)
 }
 
 test "match_class_destructure_tests_union_field_type" {
-    assert.is_true(baml.deep_equals(
-        match_box_union(BoxUnion { value: "ready" }),
-        2
-    ))
+    assert.equal(match_box_union(BoxUnion { value: "ready" }), 2)
 }
 
 test "match_top_level_class_destructure_tests_union_scrutinee" {
-    assert.is_true(baml.deep_equals(
-        score_person_age(PersonAge { age: 42 }) * 10 + score_person_age(7),
-        420
-    ))
+    assert.equal(score_person_age(PersonAge { age: 42 }) * 10 + score_person_age(7), 420)
 }
 
 test "match_or_class_destructure_same_binding_name_compatible_types" {
-    assert.is_true(baml.deep_equals(
-        score_personid(PersonIdB { id: 77 }),
-        77
-    ))
+    assert.equal(score_personid(PersonIdB { id: 77 }), 77)
 }
 
 test "match_or_class_destructure_same_binding_name_different_depths" {
-    assert.is_true(baml.deep_equals(
-        score_depth(DepthClass { field: 4 }) * 10 +
-        score_depth(DepthClass2 { c: DepthClass3 { field: 7 } }),
-        47
-    ))
+    assert.equal(
+        score_depth(DepthClass { field: 4 }) * 10 + score_depth(DepthClass2 { c: DepthClass3 { field: 7 } }),
+        47,
+    )
 }
 
 test "match_array_destructure_empty_and_prefix_rest" {
-    assert.is_true(baml.deep_equals(
-        score_empty_prefix_rest([]) * 10 + score_empty_prefix_rest([7, 8, 9]),
-        7
-    ))
+    assert.equal(score_empty_prefix_rest([]) * 10 + score_empty_prefix_rest([7, 8, 9]), 7)
 }
 
 function score_exact_length_45() -> int {
@@ -1410,291 +1389,237 @@ function score_exact_length_45() -> int {
 }
 
 test "match_array_destructure_exact_length" {
-    assert.is_true(baml.deep_equals(score_exact_length_45(), 45))
+    assert.equal(score_exact_length_45(), 45)
 }
 
 test "match_array_destructure_binds_rest_copy" {
-    assert.is_true(baml.deep_equals(score_rest_copy([1, 2, 3]), 12))
+    assert.equal(score_rest_copy([1, 2, 3]), 12)
 }
 
 test "match_array_destructure_suffix_rest" {
-    assert.is_true(baml.deep_equals(score_suffix_rest([1, 2, 9]), 29))
+    assert.equal(score_suffix_rest([1, 2, 9]), 29)
 }
 
 test "let_array_destructure_binds_whole_rest" {
-    assert.is_true(baml.deep_equals(test_let_array_rest_binds(), 3))
+    assert.equal(test_let_array_rest_binds(), 3)
 }
 
 test "let_array_destructure_nested_rest_only_is_irrefutable" {
-    assert.is_true(baml.deep_equals(test_let_array_rest_irrefutable(), 1))
+    assert.equal(test_let_array_rest_irrefutable(), 1)
 }
 
 test "match_array_destructure_entire_alphabet_of_bindings" {
-    assert.is_true(baml.deep_equals(test_match_alphabet(), 351))
+    assert.equal(test_match_alphabet(), 351)
 }
 
 test "match_or_binding_from_class_field_or_nested_array_position" {
-    assert.is_true(baml.deep_equals(
-        score_opat(OPat_A { x: 4 }) * 10 + score_opat(OPat_B { y: [9, 7] }),
-        47
-    ))
+    assert.equal(score_opat(OPat_A { x: 4 }) * 10 + score_opat(OPat_B { y: [9, 7] }), 47)
 }
 
 test "match_wildcard_inside_chained_binding_type_array_pattern" {
-    assert.is_true(baml.deep_equals(test_match_wildcard_chained_array(), 3))
+    assert.equal(test_match_wildcard_chained_array(), 3)
 }
 
 test "match_array_destructure_shadows_outer_local_only_inside_arm" {
-    assert.is_true(baml.deep_equals(test_match_array_shadows_outer(), 14))
+    assert.equal(test_match_array_shadows_outer(), 14)
 }
 
 test "for_array_destructure_nested_rest_only_is_irrefutable" {
-    assert.is_true(baml.deep_equals(test_for_nested_rest_irrefutable(), 3))
+    assert.equal(test_for_nested_rest_irrefutable(), 3)
 }
 
 test "match_array_destructure_literal_and_type_element_patterns" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         score_ints([1, 2, 3]) * 100 + score_ints([1, 9]) * 10 + score_strings_len(["a", "b"]),
-        1302
-    ))
+        1302,
+    )
 }
 
 test "match_array_destructure_or_patterns_share_bindings" {
-    assert.is_true(baml.deep_equals(
-        score_or_share([4]) * 10 + score_or_share([5, 6]),
-        45
-    ))
+    assert.equal(score_or_share([4]) * 10 + score_or_share([5, 6]), 45)
 }
 
 test "match_array_destructure_or_patterns_nested_arrays_share_bindings" {
-    assert.is_true(baml.deep_equals(
-        score_or_nested_2d([[4, 5]]) * 10 + score_or_nested_2d([[7, 9], [2]]),
-        47
-    ))
+    assert.equal(score_or_nested_2d([[4, 5]]) * 10 + score_or_nested_2d([[7, 9], [2]]), 47)
 }
 
 test "match_array_destructure_nested_array_binding_projects_inner_element" {
-    assert.is_true(baml.deep_equals(test_match_nested_array_projects_inner(), 4))
+    assert.equal(test_match_nested_array_projects_inner(), 4)
 }
 
 test "match_array_destructure_or_patterns_nested_class_array_fields" {
-    assert.is_true(baml.deep_equals(
-        score_team2([Team2 { scores: [3, 4] }]) * 10 +
-        score_team2([
-            Team2 { scores: [8, 9] },
-            Team2 { scores: [1] }
-        ]),
-        39
-    ))
+    assert.equal(
+        score_team2([Team2 { scores: [3, 4] }]) * 10 + score_team2([ Team2 { scores: [8, 9] }, Team2 { scores: [1] } ]),
+        39,
+    )
 }
 
 test "match_array_destructure_outer_chain_applies_to_whole_array" {
-    assert.is_true(baml.deep_equals(
-        score_outer_chain([[1], [2], [3], [4]]),
-        234
-    ))
+    assert.equal(score_outer_chain([[1], [2], [3], [4]]), 234)
 }
 
 test "match_alternating_class_array_five_levels_or_flipped_traversal" {
-    assert.is_true(baml.deep_equals(test_five_levels_or_flipped(), 42))
+    assert.equal(test_five_levels_or_flipped(), 42)
 }
 
 test "match_or_four_alternates_same_name_different_paths" {
-    assert.is_true(baml.deep_equals(test_or_four_alternates(), 7896))
+    assert.equal(test_or_four_alternates(), 7896)
 }
 
 test "match_deep_class_array_or_picks_deep_cell" {
-    assert.is_true(baml.deep_equals(
-        pick_grid(Grid1 {
-            cells: [
-                Cell1 { row: [1, 2, 3] },
-                Cell1 { row: [10, 42, 30] },
-                Cell1 { row: [100, 200, 300] }
-            ]
-        }),
-        42
-    ))
+    assert.equal(
+        pick_grid(Grid1 { cells: [ Cell1 { row: [1, 2, 3] }, Cell1 { row: [10, 42, 30] }, Cell1 { row: [100, 200, 300] } ] }),
+        42,
+    )
 }
 
 test "match_or_2d_array_vs_class_with_2d_field" {
-    assert.is_true(baml.deep_equals(test_or_2d_vs_class(), 711))
+    assert.equal(test_or_2d_vs_class(), 711)
 }
 
 test "match_array_destructure_two_prefix_rest_suffix_binding" {
-    assert.is_true(baml.deep_equals(score_two_prefix([7, 8, 99, 99, 9]), 789))
+    assert.equal(score_two_prefix([7, 8, 99, 99, 9]), 789)
 }
 
 test "match_array_destructure_prefix_rest_two_suffix_bindings" {
-    assert.is_true(baml.deep_equals(score_prefix_two_suffix([7, 99, 99, 8, 9]), 789))
+    assert.equal(score_prefix_two_suffix([7, 99, 99, 8, 9]), 789)
 }
 
 test "match_array_destructure_inside_class_destructure_empty_field" {
-    assert.is_true(baml.deep_equals(
-        score_team3(Team3 { scores: [] }) + score_team3(Team3 { scores: [7, 8] }),
-        17
-    ))
+    assert.equal(score_team3(Team3 { scores: [] }) + score_team3(Team3 { scores: [7, 8] }), 17)
 }
 
 test "match_array_destructure_with_class_elements" {
-    assert.is_true(baml.deep_equals(
-        score_user_score([
-            UserScore { name: "a", score: 4 },
-            UserScore { name: "b", score: 9 },
-            UserScore { name: "c", score: 8 }
-        ]),
-        42
-    ))
+    assert.equal(
+        score_user_score([ UserScore { name: "a", score: 4 }, UserScore { name: "b", score: 9 }, UserScore { name: "c", score: 8 } ]),
+        42,
+    )
 }
 
 test "match_array_destructure_wildcard_elements_and_rest" {
-    assert.is_true(baml.deep_equals(
-        score_wildcard_second([5, 8, 13, 21]) * 10 + score_wildcard_second([1]),
-        80
-    ))
+    assert.equal(score_wildcard_second([5, 8, 13, 21]) * 10 + score_wildcard_second([1]), 80)
 }
 
 test "match_array_destructure_wildcard_length_shapes" {
-    assert.is_true(baml.deep_equals(
-        exact_length([]) * 1000000 +
-        prefix_length([]) * 10000000 +
-        exact_length([9]) * 100000 +
-        exact_length([9, 8]) * 10000 +
-        exact_length([9, 8, 7]) * 1000 +
-        prefix_length([5]) * 100 +
-        rest_any([]) * 10 +
-        rest_any([1]),
-        123177
-    ))
+    assert.equal(
+        exact_length([]) * 1000000 + prefix_length([]) * 10000000 + exact_length([9]) * 100000 + exact_length([9, 8]) * 10000 + exact_length([9, 8, 7]) * 1000 + prefix_length([5]) * 100 + rest_any([]) * 10 + rest_any([1]),
+        123177,
+    )
 }
 
 test "match_array_destructure_wildcards_nested_in_class_fields" {
-    assert.is_true(baml.deep_equals(
-        score_team4(Team4 { scores: [4, 9, 16] }),
-        9
-    ))
+    assert.equal(score_team4(Team4 { scores: [4, 9, 16] }), 9)
 }
 
 test "match_array_destructure_wildcard_class_fields_and_rest" {
-    assert.is_true(baml.deep_equals(
-        score_wildcard_user([
-            UserScore { name: "hidden", score: 6 },
-            UserScore { name: "ignored", score: 7 }
-        ]),
-        6
-    ))
+    assert.equal(
+        score_wildcard_user([ UserScore { name: "hidden", score: 6 }, UserScore { name: "ignored", score: 7 } ]),
+        6,
+    )
 }
 
 test "for_array_destructure_rest_wildcard_is_irrefutable" {
-    assert.is_true(baml.deep_equals(test_for_rest_wildcard_irrefutable(), 3))
+    assert.equal(test_for_rest_wildcard_irrefutable(), 3)
 }
 
 test "class_destructure_shorthand_field_same_name_as_class_binds_field" {
-    assert.is_true(baml.deep_equals(test_class_shorthand_same_name_as_class(), 99))
+    assert.equal(test_class_shorthand_same_name_as_class(), 99)
 }
 
 test "match_class_destructure_binds_nested_field" {
-    assert.is_true(baml.deep_equals(test_match_class_binds_nested(), 12345))
+    assert.equal(test_match_class_binds_nested(), 12345)
 }
 
 test "let_deep_class_destructure_binds_inner_field" {
-    assert.is_true(baml.deep_equals(test_let_deep_class_inner_field(), 94107))
+    assert.equal(test_let_deep_class_inner_field(), 94107)
 }
 
 test "match_deep_class_destructure_falls_through_to_binding_arm" {
-    assert.is_true(baml.deep_equals(match_coord_user(), 22222))
+    assert.equal(match_coord_user(), 22222)
 }
 
 test "match_or_deep_class_destructure_binds_when_second_alt_matches" {
-    assert.is_true(baml.deep_equals(or_deep_class(), 7))
+    assert.equal(or_deep_class(), 7)
 }
 
 test "for_deep_class_destructure_sums_fields" {
-    assert.is_true(baml.deep_equals(test_for_deep_class_sums(), 321))
+    assert.equal(test_for_deep_class_sums(), 321)
 }
 
 test "for_deep_class_destructure_capture_gets_fresh_cell_per_iteration" {
-    assert.is_true(baml.deep_equals(test_for_deep_class_capture_fresh(), 123))
+    assert.equal(test_for_deep_class_capture_fresh(), 123)
 }
 
 test "let_class_destructure_binds_inner_zip" {
-    assert.is_true(baml.deep_equals(test_let_class_binds_inner_zip(), 80808))
+    assert.equal(test_let_class_binds_inner_zip(), 80808)
 }
 
 test "match_class_destructure_binds_inner_zip" {
-    assert.is_true(baml.deep_equals(test_match_class_binds_inner_zip(), 9))
+    assert.equal(test_match_class_binds_inner_zip(), 9)
 }
 
 test "for_class_destructure_binds_inner_zip" {
-    assert.is_true(baml.deep_equals(test_for_class_binds_inner_zip(), 120))
+    assert.equal(test_for_class_binds_inner_zip(), 120)
 }
 
 test "match_class_field_pattern_should_refine_parent_union_scrutinee" {
-    assert.is_true(baml.deep_equals(
-        score_refine_a(RefineA { field: 42 }),
-        42
-    ))
+    assert.equal(score_refine_a(RefineA { field: 42 }), 42)
 }
 
 test "match_class_destructure_union_field_int_arm" {
-    assert.is_true(baml.deep_equals(score_foo_union(FooUnion { value: 7 }), 1))
+    assert.equal(score_foo_union(FooUnion { value: 7 }), 1)
 }
 
 test "match_class_destructure_union_field_float_arm" {
-    assert.is_true(baml.deep_equals(score_foo_union(FooUnion { value: 1.5 }), 2))
+    assert.equal(score_foo_union(FooUnion { value: 1.5 }), 2)
 }
 
 test "match_class_destructure_union_field_bool_arm" {
-    assert.is_true(baml.deep_equals(score_foo_union(FooUnion { value: true }), 3))
+    assert.equal(score_foo_union(FooUnion { value: true }), 3)
 }
 
 test "match_array_element_pattern_should_refine_parent_union_scrutinee" {
-    assert.is_true(baml.deep_equals(score_int_string_array([21]), 42))
+    assert.equal(score_int_string_array([21]), 42)
 }
 
 test "match_or_class_patterns_should_refine_parent_union_scrutinee" {
-    assert.is_true(baml.deep_equals(score_abcde(ABCDE_D { field: 42 }), 42))
+    assert.equal(score_abcde(ABCDE_D { field: 42 }), 42)
 }
 
 test "match_or_array_patterns_should_refine_parent_union_scrutinee" {
-    assert.is_true(baml.deep_equals(score_or_array_refine([21]), 42))
+    assert.equal(score_or_array_refine([21]), 42)
 }
 
 test "rustc_port_nested_class_optional_full_coverage_true_present" {
-    assert.is_true(baml.deep_equals(
-        score_foo3(Foo3 { first: true, second: [1, 2, 3] }),
-        2
-    ))
+    assert.equal(score_foo3(Foo3 { first: true, second: [1, 2, 3] }), 2)
 }
 
 test "rustc_port_nested_class_optional_full_coverage_false_null" {
-    assert.is_true(baml.deep_equals(
-        score_foo3(Foo3 { first: false, second: null }),
-        3
-    ))
+    assert.equal(score_foo3(Foo3 { first: false, second: null }), 3)
 }
 
 test "rustc_port_slice_prefix_dispatch" {
-    assert.is_true(baml.deep_equals(score_bool_slice([true, false, false]), 1))
+    assert.equal(score_bool_slice([true, false, false]), 1)
 }
 
 test "rustc_port_slice_suffix_dispatch" {
-    assert.is_true(baml.deep_equals(score_bool_slice([false, true, false]), 2))
+    assert.equal(score_bool_slice([false, true, false]), 2)
 }
 
 test "rustc_port_enum_full_variant_dispatch_north" {
-    assert.is_true(baml.deep_equals(describe_direction(Direction.North), "up"))
+    assert.equal(describe_direction(Direction.North), "up")
 }
 
 test "rustc_port_enum_full_variant_dispatch_west" {
-    assert.is_true(baml.deep_equals(describe_direction(Direction.West), "left"))
+    assert.equal(describe_direction(Direction.West), "left")
 }
 
 test "rustc_port_or_pattern_in_class_field_first_alt" {
-    assert.is_true(baml.deep_equals(score_pair_or(PairAB { a: 0, b: 3 }), 1))
+    assert.equal(score_pair_or(PairAB { a: 0, b: 3 }), 1)
 }
 
 test "rustc_port_or_pattern_in_class_field_falls_to_wildcard" {
-    assert.is_true(baml.deep_equals(score_pair_or(PairAB { a: 5, b: 5 }), 0))
+    assert.equal(score_pair_or(PairAB { a: 5, b: 5 }), 0)
 }
 
 test "rustc_port_optional_literal_or_arm_zero" {

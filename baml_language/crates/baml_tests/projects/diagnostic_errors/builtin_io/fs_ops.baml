@@ -40,14 +40,14 @@ function ReadFileBytesAndClose() -> uint8array {
     data
 }
 
-function ReadChunk() -> string {
+function ReadChunk() -> uint8array? {
     let f = baml.fs.open("log.txt", "r");
     f.read(512)
 }
 
 function ReadChunkBytes() -> uint8array {
     let f = baml.fs.open("data.bin", "r");
-    f.read_bytes(4096)
+    f.read(4096) ?? b""
 }
 
 function WriteFile() -> int {
@@ -74,7 +74,7 @@ function FileWriteBytes() -> int {
     let f = baml.fs.open("data.bin", "r+");
     let data = f.bytes();
     f.seek_from("start", 0);
-    f.write_bytes(data)
+    f.write(data)
 }
 
 function Append() -> int {

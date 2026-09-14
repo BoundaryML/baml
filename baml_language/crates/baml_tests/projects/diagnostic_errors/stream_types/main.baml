@@ -80,13 +80,6 @@ type UnionAlias = int | Inner
 
 type OptionalAlias = Inner?
 
-// ── Dynamic ─────────────────────────────────────────────────
-
-class DynamicClass {
-    name string
-    @@dynamic
-}
-
 // ── All Defaults (comprehensive) ────────────────────────────
 
 class Education {

@@ -29,6 +29,9 @@ Examples:
   Describe a keyword:
     baml describe match
 
+  Search for something by what it does:
+    baml describe --search 'read a file'
+
 Arguments:
   [NAME]
           Symbol, namespace, package, or keyword. Omit to list project symbols
@@ -50,6 +53,22 @@ Output options:
 
       --json
           Output results as JSON
+
+      --search
+          Search names *and* docstrings for NAME, instead of resolving it.
+
+          `describe` answers "what is this called"; `--search` answers "what does this", which is
+          the question you have when you know the job and not the name: `baml describe --search
+          'read a file'`. Matching is on whole words — of names and of docstrings — best first, so
+          it finds a symbol whose documentation uses your words even when its name does not.
+
+      --limit <N>
+          Most results to return from `--search`. At least 1.
+
+          Bounded below because `--limit 0` truncated a full result set to nothing and then reported
+          "no symbol matches", which is a different answer.
+
+          [default: 30]
 
       --export
           Export a whole package's surface as one versioned JSON document (NAME must be a package:
@@ -86,6 +105,10 @@ Global options:
 
       --diagnostic-format <FORMAT>
           Select the diagnostic format [possible values: human, agent, concise]
+
+      --agent-skill-check <MODE>
+          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,
+          off]
 
   -h, --help
           Display concise help for this command

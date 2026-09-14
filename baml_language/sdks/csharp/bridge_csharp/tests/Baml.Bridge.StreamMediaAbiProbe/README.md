@@ -7,7 +7,7 @@ This repository-only .NET 10 executable runs in one-program-per-process modes:
   file/eager-owned bytes, including handle cleanup on decode failure.
 - `stream` starts a replay-server/runtime child, then starts a separate
   consumer child with the selected endpoint present before native runtime
-  initialization. The consumer drives `baml.llm.Stream.next`/`final` as
+  initialization. The consumer drives `ai.stream.Stream.next`/`final` as
   ordinary native calls. A deliberately slow consumer proves one demand gives
   one partial completion and idle time produces no pushed completion. It
   validates the exact typed pull-union descriptor and selected arm, rejects

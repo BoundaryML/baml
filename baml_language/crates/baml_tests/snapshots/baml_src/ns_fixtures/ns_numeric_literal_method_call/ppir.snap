@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.numeric_literal_method_call.BigintToStringBareLiteral() -> string  [expr] {
+  {  } 42n.to_string()
+}
+function user.fixtures.numeric_literal_method_call.FloatFloorBareLiteral() -> float  [expr] {
+  {  } 2.5.floor()
+}
+function user.fixtures.numeric_literal_method_call.IntAbsBareLiteral() -> int  [expr] {
+  {  } 3.abs()
+}
+function user.fixtures.numeric_literal_method_call.IntPowBareLiteral() -> int  [expr] {
+  {  } 2.pow(3)
+}
+function user.fixtures.numeric_literal_method_call.IntToStringBareLiteral() -> string  [expr] {
+  {  } 7.to_string()
+}

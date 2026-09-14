@@ -68,6 +68,14 @@ function round_trip_image_list(x: image[]) -> image[] {
   x
 }
 
+function round_trip_optional_image_list(x: image[]?) -> image[]? {
+  x
+}
+
+function image_mime_type(x: image) -> string? {
+  x.mime_type()
+}
+
 function round_trip_image_map(x: map<string, image>) -> map<string, image> {
   x
 }

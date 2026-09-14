@@ -14,7 +14,8 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
+//! `"baml"` and `"ai"` route under their public package names, anything else
+//! under `vendor/<pkg>/`.
 //!
 //! `$stream` companions do **not** get a separate leaf: because `$` is a
 //! valid TypeScript identifier character (spec2), a stream companion keeps
@@ -87,6 +88,8 @@ fn route_inner(name: &Name) -> LeafPath {
     match name.package().as_str() {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
+        "ai" => segs.push("ai".to_string()),
+        "reflect" => segs.push("reflect".to_string()),
         other => {
             segs.push("vendor".to_string());
             segs.push(sanitize_module_segment(other));
@@ -143,6 +146,13 @@ mod tests {
         let lp = route(&name("baml", &["http"], "Response"));
         assert_eq!(lp.segments, vec!["baml".to_string(), "http".to_string()]);
         assert_eq!(lp.init_ts(), PathBuf::from("baml/http/index.ts"));
+    }
+
+    #[test]
+    fn ai_routes_under_ai() {
+        let lp = route(&name("ai", &["stream"], "Stream"));
+        assert_eq!(lp.segments, vec!["ai".to_string(), "stream".to_string()]);
+        assert_eq!(lp.init_ts(), PathBuf::from("ai/stream/index.ts"));
     }
 
     #[test]

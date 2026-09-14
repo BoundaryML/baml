@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify
+    return
+}

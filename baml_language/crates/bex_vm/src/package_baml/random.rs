@@ -19,8 +19,9 @@ use rand_core::{RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus as XoshiroRng;
 
 use super::{
-    BamlClassRandomChaCha20, BamlClassRandomXoshiro256PlusPlus, BamlNamespaceRandom,
-    PackageBamlImpl, copy, view,
+    BamlClassRandomChaCha20, BamlClassRandomRng_for_ChaCha20,
+    BamlClassRandomRng_for_Xoshiro256PlusPlus, BamlClassRandomXoshiro256PlusPlus,
+    BamlNamespaceRandom, PackageBamlImpl, copy, view,
 };
 use crate::{
     BexVm,
@@ -92,17 +93,21 @@ fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
 // Xoshiro256PlusPlus
 // =========================================================================
 
-#[expect(
-    clippy::used_underscore_items,
-    reason = "the `_state` view accessor is generated from the private BAML field"
-)]
 impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
     fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = XoshiroRng::from_seed(seed_array(seed)?);
         let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
         Ok(copy::random::Xoshiro256PlusPlus { _state: state }.to_value(vm))
     }
+}
 
+// The `implements random.Rng` block's methods — impl-block methods, so
+// codegen emits a per-impl trait.
+#[expect(
+    clippy::used_underscore_items,
+    reason = "the `_state` view accessor is generated from the private BAML field"
+)]
+impl BamlClassRandomRng_for_Xoshiro256PlusPlus for PackageBamlImpl {
     fn random(
         vm: &BexVm,
         rng: &view::random::Xoshiro256PlusPlus<'_>,
@@ -121,17 +126,21 @@ impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
 // ChaCha20
 // =========================================================================
 
-#[expect(
-    clippy::used_underscore_items,
-    reason = "the `_state` view accessor is generated from the private BAML field"
-)]
 impl BamlClassRandomChaCha20 for PackageBamlImpl {
     fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = ChaCha20Rng::from_seed(seed_array(seed)?);
         let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
         Ok(copy::random::ChaCha20 { _state: state }.to_value(vm))
     }
+}
 
+// The `implements random.Rng` block's methods — impl-block methods, so
+// codegen emits a per-impl trait.
+#[expect(
+    clippy::used_underscore_items,
+    reason = "the `_state` view accessor is generated from the private BAML field"
+)]
+impl BamlClassRandomRng_for_ChaCha20 for PackageBamlImpl {
     fn random(
         vm: &BexVm,
         rng: &view::random::ChaCha20<'_>,

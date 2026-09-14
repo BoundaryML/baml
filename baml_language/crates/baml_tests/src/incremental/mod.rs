@@ -10,8 +10,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use salsa::{Database, Event, EventKind, Setter};
+
+use crate::engine::TestDbExt;
 
 /// Test database wrapper with Salsa event logging for incrementality verification.
 ///
@@ -33,7 +35,7 @@ impl IncrementalTestDb {
             })
         });
         // Set up a project root so TIR queries work
-        db.set_project_root(Path::new("."));
+        db.workspace(Path::new("."));
         Self { db, events }
     }
 
@@ -157,7 +159,7 @@ mod tests {
     fn test_basic_event_logging() {
         let mut test_db = IncrementalTestDb::new();
 
-        let file = test_db.db_mut().add_file(
+        let file = test_db.db_mut().file(
             "test.baml",
             r#"
 class Foo {
@@ -193,7 +195,7 @@ class Foo {
     fn test_caching_on_repeated_query() {
         let mut test_db = IncrementalTestDb::new();
 
-        let file = test_db.db_mut().add_file(
+        let file = test_db.db_mut().file(
             "test.baml",
             r#"
 class Bar {
@@ -223,7 +225,7 @@ class Bar {
     fn test_editing_file_invalidates_queries() {
         let mut test_db = IncrementalTestDb::new();
 
-        let file = test_db.db_mut().add_file(
+        let file = test_db.db_mut().file(
             "test.baml",
             r#"
 class Original {
@@ -261,7 +263,7 @@ class Modified {
     fn test_whitespace_only_change() {
         let mut test_db = IncrementalTestDb::new();
 
-        let file = test_db.db_mut().add_file(
+        let file = test_db.db_mut().file(
             "test.baml",
             r#"class Foo {
     name string

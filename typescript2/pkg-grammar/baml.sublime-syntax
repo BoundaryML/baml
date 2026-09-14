@@ -25,6 +25,9 @@ contexts:
     - include: test
     - include: let-statement
     - include: semicolon
+    - include: associated-type
+    - include: member-fragment
+    - include: type-fragment
   accessor-dot:
     - match: '\.'
       scope: punctuation.accessor.baml
@@ -1649,6 +1652,19 @@ contexts:
     - match: '\('
       scope: punctuation.definition.group.begin.baml
       push: match-scrutinee-group--body
+  member-fragment--body:
+    - meta_scope: meta.member-fragment.baml
+    - match: '$'
+      pop: true
+    - include: comments
+    - include: type-expression
+  member-fragment:
+    - match: '^\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\?)?\s*(:)'
+      captures:
+        1: variable.other.property.baml
+        2: keyword.operator.optional.baml
+        3: punctuation.separator.colon.baml
+      push: member-fragment--body
   namespace-root:
     - match: '\b(?:root|baml)\b'
       scope: support.other.namespace.baml
@@ -2314,6 +2330,15 @@ contexts:
     - include: union-operator
     - include: type-punctuation
     - include: colon-separator
+  type-fragment--body:
+    - meta_scope: meta.type-fragment.baml
+    - match: '$'
+      pop: true
+    - include: comments
+    - include: type-expression
+  type-fragment:
+    - match: '^\s*(?=\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)(?=[^:=;{}()#"''\r\n]*$)(?=[^<.\[?|\r\n]*[<.\[?|]|(?:(?:int|float|bigint|string|bool|image|audio|map|json|unknown|never|Self))\s*$)'
+      push: type-fragment--body
   type-literal:
     - include: boolean-literal
     - include: null-literal

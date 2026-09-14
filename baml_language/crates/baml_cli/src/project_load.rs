@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use baml_project::ProjectDatabase;
-use baml_workspace::{
-    BAML_TOML, discover_baml_files, find_baml_project_root, project_search_dir,
-    project_source_root, resolve_project_search_start,
+use baml_db::{
+    BAML_TOML, ProjectDatabase, SourceRoot, SourceRootKind, SourceRootSpec, discover_baml_files,
+    find_baml_project_root, project_search_dir, project_source_root, resolve_project_search_start,
 };
 
 use crate::reporter::Reporter;
@@ -52,11 +51,15 @@ pub(crate) fn resolve_source_location(
         });
     }
 
-    let (_db, root, files) = match reporter {
+    let loaded = match reporter {
         Some(reporter) => load_project_from_reporting(from, reporter)?,
         None => load_project_from(from)?,
     };
-    Ok(SourceLocation::Project { root, files })
+    let root = loaded.root().to_path_buf();
+    Ok(SourceLocation::Project {
+        root,
+        files: loaded.files,
+    })
 }
 
 pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
@@ -111,9 +114,7 @@ pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
 ///
 /// Callers decide how to surface an empty `files` result (e.g. `run` bails,
 /// `test` returns `NoTestsRun`, `generate` returns `Other`).
-pub(crate) fn load_project_from(
-    from: Option<&Path>,
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+pub(crate) fn load_project_from(from: Option<&Path>) -> Result<LoadedProject> {
     load_project_from_inner(from, |_| {})
 }
 
@@ -126,7 +127,7 @@ pub(crate) fn load_project_from(
 pub(crate) fn load_project_from_reporting(
     from: Option<&Path>,
     reporter: &Reporter,
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+) -> Result<LoadedProject> {
     load_project_from_inner(from, |path| {
         reporter.spin("Loading", path.display().to_string());
     })
@@ -136,7 +137,7 @@ pub(crate) fn load_project_from_reporting(
 /// sessions: `Ok(None)` when no project root is found (instead of an error),
 /// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
 /// key the bytecode cache identically to the strict path, but a broken
-/// manifest must not lock an agent out of `describe`.
+/// manifest must not lock an agent out of introspection.
 pub(crate) fn resolve_project_sources_lenient(
     from: Option<&Path>,
 ) -> Result<Option<ResolvedProject>> {
@@ -174,9 +175,9 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never
 /// fails on a missing `baml.toml`**. This is for the commands an agent
-/// reaches for first (`describe`) - the most expensive thing it can
-/// do is fail fast and burn a turn, so it always has something to
-/// work with.
+/// reaches for first (`run -e` probes; `describe` when it returns with the
+/// IDE layer) - the most expensive thing it can do is fail fast and burn a
+/// turn, so it always has something to work with.
 ///
 /// 1. Resolve explicit `from` with the same project/source split as
 ///    [`load_project_from`]. A containing project's settings remain available,
@@ -185,8 +186,8 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 ///    `[package].name`, and a malformed manifest shouldn't block it.
 /// 2. With no explicit `from`, walk ancestors for `baml.toml` or `baml_src/`.
 ///    If no marker exists, return a **default state** holding only the BAML
-///    stdlib (`baml.*`) and zero user files. This makes `baml describe
-///    baml.String` work in any directory without recursively loading it.
+///    stdlib (`baml.*`) and zero user files. This makes a stdlib-only
+///    `baml run -e` probe work in any directory without recursively loading it.
 ///
 /// Note the two branches differ in what they load:
 /// - The **default-state** branch (2) loads zero user files, so omitted
@@ -201,9 +202,7 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 ///   that root. The slurp guard exists to reject *unmarked* directories, not
 ///   marked ones. Manifest-less projects use `baml_src/`, which scopes the
 ///   walk. (See the `walk_up_*` tests.)
-pub(crate) fn load_project_or_default(
-    from: Option<&Path>,
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+pub(crate) fn load_project_or_default(from: Option<&Path>) -> Result<LoadedProject> {
     match resolve_project_sources_lenient(from)? {
         // Walk-up or explicit source root. Manifest validation is intentionally
         // skipped — introspection doesn't need a valid `[package].name`.
@@ -213,18 +212,31 @@ pub(crate) fn load_project_or_default(
                 .iter()
                 .map(|(path, _)| path.clone())
                 .collect();
-            let root = resolved.root.clone();
-            let db = build_db_from_sources(&resolved, |_| {});
-            Ok((db, root, files))
+            let (db, package) = build_db_from_sources(&resolved, |_| {});
+            Ok(LoadedProject { db, package, files })
         }
         None => {
             let canonical = resolve_search_start(from)?;
-            let mut db = ProjectDatabase::new();
             let root = project_search_dir(&canonical);
-            db.set_project_root(&root);
-            Ok((db, root, Vec::new()))
+            let (db, package) = workspace_db(&root);
+            configure_profiler_store_root(&root);
+            Ok(LoadedProject {
+                db,
+                package,
+                files: Vec::new(),
+            })
         }
     }
+}
+
+/// Points the global profiler session's store at the discovered project root
+/// (streams spec §7.5) so `baml run` from a subdirectory writes where
+/// `baml query` will look. First resolution wins; `BAML_PROFILE_DIR` still
+/// overrides.
+pub(crate) fn configure_profiler_store_root(project_root: &Path) {
+    let _ = bex_events::prof::backend::ProfilerSession::configure_global_store_root(
+        project_root.join(".baml/profiles-v1"),
+    );
 }
 
 /// Resolve a path suitable for project discovery. When `from` is omitted,
@@ -256,6 +268,17 @@ fn paths_overlap(left: &Path, right: &Path) -> bool {
 /// source tree overlaps the supplied path. A disjoint path is treated as an
 /// explicit source root; an ancestor manifest still supplies settings.
 pub(crate) fn resolve_project_layout(from: Option<&Path>) -> Result<Option<ProjectLayout>> {
+    let layout = resolve_project_layout_inner(from)?;
+    if let Some(layout) = &layout {
+        // The one root-resolution choke point every CLI verb passes through:
+        // point the global profiler session's store at the project root
+        // (streams spec §7.5) before any engine can initialize it.
+        configure_profiler_store_root(&layout.root);
+    }
+    Ok(layout)
+}
+
+fn resolve_project_layout_inner(from: Option<&Path>) -> Result<Option<ProjectLayout>> {
     let canonical = resolve_search_start(from)?;
     let explicit_root = project_search_dir(&canonical);
 
@@ -294,14 +317,31 @@ pub(crate) fn find_project_root_from(from: Option<&Path>) -> Result<Option<PathB
     Ok(resolve_project_layout(from)?.map(|layout| layout.root))
 }
 
-fn load_project_from_inner(
-    from: Option<&Path>,
-    on_file: impl Fn(&Path),
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+fn load_project_from_inner(from: Option<&Path>, on_file: impl Fn(&Path)) -> Result<LoadedProject> {
     let resolved = resolve_project_sources(from)?;
     let files = resolved.files.iter().map(|(p, _)| p.clone()).collect();
-    let db = build_db_from_sources(&resolved, on_file);
-    Ok((db, resolved.root, files))
+    let (db, package) = build_db_from_sources(&resolved, on_file);
+    Ok(LoadedProject { db, package, files })
+}
+
+/// A project loaded into a database: its package — the `Workspace` root its
+/// sources were added under — and those sources' paths in discovery order.
+///
+/// The package is the project's identity from here on — every query about
+/// "the user's package" is asked of it, never of the database — and its root
+/// path is the project root the CLI resolved.
+#[derive(Debug)]
+pub(crate) struct LoadedProject {
+    pub(crate) db: ProjectDatabase,
+    pub(crate) package: SourceRoot,
+    pub(crate) files: Vec<PathBuf>,
+}
+
+impl LoadedProject {
+    /// The project root: the directory the package's root was added at.
+    pub(crate) fn root(&self) -> &Path {
+        self.package.path(&self.db)
+    }
 }
 
 /// A resolved project with every source read into memory but no
@@ -331,8 +371,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
             "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
              and no `baml_src/` directory found in it or its ancestors.\n\
              add a `baml_src/` directory with your `.baml` files, run `baml init`, \
-             pass `--from <DIR>` to load an explicit source root, or for a one-off \
-             script use `--file <PATH>`.",
+             or pass `--project <DIR>` to load an explicit source directory.",
             search_start.display()
         );
     };
@@ -348,13 +387,14 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     let manifest = if toml_path.exists() {
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("failed to read {}", toml_path.display()))?;
-        let manifest = crate::manifest::parse(&content)
+        let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-        crate::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
         // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
         // `nmae = ...`) warns rather than silently no-ops, but a
         // forward-compatible manifest still loads.
-        for warning in crate::manifest::unknown_field_warnings(&manifest) {
+        for warning in baml_db::manifest::unknown_field_warnings(&manifest) {
             crate::reporter::print_warning(format_args!("{warning}"));
         }
         Some(content)
@@ -382,25 +422,44 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     })
 }
 
-/// Build a [`ProjectDatabase`] from already-read sources.
+/// A fresh [`ProjectDatabase`] holding the embedded stdlib and one empty
+/// `Workspace` root at `root` (package [`RESERVED_USER_PACKAGE`]) — the one
+/// database shape every CLI command compiles in. Returns the workspace root
+/// handle so the caller can add files under it.
+///
+/// This is the single constructor for CLI databases: project loads,
+/// standalone `--file` compiles, `-e` expression probes, and the projectless
+/// introspection fallback all start here, so they agree on the stdlib and on
+/// which root user files belong to.
+pub(crate) fn workspace_db(root: &Path) -> (ProjectDatabase, SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let workspace = db
+        .add_source_root(SourceRootSpec::new(root, SourceRootKind::Workspace))
+        .unwrap_or_else(|err| unreachable!("a fresh database accepts one workspace root: {err}"));
+    (db, workspace)
+}
+
+/// Build a [`ProjectDatabase`] from already-read sources, returning the
+/// `Workspace` root they were added under.
 pub(crate) fn build_db_from_sources(
     resolved: &ResolvedProject,
     on_file: impl Fn(&Path),
-) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(&resolved.root);
+) -> (ProjectDatabase, SourceRoot) {
+    let (mut db, workspace) = workspace_db(&resolved.root);
     for (path, _) in &resolved.files {
         on_file(path);
     }
-    // Bulk registration: one project-file-list write instead of one per file
+    // Bulk registration: one root-file-list write instead of one per file
     // (the per-file path is O(files²) Vec copies + one salsa revision each).
-    db.add_or_update_files(
+    db.add_or_update_files_in(
+        workspace,
         resolved
             .files
             .iter()
             .map(|(path, content)| (path.as_path(), content.as_str())),
     );
-    db
+    (db, workspace)
 }
 
 /// Read `<root>/baml.toml` and assert it has `[package]` with a `name`
@@ -410,9 +469,10 @@ pub(crate) fn build_db_from_sources(
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
         .with_context(|| format!("failed to read {}", toml_path.display()))?;
-    let manifest = crate::manifest::parse(&content)
+    let manifest = baml_db::manifest::parse(&content)
         .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-    crate::manifest::package_name(&manifest, toml_path)
+    baml_db::manifest::reject_stdlib_only_tables(&manifest, toml_path)?;
+    Ok(baml_db::manifest::package_name(&manifest, toml_path)?)
 }
 
 /// Resolve the project's name for output-artifact naming (used by `baml
@@ -534,7 +594,8 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
+        let loaded = load_project_from(Some(tmp.path())).unwrap();
+        let files = &loaded.files;
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }
@@ -555,7 +616,8 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
+        let loaded = load_project_from(Some(tmp.path())).unwrap();
+        let files = &loaded.files;
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }
@@ -630,7 +692,8 @@ mod tests {
         fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
         fs::write(tmp.path().join("a.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
+        let loaded = load_project_from(Some(tmp.path())).unwrap();
+        let files = &loaded.files;
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("a.baml"));
     }
@@ -643,7 +706,8 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, root, files) = load_project_from(Some(&src)).unwrap();
+        let loaded = load_project_from(Some(&src)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -661,7 +725,8 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, root, files) = load_project_from(Some(&nested)).unwrap();
+        let loaded = load_project_from(Some(&nested)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -679,7 +744,8 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, root, files) = load_project_from(Some(&nested)).unwrap();
+        let loaded = load_project_from(Some(&nested)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -698,14 +764,20 @@ mod tests {
         )
         .unwrap();
 
-        let (db, root, files) = load_project_or_default(Some(tmp.path())).unwrap();
+        let loaded = load_project_or_default(Some(tmp.path())).unwrap();
+        let db = &loaded.db;
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("loose.baml"));
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         // The builtin `baml` package is present even with no user files.
-        let baml_pkg = baml_surface::Package::named(&db, "baml");
+        let baml_pkg = baml_db::baml_compiler2_hir::package::lang_roots(db)
+            .get(baml_db::LangPackage::Baml)
+            .unwrap();
         assert!(
-            !baml_pkg.namespaces(&db).is_empty(),
+            !baml_db::baml_compiler2_hir::package::package_items(db, baml_pkg)
+                .namespaces
+                .is_empty(),
             "stdlib `baml` package missing from default state"
         );
     }
@@ -719,7 +791,8 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, root, files) = load_project_or_default(Some(tmp.path())).unwrap();
+        let loaded = load_project_or_default(Some(tmp.path())).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -738,7 +811,8 @@ mod tests {
         let nested = src.join("nested");
         fs::create_dir(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
+        let loaded = load_project_or_default(Some(&nested)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -754,7 +828,8 @@ mod tests {
         let nested = src.join("nested");
         fs::create_dir(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
+        let loaded = load_project_or_default(Some(&nested)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -776,7 +851,8 @@ mod tests {
         let nested = tmp.path().join("sub").join("deeper");
         fs::create_dir_all(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
+        let loaded = load_project_or_default(Some(&nested)).unwrap();
+        let (root, files) = (loaded.root(), &loaded.files);
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(
             files.len(),
@@ -796,7 +872,8 @@ mod tests {
         // Strict loader rejects it...
         assert!(load_project_from(Some(tmp.path())).is_err());
         // ...but the introspection loader still loads the files.
-        let (_db, _root, files) = load_project_or_default(Some(tmp.path())).unwrap();
+        let loaded = load_project_or_default(Some(tmp.path())).unwrap();
+        let files = &loaded.files;
         assert_eq!(files.len(), 1, "got files: {files:?}");
     }
 
@@ -817,7 +894,8 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
+        let loaded = load_project_from(Some(tmp.path())).unwrap();
+        let files = &loaded.files;
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }

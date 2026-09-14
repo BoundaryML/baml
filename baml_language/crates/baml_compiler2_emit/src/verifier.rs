@@ -14,7 +14,7 @@ use crate::analysis::{self, AnalysisResult};
 /// Intended for debug builds to catch invariant drift between MIR lowering,
 /// analysis, and emission.
 pub(crate) fn verify_mir_emit_invariants(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     arity: usize,
     analysis: &AnalysisResult,
 ) {
@@ -102,7 +102,7 @@ mod tests {
         }
     }
 
-    fn stmt_assign(local: Local, value: i64) -> Statement {
+    fn stmt_assign(local: Local, value: i64) -> Statement<'static> {
         Statement {
             kind: StatementKind::Assign {
                 destination: Place::Local(local),
@@ -147,7 +147,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![local("ret")],
-            viz_nodes: vec![],
         };
         // Ensure IDs/indexes stay coherent for this synthetic MIR.
         for (i, block) in body.blocks.iter_mut().enumerate() {
@@ -194,7 +193,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![local("ret")],
-            viz_nodes: vec![],
         };
         for (i, block) in body.blocks.iter_mut().enumerate() {
             block.id = BlockId(i);

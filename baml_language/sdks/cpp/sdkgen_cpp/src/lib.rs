@@ -2,11 +2,11 @@
 //! steps 1-8): the single-header layout, namespace routing, free functions
 //! with required + optional arguments (per-function opts structs, spec D4),
 //! classes + enums with generated `codec<T>` specializations, transparent
-//! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
+//! and recursive type aliases, and recursion via `baml::Box` cycle-breaking;
 //! multi-member unions as order-canonical `::baml::variant` aliases, and
 //! typed error unions via `BamlThrown`.
 //! Post-step-8 features (async, methods, callbacks, generics, streaming
-//! companions, media/handles) are skipped and reported in a trailing
+//! media/handles) are skipped and reported in a trailing
 //! header comment (no silent caps); the full implementation is preserved on
 //! the avery/bridge-cpp-full branch.
 //!
@@ -170,17 +170,51 @@ fn to_source_code_with_optional_metadata(
         // from scratch until a round completes with no failures.
         let mut cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
         loop {
+            // Only forward-declarable members may be assumed available: a
+            // struct (and a recursive alias's wrapper struct) can be named
+            // through `baml::box` ahead of its definition. A NON-recursive
+            // alias emits a `using`, which cannot be forward-declared, so it
+            // has to be declared before anything that names it. Seeding it
+            // here let a struct that names it win `cycle_set`'s alphabetical
+            // order (`ChatMessage` sorts before `ChatMessageContent`) and
+            // emit a use of an undeclared alias. Instead the plain aliases
+            // stay unavailable and the inner loop below settles the real
+            // order.
             for name in &cycle_set {
-                emitted_types.insert(name.clone());
+                if is_plain_alias(pool, name) {
+                    emitted_types.remove(name);
+                } else {
+                    emitted_types.insert(name.clone());
+                }
             }
             let mut round = Vec::new();
             let mut failed = Vec::new();
-            for name in &cycle_set {
-                match emit_type(name, &emitted_types, &cycle_set) {
-                    Ok(Some(emitted)) => round.push(emitted),
-                    Ok(None) | Err(_) => failed.push(name.clone()),
+            // Inner fixed point: `using` declarations (and whatever names
+            // them) land in dependency order rather than name order.
+            let mut cycle_pending: Vec<&Name> = cycle_set.iter().collect();
+            loop {
+                let mut progressed = false;
+                let mut still_pending = Vec::new();
+                for name in cycle_pending {
+                    match emit_type(name, &emitted_types, &cycle_set) {
+                        Ok(Some(emitted)) => {
+                            round.push(emitted);
+                            emitted_types.insert(name.clone());
+                            progressed = true;
+                        }
+                        Ok(None) => still_pending.push(name),
+                        Err(_) => {
+                            failed.push(name.clone());
+                            progressed = true;
+                        }
+                    }
+                }
+                cycle_pending = still_pending;
+                if cycle_pending.is_empty() || !progressed {
+                    break;
                 }
             }
+            failed.extend(cycle_pending.into_iter().cloned());
             if failed.is_empty() {
                 classes.extend(round);
                 break;
@@ -444,8 +478,16 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/lit.h"),
     ),
     (
+        "include/baml/media.h",
+        include_str!("../../bridge_cpp/include/baml/media.h"),
+    ),
+    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
+    ),
+    (
+        "include/baml/spec.h",
+        include_str!("../../bridge_cpp/include/baml/spec.h"),
     ),
     (
         "include/baml/version.h",
@@ -490,7 +532,8 @@ const OPTS_MEMBER: &str = "opts";
 const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
-/// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
+/// pool-level skip filters (`pkg`, partial `$stream` types, legacy `$`
+/// companions); symbols that
 /// only emission can rule out (unsupported field types, broken cycles) still
 /// get allocations, which are simply never rendered.
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
@@ -597,24 +640,128 @@ fn request_callable_members(
     fqn: &BamlFqn,
     function: &Function,
 ) {
-    for arg in &function.arguments {
+    for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         requests.insert(NameRequest::new(
             fqn.child(arg.name.as_str()),
             CppNameKind::Parameter,
         ));
     }
-    if function.arguments.iter().any(|arg| arg.default.is_some()) {
+    if function
+        .arguments
+        .iter()
+        .any(|arg| !arg.injected && arg.default.is_some())
+    {
         requests.insert(opts_request(fqn, function));
-        for arg in function.arguments.iter().filter(|a| a.default.is_some()) {
+        for arg in function
+            .arguments
+            .iter()
+            .filter(|arg| !arg.injected && arg.default.is_some())
+        {
             requests.insert(setter_request(fqn, arg.name.as_str()));
         }
     }
 }
 
-/// Post-step-8 symbols this slice never emits: `$stream` companions and
-/// `$`-suffixed companion functions.
+#[cfg(test)]
+mod injected_argument_tests {
+    use baml_base::{Name as BaseName, TyAttr};
+    use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Origin};
+
+    use super::*;
+
+    #[test]
+    fn injected_callback_does_not_hide_callable() {
+        let name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("review")],
+            BaseName::new("extract"),
+        );
+        let callback = Ty::Function {
+            params: Box::new([CallableParam {
+                name: None,
+                ty: Ty::String {
+                    attr: TyAttr::default(),
+                },
+                mode: CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let function = Function {
+            name: BaseName::new("extract"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("input"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                    default: None,
+                    injected: false,
+                },
+                FunctionArgument {
+                    name: BaseName::new("on_event"),
+                    docstring: None,
+                    ty: Ty::Union(
+                        Box::new([
+                            callback,
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        ]),
+                        TyAttr::default(),
+                    ),
+                    default: Some(FunctionArgumentDefault::Null),
+                    injected: true,
+                },
+            ],
+            return_type: Ty::String {
+                attr: TyAttr::default(),
+            },
+            throws: None,
+            watchers: vec![],
+            origin: Origin {
+                source_file_path: "review.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            &[],
+        );
+        let header = &files[&PathBuf::from("include/baml_sdk.h")];
+        let bindings = &files[&PathBuf::from("src/bindings.cc")];
+
+        assert!(
+            header.contains("extract(const std::string& input)"),
+            "{header}"
+        );
+        assert!(!header.contains("on_event"), "{header}");
+        assert!(bindings.contains("\"user.review.extract\""), "{bindings}");
+    }
+}
+
+/// Legacy `$`-suffixed companion functions are not part of the host surface.
+/// Partial `$stream` types route under `stream_types`, while callable
+/// `@spec`/`@stream` companions continue to ordinary function emission.
 fn skip_symbol(name: &Name) -> bool {
-    name.is_stream() || name.bare_name().contains('$')
+    name.bare_name().contains('$')
+}
+
+/// Whether `name` is a NON-recursive type alias, i.e. one that emits a
+/// `using` declaration. Unlike a struct (or a recursive alias's wrapper
+/// struct) a `using` cannot be forward-declared, so every use of it must
+/// follow its declaration.
+fn is_plain_alias(pool: &SymbolPool, name: &Name) -> bool {
+    matches!(pool.get(name), Some(Symbol::TypeAlias(alias)) if !alias.recursive)
 }
 
 /// The name request for a free function. Shared between collection and
@@ -998,7 +1145,7 @@ fn emit_callable(
 
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
-    for arg in &function.arguments {
+    for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         // Top-level callable parameters cross as host callables
         // (std::function); callables nested in other types stay
         // unsupported (translate_ty rejects them).
@@ -1328,9 +1475,13 @@ fn translate_ty(
         Ty::Bigint { .. } => {
             return Translated::Unsupported("bigint (post-step-8)".to_string());
         }
-        Ty::Media(..) => {
-            return Translated::Unsupported("media type (post-step-8)".to_string());
-        }
+        Ty::Media(kind, _) => match kind {
+            baml_base::MediaKind::Image => "::baml::image".to_string(),
+            baml_base::MediaKind::Audio => "::baml::audio".to_string(),
+            baml_base::MediaKind::Video => "::baml::video".to_string(),
+            baml_base::MediaKind::Pdf => "::baml::pdf".to_string(),
+            baml_base::MediaKind::Generic => "::baml::media".to_string(),
+        },
         Ty::Literal(lit, ..) => {
             // Literal types are singleton ::baml::lit types (each distinct
             // value a distinct C++ type), spelled as char packs / typed
@@ -1423,6 +1574,28 @@ fn translate_ty(
             };
         }
         Ty::Class(name, args, _) => {
+            let wire_name = name.to_string();
+            if wire_name == "ai.Prompt" && args.is_empty() {
+                return Translated::Cpp("::baml::prompt".to_string());
+            }
+            if wire_name == "ai.FunctionSpec" && args.len() == 1 {
+                let output = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
+                    Translated::Cpp(ty) => ty,
+                    other => return other,
+                };
+                return Translated::Cpp(format!("::baml::function_spec<{output}>"));
+            }
+            if wire_name == "ai.stream.Stream" && args.len() == 2 {
+                let partial = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
+                    Translated::Cpp(ty) => ty,
+                    other => return other,
+                };
+                let output = match translate_ty(pool, names, &args[1], emitted_types, boxed) {
+                    Translated::Cpp(ty) => ty,
+                    other => return other,
+                };
+                return Translated::Cpp(format!("::baml::stream<{partial}, {output}>"));
+            }
             // Type args occur only on generic-class instantiations, and
             // generic classes never emit this slice.
             if !args.is_empty() {
@@ -2317,11 +2490,14 @@ mod bytecode_escape_tests {
 
     #[test]
     fn generated_sdk_vendors_the_public_version_header() {
-        let version_header = BRIDGE_HEADERS
-            .iter()
-            .find(|(path, _)| *path == "include/baml/version.h");
-
-        assert!(version_header.is_some());
+        for header in ["media.h", "spec.h", "version.h"] {
+            assert!(
+                BRIDGE_HEADERS
+                    .iter()
+                    .any(|(path, _)| *path == format!("include/baml/{header}")),
+                "missing vendored public header {header}"
+            );
+        }
     }
 
     #[test]
@@ -2367,7 +2543,7 @@ mod declaration_safety_tests {
     #[test]
     fn required_and_return_types_can_name_later_classes() {
         let later = qualified("Later");
-        let later_ty = Ty::Class(later, vec![], TyAttr::default());
+        let later_ty = Ty::Class(later, Box::new([]), TyAttr::default());
         let pool = SymbolPool::new();
         let complete = BTreeSet::new();
 
@@ -2380,7 +2556,7 @@ mod declaration_safety_tests {
     #[test]
     fn optional_arg_storage_rejects_later_classes_in_every_container() {
         let later = qualified("Later");
-        let class = Ty::Class(later.clone(), vec![], TyAttr::default());
+        let class = Ty::Class(later.clone(), Box::new([]), TyAttr::default());
         let types = [
             class.clone(),
             Ty::List(Box::new(class.clone()), attr()),
@@ -2389,8 +2565,11 @@ mod declaration_safety_tests {
                 value: Box::new(class.clone()),
                 attr: attr(),
             },
-            Ty::Union(vec![class.clone(), Ty::String { attr: attr() }], attr()),
-            Ty::Union(vec![class, Ty::Null { attr: attr() }], attr()),
+            Ty::Union(
+                Box::new([class.clone(), Ty::String { attr: attr() }]),
+                attr(),
+            ),
+            Ty::Union(Box::new([class, Ty::Null { attr: attr() }]), attr()),
         ];
         let pool = SymbolPool::new();
         let mut complete = BTreeSet::new();

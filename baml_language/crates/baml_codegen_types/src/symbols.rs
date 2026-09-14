@@ -58,6 +58,12 @@ pub struct FunctionArgument {
     pub docstring: Option<String>,
     pub ty: super::Ty,
     pub default: Option<FunctionArgumentDefault>,
+    /// True for compiler-injected parameters (`on_event` on LLM functions and
+    /// their `@stream` companions; the injected `client` never reaches the
+    /// pool). Generators that cannot represent an injected parameter's type
+    /// may omit it — its default fills in at the VM boundary — but must never
+    /// drop a user-declared parameter, whatever its name or shape.
+    pub injected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -240,7 +246,7 @@ impl WalkAllUnions for Ty {
             | Ty::Type { .. }
             | Ty::Resource { .. }
             | Ty::PromptAst { .. }
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Never { .. }
             | Ty::Literal(..) => {}
             Ty::Class(_, args, _) => {
@@ -468,23 +474,23 @@ mod tests {
     #[test]
     fn union_walker_is_total_for_noncanonical_pools() {
         let nested = Ty::Union(
-            vec![
+            Box::new([
                 Ty::String {
                     attr: TyAttr::EMPTY,
                 },
                 Ty::Null {
                     attr: TyAttr::EMPTY,
                 },
-            ],
+            ]),
             TyAttr::EMPTY,
         );
         let outer = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: TyAttr::EMPTY,
                 },
                 nested.clone(),
-            ],
+            ]),
             TyAttr::EMPTY,
         );
         let symbol = alias(name("Nested"), outer.clone());

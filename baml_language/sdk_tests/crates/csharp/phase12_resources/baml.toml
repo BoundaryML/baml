@@ -1,7 +1,0 @@
-[package]
-name = "csharp-phase12-resources"
-
-[generator.csharp]
-output_type = "csharp"
-output_dir = "."
-naming_convention = "language"

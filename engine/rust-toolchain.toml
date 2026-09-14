@@ -1,0 +1,11 @@
+[toolchain]
+channel = "1.98.0"
+components = [
+  "rustfmt",
+  "clippy",
+  "rust-analyzer",
+  "rust-src",
+  "llvm-tools-preview",
+]
+profile = "default"
+targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-musl"]

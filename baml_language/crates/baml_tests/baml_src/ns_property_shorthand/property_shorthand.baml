@@ -35,14 +35,10 @@ function property_shorthand_class(
 }
 
 test "class properties use shorthand" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_class("safe", 2, "primary"),
-        PropertyShorthandRequest {
-            options: { "mode": "safe" },
-            retries: 2,
-            label: "primary",
-        },
-    ))
+        PropertyShorthandRequest { options: { "mode": "safe" }, retries: 2, label: "primary"},
+    )
 }
 
 function property_shorthand_map(count: int, retries: int) -> map<string, int> {
@@ -70,16 +66,10 @@ function property_shorthand_mixed(
 }
 
 test "shorthand mixes with explicit properties and nests" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_mixed("fast", 4, "nested"),
-        PropertyShorthandEnvelope {
-            request: PropertyShorthandRequest {
-                options: { "mode": "fast" },
-                retries: 5,
-                label: "nested",
-            },
-        },
-    ))
+        PropertyShorthandEnvelope { request: PropertyShorthandRequest { options: { "mode": "fast" }, retries: 5, label: "nested"}},
+    )
 }
 
 function property_shorthand_multi_nested(value: string) -> PropertyShorthandOuter {
@@ -89,14 +79,96 @@ function property_shorthand_multi_nested(value: string) -> PropertyShorthandOute
 }
 
 test "shorthand works across multiple nested classes" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_multi_nested("deep"),
-        PropertyShorthandOuter {
-            middle: PropertyShorthandMiddle {
-                leaf: PropertyShorthandLeaf {
-                    value: "deep",
-                },
-            },
+        PropertyShorthandOuter { middle: PropertyShorthandMiddle { leaf: PropertyShorthandLeaf { value: "deep"}}},
+    )
+}
+
+class PropertyShorthandBinder {
+    value: string,
+}
+
+class PropertyShorthandError {
+    message: string,
+}
+
+function property_shorthand_if_let(input: string?) -> string {
+    if let name: string = input {
+        let quoted: map<string, string> = { "name": name };
+        let shorthand: map<string, string> = { name };
+        (quoted.get("name") ?? "") + (shorthand.get("name") ?? "")
+    } else {
+        ""
+    }
+}
+
+function property_shorthand_match(input: string?) -> string {
+    match (input) {
+        let name: string => {
+            let shorthand: map<string, string> = { name };
+            shorthand.get("name") ?? ""
         },
-    ))
+        null => "",
+    }
+}
+
+function property_shorthand_for(names: string[]) -> string {
+    let output = "";
+    for (let name in names) {
+        let shorthand: map<string, string> = { name };
+        output = output + (shorthand.get("name") ?? "");
+    }
+    output
+}
+
+function property_shorthand_throw() -> string throws PropertyShorthandError {
+    throw PropertyShorthandError { message: "caught" }
+}
+
+function property_shorthand_catch() -> string {
+    property_shorthand_throw() catch (error) {
+        PropertyShorthandError => {
+            let shorthand = { error };
+            error.message
+        }
+    }
+}
+
+function property_shorthand_destructure() -> string {
+    let PropertyShorthandBinder { value } = PropertyShorthandBinder { value: "destructured" };
+    let shorthand: map<string, string> = { value };
+    shorthand.get("value") ?? ""
+}
+
+function property_shorthand_nested_block() -> string {
+    {
+        let name = "nested";
+        let shorthand: map<string, string> = { name };
+        shorthand.get("name") ?? ""
+    }
+}
+
+function property_shorthand_class_if_let(input: string?) -> string {
+    if let value: string = input {
+        PropertyShorthandBinder { value }.value
+    } else {
+        ""
+    }
+}
+
+test "if let binders work in explicit and shorthand map entries" {
+    assert.equal(property_shorthand_if_let("if-let"), "if-letif-let")
+}
+
+test "shorthand uses every lexical binder scope" {
+    assert.equal(property_shorthand_match("match"), "match");
+    assert.equal(property_shorthand_for(["for", "-binder"]), "for-binder");
+    assert.equal(property_shorthand_catch(), "caught");
+    assert.equal(property_shorthand_destructure(), "destructured");
+    assert.equal(property_shorthand_nested_block(), "nested")
+}
+
+test "class shorthand sees if let binders" {
+    assert.equal(property_shorthand_class_if_let("class"), "class")
 }

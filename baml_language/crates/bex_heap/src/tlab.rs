@@ -1,12 +1,8 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
-//! Each VM gets its own TLAB, which is a reserved chunk of the heap.
-//! Allocation within a TLAB is a simple bump-pointer increment - no
-//! locks, no atomics, no contention.
-//!
-//! When a TLAB is exhausted, the VM requests a new chunk from the heap.
-//! This is the only point where synchronization is needed (an atomic
-//! fetch_add on the heap's next_chunk counter).
+//! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
+//! to 1024 as the VM allocates. Only reserved object slots spend the GC budget;
+//! backing storage is excluded. Ordinary yields preserve unused capacity.
 
 use std::sync::Arc;
 
@@ -54,10 +50,9 @@ impl TlabChunk {
 ///
 /// # Performance
 ///
-/// - **Fast path**: `alloc()` is a single pointer increment + write
-/// - **No atomics**: Each VM owns its TLAB exclusively
-/// - **No locks**: Direct memory access via `UnsafeCell`
-/// - **Refill cost**: One `AtomicUsize::fetch_add` per ~1024 allocations
+/// Object placement uses an exclusive bump pointer. Reservations update the shared
+/// allocation budget; no collection runs here.
+/// Refill reserves another region from the heap.
 ///
 /// # Example
 ///
@@ -67,7 +62,7 @@ impl TlabChunk {
 ///
 /// // Fast allocation - just bumps pointer
 /// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(baml_type::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
+/// let ptr2 = tlab.alloc_array(bex_vm_types::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
 ///
 /// // When chunk exhausted, refill gets a new region
 /// for _ in 0..2000 {
@@ -83,6 +78,8 @@ pub struct Tlab {
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
+
+    next_chunk_size: usize,
 }
 
 impl Tlab {
@@ -102,12 +99,9 @@ impl Tlab {
     /// TLAB mechanics without the permit infrastructure (those tests
     /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
-        let chunk = heap.alloc_tlab_chunk();
-        Self {
-            alloc_ptr: chunk.start,
-            alloc_limit: chunk.end,
-            heap,
-        }
+        let mut tlab = Self::new_empty(heap);
+        tlab.refill();
+        tlab
     }
 
     /// Create a TLAB without allocating an initial chunk.
@@ -121,6 +115,11 @@ impl Tlab {
         Self {
             alloc_ptr: 0,
             alloc_limit: 0,
+
+            // Zero marks the first reservation, so the first size is repeated:
+            // 32, 32, 64, ... gives aligned cumulative reservations of
+            // 32, 64, 128, ... rather than 32, 96, 224, ... .
+            next_chunk_size: 0,
             heap,
         }
     }
@@ -175,7 +174,7 @@ impl Tlab {
     #[inline]
     pub fn alloc_array(
         &mut self,
-        element_ty: baml_type::RealizedTy,
+        element_ty: bex_vm_types::RealizedTy,
         values: Vec<Value>,
     ) -> HeapPtr {
         self.alloc(Object::Array(Array::new(element_ty, values)))
@@ -185,8 +184,8 @@ impl Tlab {
     #[inline]
     pub fn alloc_map(
         &mut self,
-        key_ty: baml_type::RealizedTy,
-        value_ty: baml_type::RealizedTy,
+        key_ty: bex_vm_types::RealizedTy,
+        value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
         self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
@@ -205,7 +204,7 @@ impl Tlab {
     pub fn alloc_instance_with_type_args(
         &mut self,
         class: HeapPtr,
-        type_args: Box<[baml_type::RealizedTy]>,
+        type_args: Box<[bex_vm_types::RealizedTy]>,
         fields: Vec<Value>,
     ) -> HeapPtr {
         self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
@@ -236,16 +235,13 @@ impl Tlab {
         self.alloc(Object::RustData(data))
     }
 
-    /// Allocate a collector object on the heap.
-    #[inline]
-    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.alloc(Object::Collector(collector))
-    }
-
     /// Allocate a type descriptor object on the heap.
+    ///
+    /// Static materialization inside the VM should go through
+    /// `BexVm::alloc_static_type`.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.alloc(Object::Type(Box::new(ty)))
+    pub fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.alloc(Object::Type(Box::new(tv)))
     }
 
     /// Allocate a future object on the heap.
@@ -263,7 +259,17 @@ impl Tlab {
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
-        let chunk = self.heap.alloc_tlab_chunk();
+        let size = if self.next_chunk_size == 0 {
+            self.heap.tlab_size()
+        } else {
+            self.next_chunk_size
+        };
+        let chunk = self.heap.alloc_tlab_chunk_sized(size);
+        self.next_chunk_size = if self.next_chunk_size == 0 {
+            size
+        } else {
+            size.saturating_mul(2).min(self.heap.max_tlab_size)
+        };
         self.alloc_ptr = chunk.start;
         self.alloc_limit = chunk.end;
     }
@@ -353,14 +359,14 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_string(s)
     }
 
-    fn alloc_array(&mut self, element_ty: baml_type::RealizedTy, values: Vec<Value>) -> HeapPtr {
+    fn alloc_array(&mut self, element_ty: bex_vm_types::RealizedTy, values: Vec<Value>) -> HeapPtr {
         self.tlab_mut().alloc_array(element_ty, values)
     }
 
     fn alloc_map(
         &mut self,
-        key_ty: baml_type::RealizedTy,
-        value_ty: baml_type::RealizedTy,
+        key_ty: bex_vm_types::RealizedTy,
+        value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
         self.tlab_mut().alloc_map(key_ty, value_ty, values)
@@ -386,12 +392,8 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_rust_data(data)
     }
 
-    fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.tlab_mut().alloc_collector(collector)
-    }
-
-    fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.tlab_mut().alloc_type(ty)
+    fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.tlab_mut().alloc_type(tv)
     }
 
     fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
@@ -546,7 +548,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let values = vec![Value::int(1), Value::int(2), Value::int(3)];
-        let ptr = tlab.alloc_array(baml_type::RealizedTy::int(), values);
+        let ptr = tlab.alloc_array(bex_vm_types::RealizedTy::int(), values);
 
         unsafe {
             match ptr.get() {
@@ -567,8 +569,8 @@ mod tests {
         let mut map = IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::int(42));
         let ptr = tlab.alloc_map(
-            baml_type::RealizedTy::string(),
-            baml_type::RealizedTy::int(),
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::int(),
             map,
         );
 
@@ -592,7 +594,9 @@ mod tests {
 
         // Simulate a class at index 0
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
+            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("TestClass"),
+            )),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
@@ -604,7 +608,10 @@ mod tests {
                     }),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
+                    runtime_type: None,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -616,15 +623,21 @@ mod tests {
                     }),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
+                    runtime_type: None,
                 },
             ],
             description: None,
             alias: None,
-            type_tag: 100,
+            docstring: None,
+            other: Default::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(100),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         // Allocate an instance of that class
@@ -652,30 +665,42 @@ mod tests {
 
         // Simulate an enum at index 0
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: baml_type::TypeName::local(baml_type::Name::new("Color")),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
+            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("Color"),
+            )),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Green".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Blue".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         // Allocate a variant (Color::Green = index 1)

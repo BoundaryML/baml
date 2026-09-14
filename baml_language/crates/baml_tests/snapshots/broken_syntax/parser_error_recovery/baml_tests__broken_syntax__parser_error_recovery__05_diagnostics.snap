@@ -86,6 +86,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0010
 
   × unexpected token
+    ╭─[invalid_syntax.baml:11:9]
+ 11 │   client: GPT4
+    ·         ┬
+    ·         ╰── expected `expression`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
    ╭─[missing_braces.baml:5:1]
  5 │ class Another {  // Should still parse this class
    · ──┬──

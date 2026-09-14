@@ -15,14 +15,14 @@ use rustc_hash::FxHashMap;
 use crate::{
     ids::{
         ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker,
-        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
-        TypeAliasMarker, hash_impl_key, hash_name,
+        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
+        hash_impl_key, hash_name,
     },
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
-        InterfaceMethodSig, ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
-        TemplateString, Test, TypeAlias,
+        ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString,
+        TypeAlias,
     },
 };
 
@@ -67,6 +67,7 @@ impl ItemTreeBuilder {
                 type_expr: p.type_expr.clone(),
                 default: p.default.map(|expr| DefaultExprRef { function: id, expr }),
                 span: p.span,
+                name_span: p.name_span,
             })
             .collect();
         self.tree.functions.insert(
@@ -195,15 +196,16 @@ impl ItemTreeBuilder {
         match &block.subject {
             ImplSubject::InClass { class, .. } => {
                 self.tree.class_to_impls.entry(*class).or_default().push(id);
-                // No owner recording: in-body impl methods are flattened into
-                // `Class::methods`, so `set_class_methods` owns them.
             }
             ImplSubject::Free { .. } => {
                 self.tree.free_impls.push(id);
-                for method in &block.methods {
-                    self.record_method_owner(*method, MethodOwner::FreeImpl(id));
-                }
             }
+        }
+        // A method belongs to its impl block regardless of where the block
+        // is written — the in-class spelling is pure syntax (TYPE_SYSTEM.md:
+        // "the implementation should use a unified path for both forms").
+        for method in &block.methods {
+            self.record_method_owner(*method, MethodOwner::Impl(id));
         }
         self.tree.impls.insert(id, block);
         id
@@ -238,15 +240,60 @@ impl ItemTreeBuilder {
         id
     }
 
+    /// Allocate a REQUIRED (bodyless) interface method as an ordinary
+    /// `Function` item - the rust-analyzer shape: one item kind for every
+    /// method, `body: None` the only difference. The signature carries no
+    /// defaults arena and default metadata; interface signatures declare
+    /// `throws` explicitly (spec rule 1), so nothing here needs a body.
+    pub fn alloc_function_signature(
+        &mut self,
+        m: &ast::MethodSigDef,
+    ) -> LocalItemId<FunctionMarker> {
+        let id = self.alloc_id(ItemKind::Function, &m.name);
+        self.source_map.function_name_spans.insert(id, m.name_span);
+        let params = m
+            .params
+            .iter()
+            .map(|p| FunctionParam {
+                name: p.name.clone(),
+                type_expr: p.type_expr.clone(),
+                default: None,
+                span: p.span,
+                name_span: p.name_span,
+            })
+            .collect();
+        self.tree.functions.insert(
+            id,
+            Function {
+                name: m.name.clone(),
+                generic_params: m.generic_params.clone(),
+                params,
+                defaults: m.defaults.clone(),
+                return_type: m.return_type.clone(),
+                throws: m.throws.clone(),
+                body: None,
+                declarative_meta: None,
+                metadata: ast::FunctionMetadata {
+                    origin: ast::FunctionOrigin::UserDefined,
+                    is_language_internal: false,
+                },
+                docstring: m.docstring.clone(),
+                is_tagged_template_tag: false,
+                span: m.span,
+            },
+        );
+        id
+    }
+
     /// Allocate an interface (BEP-044) in the `ItemTree`.
     ///
-    /// `default_method_ids` are the `FunctionMarker` ids for any default
-    /// methods in the interface — those should be allocated separately via
-    /// `alloc_function` before this is called.
+    /// `method_ids` are the `FunctionMarker` ids for EVERY method -
+    /// defaults allocated via `alloc_function`, required signatures via
+    /// `alloc_function_signature` - in declaration-list order.
     pub fn alloc_interface(
         &mut self,
         i: &ast::InterfaceDef,
-        default_method_ids: Vec<LocalItemId<FunctionMarker>>,
+        method_ids: Vec<LocalItemId<FunctionMarker>>,
     ) -> LocalItemId<InterfaceMarker> {
         let id = self.alloc_id(ItemKind::Interface, &i.name);
         self.source_map.interface_name_spans.insert(id, i.name_span);
@@ -256,7 +303,7 @@ impl ItemTreeBuilder {
         self.source_map
             .interface_method_spans
             .insert(id, i.required_methods.iter().map(|m| m.name_span).collect());
-        for method in &default_method_ids {
+        for method in &method_ids {
             self.record_method_owner(*method, MethodOwner::Interface(id));
         }
         let fields = i
@@ -269,29 +316,6 @@ impl ItemTreeBuilder {
                 docstring: f.docstring.clone(),
             })
             .collect();
-        let required_methods = i
-            .required_methods
-            .iter()
-            .map(|m| InterfaceMethodSig {
-                name: m.name.clone(),
-                generic_params: m.generic_params.clone(),
-                params: m
-                    .params
-                    .iter()
-                    .map(|p| FunctionParam {
-                        name: p.name.clone(),
-                        type_expr: p.type_expr.clone(),
-                        default: None,
-                        span: p.span,
-                    })
-                    .collect(),
-                return_type: m.return_type.clone(),
-                throws: m.throws.clone(),
-                attributes: m.attributes.iter().map(Attribute::from).collect(),
-                docstring: m.docstring.clone(),
-                span: m.span,
-            })
-            .collect();
         self.tree.interfaces.insert(
             id,
             Interface {
@@ -300,8 +324,7 @@ impl ItemTreeBuilder {
                 requires: i.requires.clone(),
                 fields,
                 associated_types: i.associated_types.clone(),
-                default_methods: default_method_ids,
-                required_methods,
+                methods: method_ids,
                 attributes: i.attributes.iter().map(Attribute::from).collect(),
                 docstring: i.docstring.clone(),
                 span: i.span,
@@ -365,26 +388,6 @@ impl ItemTreeBuilder {
         id
     }
 
-    pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
-        let id = self.alloc_id(ItemKind::Test, &t.name);
-        self.source_map.test_spans.insert(
-            id,
-            ItemSpans {
-                span: t.span,
-                name_span: t.name_span,
-            },
-        );
-        self.tree.tests.insert(
-            id,
-            Test {
-                name: t.name.clone(),
-                function_refs: t.function_refs.clone(),
-                args: t.args.clone(),
-            },
-        );
-        id
-    }
-
     pub fn alloc_template_string(
         &mut self,
         ts: &ast::TemplateStringDef,
@@ -401,15 +404,14 @@ impl ItemTreeBuilder {
                 type_expr: p.type_expr.clone(),
                 default: None,
                 span: p.span,
+                name_span: p.name_span,
             })
             .collect();
-        let body = ts.body.as_ref().map(|b| b.text.clone());
         self.tree.template_strings.insert(
             id,
             TemplateString {
                 name: ts.name.clone(),
                 params,
-                body,
                 span: ts.span,
             },
         );

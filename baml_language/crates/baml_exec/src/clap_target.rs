@@ -464,7 +464,11 @@ mod tests {
         }
     }
     fn ty_class(name: &str) -> RuntimeTy {
-        RuntimeTy::Class(TypeName::local(name.into()), vec![], TyAttr::default())
+        RuntimeTy::Class(
+            TypeName::local(name.into()),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     fn func_info(

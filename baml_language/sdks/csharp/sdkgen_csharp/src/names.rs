@@ -400,12 +400,8 @@ pub(crate) fn callable_source_identity(identity: &CallableIdentity) -> String {
     let family = identity.family_name.as_str();
     match identity.variant {
         CallableVariant::Execute => family.to_string(),
-        CallableVariant::RenderPrompt => format!("{family}_render_prompt"),
-        CallableVariant::BuildRequest => format!("{family}_build_request"),
-        CallableVariant::BuildRequestStream => format!("{family}_build_stream_request"),
+        CallableVariant::Spec => format!("{family}_spec"),
         CallableVariant::Stream => format!("{family}_stream"),
-        CallableVariant::Parse => format!("{family}_parse_response"),
-        CallableVariant::ParseStream => format!("{family}_parse_stream_response"),
     }
 }
 
@@ -964,17 +960,14 @@ mod tests {
 
         let identity = CallableIdentity {
             family_name: BaseName::new("classify_text"),
-            wire_name: BaseName::new("classify_text$parse_stream"),
-            variant: CallableVariant::ParseStream,
+            wire_name: BaseName::new("classify_text@stream"),
+            variant: CallableVariant::Stream,
             receiver: None,
         };
-        assert_eq!(
-            callable_source_identity(&identity),
-            "classify_text_parse_stream_response"
-        );
+        assert_eq!(callable_source_identity(&identity), "classify_text_stream");
         assert_eq!(
             to_pascal_case(&callable_source_identity(&identity)),
-            "ClassifyTextParseStreamResponse"
+            "ClassifyTextStream"
         );
         assert_eq!(type_fqn.symbol_name().name().as_str(), "invoice");
     }

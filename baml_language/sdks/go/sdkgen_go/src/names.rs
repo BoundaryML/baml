@@ -18,6 +18,8 @@ use crate::{
     types::{GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
 };
 
+const AI_PROMPT_FQN: &str = "ai.Prompt";
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
     symbol: Name,
@@ -58,7 +60,9 @@ pub(crate) enum GoNameKind {
     MethodOptionType,
     FunctionOptionSetter,
     MethodOptionSetter,
+    StreamControlOptionSetter,
     Class,
+    InterfaceToken,
     Enum,
     EnumVariant,
     TypeAlias,
@@ -217,7 +221,9 @@ impl NameRequest {
             | GoNameKind::FunctionOptionSetter
             | GoNameKind::MethodOptionType
             | GoNameKind::MethodOptionSetter
+            | GoNameKind::StreamControlOptionSetter
             | GoNameKind::Class
+            | GoNameKind::InterfaceToken
             | GoNameKind::Enum
             | GoNameKind::EnumVariant
             | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.package().clone()),
@@ -376,6 +382,7 @@ impl GoNames {
         pool: &SymbolPool,
         packages: &GoPackages,
         projection: &GoTypeProjection<'_>,
+        interface_tokens: &BTreeSet<Name>,
     ) -> Self {
         let mut requests = Vec::new();
         let mut wire_overrides = HashMap::new();
@@ -401,6 +408,8 @@ impl GoNames {
                     .arguments
                     .iter()
                     .any(|argument| argument.default.is_some())
+                    || function.name.as_str().ends_with("@stream")
+                    || !function.generic_params.is_empty()
                 {
                     requests.push(NameRequest::new(
                         fqn.clone(),
@@ -428,6 +437,15 @@ impl GoNames {
                             )
                         }),
                 );
+                if function.name.as_str().ends_with("@stream") {
+                    requests.extend(["client", "on_event"].map(|control| {
+                        NameRequest::new(
+                            fqn.member(&baml_base::Name::new(control)),
+                            GoNameKind::StreamControlOptionSetter,
+                            GoVisibility::Exported,
+                        )
+                    }));
+                }
             }
             if let Symbol::Class(class) = symbol {
                 requests.extend(class.generic_params.iter().map(|parameter| {
@@ -488,6 +506,9 @@ impl GoNames {
                         .arguments
                         .iter()
                         .any(|argument| argument.default.is_some())
+                        || method.name.as_str().ends_with("@stream")
+                        || !class.generic_params.is_empty()
+                        || !method.generic_params.is_empty()
                     {
                         requests.push(NameRequest::new(
                             method_fqn.clone(),
@@ -515,6 +536,15 @@ impl GoNames {
                                 )
                             }),
                     );
+                    if method.name.as_str().ends_with("@stream") {
+                        requests.extend(["client", "on_event"].map(|control| {
+                            NameRequest::new(
+                                method_fqn.member(&baml_base::Name::new(control)),
+                                GoNameKind::StreamControlOptionSetter,
+                                GoVisibility::Exported,
+                            )
+                        }));
+                    }
                 }
             }
             if let Symbol::Enum(enum_) = symbol {
@@ -531,6 +561,13 @@ impl GoNames {
                     requests.push(request);
                 }
             }
+        }
+        for name in interface_tokens {
+            requests.push(NameRequest::new(
+                BamlFqn::symbol(name),
+                GoNameKind::InterfaceToken,
+                GoVisibility::Exported,
+            ));
         }
         let generated_package_aliases = packages
             .iter()
@@ -638,7 +675,9 @@ impl GoNames {
                 requests.sort();
                 let collides = requests.len() > 1;
                 for request in requests {
-                    let candidate = if collides {
+                    let canonical_runtime_prompt = matches!(request.kind, GoNameKind::Class)
+                        && request.fqn.symbol.to_string() == AI_PROMPT_FQN;
+                    let candidate = if collides && !canonical_runtime_prompt {
                         base.with_suffix(&short_hash(request))
                     } else {
                         base.clone()
@@ -897,6 +936,14 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Json => "Json".into(),
         GoTy::ReflectedType => "Type".into(),
         GoTy::RustType => "RustType".into(),
+        GoTy::FunctionSpec { output } => {
+            format!("FunctionSpec{}", union_type_component(output, names))
+        }
+        GoTy::Stream { partial, final_ } => format!(
+            "Stream{}{}",
+            union_type_component(partial, names),
+            union_type_component(final_, names)
+        ),
         GoTy::TypeVar(name) => format!("TypeVar{}", name.as_str()),
         GoTy::Literal(literal) => literal_component(literal),
         GoTy::Class(name, arguments) => {
@@ -1004,6 +1051,15 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         GoTy::Json => hash.byte(18),
         GoTy::ReflectedType => hash.byte(19),
         GoTy::RustType => hash.byte(20),
+        GoTy::FunctionSpec { output } => {
+            hash.byte(23);
+            hash_go_ty(hash, output);
+        }
+        GoTy::Stream { partial, final_ } => {
+            hash.byte(24);
+            hash_go_ty(hash, partial);
+            hash_go_ty(hash, final_);
+        }
         GoTy::TypeVar(name) => {
             hash.byte(21);
             hash.component(name.as_str());
@@ -1128,7 +1184,11 @@ fn literal_component(literal: &GoLiteral) -> String {
 fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
     let mut value = String::new();
     match request.kind {
-        GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
+        GoNameKind::Function
+        | GoNameKind::Class
+        | GoNameKind::InterfaceToken
+        | GoNameKind::Enum
+        | GoNameKind::TypeAlias => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
@@ -1181,6 +1241,15 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
                 push_upper_component(&mut value, member);
             }
         }
+        GoNameKind::StreamControlOptionSetter => {
+            for segment in request.fqn.symbol.namespace() {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, request.fqn.symbol.name());
+            for member in &request.fqn.members {
+                push_upper_component(&mut value, member);
+            }
+        }
         GoNameKind::EnumVariant => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
@@ -1220,6 +1289,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         GoNameKind::Function
         | GoNameKind::FunctionOptionType
         | GoNameKind::Class
+        | GoNameKind::InterfaceToken
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
         GoNameKind::Method | GoNameKind::MethodHelper | GoNameKind::MethodOptionType => {
@@ -1230,6 +1300,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         }
         GoNameKind::FunctionOptionSetter
         | GoNameKind::MethodOptionSetter
+        | GoNameKind::StreamControlOptionSetter
         | GoNameKind::EnumVariant
         | GoNameKind::ClassTypeParameter
         | GoNameKind::CallableTypeParameter
@@ -1280,6 +1351,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::Method => 9,
         GoNameKind::MethodHelper => 14,
         GoNameKind::Class => 1,
+        GoNameKind::InterfaceToken => 16,
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
         GoNameKind::Parameter => 4,
@@ -1292,6 +1364,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::EnumVariant => 8,
         GoNameKind::MethodOptionType => 10,
         GoNameKind::MethodOptionSetter => 11,
+        GoNameKind::StreamControlOptionSetter => 17,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
@@ -1438,8 +1511,8 @@ mod tests {
 
     #[test]
     fn companion_names_preserve_wire_identity_and_share_package_collision_scope() {
-        let companion = symbol(&["lorem"], "extract_resume$build_request");
-        let user_function = symbol(&["lorem"], "extract_resume_build_request");
+        let companion = symbol(&["lorem"], "extract_resume@spec");
+        let user_function = symbol(&["lorem"], "extract_resume_spec");
         let names = GoNames::new(
             &generated_package(),
             vec![
@@ -1461,22 +1534,22 @@ mod tests {
         let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
 
         assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequest_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequest_"));
+        assert!(identifier(companion_name).starts_with("LoremExtractResumeSpec_"));
+        assert!(identifier(user_name).starts_with("LoremExtractResumeSpec_"));
         assert_eq!(
             companion_name.wire(),
             &BamlWireName::Symbol(companion.symbol.clone())
         );
         assert_eq!(
             companion_name.wire().to_string(),
-            "user.lorem.extract_resume$build_request"
+            "user.lorem.extract_resume@spec"
         );
     }
 
     #[test]
-    fn parse_companion_preserves_wire_identity_and_collides_canonically() {
-        let companion = symbol(&["lorem"], "extract_resume$parse");
-        let user_function = symbol(&["lorem"], "extract_resume_parse");
+    fn stream_companion_preserves_wire_identity_and_collides_canonically() {
+        let companion = symbol(&["lorem"], "extract_resume@stream");
+        let user_function = symbol(&["lorem"], "extract_resume_stream");
         let names = GoNames::new(
             &generated_package(),
             vec![
@@ -1498,52 +1571,15 @@ mod tests {
         let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
 
         assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeParse_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeParse_"));
+        assert!(identifier(companion_name).starts_with("LoremExtractResumeStream_"));
+        assert!(identifier(user_name).starts_with("LoremExtractResumeStream_"));
         assert_eq!(
             companion_name.wire(),
             &BamlWireName::Symbol(companion.symbol.clone())
         );
         assert_eq!(
             companion_name.wire().to_string(),
-            "user.lorem.extract_resume$parse"
-        );
-    }
-
-    #[test]
-    fn build_request_stream_companion_preserves_wire_identity_and_collides_canonically() {
-        let companion = symbol(&["lorem"], "extract_resume$build_request_stream");
-        let user_function = symbol(&["lorem"], "extract_resume_build_request_stream");
-        let names = GoNames::new(
-            &generated_package(),
-            vec![
-                request(
-                    companion.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-                request(
-                    user_function.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-            ],
-        );
-
-        let companion_name =
-            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
-        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
-
-        assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequestStream_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequestStream_"));
-        assert_eq!(
-            companion_name.wire(),
-            &BamlWireName::Symbol(companion.symbol.clone())
-        );
-        assert_eq!(
-            companion_name.wire().to_string(),
-            "user.lorem.extract_resume$build_request_stream"
+            "user.lorem.extract_resume@stream"
         );
     }
 

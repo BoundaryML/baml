@@ -4,11 +4,11 @@ mod trivia_classifier;
 
 use ast::FromCST as _;
 use baml_db::{
+    ProjectDatabase, SourceRootSpec,
     baml_compiler_diagnostics::ParseError,
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
-use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
@@ -22,9 +22,26 @@ mod formatter_scenario_tests;
 /// # Errors
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
-    let mut db = ProjectDatabase::new();
-    let source_file = db.add_file("file.baml", source);
+    let (db, source_file) = single_file_db("file.baml", source);
     format_salsa(&db, source_file, *options)
+}
+
+/// A throwaway database holding exactly one workspace file.
+///
+/// Formatting is purely syntactic (lexer + parser over one file), so the
+/// database carries no stdlib — only the workspace root the file must belong
+/// to. The root's virtual path never touches the filesystem.
+pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml_db::SourceFile) {
+    let mut db = ProjectDatabase::new();
+    let root = db
+        .add_source_root(SourceRootSpec::new(
+            "<fmt>",
+            baml_db::SourceRootKind::Workspace,
+        ))
+        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    let file =
+        db.add_or_update_file_in(root, &std::path::PathBuf::from("<fmt>").join(name), source);
+    (db, file)
 }
 
 #[salsa::tracked]
@@ -134,6 +151,543 @@ mod format_options_tests {
 }
 
 #[cfg(test)]
+mod redundant_paren_tests {
+    use super::*;
+
+    fn fmt(source: &str) -> String {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("source should format");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        formatted
+    }
+
+    /// B-1562: a left-nested fully parenthesized `&&` chain used to print as
+    /// a staircase, one indent level per redundant paren. The parens peel and
+    /// the chain flattens like an unparenthesized one; the mixed-precedence
+    /// `(x != null)` clause keeps its clarity parens.
+    #[test]
+    fn test_left_nested_logical_parens_flatten() {
+        let source = concat!(
+            "test \"doc\" {\n",
+            "    let output_document: string? = \"doc\";\n",
+            "    assert.is_true(((((output_document != null) && (output_document ?? \"\").includes(\"Shadow\")) && (output_document ?? \"\").includes(\"Amlodipine\")) && (output_document ?? \"\").includes(\"Semintra\")) && (output_document ?? \"\").includes(\"11/04/2025\"))\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (output_document != null)\n",
+                "            && (output_document ?? \"\").includes(\"Shadow\")\n",
+                "            && (output_document ?? \"\").includes(\"Amlodipine\")\n",
+                "            && (output_document ?? \"\").includes(\"Semintra\")\n",
+                "            && (output_document ?? \"\").includes(\"11/04/2025\"),\n",
+                "    )",
+            )),
+            "chain flattens to one indent level: {formatted}"
+        );
+        assert!(
+            !formatted.contains("(("),
+            "no nested paren staircase remains: {formatted}"
+        );
+    }
+
+    /// The verbatim staircase from the B-1562 screenshot: the old formatter's
+    /// own output for a generated medical-document test, six nested parens
+    /// deep with backtick strings and a `reflect.class.get_field` binding.
+    /// Feeding it back in must collapse to the flat chain.
+    #[test]
+    fn test_b1562_original_example() {
+        let source = concat!(
+            "class MedicalDoc {\n",
+            "    document: string?,\n",
+            "    follow_up: string?,\n",
+            "}\n",
+            "\n",
+            "test \"medical_doc\" {\n",
+            "    let result = MedicalDoc { document: `Shadow`, follow_up: null };\n",
+            "    let output_document = reflect.class.get_field<string?>(result, \"document\");\n",
+            "    let output_follow_up = reflect.class.get_field<string?>(result, \"follow_up\");\n",
+            "\n",
+            "    assert.is_true(\n",
+            "        (\n",
+            "            (\n",
+            "                (\n",
+            "                    (\n",
+            "                        (\n",
+            "                            (\n",
+            "                                (output_document != null)\n",
+            "                                    && (output_document ?? \"\").includes(`Shadow`)\n",
+            "                            )\n",
+            "                                && (output_document ?? \"\").includes(`Amlodipine`)\n",
+            "                        )\n",
+            "                            && (output_document ?? \"\").includes(`Semintra`)\n",
+            "                    )\n",
+            "                        && (output_document ?? \"\").includes(`BUN`)\n",
+            "                )\n",
+            "                    && (output_document ?? \"\").includes(`42 mg/dL`)\n",
+            "            )\n",
+            "                && (output_document ?? \"\").includes(`11/04/2025`)\n",
+            "        ),\n",
+            "    )\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (output_document != null)\n",
+                "            && (output_document ?? \"\").includes(`Shadow`)\n",
+                "            && (output_document ?? \"\").includes(`Amlodipine`)\n",
+                "            && (output_document ?? \"\").includes(`Semintra`)\n",
+                "            && (output_document ?? \"\").includes(`BUN`)\n",
+                "            && (output_document ?? \"\").includes(`42 mg/dL`)\n",
+                "            && (output_document ?? \"\").includes(`11/04/2025`),\n",
+                "    )",
+            )),
+            "ticket staircase collapses to a flat chain: {formatted}"
+        );
+    }
+
+    #[test]
+    fn test_same_row_left_parens_strip_single_line() {
+        let formatted = fmt("function f(a: int, b: int, c: int) -> int {\n    ((a + b)) - c\n}\n");
+        assert!(formatted.contains("    a + b - c\n"), "{formatted}");
+        let formatted =
+            fmt("function f(a: bool, b: bool, c: bool) -> bool {\n    (a && b) && c\n}\n");
+        assert!(formatted.contains("    a && b && c\n"), "{formatted}");
+    }
+
+    /// Mixed-precedence parens are redundant to the parser but carry clarity
+    /// for the reader; they stay.
+    #[test]
+    fn test_clarity_parens_are_kept() {
+        for expr in ["(a * b) + c", "(a && b) || c", "(a != null) && b"] {
+            let source =
+                std::format!("function f(a: bool, b: bool, c: bool) -> bool {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// Right-operand parens re-associate if removed; they always stay.
+    #[test]
+    fn test_right_operand_parens_are_kept() {
+        for expr in ["a - (b - c)", "a && (b && c)"] {
+            let source =
+                std::format!("function f(a: int, b: int, c: int) -> int {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A transparent paren wrapping a whole call argument carries nothing:
+    /// the call's own parens already delimit it.
+    #[test]
+    fn test_call_argument_parens_strip() {
+        let formatted =
+            fmt("function f(x: bool) -> null {\n    assert.is_true((x));\n    null\n}\n");
+        assert!(formatted.contains("assert.is_true(x);"), "{formatted}");
+        let formatted =
+            fmt("function f(x: bool) -> null {\n    assert.is_true(((x && x)));\n    null\n}\n");
+        assert!(formatted.contains("assert.is_true(x && x);"), "{formatted}");
+    }
+
+    /// Parens with a comment on their boundary are not transparent; peeling
+    /// them would drop or move the comment, so they stay.
+    #[test]
+    fn test_comment_bearing_parens_are_kept() {
+        let formatted = fmt(
+            "function f(a: bool, b: bool, c: bool) -> bool {\n    (a && b /* keep */) && c\n}\n",
+        );
+        assert!(formatted.contains("(a && b/* keep */) && c"), "{formatted}");
+    }
+
+    /// B-1562 follow-up: parens wrapping a *receiver* in a postfix chain.
+    /// `(xs).join(x)` and `((xs).join(x)).includes(y)` are pure noise — the
+    /// receiver already binds tighter than `.`. Each one used to terminate
+    /// the chain walk in `PrintChain::new`, producing one indent level per
+    /// paren.
+    #[test]
+    fn test_postfix_receiver_parens_strip() {
+        let formatted =
+            fmt("function f(xs: string[]) -> bool {\n    ((xs).join(` `)).includes(`a`)\n}\n");
+        assert!(
+            formatted.contains("    xs.join(` `).includes(`a`)\n"),
+            "{formatted}"
+        );
+        let formatted =
+            fmt("function f(xs: string[]) -> string {\n    (xs.at(0)).to_string()\n}\n");
+        assert!(
+            formatted.contains("    xs.at(0).to_string()\n"),
+            "{formatted}"
+        );
+        let formatted = fmt("function f(xs: string[]) -> int {\n    (xs).length()\n}\n");
+        assert!(formatted.contains("    xs.length()\n"), "{formatted}");
+    }
+
+    /// The single-line index path measured and printed the raw base, so
+    /// `(xs)[0]` kept its parens inline while the multiline path stripped
+    /// them. Optional receivers had the mirror problem: `PrintChain` peeled
+    /// them while `single_line_width` still counted the parens, over-measuring
+    /// by two per paren and wrapping earlier than needed.
+    #[test]
+    fn test_index_and_optional_receiver_parens_strip() {
+        let formatted = fmt("function f(xs: string[]) -> string {\n    (xs)[0]\n}\n");
+        assert!(formatted.contains("    xs[0]\n"), "{formatted}");
+        let formatted = fmt("function f(o: string?) -> int? {\n    ((o))?.length\n}\n");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+        let formatted = fmt("function f(o: string[]?) -> string? {\n    ((o))?.[0]\n}\n");
+        assert!(formatted.contains("    o?.[0]\n"), "{formatted}");
+        // a looser-binding index receiver still collapses to exactly one paren
+        let formatted = fmt("function f(a: string, b: string) -> string {\n    ((a ?? b))[0]\n}\n");
+        assert!(formatted.contains("    (a ?? b)[0]\n"), "{formatted}");
+    }
+
+    /// Pins the optional-receiver *width* accounting, not just the printed
+    /// text: at width 15, `o?.length` (13 cols with indent) fits but the raw
+    /// `((o))?.length` (17 cols) does not. If `single_line_width` reverts to
+    /// counting the un-peeled base, the expression wraps and this fails even
+    /// though the wide-width tests above still pass.
+    #[test]
+    fn test_optional_receiver_width_counts_effective_base() {
+        let options = FormatOptions {
+            line_width: 15,
+            ..FormatOptions::default()
+        };
+        let source = "function f(o: string?) -> int? {\n    ((o))?.length\n}\n";
+        let formatted = format(source, &options).expect("source should format");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(formatted.contains("    o?.length\n"), "{formatted}");
+    }
+
+    /// The literal restriction exists only to stop `(1).to_string()` from
+    /// re-lexing its `.` into a float. No `.` follows a unary operand, so
+    /// literals peel there — but a literal that *is* a receiver still keeps
+    /// its parens.
+    #[test]
+    fn test_unary_operand_literal_parens_strip() {
+        let formatted = fmt("function f() -> int {\n    -((1))\n}\n");
+        assert!(formatted.contains("    -1\n"), "{formatted}");
+        let formatted = fmt("function f() -> bool {\n    !((true))\n}\n");
+        assert!(formatted.contains("    !true\n"), "{formatted}");
+        // the literal here is a postfix receiver, not a unary operand
+        let formatted = fmt("function f() -> string {\n    -(1).to_string()\n}\n");
+        assert!(formatted.contains("    -(1).to_string()\n"), "{formatted}");
+    }
+
+    /// Parens that terminate an optional chain are load-bearing, not
+    /// decoration: `(a?.b).c` evaluates `(null).c` — a `TypeError` — when `a` is
+    /// null, where `a?.b.c` short-circuits to null. Peeling them would change
+    /// runtime behavior, so they always stay, including when the `?.` sits
+    /// further down the spine (`(a?.b.c).d`).
+    #[test]
+    fn test_optional_chain_breaking_parens_are_kept() {
+        for expr in [
+            "(user?.profile).name",
+            "(items?.at(0)).to_string()",
+            "(user?.profile.name).length()",
+        ] {
+            let source = std::format!(
+                "function f(user: string?, items: string[]?) -> string {{\n    {expr}\n}}\n"
+            );
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A `?.` off the spine — inside a call argument — is a separate chain and
+    /// does not pin the receiver's parens.
+    #[test]
+    fn test_optional_chain_off_the_spine_still_strips() {
+        let formatted = fmt(
+            "function f(a: string?, xs: string[]) -> int {\n    (xs.at(a?.length ?? 0)).to_string().length()\n}\n",
+        );
+        assert!(
+            formatted.contains("    xs.at(a?.length ?? 0).to_string().length()\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A receiver that binds looser than `.` keeps exactly one paren: removing
+    /// it would re-parse against a different base, but the redundant layers
+    /// stacked around it still peel.
+    #[test]
+    fn test_looser_receiver_collapses_to_one_paren() {
+        let formatted =
+            fmt("function f(a: string, b: string) -> string {\n    ((a ?? b)).to_string()\n}\n");
+        assert!(
+            formatted.contains("    (a ?? b).to_string()\n"),
+            "{formatted}"
+        );
+        let formatted =
+            fmt("function f(a: string, b: string) -> bool {\n    !((a ?? b)).includes(`x`)\n}\n");
+        assert!(
+            formatted.contains("    !(a ?? b).includes(`x`)\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A receiver that binds looser than `.` keeps its parens: removing them
+    /// would re-parse against a different base.
+    #[test]
+    fn test_postfix_receiver_clarity_parens_are_kept() {
+        for expr in ["(a ?? b).length()", "(a && b).to_string()"] {
+            let source =
+                std::format!("function f(a: string, b: string) -> string {{\n    {expr}\n}}\n");
+            let formatted = fmt(&source);
+            assert!(formatted.contains(expr), "kept `{expr}`: {formatted}");
+        }
+    }
+
+    /// A transparent paren around a unary operand that already binds tighter
+    /// than the operator carries nothing: `!(x.f())` is `!x.f()`.
+    #[test]
+    fn test_unary_operand_parens_strip() {
+        let formatted =
+            fmt("function f(xs: string[]) -> bool {\n    !((xs).join(` `).includes(`a`))\n}\n");
+        assert!(
+            formatted.contains("    !xs.join(` `).includes(`a`)\n"),
+            "{formatted}"
+        );
+    }
+
+    /// A unary operand that binds looser than the operator keeps its parens.
+    #[test]
+    fn test_unary_operand_clarity_parens_are_kept() {
+        let formatted = fmt("function f(a: bool, b: bool) -> bool {\n    !(a && b)\n}\n");
+        assert!(formatted.contains("!(a && b)"), "{formatted}");
+    }
+
+    /// The user-reported staircase: a `map`/`join`/`includes` chain nested
+    /// under `!` inside a call argument, five parens deep.
+    #[test]
+    fn test_postfix_receiver_staircase_collapses() {
+        let source = concat!(
+            "function f(sections: string[], pet_name: string) -> null {\n",
+            "    assert.is_true(\n",
+            "        (pet_name == `Bella`)\n",
+            "            && !(\n",
+            "                (\n",
+            "                    (\n",
+            "                        (sections).map((item) -> {\n",
+            "                            item.to_string()\n",
+            "                        })\n",
+            "                    )\n",
+            "                        .join(` `)\n",
+            "                )\n",
+            "                    .includes(`WarningSignsContact`)\n",
+            "            ),\n",
+            "    );\n",
+            "    null\n",
+            "}\n",
+        );
+        let formatted = fmt(source);
+        assert!(
+            formatted.contains(concat!(
+                "    assert.is_true(\n",
+                "        (pet_name == `Bella`)\n",
+                "            && !sections\n",
+                "                .map((item) -> {\n",
+                "                    item.to_string()\n",
+                "                })\n",
+                "                .join(` `)\n",
+                "                .includes(`WarningSignsContact`),\n",
+                "    );",
+            )),
+            "staircase collapses to one flat chain: {formatted}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod llm_tools_field_tests {
+    use super::*;
+
+    /// The BEP `tools` field must survive formatting — the print path used to
+    /// omit it entirely, silently deleting the field (and with it the
+    /// function's spec mode) from the user's source.
+    #[test]
+    fn test_tools_field_is_preserved_and_idempotent() {
+        let source = concat!(
+            "function Plan(q: string) -> string {\n",
+            "    client: \"openai/gpt-4o-mini\"\n",
+            "    // the toolbox\n",
+            "    tools: [search_flights, search_hotels]\n",
+            "    prompt: `\n",
+            "        ${q}\n",
+            "        ${ctx.output_format()}\n",
+            "    `\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("tools field should format");
+        assert!(
+            formatted.contains("tools: [search_flights, search_hotels]"),
+            "tools field preserved (canonical colon form): {formatted}"
+        );
+        assert!(
+            formatted.contains("// the toolbox"),
+            "comment on the tools line preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_llm_field_comments_before_colons_are_preserved() {
+        let source = concat!(
+            "function Plan() -> string {\n",
+            "    client /* client colon */ : \"openai/gpt-4o-mini\"\n",
+            "    tools /* tools colon */ : []\n",
+            "    prompt /* prompt colon */ : `hello`\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("LLM field comments should format");
+
+        for comment in ["client colon", "tools colon", "prompt colon"] {
+            assert!(
+                formatted.contains(comment),
+                "comment `{comment}` must be preserved: {formatted}"
+            );
+        }
+
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod object_spread_tests {
+    use super::*;
+
+    /// Struct-update spread (`Type { ...base, field: v }`) compiles, but the
+    /// object printer used to reject it outright: "Expected token/node
+    /// `OBJECT_FIELD` or `R_BRACE`, but found `SPREAD_ELEMENT`".
+    #[test]
+    fn test_spread_formats_and_is_idempotent() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function f(p: P) -> P {\n",
+            "    P { ...p, score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("class spread should format");
+        assert!(
+            formatted.contains("P { ...p, score: 1 }"),
+            "spread preserved without a space after `...`: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// Member order is semantic — later members win at runtime, so
+    /// `P { score: 9, ...p }` and `P { ...p, score: 9 }` evaluate differently.
+    /// The formatter must never reorder them, and must keep multiple spreads.
+    #[test]
+    fn test_spread_and_field_order_is_preserved() {
+        let options = FormatOptions::default();
+        for (source_expr, expected) in [
+            ("P { ...p, score: 9 }", "P { ...p, score: 9 }"),
+            ("P { score: 9, ...p }", "P { score: 9, ...p }"),
+            ("P { ...a, ...b }", "P { ...a, ...b }"),
+            ("P { ...a, score: 1, ...b }", "P { ...a, score: 1, ...b }"),
+        ] {
+            let source = format!(
+                concat!(
+                    "class P {{\n",
+                    "    name: string,\n",
+                    "    score: int,\n",
+                    "}}\n",
+                    "\n",
+                    "function f(p: P, a: P, b: P) -> P {{\n",
+                    "    {source_expr}\n",
+                    "}}\n",
+                ),
+                source_expr = source_expr
+            );
+            let formatted = format(&source, &options)
+                .unwrap_or_else(|e| panic!("`{source_expr}` should format: {e:?}"));
+            assert!(
+                formatted.contains(expected),
+                "order preserved for `{source_expr}`, got: {formatted}"
+            );
+            let second = format(&formatted, &options).expect("formatter should be idempotent");
+            assert_eq!(formatted, second, "idempotent for `{source_expr}`");
+        }
+    }
+
+    /// A spread wide enough to break must survive the multi-line path too,
+    /// and comments attached to a spread member must not be dropped.
+    #[test]
+    fn test_spread_multi_line_and_comments() {
+        let source = concat!(
+            "class Config {\n",
+            "    alpha: string,\n",
+            "    beta: string,\n",
+            "    gamma: string,\n",
+            "}\n",
+            "\n",
+            "function f(base: Config) -> Config {\n",
+            "    Config {\n",
+            "        // inherit everything from the base configuration first\n",
+            "        ...base,\n",
+            "        alpha: \"a much longer override value to force the multi-line path\",\n",
+            "        beta: \"another fairly long override value so this cannot fit\",\n",
+            "    }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("multi-line spread should format");
+        assert!(
+            formatted.contains("...base,"),
+            "spread member preserved on its own line: {formatted}"
+        );
+        assert!(
+            formatted.contains("// inherit everything from the base configuration first"),
+            "comment above the spread preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The spread operand is an arbitrary expression, not just a name.
+    #[test]
+    fn test_spread_of_call_expression() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function base() -> P {\n",
+            "    P { name: \"b\", score: 0 }\n",
+            "}\n",
+            "\n",
+            "function f() -> P {\n",
+            "    P { ...base(), score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("spread of a call should format");
+        assert!(
+            formatted.contains("P { ...base(), score: 1 }"),
+            "call operand preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod contextual_keyword_identifier_tests {
     use super::*;
 
@@ -168,25 +722,14 @@ mod contextual_keyword_identifier_tests {
 mod header_comment_position_tests {
     use super::*;
 
-    /// `//#` header comments must survive formatting in class bodies,
-    /// implements blocks, and between match arms — not only at statement
-    /// boundaries inside blocks.
+    /// `//#` header comments survive formatting before expression functions and remain structural
+    /// at executable statement and arm boundaries.
     #[test]
-    fn test_header_comments_in_member_positions() {
+    fn test_header_comments_in_expression_positions() {
         let source = concat!(
-            "class Dog {\n",
-            "    //# fields\n",
-            "    name: string,\n",
-            "    //# behavior\n",
-            "    implements Sound {\n",
-            "        //# conformance\n",
-            "        function sound(self) -> string {\n",
-            "            \"woof\"\n",
-            "        }\n",
-            "    }\n",
-            "}\n",
-            "\n",
+            "//# classify values\n",
             "function classify(n: int) -> string {\n",
+            "    //# statements\n",
             "    match (n) {\n",
             "        //# leading header\n",
             "        0 => \"zero\",\n",
@@ -197,11 +740,10 @@ mod header_comment_position_tests {
         );
         let options = FormatOptions::default();
         let formatted = format(source, &options)
-            .expect("formatter should accept header comments in member positions");
+            .expect("formatter should accept header comments in expression positions");
         for needle in [
-            "//# fields",
-            "//# behavior",
-            "//# conformance",
+            "//# classify values",
+            "//# statements",
             "//# leading header",
             "//# between arms",
         ] {
@@ -209,6 +751,22 @@ mod header_comment_position_tests {
         }
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_header_comments_in_declarations_are_rejected() {
+        for source in [
+            "interface Animal {\n    //# methods\n    function name(self) -> string\n}\n",
+            "//# generated text\nfunction generate() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `hello`\n}\n",
+        ] {
+            let error = format(source, &FormatOptions::default())
+                .expect_err("formatter should reject headers outside expression functions");
+
+            assert!(
+                format!("{error:?}")
+                    .contains("header comments (`//#`) are only allowed in expression functions")
+            );
+        }
     }
 }
 
@@ -376,6 +934,33 @@ implements<T extends Named> Printable for Box<T> {
             );
         }
     }
+
+    #[test]
+    fn test_runtime_type_syntax_formatting_is_idempotent() {
+        // The formatter is parse-only: it must preserve the scoped binding
+        // (the one legal `unreflect` position) and, for recovery, the inline
+        // spelling the checker rejects.
+        let source = r#"function f(t: reflect.Type, value: int) -> int {
+    type T = unreflect(t)
+    type S = Wrapper<string>
+    let annotated: Wrapper<T>? = null
+    let result = identity<Wrapper<unreflect(t)>, string>(value)
+    match (value) {
+        Wrapper<T> => result,
+        _ => 0
+    }
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("runtime type syntax should format");
+        assert!(formatted.contains("type T = unreflect(t)"));
+        assert!(formatted.contains("type S = Wrapper<string>"));
+        assert!(formatted.contains("let annotated: Wrapper<T>? = null"));
+        assert!(formatted.contains("identity<Wrapper<unreflect(t)>, string>"));
+        assert!(formatted.contains("Wrapper<T> => result"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
 }
 
 #[cfg(test)]
@@ -455,8 +1040,19 @@ mod backtick_format_tests {
     /// spaces), dedented by the common leading indent.
     #[test]
     fn backtick_prompt_multiline_dedents() {
-        let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let source = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
         let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n        Hello ${name}\n        Goodbye\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_function_return_dedents() {
+        let source = "function Foo(name: string) -> string {\n    `\n            Hello ${name}\n            Bye\n    `\n}\n";
+        let expected = "function Foo(name: string) -> string {\n    `\n        Hello ${name}\n        Bye\n    `\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");
@@ -467,7 +1063,7 @@ mod backtick_format_tests {
     /// A single-line backtick prompt is accepted and printed verbatim.
     #[test]
     fn backtick_prompt_one_liner_accepted() {
-        let source = "function Demo() -> string {\n    client \"openai/gpt-4o\"\n    prompt `Just one line`\n}\n";
+        let source = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let expected = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
@@ -482,19 +1078,6 @@ mod backtick_format_tests {
     fn backtick_attribute_arg_dedents() {
         let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
         let expected = "class Foo {\n    bar: string @description(\n        `\n            some desc\n            more\n        `,\n    ),\n}\n";
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(formatted, expected, "got:\n{formatted}");
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second);
-    }
-
-    /// A backtick `template_string` body is accepted and its interior re-indented
-    /// (closing backtick at column 0, like a raw-string body).
-    #[test]
-    fn backtick_template_string_dedents() {
-        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
-        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");
@@ -651,10 +1234,12 @@ mod contextual_keyword_name_tests {
 
     #[test]
     fn keyword_method_names_round_trip() {
-        // `implements` and friends stay valid as member names (reflection
-        // API, e.g. `dog_t.implements(animal_t)`).
+        // Declaration keywords stay valid as member/path names. Runtime
+        // reflection relies on `class`/`enum`/`function` namespace segments,
+        // while the
+        // reflection API uses `implements` as a method name.
         assert_round_trips(
-            "function f(dog_t: type, animal_t: type) -> bool {\n    dog_t.implements(animal_t)\n}\n",
+            "function f(dog_t: reflect.Type, animal_t: reflect.Type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
         );
     }
 }
@@ -838,16 +1423,16 @@ mod catch_format_tests {
     fn test_catch_arm_bodies_indent_inside_enclosing_block() {
         let source = r#"function demo(s: string) -> int {
     baml.json.from_string<int>(s) catch (e) {
-    baml.json.JsonParseError => 0,
-    baml.json.JsonDecodeError => 0,
+    baml.json.ParseError => 0,
+    baml.json.DecodeError => 0,
   };
     42
 }
 "#;
         let expected = r#"function demo(s: string) -> int {
     baml.json.from_string<int>(s) catch (e) {
-        baml.json.JsonParseError => 0,
-        baml.json.JsonDecodeError => 0,
+        baml.json.ParseError => 0,
+        baml.json.DecodeError => 0,
     };
     42
 }
@@ -1423,7 +2008,7 @@ mod over_split_regression_tests {
         // A braceless `=> throw …,` catch arm that fits the budget must not be
         // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
         // it used to report itself as multi-line and force the block wrap.
-        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => throw Boom {},\n        baml.json.JsonDecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
     }
 }
@@ -1562,8 +2147,8 @@ mod member_chain_layout_tests {
     /// receiver line; only the final call's arguments wrap.
     #[test]
     fn test_namespace_chain_stays_glued_only_args_wrap() {
-        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking\", root.anthropic.AnthropicClient.new()));\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking and rest\", root.anthropic.Client.new()));\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n            root.anthropic.Client.new(),\n        ),\n    );\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 
@@ -1571,8 +2156,8 @@ mod member_chain_layout_tests {
     /// to the glued layout.
     #[test]
     fn test_exploded_chain_collapses() {
-        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking\",\n                root.anthropic.AnthropicClient.new(),\n            ),\n        );\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n                root.anthropic.Client.new(),\n            ),\n        );\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n            root.anthropic.Client.new(),\n        ),\n    );\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 
@@ -1590,8 +2175,8 @@ mod member_chain_layout_tests {
     /// call (`.new()`) stays attached to the path because it fits.
     #[test]
     fn test_long_chain_breaks_at_calls_only() {
-        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.AnthropicClient.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.AnthropicClient.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.Client.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.Client.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 
@@ -1655,5 +2240,264 @@ mod member_chain_layout_tests {
         let source = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload.decode_as_structured(schema_registry_value).validate_against(validation_rules_value);\n    out\n}\n";
         let expected = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload\n        .decode_as_structured(schema_registry_value)\n        .validate_against(validation_rules_value);\n    out\n}\n";
         assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
+mod interface_format_tests {
+    use super::{FormatOptions, format};
+
+    fn assert_round_trip(source: &str, options: &FormatOptions) -> String {
+        let formatted = format(source, options).unwrap_or_else(|e| panic!("{e:?}\n{source}"));
+        assert_eq!(format(&formatted, options).unwrap(), formatted);
+        formatted
+    }
+
+    #[test]
+    fn declaration_semicolons_are_canonical() {
+        let options = FormatOptions::default();
+        for terminator in ["", ";"] {
+            let source = format!(
+                "type Name = string{terminator}\ninterface Named {{\n type Key{terminator}\n type Error = never{terminator}\n name: Name,\n function label(self) -> string throws never{terminator}\n function display(self) -> string throws never {{ self.label() }}\n}}\nclass Item {{\n name: Name,\n implements Named {{ type Key = string{terminator}\n function label(self) -> string {{ self.name }} }}\n}}"
+            );
+            let formatted = assert_round_trip(&source, &options);
+            for expected in [
+                "type Name = string;",
+                "type Key;",
+                "type Error = never;",
+                "name: Name,",
+                "function label(self) -> string throws never;",
+                "type Key = string;",
+            ] {
+                assert!(
+                    formatted.contains(expected),
+                    "missing {expected}:\n{formatted}"
+                );
+            }
+            assert!(!formatted.contains("};"), "{formatted}");
+        }
+    }
+
+    #[test]
+    fn preserves_interface_terminator_comments() {
+        for declaration in ["function f(self) -> int throws never", "type Key = int"] {
+            for separator in [
+                " /* before */; // after\n",
+                " // before\n; // after\n",
+                "; /* after */\n",
+            ] {
+                let source = format!("interface I {{ {declaration}{separator} }}");
+                let formatted = assert_round_trip(&source, &FormatOptions::default());
+                for marker in ["/* before */", "// before", "// after", "/* after */"] {
+                    assert_eq!(
+                        formatted.matches(marker).count(),
+                        source.matches(marker).count(),
+                        "{formatted}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_line_comments_inside_interface_headers() {
+        for source in [
+            "interface I // name\n requires A, // target\n B { // body\n}\n",
+            "interface I {function f(self) -> string // result\n throws never // throws\n function g(self) -> int throws never // default\n { 1 }}",
+            "interface I {function f(\n self, // receiver\n value: string // parameter\n) -> string throws never}",
+        ] {
+            let formatted = assert_round_trip(source, &FormatOptions::default());
+            for line in source.lines() {
+                if let Some((_, comment)) = line.split_once("//") {
+                    let marker = format!("//{comment}");
+                    assert_eq!(formatted.matches(&marker).count(), 1, "{formatted}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_associated_type_comments() {
+        let source = "interface I {type /* keyword */ Key /* name */ extends /* bound */ string /* value */ = /* default */ string /* delimiter */; // end\n}";
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "/* keyword */",
+            "/* name */",
+            "/* bound */",
+            "/* value */",
+            "/* default */",
+            "/* delimiter */",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn required_signature_uses_full_available_width() {
+        let signature = "    function name(self) -> string throws never;";
+        let source = format!("interface I {{\n{signature}\n}}\n");
+        let options = FormatOptions {
+            line_width: signature.len(),
+            ..FormatOptions::default()
+        };
+        assert_eq!(assert_round_trip(&source, &options), source);
+        let narrower = FormatOptions {
+            line_width: signature.len() - 1,
+            ..options
+        };
+        assert!(assert_round_trip(&source, &narrower).contains("function name(\n"));
+    }
+
+    #[test]
+    fn formats_empty_and_attributed_interfaces() {
+        let options = FormatOptions::default();
+        for (source, expected) in [
+            ("interface  Empty{}", "interface Empty {}\n"),
+            ("interface Marker {\n\n}", "interface Marker {}\n"),
+            (
+                "interface Marker<T> requires Base {}",
+                "interface Marker<T> requires Base {}\n",
+            ),
+            (
+                "@@internal interface Marker {}",
+                "@@internal\ninterface Marker {}\n",
+            ),
+            (
+                "interface Marker {\n// kept\n}",
+                "interface Marker {\n    // kept\n}\n",
+            ),
+            (
+                "interface Empty{/* kept */}",
+                "interface Empty { /* kept */\n}\n",
+            ),
+            (
+                "@@internal interface  I{@@internal function f(self)->int throws never}",
+                "@@internal\ninterface I {\n    @@internal\n    function f(self) -> int throws never;\n}\n",
+            ),
+        ] {
+            assert_eq!(assert_round_trip(source, &options), expected);
+        }
+    }
+
+    #[test]
+    fn preserves_interface_comments() {
+        let source = r#"// declaration
+interface /* keyword */ Named /* name */ <T> /* generics */ requires /* requires */ Display /* target */, /* comma */ Identity /* header */ { // open
+// associated
+ type Key extends string = string; // alias
+ name: string; // field
+ // method
+ function label(self) -> string // signature
+ function value(self) -> T throws never // throws
+ // default
+ function fallback(self) -> string throws never { "fallback" } // body
+ // close
+} // end
+"#;
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "// declaration",
+            "/* keyword */",
+            "/* name */",
+            "/* generics */",
+            "/* requires */",
+            "/* target */",
+            "/* comma */",
+            "/* header */",
+            "// open",
+            "// associated",
+            "// alias",
+            "// field",
+            "// method",
+            "// signature",
+            "// throws",
+            "// default",
+            "// body",
+            "// close",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_generic_methods_and_wraps_signatures() {
+        let source = "interface I{function convert<T extends Display>(self, first:T, second:string)->map<string,T> throws never}";
+        let options = FormatOptions {
+            line_width: 60,
+            ..FormatOptions::default()
+        };
+        let formatted = assert_round_trip(source, &options);
+        assert!(
+            formatted.contains("function convert<T extends Display>(\n"),
+            "{formatted}"
+        );
+        assert!(formatted.contains("first: T,"), "{formatted}");
+        assert!(
+            formatted.contains(") -> map<string, T> throws never"),
+            "{formatted}"
+        );
+        assert!(
+            formatted
+                .lines()
+                .all(|line| line.len() <= options.line_width),
+            "{formatted}"
+        );
+    }
+
+    #[test]
+    fn wraps_requires_clause() {
+        let source = "interface Named requires FirstLongInterface, SecondLongInterface, ThirdLongInterface {function name(self)->string throws never}";
+        let options = FormatOptions {
+            line_width: 60,
+            ..FormatOptions::default()
+        };
+        let formatted = assert_round_trip(source, &options);
+        assert!(
+            formatted
+                .lines()
+                .all(|line| line.len() <= options.line_width),
+            "{formatted}"
+        );
+    }
+
+    #[test]
+    fn preserves_required_method_signature_comments() {
+        let source = "interface I {function /* keyword */ get /* name */ (self) /* params */ -> /* arrow */ string /* result */ throws /* throws */ never // end\n}";
+        let formatted = assert_round_trip(source, &FormatOptions::default());
+        for marker in [
+            "/* keyword */",
+            "/* name */",
+            "/* params */",
+            "/* arrow */",
+            "/* result */",
+            "/* throws */",
+            "// end",
+        ] {
+            assert_eq!(
+                formatted.matches(marker).count(),
+                1,
+                "lost or repeated {marker}:\n{formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn formats_interface_members() {
+        let source = "interface  Named < T > requires  Display , Identity {\n type Key extends string = string;\n name  :string;\n function label( self ,value:T )->string throws never\n function fallback(self)->string throws never{return self.name}\n}\n";
+        let expected = "interface Named<T> requires Display, Identity {\n    type Key extends string = string;\n    name: string,\n    function label(self, value: T) -> string throws never;\n    function fallback(self) -> string throws never {\n        return self.name;\n    }\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).unwrap();
+        assert_eq!(formatted, expected);
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
     }
 }

@@ -1,0 +1,46 @@
+import bamlGrammar from '@b/pkg-grammar';
+import {
+  type BundledLanguage,
+  createHighlighter,
+  type ThemedToken,
+} from 'shiki';
+
+function createDocsHighlighter() {
+  return createHighlighter({
+    langs: [bamlGrammar, 'toml', 'typescript', 'rust'],
+    themes: ['github-light', 'github-dark'],
+  });
+}
+
+let highlighterPromise: ReturnType<typeof createDocsHighlighter> | null = null;
+
+function getHighlighter(): ReturnType<typeof createDocsHighlighter> {
+  highlighterPromise ??= createDocsHighlighter();
+  return highlighterPromise;
+}
+
+function registeredLanguage(
+  language: 'baml' | 'toml' | 'typescript' | 'rust',
+): BundledLanguage {
+  if (language !== 'baml') return language;
+  // SAFETY: createDocsHighlighter registers the canonical custom grammar named baml.
+  return language as BundledLanguage;
+}
+
+export async function highlightCode(
+  code: string,
+  language: 'baml' | 'toml' | 'typescript' | 'rust',
+): Promise<{ dark: ThemedToken[][]; light: ThemedToken[][] }> {
+  const highlighter = await getHighlighter();
+  const registered = registeredLanguage(language);
+  return {
+    dark: highlighter.codeToTokensBase(code, {
+      lang: registered,
+      theme: 'github-dark',
+    }),
+    light: highlighter.codeToTokensBase(code, {
+      lang: registered,
+      theme: 'github-light',
+    }),
+  };
+}

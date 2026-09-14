@@ -65,13 +65,20 @@ jobs:
         run: cargo fetch --target wasm32-unknown-unknown
         working-directory: baml_language
 
-      # Only wasm-pack is needed here.
-      - name: "Install mise"
+      # Compiling for wasm is necessary but far from sufficient: the target
+      # accepts code that traps on first call (`std::time::Instant::now` is
+      # "not implemented on this platform" there). The check catches wasm-only
+      # dependency breakage (e.g. a missing `getrandom/js` feature); the test
+      # run is the only place the browser language server actually executes.
+      - name: "Check wasm build (bridge_wasm)"
+        run: cargo check -p bridge_wasm --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Setup Node.js and wasm-pack"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "github:rustwasm/wasm-pack"
+          install_args: "node github:rustwasm/wasm-pack"
 
-      # NOTE: if you add a crate with wasm-gated tests, add a step here.
-      - name: "Run wasm-pack tests (sys_llm)"
-        run: wasm-pack test --node crates/sys_llm
-        working-directory: baml_language
+      - name: "Run wasm tests (bridge_wasm)"
+        run: wasm-pack test --node
+        working-directory: baml_language/crates/bridge_wasm

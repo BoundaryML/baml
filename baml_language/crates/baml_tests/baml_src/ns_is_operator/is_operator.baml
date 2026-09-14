@@ -37,7 +37,7 @@ function is_type_match_true_fn() -> bool {
 }
 
 test "is_type_match_true" {
-    assert.is_true(baml.deep_equals(is_type_match_true_fn(), true))
+    assert.is_true(is_type_match_true_fn())
 }
 
 function is_type_match_false_fn() -> bool {
@@ -46,7 +46,7 @@ function is_type_match_false_fn() -> bool {
 }
 
 test "is_type_match_false" {
-    assert.is_true(baml.deep_equals(is_type_match_false_fn(), false))
+    assert.is_true(!is_type_match_false_fn())
 }
 
 function is_pattern_disjoint_from_scrutinee_type_returns_false_fn() -> bool {
@@ -55,7 +55,7 @@ function is_pattern_disjoint_from_scrutinee_type_returns_false_fn() -> bool {
 }
 
 test "is_pattern_disjoint_from_scrutinee_type_returns_false" {
-    assert.is_true(baml.deep_equals(is_pattern_disjoint_from_scrutinee_type_returns_false_fn(), false))
+    assert.is_true(!is_pattern_disjoint_from_scrutinee_type_returns_false_fn())
 }
 
 function is_with_not_fn() -> bool {
@@ -64,7 +64,7 @@ function is_with_not_fn() -> bool {
 }
 
 test "is_with_not" {
-    assert.is_true(baml.deep_equals(is_with_not_fn(), true))
+    assert.is_true(is_with_not_fn())
 }
 
 // Regression: `int | string?` lowers to a nested union `int | (string | null)`.
@@ -80,7 +80,7 @@ function is_else_narrows_nested_optional_member_fn() -> int {
 }
 
 test "is_else_narrows_nested_optional_member" {
-    assert.is_true(baml.deep_equals(is_else_narrows_nested_optional_member_fn(), 8))
+    assert.equal(is_else_narrows_nested_optional_member_fn(), 8)
 }
 
 // ── Group B: pattern shape catalog ───────────────────────────────────────────
@@ -91,7 +91,7 @@ function is_null_pattern_on_null_fn() -> bool {
 }
 
 test "is_null_pattern_on_null" {
-    assert.is_true(baml.deep_equals(is_null_pattern_on_null_fn(), true))
+    assert.is_true(is_null_pattern_on_null_fn())
 }
 
 function is_null_pattern_on_non_null_fn() -> bool {
@@ -100,7 +100,7 @@ function is_null_pattern_on_non_null_fn() -> bool {
 }
 
 test "is_null_pattern_on_non_null" {
-    assert.is_true(baml.deep_equals(is_null_pattern_on_non_null_fn(), false))
+    assert.is_true(!is_null_pattern_on_non_null_fn())
 }
 
 function is_wildcard_pattern_is_always_true_fn() -> bool {
@@ -109,7 +109,7 @@ function is_wildcard_pattern_is_always_true_fn() -> bool {
 }
 
 test "is_wildcard_pattern_is_always_true" {
-    assert.is_true(baml.deep_equals(is_wildcard_pattern_is_always_true_fn(), true))
+    assert.is_true(is_wildcard_pattern_is_always_true_fn())
 }
 
 function is_wildcard_on_null_is_true_fn() -> bool {
@@ -118,7 +118,7 @@ function is_wildcard_on_null_is_true_fn() -> bool {
 }
 
 test "is_wildcard_on_null_is_true" {
-    assert.is_true(baml.deep_equals(is_wildcard_on_null_is_true_fn(), true))
+    assert.is_true(is_wildcard_on_null_is_true_fn())
 }
 
 function is_string_literal_pattern_match_fn() -> bool {
@@ -127,7 +127,7 @@ function is_string_literal_pattern_match_fn() -> bool {
 }
 
 test "is_string_literal_pattern_match" {
-    assert.is_true(baml.deep_equals(is_string_literal_pattern_match_fn(), true))
+    assert.is_true(is_string_literal_pattern_match_fn())
 }
 
 function is_string_literal_pattern_mismatch_fn() -> bool {
@@ -136,7 +136,7 @@ function is_string_literal_pattern_mismatch_fn() -> bool {
 }
 
 test "is_string_literal_pattern_mismatch" {
-    assert.is_true(baml.deep_equals(is_string_literal_pattern_mismatch_fn(), false))
+    assert.is_true(!is_string_literal_pattern_mismatch_fn())
 }
 
 function is_bool_literal_pattern_true_fn() -> bool {
@@ -145,7 +145,7 @@ function is_bool_literal_pattern_true_fn() -> bool {
 }
 
 test "is_bool_literal_pattern_true" {
-    assert.is_true(baml.deep_equals(is_bool_literal_pattern_true_fn(), true))
+    assert.is_true(is_bool_literal_pattern_true_fn())
 }
 
 function is_bool_literal_pattern_false_fn() -> bool {
@@ -154,7 +154,7 @@ function is_bool_literal_pattern_false_fn() -> bool {
 }
 
 test "is_bool_literal_pattern_false" {
-    assert.is_true(baml.deep_equals(is_bool_literal_pattern_false_fn(), false))
+    assert.is_true(!is_bool_literal_pattern_false_fn())
 }
 
 function is_int_literal_pattern_zero_fn() -> bool {
@@ -163,7 +163,7 @@ function is_int_literal_pattern_zero_fn() -> bool {
 }
 
 test "is_int_literal_pattern_zero" {
-    assert.is_true(baml.deep_equals(is_int_literal_pattern_zero_fn(), true))
+    assert.is_true(is_int_literal_pattern_zero_fn())
 }
 
 function is_int_literal_pattern_mismatch_fn() -> bool {
@@ -172,7 +172,7 @@ function is_int_literal_pattern_mismatch_fn() -> bool {
 }
 
 test "is_int_literal_pattern_mismatch" {
-    assert.is_true(baml.deep_equals(is_int_literal_pattern_mismatch_fn(), false))
+    assert.is_true(!is_int_literal_pattern_mismatch_fn())
 }
 
 function is_enum_variant_pattern_match_fn() -> bool {
@@ -181,7 +181,7 @@ function is_enum_variant_pattern_match_fn() -> bool {
 }
 
 test "is_enum_variant_pattern_match" {
-    assert.is_true(baml.deep_equals(is_enum_variant_pattern_match_fn(), true))
+    assert.is_true(is_enum_variant_pattern_match_fn())
 }
 
 function is_enum_variant_pattern_mismatch_fn() -> bool {
@@ -190,7 +190,7 @@ function is_enum_variant_pattern_mismatch_fn() -> bool {
 }
 
 test "is_enum_variant_pattern_mismatch" {
-    assert.is_true(baml.deep_equals(is_enum_variant_pattern_mismatch_fn(), false))
+    assert.is_true(!is_enum_variant_pattern_mismatch_fn())
 }
 
 function is_class_destructure_pattern_match_fn() -> bool {
@@ -199,7 +199,7 @@ function is_class_destructure_pattern_match_fn() -> bool {
 }
 
 test "is_class_destructure_pattern_match" {
-    assert.is_true(baml.deep_equals(is_class_destructure_pattern_match_fn(), true))
+    assert.is_true(is_class_destructure_pattern_match_fn())
 }
 
 function is_array_type_pattern_fn() -> bool {
@@ -208,7 +208,7 @@ function is_array_type_pattern_fn() -> bool {
 }
 
 test "is_array_type_pattern" {
-    assert.is_true(baml.deep_equals(is_array_type_pattern_fn(), true))
+    assert.is_true(is_array_type_pattern_fn())
 }
 
 function is_array_type_pattern_mismatch_fn() -> bool {
@@ -217,7 +217,7 @@ function is_array_type_pattern_mismatch_fn() -> bool {
 }
 
 test "is_array_type_pattern_mismatch" {
-    assert.is_true(baml.deep_equals(is_array_type_pattern_mismatch_fn(), false))
+    assert.is_true(!is_array_type_pattern_mismatch_fn())
 }
 
 // ── Group C: or-patterns ──────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ function is_or_pattern_fn() -> bool {
 }
 
 test "is_or_pattern" {
-    assert.is_true(baml.deep_equals(is_or_pattern_fn(), true))
+    assert.is_true(is_or_pattern_fn())
 }
 
 function is_or_pattern_first_alternative_fn() -> bool {
@@ -237,7 +237,7 @@ function is_or_pattern_first_alternative_fn() -> bool {
 }
 
 test "is_or_pattern_first_alternative" {
-    assert.is_true(baml.deep_equals(is_or_pattern_first_alternative_fn(), true))
+    assert.is_true(is_or_pattern_first_alternative_fn())
 }
 
 function is_or_pattern_none_match_fn() -> bool {
@@ -246,7 +246,7 @@ function is_or_pattern_none_match_fn() -> bool {
 }
 
 test "is_or_pattern_none_match" {
-    assert.is_true(baml.deep_equals(is_or_pattern_none_match_fn(), false))
+    assert.is_true(!is_or_pattern_none_match_fn())
 }
 
 function is_or_pattern_with_literals_fn() -> bool {
@@ -255,7 +255,7 @@ function is_or_pattern_with_literals_fn() -> bool {
 }
 
 test "is_or_pattern_with_literals" {
-    assert.is_true(baml.deep_equals(is_or_pattern_with_literals_fn(), true))
+    assert.is_true(is_or_pattern_with_literals_fn())
 }
 
 function is_or_pattern_parenthesised_alternatives_fn() -> bool {
@@ -264,7 +264,7 @@ function is_or_pattern_parenthesised_alternatives_fn() -> bool {
 }
 
 test "is_or_pattern_parenthesised_alternatives" {
-    assert.is_true(baml.deep_equals(is_or_pattern_parenthesised_alternatives_fn(), true))
+    assert.is_true(is_or_pattern_parenthesised_alternatives_fn())
 }
 
 // ── Group D: binding patterns ─────────────────────────────────────────────────
@@ -275,7 +275,7 @@ function is_bare_binding_pattern_matches_fn() -> bool {
 }
 
 test "is_bare_binding_pattern_matches" {
-    assert.is_true(baml.deep_equals(is_bare_binding_pattern_matches_fn(), true))
+    assert.is_true(is_bare_binding_pattern_matches_fn())
 }
 
 function is_typed_binding_pattern_matches_fn() -> bool {
@@ -284,7 +284,7 @@ function is_typed_binding_pattern_matches_fn() -> bool {
 }
 
 test "is_typed_binding_pattern_matches" {
-    assert.is_true(baml.deep_equals(is_typed_binding_pattern_matches_fn(), true))
+    assert.is_true(is_typed_binding_pattern_matches_fn())
 }
 
 function is_typed_binding_pattern_mismatch_fn() -> bool {
@@ -293,7 +293,7 @@ function is_typed_binding_pattern_mismatch_fn() -> bool {
 }
 
 test "is_typed_binding_pattern_mismatch" {
-    assert.is_true(baml.deep_equals(is_typed_binding_pattern_mismatch_fn(), false))
+    assert.is_true(!is_typed_binding_pattern_mismatch_fn())
 }
 
 // ── Group E: complex scrutinee expressions ────────────────────────────────────
@@ -305,7 +305,7 @@ function is_with_call_scrutinee_fn() -> bool {
 }
 
 test "is_with_call_scrutinee" {
-    assert.is_true(baml.deep_equals(is_with_call_scrutinee_fn(), true))
+    assert.is_true(is_with_call_scrutinee_fn())
 }
 
 function is_with_field_access_scrutinee_fn() -> bool {
@@ -314,7 +314,7 @@ function is_with_field_access_scrutinee_fn() -> bool {
 }
 
 test "is_with_field_access_scrutinee" {
-    assert.is_true(baml.deep_equals(is_with_field_access_scrutinee_fn(), true))
+    assert.is_true(is_with_field_access_scrutinee_fn())
 }
 
 function is_with_optional_chain_scrutinee_fn() -> bool {
@@ -323,7 +323,7 @@ function is_with_optional_chain_scrutinee_fn() -> bool {
 }
 
 test "is_with_optional_chain_scrutinee" {
-    assert.is_true(baml.deep_equals(is_with_optional_chain_scrutinee_fn(), true))
+    assert.is_true(is_with_optional_chain_scrutinee_fn())
 }
 
 function is_with_parenthesised_arithmetic_scrutinee_fn() -> bool {
@@ -331,7 +331,7 @@ function is_with_parenthesised_arithmetic_scrutinee_fn() -> bool {
 }
 
 test "is_with_parenthesised_arithmetic_scrutinee" {
-    assert.is_true(baml.deep_equals(is_with_parenthesised_arithmetic_scrutinee_fn(), true))
+    assert.is_true(is_with_parenthesised_arithmetic_scrutinee_fn())
 }
 
 // ── Group F: precedence interactions ──────────────────────────────────────────
@@ -343,7 +343,7 @@ function is_chained_with_and_fn() -> bool {
 }
 
 test "is_chained_with_and" {
-    assert.is_true(baml.deep_equals(is_chained_with_and_fn(), true))
+    assert.is_true(is_chained_with_and_fn())
 }
 
 function is_chained_with_or_fn() -> bool {
@@ -353,7 +353,7 @@ function is_chained_with_or_fn() -> bool {
 }
 
 test "is_chained_with_or" {
-    assert.is_true(baml.deep_equals(is_chained_with_or_fn(), true))
+    assert.is_true(is_chained_with_or_fn())
 }
 
 function is_compared_with_eq_binds_tighter_fn() -> bool {
@@ -362,7 +362,7 @@ function is_compared_with_eq_binds_tighter_fn() -> bool {
 }
 
 test "is_compared_with_eq_binds_tighter" {
-    assert.is_true(baml.deep_equals(is_compared_with_eq_binds_tighter_fn(), true))
+    assert.is_true(is_compared_with_eq_binds_tighter_fn())
 }
 
 function is_chained_on_itself_fn() -> bool {
@@ -371,7 +371,7 @@ function is_chained_on_itself_fn() -> bool {
 }
 
 test "is_chained_on_itself" {
-    assert.is_true(baml.deep_equals(is_chained_on_itself_fn(), true))
+    assert.is_true(is_chained_on_itself_fn())
 }
 
 function is_chained_on_itself_without_parens_is_left_associative_fn() -> bool {
@@ -380,7 +380,7 @@ function is_chained_on_itself_without_parens_is_left_associative_fn() -> bool {
 }
 
 test "is_chained_on_itself_without_parens_is_left_associative" {
-    assert.is_true(baml.deep_equals(is_chained_on_itself_without_parens_is_left_associative_fn(), true))
+    assert.is_true(is_chained_on_itself_without_parens_is_left_associative_fn())
 }
 
 function is_chained_on_itself_without_parens_negative_outer_fn() -> bool {
@@ -389,7 +389,7 @@ function is_chained_on_itself_without_parens_negative_outer_fn() -> bool {
 }
 
 test "is_chained_on_itself_without_parens_negative_outer" {
-    assert.is_true(baml.deep_equals(is_chained_on_itself_without_parens_negative_outer_fn(), true))
+    assert.is_true(is_chained_on_itself_without_parens_negative_outer_fn())
 }
 
 function is_in_if_condition_fn() -> string {
@@ -398,7 +398,7 @@ function is_in_if_condition_fn() -> string {
 }
 
 test "is_in_if_condition" {
-    assert.is_true(baml.deep_equals(is_in_if_condition_fn(), "number"))
+    assert.equal(is_in_if_condition_fn(), "number")
 }
 
 // ── Group G: use in unusual positions ────────────────────────────────────────
@@ -409,7 +409,7 @@ function is_inside_array_literal_fn() -> bool[] {
 }
 
 test "is_inside_array_literal" {
-    assert.is_true(baml.deep_equals(is_inside_array_literal_fn(), [true, false]))
+    assert.equal(is_inside_array_literal_fn(), [true, false])
 }
 
 function is_inside_lambda_body_fn() -> bool {
@@ -418,7 +418,7 @@ function is_inside_lambda_body_fn() -> bool {
 }
 
 test "is_inside_lambda_body" {
-    assert.is_true(baml.deep_equals(is_inside_lambda_body_fn(), true))
+    assert.is_true(is_inside_lambda_body_fn())
 }
 
 function is_int_param(v: int | string) -> bool {
@@ -430,7 +430,7 @@ function is_as_return_value_fn() -> bool {
 }
 
 test "is_as_return_value" {
-    assert.is_true(baml.deep_equals(is_as_return_value_fn(), true))
+    assert.is_true(is_as_return_value_fn())
 }
 
 function is_in_match_guard_fn() -> int {
@@ -442,7 +442,7 @@ function is_in_match_guard_fn() -> int {
 }
 
 test "is_in_match_guard" {
-    assert.is_true(baml.deep_equals(is_in_match_guard_fn(), 6))
+    assert.equal(is_in_match_guard_fn(), 6)
 }
 
 function is_in_let_initializer_fn() -> bool {
@@ -452,7 +452,7 @@ function is_in_let_initializer_fn() -> bool {
 }
 
 test "is_in_let_initializer" {
-    assert.is_true(baml.deep_equals(is_in_let_initializer_fn(), true))
+    assert.is_true(is_in_let_initializer_fn())
 }
 
 function is_inside_while_condition_fn() -> int {
@@ -468,7 +468,7 @@ function is_inside_while_condition_fn() -> int {
 }
 
 test "is_inside_while_condition" {
-    assert.is_true(baml.deep_equals(is_inside_while_condition_fn(), 3))
+    assert.equal(is_inside_while_condition_fn(), 3)
 }
 
 // ── Group H: scrutinee evaluated exactly once ─────────────────────────────────
@@ -484,7 +484,7 @@ function is_evaluates_scrutinee_exactly_once_fn() -> int {
 }
 
 test "is_evaluates_scrutinee_exactly_once" {
-    assert.is_true(baml.deep_equals(is_evaluates_scrutinee_exactly_once_fn(), 1))
+    assert.equal(is_evaluates_scrutinee_exactly_once_fn(), 1)
 }
 
 // ── Group J: type narrowing in if/else branches ───────────────────────────────
@@ -495,7 +495,7 @@ function narrowing_then_branch_picks_pattern_type_fn() -> int {
 }
 
 test "narrowing_then_branch_picks_pattern_type" {
-    assert.is_true(baml.deep_equals(narrowing_then_branch_picks_pattern_type_fn(), 8))
+    assert.equal(narrowing_then_branch_picks_pattern_type_fn(), 8)
 }
 
 function describe_int_string_bool(v: int | string | bool) -> string {
@@ -509,7 +509,7 @@ function narrowing_then_branch_picks_or_pattern_type_fn() -> string {
 }
 
 test "narrowing_then_branch_picks_or_pattern_type" {
-    assert.is_true(baml.deep_equals(narrowing_then_branch_picks_or_pattern_type_fn(), "got bool"))
+    assert.equal(narrowing_then_branch_picks_or_pattern_type_fn(), "got bool")
 }
 
 function narrowing_else_branch_runs_for_non_matching_value_fn() -> string {
@@ -518,7 +518,7 @@ function narrowing_else_branch_runs_for_non_matching_value_fn() -> string {
 }
 
 test "narrowing_else_branch_runs_for_non_matching_value" {
-    assert.is_true(baml.deep_equals(narrowing_else_branch_runs_for_non_matching_value_fn(), "text"))
+    assert.equal(narrowing_else_branch_runs_for_non_matching_value_fn(), "text")
 }
 
 function narrowing_else_branch_subtracts_matched_type_fn() -> int {
@@ -527,7 +527,7 @@ function narrowing_else_branch_subtracts_matched_type_fn() -> int {
 }
 
 test "narrowing_else_branch_subtracts_matched_type" {
-    assert.is_true(baml.deep_equals(narrowing_else_branch_subtracts_matched_type_fn(), 2))
+    assert.equal(narrowing_else_branch_subtracts_matched_type_fn(), 2)
 }
 
 function narrowing_else_branch_subtracts_or_pattern_fn() -> int {
@@ -536,7 +536,7 @@ function narrowing_else_branch_subtracts_or_pattern_fn() -> int {
 }
 
 test "narrowing_else_branch_subtracts_or_pattern" {
-    assert.is_true(baml.deep_equals(narrowing_else_branch_subtracts_or_pattern_fn(), 5))
+    assert.equal(narrowing_else_branch_subtracts_or_pattern_fn(), 5)
 }
 
 function describe_success_failure(v: Success | Failure) -> string {
@@ -548,7 +548,7 @@ function narrowing_else_branch_with_class_types_fn() -> string {
 }
 
 test "narrowing_else_branch_with_class_types" {
-    assert.is_true(baml.deep_equals(narrowing_else_branch_with_class_types_fn(), "oops"))
+    assert.equal(narrowing_else_branch_with_class_types_fn(), "oops")
 }
 
 function narrowing_else_branch_with_literal_pattern_keeps_original_fn() -> int {
@@ -557,7 +557,7 @@ function narrowing_else_branch_with_literal_pattern_keeps_original_fn() -> int {
 }
 
 test "narrowing_else_branch_with_literal_pattern_keeps_original" {
-    assert.is_true(baml.deep_equals(narrowing_else_branch_with_literal_pattern_keeps_original_fn(), 6))
+    assert.equal(narrowing_else_branch_with_literal_pattern_keeps_original_fn(), 6)
 }
 
 function narrowing_negation_subtracts_in_then_branch_fn() -> int {
@@ -566,7 +566,7 @@ function narrowing_negation_subtracts_in_then_branch_fn() -> int {
 }
 
 test "narrowing_negation_subtracts_in_then_branch" {
-    assert.is_true(baml.deep_equals(narrowing_negation_subtracts_in_then_branch_fn(), 3))
+    assert.equal(narrowing_negation_subtracts_in_then_branch_fn(), 3)
 }
 
 function narrowing_through_negation_fn() -> int {
@@ -575,7 +575,7 @@ function narrowing_through_negation_fn() -> int {
 }
 
 test "narrowing_through_negation" {
-    assert.is_true(baml.deep_equals(narrowing_through_negation_fn(), 105))
+    assert.equal(narrowing_through_negation_fn(), 105)
 }
 
 function process(v: int | string) -> int {
@@ -587,7 +587,7 @@ function narrowing_works_on_function_parameter_fn() -> int {
 }
 
 test "narrowing_works_on_function_parameter" {
-    assert.is_true(baml.deep_equals(narrowing_works_on_function_parameter_fn(), 21))
+    assert.equal(narrowing_works_on_function_parameter_fn(), 21)
 }
 
 function describe_success_or_failed(v: Success | Failure) -> string {
@@ -599,7 +599,7 @@ function narrowing_picks_class_type_in_then_branch_fn() -> string {
 }
 
 test "narrowing_picks_class_type_in_then_branch" {
-    assert.is_true(baml.deep_equals(narrowing_picks_class_type_in_then_branch_fn(), "ok"))
+    assert.equal(narrowing_picks_class_type_in_then_branch_fn(), "ok")
 }
 
 function narrowing_persists_across_multiple_uses_in_then_fn() -> int {
@@ -614,7 +614,7 @@ function narrowing_persists_across_multiple_uses_in_then_fn() -> int {
 }
 
 test "narrowing_persists_across_multiple_uses_in_then" {
-    assert.is_true(baml.deep_equals(narrowing_persists_across_multiple_uses_in_then_fn(), 11))
+    assert.equal(narrowing_persists_across_multiple_uses_in_then_fn(), 11)
 }
 
 function narrowing_skipped_for_non_path_scrutinee_fn() -> string {
@@ -623,7 +623,7 @@ function narrowing_skipped_for_non_path_scrutinee_fn() -> string {
 }
 
 test "narrowing_skipped_for_non_path_scrutinee" {
-    assert.is_true(baml.deep_equals(narrowing_skipped_for_non_path_scrutinee_fn(), "int"))
+    assert.equal(narrowing_skipped_for_non_path_scrutinee_fn(), "int")
 }
 
 function narrowing_with_early_return_fn() -> int {
@@ -633,7 +633,7 @@ function narrowing_with_early_return_fn() -> int {
 }
 
 test "narrowing_with_early_return" {
-    assert.is_true(baml.deep_equals(narrowing_with_early_return_fn(), 14))
+    assert.equal(narrowing_with_early_return_fn(), 14)
 }
 
 function is_chained_negation_and_or_fn() -> bool {
@@ -643,5 +643,5 @@ function is_chained_negation_and_or_fn() -> bool {
 }
 
 test "is_chained_negation_and_or" {
-    assert.is_true(baml.deep_equals(is_chained_negation_and_or_fn(), true))
+    assert.is_true(is_chained_negation_and_or_fn())
 }

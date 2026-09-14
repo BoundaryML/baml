@@ -1,0 +1,69 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// `unreflect` has exactly one legal position: the whole right-hand side of a
+// body-level `type T = …;` binding. Everywhere else it is E0168, reported at
+// CST→AST lowering, and the position lowers to the error type so nothing
+// downstream cascades: every inline occurrence below is reported exactly once
+// and nothing else is.
+
+class Holder<T> {
+    label: string,
+
+    function new(label: string) -> Holder<T> throws never {
+        Holder<T> { label: label }
+    }
+}
+
+class Wrapper<T> {
+    inner: T,
+}
+
+function ident<T>(v: T) -> T throws never {
+    v
+}
+
+// Body positions: a call slot, a generic-apply value, a class literal, a
+// static constructor, an annotation, an `is` pattern, a `match` arm,
+// `reflect.Type.of`, and a marker nested inside a binding's static
+// right-hand side.
+function body_positions(t: reflect.Type) -> int {
+    let call = ident<unreflect(t)>(1);
+    let applied = ident<unreflect(t)>;
+    let literal = Holder<unreflect(t)> { label: "h" };
+    let constructed = Holder<unreflect(t)>.new("h");
+    let annotated: Wrapper<unreflect(t)>? = null;
+    let tested = 1 is unreflect(t);
+    let arm = match (1) {
+        unreflect(t) => 1,
+        _ => 0,
+    };
+    let reflected = reflect.Type.of<unreflect(t)>();
+    type Nested = Wrapper<unreflect(t)>
+    0
+}
+
+// Item signatures have no body to own a binding at all: a field, an
+// `implements` argument, a parameter, a return type, a bound, and a
+// top-level alias.
+interface Marker<T> {}
+
+class FieldSite {
+    value: Wrapper<unreflect(reflect.Type.of<string>())>,
+}
+
+class ImplementsSite {
+    implements Marker<unreflect(reflect.Type.of<string>())> {}
+}
+
+function signature_site(
+    value: Wrapper<unreflect(reflect.Type.of<string>())>,
+) -> Wrapper<unreflect(reflect.Type.of<string>())> {
+    value
+}
+
+function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null {
+    null
+}
+
+type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>;

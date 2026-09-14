@@ -15,7 +15,6 @@ mod lets;
 mod retry_policies;
 mod source_map;
 mod template_strings;
-mod test_items;
 mod type_aliases;
 
 use std::ops::Index;
@@ -32,12 +31,11 @@ pub use retry_policies::*;
 use rustc_hash::FxHashMap;
 pub use source_map::*;
 pub use template_strings::*;
-pub use test_items::*;
 pub use type_aliases::*;
 
 use crate::ids::{
     ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
 };
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -56,7 +54,6 @@ pub struct ItemTree {
     pub interfaces: FxHashMap<LocalItemId<InterfaceMarker>, Interface>,
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
-    pub tests: FxHashMap<LocalItemId<TestMarker>, Test>,
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
@@ -109,7 +106,7 @@ impl ItemTree {
         match self.method_owners.get(&method) {
             Some(MethodOwner::Class(id)) => &self[*id].generic_params,
             Some(MethodOwner::Interface(id)) => &self[*id].generic_params,
-            Some(MethodOwner::FreeImpl(_)) | None => &[],
+            Some(MethodOwner::Impl(_)) | None => &[],
         }
     }
 }
@@ -155,13 +152,6 @@ impl Index<LocalItemId<ClientMarker>> for ItemTree {
     type Output = Client;
     fn index(&self, id: LocalItemId<ClientMarker>) -> &Client {
         &self.clients[&id]
-    }
-}
-
-impl Index<LocalItemId<TestMarker>> for ItemTree {
-    type Output = Test;
-    fn index(&self, id: LocalItemId<TestMarker>) -> &Test {
-        &self.tests[&id]
     }
 }
 

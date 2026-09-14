@@ -20,11 +20,9 @@
 //! }
 //! ```
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
-pub use baml_project::testing::{
-    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
-};
+use baml_db::{Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
@@ -32,6 +30,14 @@ pub use indexmap::IndexMap;
 #[cfg(test)]
 use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
+
+// The stdlib slice these helpers splice in is compiled once at build time
+// rather than once per test; see `crate::stdlib_prefix`. Output is byte-identical
+// to `baml_db::testing`'s honest helpers, pinned by the
+// `stdlib_prefix_equivalence` oracle.
+pub use crate::stdlib_prefix::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 
 #[cfg(test)]
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
@@ -66,13 +72,36 @@ pub fn display_user_functions(program: &Program) -> String {
     display_user_functions_with_options(program, false)
 }
 
+/// The program's named functions plus its interface bodies, as
+/// `(fq name, object index)` pairs. Bodies are anonymous (in no name map), so
+/// they are enumerated straight off the object pool — their `Function::name`
+/// display field is exactly the spelling bytecode snapshots show.
+pub fn named_and_interface_body_functions(
+    program: &Program,
+) -> impl Iterator<Item = (&String, usize)> {
+    program
+        .function_indices
+        .iter()
+        .map(|(name, &idx)| (name, idx))
+        .chain(
+            program
+                .objects
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, obj)| match obj {
+                    bex_vm_types::Object::Function(f) if f.is_interface_body => {
+                        Some((&f.name, idx))
+                    }
+                    _ => None,
+                }),
+        )
+}
+
 /// Like [`display_user_functions`], but lets the caller include auto-derived
 /// methods in the bytecode output.
 pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
-    let mut functions: Vec<(String, &Function)> = program
-        .function_indices
-        .iter()
-        .filter_map(|(name, idx)| match program.objects.get(*idx) {
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
+        .filter_map(|(name, idx)| match program.objects.get(idx) {
             Some(Object::Function(f)) => {
                 if !f.origin.is_user_callable() {
                     return None;
@@ -88,6 +117,75 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
                 Some((display_name, &**f))
             }
             _ => None,
+        })
+        .collect();
+    functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+    display_program(&functions, BytecodeFormat::Textual)
+}
+
+/// Build the pool into an (unsealed) heap and bind every head, so rendered
+/// metadata reflects what the runtime shows: the loader always binds before
+/// anything can display a type, and an unbound head renders as its tag
+/// (`<unresolved type #…>`).
+///
+/// Float constants are boxed into the pool first, exactly as the engine's
+/// load path does — `resolve_function_constants` (inside the heap build)
+/// refuses a raw `ConstValue::Float`.
+pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
+    let mut objects = program.objects.0.clone();
+    for index in 0..objects.len() {
+        let Object::Function(function) = &objects[index] else {
+            continue;
+        };
+        let floats: Vec<(usize, f64)> = function
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, constant)| match constant {
+                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                _ => None,
+            })
+            .collect();
+        for (slot, value) in floats {
+            let boxed = objects.len();
+            objects.push(Object::Float(value));
+            let Object::Function(function) = &mut objects[index] else {
+                unreachable!("the object at `index` was a function above");
+            };
+            function.bytecode.constants[slot] =
+                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
+        }
+    }
+    let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
+    heap.bind_type_heads();
+    heap
+}
+
+/// Read the function at pool index `idx` out of a heap built by
+/// [`bound_pool`], or `None` if the slot holds something else.
+pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was built from, and the returned
+    // borrow is tied to `heap`, which owns that pool for the borrow's lifetime.
+    match unsafe { ptr.get() } {
+        Object::Function(f) => Some(&**f),
+        _ => None,
+    }
+}
+
+/// [`display_user_functions`] over a [`bound_pool`], so type positions in the
+/// rendered bytecode show declaration names instead of raw head tags.
+pub fn display_user_functions_bound(program: &Program) -> String {
+    let heap = bound_pool(program);
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
+        .filter_map(|(name, idx)| {
+            let f = bound_function(&heap, idx)?;
+            if !f.origin.is_user_callable() {
+                return None;
+            }
+            let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
+            Some((display_name, f))
         })
         .collect();
     functions.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -229,8 +327,13 @@ pub async fn run_compiled(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
-        .expect("Failed to create BexEngine");
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -243,6 +346,175 @@ pub async fn run_compiled(
         .await;
 
     TestOutput { bytecode, result }
+}
+
+/// Attempt an engine call by fq name WITHOUT the harness's entry-name
+/// resolution (which panics on a missing entry). For asserting that a
+/// spelling is — or is not — runtime-addressable.
+pub async fn try_call_by_name(
+    program: Program,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
+    engine
+        .call_function_bound_args(
+            name,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+/// Test-database conveniences over [`ProjectDatabase`]'s source-root API.
+///
+/// Test fixtures overwhelmingly want one thing: a stdlib-equipped database
+/// with a single `Workspace` root that files are dropped into by path, plus
+/// the occasional source-bearing dependency package. This trait spells that
+/// out once so fixtures read `db.workspace(root)` / `db.file(path, text)`
+/// instead of repeating the root bookkeeping. It is test support only —
+/// production code adds roots and files explicitly.
+pub trait TestDbExt {
+    /// Install the stdlib sources (if not yet installed) and add an unnamed
+    /// `Workspace` root at `root` — the package the default spelling `user`
+    /// displays.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `root` is rejected (see [`baml_db::SourceRootError`]), or if
+    /// a non-stdlib root was added before the stdlib.
+    fn workspace(&mut self, root: &Path) -> SourceRoot;
+
+    /// Add a source-bearing `Dependency` root for `package` at
+    /// `<builtin>/<package>`.
+    ///
+    /// The `<builtin>/` prefix is deliberate: it is the emit layer's wire
+    /// contract for non-workspace units, so files added under this root
+    /// (`db.file("<builtin>/<package>/lib.baml", ...)`) ride the same emit
+    /// group as the stdlib and can be captured as a mountable
+    /// `PackageInterface` blob plus symbolic compilation units.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `package` is already served by another root or a mounted
+    /// blob (see [`baml_db::SourceRootError`]).
+    fn dependency(&mut self, package: &str) -> SourceRoot;
+
+    /// Mount a serialized `PackageInterface` as a source-less package reached
+    /// from the workspace root under `alias` — the runtime compiler's shape:
+    /// a `Dynamic` root at `<builtin>/<alias>` served from the blob, plus the
+    /// edge. Errors are the database's own ([`baml_db::SourceRootError`]).
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, baml_db::SourceRootError>;
+
+    /// [`Self::try_mount`], panicking on refusal.
+    fn mount(&mut self, alias: &str, blob: Vec<u8>) -> SourceRoot {
+        self.try_mount(alias, blob)
+            .unwrap_or_else(|err| panic!("cannot mount `{alias}`: {err}"))
+    }
+
+    /// Add or update the file at `path`, owned by the live root whose path is
+    /// the longest prefix of `path`; a path under no root (e.g. the bare
+    /// `test.baml` most fixtures use) goes to the `Workspace` root.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is under no root and the database has no `Workspace`
+    /// root — call [`TestDbExt::workspace`] first.
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile;
+}
+
+impl TestDbExt for ProjectDatabase {
+    fn workspace(&mut self, root: &Path) -> SourceRoot {
+        self.ensure_stdlib_sources();
+        self.add_source_root(SourceRootSpec::new(root, SourceRootKind::Workspace))
+            .unwrap_or_else(|err| {
+                panic!(
+                    "cannot add the workspace source root at `{}`: {err}",
+                    root.display()
+                )
+            })
+    }
+
+    fn dependency(&mut self, package: &str) -> SourceRoot {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::dependency(\"{package}\")` needs a workspace root to depend on it")
+        });
+        let root = self
+            .add_source_root(
+                SourceRootSpec::new(format!("<builtin>/{package}"), SourceRootKind::Dependency)
+                    .named(Name::new(package)),
+            )
+            .unwrap_or_else(|err| {
+                panic!("cannot add the dependency source root `{package}`: {err}")
+            });
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(package),
+                root,
+            },
+        )
+        .unwrap_or_else(|err| panic!("cannot depend on `{package}`: {err}"));
+        root
+    }
+
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, baml_db::SourceRootError> {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::mount(\"{alias}\")` needs a workspace root to mount into")
+        });
+        let root = self.add_source_root(
+            SourceRootSpec::new(format!("<builtin>/{alias}"), SourceRootKind::Dynamic)
+                .named(Name::new(alias))
+                .served_from(blob),
+        )?;
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(alias),
+                root,
+            },
+        )?;
+        Ok(root)
+    }
+
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile {
+        let path = path.as_ref();
+        let root = self
+            .source_root_for_path(path)
+            .or_else(|| self.workspace_root())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no source root owns `{}` and the database has no workspace root; \
+                     call `TestDbExt::workspace` (or `db_with_root`) first",
+                    path.display()
+                )
+            });
+        self.add_or_update_file_in(root, path, text)
+    }
+}
+
+/// A fresh database with the stdlib installed and one `Workspace` root at
+/// `root` (package `user`) — [`ProjectDatabase::new`] followed by
+/// [`TestDbExt::workspace`].
+pub fn db_with_root(root: &Path) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(root);
+    db
 }
 
 /// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).
@@ -352,7 +624,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_dropping_adapter_preserves_source_defaults() {
+    async fn narrowed_function_value_preserves_source_defaults() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -372,13 +644,13 @@ mod tests {
 
         assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
         engine_snapshot!(
-            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            "narrowed_function_value_preserves_source_defaults_bytecode",
             output.bytecode
         );
     }
 
     #[tokio::test]
-    async fn optional_adapter_reorders_named_optional_params() {
+    async fn narrowed_function_value_reorders_named_optionals() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -400,7 +672,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_concrete_call_argument() {
+    async fn narrowed_function_value_as_concrete_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -425,7 +697,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_adapter_applies_to_generic_call_argument() {
+    async fn narrowed_function_value_as_generic_call_argument() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {

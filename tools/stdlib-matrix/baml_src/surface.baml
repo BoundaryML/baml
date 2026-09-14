@@ -1,21 +1,15 @@
 // Naming helpers shared by the two symbol layers.
 //
-// These are the parts of the old container-centric pooling worth keeping: how
-// a name is normalized for matching, how an export id is split, and how a
-// companion class maps to the type it backs. The pooling itself is gone —
-// symbols.baml and ts_symbols.baml flatten each side directly.
-
-/// The deterministic match key: lowercase with underscores stripped, so BAML
-/// snake_case meets TS camelCase (`to_upper_case` ≡ `toUpperCase`).
-function match_key(name: string) -> string {
-    name.to_lower_case().replace_all("_", "")
-}
+// What survives of the old container-centric pooling: how an export id is
+// split, and how a companion class maps to the type it backs. The pooling is
+// gone, and so is the name normalization it existed for — nothing matches on
+// spelling any more.
 
 /// `"<K>:<dotted.path>"` → `"<dotted.path>"`.
 function strip_kind_prefix(id: string) -> string {
     let out = id;
     if let idx: int = id.index_of(":") {
-        out = id.substring(idx + 1, id.length());
+        out = id.slice(idx + 1, id.length());
     }
     out
 }
@@ -24,12 +18,12 @@ function last_segment(path: string) -> string {
     let cut = -1;
     let i = 0;
     while (i < path.length()) {
-        if (path.char_at(i) == ".") {
+        if (path.at(i) == ".") {
             cut = i;
         }
         i += 1;
     }
-    path.substring(cut + 1, path.length())
+    path.slice(cut + 1, path.length())
 }
 
 /// Rewrites a companion class's name to the type it backs, leaving every other

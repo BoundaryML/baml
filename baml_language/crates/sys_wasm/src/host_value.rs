@@ -81,8 +81,7 @@ use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
-    VmRustFnError,
+    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmRustFnError,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -692,15 +691,19 @@ impl io::IoNamespaceHost for WasmHost {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
+        type_arg_0: ::sys_types::SapTy,
+        _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        // Extract the HostValueArc from the incoming handle.
+        // Extract the HostValueArc from the incoming handle. Only
+        // compiler-synthesized wrapper closures reach this sysop and they
+        // always pass a `HostValue`, so anything else is an engine fault —
+        // and the `throws` clause here is the callable's own `E`, which
+        // cannot carry a `baml.errors.*` of our choosing.
         let host_arc = match handle {
             BexExternalValue::HostValue(arc) => arc,
             other => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("expected HostValue, got {other:?}"),
                 });
             }
@@ -741,7 +744,7 @@ impl io::IoNamespaceHost for WasmHost {
                 &positional,
                 &optional,
             ),
-            type_arg_0,
+            expected_wire_ty(&type_arg_0),
         )
     }
 }
@@ -825,6 +828,18 @@ fn validate_host_output(
 /// violated its typed contract, so the call cannot be reasonably continued.
 /// Mirrors the native bridge's `validate_return_value` in
 /// `sys_native::host_impls`.
+/// Project a lane type into the name-headed form the contract check reads.
+///
+/// See the note in `sys_native`'s equivalent: the check is name-based, so an
+/// anonymous declaration widens to `unknown` rather than being given a
+/// spelling it does not have.
+fn expected_wire_ty(expected: &::sys_types::SapTy) -> baml_type::RuntimeTy {
+    expected
+        .clone()
+        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
+        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
+}
+
 fn validate_host_return_value(
     value: &BexExternalValue,
     expected: &baml_type::RuntimeTy,

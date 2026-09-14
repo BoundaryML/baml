@@ -3,8 +3,8 @@
 //!
 //! The join path is `program_id + function_id -> FunctionMetadata ->
 //! definition_key / source / revision / semantic lanes`. Events stay
-//! compact (ids only); everything semantic lives here, shipped once per
-//! artifact in the `.bamlprof` header. Enrichment fields
+//! compact (ids only); everything semantic lives here and is registered once
+//! per engine with the direct consumer. Enrichment fields
 //! (`source_snapshot_id`, `revision_id`, `semantic_lanes`, lambda
 //! identity) are modeled but `None` until authoritative compiler/cloud
 //! sources populate them — consumers must tolerate that.
@@ -85,10 +85,10 @@ pub struct SemanticLanes {
     pub effective_implementation: Option<Hash256>,
 }
 
-/// One row of the per-artifact function table. `function_id` is the join
+/// One row of the program function table. `function_id` is the join
 /// key from events; it is NOT stable across recompiles (it is a per-run
 /// sequential id), so rows are only meaningful with their own artifact's
-/// header.
+/// program metadata.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionMetadata {
     pub function_id: FunctionId,
@@ -109,7 +109,7 @@ pub struct FunctionMetadata {
     pub semantic_lanes: Option<SemanticLanes>,
 }
 
-/// The function table shipped in every `.bamlprof` header. Contains one
+/// The function table registered with the direct consumer. Contains one
 /// row per compile-time function plus reserved synthetic rows (the
 /// spawn-closure root and the unknown-function sentinel) with ids just past
 /// the pool.

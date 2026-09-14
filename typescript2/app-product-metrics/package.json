@@ -1,0 +1,37 @@
+{
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "croner": "^10.0.1",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "1.57.0",
+    "prisma": "7.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "name": "app-product-metrics",
+  "private": true,
+  "scripts": {
+    "backfill:6-weeks": "tsx scripts/backfill-six-weeks.ts",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/server.ts",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:validate": "prisma validate",
+    "report:slack": "tsx src/scripts/send-slack-report.ts",
+    "start": "node dist/server.js",
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.0.0"
+}

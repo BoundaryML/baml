@@ -70,14 +70,10 @@ pub(super) fn try_cast_array(
     let mut last_union_hint: Option<usize> = None;
     for (i, item) in arr.iter().enumerate() {
         let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
-        match element_type.try_cast(&child_ctx, element_type, Some(item)) {
-            Some(v) => {
-                // Extract winning variant index for the next iteration's hint
-                last_union_hint = extract_union_winner_index(&v);
-                items.push(v);
-            }
-            None => return None, // Fail fast on first error
-        }
+        let v = element_type.try_cast(&child_ctx, element_type, Some(item))?;
+        // Extract winning variant index for the next iteration's hint
+        last_union_hint = extract_union_winner_index(&v);
+        items.push(v);
     }
 
     let mut result =

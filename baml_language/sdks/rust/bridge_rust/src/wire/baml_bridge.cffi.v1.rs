@@ -15,8 +15,9 @@ pub struct BamlHandle {
 /// Stdlib symbols with special host-side decoding rules today:
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
-///    - baml.llm.Collector                     -> ADT_COLLECTOR
-///    - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
+///    - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
+///    - runtime-created nominal values         -> ADT_RUNTIME_VALUE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -26,7 +27,7 @@ pub struct BamlHandle {
 ///
 /// Stdlib symbols TODO (decode to bare BamlPyHandle today):
 ///    - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///    - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+///    - baml.glob.Glob, baml.sap.ParseCache
 ///
 /// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -44,7 +45,6 @@ pub enum BamlHandleType {
     AdtMediaPdf = 9,
     AdtMediaGeneric = 10,
     AdtPromptAst = 11,
-    AdtCollector = 12,
     AdtType = 13,
     AdtTaggedHeapHandle = 14,
     /// Host-owned callable referenced via per-bridge HostValueRegistry.
@@ -59,6 +59,14 @@ pub enum BamlHandleType {
     /// baml.errors.HostCallable instance for throw semantics. See
     /// bex_external_types::host_value.
     HostValueOpaque = 16,
+    /// Live, engine-owned ai.FunctionSpec capability. Its optional `ty` payload
+    /// is annotation-only; method generic substitution comes from the resolved
+    /// heap object.
+    AdtFunctionSpec = 17,
+    /// Live runtime-created class/enum value. The host must not resolve its
+    /// display name through a generated typemap; only the originating engine can
+    /// interpret the rooted declaration identity.
+    AdtRuntimeValue = 18,
 }
 impl BamlHandleType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -77,11 +85,12 @@ impl BamlHandleType {
             Self::AdtMediaPdf => "ADT_MEDIA_PDF",
             Self::AdtMediaGeneric => "ADT_MEDIA_GENERIC",
             Self::AdtPromptAst => "ADT_PROMPT_AST",
-            Self::AdtCollector => "ADT_COLLECTOR",
             Self::AdtType => "ADT_TYPE",
             Self::AdtTaggedHeapHandle => "ADT_TAGGED_HEAP_HANDLE",
             Self::HostValueCallable => "HOST_VALUE_CALLABLE",
             Self::HostValueOpaque => "HOST_VALUE_OPAQUE",
+            Self::AdtFunctionSpec => "ADT_FUNCTION_SPEC",
+            Self::AdtRuntimeValue => "ADT_RUNTIME_VALUE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -97,11 +106,12 @@ impl BamlHandleType {
             "ADT_MEDIA_PDF" => Some(Self::AdtMediaPdf),
             "ADT_MEDIA_GENERIC" => Some(Self::AdtMediaGeneric),
             "ADT_PROMPT_AST" => Some(Self::AdtPromptAst),
-            "ADT_COLLECTOR" => Some(Self::AdtCollector),
             "ADT_TYPE" => Some(Self::AdtType),
             "ADT_TAGGED_HEAP_HANDLE" => Some(Self::AdtTaggedHeapHandle),
             "HOST_VALUE_CALLABLE" => Some(Self::HostValueCallable),
             "HOST_VALUE_OPAQUE" => Some(Self::HostValueOpaque),
+            "ADT_FUNCTION_SPEC" => Some(Self::AdtFunctionSpec),
+            "ADT_RUNTIME_VALUE" => Some(Self::AdtRuntimeValue),
             _ => None,
         }
     }
@@ -140,7 +150,7 @@ pub mod baml_ty {
         Literal(super::BamlTyLiteral),
         #[prost(message, tag = "9")]
         TypeAlias(super::BamlTyTypeAlias),
-        /// `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+        /// `unknown` decodes to `RuntimeTy::Unknown` — the top type.
         #[prost(message, tag = "10")]
         Unknown(super::BamlTyUnknown),
         #[prost(message, tag = "11")]
@@ -172,6 +182,93 @@ pub mod baml_ty {
         #[prost(message, tag = "24")]
         Never(super::BamlTyNever),
     }
+}
+/// A host-portable reflected type. `root` is the structural/name-reference
+/// spelling and the definition tables give runtime-created nominal names their
+/// meaning. Engine-local mint identity is deliberately absent: every inbound
+/// decode materializes a fresh, equivalent definition graph (BEP-066 H-4).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlTyDef {
+    #[prost(message, optional, tag = "1")]
+    pub root: ::core::option::Option<BamlTy>,
+    #[prost(message, repeated, tag = "2")]
+    pub classes: ::prost::alloc::vec::Vec<BamlClassDef>,
+    #[prost(message, repeated, tag = "3")]
+    pub enums: ::prost::alloc::vec::Vec<BamlEnumDef>,
+    #[prost(message, repeated, tag = "4")]
+    pub witnesses: ::prost::alloc::vec::Vec<BamlWitnessDef>,
+}
+/// A pointer-free structural conformance contribution. The implemented class is
+/// the class denoted by the enclosing definition's root; the interface itself
+/// is a static, already-known declaration and therefore remains a name ref.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlWitnessDef {
+    #[prost(string, tag = "1")]
+    pub interface: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub interface_args: ::prost::alloc::vec::Vec<BamlTy>,
+    #[prost(message, repeated, tag = "3")]
+    pub associated_types: ::prost::alloc::vec::Vec<BamlTyAssociatedBinding>,
+    #[prost(message, repeated, tag = "4")]
+    pub field_links: ::prost::alloc::vec::Vec<BamlWitnessFieldLink>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BamlWitnessFieldLink {
+    #[prost(string, tag = "1")]
+    pub interface_field: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub class_field: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlTyMetadata {
+    #[prost(string, optional, tag = "1")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub alias: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub docstring: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(map = "string, string", tag = "4")]
+    pub other: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlClassDef {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub fields: ::prost::alloc::vec::Vec<BamlClassFieldDef>,
+    #[prost(message, optional, tag = "3")]
+    pub metadata: ::core::option::Option<BamlTyMetadata>,
+    #[prost(uint32, tag = "4")]
+    pub generic_param_count: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlClassFieldDef {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub ty: ::core::option::Option<BamlTy>,
+    #[prost(message, optional, tag = "3")]
+    pub metadata: ::core::option::Option<BamlTyMetadata>,
+    #[prost(bool, tag = "4")]
+    pub skip: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlEnumDef {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub variants: ::prost::alloc::vec::Vec<BamlEnumVariantDef>,
+    #[prost(message, optional, tag = "3")]
+    pub metadata: ::core::option::Option<BamlTyMetadata>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlEnumVariantDef {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub metadata: ::core::option::Option<BamlTyMetadata>,
+    #[prost(bool, tag = "3")]
+    pub skip: bool,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyPrimitive {
@@ -482,158 +579,6 @@ impl BamlTyFunctionParamMode {
     }
 }
 // -----------------------------------------------------------------------------
-// Inbound values — host language to engine
-// -----------------------------------------------------------------------------
-
-/// Core value type. `value_type` is a sparse exact-type annotation for this
-/// node, never a copy of the enclosing union. Most values omit it and are
-/// decoded from the declared contextual type plus payload shape. Hosts set it
-/// only when shape/context cannot preserve their choice (for example an empty
-/// container, an overlapping union arm, or a literal-vs-primitive selection).
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundValue {
-    #[prost(message, optional, tag = "1")]
-    pub value_type: ::core::option::Option<BamlTy>,
-    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
-    pub value: ::core::option::Option<inbound_value::Value>,
-}
-/// Nested message and enum types in `InboundValue`.
-pub mod inbound_value {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Value {
-        #[prost(string, tag = "2")]
-        StringValue(::prost::alloc::string::String),
-        #[prost(int64, tag = "3")]
-        IntValue(i64),
-        #[prost(double, tag = "4")]
-        FloatValue(f64),
-        #[prost(bool, tag = "5")]
-        BoolValue(bool),
-        #[prost(message, tag = "6")]
-        ListValue(super::InboundListValue),
-        #[prost(message, tag = "7")]
-        MapValue(super::InboundMapValue),
-        #[prost(message, tag = "8")]
-        ClassValue(super::InboundClassValue),
-        #[prost(message, tag = "9")]
-        EnumValue(super::InboundEnumValue),
-        #[prost(message, tag = "10")]
-        Handle(super::BamlHandle),
-        #[prost(bytes, tag = "11")]
-        Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
-        #[prost(string, tag = "12")]
-        BigintValue(::prost::alloc::string::String),
-        /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-        /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
-        /// argument value so the host can pass types as data.
-        #[prost(message, tag = "13")]
-        TyValue(super::BamlTy),
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundListValue {
-    #[prost(message, repeated, tag = "1")]
-    pub values: ::prost::alloc::vec::Vec<InboundValue>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundMapValue {
-    #[prost(message, repeated, tag = "1")]
-    pub entries: ::prost::alloc::vec::Vec<InboundMapEntry>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundMapEntry {
-    #[prost(message, optional, tag = "6")]
-    pub value: ::core::option::Option<InboundValue>,
-    #[prost(oneof = "inbound_map_entry::Key", tags = "1, 2, 3, 5")]
-    pub key: ::core::option::Option<inbound_map_entry::Key>,
-}
-/// Nested message and enum types in `InboundMapEntry`.
-pub mod inbound_map_entry {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
-    pub enum Key {
-        #[prost(string, tag = "1")]
-        StringKey(::prost::alloc::string::String),
-        #[prost(int64, tag = "2")]
-        IntKey(i64),
-        #[prost(bool, tag = "3")]
-        BoolKey(bool),
-        #[prost(message, tag = "5")]
-        EnumKey(super::InboundEnumValue),
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundClassValue {
-    #[prost(message, repeated, tag = "2")]
-    pub fields: ::prost::alloc::vec::Vec<InboundMapEntry>,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct InboundEnumValue {
-    #[prost(string, tag = "1")]
-    pub name: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub value: ::prost::alloc::string::String,
-}
-// -----------------------------------------------------------------------------
-// Function call protocol
-// -----------------------------------------------------------------------------
-
-/// One explicit `TypeVar` binding for a generic function/method call: the
-/// TypeVar name paired with the concrete type it is bound to.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BamlTyArg {
-    /// TypeVar name, e.g. "T", "A"
-    #[prost(string, tag = "1")]
-    pub type_var: ::prost::alloc::string::String,
-    /// the concrete binding
-    #[prost(message, optional, tag = "2")]
-    pub type_value: ::core::option::Option<BamlTy>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CallFunctionArgs {
-    #[prost(message, repeated, tag = "1")]
-    pub kwargs: ::prost::alloc::vec::Vec<InboundMapEntry>,
-    #[prost(uint64, tag = "2")]
-    pub call_id: u64,
-    /// Explicit TypeVar bindings for a generic function/method call. Named and
-    /// order-preserving: each entry self-describes its TypeVar, and entries are
-    /// sent in De Bruijn order (enclosing class params first — recovered from a
-    /// generic receiver's type args — then the callee's own `<...>` params,
-    /// `_types=` in Python). The engine maps each named binding onto the entry
-    /// frame's `type_args` slot by matching the TypeVar name against the callee's
-    /// generic params (see `set_entry_point_with_type_args`). Empty for
-    /// non-generic calls.
-    #[prost(message, repeated, tag = "3")]
-    pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
-    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
-    pub call_target: ::core::option::Option<call_function_args::CallTarget>,
-}
-/// Nested message and enum types in `CallFunctionArgs`.
-pub mod call_function_args {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
-    pub enum CallTarget {
-        #[prost(string, tag = "4")]
-        FunctionName(::prost::alloc::string::String),
-        #[prost(uint64, tag = "5")]
-        FunctionHandle(u64),
-    }
-}
-/// CallAck is the engine's acknowledgment of an inbound call. It flows
-/// engine->host, but is defined in the inbound proto because it completes
-/// the inbound call contract (CallFunctionArgs request + CallAck response).
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CallAck {
-    #[prost(oneof = "call_ack::Response", tags = "1")]
-    pub response: ::core::option::Option<call_ack::Response>,
-}
-/// Nested message and enum types in `CallAck`.
-pub mod call_ack {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
-    pub enum Response {
-        #[prost(string, tag = "1")]
-        Error(::prost::alloc::string::String),
-    }
-}
-// -----------------------------------------------------------------------------
 // Outbound values — engine to host (type-rich)
 // -----------------------------------------------------------------------------
 
@@ -700,7 +645,7 @@ pub struct BamlOutboundValue {
     /// Required for BAML -> CFFI
     /// But not for CFFI -> BAML (BAML always does type validation again at
     /// boundaries)
-    #[prost(oneof = "baml_outbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21")]
+    #[prost(oneof = "baml_outbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22")]
     pub value: ::core::option::Option<baml_outbound_value::Value>,
 }
 /// Nested message and enum types in `BamlOutboundValue`.
@@ -746,10 +691,13 @@ pub mod baml_outbound_value {
         Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
         #[prost(string, tag = "20")]
         BigintValue(::prost::alloc::string::String),
-        /// A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+        /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
         /// Shares the `BamlTy` representation with the inbound side.
         #[prost(message, tag = "21")]
         TyValue(super::BamlTy),
+        /// Definition-carrying type handle. Identity is intentionally not encoded.
+        #[prost(message, tag = "22")]
+        TyDefValue(super::BamlTyDef),
     }
 }
 /// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
@@ -1011,5 +959,174 @@ impl MediaTypeEnum {
             "OTHER" => Some(Self::Other),
             _ => None,
         }
+    }
+}
+// -----------------------------------------------------------------------------
+// Inbound values — host language to engine
+// -----------------------------------------------------------------------------
+
+/// Core value type. `value_type` is a sparse exact-type annotation for this
+/// node, never a copy of the enclosing union. Most values omit it and are
+/// decoded from the declared contextual type plus payload shape. Hosts set it
+/// only when shape/context cannot preserve their choice (for example an empty
+/// container, an overlapping union arm, or a literal-vs-primitive selection).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundValue {
+    #[prost(message, optional, tag = "1")]
+    pub value_type: ::core::option::Option<BamlTy>,
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16")]
+    pub value: ::core::option::Option<inbound_value::Value>,
+}
+/// Nested message and enum types in `InboundValue`.
+pub mod inbound_value {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Value {
+        #[prost(string, tag = "2")]
+        StringValue(::prost::alloc::string::String),
+        #[prost(int64, tag = "3")]
+        IntValue(i64),
+        #[prost(double, tag = "4")]
+        FloatValue(f64),
+        #[prost(bool, tag = "5")]
+        BoolValue(bool),
+        #[prost(message, tag = "6")]
+        ListValue(super::InboundListValue),
+        #[prost(message, tag = "7")]
+        MapValue(super::InboundMapValue),
+        #[prost(message, tag = "8")]
+        ClassValue(super::InboundClassValue),
+        #[prost(message, tag = "9")]
+        EnumValue(super::InboundEnumValue),
+        #[prost(message, tag = "10")]
+        Handle(super::BamlHandle),
+        #[prost(bytes, tag = "11")]
+        Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
+        #[prost(string, tag = "12")]
+        BigintValue(::prost::alloc::string::String),
+        /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+        /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
+        /// argument value so the host can pass types as data.
+        #[prost(message, tag = "13")]
+        TyValue(super::BamlTy),
+        /// Definition-carrying reflected type. New hosts use this for values that
+        /// must retain runtime-created class/enum schemas; tag 13 remains for
+        /// rollout compatibility with structural/static type senders.
+        #[prost(message, tag = "14")]
+        TyDefValue(super::BamlTyDef),
+        /// Rust-backed values cross as portable data, never as capability handles.
+        /// These message shapes are shared with the outbound side so host-created
+        /// and engine-created values have one canonical representation.
+        #[prost(message, tag = "15")]
+        MediaValue(super::BamlValueMedia),
+        #[prost(message, tag = "16")]
+        PromptAstValue(super::BamlValuePromptAst),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundListValue {
+    #[prost(message, repeated, tag = "1")]
+    pub values: ::prost::alloc::vec::Vec<InboundValue>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundMapValue {
+    #[prost(message, repeated, tag = "1")]
+    pub entries: ::prost::alloc::vec::Vec<InboundMapEntry>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundMapEntry {
+    #[prost(message, optional, tag = "6")]
+    pub value: ::core::option::Option<InboundValue>,
+    #[prost(oneof = "inbound_map_entry::Key", tags = "1, 2, 3, 5")]
+    pub key: ::core::option::Option<inbound_map_entry::Key>,
+}
+/// Nested message and enum types in `InboundMapEntry`.
+pub mod inbound_map_entry {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Key {
+        #[prost(string, tag = "1")]
+        StringKey(::prost::alloc::string::String),
+        #[prost(int64, tag = "2")]
+        IntKey(i64),
+        #[prost(bool, tag = "3")]
+        BoolKey(bool),
+        #[prost(message, tag = "5")]
+        EnumKey(super::InboundEnumValue),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundClassValue {
+    #[prost(message, repeated, tag = "2")]
+    pub fields: ::prost::alloc::vec::Vec<InboundMapEntry>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InboundEnumValue {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub value: ::prost::alloc::string::String,
+}
+// -----------------------------------------------------------------------------
+// Function call protocol
+// -----------------------------------------------------------------------------
+
+/// One explicit `TypeVar` binding for a generic function/method call: the
+/// TypeVar name paired with the concrete type it is bound to.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BamlTyArg {
+    /// TypeVar name, e.g. "T", "A"
+    #[prost(string, tag = "1")]
+    pub type_var: ::prost::alloc::string::String,
+    /// the concrete binding
+    #[prost(message, optional, tag = "2")]
+    pub type_value: ::core::option::Option<BamlTy>,
+    /// Preferred for a runtime reflected type. Mutually exclusive with
+    /// `type_value` by convention; retained as separate fields for backwards
+    /// compatibility with already generated SDKs.
+    #[prost(message, optional, tag = "3")]
+    pub type_definition: ::core::option::Option<BamlTyDef>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CallFunctionArgs {
+    #[prost(message, repeated, tag = "1")]
+    pub kwargs: ::prost::alloc::vec::Vec<InboundMapEntry>,
+    #[prost(uint64, tag = "2")]
+    pub call_id: u64,
+    /// Explicit TypeVar bindings for a generic function/method call. Named and
+    /// order-preserving: each entry self-describes its TypeVar, and entries are
+    /// sent in De Bruijn order (enclosing class params first — recovered from a
+    /// generic receiver's type args — then the callee's own `<...>` params,
+    /// `_types=` in Python). The engine maps each named binding onto the entry
+    /// frame's `type_args` slot by matching the TypeVar name against the callee's
+    /// generic params (see `set_entry_point_with_type_args`). Empty for
+    /// non-generic calls.
+    #[prost(message, repeated, tag = "3")]
+    pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
+    pub call_target: ::core::option::Option<call_function_args::CallTarget>,
+}
+/// Nested message and enum types in `CallFunctionArgs`.
+pub mod call_function_args {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum CallTarget {
+        #[prost(string, tag = "4")]
+        FunctionName(::prost::alloc::string::String),
+        #[prost(uint64, tag = "5")]
+        FunctionHandle(u64),
+    }
+}
+/// CallAck is the engine's acknowledgment of an inbound call. It flows
+/// engine->host, but is defined in the inbound proto because it completes
+/// the inbound call contract (CallFunctionArgs request + CallAck response).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CallAck {
+    #[prost(oneof = "call_ack::Response", tags = "1")]
+    pub response: ::core::option::Option<call_ack::Response>,
+}
+/// Nested message and enum types in `CallAck`.
+pub mod call_ack {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Response {
+        #[prost(string, tag = "1")]
+        Error(::prost::alloc::string::String),
     }
 }

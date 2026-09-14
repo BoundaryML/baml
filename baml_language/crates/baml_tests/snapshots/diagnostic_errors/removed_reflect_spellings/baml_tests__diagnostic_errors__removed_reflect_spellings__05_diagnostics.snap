@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0098
+
+  × `type.of` no longer exists — write `reflect.Type.of` instead. The `type` keyword itself is unchanged: it still names aliases (`type UserId = string`) and scoped type bindings (`type T =
+  │ unreflect(t)`)
+   ╭─[main.baml:7:5]
+ 7 │     type.of<int>()
+   ·     ───────
+   ╰────
+
+  [type] E0098
+
+  × `type` no longer names a runtime type value — write `reflect.Type` instead. The `type` keyword itself is unchanged: it still names aliases (`type UserId = string`) and scoped type bindings
+  │ (`type T = unreflect(t)`)
+    ╭─[main.baml:11:35]
+ 11 │ function old_type_annotation() -> type {
+    ·                                   ────
+    ╰────
+
+  [type] E0098
+
+  × `baml.reflect.Package` no longer exists — reflection is its own package now, so write `reflect.Package` instead
+    ╭─[main.baml:16:32]
+ 16 │ function old_qualified_type(p: baml.reflect.Package) -> string {
+    ·                                ────────────────────
+    ╰────
+
+  [type] E0098
+
+  × `baml.reflect.Type.of` no longer exists — reflection is its own package now, so write `reflect.Type.of` instead
+    ╭─[main.baml:22:5]
+ 22 │     baml.reflect.Type.of<int>().to_string()
+    ·     ────────────────────
+    ╰────

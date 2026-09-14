@@ -54,12 +54,8 @@ pub(super) fn try_cast_map(
     // Try to cast all values
     let mut items = BamlMap::new();
     for (key, value) in obj {
-        match value_type.try_cast(ctx, value_type, Some(value)) {
-            Some(cast_value) => {
-                items.insert(key.to_string(), (DeserializerConditions::new(), cast_value));
-            }
-            None => return None, // Fail fast on first error
-        }
+        let cast_value = value_type.try_cast(ctx, value_type, Some(value))?;
+        items.insert(key.to_string(), (DeserializerConditions::new(), cast_value));
     }
 
     let mut flags = DeserializerConditions::new();

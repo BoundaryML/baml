@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 51674
 ---
 === PPIR ===
 class user.Address {

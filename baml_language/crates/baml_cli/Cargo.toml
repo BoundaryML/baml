@@ -17,21 +17,23 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
-baml_lsp2_actions = { workspace = true }
+baml_ide = { workspace = true }
 baml_lsp_server = { workspace = true }
-baml_project = { workspace = true }
+baml_query = { workspace = true }
+baml_query_profiles = { workspace = true }
 baml_release = { workspace = true }
-baml_surface = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
-baml_workspace = { workspace = true }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
+bex_events = { workspace = true }
+bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_cpp = { workspace = true }
 sdkgen_csharp = { workspace = true }
@@ -41,14 +43,14 @@ sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_rust = { workspace = true }
 sdkgen_swift = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
-sys_native = { workspace = true }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
-flate2 = { workspace = true }
+datafusion = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
@@ -60,9 +62,9 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
-tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
@@ -72,10 +74,10 @@ webbrowser = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "baml_lsp_server/aws-crypto", "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
-ring-crypto = [ "baml_lsp_server/ring-crypto", "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
-native-tls = [ "baml_lsp_server/native-tls" ]
-rustls = [ "baml_lsp_server/rustls" ]
+aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
+native-tls = [ "sys_native/native-tls" ]
+rustls = [ "aws-crypto" ]
 defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]

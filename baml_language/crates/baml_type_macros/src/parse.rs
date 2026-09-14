@@ -2,26 +2,39 @@
 //!
 //! The DSL has four sections, in order:
 //! 1. `axes { a, b, c, ... }` — the membership categories.
-//! 2. one or more `type Name { includes: [..axes..], child: Self | Other }`.
-//! 3. zero or more `satellite Name { fields } methods { ... }`.
+//! 2. one or more `type Name { includes: [..axes..], child: C }` where `C`
+//!    is `Self` (deep), another member's name (shallow), or
+//!    `interned(path::to::Handle)` (an interned member; see below).
+//! 3. zero or more `satellite Name<..> { fields } methods { ... }`.
 //! 4. the master `enum`, each variant tagged with exactly one `#[axis(..)]`.
+//!
+//! The master enum's generics (e.g. `pub enum Ty<N = TypeName>`) are carried by
+//! every generated member, so the family is parameterized as a whole — `Ty<N>`,
+//! `RuntimeTy<N>`, `RealizedTy<N>`, … A satellite declares its own generics so
+//! it can opt out. Nested positions are written out in full in the DSL
+//! (`Box<Ty<N>>`, `Box<[FunctionParamTy<N>]>`): the per-member rewrite is
+//! ident-for-ident, so the argument list rides along untouched and the master
+//! `enum` stays readable as ordinary Rust.
 //!
 //! [`FamilyInput`] is the raw parse; [`Family`] is the resolved form with axis
 //! and child names turned into indices and validated.
 
 use proc_macro2::TokenStream;
 use syn::{
-    Attribute, Field, Fields, Ident, ItemEnum, Token, braced, bracketed,
+    Attribute, Field, Fields, Generics, Ident, ItemEnum, Token, braced, bracketed,
     ext::IdentExt,
+    parenthesized,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
 };
 
 mod kw {
     syn::custom_keyword!(axes);
+    syn::custom_keyword!(interned);
     syn::custom_keyword!(satellite);
     syn::custom_keyword!(includes);
     syn::custom_keyword!(child);
+    syn::custom_keyword!(head);
     syn::custom_keyword!(methods);
 }
 
@@ -38,6 +51,8 @@ struct MemberInput {
     name: Ident,
     includes: Vec<Ident>,
     child: ChildRef,
+    /// `head: T` — this member's default for the family's head parameter.
+    head: Option<syn::Type>,
 }
 
 enum ChildRef {
@@ -45,10 +60,14 @@ enum ChildRef {
     SelfRef,
     /// `child: Other` — a shallow member whose nested positions hold `Other`.
     Named(Ident),
+    /// `child: interned(path::to::Handle)` — an interned member whose nested
+    /// positions hold the named hash-cons handle type.
+    Interned(syn::Type),
 }
 
 struct SatelliteInput {
     name: Ident,
+    generics: Generics,
     fields: Punctuated<Field, Token![,]>,
     methods: Option<TokenStream>,
 }
@@ -107,21 +126,37 @@ fn parse_member(input: ParseStream) -> syn::Result<MemberInput> {
     let child = if content.peek(Token![Self]) {
         content.parse::<Token![Self]>()?;
         ChildRef::SelfRef
+    } else if content.peek(kw::interned) && content.peek2(syn::token::Paren) {
+        content.parse::<kw::interned>()?;
+        let handle;
+        parenthesized!(handle in content);
+        ChildRef::Interned(handle.parse::<syn::Type>()?)
     } else {
         ChildRef::Named(content.parse::<Ident>()?)
     };
+    let mut head = None;
+    if content.peek(Token![,]) && content.peek2(kw::head) {
+        content.parse::<Token![,]>()?;
+        content.parse::<kw::head>()?;
+        content.parse::<Token![:]>()?;
+        head = Some(content.parse::<syn::Type>()?);
+    }
     let _trailing: Option<Token![,]> = content.parse()?;
 
     Ok(MemberInput {
         name,
         includes,
         child,
+        head,
     })
 }
 
 fn parse_satellite(input: ParseStream) -> syn::Result<SatelliteInput> {
     input.parse::<kw::satellite>()?;
     let name: Ident = input.parse()?;
+    // Declared like an ordinary struct's generics, defaults included
+    // (`<N = TypeName>`), so bare uses of the satellite keep resolving.
+    let generics: Generics = input.parse()?;
     let content;
     braced!(content in input);
     let fields =
@@ -138,6 +173,7 @@ fn parse_satellite(input: ParseStream) -> syn::Result<SatelliteInput> {
 
     Ok(SatelliteInput {
         name,
+        generics,
         fields,
         methods,
     })
@@ -149,6 +185,11 @@ pub(crate) struct Family {
     pub(crate) master_ident: Ident,
     /// Attributes on the master `enum` (derives + docs), re-emitted per member.
     pub(crate) master_attrs: Vec<Attribute>,
+    /// Generics declared on the master `enum`, shared verbatim by every member
+    /// (so `Ty<N>` and `RuntimeTy<N>` are parameterized alike, which is what
+    /// makes them layout-comparable at a given `N`). Retains defaults; use
+    /// [`Generics::split_for_impl`] where defaults are not permitted.
+    pub(crate) generics: Generics,
     pub(crate) members: Vec<Member>,
     pub(crate) satellites: Vec<Satellite>,
     pub(crate) variants: Vec<MVariant>,
@@ -158,17 +199,75 @@ pub(crate) struct Member {
     pub(crate) name: Ident,
     /// Axis indices this member includes (a variant is present iff its axis is here).
     pub(crate) includes: Vec<usize>,
-    /// Index into [`Family::members`] for nested positions; equal to this
-    /// member's own index iff the member is deep (`child: Self`).
-    pub(crate) child: usize,
+    /// What this member's nested positions hold.
+    pub(crate) child: Child,
     /// `true` for the master member (its name equals [`Family::master_ident`]).
     pub(crate) is_master: bool,
     /// `true` iff `child` points at this member itself.
     pub(crate) deep: bool,
+    /// This member's default for the head parameter, when it overrides the
+    /// master's (`head: DeclName`). A bare `Ty` in type position means
+    /// `Ty<DeclName>` while a bare `RuntimeTy` keeps meaning
+    /// `RuntimeTy<TypeName>`: the compile-time members carry the root-based
+    /// head, the wire members the name-based one, and each is what its
+    /// unqualified spelling denotes.
+    pub(crate) head: Option<syn::Type>,
+}
+
+/// A member's resolved nested-position type.
+pub(crate) enum Child {
+    /// A plain tree: nested positions hold this [`Family::members`] index
+    /// (the member's own index iff the member is deep).
+    Member(usize),
+    /// An interned member: nested positions hold this hash-cons handle type
+    /// (boxed: a `syn::Type` outweighs the index variant considerably).
+    /// The member is the pool's *kind* — the one-level-deep structural layer a
+    /// handle dereferences to — so it takes no part in the plain world's
+    /// conversion matrix, visitors, or mappers (its layout is alien), and the
+    /// head parameter is fixed at its declared default (the pool is
+    /// monomorphic).
+    Interned(Box<syn::Type>),
+}
+
+impl Member {
+    /// `generics` with this member's head default applied: the declaration
+    /// generics for the member's enum and its satellite twins. Defaults only
+    /// matter in declarations (`split_for_impl` strips them), so every impl
+    /// stays shared across the family regardless of which default a member
+    /// declares.
+    pub(crate) fn declaration_generics(&self, generics: &Generics) -> Generics {
+        let mut out = generics.clone();
+        if let Some(head) = &self.head {
+            let param = out
+                .params
+                .iter_mut()
+                .find_map(|p| match p {
+                    syn::GenericParam::Type(t) => Some(t),
+                    syn::GenericParam::Lifetime(_) | syn::GenericParam::Const(_) => None,
+                })
+                .expect("a member declaring `head:` needs the family to have a head parameter");
+            param.eq_token = Some(Default::default());
+            param.default = Some(head.clone());
+        }
+        out
+    }
+
+    /// The family-member index feeding nested positions; `None` for an
+    /// interned member (its children are handles, not a member type).
+    pub(crate) fn child_member(&self) -> Option<usize> {
+        match &self.child {
+            Child::Member(idx) => Some(*idx),
+            Child::Interned(_) => None,
+        }
+    }
 }
 
 pub(crate) struct Satellite {
     pub(crate) name: Ident,
+    /// The satellite's own generics — usually the family's, but declared
+    /// separately so a satellite that references no parameterized position can
+    /// stay non-generic.
+    pub(crate) generics: Generics,
     pub(crate) fields: Punctuated<Field, Token![,]>,
     pub(crate) methods: Option<TokenStream>,
 }
@@ -219,15 +318,42 @@ impl Family {
                     .map(&axis_index)
                     .collect::<syn::Result<Vec<_>>>()?;
                 let child = match &m.child {
-                    ChildRef::SelfRef => i,
-                    ChildRef::Named(name) => member_index(name)?,
+                    ChildRef::SelfRef => Child::Member(i),
+                    ChildRef::Named(name) => {
+                        let idx = member_index(name)?;
+                        // A plain member cannot nest an interned member: the
+                        // structural conversion walkers would have to convert
+                        // through a handle, which only the hand-written
+                        // boundary conversions can do.
+                        if matches!(members[idx].child, ChildRef::Interned(_)) {
+                            return Err(syn::Error::new(
+                                name.span(),
+                                format!(
+                                    "interned member `{name}` cannot be another member's child"
+                                ),
+                            ));
+                        }
+                        Child::Member(idx)
+                    }
+                    ChildRef::Interned(handle) => {
+                        if m.name == master_ident {
+                            return Err(syn::Error::new(
+                                m.name.span(),
+                                "the master member cannot be interned: the master is the \
+                                 plain tree every other member converts through",
+                            ));
+                        }
+                        Child::Interned(Box::new(handle.clone()))
+                    }
                 };
+                let deep = matches!(child, Child::Member(idx) if idx == i);
                 Ok(Member {
                     name: m.name.clone(),
                     includes,
                     child,
                     is_master: m.name == master_ident,
-                    deep: child == i,
+                    deep,
+                    head: m.head.clone(),
                 })
             })
             .collect::<syn::Result<Vec<_>>>()?;
@@ -236,6 +362,7 @@ impl Family {
             .into_iter()
             .map(|s| Satellite {
                 name: s.name,
+                generics: s.generics,
                 fields: s.fields,
                 methods: s.methods,
             })
@@ -250,6 +377,7 @@ impl Family {
         Ok(Family {
             master_ident,
             master_attrs: master.attrs,
+            generics: master.generics,
             members: resolved_members,
             satellites: resolved_satellites,
             variants,

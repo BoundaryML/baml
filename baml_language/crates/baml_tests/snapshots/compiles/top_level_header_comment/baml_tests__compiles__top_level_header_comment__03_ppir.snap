@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34598
----
-=== PPIR ===
-function user.Foo() -> int  [expr] {
-  {  } 1
-}

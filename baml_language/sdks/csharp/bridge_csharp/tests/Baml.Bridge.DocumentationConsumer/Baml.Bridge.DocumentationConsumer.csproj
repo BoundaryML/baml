@@ -11,7 +11,7 @@
     <BamlBridgePackageVersion
       Condition="'$(BamlBridgePackageVersion)' == ''">0.15.0</BamlBridgePackageVersion>
     <BamlGeneratedSourceRoot
-      Condition="'$(BamlGeneratedSourceRoot)' == ''">../../../../../sdk_tests/crates/csharp/primitive_slice/baml_client</BamlGeneratedSourceRoot>
+      Condition="'$(BamlGeneratedSourceRoot)' == ''">../../../../../sdk_tests/crates/csharp/basic_calls/baml_sdk</BamlGeneratedSourceRoot>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(BamlBridgeProjectReference)' != ''">
@@ -26,6 +26,6 @@
     <Compile Remove="$(BamlGeneratedSourceRoot)/**/*.g.cs" />
     <Compile
       Include="$(BamlGeneratedSourceRoot)/**/*.g.cs"
-      Link="baml_client/%(RecursiveDir)%(Filename)%(Extension)" />
+      Link="baml_sdk/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

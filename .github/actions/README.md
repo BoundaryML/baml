@@ -5,7 +5,7 @@ This directory contains modular setup actions for the BAML project. Each action 
 ## Available Actions
 
 ### setup-all
-Sets up the complete development environment using all modular actions.
+Sets up the complete legacy engine development environment using the engine-specific modular actions.
 
 ```yaml
 - name: Setup All
@@ -41,7 +41,7 @@ Sets up the complete development environment using all modular actions.
 ```
 
 ### setup-node
-Sets up Node.js with pnpm package manager.
+Sets up Node.js with pnpm for BAML Language workflows.
 
 ```yaml
 - name: Setup Node.js
@@ -55,17 +55,55 @@ Sets up Node.js with pnpm package manager.
     turbo-cache-path: '.turbo'       # Optional, default: '.turbo'
 ```
 
+### engine-setup-node
+Sets up Node.js with pnpm for legacy engine workflows while preserving the same inputs and cache behavior as `setup-node`.
+
+```yaml
+- name: Setup Engine Node.js
+  uses: ./.github/actions/engine-setup-node
+  with:
+    node-version: '20'              # Optional, default: '20'
+    pnpm-version: '9.12.0'          # Optional, default: '9.12.0'
+    install-dependencies: 'true'     # Optional, default: 'true'
+    frozen-lockfile: 'true'          # Optional, default: 'true'
+    enable-turbo-cache: 'true'       # Optional, default: 'true'
+    turbo-cache-path: '.turbo'       # Optional, default: '.turbo'
+```
+
 ### setup-rust
-Sets up Rust toolchain with caching and optional WASM support.
+Sets up the BAML Language Rust toolchain with caching and optional WASM support.
 
 ```yaml
 - name: Setup Rust
   uses: ./.github/actions/setup-rust
   with:
-    toolchain: 'stable'                           # Optional, default: 'stable'
+    toolchain: '1.98.0'                          # Optional, default: '1.98.0'
     enable-wasm: 'false'                         # Optional, default: 'false'
     targets: 'x86_64-pc-windows-msvc'           # Optional, space-separated targets
-    workspace: 'engine'                          # Optional, default: 'engine'
+    workspace: 'baml_language'                   # Optional, default: 'baml_language'
+```
+
+### engine-setup-rust
+Sets up the engine Rust toolchain with caching and optional WASM support.
+
+```yaml
+- name: Setup Engine Rust
+  uses: ./.github/actions/engine-setup-rust
+  with:
+    toolchain: '1.98.0'                          # Optional, default: '1.98.0'
+    enable-wasm: 'false'                         # Optional, default: 'false'
+    targets: 'x86_64-pc-windows-msvc'           # Optional, space-separated targets
+    workspace: 'engine'                         # Optional, default: 'engine'
+```
+
+### setup-ruby and engine-setup-ruby
+`setup-ruby` remains dedicated to BAML Language workflows, while `engine-setup-ruby` is the behavior-identical copy for legacy engine workflows.
+
+```yaml
+- name: Setup Engine Ruby
+  uses: ./.github/actions/engine-setup-ruby
+  with:
+    ruby-version: '3.4'                          # Optional, default: '3.4'
 ```
 
 ### setup-python
@@ -136,7 +174,7 @@ For jobs that don't need Python at all:
 Only needs Node.js and pnpm:
 ```yaml
 - name: Setup Node.js
-  uses: ./.github/actions/setup-node
+  uses: ./.github/actions/engine-setup-node
   with:
     node-version: ${{ env.NODE_VERSION }}
     pnpm-version: ${{ env.PNPM_VERSION }}
@@ -146,7 +184,7 @@ Only needs Node.js and pnpm:
 Only needs Rust toolchain:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
     targets: ${{ matrix.target }}
@@ -156,7 +194,7 @@ Only needs Rust toolchain:
 Needs Rust with WASM support:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
     enable-wasm: 'true'
@@ -166,12 +204,12 @@ Needs Rust with WASM support:
 Needs multiple technologies:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
 
 - name: Setup Node.js
-  uses: ./.github/actions/setup-node
+  uses: ./.github/actions/engine-setup-node
   with:
     node-version: ${{ env.NODE_VERSION }}
     pnpm-version: ${{ env.PNPM_VERSION }}
@@ -221,14 +259,14 @@ This approach gives you the fastest builds by only setting up what you need.
 The setup actions include optimized [Turborepo caching](https://turborepo.com/docs/guides/ci-vendors/github-actions) configuration:
 
 ### Dual Caching Strategy
-- **GitHub Actions Cache**: Fast local caching using `actions/cache@v4`
+- **GitHub Actions Cache**: Fast local caching using `actions/cache@v6`
 - **Vercel Remote Cache**: Team-wide cache sharing using `TURBO_TOKEN` and `TURBO_TEAM`
 
 ### Configuration
 The `setup-node` action automatically configures Turbo caching:
 ```yaml
 - name: Cache Turbo build setup
-  uses: actions/cache@v4
+  uses: actions/cache@v6
   with:
     path: .turbo
     key: ${{ runner.os }}-turbo-${{ github.sha }}

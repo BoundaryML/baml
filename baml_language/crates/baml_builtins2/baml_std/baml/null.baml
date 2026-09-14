@@ -1,3 +1,3 @@
-/// The null type, representing the absence of a value.
+/// The type of `null`, representing the absence of a value.
 class Null {
 }

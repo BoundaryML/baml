@@ -11,14 +11,14 @@ source: crates/baml_tests/src/generated_tests.rs
    ·            ╰── expected `expression`, found `let`
    ╰────
 
-  [type] E0029
+  [type] E0001
 
-  × missing return expression
+  × mismatched types
     ╭─[banned_expressions.baml:8:23]
   8 │ ╭─▶ function Bar() -> int {
   9 │ │     let b = 42
  10 │ ├─▶ }
-    · ╰──── expected return value of type `int`
+    · ╰──── expected `int`, found `void`
     ╰────
 
   [hir] E0010
@@ -39,14 +39,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·       ╰── assignment not allowed here
     ╰────
 
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:34:3]
- 34 │   let y = (x = 5);
-    ·   ────────────────
-    ╰────
-
   [hir] E0010
 
   × assignment is not allowed in expression position; assignment is a statement
@@ -54,14 +46,6 @@ source: crates/baml_tests/src/generated_tests.rs
  34 │   let y = (x = 5);
     ·            ──┬──
     ·              ╰── assignment not allowed here
-    ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:64:3]
- 64 │   let result = (user?.profile?.name = "new_name");
-    ·   ────────────────────────────────────────────────
     ╰────
 
   [hir] E0010
@@ -73,14 +57,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                 ╰── assignment not allowed here
     ╰────
 
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:70:3]
- 70 │   let result = (items?.[0] = 42);
-    ·   ───────────────────────────────
-    ╰────
-
   [hir] E0010
 
   × assignment is not allowed in expression position; assignment is a statement
@@ -88,14 +64,6 @@ source: crates/baml_tests/src/generated_tests.rs
  70 │   let result = (items?.[0] = 42);
     ·                 ───────┬───────
     ·                        ╰── assignment not allowed here
-    ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:76:3]
- 76 │   let result = (user?.id += 1);
-    ·   ─────────────────────────────
     ╰────
 
   [hir] E0010
@@ -116,14 +84,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                   ╰── assignment not allowed here
     ╰────
 
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:87:3]
- 87 │   let result = (node?.children?.[0].value = 99);
-    ·   ──────────────────────────────────────────────
-    ╰────
-
   [hir] E0010
 
   × assignment is not allowed in expression position; assignment is a statement
@@ -131,14 +91,6 @@ source: crates/baml_tests/src/generated_tests.rs
  87 │   let result = (node?.children?.[0].value = 99);
     ·                 ───────────────┬──────────────
     ·                                ╰── assignment not allowed here
-    ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[banned_expressions.baml:93:3]
- 93 │   let result = (node?.labels?.["main"].value = 50);
-    ·   ─────────────────────────────────────────────────
     ╰────
 
   [hir] E0010

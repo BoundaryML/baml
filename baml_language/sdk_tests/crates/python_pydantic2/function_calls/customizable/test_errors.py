@@ -36,7 +36,7 @@ from baml_bridge import BamlCallContext, BamlCancelledError, call_function, get_
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
-from baml_sdk.baml.json import JsonParseError
+from baml_sdk.baml import json as baml_json
 from baml_sdk.baml.panics import UserPanic
 from baml_sdk.raises_test import LoadDoc, ParseError, Reparse
 from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
@@ -50,11 +50,11 @@ _BAD_JSON = "{not valid json"
 
 def test_errors_stdlib_error_surfaces_as_baml_error():
     """`baml.json.parse` on bad input → `BamlError` whose `.value` is a
-    `JsonParseError` (a plain pydantic model). Proves stdlib error classes
+    `baml_json.ParseError` (a plain pydantic model). Proves stdlib error classes
     surface structured, independent of any `throws` clause."""
     with pytest.raises(BamlError) as exc_info:
         ParseJson(_BAD_JSON)
-    assert isinstance(exc_info.value.value, JsonParseError)
+    assert isinstance(exc_info.value.value, baml_json.ParseError)
 
 
 def test_errors_user_throw_surfaces_declared_instance():
@@ -116,11 +116,11 @@ async def test_errors_cancellation_surfaces_as_baml_panic():
         await asyncio.sleep(0.1)
         ctx.abort()
 
+    abort_task = asyncio.create_task(_abort_soon())
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await asyncio.gather(
-            call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx),
-            _abort_soon(),
-        )
+        await call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx)
+
+    await abort_task
     assert isinstance(exc_info.value.reason, BamlCancelledError)
 
 

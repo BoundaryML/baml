@@ -30,7 +30,7 @@
 class Temp {
     celsius float
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
         }
     }
@@ -43,7 +43,7 @@ class User { name string  age int }
 // `baml.json.to<Temp>(j)` resolves Temp's `baml.FromJson` override, which
 // reads the `"c"` field rather than a structural `celsius` field.
 
-function to_dispatches_fromjson_override_fn() -> float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function to_dispatches_fromjson_override_fn() -> float throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"c\": 20.5}");
     let t: Temp = baml.json.to<Temp>(j);
     t.celsius
@@ -56,7 +56,7 @@ test "to_dispatches_fromjson_override" {
 // ─── to_decodes_non_implementor_structurally ──────────────────────────────────
 // A plain class (no FromJson impl) decodes structurally via `baml.json.to`.
 
-function to_decodes_non_implementor_structurally_fn() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function to_decodes_non_implementor_structurally_fn() -> string throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"name\": \"Ada\", \"age\": 30}");
     let u: User = baml.json.to<User>(j);
     u.name
@@ -80,13 +80,13 @@ test "to_decodes_primitive" {
 class TempCelsius {
     celsius float
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             TempCelsius { celsius: baml.json.to<float>(baml.json.field(j, "celsius")) }
         }
     }
 }
 
-function from_to_roundtrip_with_override_fn() -> bool throws baml.json.JsonSerializationError | baml.json.JsonDecodeError {
+function from_to_roundtrip_with_override_fn() -> bool throws baml.json.SerializationError | baml.json.DecodeError {
     let original: TempCelsius = TempCelsius { celsius: 36.6 };
     let j: baml.json.json = baml.json.from(original);
     let decoded: TempCelsius = baml.json.to<TempCelsius>(j);
@@ -105,7 +105,7 @@ test "from_to_roundtrip_with_override" {
 class Inner {
     v int
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             Inner { v: baml.json.to<int>(baml.json.field(j, "wrapped")) }
         }
     }
@@ -113,7 +113,7 @@ class Inner {
 
 class Outer { inner Inner  tag string }
 
-function nested_field_override_is_honored_fn() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function nested_field_override_is_honored_fn() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"inner\": {\"wrapped\": 7}, \"tag\": \"x\"}");
     let o: Outer = baml.json.to<Outer>(j);
     o.inner.v
@@ -131,7 +131,7 @@ test "nested_field_override_is_honored" {
 // `User.from_json(j)` (no FromJson impl) desugars to `baml.json.to<User>(j)`
 // and decodes structurally.
 
-function static_from_json_decodes_non_implementor_fn() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function static_from_json_decodes_non_implementor_fn() -> string throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"name\": \"Ada\", \"age\": 30}");
     let u: User = User.from_json(j);
     u.name
@@ -145,7 +145,7 @@ test "static_from_json_decodes_non_implementor" {
 // An implementor's `Temp.from_json(j)` resolves Temp's own `baml.FromJson`
 // override (not the sugar) — it reads "c", not a structural "celsius".
 
-function static_from_json_dispatches_override_fn() -> float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function static_from_json_dispatches_override_fn() -> float throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"c\": 20.5}");
     let t: Temp = Temp.from_json(j);
     t.celsius
@@ -162,7 +162,7 @@ test "static_from_json_dispatches_override" {
 
 class Box<T> { value T }
 
-function static_from_json_threads_generic_type_arg_fn() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function static_from_json_threads_generic_type_arg_fn() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"value\": 42}");
     let b: Box<int> = Box<int>.from_json(j);
     b.value

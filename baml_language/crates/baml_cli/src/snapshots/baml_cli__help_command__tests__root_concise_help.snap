@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-assertion_line: 203
 expression: concise
 ---
 Build and run BAML projects.
@@ -9,19 +8,21 @@ Usage: baml [OPTIONS] <COMMAND>
 
 Commands:
   check       Check BAML source files for compiler errors
+  clean       Remove segmented local profiler data
+  describe    Describe a BAML symbol
+  query       Query the local profile store with SQL
   auth        Manage authentication
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files
-  describe    Describe a BAML symbol
   generate    Generate client code from BAML definitions
   test        Run BAML tests
   init        Initialize a new BAML project (creates baml.toml)
   new         Create a new BAML project directory
   run         Run a BAML function or script
-  playground  Open the BAML playground in your browser
   pack        Package a BAML target as a standalone executable
   ide         Install or manage IDE integration assets
-  agent       Install BAML agent skills for this project
+  agent       Install the toolchain's BAML agent skill for this project
+  playground  Open the BAML playground in a browser
   lsp         Start a language server
   help        Display documentation for a command
 
@@ -38,6 +39,8 @@ Global options:
                                     never]
       --diagnostic-format <FORMAT>  Select the diagnostic format [possible values: human, agent,
                                     concise]
+      --agent-skill-check <MODE>    Control BAML agent skill validation [default: auto] [possible
+                                    values: auto, require, warn, off]
   -h, --help                        Display concise help for this command
   -V, --version                     Print version
 

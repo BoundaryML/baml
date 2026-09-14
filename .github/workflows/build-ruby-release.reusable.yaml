@@ -36,7 +36,7 @@ jobs:
       run:
         working-directory: engine/language_client_ruby
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:

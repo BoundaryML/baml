@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
-import type {
-  AtbState,
-  Build,
-  Cohort,
-  Issue,
-  SlimIssue,
-  SlimTask,
-  SlimTrophy,
-  Task,
-  Trophy,
-  Worker,
-} from "@/app/atb/_lib/types";
+import { NextResponse } from 'next/server';
+import {
+  ATB_TROPHIES_QUERY_LIMIT,
+  type AtbState,
+  type Build,
+  type Cohort,
+  type Issue,
+  type SlimIssue,
+  type SlimTask,
+  type SlimTrophy,
+  type Task,
+  type Trophy,
+  type Worker,
+} from '@/app/atb/_lib/types';
 
 // The Convex deployment's generic list queries return full documents. A
 // full trophies:list is ~5 MB (turn logs, file contents, reports), which
@@ -23,14 +24,14 @@ const CONVEX_URL = process.env.NEXT_PUBLIC_ATB_CONVEX_URL;
 
 async function convexQuery<T>(path: string, args: object): Promise<T> {
   const res = await fetch(`${CONVEX_URL}/api/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, args, format: "json" }),
-    cache: "no-store",
+    body: JSON.stringify({ args, format: 'json', path }),
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
   });
   if (!res.ok) throw new Error(`convex ${path}: ${res.status}`);
   const body = (await res.json()) as { status: string; value: T };
-  if (body.status !== "success") throw new Error(`convex ${path} failed`);
+  if (body.status !== 'success') throw new Error(`convex ${path} failed`);
   return body.value;
 }
 
@@ -40,84 +41,89 @@ const trunc = (s: string | undefined | null, n: number) =>
 function slimTask(t: Task): SlimTask {
   return {
     _id: t._id,
-    source: t.source,
-    prompt: trunc(t.prompt, 280) ?? "",
-    status: t.status,
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-    claimedBy: t.claimedBy ?? null,
+    bamlVersion: t.bamlVersion ?? null,
     claimedAt: t.claimedAt ?? null,
+    claimedBy: t.claimedBy ?? null,
     cohortId: t.cohortId ?? null,
+    createdAt: t.createdAt,
+    prompt: trunc(t.prompt, 280) ?? '',
     skillRef: t.skillRef ?? null,
     skillStorageId: t.skillStorageId ?? null,
-    bamlVersion: t.bamlVersion ?? null,
+    source: t.source,
+    status: t.status,
+    updatedAt: t.updatedAt,
   };
 }
 
 function slimTrophy(t: Trophy): SlimTrophy {
   return {
     _id: t._id,
-    taskId: t.taskId,
+    bamlVersion: t.bamlVersion ?? null,
+    claimedAt: t.claimedAt ?? null,
+    claimedBy: t.claimedBy ?? null,
+    cohortId: t.cohortId ?? null,
+    createdAt: t.createdAt,
+    findingsCount: t.findings?.length ?? 0,
+    isCohortReport: t.isCohortReport ?? false,
+    metrics: t.metrics,
     outcome: t.outcome,
     status: t.status,
-    metrics: t.metrics,
-    findingsCount: t.findings?.length ?? 0,
-    createdAt: t.createdAt,
+    taskId: t.taskId,
     updatedAt: t.updatedAt,
-    claimedBy: t.claimedBy ?? null,
-    claimedAt: t.claimedAt ?? null,
-    cohortId: t.cohortId ?? null,
-    isCohortReport: t.isCohortReport ?? false,
-    bamlVersion: t.bamlVersion ?? null,
   };
 }
 
 function slimIssue(i: Issue): SlimIssue {
   return {
     _id: i._id,
-    kind: i.kind,
-    category: i.category ?? null,
-    title: i.title,
-    status: i.status,
-    fixSlackTs: i.fixSlackTs ?? null,
-    notionSyncStatus: i.notionSyncStatus,
-    linearSyncStatus: i.linearSyncStatus,
-    evidenceCount: i.evidence?.length ?? 0,
-    evidence: (i.evidence ?? []).map((e) => ({
-      trophyId: e.trophyId,
-      call_index: e.call_index ?? null,
-    })),
     bamlVersion: i.bamlVersion ?? null,
+    brokeIn: i.brokeIn ?? null,
+    category: i.category ?? null,
+    createdAt: i.createdAt,
+    evidence: (i.evidence ?? []).map((e) => ({
+      call_index: e.call_index ?? null,
+      trophyId: e.trophyId,
+    })),
+    evidenceCount: i.evidence?.length ?? 0,
+    firstSeenAt: i.firstSeenAt,
+    fixedIn: i.fixedIn ?? null,
+    fixSlackTs: i.fixSlackTs ?? null,
+    kind: i.kind,
+    lastSeenAt: i.lastSeenAt,
+    linearSyncStatus: i.linearSyncStatus,
+    notionSyncStatus: i.notionSyncStatus,
     skillUsed: i.skillUsed ?? null,
     skillVersion: i.skillVersion ?? null,
-    brokeIn: i.brokeIn ?? null,
-    fixedIn: i.fixedIn ?? null,
+    status: i.status,
+    title: i.title,
     verifiedAt: i.verifiedAt ?? null,
-    firstSeenAt: i.firstSeenAt,
-    lastSeenAt: i.lastSeenAt,
-    createdAt: i.createdAt,
   };
 }
 
 async function buildState(): Promise<AtbState> {
-  const [tasks, trophies, issues, cohorts, builds, workers] =
-    await Promise.all([
-      convexQuery<Task[]>("tasks:list", { limit: 500 }),
-      convexQuery<Trophy[]>("trophies:list", { limit: 500 }),
-      convexQuery<Issue[]>("issues:list", { limit: 500 }),
-      convexQuery<Cohort[]>("cohorts:list", { limit: 100 }),
-      convexQuery<Build[]>("bamlBuilds:list", { limit: 50 }),
-      convexQuery<Worker[]>("workers:list", { limit: 100 }),
-    ]);
+  const [tasks, trophies, issues, cohorts, builds, workers] = await Promise.all(
+    [
+      convexQuery<Task[]>('tasks:list', { limit: 500 }),
+      convexQuery<Trophy[]>('trophies:list', {
+        limit: ATB_TROPHIES_QUERY_LIMIT,
+      }),
+      convexQuery<Issue[]>('issues:list', { limit: 500 }),
+      convexQuery<Cohort[]>('cohorts:list', { limit: 100 }),
+      convexQuery<Build[]>('bamlBuilds:list', { limit: 50 }),
+      convexQuery<Worker[]>('workers:list', { limit: 100 }),
+    ],
+  );
   const newestFirst = <T extends { createdAt: number }>(rows: T[]) =>
     [...rows].sort((a, b) => b.createdAt - a.createdAt);
   return {
+    builds: newestFirst(
+      builds.map(({ buildLogTail: _drop, ...b }) => b as Build),
+    ),
+    cohorts: newestFirst(cohorts),
     generatedAt: Date.now(),
+    issues: newestFirst(issues.map(slimIssue)),
     tasks: newestFirst(tasks.map(slimTask)),
     trophies: newestFirst(trophies.map(slimTrophy)),
-    issues: newestFirst(issues.map(slimIssue)),
-    cohorts: newestFirst(cohorts),
-    builds: newestFirst(builds.map(({ buildLogTail: _drop, ...b }) => b as Build)),
     workers,
   };
 }
@@ -142,7 +148,7 @@ function refresh(): Promise<AtbState> {
       })
       .catch((e) => {
         // Surface the failure so a frozen dashboard is visible in logs.
-        console.error("atb state refresh failed", e);
+        console.error('atb state refresh failed', e);
         throw e;
       })
       .finally(() => {
@@ -154,11 +160,11 @@ function refresh(): Promise<AtbState> {
 
 export async function GET() {
   if (!CONVEX_URL) {
-    return new NextResponse("atb data source not configured", { status: 503 });
+    return new NextResponse('atb data source not configured', { status: 503 });
   }
-  const age = cache ? Date.now() - cache.at : Infinity;
+  const age = cache ? Date.now() - cache.at : Number.POSITIVE_INFINITY;
   const fresh = {
-    "Cache-Control": "public, s-maxage=10, stale-while-revalidate=120",
+    'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=120',
   };
   if (cache && age < TTL_MS) {
     return NextResponse.json(cache.state, { headers: fresh });
@@ -174,9 +180,11 @@ export async function GET() {
   } catch {
     if (cache) {
       return NextResponse.json(cache.state, {
-        headers: { "Cache-Control": "no-store", "X-Atb-Stale": "true" },
+        headers: { 'Cache-Control': 'no-store', 'X-Atb-Stale': 'true' },
       });
     }
-    return new NextResponse("atb data temporarily unavailable", { status: 503 });
+    return new NextResponse('atb data temporarily unavailable', {
+      status: 503,
+    });
   }
 }

@@ -1,17 +1,17 @@
 using Baml;
-using CsharpSlice;
+using CsharpBasicCalls;
 
 const string Text = "héllo\0雪";
 using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-string synchronous = Functions.PrimitiveSlice(
+string synchronous = Functions.BasicCalls(
     flag: true,
     count: 42,
     ratio: 1.25,
     text: Text,
     nullable: null,
     cancellation.Token);
-string asynchronous = await Functions.PrimitiveSliceAsync(
+string asynchronous = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
@@ -67,7 +67,7 @@ Require(await service.EchoAsync(Text, cancellation.Token) == Text, "DI example c
 
 try
 {
-    _ = await Functions.PrimitiveSliceAsync(true, 1, 1.0, Text, null, cancellation.Token);
+    _ = await Functions.BasicCallsAsync(true, 1, 1.0, Text, null, cancellation.Token);
 }
 catch (BamlTypeMismatchException error)
 {
@@ -127,7 +127,7 @@ public interface IPrimitiveService
 public sealed class PrimitiveService : IPrimitiveService
 {
     public Task<string> EchoAsync(string text, CancellationToken cancellationToken) =>
-        Functions.PrimitiveSliceAsync(
+        Functions.BasicCallsAsync(
             flag: true,
             count: 1,
             ratio: 1.0,

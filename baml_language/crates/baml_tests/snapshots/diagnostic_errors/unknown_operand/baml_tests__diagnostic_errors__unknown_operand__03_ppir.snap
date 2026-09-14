@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.add_unknown(x: unknown) -> string  [expr] {
+  {  } x Add "!"
+}
+function user.add_unknown_rhs(x: unknown) -> string  [expr] {
+  {  } "!" Add x
+}

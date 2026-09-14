@@ -1,4 +1,4 @@
-// BEP-042 Part 3 — `ErrorContext` cause-chain tests.
+// BEP-042 Part 3 — `Context` cause-chain tests.
 //
 // Cause is computed lazily at the throw funnel: a throw whose PC lies in a
 // handler body chains onto that handler's caught error (`vm.rs`
@@ -113,7 +113,7 @@ function ec_rethrow_main() -> string {
     _ => {
       match (ctx2.cause) {
         null => "no cause"
-        let c: baml.errors.ErrorContext => "MISCHAINED: rethrow self-linked"
+        let c: baml.errors.Context => "MISCHAINED: rethrow self-linked"
       }
     }
   }
@@ -148,7 +148,7 @@ function ec_gap_main() -> string {
     _ => {
       match (ctx2.cause) {
         null => recovered
-        let c: baml.errors.ErrorContext => "MISCHAINED: gap over-covered"
+        let c: baml.errors.Context => "MISCHAINED: gap over-covered"
       }
     }
   }

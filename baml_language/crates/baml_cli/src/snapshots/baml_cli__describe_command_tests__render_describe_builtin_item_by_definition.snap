@@ -2,40 +2,43 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:5-568
+class String  (string)  <builtin>/baml/string.baml:17-802
 
 /// A UTF-8 encoded string.
 ///
-/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
-/// All methods returning a new string do not mutate `self` unless noted otherwise.
+/// Strings are immutable: every method here returns a new string rather than
+/// modifying `self`. Quoted strings may span multiple lines; backtick strings
+/// interpolate.
+///
+/// Positions are **character** (Unicode code point) offsets, never byte offsets.
+/// `length`, `at`, `code_point_at`, `slice`, `index_of`, and `last_index_of` all
+/// agree with each other, and all disagree with `byte_length` as soon as one
+/// character takes more than one UTF-8 byte. A method taking a position also
+/// accepts a negative one, counting from the end. Python's `str` indexes the same
+/// way; JavaScript indexes by UTF-16 unit and so can cut an emoji in half.
+///
+/// The `is_*` predicates ask whether **every** character has the property, so all
+/// of them are true on the empty string. The `is_ascii_*` family is false for any
+/// character at or above U+0080.
 class String {}
 
 methods:
-  /// Returns the number of **Unicode code points** (characters) in the string.
-  function length(self) -> int  <builtin>/baml/string.baml:56-58
+  /// Returns the number of characters (Unicode code points).
+  function length(self) -> int throws never  <builtin>/baml/string.baml:54-56
   /// Alias for `length()`.
-  function char_count(self) -> int  <builtin>/baml/string.baml:61-63
-  /// Returns the length of the string in **UTF-8 bytes**.
-  function byte_length(self) -> int  <builtin>/baml/string.baml:76-78
-  /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string  <builtin>/baml/string.baml:81-83
-  /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string  <builtin>/baml/string.baml:86-88
-  /// Returns the string with leading and trailing whitespace removed.
-  function trim(self) -> string  <builtin>/baml/string.baml:101-103
-  /// Returns the string with leading whitespace removed (trailing whitespace
-  function trim_start(self) -> string  <builtin>/baml/string.baml:113-115
-  /// Returns the string with trailing whitespace removed (leading whitespace
-  function trim_end(self) -> string  <builtin>/baml/string.baml:125-127
-  /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool  <builtin>/baml/string.baml:130-132
-  /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:135-137
-  /// Returns true if the string ends with `suffix`.
-  function ends_with(self, suffix: string) -> bool  <builtin>/baml/string.baml:140-142
-  … 60 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+  function char_count(self) -> int throws never  <builtin>/baml/string.baml:59-61
+  /// Returns true if the string has no characters.
+  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:71-73
+  /// Returns the length in UTF-8 bytes.
+  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:88-90
+  /// Returns the lowercase equivalent of this string.
+  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:107-109
+  … 76 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
 
 static_methods:
-  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
+
+implementations (5):
+  … 15 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
 
 references (0):

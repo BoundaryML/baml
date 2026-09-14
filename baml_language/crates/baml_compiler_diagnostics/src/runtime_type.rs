@@ -1,0 +1,370 @@
+//! Shared diagnostics for runtime type construction, reflection, and rendering.
+//!
+//! Static checking and runtime validation deliberately call the same typed
+//! constructors here. The constructor selects both the diagnostic id and its
+//! complete message, so runtime code cannot reuse a compiler code with a
+//! divergent hand-built string.
+
+use std::fmt;
+
+use crate::{Diagnostic, DiagnosticId};
+
+/// The declaration kind whose members collide after serialization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SerializedKeyContainer {
+    Class,
+    Enum,
+}
+
+/// The kind of repeated runtime-type member reported by E0012.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DuplicateMemberKind {
+    Field,
+    Variant,
+}
+
+/// The declaration position containing an invalid runtime-supplied name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvalidIdentifierKind {
+    Class,
+    Enum,
+    Field,
+    EnumVariant,
+    ExportedType,
+}
+
+impl fmt::Display for DuplicateMemberKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Field => f.write_str("field"),
+            Self::Variant => f.write_str("variant"),
+        }
+    }
+}
+
+impl fmt::Display for SerializedKeyContainer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Class => f.write_str("class"),
+            Self::Enum => f.write_str("enum"),
+        }
+    }
+}
+
+impl fmt::Display for InvalidIdentifierKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Class => f.write_str("class"),
+            Self::Enum => f.write_str("enum"),
+            Self::Field => f.write_str("field"),
+            Self::EnumVariant => f.write_str("enum variant"),
+            Self::ExportedType => f.write_str("exported type"),
+        }
+    }
+}
+
+/// Check a runtime-supplied name with the compiler lexer's identifier rules.
+pub fn is_baml_identifier(value: &str) -> bool {
+    baml_compiler_lexer::is_baml_identifier(value)
+}
+
+/// E0010 — a runtime-supplied declaration name is not a BAML identifier.
+pub fn invalid_identifier(kind: InvalidIdentifierKind, name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::InvalidSyntax,
+        format!("invalid {kind} name `{name}`"),
+    )
+}
+
+/// E0001 — the compiler's type-mismatch headline.
+pub fn mismatched_types() -> Diagnostic {
+    Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+}
+
+/// E0001 — a reflection class operation received a non-instance value.
+pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        format!("{callee} expected a class instance, got {got}"),
+    )
+}
+
+/// E0165 — reflection cannot construct a complete generic frame.
+///
+/// Package extraction supplies a package-qualified display name; dynamic
+/// `call_any` has no package context and supplies the callable's bare declared
+/// name. The difference is intentional and keeps both diagnostics actionable.
+///
+/// A by-name lookup has nowhere to put type arguments, so an unspecialized
+/// generic is refused. (No route supplies them today; when descriptor
+/// specialization lands on the reflection kind views, the message should
+/// name it again.)
+pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::UnspecializedReflectedGeneric,
+        format!(
+            "generic function `{name}` cannot be extracted through reflection: its signature \
+             still mentions its own type parameters"
+        ),
+    )
+}
+
+/// E0165 — a reflected generic callable was invoked without its type arguments.
+///
+/// The sibling above covers *extraction*: a callable whose signature still
+/// mentions its own type parameters cannot even be handed out. This one covers
+/// the callables that get past that edge — a companion whose signature is free
+/// of `T` but whose body still materializes it. Invoking one would fail inside
+/// the body as an internal error, so reflection refuses it up front.
+pub fn unspecialized_reflected_generic_call(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::UnspecializedReflectedGeneric,
+        format!(
+            "generic function `{name}` cannot be invoked through reflection: its body needs \
+             type arguments"
+        ),
+    )
+}
+
+/// E0002 — a value name was written where a type argument belongs. A runtime
+/// type enters a type position only through a `type T = unreflect(value)`
+/// binding; the slot then names `T`.
+pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::UnknownType,
+        format!(
+            "`{name}` is a value, not a type; bind its runtime type first with \
+             `type T = unreflect({name});` and write `T` here"
+        ),
+    )
+}
+
+/// E0168 — `unreflect(...)` written anywhere other than as the whole
+/// right-hand side of a body-level `type T = …;` binding. The binding is the
+/// one spelling that lifts a runtime type into a type position; every other
+/// position names the bound `T`.
+pub fn runtime_type_must_be_named() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RuntimeTypeMustBeNamed,
+        "this runtime type must be given a name before it can be used here",
+    )
+}
+
+/// E0172 — a value typed by a body-scoped `type T = …` binding would be
+/// observable outside the block that binds `T`. The binding re-executes on
+/// every pass through its block and may bind `T` to a different type each
+/// time, so a `T`-typed value that outlived the block could break the
+/// invariants of whatever it landed in. A value leaves a block only through
+/// a type that does not mention `T` (such as `unknown`).
+///
+/// "scoped type" rather than "scoped runtime type": the rule is the same for
+/// a static right-hand side (`type S = Wrapper<int>`), which binds no runtime
+/// value at all.
+pub fn scoped_type_escapes_block(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::ScopedTypeEscapesBlock,
+        format!("scoped type `{name}` cannot leave the block that binds it"),
+    )
+}
+
+/// E0001 — sealed reflection-kind values come only from an existing `type`.
+pub fn cannot_construct_reflection_kind(class_name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        format!(
+            "reflection kind `{class_name}` cannot be constructed; obtain it from a type value"
+        ),
+    )
+}
+
+/// E0166 — builtin companion carriers stand in for a builtin type; they hold
+/// no fields and are never instantiated. `carries_methods` is false for the
+/// empty-bodied companions (`baml.Bool`, `baml.Null`), which would otherwise
+/// be described as carrying methods they do not have.
+pub fn cannot_construct_builtin_companion(
+    class_name: &str,
+    builtin: &str,
+    origin: &str,
+    carries_methods: bool,
+) -> Diagnostic {
+    let role = if carries_methods {
+        format!("it only carries the methods of `{builtin}`")
+    } else {
+        format!("it is only the companion of `{builtin}`")
+    };
+    Diagnostic::error(
+        DiagnosticId::CannotConstructBuiltinCompanion,
+        format!(
+            "companion class `{class_name}` cannot be constructed; {role}, whose values come from {origin}"
+        ),
+    )
+}
+
+/// E0158 — the mounted callable has no location-free bytecode link contract.
+pub fn mounted_package_call_unsupported(path: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::MountedPackageCallUnsupported,
+        format!(
+            "cannot call mounted callable `{path}`: this callable kind has no loc-free bytecode link contract"
+        ),
+    )
+}
+
+/// E0012 — a runtime type contains the same member more than once.
+pub fn duplicate_member(kind: DuplicateMemberKind, container: &str, member: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::DuplicateField,
+        format!("duplicate {kind} `{container}.{member}`"),
+    )
+}
+
+/// E0149 — two members serialize to the same key.
+pub fn duplicate_serialized_key(key: &str, container: SerializedKeyContainer) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::DuplicateFieldAlias,
+        format!("duplicate serialized key `{key}` in {container}"),
+    )
+}
+
+/// E0160 — runtime-only empty-union construction failure.
+pub fn runtime_empty_union() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RuntimeEmptyUnion,
+        "a runtime union must contain at least one member",
+    )
+}
+
+/// E0161 — an open interface reached an LLM schema render.
+pub fn open_interface_at_render(field: &str, open_type: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::OpenInterfaceAtRender,
+        format!(
+            "field `{field}` has open interface type `{open_type}`, which cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
+/// E0164 — a non-data type reached an LLM schema render.
+pub fn non_data_type_at_render(ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!("non-data type `{ty}` cannot be rendered as an LLM output schema"),
+    )
+}
+
+/// E0164 — a class field contains a non-data type at the LLM schema boundary.
+pub fn non_data_field_at_render(field: &str, ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!(
+            "field `{field}` has non-data type `{ty}`, which cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructors_own_code_and_complete_message() {
+        let cases = [
+            (mismatched_types(), "E0001", "mismatched types"),
+            (
+                expected_class_instance("reflect.class.get_field", "int"),
+                "E0001",
+                "reflect.class.get_field expected a class instance, got int",
+            ),
+            (
+                unspecialized_reflected_generic("root.Extract"),
+                "E0165",
+                "generic function `root.Extract` cannot be extracted through reflection: its signature still mentions its own type parameters",
+            ),
+            (
+                unspecialized_reflected_generic_call("GenericList@render_prompt"),
+                "E0165",
+                "generic function `GenericList@render_prompt` cannot be invoked through reflection: its body needs type arguments",
+            ),
+            (
+                computed_generic_argument_requires_unreflect("runtime_t"),
+                "E0002",
+                "`runtime_t` is a value, not a type; bind its runtime type first with `type T = unreflect(runtime_t);` and write `T` here",
+            ),
+            (
+                scoped_type_escapes_block("Out"),
+                "E0172",
+                "scoped type `Out` cannot leave the block that binds it",
+            ),
+            (
+                duplicate_member(DuplicateMemberKind::Field, "Collision", "wire"),
+                "E0012",
+                "duplicate field `Collision.wire`",
+            ),
+            (
+                cannot_construct_reflection_kind("reflect.class.Type"),
+                "E0001",
+                "reflection kind `reflect.class.Type` cannot be constructed; obtain it from a type value",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Int", "int", "literals", true),
+                "E0166",
+                "companion class `baml.Int` cannot be constructed; it only carries the methods of `int`, whose values come from literals",
+            ),
+            (
+                cannot_construct_builtin_companion("baml.Bool", "bool", "literals", false),
+                "E0166",
+                "companion class `baml.Bool` cannot be constructed; it is only the companion of `bool`, whose values come from literals",
+            ),
+            (
+                mounted_package_call_unsupported("dep.tool"),
+                "E0158",
+                "cannot call mounted callable `dep.tool`: this callable kind has no loc-free bytecode link contract",
+            ),
+            (
+                duplicate_serialized_key("wire", SerializedKeyContainer::Class),
+                "E0149",
+                "duplicate serialized key `wire` in class",
+            ),
+            (
+                invalid_identifier(InvalidIdentifierKind::Class, "type"),
+                "E0010",
+                "invalid class name `type`",
+            ),
+            (
+                invalid_identifier(InvalidIdentifierKind::EnumVariant, "Choice.function"),
+                "E0010",
+                "invalid enum variant name `Choice.function`",
+            ),
+            (
+                runtime_empty_union(),
+                "E0160",
+                "a runtime union must contain at least one member",
+            ),
+            (
+                open_interface_at_render("payload", "user.Open"),
+                "E0161",
+                "field `payload` has open interface type `user.Open`, which cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_type_at_render("never"),
+                "E0164",
+                "non-data type `never` cannot be rendered as an LLM output schema",
+            ),
+            (
+                non_data_field_at_render("Envelope.payload", "unknown"),
+                "E0164",
+                "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
+            ),
+            (
+                runtime_type_must_be_named(),
+                "E0168",
+                "this runtime type must be given a name before it can be used here",
+            ),
+        ];
+
+        for (diagnostic, code, message) in cases {
+            assert_eq!(diagnostic.code(), code);
+            assert_eq!(diagnostic.message, message);
+        }
+    }
+}

@@ -1,0 +1,104 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Boom {
+  payload: T
+}
+class user.Boom$stream {
+  payload: T | null
+}
+class user.Cell {
+  value: T
+}
+class user.Cell$stream {
+  value: T | null
+}
+function user.as_t(v: unknown) -> T  [expr] {
+  {  } match (v) { x: T => x, _ => throw "not a T" }
+}
+function user.block_local_list_before_the_binding(t: reflect.Type) -> int  [expr] {
+  { let ys = []; type T = unreflect(t); ys.push(as_t(1)) } ys.length()
+}
+function user.block_value_is_a_map_literal(t: reflect.Type) -> unknown  [expr] {
+  { let escaped = { type T = unreflect(t) } map { "key": as_t(1) } } escaped
+}
+function user.body_value_against_a_narrower_return(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } as_t(1)
+}
+function user.boom_relaxed_wrongly(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } risky(as_t("x"), true)
+}
+function user.catch_outside_the_block(t: reflect.Type) -> int  [expr] {
+  { let n = { type T = unreflect(t) } risky(as_t("x"), true) catch (e) { _ => 0 } } n
+}
+function user.erroneous_context(t: reflect.Type) -> Undefined  [expr] {
+  { type T = unreflect(t) } as_t(1)
+}
+function user.ident(v: T) -> T  [expr] {
+  {  } v
+}
+function user.imprecise_unknown_clause(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t); let v: T = as_t(1); throw () -> { {  } ident(v) } }
+}
+function user.inferred_throws_publish_the_binding(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } risky(as_t("x"), false)
+}
+function user.lambda_infers_its_own_clause(t: reflect.Type) -> unknown  [expr] {
+  { let f = () -> { { type T = unreflect(t) } risky(as_t("x"), false) } } f
+}
+function user.lambda_partial_clause_covers(t: reflect.Type) -> int  [expr] {
+  { let f = () -> int throws unknown | _ { { type T = unreflect(t); throw as_t(1) } } } f()
+}
+function user.lambda_partial_clause_too_narrow(t: reflect.Type) -> int  [expr] {
+  { let f = () -> int throws string | _ { { type T = unreflect(t); throw as_t(1) } } } f()
+}
+function user.list_relaxed_wrongly(t: reflect.Type) -> string  [expr] {
+  { type T = unreflect(t); let v: T = as_t(1); let a: T[] = [v]; throw a }
+}
+function user.outer_container_takes_the_binding(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t) } xs.push(as_t(1)) } xs
+}
+function user.outer_list_through_a_class_literal(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t) } xs.push(user.Cell { value: ident(as_t(1)) }) } xs
+}
+function user.outer_list_through_an_inner_variable(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))) } xs.push(ys) } xs
+}
+function user.outer_map_through_an_inner_variable(t: reflect.Type) -> unknown  [expr] {
+  { let m = map {  }; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))) } m.set("k", ys) } m
+}
+function user.outer_variable_through_assignment(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t); let ys = []; ys.push(ident(as_t(1))); xs = ys } } xs
+}
+function user.partial_clause_too_narrow(t: reflect.Type) -> unknown  [expr] {
+  { type T = unreflect(t); throw as_t(1) }
+}
+function user.return_against_a_narrower_type(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t); return as_t(1) }
+}
+function user.return_from_an_inferred_lambda(t: reflect.Type) -> unknown  [expr] {
+  { let f = () -> { { type T = unreflect(t); return as_t("x") } } } f
+}
+function user.risky(v: T, fail: bool) -> int  [expr] {
+  { if (fail) { throw user.Boom { payload: v } } } 0
+}
+function user.thrown_list_without_a_clause(t: reflect.Type) -> string  [expr] {
+  { type T = unreflect(t); let v: T = as_t(1); let a: T[] = [v]; throw a }
+}
+function user.unannotated_block_value(t: reflect.Type) -> unknown  [expr] {
+  { let escaped = { type T = unreflect(t) } as_t(1) } escaped
+}
+function user.value_through_a_nested_open_variable(t: reflect.Type) -> unknown[]  [expr] {
+  { let vs = { type T = unreflect(t) } [ident(as_t(42))] } vs
+}
+function user.value_through_an_open_variable(t: reflect.Type) -> string  [expr] {
+  { let v = { type T = unreflect(t) } ident(as_t(42)); let s: string = v } s
+}
+
+--- captures ---
+lambda () in lambda_infers_its_own_clause: captures [t]
+lambda () in imprecise_unknown_clause: captures [v]
+lambda () in return_from_an_inferred_lambda: captures [t]
+lambda () in lambda_partial_clause_covers: captures [t]
+lambda () in lambda_partial_clause_too_narrow: captures [t]

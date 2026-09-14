@@ -8,3 +8,4 @@
 
 # Mark snapshots directory as generated
 snapshots/** linguist-generated=true
+

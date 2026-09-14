@@ -117,8 +117,8 @@ async fn cleanup_with_throws_is_compile_error() {
         r#"
 class Bad {
   x int
-  function cleanup(self) -> void throws baml.json.JsonParseError {
-    throw baml.json.JsonParseError { message: "boom" }
+  function cleanup(self) -> void throws baml.json.ParseError {
+    throw baml.json.ParseError { message: "boom" }
   }
 }
 function main() -> int { 0 }

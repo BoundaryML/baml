@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.parser_statements.simple_while_loop() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // i
+    let _2: bool
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _1 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = copy _1;
+        _1 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}

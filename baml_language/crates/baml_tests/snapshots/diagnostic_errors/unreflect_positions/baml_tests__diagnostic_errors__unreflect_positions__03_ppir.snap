@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.FieldSite {
+  value: user.Wrapper<error>
+}
+class user.FieldSite$stream {
+  value: user.Wrapper$stream<error> | null
+}
+class user.Holder {
+  label: string
+}
+class user.Holder$stream {
+  label: string | null
+}
+class user.ImplementsSite {
+}
+class user.ImplementsSite$stream {
+}
+class user.Wrapper {
+  inner: T
+}
+class user.Wrapper$stream {
+  inner: T | null
+}
+type user.AliasSite = user.Wrapper<error>
+type user.AliasSite$stream = user.Wrapper$stream<error>
+function user.body_positions(t: reflect.Type) -> int  [expr] {
+  { let call = ident(1); let applied = ident<...>; let literal = user.Holder { label: "h" }; let constructed = Holder.new("h"); let annotated: user.Wrapper<error>? = null; let tested = 1 is error; let arm = match (1) { error => 1, _ => 0 }; let reflected = reflect.Type.of(); type Nested = error } 0
+}
+function user.bound_site() -> null  [expr] {
+  {  } null
+}
+function user.ident(v: T) -> T  [expr] {
+  {  } v
+}
+function user.new(label: string) -> user.Holder<T>  [expr] {
+  {  } user.Holder { label: label }
+}
+function user.signature_site(value: user.Wrapper<error>) -> user.Wrapper<error>  [expr] {
+  {  } value
+}

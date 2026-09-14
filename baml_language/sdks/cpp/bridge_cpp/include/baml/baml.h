@@ -15,7 +15,9 @@
 #include <baml/errors.h>
 #include <baml/future.h>
 #include <baml/lit.h>
+#include <baml/media.h>
 #include <baml/runtime.h>
+#include <baml/spec.h>
 #include <baml/variant.h>
 
 #endif  // BAML_BAML_H_

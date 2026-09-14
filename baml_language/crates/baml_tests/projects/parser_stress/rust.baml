@@ -160,7 +160,7 @@ impl ClassDef {
         self.syntax.children().filter_map(Field::cast)
     }
 
-    /// Get block attributes (@@dynamic).
+    /// Get block attributes.
     pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
         self.syntax.children().filter_map(BlockAttribute::cast)
     }

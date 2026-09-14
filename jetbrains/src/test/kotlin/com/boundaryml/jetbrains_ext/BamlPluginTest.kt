@@ -6,6 +6,10 @@ import com.intellij.psi.xml.XmlFile
 import com.intellij.testFramework.TestDataPath
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.PsiErrorElementUtil
+import org.jetbrains.plugins.textmate.TextMateBackedFileType
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.xpath.XPathConstants
+import javax.xml.xpath.XPathFactory
 
 @TestDataPath("\$CONTENT_ROOT/src/test/testData")
 class BamlPluginTest : BasePlatformTestCase() {
@@ -32,6 +36,31 @@ class BamlPluginTest : BasePlatformTestCase() {
 //        val projectService = project.service<BamlProjectService>()
 //
 //        assertNotSame(projectService.getRandomNumber(), projectService.getRandomNumber())
+    }
+
+    fun testTextMateDescriptorUsesSupportedHandoff() {
+        assertInstanceOf(BamlFileType.INSTANCE, TextMateBackedFileType::class.java)
+
+        val pluginDescriptor = requireNotNull(javaClass.classLoader.getResourceAsStream("META-INF/plugin.xml"))
+            .use { DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(it) }
+        val xpath = XPathFactory.newInstance().newXPath()
+
+        // This element is added by patchPluginXml, proving this test inspects Gradle's packaged descriptor rather than
+        // the source XML.
+        assertEquals("242", xpath.evaluate("string(/idea-plugin/idea-version/@since-build)", pluginDescriptor))
+        assertEquals("261.*", xpath.evaluate("string(/idea-plugin/idea-version/@until-build)", pluginDescriptor))
+        assertEquals(
+            BamlTextMateBundleProvider::class.java.name,
+            xpath.evaluate("string(/idea-plugin/extensions/textmate.bundleProvider/@implementation)", pluginDescriptor),
+        )
+        assertEquals(
+            0.0,
+            xpath.evaluate(
+                "count(/idea-plugin/extensions/*[starts-with(@implementation, 'org.jetbrains.plugins.textmate.') or starts-with(@implementationClass, 'org.jetbrains.plugins.textmate.')])",
+                pluginDescriptor,
+                XPathConstants.NUMBER,
+            ),
+        )
     }
 
     override fun getTestDataPath() = "src/test/testData/rename"

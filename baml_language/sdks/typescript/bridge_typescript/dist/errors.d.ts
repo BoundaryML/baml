@@ -7,7 +7,7 @@
  * - `bamlTrace`: the pre-rendered `File "...", line N, in fn` frame strings
  *   from the BAML stack.
  * - `className`: the thrown value's BAML FQN when known (e.g.
- *   `baml.json.JsonParseError`).
+ *   `baml.json.ParseError`).
  */
 export interface BamlErrorDetail {
     value?: unknown;

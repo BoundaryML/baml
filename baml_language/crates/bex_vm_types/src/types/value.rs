@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use baml_type::Int63;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{HeapPtr, Object};
@@ -86,10 +87,10 @@ impl Value {
     ///
     /// Integers in BAML are i63 (low bit reserved for the tag). Values
     /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
-    pub const INT_MAX: i64 = (i64::MAX >> 1);
+    pub const INT_MAX: i64 = Int63::MAX.get();
 
     /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
-    pub const INT_MIN: i64 = !Self::INT_MAX;
+    pub const INT_MIN: i64 = Int63::MIN.get();
 
     // ── Tagged-int fast-path arithmetic ───────────────────────────────────
     //

@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
+import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import { BamlCode } from '../../learn2/_components/BamlCode';
-import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import {
   Bullets,
@@ -360,9 +360,9 @@ const GREP_EVENTS: TermEvent[] = [
   { text: 'main.baml:10:    greet("world").message' },
   { text: 'main.baml:18:        assert.equal(greet("bob").message, …' },
   {
+    pause: 0.5,
     text: '# 4 tool calls, a whole file in context — and the',
     tone: 'dim',
-    pause: 0.5,
   },
   { text: '# caller list is still just text matches', tone: 'dim' },
 ];
@@ -383,9 +383,9 @@ const DESCRIBE_EVENTS: TermEvent[] = [
   { text: '  baml_src/main.baml:18  assert.equal(greet("bob")…' },
   { text: '' },
   {
+    pause: 0.3,
     text: '✓ one call: signature, deps, every reference',
     tone: 'ok',
-    pause: 0.3,
   },
 ];
 
@@ -395,18 +395,16 @@ export function getSlides(): Slide[] {
   return [
     {
       id: 'cover',
-      section: 'Thesis',
-      title: 'BAML',
       node: (
         <div className="l2-cover">
           <div className="l2-cover-mark">
             <Image
-              src="/baml-sheep.png"
               alt=""
-              width={128}
-              height={128}
               className="l2-cover-sheep"
+              height={128}
               priority
+              src="/baml-sheep.png"
+              width={128}
             />
             <h1 className="l2-cover-title">BAML</h1>
           </div>
@@ -420,14 +418,14 @@ export function getSlides(): Slide[] {
           </p>
         </div>
       ),
+      section: 'Thesis',
+      title: 'BAML',
     },
 
     {
       id: 'infection',
-      section: 'Thesis',
-      title: 'One stochastic call infects the graph',
       node: (
-        <SlideShell wide title="One model call changes everything above it">
+        <SlideShell title="One model call changes everything above it" wide>
           <Split
             left={
               <>
@@ -449,12 +447,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Thesis',
+      title: 'One stochastic call infects the graph',
     },
 
     {
       id: 'why-language',
-      section: 'Thesis',
-      title: 'Why a language, not a library',
       node: (
         <SlideShell title="Why a language, and not a library">
           <Lead>{'A library cannot:'}</Lead>
@@ -473,14 +471,14 @@ export function getSlides(): Slide[] {
           </Callout>
         </SlideShell>
       ),
+      section: 'Thesis',
+      title: 'Why a language, not a library',
     },
 
     {
       id: 'hello',
-      section: 'The language',
-      title: 'Sixty seconds of BAML',
       node: (
-        <SlideShell wide title="The language, in sixty seconds">
+        <SlideShell title="The language, in sixty seconds" wide>
           <Split
             left={
               <>
@@ -504,14 +502,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'The language',
+      title: 'Sixty seconds of BAML',
     },
 
     {
       id: 'boundary',
-      section: 'The language',
-      title: 'Types at the model boundary',
       node: (
-        <SlideShell wide title="Types have to outlive the compiler">
+        <SlideShell title="Types have to outlive the compiler" wide>
           <Lead>
             {
               'TypeScript checks your types, then erases them. But the model replies at runtime — exactly when there is nothing left to check it against.'
@@ -524,16 +522,16 @@ export function getSlides(): Slide[] {
                   TypeScript — the type system never sees the model
                 </p>
                 <BamlCode
-                  lang="typescript"
-                  filename="classify.ts"
                   code={TS_BOUNDARY}
                   diagnostics={[
                     {
                       line: 5,
-                      severity: 'warning',
                       message: 'const data: any',
+                      severity: 'warning',
                     },
                   ]}
+                  filename="classify.ts"
+                  lang="typescript"
                 />
               </div>
             }
@@ -556,12 +554,12 @@ export function getSlides(): Slide[] {
           </Callout>
         </SlideShell>
       ),
+      section: 'The language',
+      title: 'Types at the model boundary',
     },
 
     {
       id: 'graph',
-      section: 'The language',
-      title: 'The graph is the program',
       node: (
         <div className="l3-playground-slide">
           <h2 className="l2-slide-title">The graph is the program</h2>
@@ -576,14 +574,14 @@ export function getSlides(): Slide[] {
           />
         </div>
       ),
+      section: 'The language',
+      title: 'The graph is the program',
     },
 
     {
       id: 'errors-compare',
-      section: 'Errors',
-      title: 'Where the error type gets lost',
       node: (
-        <SlideShell wide title="Where mainstream languages lose the error type">
+        <SlideShell title="Where mainstream languages lose the error type" wide>
           <Lead>
             {
               'Code that calls models fails a lot — and error handling is the least typed part of every mainstream language.'
@@ -592,27 +590,27 @@ export function getSlides(): Slide[] {
           <div className="l3-cols3">
             <div className="l2-example">
               <p className="l2-example-label font-mono">TypeScript</p>
-              <BamlCode lang="typescript" filename="run.ts" code={TS_CATCH} />
+              <BamlCode code={TS_CATCH} filename="run.ts" lang="typescript" />
             </div>
             <div className="l2-example">
               <p className="l2-example-label font-mono">Python</p>
-              <BamlCode lang="python" filename="run.py" code={PY_CATCH} />
+              <BamlCode code={PY_CATCH} filename="run.py" lang="python" />
             </div>
             <div className="l2-example">
               <p className="l2-example-label font-mono">Go</p>
-              <BamlCode lang="go" filename="run.go" code={GO_CATCH} />
+              <BamlCode code={GO_CATCH} filename="run.go" lang="go" />
             </div>
           </div>
         </SlideShell>
       ),
+      section: 'Errors',
+      title: 'Where the error type gets lost',
     },
 
     {
       id: 'errors-baml',
-      section: 'Errors',
-      title: 'throws is inferred',
       node: (
-        <SlideShell wide title="Errors are types; throws is inferred">
+        <SlideShell title="Errors are types; throws is inferred" wide>
           <Split
             left={
               <Bullets
@@ -629,14 +627,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Errors',
+      title: 'throws is inferred',
     },
 
     {
       id: 'errors-live',
-      section: 'Errors',
-      title: 'The compiler knows the error set',
       node: (
-        <SlideShell wide title="The compiler knows the complete error set">
+        <SlideShell title="The compiler knows the complete error set" wide>
           <Split
             left={
               <>
@@ -663,14 +661,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Errors',
+      title: 'The compiler knows the error set',
     },
 
     {
       id: 'coloring',
-      section: 'Concurrency',
-      title: 'No function coloring',
       node: (
-        <SlideShell wide title="Reads like TypeScript. Schedules like Go.">
+        <SlideShell title="Reads like TypeScript. Schedules like Go." wide>
           <Split
             left={
               <>
@@ -679,9 +677,9 @@ export function getSlides(): Slide[] {
                     TypeScript — async repaints the call stack
                   </p>
                   <BamlCode
-                    lang="typescript"
-                    filename="server.ts"
                     code={TS_COLOR}
+                    filename="server.ts"
+                    lang="typescript"
                   />
                 </div>
                 <div className="l2-example">
@@ -689,9 +687,9 @@ export function getSlides(): Slide[] {
                     Python — same wall, different paint
                   </p>
                   <BamlCode
-                    lang="python"
-                    filename="server.py"
                     code={PY_COLOR}
+                    filename="server.py"
+                    lang="python"
                   />
                 </div>
               </>
@@ -707,14 +705,14 @@ export function getSlides(): Slide[] {
           </Callout>
         </SlideShell>
       ),
+      section: 'Concurrency',
+      title: 'No function coloring',
     },
 
     {
       id: 'fanout',
-      section: 'Concurrency',
-      title: 'Use every core',
       node: (
-        <SlideShell wide title="Use every core">
+        <SlideShell title="Use every core" wide>
           <Lead>
             {
               'Promise.all can overlap waiting, but compute still runs on one core. BAML spawns schedule across all of them.'
@@ -723,14 +721,14 @@ export function getSlides(): Slide[] {
           <CoreUsage />
         </SlideShell>
       ),
+      section: 'Concurrency',
+      title: 'Use every core',
     },
 
     {
       id: 'tests',
-      section: 'Evals',
-      title: 'Tests are language constructs',
       node: (
-        <SlideShell wide title="Tests are language constructs">
+        <SlideShell title="Tests are language constructs" wide>
           <Split
             left={
               <Bullets
@@ -746,14 +744,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Evals',
+      title: 'Tests are language constructs',
     },
 
     {
       id: 'flaky',
-      section: 'Evals',
-      title: 'Statistical evaluation is just code',
       node: (
-        <SlideShell wide title="Statistical evaluation is just code">
+        <SlideShell title="Statistical evaluation is just code" wide>
           <Split
             left={
               <>
@@ -776,14 +774,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Evals',
+      title: 'Statistical evaluation is just code',
     },
 
     {
       id: 'pack',
-      section: 'Toolchain',
-      title: 'baml pack',
       node: (
-        <SlideShell wide title="A function is a deployable unit">
+        <SlideShell title="A function is a deployable unit" wide>
           <Split
             left={
               <>
@@ -804,28 +802,28 @@ export function getSlides(): Slide[] {
                 </Callout>
               </>
             }
-            right={<TermPlay title="baml pack" events={PACK_EVENTS} />}
+            right={<TermPlay events={PACK_EVENTS} title="baml pack" />}
           />
         </SlideShell>
       ),
+      section: 'Toolchain',
+      title: 'baml pack',
     },
 
     {
       id: 'describe',
-      section: 'Toolchain',
-      title: 'baml describe vs grep',
       node: (
-        <SlideShell wide title="baml describe — one call, a complete answer">
+        <SlideShell title="baml describe — one call, a complete answer" wide>
           <div className="l3-task font-mono">
             <span className="l3-task-label">the agent’s task</span>
             {'what does greet return, and where is it called from?'}
           </div>
           <Split
             left={
-              <TermPlay title="agent without describe" events={GREP_EVENTS} />
+              <TermPlay events={GREP_EVENTS} title="agent without describe" />
             }
             right={
-              <TermPlay title="agent with describe" events={DESCRIBE_EVENTS} />
+              <TermPlay events={DESCRIBE_EVENTS} title="agent with describe" />
             }
           />
           <Callout tone="note">
@@ -835,14 +833,14 @@ export function getSlides(): Slide[] {
           </Callout>
         </SlideShell>
       ),
+      section: 'Toolchain',
+      title: 'baml describe vs grep',
     },
 
     {
       id: 'embed',
-      section: 'Embedding',
-      title: 'Call it from Python',
       node: (
-        <SlideShell wide title="It embeds in the app you already have">
+        <SlideShell title="It embeds in the app you already have" wide>
           <Split
             left={
               <Bullets
@@ -855,18 +853,18 @@ export function getSlides(): Slide[] {
                 ]}
               />
             }
-            right={<BamlCode lang="python" filename="app.py" code={PY_EMBED} />}
+            right={<BamlCode code={PY_EMBED} filename="app.py" lang="python" />}
           />
         </SlideShell>
       ),
+      section: 'Embedding',
+      title: 'Call it from Python',
     },
 
     {
       id: 'metrics',
-      section: 'Design — not shipped',
-      title: 'Metrics as a language concept',
       node: (
-        <SlideShell wide title="Metrics as a language concept">
+        <SlideShell title="Metrics as a language concept" wide>
           <span className="l3-design-tag font-mono">
             design proposal — not shipped
           </span>
@@ -889,22 +887,22 @@ export function getSlides(): Slide[] {
             }
             right={
               <BamlCode
-                lang="baml"
-                filename="resume.baml (proposed)"
                 code={BAML_METRIC}
+                filename="resume.baml (proposed)"
+                lang="baml"
               />
             }
           />
         </SlideShell>
       ),
+      section: 'Design — not shipped',
+      title: 'Metrics as a language concept',
     },
 
     {
       id: 'metrics-dag',
-      section: 'Design — not shipped',
-      title: 'Metrics fire when data arrives',
       node: (
-        <SlideShell wide title="Metrics fire when their data arrives">
+        <SlideShell title="Metrics fire when their data arrives" wide>
           <span className="l3-design-tag font-mono">
             design proposal — not shipped
           </span>
@@ -912,9 +910,9 @@ export function getSlides(): Slide[] {
             left={
               <>
                 <BamlCode
-                  lang="baml"
-                  filename="usage.baml (proposed)"
                   code={BAML_METRIC_USE}
+                  filename="usage.baml (proposed)"
+                  lang="baml"
                 />
                 <Callout tone="warn">
                   {
@@ -927,12 +925,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Design — not shipped',
+      title: 'Metrics fire when data arrives',
     },
 
     {
       id: 'tradeoffs',
-      section: 'Tradeoffs',
-      title: 'What you are signing up for',
       node: (
         <SlideShell title="What you are signing up for">
           <Bullets
@@ -950,25 +948,27 @@ export function getSlides(): Slide[] {
           </Callout>
         </SlideShell>
       ),
+      section: 'Tradeoffs',
+      title: 'What you are signing up for',
     },
 
     {
       id: 'close',
-      section: 'Start',
-      title: 'Try it',
       node: (
         <div className="l2-close">
-          <Terminal lines={['brew install boundaryml/tap/baml']} />
+          <Terminal lines={['brew install baml']} />
           <a
             className="l2-close-link font-mono"
             href="https://new.boundaryml.com/quickstart"
-            target="_blank"
             rel="noreferrer"
+            target="_blank"
           >
             new.boundaryml.com/quickstart →
           </a>
         </div>
       ),
+      section: 'Start',
+      title: 'Try it',
     },
   ];
 }

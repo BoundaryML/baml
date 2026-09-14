@@ -50,9 +50,9 @@ pub enum PackMode {
 
 /// Wire format embedded into a packaged binary.
 ///
-/// Stable across `baml pack` / `baml-pack-host` versions built from the
-/// same source tree. Version-skew is the author's responsibility; a
-/// binary packed by `baml pack` ships its own host.
+/// Wrapped in a `baml_artifact::ArtifactKind::PackedProgram` envelope at the
+/// CLI/host boundary, so a host built with a different format or canary
+/// fingerprint rejects it before Borsh decodes this type.
 #[derive(Clone, Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackEnvelope {
     /// The compiled BAML program.

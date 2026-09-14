@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[interface_requires_pins.baml:28:19]
+ 28 │     wants_int_key(e)
+    ·                   ┬
+    ·                   ╰── expected `HasKey<Key = int>`, found `Entity`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interface_requires_pins.baml:33:19]
+ 33 │     wants_int_key(l)
+    ·                   ┬
+    ·                   ╰── expected `HasKey<Key = int>`, found `Loose`
+    ╰────

@@ -7,9 +7,9 @@
 /// Compile errors raised in the user file, as `[CODE] message`.
 fn compile_errors(source: &str) -> Vec<String> {
     use baml_compiler_diagnostics::Severity;
-    use baml_project::{collect_diagnostics, testing::setup_test_db};
+    use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
     let db = setup_test_db(source);
-    collect_diagnostics(&db)
+    check_user_files(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
@@ -25,7 +25,7 @@ fn from_json_interface_compiles() {
         class Temp {
             celsius float
             implements baml.FromJson {
-                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+                function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
                     Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
                 }
             }
@@ -64,13 +64,13 @@ fn empty_implementor_is_rejected() {
 
 #[test]
 fn static_from_json_charges_only_json_decode_error() {
-    // The sugar charges exactly `JsonDecodeError` (not the unaccounted-callee
+    // The sugar charges exactly `DecodeError` (not the unaccounted-callee
     // `unknown`): a wrapper declaring only that throws compiles clean, and a
-    // structural decode needs no `JsonParseError`.
+    // structural decode needs no `ParseError`.
     let errors = compile_errors(
         r#"
         class User { name string  age int }
-        function decode(j: baml.json.json) -> User throws baml.json.JsonDecodeError {
+        function decode(j: baml.json.json) -> User throws baml.json.DecodeError {
             User.from_json(j)
         }
         function main() -> int { 1 }
@@ -78,7 +78,7 @@ fn static_from_json_charges_only_json_decode_error() {
     );
     assert!(
         errors.is_empty(),
-        "Type.from_json should charge only JsonDecodeError; got:\n  {}",
+        "Type.from_json should charge only DecodeError; got:\n  {}",
         errors.join("\n  ")
     );
 }

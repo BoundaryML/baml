@@ -1,13 +1,16 @@
 import type { RuntimePort } from './runtime-port';
 import type {
+  BoundaryId,
+  ExecutionTelemetry,
   RequestCommandOutcome,
   Run,
   RunCursor,
   RunCursorExpiredReason,
-  BoundaryId,
   RunListFilter,
   RunPatch,
   RunSummary,
+  TelemetryExecution,
+  TelemetryMedia,
   ValueBodyResponse,
   ValueRef,
   WorkerOutMessage,
@@ -67,9 +70,24 @@ export interface RunStoreClient {
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
   listHistory(filter?: RunListFilter): Promise<RunSummary[]>;
+  /**
+   * Executions in the project's profile store, newest first. Structure and
+   * timing live there rather than in the run store.
+   */
+  listExecutions(project: string): Promise<ExecutionListResult>;
+  /** One execution's threads, calling contexts, retained spans, and errors. */
+  openExecution(
+    project: string,
+    executionId: string,
+  ): Promise<ExecutionTelemetry>;
+  /** One captured value's media bytes, by content id. */
+  readTelemetryMedia(project: string, cid: string): Promise<TelemetryMedia>;
   openHistory(boundaryId: BoundaryId): Promise<Run>;
   snapshot(boundaryId: BoundaryId): Promise<Run>;
-  readValue(boundaryId: BoundaryId, valueRef: ValueRef): Promise<ValueBodyResponse>;
+  readValue(
+    boundaryId: BoundaryId,
+    valueRef: ValueRef,
+  ): Promise<ValueBodyResponse>;
   subscribe(boundaryId: BoundaryId, cursor?: RunCursor): RunSubscriptionHandle;
   unsubscribe(subscriptionId: string): Promise<RequestCommandOutcome | string>;
   dispose(): void;
@@ -100,14 +118,63 @@ export function isProjectNotReadyError(error: unknown): boolean {
   );
 }
 
+export interface ExecutionListResult {
+  executions: TelemetryExecution[];
+  /** True when nothing has run under this project yet. */
+  storeMissing: boolean;
+}
+
 type PendingRequest =
-  | { kind: 'startRun'; resolve: (boundaryId: BoundaryId) => void; reject: (error: Error) => void }
-  | { kind: 'command'; resolve: (outcome: RequestCommandOutcome | string) => void; reject: (error: Error) => void }
-  | { kind: 'listRuns'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
-  | { kind: 'historyList'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
-  | { kind: 'snapshot'; resolve: (run: Run) => void; reject: (error: Error) => void }
-  | { kind: 'valueBody'; resolve: (body: ValueBodyResponse) => void; reject: (error: Error) => void }
-  | { kind: 'subscribe'; subscriptionId: string; reject: (error: Error) => void };
+  | {
+      kind: 'startRun';
+      resolve: (boundaryId: BoundaryId) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'command';
+      resolve: (outcome: RequestCommandOutcome | string) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'listRuns';
+      resolve: (runs: RunSummary[]) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'historyList';
+      resolve: (runs: RunSummary[]) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'snapshot';
+      resolve: (run: Run) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'executionList';
+      resolve: (result: ExecutionListResult) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'executionTelemetry';
+      resolve: (telemetry: ExecutionTelemetry) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'telemetryMedia';
+      resolve: (media: TelemetryMedia) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'valueBody';
+      resolve: (body: ValueBodyResponse) => void;
+      reject: (error: Error) => void;
+    }
+  | {
+      kind: 'subscribe';
+      subscriptionId: string;
+      reject: (error: Error) => void;
+    };
 
 class AsyncQueue<T> implements AsyncIterable<T> {
   private values: T[] = [];
@@ -117,7 +184,7 @@ class AsyncQueue<T> implements AsyncIterable<T> {
   push(value: T): void {
     const waiter = this.waiters.shift();
     if (waiter) {
-      waiter({ value, done: false });
+      waiter({ done: false, value });
     } else {
       this.values.push(value);
     }
@@ -126,7 +193,7 @@ class AsyncQueue<T> implements AsyncIterable<T> {
   close(): void {
     this.closed = true;
     for (const waiter of this.waiters.splice(0)) {
-      waiter({ value: undefined, done: true });
+      waiter({ done: true, value: undefined });
     }
   }
 
@@ -135,10 +202,10 @@ class AsyncQueue<T> implements AsyncIterable<T> {
       next: () => {
         const value = this.values.shift();
         if (value !== undefined) {
-          return Promise.resolve({ value, done: false });
+          return Promise.resolve({ done: false, value });
         }
         if (this.closed) {
-          return Promise.resolve({ value: undefined, done: true });
+          return Promise.resolve({ done: true, value: undefined });
         }
         return new Promise<IteratorResult<T>>((resolve) => {
           this.waiters.push(resolve);
@@ -163,7 +230,11 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
     return nextRequestId++;
   }
 
-  function rejectPending(requestId: number, code: string, message: string): void {
+  function rejectPending(
+    requestId: number,
+    code: string,
+    message: string,
+  ): void {
     const waiter = pending.get(requestId);
     if (!waiter) return;
     pending.delete(requestId);
@@ -204,6 +275,30 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
         waiter.resolve(msg.runs);
         return;
       }
+      case 'executionList': {
+        const waiter = pending.get(msg.requestId);
+        if (!waiter || waiter.kind !== 'executionList') return;
+        pending.delete(msg.requestId);
+        waiter.resolve({
+          executions: msg.executions,
+          storeMissing: msg.storeMissing ?? false,
+        });
+        return;
+      }
+      case 'executionTelemetry': {
+        const waiter = pending.get(msg.requestId);
+        if (!waiter || waiter.kind !== 'executionTelemetry') return;
+        pending.delete(msg.requestId);
+        waiter.resolve(msg.telemetry);
+        return;
+      }
+      case 'telemetryMedia': {
+        const waiter = pending.get(msg.requestId);
+        if (!waiter || waiter.kind !== 'telemetryMedia') return;
+        pending.delete(msg.requestId);
+        waiter.resolve(msg.media);
+        return;
+      }
       case 'runSnapshot': {
         if (msg.requestId != null) {
           const waiter = pending.get(msg.requestId);
@@ -215,14 +310,17 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
           if (waiter?.kind === 'subscribe') {
             subscriptions
               .get(waiter.subscriptionId)
-              ?.queue.push({ type: 'snapshot', snapshot: msg.snapshot });
+              ?.queue.push({ snapshot: msg.snapshot, type: 'snapshot' });
             pending.delete(msg.requestId);
             return;
           }
         }
         for (const subscription of subscriptions.values()) {
           if (subscription.boundaryId === msg.boundaryId) {
-            subscription.queue.push({ type: 'snapshot', snapshot: msg.snapshot });
+            subscription.queue.push({
+              snapshot: msg.snapshot,
+              type: 'snapshot',
+            });
           }
         }
         return;
@@ -237,15 +335,15 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       case 'runPatch':
         for (const subscription of subscriptions.values()) {
           if (subscription.boundaryId === msg.patch.boundaryId) {
-            subscription.queue.push({ type: 'patch', patch: msg.patch });
+            subscription.queue.push({ patch: msg.patch, type: 'patch' });
           }
         }
         return;
       case 'runCursorExpired': {
         const event: RunCursorExpiredEvent = {
-          type: 'cursorExpired',
           boundaryId: msg.boundaryId,
           reason: msg.reason,
+          type: 'cursorExpired',
         };
         if (msg.requestId != null) {
           const waiter = pending.get(msg.requestId);
@@ -257,7 +355,8 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
           subscriptions.get(msg.subscriptionId)?.queue.push(event);
         } else {
           for (const subscription of subscriptions.values()) {
-            if (subscription.boundaryId === msg.boundaryId) subscription.queue.push(event);
+            if (subscription.boundaryId === msg.boundaryId)
+              subscription.queue.push(event);
           }
         }
         return;
@@ -287,153 +386,14 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       | { type: 'unsubscribe'; requestId: number; subscriptionId: string },
   ): Promise<RequestCommandOutcome | string> {
     return new Promise((resolve, reject) => {
-      pending.set(msg.requestId, { kind: 'command', resolve, reject });
+      pending.set(msg.requestId, { kind: 'command', reject, resolve });
       port.postMessage(msg);
     });
   }
 
   const client: RunStoreClient = {
-    startRun(request) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'startRun', resolve, reject });
-        port.postMessage({
-          type: 'startRun',
-          requestId: id,
-          project: request.project,
-          functionName: request.functionName,
-          argsBytes: request.argsBytes,
-        });
-      });
-    },
-
-    startPreviewRun(request) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'startRun', resolve, reject });
-        port.postMessage({
-          type: 'startPreviewRun',
-          requestId: id,
-          project: request.project,
-          parentFunctionName: request.parentFunctionName,
-          helper: request.helper,
-          functionName: request.functionName,
-          argsBytes: request.argsBytes,
-        });
-      });
-    },
-
-    startTestRun(request) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'startRun', resolve, reject });
-        port.postMessage({
-          type: 'startTestRun',
-          requestId: id,
-          project: request.project,
-          generation: request.generation,
-          testName: request.testName,
-        });
-      });
-    },
-
     cancelRun(boundaryId) {
-      return command({ type: 'cancelRun', requestId: requestId(), boundaryId });
-    },
-
-    respondToInput(boundaryId, inputRequestId, value) {
-      return command({
-        type: 'respondToInput',
-        requestId: requestId(),
-        boundaryId,
-        inputRequestId,
-        value,
-      });
-    },
-
-    respondToEnv(boundaryId, envRequestId, value) {
-      return command({
-        type: 'respondToEnv',
-        requestId: requestId(),
-        boundaryId,
-        envRequestId,
-        value,
-      });
-    },
-
-    listRuns(filter) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'listRuns', resolve, reject });
-        port.postMessage({ type: 'listRuns', requestId: id, filter });
-      });
-    },
-
-    listHistory(filter) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'historyList', resolve, reject });
-        port.postMessage({ type: 'listHistory', requestId: id, filter });
-      });
-    },
-
-    openHistory(boundaryId) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'snapshot', resolve, reject });
-        port.postMessage({ type: 'openHistory', requestId: id, boundaryId });
-      });
-    },
-
-    snapshot(boundaryId) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'snapshot', resolve, reject });
-        port.postMessage({ type: 'snapshot', requestId: id, boundaryId });
-      });
-    },
-
-    readValue(boundaryId, valueRef) {
-      const id = requestId();
-      return new Promise((resolve, reject) => {
-        pending.set(id, { kind: 'valueBody', resolve, reject });
-        port.postMessage({ type: 'readValue', requestId: id, boundaryId, valueRef });
-      });
-    },
-
-    subscribe(boundaryId, cursor) {
-      const id = requestId();
-      const subscriptionId = `run_sub_${nextSubscriptionId++}`;
-      const queue = new AsyncQueue<RunSubscriptionEvent>();
-      subscriptions.set(subscriptionId, { boundaryId, queue });
-      pending.set(id, {
-        kind: 'subscribe',
-        subscriptionId,
-        reject: () =>
-          queue.push({ type: 'cursorExpired', boundaryId, reason: 'unavailable' }),
-      });
-      port.postMessage({
-        type: 'subscribe',
-        requestId: id,
-        subscriptionId,
-        boundaryId,
-        afterCursor: cursor,
-      });
-      return {
-        subscriptionId,
-        events: queue,
-        unsubscribe: () => client.unsubscribe(subscriptionId),
-      };
-    },
-
-    unsubscribe(subscriptionId) {
-      subscriptions.get(subscriptionId)?.queue.close();
-      subscriptions.delete(subscriptionId);
-      return command({
-        type: 'unsubscribe',
-        requestId: requestId(),
-        subscriptionId,
-      });
+      return command({ boundaryId, requestId: requestId(), type: 'cancelRun' });
     },
 
     dispose() {
@@ -446,6 +406,187 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
         subscription.queue.close();
       }
       subscriptions.clear();
+    },
+
+    listExecutions(project) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'executionList', reject, resolve });
+        port.postMessage({ project, requestId: id, type: 'listExecutions' });
+      });
+    },
+
+    listHistory(filter) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'historyList', reject, resolve });
+        port.postMessage({ filter, requestId: id, type: 'listHistory' });
+      });
+    },
+
+    listRuns(filter) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'listRuns', reject, resolve });
+        port.postMessage({ filter, requestId: id, type: 'listRuns' });
+      });
+    },
+
+    openExecution(project, executionId) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'executionTelemetry', reject, resolve });
+        port.postMessage({
+          executionId,
+          project,
+          requestId: id,
+          type: 'openExecution',
+        });
+      });
+    },
+
+    openHistory(boundaryId) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'snapshot', reject, resolve });
+        port.postMessage({ boundaryId, requestId: id, type: 'openHistory' });
+      });
+    },
+
+    readTelemetryMedia(project, cid) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'telemetryMedia', reject, resolve });
+        port.postMessage({
+          cid,
+          project,
+          requestId: id,
+          type: 'readTelemetryMedia',
+        });
+      });
+    },
+
+    readValue(boundaryId, valueRef) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'valueBody', reject, resolve });
+        port.postMessage({
+          boundaryId,
+          requestId: id,
+          type: 'readValue',
+          valueRef,
+        });
+      });
+    },
+
+    respondToEnv(boundaryId, envRequestId, value) {
+      return command({
+        boundaryId,
+        envRequestId,
+        requestId: requestId(),
+        type: 'respondToEnv',
+        value,
+      });
+    },
+
+    respondToInput(boundaryId, inputRequestId, value) {
+      return command({
+        boundaryId,
+        inputRequestId,
+        requestId: requestId(),
+        type: 'respondToInput',
+        value,
+      });
+    },
+
+    snapshot(boundaryId) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'snapshot', reject, resolve });
+        port.postMessage({ boundaryId, requestId: id, type: 'snapshot' });
+      });
+    },
+
+    startPreviewRun(request) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'startRun', reject, resolve });
+        port.postMessage({
+          argsBytes: request.argsBytes,
+          functionName: request.functionName,
+          helper: request.helper,
+          parentFunctionName: request.parentFunctionName,
+          project: request.project,
+          requestId: id,
+          type: 'startPreviewRun',
+        });
+      });
+    },
+    startRun(request) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'startRun', reject, resolve });
+        port.postMessage({
+          argsBytes: request.argsBytes,
+          functionName: request.functionName,
+          project: request.project,
+          requestId: id,
+          type: 'startRun',
+        });
+      });
+    },
+
+    startTestRun(request) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'startRun', reject, resolve });
+        port.postMessage({
+          generation: request.generation,
+          project: request.project,
+          requestId: id,
+          testName: request.testName,
+          type: 'startTestRun',
+        });
+      });
+    },
+
+    subscribe(boundaryId, cursor) {
+      const id = requestId();
+      const subscriptionId = `run_sub_${nextSubscriptionId++}`;
+      const queue = new AsyncQueue<RunSubscriptionEvent>();
+      subscriptions.set(subscriptionId, { boundaryId, queue });
+      pending.set(id, {
+        kind: 'subscribe',
+        reject: () =>
+          queue.push({
+            boundaryId,
+            reason: 'unavailable',
+            type: 'cursorExpired',
+          }),
+        subscriptionId,
+      });
+      port.postMessage({
+        afterCursor: cursor,
+        boundaryId,
+        requestId: id,
+        subscriptionId,
+        type: 'subscribe',
+      });
+      return {
+        events: queue,
+        subscriptionId,
+        unsubscribe: () => client.unsubscribe(subscriptionId),
+      };
+    },
+
+    unsubscribe(subscriptionId) {
+      subscriptions.get(subscriptionId)?.queue.close();
+      subscriptions.delete(subscriptionId);
+      return command({
+        requestId: requestId(),
+        subscriptionId,
+        type: 'unsubscribe',
+      });
     },
   };
 

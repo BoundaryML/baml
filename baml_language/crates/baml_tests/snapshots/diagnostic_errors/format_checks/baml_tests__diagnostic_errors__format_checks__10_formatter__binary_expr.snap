@@ -70,9 +70,9 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     a + (b * (c + d));
 
     // ===== Deeply nested parens =====
-    ((((a + b) * c) + d) * (((a - b) + c) - d)) + ((a * b) + (c * d));
+    ((((a + b) * c) + d) * (a - b + c - d)) + ((a * b) + (c * d));
     (((a + b) * (c + d)) + ((a - b) * (c - d)))
-        * (((a * c * d) + (b * c * d)) - ((a * d) + (b * c * d)));
+        * ((a * c * d) + (b * c * d) - ((a * d) + (b * c * d)));
 
     // ===== Trivia between operands (line comments) =====
     // 1 left leading

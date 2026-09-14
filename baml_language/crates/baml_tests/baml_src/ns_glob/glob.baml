@@ -1,7 +1,7 @@
 // Tests for baml.glob namespace.
 //
 // HERMETICITY: every scan test creates a unique temp directory under /tmp
-// (using baml.sys.now_ms() and int.random as discriminators), writes fixture files with
+// (using baml.time.Instant.now() and int.random as discriminators), writes fixture files with
 // baml.fs.write / baml.fs.mkdir, runs the assertions, then removes the
 // directory tree with baml.sys.shell("rm -rf …"). All filesystem work is
 // done inside top-level functions (not in test-block locals) to avoid the
@@ -10,8 +10,9 @@
 // instead of the string path. Locals inside a top-level `function` do not
 // have this problem.
 //
-// baml.json.stringify converts an int to its decimal JSON representation
-// (e.g. 1234567890 → "1234567890"); used to build unique temp dir paths.
+// string.from renders the epoch-milliseconds bigint in decimal (e.g. 1234567890n
+// → "1234567890"); used to build unique temp dir paths. baml.json.stringify
+// cannot take its place here — the `json` type admits `int` but not `bigint`.
 //
 // Scan failures (broken symlink with throw_error_on_broken_symlink=true,
 // unreadable directories) surface as BAML-catchable `baml.errors.Io` throws,
@@ -25,32 +26,32 @@
 // ============================================================================
 
 function glob_tmp(name: string) -> string {
-    "/tmp/baml_glob_" + name + "_" + baml.json.stringify(baml.sys.now_ms()) + "_" + baml.json.stringify(int.random(0, 1000000000))
+    `/tmp/baml_glob_${name}_${baml.time.Instant.now().to_timestamp_milliseconds()}_${int.random(0, 1000000000)}`
 }
 
 test "glob_matches_basic" {
     let g = baml.glob.new("*.txt");
-    assert.is_true(baml.deep_equals(g.matches("hello.txt"), true))
+    assert.is_true(g.matches("hello.txt"))
 }
 
 test "glob_matches_no_match" {
     let g = baml.glob.new("*.txt");
-    assert.is_true(baml.deep_equals(g.matches("hello.rs"), false))
+    assert.is_true(!g.matches("hello.rs"))
 }
 
 test "glob_matches_recursive_wildcard" {
     let g = baml.glob.new("**/*.ts");
-    assert.is_true(baml.deep_equals(g.matches("src/index.ts"), true))
+    assert.is_true(g.matches("src/index.ts"))
 }
 
 test "glob_matches_question_mark" {
     let g = baml.glob.new("file?.txt");
-    assert.is_true(baml.deep_equals(g.matches("fileA.txt"), true))
+    assert.is_true(g.matches("fileA.txt"))
 }
 
 test "glob_matches_question_mark_no_match" {
     let g = baml.glob.new("file?.txt");
-    assert.is_true(baml.deep_equals(g.matches("file.txt"), false))
+    assert.is_true(!g.matches("file.txt"))
 }
 
 // [abc] matches a single character from the set.
@@ -60,7 +61,7 @@ function glob_matches_bracket_character_class_fn() -> bool[] {
 }
 
 test "glob_matches_bracket_character_class" {
-    assert.is_true(baml.deep_equals(glob_matches_bracket_character_class_fn(), [true, true, true, false]))
+    assert.equal(glob_matches_bracket_character_class_fn(), [true, true, true, false])
 }
 
 // [a-c] matches any character in the range.
@@ -70,7 +71,7 @@ function glob_matches_bracket_range_fn() -> bool[] {
 }
 
 test "glob_matches_bracket_range" {
-    assert.is_true(baml.deep_equals(glob_matches_bracket_range_fn(), [true, true, false]))
+    assert.equal(glob_matches_bracket_range_fn(), [true, true, false])
 }
 
 // [^abc] matches a single character NOT in the set.
@@ -80,7 +81,7 @@ function glob_matches_negated_bracket_fn() -> bool[] {
 }
 
 test "glob_matches_negated_bracket" {
-    assert.is_true(baml.deep_equals(glob_matches_negated_bracket_fn(), [false, true]))
+    assert.equal(glob_matches_negated_bracket_fn(), [false, true])
 }
 
 // *.{ts,tsx} alternation.
@@ -90,7 +91,7 @@ function glob_matches_alternation_fn() -> bool[] {
 }
 
 test "glob_matches_alternation" {
-    assert.is_true(baml.deep_equals(glob_matches_alternation_fn(), [true, true, false]))
+    assert.equal(glob_matches_alternation_fn(), [true, true, false])
 }
 
 // !index.ts — negated pattern matches everything except that file.
@@ -100,7 +101,7 @@ function glob_matches_negated_pattern_fn() -> bool[] {
 }
 
 test "glob_matches_negated_pattern" {
-    assert.is_true(baml.deep_equals(glob_matches_negated_pattern_fn(), [true, false]))
+    assert.equal(glob_matches_negated_pattern_fn(), [true, false])
 }
 
 // ============================================================================
@@ -126,15 +127,15 @@ function scan_finds_txt_files() -> string[] {
 }
 
 test "glob_scan_finds_txt_files_length" {
-    assert.is_true(baml.deep_equals(scan_finds_txt_files().length(), 2))
+    assert.equal(scan_finds_txt_files().length(), 2)
 }
 
 test "glob_scan_finds_txt_files_has_a" {
-    assert.is_true(baml.deep_equals(scan_finds_txt_files().includes("a.txt"), true))
+    assert.is_true(scan_finds_txt_files().includes("a.txt"))
 }
 
 test "glob_scan_finds_txt_files_has_b" {
-    assert.is_true(baml.deep_equals(scan_finds_txt_files().includes("b.txt"), true))
+    assert.is_true(scan_finds_txt_files().includes("b.txt"))
 }
 
 // ─── glob_scan_returns_empty_for_no_match ────────────────────────────────────
@@ -151,7 +152,7 @@ function scan_returns_empty_for_no_match() -> string[] {
 }
 
 test "glob_scan_returns_empty_for_no_match" {
-    assert.is_true(baml.deep_equals(scan_returns_empty_for_no_match().length(), 0))
+    assert.equal(scan_returns_empty_for_no_match().length(), 0)
 }
 
 // ─── glob_scan_only_files_by_default ─────────────────────────────────────────
@@ -175,7 +176,7 @@ function scan_only_files_by_default_checks() -> bool[] {
 }
 
 test "glob_scan_only_files_by_default" {
-    assert.is_true(baml.deep_equals(scan_only_files_by_default_checks(), [true, true]))
+    assert.equal(scan_only_files_by_default_checks(), [true, true])
 }
 
 // ─── glob_scan_options_include_dot_absolute_and_directories ──────────────────
@@ -202,7 +203,7 @@ function scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
 }
 
 test "glob_scan_options_include_dot_absolute_and_directories" {
-    assert.is_true(baml.deep_equals(scan_opts_include_dot_absolute_and_dirs_checks(), [true, true, true, true]))
+    assert.equal(scan_opts_include_dot_absolute_and_dirs_checks(), [true, true, true, true])
 }
 
 // ─── glob_scan_matches_dot_slash_pattern ─────────────────────────────────────
@@ -218,11 +219,11 @@ function scan_matches_dot_slash_pattern() -> string[] {
 }
 
 test "glob_scan_matches_dot_slash_pattern_length" {
-    assert.is_true(baml.deep_equals(scan_matches_dot_slash_pattern().length(), 1))
+    assert.equal(scan_matches_dot_slash_pattern().length(), 1)
 }
 
 test "glob_scan_matches_dot_slash_pattern_has_file" {
-    assert.is_true(baml.deep_equals(scan_matches_dot_slash_pattern().includes("file.txt"), true))
+    assert.is_true(scan_matches_dot_slash_pattern().includes("file.txt"))
 }
 
 // ─── glob_scan_matches_absolute_pattern ──────────────────────────────────────
@@ -243,7 +244,7 @@ function scan_matches_absolute_pattern_checks() -> bool[] {
 }
 
 test "glob_scan_matches_absolute_pattern" {
-    assert.is_true(baml.deep_equals(scan_matches_absolute_pattern_checks(), [true, true]))
+    assert.equal(scan_matches_absolute_pattern_checks(), [true, true])
 }
 
 // ─── glob_scan_dot_pattern_matches_only_dot_files ────────────────────────────
@@ -261,11 +262,11 @@ function scan_dot_pattern_matches_only_dot_files() -> string[] {
 }
 
 test "glob_scan_dot_pattern_matches_only_dot_files_length" {
-    assert.is_true(baml.deep_equals(scan_dot_pattern_matches_only_dot_files().length(), 1))
+    assert.equal(scan_dot_pattern_matches_only_dot_files().length(), 1)
 }
 
 test "glob_scan_dot_pattern_matches_only_dot_files_has_hidden" {
-    assert.is_true(baml.deep_equals(scan_dot_pattern_matches_only_dot_files().includes(".hidden"), true))
+    assert.is_true(scan_dot_pattern_matches_only_dot_files().includes(".hidden"))
 }
 
 // ─── glob_scan_default_prunes_dot_directories ────────────────────────────────
@@ -290,7 +291,7 @@ function scan_default_prunes_dot_directories_checks() -> bool[] {
 }
 
 test "glob_scan_default_prunes_dot_directories" {
-    assert.is_true(baml.deep_equals(scan_default_prunes_dot_directories_checks(), [true, true]))
+    assert.equal(scan_default_prunes_dot_directories_checks(), [true, true])
 }
 
 // ─── glob_scan_follows_symlinked_directory_when_enabled (unix) ───────────────
@@ -316,7 +317,7 @@ function scan_follows_symlinked_directory_checks() -> bool[] {
 }
 
 test "glob_scan_follows_symlinked_directory_when_enabled" {
-    assert.is_true(baml.deep_equals(scan_follows_symlinked_directory_checks(), [true, true]))
+    assert.equal(scan_follows_symlinked_directory_checks(), [true, true])
 }
 
 // ─── glob_scan_skips_broken_symlinks_by_default (unix) ───────────────────────
@@ -336,11 +337,11 @@ function scan_skips_broken_symlinks_by_default() -> string[] {
 }
 
 test "glob_scan_skips_broken_symlinks_by_default_length" {
-    assert.is_true(baml.deep_equals(scan_skips_broken_symlinks_by_default().length(), 1))
+    assert.equal(scan_skips_broken_symlinks_by_default().length(), 1)
 }
 
 test "glob_scan_skips_broken_symlinks_by_default_has_real" {
-    assert.is_true(baml.deep_equals(scan_skips_broken_symlinks_by_default().includes("real.txt"), true))
+    assert.is_true(scan_skips_broken_symlinks_by_default().includes("real.txt"))
 }
 
 // ─── glob_scan_throws_on_broken_symlink_when_opted_in (unix) ─────────────────

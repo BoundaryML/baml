@@ -196,3 +196,10 @@ rpi/
 !baml_language/sdks/typescript/bridge_typescript/dist/
 !baml_language/sdks/typescript/bridge_typescript/dist/**
 baml_language/sdks/typescript/bridge_typescript/dist/*.node
+
+# Local developer-docs planning artifacts
+/DEVELOPER_DOCS_*.md
+
+# JUnit reports for Trunk Flaky Tests uploads (nextest writes its own under
+# baml_language/target/, already ignored).
+junit.xml

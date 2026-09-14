@@ -25,6 +25,14 @@ function test_arity_mismatch() -> int[] {
     })
 }
 
+// Arity mismatch: lambda has too few params for expected type
+function test_arity_mismatch_too_few() -> int[] {
+    let f: (int, int) -> int[] throws never = (x) -> {
+        [x]
+    };
+    f(1, 2)
+}
+
 // Wrong param type annotation vs expected
 function test_param_type_mismatch() -> int[] {
     let items: int[] = [1, 2, 3];
@@ -47,4 +55,14 @@ function test_unknown_return_type() -> int {
         x
     };
     0
+}
+
+// Incompatible constraints after an initially unconstrained lambda
+function test_conflicting_later_constraints() -> int {
+    let f = (x) -> {
+        x
+    };
+    let int_identity: (int) -> int throws never = f;
+    let string_identity: (string) -> string throws never = f;
+    int_identity(0)
 }

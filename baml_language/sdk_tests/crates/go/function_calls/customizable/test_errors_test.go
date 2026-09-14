@@ -28,7 +28,7 @@ func initializeGeneratedRuntime(t *testing.T) {
 // Direct Go counterpart to Python test_stdlib_error_surfaces_as_baml_error.
 func Test_stdlib_error_surfaces_as_go_error(t *testing.T) {
 	_, err := baml_sdk.ThrowsTestParseJson(context.Background(), badJSON)
-	assertErrorContains(t, err, "BAML error", "baml.json.JsonParseError")
+	assertErrorContains(t, err, "BAML error", "baml.json.ParseError")
 }
 
 func Test_parse_json_successful_value_uses_generated_json_projection(t *testing.T) {

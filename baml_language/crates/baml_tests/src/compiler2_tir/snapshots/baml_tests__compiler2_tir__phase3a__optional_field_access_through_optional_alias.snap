@@ -10,6 +10,7 @@ function user.f(u: user.MaybeUser) -> string | null throws never {
   { : string | null
     u?.name : string | null
   }
+  !! 89..96: did you mean `u.name`? `u?.name` is unnecessary, because `u` cannot be null
 }
 class user.User$stream {
   name: string | null

@@ -56,7 +56,7 @@ jobs:
             target: aarch64-unknown-linux-musl
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
-    # with a newer GLIBC version compatible with Node24 used by actions/checkout@v6
+    # with a newer GLIBC version compatible with Node24 used by actions/checkout@v7
     # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
 
@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # This sets up protoc-gen-go for non-Windows builds
       # and on windows this seems to hang forever since 0.217.0
@@ -79,7 +79,7 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           targets: ${{ matrix._.target }}
           enable-cache: false
@@ -87,7 +87,7 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4.2.4
         if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"

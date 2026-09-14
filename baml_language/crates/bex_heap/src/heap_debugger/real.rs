@@ -372,11 +372,12 @@ impl BexHeap {
             | Object::Interface(_)
             | Object::Package(_)
             | Object::ImplRule(_)
+            | Object::TypeAlias(_)
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
-            | Object::Collector(_)
+
             | Object::Type(_)
             | Object::Float(_)
             // `HostClosure` carries no heap references.

@@ -11,7 +11,10 @@
 //!   `RuntimeFunctionParamTy`);
 //! - the mechanical `attr`/`with_attr` accessors;
 //! - the full conversion matrix (`From` widenings and `TryFrom` narrowings,
-//!   owned and by-reference) between every comparable pair of members.
+//!   owned and by-reference) between every comparable pair of members;
+//! - for a `child: interned(Handle)` member, the hash-cons pool's kind enum
+//!   and twin satellites, with nested positions holding the handle (see
+//!   `interned_member`) — excluded from the matrix and walkers.
 //!
 //! The semantic impls (`render_with`, `Display`, the `lower_to_runtime`
 //! boundary) stay hand-written on the generated types.
@@ -24,6 +27,7 @@ use crate::parse::{Family, FamilyInput};
 
 mod convert;
 mod emit;
+mod interned_member;
 mod parse;
 
 /// Generate the `Ty` family. See the crate docs for the DSL and what is

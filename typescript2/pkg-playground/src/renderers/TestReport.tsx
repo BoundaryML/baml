@@ -1,15 +1,17 @@
 /**
  * Renders a testing.TestReport as a readable test result summary.
  */
+// biome-ignore-all lint/style/useFilenamingConvention: predates the convention; renaming would churn the renderer registry layout shared with canary
 
+import { AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import type { FC } from 'react';
-import type { ResultRendererProps } from '../result-renderers';
-import { CheckCircle2, XCircle, AlertCircle, Clock } from 'lucide-react';
 import { cn } from '../lib/utils';
+import type { ResultRendererProps } from '../result-renderers';
 
 interface RunReportShape {
   outcome?: string;
   duration_ms?: number;
+  message?: string | null;
 }
 
 interface TestReportShape {
@@ -28,9 +30,9 @@ const outcomeIcon: Record<
   string,
   { icon: typeof CheckCircle2; color: string; label: string }
 > = {
-  pass: { icon: CheckCircle2, color: 'text-green-500', label: 'Passed' },
-  fail: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
-  error: { icon: AlertCircle, color: 'text-orange-500', label: 'Error' },
+  error: { color: 'text-orange-500', icon: AlertCircle, label: 'Error' },
+  fail: { color: 'text-red-500', icon: XCircle, label: 'Failed' },
+  pass: { color: 'text-green-500', icon: CheckCircle2, label: 'Passed' },
 };
 
 function formatDuration(ms: number): string {
@@ -67,7 +69,7 @@ export const TestReportRenderer: FC<ResultRendererProps> = ({
     <div className="space-y-2 p-3 rounded bg-vsc-bg border border-vsc-border">
       {/* Overall outcome */}
       <div className="flex items-center gap-2">
-        <Icon size={20} className={info.color} />
+        <Icon className={info.color} size={20} />
         <span className={cn('text-sm font-semibold', info.color)}>
           {info.label}
         </span>
@@ -87,17 +89,25 @@ export const TestReportRenderer: FC<ResultRendererProps> = ({
             const RunIcon = runInfo.icon;
             return (
               <div
+                className="text-xs font-vsc-mono py-0.5 px-2 rounded bg-vsc-bg-alt"
+                // biome-ignore lint/suspicious/noArrayIndexKey: report runs are positional and have no stable id
                 key={i}
-                className="flex items-center gap-2 text-xs font-vsc-mono py-0.5 px-2 rounded bg-vsc-bg-alt"
               >
-                <RunIcon size={12} className={runInfo.color} />
-                <span className={cn('text-[11px]', runInfo.color)}>
-                  {runInfo.label}
-                </span>
-                {(run.duration_ms ?? 0) > 0 && (
-                  <span className="text-vsc-text-faint ml-auto">
-                    {formatDuration(run.duration_ms!)}
+                <div className="flex items-center gap-2">
+                  <RunIcon className={runInfo.color} size={12} />
+                  <span className={cn('text-[11px]', runInfo.color)}>
+                    {runInfo.label}
                   </span>
+                  {(run.duration_ms ?? 0) > 0 && (
+                    <span className="text-vsc-text-faint ml-auto">
+                      {formatDuration(run.duration_ms ?? 0)}
+                    </span>
+                  )}
+                </div>
+                {run.message && (
+                  <pre className="whitespace-pre-wrap m-0 mt-1 pl-5 text-[11px] text-vsc-text max-h-[200px] overflow-auto">
+                    {run.message}
+                  </pre>
                 )}
               </div>
             );

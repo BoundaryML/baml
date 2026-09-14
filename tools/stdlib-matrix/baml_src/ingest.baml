@@ -65,20 +65,20 @@ class ReportHeader {
 /// against a corrupt or stale-format artifact.
 function load_report(path: string) -> ReportHeader {
     let report = baml.json.to<ReportHeader>(baml.json.parse(baml.fs.read(path))) catch (_) {
-        baml.json.JsonParseError => {
+        baml.json.ParseError => {
             throw baml.errors.InvalidArgument {
             message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
         }
         },
-        baml.json.JsonDecodeError => {
+        baml.json.DecodeError => {
             throw baml.errors.InvalidArgument {
             message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
         }
         },
     };
-    if (report.format_version != 1) {
+    if (report.format_version != 2) {
         throw baml.errors.InvalidArgument {
-            message: `${path} has report format_version ${report.format_version} (expected 1); regenerate it with tools/stdlib-matrix/run`,
+            message: `${path} has report format_version ${report.format_version} (expected 2); regenerate it with tools/stdlib-matrix/run`,
         };
     }
     report
@@ -86,9 +86,9 @@ function load_report(path: string) -> ReportHeader {
 
 function load_ts_surface(path: string) -> TsSurfaceDoc {
     let doc = baml.json.from_string<TsSurfaceDoc>(baml.fs.read(path));
-    if (doc.format_version != 1) {
+    if (doc.format_version != 2) {
         throw baml.errors.InvalidArgument {
-            message: `unsupported ts-surface format_version ${doc.format_version} in ${path} (expected 1)`,
+            message: `unsupported ts-surface format_version ${doc.format_version} in ${path} (expected 2); regenerate it with tools/stdlib-matrix/run`,
         };
     }
     doc

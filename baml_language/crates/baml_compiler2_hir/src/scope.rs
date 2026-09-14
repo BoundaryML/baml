@@ -11,7 +11,7 @@ use text_size::TextRange;
 
 use crate::ids::{
     ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
 };
 
 /// Dense sequential index into the per-file scope arena.
@@ -98,7 +98,6 @@ pub enum ItemScopeOwner {
     TypeAlias(LocalItemId<TypeAliasMarker>),
     TemplateString(LocalItemId<TemplateStringMarker>),
     Client(LocalItemId<ClientMarker>),
-    Test(LocalItemId<TestMarker>),
     RetryPolicy(LocalItemId<RetryPolicyMarker>),
     Let(LocalItemId<LetMarker>),
     /// An out-of-body `implement I for T { … }` block, which opens a scope for

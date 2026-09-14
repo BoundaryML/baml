@@ -15,29 +15,24 @@
 //!     comparison that could miss a §13 change.
 
 use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
-use baml_project::ProjectDatabase;
+use baml_tests::engine::{TestDbExt, db_with_root};
 
-/// Decode escapes and apply the BEP-049 §12 dedent, as the compiler does for a
-/// backtick literal's value (treating `${...}` as literal text — only valid for
-/// literals with no block tag and no multi-line interpolation).
+/// Apply the BEP-049 §12 dedent and then decode escapes, as the compiler does
+/// for a backtick literal's value (treating `${...}` as literal text — only
+/// valid for literals with no block tag and no multi-line interpolation).
 fn backtick_value(node_text: &str) -> String {
     let ticks = node_text.bytes().take_while(|&c| c == b'`').count();
     if ticks == 0 || node_text.len() < ticks * 2 {
         return node_text.to_string();
     }
     let inner = &node_text[ticks..node_text.len() - ticks];
-    let decoded = baml_db::escape::unescape_backtick_string_literal(inner);
-    if decoded.contains('\n') {
-        baml_db::dedent::preprocess_template(&decoded)
-    } else {
-        decoded
-    }
+    baml_db::escape::unescape_backtick_string_literal(&baml_db::dedent::dedent_backtick(inner))
 }
 
 /// Map `f` over every backtick literal in `src`, in source order.
 fn backtick_map(src: &str, f: impl Fn(&str) -> String) -> Vec<String> {
-    let mut db = ProjectDatabase::new();
-    let file = db.add_file("main.baml", src);
+    let mut db = db_with_root(std::path::Path::new("."));
+    let file = db.file("main.baml", src);
     let tree: SyntaxNode = baml_db::baml_compiler_parser::syntax_tree(&db, file);
     tree.descendants()
         .filter(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
@@ -59,12 +54,12 @@ fn formatting_preserves_backtick_values() {
         // over-indented prompt value
         (
             Reindented,
-            "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n",
+            "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n",
         ),
-        // template_string body
+        // function return value
         (
             Reindented,
-            "template_string Header(title: string) `\n        # ${title}\n`\n",
+            "function Header(title: string) -> string {\n    `\n            # ${title}\n    `\n}\n",
         ),
         // attribute argument
         (
@@ -95,6 +90,11 @@ fn formatting_preserves_backtick_values() {
         (
             Reindented,
             "function Demo() -> string {\n    `hello ${name} world`\n}\n",
+        ),
+        // B-1474: a trailing `\n` escape is content and must survive formatting
+        (
+            Reindented,
+            "function Demo(host: string) -> string {\n    `\n        ${host}\\n\n    `\n}\n",
         ),
         // block-control template: §13 whitespace control, must stay verbatim
         (

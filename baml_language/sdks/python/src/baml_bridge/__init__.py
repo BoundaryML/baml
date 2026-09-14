@@ -19,13 +19,8 @@ from .baml_py import (
     BamlCallContext,
     BamlPyHandle,
     BamlRuntime,
-    Collector as _RustCollector,
-    FunctionLog as _RustFunctionLog,
     FunctionResult,
     HostSpanManager,
-    LLMCall,
-    Timing,
-    Usage,
     cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
@@ -44,8 +39,11 @@ from .errors import (
     make_sdk_panic,
 )
 from ._stream import BamlStream
+from ._function_spec import BamlFunctionSpec
+from ._runtime_value import BamlRuntimeValue
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import (
+    BamlType,
     decode_call_result,
     encode_call_args,
     pydantic_instance_type_args,
@@ -78,82 +76,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.15.0"
-
-
-# ---------------------------------------------------------------------------
-# FunctionLog / Collector wrappers (decode protobuf result → Python value)
-# ---------------------------------------------------------------------------
-
-
-def _wrap_log(log: _RustFunctionLog) -> "FunctionLog":
-    return FunctionLog(log)
-
-
-class FunctionLog:
-    """Python wrapper around the Rust FunctionLog that decodes the proto result."""
-
-    __slots__ = ("_inner",)
-
-    def __init__(self, inner: _RustFunctionLog):
-        self._inner = inner
-
-    @property
-    def id(self) -> str:
-        return self._inner.id
-
-    @property
-    def function_name(self) -> str:
-        return self._inner.function_name
-
-    @property
-    def timing(self) -> Timing:
-        return self._inner.timing
-
-    @property
-    def usage(self) -> Usage:
-        return self._inner.usage
-
-    @property
-    def calls(self) -> List[LLMCall]:
-        return self._inner.calls
-
-    @property
-    def tags(self) -> Dict[str, str]:
-        return self._inner.tags
-
-    @property
-    def result(self) -> Optional[Any]:
-        proto_bytes = self._inner.result
-        if proto_bytes is None:
-            return None
-        return decode_call_result(proto_bytes)
-
-    def __repr__(self):
-        return repr(self._inner)
-
-
-class Collector(_RustCollector):
-    """Python subclass of the Rust Collector that wraps FunctionLog results.
-
-    Overrides return the Python FunctionLog wrapper (which wraps the Rust
-    FunctionLog), so pyright sees a nominal type mismatch — suppress it.
-    """
-
-    @property
-    def logs(self) -> List["FunctionLog"]:  # type: ignore[override]
-        return [_wrap_log(log) for log in super().logs]
-
-    @property
-    def last(self) -> Optional["FunctionLog"]:  # type: ignore[override]
-        if last := super().last:
-            return _wrap_log(last)
-        return None
-
-    def id(self, function_log_id: str) -> Optional["FunctionLog"]:  # type: ignore[override]
-        if id := super().id(function_log_id):
-            return _wrap_log(id)
-        return None
+__version__ = "0.19.0"
 
 
 # ---------------------------------------------------------------------------
@@ -203,24 +126,26 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
-        result_bytes = rt.call_function_sync(args_proto, ctx, collectors)
+        result_bytes = rt.call_function_sync(args_proto, ctx)
     finally:
         _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+async def call_function(
+    rt, function_name, kwargs, ctx=None, _ctx=None
+):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
-            result_bytes = await rt.call_function(args_proto, ctx, collectors)
+            result_bytes = await rt.call_function(args_proto, ctx)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
@@ -255,6 +180,7 @@ def _build_kwargs(
     kwargs: Dict[str, Any],
     required_param_names: List[str],
     optional_param_names: List[str],
+    param_aliases: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Zip positional args with required names, then merge
     caller-supplied kwargs on top. Extra positional args error loudly
@@ -267,15 +193,17 @@ def _build_kwargs(
             f"{positional_limit} positional parameter names "
             f"({required_param_names!r})"
         )
+    aliases = param_aliases or {}
     built: Dict[str, Any] = {}
     for name, value in zip(required_param_names, args):
-        built[name] = value
+        built[aliases.get(name, name)] = value
     for k, v in kwargs.items():
         if v is UNSET:
             continue
-        if k in built:
+        wire_name = aliases.get(k, k)
+        if wire_name in built:
             raise TypeError(f"multiple values for argument {k!r}")
-        built[k] = v
+        built[wire_name] = v
     return built
 
 
@@ -349,7 +277,12 @@ def _build_type_args(
     if class_args:
         for i, name in enumerate(class_type_params):
             arg = class_args[i] if i < len(class_args) else None
-            wire.append((name, python_type_to_wire_ty(arg)))
+            wire.append(
+                (
+                    name,
+                    arg if isinstance(arg, BamlType) else python_type_to_wire_ty(arg),
+                )
+            )
 
     resolved = _resolve_types_kwarg(types_kwarg, type_params)
     # Send only the *explicitly* bound params (non-`None`); the rest are inferred
@@ -367,7 +300,10 @@ def _build_type_args(
                 "_types= on a generic method requires a Pydantic generic "
                 "receiver so the class type args can be recovered"
             )
-        wire.extend((name, python_type_to_wire_ty(r)) for name, r in bound)
+        wire.extend(
+            (name, r if isinstance(r, BamlType) else python_type_to_wire_ty(r))
+            for name, r in bound
+        )
     return wire
 
 
@@ -397,6 +333,9 @@ class _GenericCallable(staticmethod):
     def __init__(self, call: Callable[..., Any], type_param_names: List[str]) -> None:
         super().__init__(call)
         self._type_param_names = type_param_names
+        for attr in functools.WRAPPER_ASSIGNMENTS:
+            if hasattr(call, attr):
+                setattr(self, attr, getattr(call, attr))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.__func__(*args, **kwargs)
@@ -417,9 +356,12 @@ class _GenericCallable(staticmethod):
         # forms both forward `self` like an ordinary bound method.
         if obj is None:
             return self
-        return _GenericCallable(
+        bound = _GenericCallable(
             functools.partial(self.__func__, obj), self._type_param_names
         )
+        for attr in ("__name__", "__qualname__", "__module__", "__doc__"):
+            setattr(bound, attr, getattr(self, attr))
+        return bound
 
 
 def _maybe_generic_callable(
@@ -442,6 +384,10 @@ def define_function(
     *,
     type_params: Optional[List[str]] = None,
     class_type_params: Optional[List[str]] = None,
+    param_aliases: Optional[Dict[str, str]] = None,
+    binding_name: Optional[str] = None,
+    binding_qualname: Optional[str] = None,
+    binding_module: Optional[str] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML callable (free function, static method, or
     instance method). Captures the call contract by closure; returns a
@@ -469,15 +415,36 @@ def define_function(
     optional_names = list(optional_param_names or [])
     type_param_names = list(type_params or [])
     class_type_param_names = list(class_type_params or [])
+    host_to_wire_param_names = dict(param_aliases or {})
     is_generic = bool(type_param_names or class_type_param_names)
+
+    def _set_binding_metadata(call: Callable[..., Any]) -> None:
+        if binding_name is not None:
+            call.__name__ = binding_name
+        if binding_qualname is not None:
+            call.__qualname__ = binding_qualname
+        if binding_module is not None:
+            call.__module__ = binding_module
+
     if mode == "sync":
+
         def _sync(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
-            merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            merged = _build_kwargs(
+                args,
+                kwargs,
+                required_names,
+                optional_names,
+                host_to_wire_param_names,
+            )
+            call_kwargs = merged
             type_args = (
                 _build_type_args(
-                    merged, types_kwarg, type_param_names, class_type_param_names
+                    call_kwargs,
+                    types_kwarg,
+                    type_param_names,
+                    class_type_param_names,
                 )
                 if is_generic
                 else None
@@ -485,26 +452,39 @@ def define_function(
             rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
-                merged,
+                call_kwargs,
                 call_id,
                 type_args,
                 function_name=baml_fqn,
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
-                result_bytes = rt.call_function_sync(args_proto, None, None)
+                result_bytes = rt.call_function_sync(args_proto, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
+
+        _set_binding_metadata(_sync)
         return _maybe_generic_callable(_sync, type_param_names)
     elif mode == "async":
+
         async def _async(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
-            merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            merged = _build_kwargs(
+                args,
+                kwargs,
+                required_names,
+                optional_names,
+                host_to_wire_param_names,
+            )
+            call_kwargs = merged
             type_args = (
                 _build_type_args(
-                    merged, types_kwarg, type_param_names, class_type_param_names
+                    call_kwargs,
+                    types_kwarg,
+                    type_param_names,
+                    class_type_param_names,
                 )
                 if is_generic
                 else None
@@ -512,7 +492,7 @@ def define_function(
             rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
-                merged,
+                call_kwargs,
                 call_id,
                 type_args,
                 function_name=baml_fqn,
@@ -520,13 +500,15 @@ def define_function(
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
-                    result_bytes = await rt.call_function(args_proto, None, None)
+                    result_bytes = await rt.call_function(args_proto, None)
                 except asyncio.CancelledError:
                     cancel_function_call(call_id)
                     raise
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return _decode_call_result_async(result_bytes)
+
+        _set_binding_metadata(_async)
         return _maybe_generic_callable(_async, type_param_names)
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
@@ -536,15 +518,13 @@ __all__ = [
     "BamlCallContext",
     "BamlPyHandle",
     "BamlRuntime",
+    "BamlType",
     "BamlStream",
-    "Collector",
-    "FunctionLog",
+    "BamlFunctionSpec",
+    "BamlRuntimeValue",
     "FunctionResult",
     "HostSpanManager",
-    "LLMCall",
-    "Timing",
     "UNSET",
-    "Usage",
     "BamlCtxManager",
     "BamlCancelledError",
     "BamlError",

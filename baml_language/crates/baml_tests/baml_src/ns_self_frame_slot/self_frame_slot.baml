@@ -1,7 +1,8 @@
 // The `Self` frame slot: interface-owned default-method bodies carry the
 // receiver's concrete type at frame slot 0 (layout
-// `[Self ++ interface generics ++ associated types ++ fn generics]`), so
-// body-position `Self` — `is` tests, match arms, `reflect.type_of<Self>()` —
+// `[Self ++ interface generics ++ fn generics]` — associated types are not
+// frame slots; they reduce as `Self.X` projections), so
+// body-position `Self` — `is` tests, match arms, `reflect.Type.of<Self>()` —
 // resolves to the *implementor* type at runtime through every seeding path:
 // the impl rule's realized frame (virtual/existential dispatch and plain
 // concrete-receiver calls), bound methods (frame materialized at bind time),
@@ -35,13 +36,13 @@ interface Kinded {
 
     /// Reflect the concrete implementor type.
     function kind_name(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
+        reflect.Type.of<Self>().to_string()
     }
 
     /// A closure created in the default body captures the frame — including
     /// the `Self` slot — positionally.
     function kind_namer(self) -> (() -> string throws never) throws never {
-        return () -> string { reflect.type_of<Self>().to_string() };
+        return () -> string { reflect.Type.of<Self>().to_string() };
     }
 }
 
@@ -213,9 +214,9 @@ interface Store<T> {
     /// Reads all three frame regions: `Self` (slot 0), the interface generic,
     /// and the associated type.
     function describe(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
-            + "/" + reflect.type_of<T>().to_string()
-            + "/" + reflect.type_of<Self.Key>().to_string()
+        reflect.Type.of<Self>().to_string()
+            + "/" + reflect.Type.of<T>().to_string()
+            + "/" + reflect.Type.of<Self.Key>().to_string()
     }
 }
 
@@ -277,7 +278,7 @@ implements Marked for int {
         other is Self
     }
     function type_name(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
+        reflect.Type.of<Self>().to_string()
     }
 }
 
@@ -289,7 +290,7 @@ implements<T> Marked for T[] {
         other is Self
     }
     function type_name(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
+        reflect.Type.of<Self>().to_string()
     }
 }
 
@@ -302,7 +303,7 @@ class Croc {
             other is Self
         }
         function type_name(self) -> string throws never {
-            reflect.type_of<Self>().to_string()
+            reflect.Type.of<Self>().to_string()
         }
     }
 }
@@ -317,7 +318,7 @@ class Crate<T> {
             other is Self
         }
         function type_name(self) -> string throws never {
-            reflect.type_of<Self>().to_string()
+            reflect.Type.of<Self>().to_string()
         }
     }
 }

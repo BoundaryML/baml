@@ -3837,6 +3837,42 @@ export const TestOpenAIShorthand = async (
 };
 
 /**
+ * Executes the "TestOpenAITranscription" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAITranscription"
+ * with the specified parameters.
+ *
+ * @param { Audio } audio - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAITranscription = async (
+  audio: Audio,
+): Promise<string> => {
+  return b.TestOpenAITranscription(
+    audio,
+  );
+};
+
+/**
+ * Executes the "TestOpenAITranscriptionMultipartChat" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAITranscriptionMultipartChat"
+ * with the specified parameters.
+ *
+ * @param { Audio } audio - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAITranscriptionMultipartChat = async (
+  audio: Audio,
+): Promise<string> => {
+  return b.TestOpenAITranscriptionMultipartChat(
+    audio,
+  );
+};
+
+/**
  * Executes the "TestOpenAIWithFinishReasonError" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIWithFinishReasonError"
