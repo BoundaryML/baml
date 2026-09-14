@@ -21,7 +21,12 @@ test "witnessed_to_baml_round_trip_preserves_the_definition_tuple" {
         `;
     let compiled_package = reflect.Package.compile(
         {
-            "contract.baml": "interface Named {\n  type Value\n  name Self.Value\n}",
+            "contract.baml": `
+                interface Named {
+                    type Value
+                    name Self.Value
+                }
+            `,
             "person.baml": checked_source,
         },
     );
@@ -45,7 +50,7 @@ test "same_named_runtime_declarations_are_rejected" {
 }
 
 test "minted_and_compiled_same_named_declarations_are_rejected" {
-    let package = reflect.Package.compile({ "original.baml": "class Choice { compiled string }" });
+    let package = reflect.Package.compile({ "original.baml": `class Choice { compiled string }` });
     let compiled_choice = package.get_class("root.Choice") ?? throw "missing Choice";
     let minted_choice = reflect.class.new("Choice", { "minted": reflect.Type.of<int>() });
     let combined = reflect.union.new([compiled_choice.as_type(), minted_choice.as_type()]);

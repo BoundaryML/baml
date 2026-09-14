@@ -354,7 +354,7 @@ test "render prompt uses the runtime package schema" {
 }
 
 test "runtime package declarations are stable per package and generative per compile" {
-    let files = { "schema.baml": "class ExtractedRecord { account string amount int }" };
+    let files = { "schema.baml": `class ExtractedRecord { account string amount int }` };
     let first = reflect.Package.compile(files);
     let second = reflect.Package.compile(files);
     let a = first.get_class("root.ExtractedRecord") ?? throw "missing first";
@@ -373,9 +373,9 @@ test "runtime package and declarations survive major collection" {
 }
 
 test "runtime compile honors namespaces and mounted dependencies" {
-    let base = reflect.Package.compile({ "ns_models/base.baml": "class Base { id string }" });
+    let base = reflect.Package.compile({ "ns_models/base.baml": `class Base { id string }` });
     let child = reflect.Package.compile(
-        { "child.baml": "class Child { base dep.models.Base }" },
+        { "child.baml": `class Child { base dep.models.Base }` },
         packages = { "dep": base },
     );
     assert.is_true(base.get_class("root.models.Base") != null);
@@ -385,7 +385,7 @@ test "runtime compile honors namespaces and mounted dependencies" {
 
 test "mounted runtime types do not leak into phantom stub diagnostics" {
     let runtime_minted = reflect.class.new("RpcRuntimeMinted", { "value": reflect.Type.of<string>() });
-    let app = reflect.Package.compile({ "app.baml": "function ready() -> bool { true }" }).with_types(
+    let app = reflect.Package.compile({ "app.baml": `function ready() -> bool { true }` }).with_types(
         { "RpcRuntimeMinted": runtime_minted },
     );
     let dependency = reflect.Package.compile(
@@ -402,14 +402,14 @@ test "mounted runtime types do not leak into phantom stub diagnostics" {
         packages = { "app": app },
     );
     let consumer = reflect.Package.compile(
-        { "consumer.baml": "function ready() -> bool { true }" },
+        { "consumer.baml": `function ready() -> bool { true }` },
         packages = { "dependency": dependency },
     );
     assert.equal(consumer.diagnostics().length(), 0)
 }
 
 function rpc_simple_function_package() -> reflect.Package {
-    reflect.Package.compile({ "main.baml": "function Present(value: string) -> string { value }" })
+    reflect.Package.compile({ "main.baml": `function Present(value: string) -> string { value }` })
 }
 
 test "get_function absence is null" {
@@ -541,7 +541,7 @@ test "alias maps are order-independent and cannot shadow stdlib" {
 
     let rejected = false;
     let _ = reflect.Package.compile(
-        { "main.baml": "function main() -> int { 1 }" },
+        { "main.baml": `function main() -> int { 1 }` },
         packages = { "baml": root_package },
     ) catch (e) {
         reflect.errors.CompilationError => {
@@ -568,7 +568,7 @@ test "package tests enumerate invocable zero-argument functions" {
 }
 
 test "one package under two aliases is one package" {
-    let root_package = reflect.Package.compile({ "twin.baml": "class Twin { x int }" });
+    let root_package = reflect.Package.compile({ "twin.baml": `class Twin { x int }` });
     let generated = reflect.Package.compile(
         {
             "main.baml": `

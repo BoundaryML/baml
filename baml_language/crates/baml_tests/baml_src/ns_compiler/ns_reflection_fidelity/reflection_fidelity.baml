@@ -1,12 +1,17 @@
 function prompt(body: string) -> string {
-    "function G() -> string {\n  client: \"openai/gpt-4o-mini\"\n  prompt: `" + body + "`\n}\n"
+    `
+        function G() -> string {
+          client: "openai/gpt-4o-mini"
+          prompt: \`${body}\`
+        }\n
+    `
 }
 
 test "failed compile exposes structured diagnostic fidelity" {
     let diagnostics = root.compiler.CompileDiagnostics(
         {
-            "first.baml": "class Widget { first int }",
-            "second.baml": "class Widget { second string }",
+            "first.baml": `class Widget { first int }`,
+            "second.baml": `class Widget { second string }`,
         },
     );
     assert.equal(diagnostics.length(), 1);
@@ -62,7 +67,10 @@ test "successful public compile exposes warnings" {
 test "compiler related locations and their highlights stay structured" {
     let diagnostics = root.compiler.CompileDiagnostics(
         {
-            "tag.baml": "function sql(body: (x: int) -> baml.TaggedString) -> string { \"ok\" }\nfunction Demo() -> string { sql`hi ${1}` }\n",
+            "tag.baml": `
+                function sql(body: (x: int) -> baml.TaggedString) -> string { "ok" }
+                function Demo() -> string { sql\`hi \${1}\` }
+            `,
         },
     );
     let matches = diagnostics.filter((diagnostic) -> bool {

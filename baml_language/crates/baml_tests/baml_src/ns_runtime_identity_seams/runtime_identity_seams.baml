@@ -36,7 +36,7 @@ test "runtime_declarations_anchor_through_every_container_seam" {
     let minted_enum = reflect.enum.new("MintedState", ["Ready", "Done"]);
     let enum_array = minted_enum.as_type().array().as_type();
 
-    let compiled_package = reflect.Package.compile({ "compiled.baml": "class CompiledInner { x string }" });
+    let compiled_package = reflect.Package.compile({ "compiled.baml": `class CompiledInner { x string }` });
     let compiled_inner = compiled_package.get_class("root.CompiledInner") ?? throw "missing CompiledInner";
     let compiled_array = compiled_inner.as_type().array().as_type();
     let compiled_holder_array = reflect.class.new("CompiledHolderArray", { "bs": compiled_array }).as_type();

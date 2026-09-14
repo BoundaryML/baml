@@ -263,7 +263,7 @@ test "map_key_type_view_keeps_runtime_definitions" {
 
 test "nested_class_of_a_runtime_package_type_reads_back" {
     let package = reflect.Package.compile(
-        { "schema.baml": "class Leaf { name string } class Root { leaf Leaf }" },
+        { "schema.baml": `class Leaf { name string } class Root { leaf Leaf }` },
     );
     let root = package.get_class("root.Root") ?? throw "missing Root";
     let field = root.fields().at(0) ?? throw "missing field";
@@ -275,7 +275,7 @@ test "nested_class_of_a_runtime_package_type_reads_back" {
 
 test "function_views_of_a_runtime_package_keep_its_definitions" {
     let package = reflect.Package.compile(
-        { "schema.baml": "enum Choice { FIRST SECOND } function pick(c: Choice) -> Choice { c }" },
+        { "schema.baml": `enum Choice { FIRST SECOND } function pick(c: Choice) -> Choice { c }` },
     );
 
     let view = package.functions().get("root.pick") ?? throw "missing pick";

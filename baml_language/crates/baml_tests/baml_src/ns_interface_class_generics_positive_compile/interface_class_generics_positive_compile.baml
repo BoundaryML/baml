@@ -4,7 +4,36 @@
 test "class_generic_bound_through_requires_chain_exposes_all_members" {
     root.compiler.AssertCompiles(
         {
-            "class_generic_bound_through_requires_chain_exposes_all_members.baml": "\n        interface Named {\n            name: string\n        }\n\n        interface Person requires Named {\n            occupation: string\n        }\n\n        class Employee {\n            name: string\n            occupation: string\n            implements Named {}\n            implements Person {}\n        }\n\n        class Holder<T extends Person> {\n            value: T\n\n            function label(self) -> string {\n                return self.value.name + \":\" + self.value.occupation\n            }\n        }\n\n        function main() -> Holder<Employee> {\n            return Holder<Employee> {\n                value: Employee { name: \"Ada\", occupation: \"Engineer\" }\n            }\n        }\n        ",
+            "class_generic_bound_through_requires_chain_exposes_all_members.baml": `
+                interface Named {
+                    name: string
+                }
+
+                interface Person requires Named {
+                    occupation: string
+                }
+
+                class Employee {
+                    name: string
+                    occupation: string
+                    implements Named {}
+                    implements Person {}
+                }
+
+                class Holder<T extends Person> {
+                    value: T
+
+                    function label(self) -> string {
+                        return self.value.name + ":" + self.value.occupation
+                    }
+                }
+
+                function main() -> Holder<Employee> {
+                    return Holder<Employee> {
+                        value: Employee { name: "Ada", occupation: "Engineer" }
+                    }
+                }
+            `,
         },
     )
 }
@@ -12,7 +41,31 @@ test "class_generic_bound_through_requires_chain_exposes_all_members" {
 test "class_generic_bound_is_visible_inside_lambda_body" {
     root.compiler.AssertCompiles(
         {
-            "class_generic_bound_is_visible_inside_lambda_body.baml": "\n        interface Named {\n            name: string\n        }\n\n        class Dog {\n            name: string\n            implements Named {}\n        }\n\n        class Box<T extends Named> {\n            value: T\n\n            function get_name(self) -> string {\n                let read = () -> string {\n                    return self.value.name\n                }\n                return read()\n            }\n        }\n\n        function main() -> string {\n            return Box<Dog> { value: Dog { name: \"Rex\" } }.get_name()\n        }\n        ",
+            "class_generic_bound_is_visible_inside_lambda_body.baml": `
+                interface Named {
+                    name: string
+                }
+
+                class Dog {
+                    name: string
+                    implements Named {}
+                }
+
+                class Box<T extends Named> {
+                    value: T
+
+                    function get_name(self) -> string {
+                        let read = () -> string {
+                            return self.value.name
+                        }
+                        return read()
+                    }
+                }
+
+                function main() -> string {
+                    return Box<Dog> { value: Dog { name: "Rex" } }.get_name()
+                }
+            `,
         },
     )
 }
@@ -20,7 +73,28 @@ test "class_generic_bound_is_visible_inside_lambda_body" {
 test "class_generic_bound_substitutes_other_class_type_params" {
     root.compiler.AssertCompiles(
         {
-            "class_generic_bound_substitutes_other_class_type_params.baml": "\n        interface Slot<T> {\n            value: T\n        }\n\n        class IntSlot {\n            value: int\n            implements Slot<int> {}\n        }\n\n        class Holder<T extends Slot<U>, U> {\n            item: T\n\n            function read(self) -> U {\n                return self.item.value\n            }\n        }\n\n        function main() -> Holder<IntSlot, int> {\n            return Holder<IntSlot, int> { item: IntSlot { value: 1 } }\n        }\n        ",
+            "class_generic_bound_substitutes_other_class_type_params.baml": `
+                interface Slot<T> {
+                    value: T
+                }
+
+                class IntSlot {
+                    value: int
+                    implements Slot<int> {}
+                }
+
+                class Holder<T extends Slot<U>, U> {
+                    item: T
+
+                    function read(self) -> U {
+                        return self.item.value
+                    }
+                }
+
+                function main() -> Holder<IntSlot, int> {
+                    return Holder<IntSlot, int> { item: IntSlot { value: 1 } }
+                }
+            `,
         },
     )
 }
@@ -28,7 +102,21 @@ test "class_generic_bound_substitutes_other_class_type_params" {
 test "class_generic_bound_allows_bounded_type_var_as_type_arg_in_class_field" {
     root.compiler.AssertCompiles(
         {
-            "class_generic_bound_allows_bounded_type_var_as_type_arg_in_class_field.baml": "\n        interface Marker {}\n\n        class Box<T extends Marker> {\n            value: T\n        }\n\n        class Outer<T extends Marker> {\n            inner: Box<T>\n        }\n\n        function main() -> int {\n            return 1\n        }\n        ",
+            "class_generic_bound_allows_bounded_type_var_as_type_arg_in_class_field.baml": `
+                interface Marker {}
+
+                class Box<T extends Marker> {
+                    value: T
+                }
+
+                class Outer<T extends Marker> {
+                    inner: Box<T>
+                }
+
+                function main() -> int {
+                    return 1
+                }
+            `,
         },
     )
 }

@@ -1,67 +1,651 @@
 // Native ports of Phase-1 Rust integration tests.
 
 function source_1() -> string {
-    "\nfunction main() -> bool {\n  let pkg = reflect.Package.compile({ \"items.baml\": `\nclass Item { value string }\nfunction Items() -> Item[] { [Item { value: \"bound\" }] }\n  ` })\n  let item_ct = pkg.get_class(\"root.Item\") ?? throw \"missing Item\"\n  let binding_evaluations: int = 0\n  let operand = () -> {\n    binding_evaluations += 1\n    item_ct.as_type()\n  }\n\n  let escaped: unknown = {\n    type T = unreflect(operand());\n    if (reflect.Type.of<T>() != item_ct.as_type()) {\n      throw \"reflect.Type.of<T>() did not preserve the bound value\"\n    }\n    let get_items = pkg.get_function<() -> T[]>(\"root.Items\")\n      ?? throw \"missing root.Items\"\n    let items: T[] = get_items()\n    let item: T = items[0]\n    if (reflect.Type.of_value(item) != reflect.Type.of<T>()) {\n      throw \"typed result did not retain T\"\n    }\n    item\n  }\n\n  binding_evaluations == 1\n    && reflect.Type.of_value(escaped) == item_ct.as_type()\n}\n"
+    `
+        function main() -> bool {
+            let pkg = reflect.Package.compile({ "items.baml": \`
+                class Item { value string }
+                function Items() -> Item[] { [Item { value: "bound" }] }
+            \` })
+            let item_ct = pkg.get_class("root.Item") ?? throw "missing Item"
+            let binding_evaluations: int = 0
+            let operand = () -> {
+                binding_evaluations += 1
+                item_ct.as_type()
+            }
+
+            let escaped: unknown = {
+                type T = unreflect(operand());
+                if (reflect.Type.of<T>() != item_ct.as_type()) {
+                    throw "reflect.Type.of<T>() did not preserve the bound value"
+                }
+                let get_items = pkg.get_function<() -> T[]>("root.Items")
+                    ?? throw "missing root.Items"
+                let items: T[] = get_items()
+                let item: T = items[0]
+                if (reflect.Type.of_value(item) != reflect.Type.of<T>()) {
+                    throw "typed result did not retain T"
+                }
+                item
+            }
+
+            binding_evaluations == 1
+                && reflect.Type.of_value(escaped) == item_ct.as_type()
+        }
+    `
 }
 
 function source_2() -> string {
-    "\nfunction main() -> bool {\n  let string_t = reflect.Type.of<string>()\n  let int_t = reflect.Type.of<int>()\n  let check = (bound: reflect.Type) -> {\n    type T = unreflect(bound);\n    reflect.Type.of<T>() == bound\n  }\n\n  type T = unreflect(string_t);\n  let inner = {\n    type T = unreflect(int_t);\n    reflect.Type.of<T>() == int_t\n  }\n  reflect.Type.of<T>() == string_t && inner && check(int_t)\n}\n"
+    `
+        function main() -> bool {
+            let string_t = reflect.Type.of<string>()
+            let int_t = reflect.Type.of<int>()
+            let check = (bound: reflect.Type) -> {
+                type T = unreflect(bound);
+                reflect.Type.of<T>() == bound
+            }
+
+            type T = unreflect(string_t);
+            let inner = {
+                type T = unreflect(int_t);
+                reflect.Type.of<T>() == int_t
+            }
+            reflect.Type.of<T>() == string_t && inner && check(int_t)
+        }
+    `
 }
 
 function source_3() -> string {
-    "\n        interface Parser<Out> {\n            function parse_it(self, text: string) -> Out throws unknown\n            function describe(self) -> string throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Parser<T> {\n                function parse_it(self, text: string) -> T {\n                    baml.sap.parse<T>(text)\n                }\n\n                function describe(self) -> string throws never {\n                    reflect.Type.of<T>().to_string()\n                }\n            }\n        }\n\n        function main() -> string {\n            let output_type = reflect.class.new(\"RuntimeOutput\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type Out = unreflect(output_type)\n\n            let holder = Holder<Out>.new()\n            let parsed = holder.parse_it(`{\"name\":\"Pixel\"}`)\n            `${holder.describe()}|${reflect.class.get_field<string>(parsed, \"name\")}`\n        }\n        "
+    `
+        interface Parser<Out> {
+            function parse_it(self, text: string) -> Out throws unknown
+            function describe(self) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Parser<T> {
+                function parse_it(self, text: string) -> T {
+                    baml.sap.parse<T>(text)
+                }
+
+                function describe(self) -> string throws never {
+                    reflect.Type.of<T>().to_string()
+                }
+            }
+        }
+
+        function main() -> string {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let parsed = holder.parse_it(\`{"name":"Pixel"}\`)
+            \`\${holder.describe()}|\${reflect.class.get_field<string>(parsed, "name")}\`
+        }
+    `
 }
 
 function source_4() -> string {
-    "\n        \nclient DefaultClient = openai.ResponsesClient.new(\n    model = \"gpt-4o-mini\",\n    api_key = \"test-key\",\n    base_url = \"http://localhost:1234\",\n);\n\nclass ProbeClient {\n    reply: string,\n    requests: string[],\n\n    implements ai.Client {\n        function id(self) -> string {\n            \"probe\"\n        }\n\n        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {\n            let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();\n            let _ = self.requests.push(prompt);\n            baml.http.Request { method: \"POST\", url: \"https://probe.invalid\", headers: {}, body: prompt }\n        }\n\n        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {\n            let _ = self.render(input);\n            ai.ModelTurn {\n                calls: [],\n                content: [ai.content.Text { text: self.reply }],\n                stop_reason: ai.content.StopReason.Complete,\n                usage: null,\n            }\n        }\n    }\n}\n\n\n        function DynamicOutput<T>() -> T {\n            client: DefaultClient\n            prompt: `${ctx.output_format()}`\n        }\n\n        function main() -> string {\n            let output_type = reflect.class.new(\"RuntimeOutput\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type Out = unreflect(output_type)\n\n            // Control: the direct SAP call has always worked.\n            let direct = baml.sap.parse<Out>(`{\"name\":\"Pixel\"}`)\n\n            let run = ai.Agent.new(\n                client = ProbeClient { reply: `{\"name\":\"Pixel\"}`, requests: [] },\n            ).run(DynamicOutput@spec<Out>())\n\n            let direct_name = reflect.class.get_field<string>(direct, \"name\")\n            let agent_name = reflect.class.get_field<string>(run.value, \"name\")\n            `${direct_name}|${agent_name}`\n        }\n        "
+    `
+        client DefaultClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        class ProbeClient {
+            reply: string,
+            requests: string[],
+
+            implements ai.Client {
+                function id(self) -> string {
+                    "probe"
+                }
+
+                function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+                    let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+                    let _ = self.requests.push(prompt);
+                    baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
+                }
+
+                function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+                    let _ = self.render(input);
+                    ai.ModelTurn {
+                        calls: [],
+                        content: [ai.content.Text { text: self.reply }],
+                        stop_reason: ai.content.StopReason.Complete,
+                        usage: null,
+                    }
+                }
+            }
+        }
+
+        function DynamicOutput<T>() -> T {
+            client: DefaultClient
+            prompt: \`\${ctx.output_format()}\`
+        }
+
+        function main() -> string {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            // Control: the direct SAP call has always worked.
+            let direct = baml.sap.parse<Out>(\`{"name":"Pixel"}\`)
+
+            let run = ai.Agent.new(
+                client = ProbeClient { reply: \`{"name":"Pixel"}\`, requests: [] },
+            ).run(DynamicOutput@spec<Out>())
+
+            let direct_name = reflect.class.get_field<string>(direct, "name")
+            let agent_name = reflect.class.get_field<string>(run.value, "name")
+            \`\${direct_name}|\${agent_name}\`
+        }
+    `
 }
 
 function source_5() -> string {
-    "\n        \nclient DefaultClient = openai.ResponsesClient.new(\n    model = \"gpt-4o-mini\",\n    api_key = \"test-key\",\n    base_url = \"http://localhost:1234\",\n);\n\nclass ProbeClient {\n    reply: string,\n    requests: string[],\n\n    implements ai.Client {\n        function id(self) -> string {\n            \"probe\"\n        }\n\n        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {\n            let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();\n            let _ = self.requests.push(prompt);\n            baml.http.Request { method: \"POST\", url: \"https://probe.invalid\", headers: {}, body: prompt }\n        }\n\n        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {\n            let _ = self.render(input);\n            ai.ModelTurn {\n                calls: [],\n                content: [ai.content.Text { text: self.reply }],\n                stop_reason: ai.content.StopReason.Complete,\n                usage: null,\n            }\n        }\n    }\n}\n\n\n        function DynamicOutput<T>() -> T {\n            client: DefaultClient\n            prompt: `${ctx.output_format()}`\n        }\n\n        function main() -> string {\n            let minted_class = reflect.class.new(\"MintedRecord\", {\n                \"minted_field\": reflect.Type.of<string>().meta(\n                    docstring = \"Minted runner field docs\",\n                ),\n            }).as_type()\n            type MintedRecord = unreflect(minted_class)\n            let class_client = ProbeClient { reply: `{\"minted_field\":\"ok\"}`, requests: [] }\n            let _ = ai.Agent.new(\n                client = class_client,\n            ).run(DynamicOutput@spec<MintedRecord>())\n\n            let minted_enum = reflect.enum.new(\n                \"MintedChoice\",\n                [\"PENDING\", \"RUNNING\"],\n            ).as_type()\n            type MintedChoice = unreflect(minted_enum)\n            let enum_client = ProbeClient { reply: `\"RUNNING\"`, requests: [] }\n            let _ = ai.Agent.new(\n                client = enum_client,\n            ).run(DynamicOutput@spec<MintedChoice>())\n\n            let alpha = reflect.class.new(\"AlphaShape\", {\n                \"alpha_only\": reflect.Type.of<string>(),\n            }).as_type()\n            let beta = reflect.class.new(\"BetaShape\", {\n                \"beta_only\": reflect.Type.of<int>(),\n            }).as_type()\n            let union = reflect.union.new([alpha, beta]).as_type()\n            type MintedUnion = unreflect(union)\n            let union_client = ProbeClient { reply: `{\"alpha_only\":\"ok\"}`, requests: [] }\n            let _ = ai.Agent.new(\n                client = union_client,\n            ).run(DynamicOutput@spec<MintedUnion>())\n\n            let package = reflect.Package.compile({ \"compiled.baml\": `\nclass CompiledRecord { compiled_field string }\n` })\n            let compiled = (package.get_class(\"root.CompiledRecord\")\n                ?? throw \"missing CompiledRecord\").as_type()\n            type CompiledRecord = unreflect(compiled)\n            let compiled_client = ProbeClient { reply: `{\"compiled_field\":\"ok\"}`, requests: [] }\n            let _ = ai.Agent.new(\n                client = compiled_client,\n            ).run(DynamicOutput@spec<CompiledRecord>())\n\n            let class_prompt = class_client.requests.at(0) ?? throw \"missing class request\"\n            let enum_prompt = enum_client.requests.at(0) ?? throw \"missing enum request\"\n            let union_prompt = union_client.requests.at(0) ?? throw \"missing union request\"\n            let compiled_prompt = compiled_client.requests.at(0) ?? throw \"missing compiled request\"\n            `${class_prompt}~~${enum_prompt}~~${union_prompt}~~${compiled_prompt}`\n        }\n        "
+    `
+        client DefaultClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        class ProbeClient {
+            reply: string,
+            requests: string[],
+
+            implements ai.Client {
+                function id(self) -> string {
+                    "probe"
+                }
+
+                function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+                    let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+                    let _ = self.requests.push(prompt);
+                    baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
+                }
+
+                function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+                    let _ = self.render(input);
+                    ai.ModelTurn {
+                        calls: [],
+                        content: [ai.content.Text { text: self.reply }],
+                        stop_reason: ai.content.StopReason.Complete,
+                        usage: null,
+                    }
+                }
+            }
+        }
+
+        function DynamicOutput<T>() -> T {
+            client: DefaultClient
+            prompt: \`\${ctx.output_format()}\`
+        }
+
+        function main() -> string {
+            let minted_class = reflect.class.new("MintedRecord", {
+                "minted_field": reflect.Type.of<string>().meta(
+                    docstring = "Minted runner field docs",
+                ),
+            }).as_type()
+            type MintedRecord = unreflect(minted_class)
+            let class_client = ProbeClient { reply: \`{"minted_field":"ok"}\`, requests: [] }
+            let _ = ai.Agent.new(
+                client = class_client,
+            ).run(DynamicOutput@spec<MintedRecord>())
+
+            let minted_enum = reflect.enum.new(
+                "MintedChoice",
+                ["PENDING", "RUNNING"],
+            ).as_type()
+            type MintedChoice = unreflect(minted_enum)
+            let enum_client = ProbeClient { reply: \`"RUNNING"\`, requests: [] }
+            let _ = ai.Agent.new(
+                client = enum_client,
+            ).run(DynamicOutput@spec<MintedChoice>())
+
+            let alpha = reflect.class.new("AlphaShape", {
+                "alpha_only": reflect.Type.of<string>(),
+            }).as_type()
+            let beta = reflect.class.new("BetaShape", {
+                "beta_only": reflect.Type.of<int>(),
+            }).as_type()
+            let union = reflect.union.new([alpha, beta]).as_type()
+            type MintedUnion = unreflect(union)
+            let union_client = ProbeClient { reply: \`{"alpha_only":"ok"}\`, requests: [] }
+            let _ = ai.Agent.new(
+                client = union_client,
+            ).run(DynamicOutput@spec<MintedUnion>())
+
+            let package = reflect.Package.compile({ "compiled.baml": \`
+                class CompiledRecord { compiled_field string }
+            \` })
+            let compiled = (package.get_class("root.CompiledRecord")
+                ?? throw "missing CompiledRecord").as_type()
+            type CompiledRecord = unreflect(compiled)
+            let compiled_client = ProbeClient { reply: \`{"compiled_field":"ok"}\`, requests: [] }
+            let _ = ai.Agent.new(
+                client = compiled_client,
+            ).run(DynamicOutput@spec<CompiledRecord>())
+
+            let class_prompt = class_client.requests.at(0) ?? throw "missing class request"
+            let enum_prompt = enum_client.requests.at(0) ?? throw "missing enum request"
+            let union_prompt = union_client.requests.at(0) ?? throw "missing union request"
+            let compiled_prompt = compiled_client.requests.at(0) ?? throw "missing compiled request"
+            \`\${class_prompt}~~\${enum_prompt}~~\${union_prompt}~~\${compiled_prompt}\`
+        }
+    `
 }
 
 function source_6() -> string {
-    "\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n            function same_from_default(self, t: reflect.Type) -> bool throws never {\n                reflect.Type.of<Out>() == t\n            }\n        }\n\n        interface Relay<Out> {\n            function relay(self, t: reflect.Type) -> bool throws unknown\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n\n            implements Relay<T> {\n                function relay(self, t: reflect.Type) -> bool {\n                    // Two-hop: the second interface operand is materialized\n                    // inside this frame, so it has to carry the identity on.\n                    Holder<T>.new().same(t)\n                }\n            }\n        }\n\n        function main() -> string {\n            let output_type = reflect.class.new(\"RuntimeOutput\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type Out = unreflect(output_type)\n\n            let holder = Holder<Out>.new()\n            let impl_method = holder.same(output_type)\n            let default_method = holder.same_from_default(output_type)\n            let two_hop = holder.relay(output_type)\n            `${impl_method}|${default_method}|${two_hop}`\n        }\n        "
+    `
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+            function same_from_default(self, t: reflect.Type) -> bool throws never {
+                reflect.Type.of<Out>() == t
+            }
+        }
+
+        interface Relay<Out> {
+            function relay(self, t: reflect.Type) -> bool throws unknown
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+
+            implements Relay<T> {
+                function relay(self, t: reflect.Type) -> bool {
+                    // Two-hop: the second interface operand is materialized
+                    // inside this frame, so it has to carry the identity on.
+                    Holder<T>.new().same(t)
+                }
+            }
+        }
+
+        function main() -> string {
+            let output_type = reflect.class.new("RuntimeOutput", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type Out = unreflect(output_type)
+
+            let holder = Holder<Out>.new()
+            let impl_method = holder.same(output_type)
+            let default_method = holder.same_from_default(output_type)
+            let two_hop = holder.relay(output_type)
+            \`\${impl_method}|\${default_method}|\${two_hop}\`
+        }
+    `
 }
 
 function source_7() -> string {
-    "\n        class Entry {\n            key: reflect.Type,\n            label: string,\n        }\n\n        interface Named<Out> {\n            function label(self, first: Entry, second: Entry) -> string throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Named<T> {\n                function label(self, first: Entry, second: Entry) -> string throws never {\n                    let wanted = reflect.Type.of<T>()\n                    if (first.key == wanted) {\n                        first.label\n                    } else if (second.key == wanted) {\n                        second.label\n                    } else {\n                        \"missing\"\n                    }\n                }\n            }\n        }\n\n        function main() -> string {\n            let first_type = reflect.class.new(\"Shape\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            let second_type = reflect.class.new(\"Shape\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type First = unreflect(first_type)\n            type Second = unreflect(second_type)\n\n            let first_entry = Entry { key: first_type, label: \"first\" }\n            let second_entry = Entry { key: second_type, label: \"second\" }\n\n            let first_hit = Holder<First>.new().label(first_entry, second_entry)\n            let second_hit = Holder<Second>.new().label(first_entry, second_entry)\n            `${first_hit}|${second_hit}`\n        }\n        "
+    `
+        class Entry {
+            key: reflect.Type,
+            label: string,
+        }
+
+        interface Named<Out> {
+            function label(self, first: Entry, second: Entry) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Named<T> {
+                function label(self, first: Entry, second: Entry) -> string throws never {
+                    let wanted = reflect.Type.of<T>()
+                    if (first.key == wanted) {
+                        first.label
+                    } else if (second.key == wanted) {
+                        second.label
+                    } else {
+                        "missing"
+                    }
+                }
+            }
+        }
+
+        function main() -> string {
+            let first_type = reflect.class.new("Shape", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            let second_type = reflect.class.new("Shape", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type First = unreflect(first_type)
+            type Second = unreflect(second_type)
+
+            let first_entry = Entry { key: first_type, label: "first" }
+            let second_entry = Entry { key: second_type, label: "second" }
+
+            let first_hit = Holder<First>.new().label(first_entry, second_entry)
+            let second_hit = Holder<Second>.new().label(first_entry, second_entry)
+            \`\${first_hit}|\${second_hit}\`
+        }
+    `
 }
 
 function source_8() -> string {
-    "\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n        }\n\n        function main() -> string {\n            let mine = reflect.class.new(\"Shape\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            let other = reflect.class.new(\"Shape\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type Mine = unreflect(mine)\n\n            let holder = Holder<Mine>.new()\n            let own_mint = holder.same(mine)\n            let foreign_mint = holder.same(other)\n\n            let static_holder = Holder<string>.new()\n            let static_match = static_holder.same(reflect.Type.of<string>())\n            let static_miss = static_holder.same(reflect.Type.of<int>())\n            `${own_mint}|${foreign_mint}|${static_match}|${static_miss}`\n        }\n        "
+    `
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string {
+            let mine = reflect.class.new("Shape", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            let other = reflect.class.new("Shape", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type Mine = unreflect(mine)
+
+            let holder = Holder<Mine>.new()
+            let own_mint = holder.same(mine)
+            let foreign_mint = holder.same(other)
+
+            let static_holder = Holder<string>.new()
+            let static_match = static_holder.same(reflect.Type.of<string>())
+            let static_miss = static_holder.same(reflect.Type.of<int>())
+            \`\${own_mint}|\${foreign_mint}|\${static_match}|\${static_miss}\`
+        }
+    `
 }
 
 function source_9() -> string {
-    "\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n            function name(self) -> string throws never {\n                reflect.Type.of<Out>().to_string()\n            }\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n        }\n\n        function main() -> string {\n            let pkg = reflect.Package.compile({ \"items.baml\": `\nclass Item { value string }\n              ` })\n            let item_type = (pkg.get_class(\"root.Item\") ?? throw \"missing Item\").as_type()\n            type Item = unreflect(item_type)\n\n            let holder = Holder<Item>.new()\n            `${holder.same(item_type)}|${holder.name()}`\n        }\n        "
+    `
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+            function name(self) -> string throws never {
+                reflect.Type.of<Out>().to_string()
+            }
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string {
+            let pkg = reflect.Package.compile({ "items.baml": \`
+                class Item { value string }
+            \` })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            let holder = Holder<Item>.new()
+            \`\${holder.same(item_type)}|\${holder.name()}\`
+        }
+    `
 }
 
 function source_10() -> string {
-    "\n        class Item {\n            value: string,\n        }\n\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n        }\n\n        function main() -> string {\n            let pkg = reflect.Package.compile({ \"items.baml\": `\nclass Item { value string }\n              ` })\n            let runtime_item = (pkg.get_class(\"root.Item\") ?? throw \"missing Item\").as_type()\n            // Binding it merges `user.Item` into this frame's overlay, which is\n            // what every type materialized here from now on carries.\n            type Shadow = unreflect(runtime_item)\n            let _shadow_holder = Holder<Shadow>.new()\n\n            let holder = Holder<Item>.new()\n            `${holder.same(reflect.Type.of<Item>())}|${holder.same(runtime_item)}`\n        }\n        "
+    `
+        class Item {
+            value: string,
+        }
+
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string {
+            let pkg = reflect.Package.compile({ "items.baml": \`
+                class Item { value string }
+            \` })
+            let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            // Binding it merges \`user.Item\` into this frame's overlay, which is
+            // what every type materialized here from now on carries.
+            type Shadow = unreflect(runtime_item)
+            let _shadow_holder = Holder<Shadow>.new()
+
+            let holder = Holder<Item>.new()
+            \`\${holder.same(reflect.Type.of<Item>())}|\${holder.same(runtime_item)}\`
+        }
+    `
 }
 
 function source_11() -> string {
-    "\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n        }\n\n        function main() -> string {\n            let first = reflect.Package.compile({ \"a.baml\": `\nclass Item { value string }\n              ` })\n            let second = reflect.Package.compile({ \"b.baml\": `\nclass Item { value string }\n              ` })\n            let first_item = (first.get_class(\"root.Item\") ?? throw \"missing A\").as_type()\n            let second_item = (second.get_class(\"root.Item\") ?? throw \"missing B\").as_type()\n            type First = unreflect(first_item)\n            type Second = unreflect(second_item)\n\n            let _first_holder = Holder<First>.new()\n            let holder = Holder<Second>.new()\n            // The holder's own declaration answers true \u2014 the slot carries its\n            // head. The failure this guards is the SECOND value being `true`:\n            // answering with a same-named foreign package's identity.\n            `${holder.same(second_item)}|${holder.same(first_item)}`\n        }\n        "
+    `
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string {
+            let first = reflect.Package.compile({ "a.baml": \`
+                class Item { value string }
+            \` })
+            let second = reflect.Package.compile({ "b.baml": \`
+                class Item { value string }
+            \` })
+            let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
+            let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
+            type First = unreflect(first_item)
+            type Second = unreflect(second_item)
+
+            let _first_holder = Holder<First>.new()
+            let holder = Holder<Second>.new()
+            // The holder's own declaration answers true — the slot carries its
+            // head. The failure this guards is the SECOND value being \`true\`:
+            // answering with a same-named foreign package's identity.
+            \`\${holder.same(second_item)}|\${holder.same(first_item)}\`
+        }
+    `
 }
 
 function source_12() -> string {
-    "\n        interface Probe<Out> {\n            function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never {\n                    `${reflect.Type.of<T>() == own}|${reflect.Type.of<M>() == method}|${reflect.Type.of<T>() == method}`\n                }\n            }\n        }\n\n        function main() -> string {\n            let owner_type = reflect.class.new(\"Owner\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            let method_type = reflect.class.new(\"Method\", {\n                \"name\": reflect.Type.of<string>(),\n            }).as_type()\n            type Owner = unreflect(owner_type)\n            type Method = unreflect(method_type)\n\n            Holder<Owner>.new().pair<Method>(owner_type, method_type)\n        }\n        "
+    `
+        interface Probe<Out> {
+            function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never {
+                    \`\${reflect.Type.of<T>() == own}|\${reflect.Type.of<M>() == method}|\${reflect.Type.of<T>() == method}\`
+                }
+            }
+        }
+
+        function main() -> string {
+            let owner_type = reflect.class.new("Owner", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            let method_type = reflect.class.new("Method", {
+                "name": reflect.Type.of<string>(),
+            }).as_type()
+            type Owner = unreflect(owner_type)
+            type Method = unreflect(method_type)
+
+            Holder<Owner>.new().pair<Method>(owner_type, method_type)
+        }
+    `
 }
 
 function source_13() -> string {
-    "\n        interface Probe<Out> {\n            function same(self, t: reflect.Type) -> bool throws never\n        }\n\n        class Holder<T> {\n            function new() -> Holder<T> throws never {\n                Holder {}\n            }\n\n            implements Probe<T> {\n                function same(self, t: reflect.Type) -> bool throws never {\n                    reflect.Type.of<T>() == t\n                }\n            }\n        }\n\n        function main() -> string {\n            let choice = reflect.enum.new(\"Choice\", [\"FIRST\", \"SECOND\"]).as_type()\n            let other = reflect.enum.new(\"Choice\", [\"FIRST\", \"SECOND\"]).as_type()\n            type Choice = unreflect(choice)\n\n            let holder = Holder<Choice>.new()\n            `${holder.same(choice)}|${holder.same(other)}`\n        }\n        "
+    `
+        interface Probe<Out> {
+            function same(self, t: reflect.Type) -> bool throws never
+        }
+
+        class Holder<T> {
+            function new() -> Holder<T> throws never {
+                Holder {}
+            }
+
+            implements Probe<T> {
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
+                }
+            }
+        }
+
+        function main() -> string {
+            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            type Choice = unreflect(choice)
+
+            let holder = Holder<Choice>.new()
+            \`\${holder.same(choice)}|\${holder.same(other)}\`
+        }
+    `
 }
 
 function source_14() -> string {
-    "\n        client TestClient = openai.ResponsesClient.new(\n            model = \"gpt-4o-mini\",\n            api_key = \"test-key\",\n            base_url = \"http://localhost:1234\",\n        );\n\n        function Render<T>() -> T {\n            client: TestClient\n            prompt: `${ctx.output_format()}`\n        }\n\n        function main() -> string {\n            // `next` makes `Item` recursive, which forces the LLM schema to\n            // hoist it under a *name* rather than inline its shape.\n            let pkg = reflect.Package.compile({ \"items.baml\": `\nclass Item { value string, next Item? }\nfunction Items() -> Item[] { [Item { value: \"bound\", next: null }] }\n              ` })\n            let item_type = (pkg.get_class(\"root.Item\") ?? throw \"missing Item\").as_type()\n            type Item = unreflect(item_type)\n\n            // A diagnostic that has to name the type it rejected.\n            let contract = pkg.get_function<() -> Item>(\"root.Items\") catch (e) {\n                reflect.errors.CompilationError => e.diagnostics[0].message,\n                _ => \"wrong error\",\n            }\n            let diagnostic = if contract is string { contract } else { \"no diagnostic\" }\n\n            // `~~` and not `|`: `to_baml()` and the LLM schema both spell a\n            // union with `|`, so a `|` join could split *inside* a surface and\n            // leave the assertions below silently comparing the wrong text.\n            let schema = Render@render_prompt<Item[]>()\n            `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`\n        }\n        "
+    `
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: \`\${ctx.output_format()}\`
+        }
+
+        function main() -> string {
+            // \`next\` makes \`Item\` recursive, which forces the LLM schema to
+            // hoist it under a *name* rather than inline its shape.
+            let pkg = reflect.Package.compile({ "items.baml": \`
+                class Item { value string, next Item? }
+                function Items() -> Item[] { [Item { value: "bound", next: null }] }
+            \` })
+            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            type Item = unreflect(item_type)
+
+            // A diagnostic that has to name the type it rejected.
+            let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
+                reflect.errors.CompilationError => e.diagnostics[0].message,
+                _ => "wrong error",
+            }
+            let diagnostic = if contract is string { contract } else { "no diagnostic" }
+
+            // \`~~\` and not \`|\`: \`to_baml()\` and the LLM schema both spell a
+            // union with \`|\`, so a \`|\` join could split *inside* a surface and
+            // leave the assertions below silently comparing the wrong text.
+            let schema = Render@render_prompt<Item[]>()
+            \`\${item_type.to_string()}~~\${item_type.to_baml()}~~\${schema}~~\${diagnostic}\`
+        }
+    `
 }
 
 function source_15() -> string {
-    "\n        function main() -> string {\n            let first = reflect.Package.compile({ \"a.baml\": `\nclass Item { value string }\nfunction Make() -> Item { Item { value: \"a\" } }\n              ` })\n            let second = reflect.Package.compile({ \"b.baml\": `\nclass Item { value string }\n              ` })\n            type First = unreflect((first.get_class(\"root.Item\") ?? throw \"missing A\").as_type())\n            type Second = unreflect((second.get_class(\"root.Item\") ?? throw \"missing B\").as_type())\n\n            let make = first.get_function<() -> First>(\"root.Make\") ?? throw \"missing root.Make\"\n            let value: unknown = make()\n            let own = if value is First { \"yes\" } else { \"no\" }\n            let foreign = if value is Second { \"yes\" } else { \"no\" }\n            `${own}|${foreign}`\n        }\n        "
+    `
+        function main() -> string {
+            let first = reflect.Package.compile({ "a.baml": \`
+                class Item { value string }
+                function Make() -> Item { Item { value: "a" } }
+            \` })
+            let second = reflect.Package.compile({ "b.baml": \`
+                class Item { value string }
+            \` })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
+            let value: unknown = make()
+            let own = if value is First { "yes" } else { "no" }
+            let foreign = if value is Second { "yes" } else { "no" }
+            \`\${own}|\${foreign}\`
+        }
+    `
 }
 
 function source_16() -> string {
-    "\n        client TestClient = openai.ResponsesClient.new(\n            model = \"gpt-4o-mini\",\n            api_key = \"test-key\",\n            base_url = \"http://localhost:1234\",\n        );\n\n        function Render<T>() -> T {\n            client: TestClient\n            prompt: `${ctx.output_format()}`\n        }\n\n        function main() -> string {\n            // `next` makes each `Item` recursive, which forces the schema to\n            // hoist it under a name rather than inline its shape.\n            let first = reflect.Package.compile({ \"a.baml\": `\nclass Item { alpha string, next Item? }\n              ` })\n            let second = reflect.Package.compile({ \"b.baml\": `\nclass Item { beta int, next Item? }\n              ` })\n            type First = unreflect((first.get_class(\"root.Item\") ?? throw \"missing A\").as_type())\n            type Second = unreflect((second.get_class(\"root.Item\") ?? throw \"missing B\").as_type())\n\n            `${Render@render_prompt<First[]>()}~${Render@render_prompt<Second[]>()}`\n        }\n        "
+    `
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        function Render<T>() -> T {
+            client: TestClient
+            prompt: \`\${ctx.output_format()}\`
+        }
+
+        function main() -> string {
+            // \`next\` makes each \`Item\` recursive, which forces the schema to
+            // hoist it under a name rather than inline its shape.
+            let first = reflect.Package.compile({ "a.baml": \`
+                class Item { alpha string, next Item? }
+            \` })
+            let second = reflect.Package.compile({ "b.baml": \`
+                class Item { beta int, next Item? }
+            \` })
+            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
+            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+
+            \`\${Render@render_prompt<First[]>()}~\${Render@render_prompt<Second[]>()}\`
+        }
+    `
 }
 
 test "scoped_type_binding_evaluates_once_types_contracts_and_leaves_as_unknown" {

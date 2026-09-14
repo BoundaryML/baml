@@ -25,7 +25,7 @@ function main() -> string {
         "duplicate did not throw"
     };
 
-    let package_result = reflect.Package.compile({ "broken.baml": "class {" }) catch (e) {
+    let package_result = reflect.Package.compile({ "broken.baml": `class {` }) catch (e) {
         reflect.errors.CompilationError { diagnostics } => {
             (diagnostics[0].span != null).to_string()
         },

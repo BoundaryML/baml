@@ -1,9 +1,19 @@
 function prompt(body: string) -> string {
-    "function G() -> string {\n  client: \"openai/gpt-4o-mini\"\n  prompt: `" + body + "`\n}\n"
+    `
+        function G() -> string {
+          client: "openai/gpt-4o-mini"
+          prompt: \`${body}\`
+        }\n
+    `
 }
 
 function untagged(body: string) -> string {
-    "function G() -> string {\n  let s = `" + body + "`;\n  s\n}\n"
+    `
+        function G() -> string {
+          let s = \`${body}\`;
+          s
+        }\n
+    `
 }
 
 test "unclosed for reports on prompt and untagged templates" {
@@ -86,7 +96,14 @@ test "unresolved statement-only interpolation name reports" {
 }
 
 test "nullable interpolation keeps original diagnostic and suppresses synthetic call noise" {
-    let files = { "main.baml": "function G(a: string?) -> string {\n  let s = `${a}`;\n  s\n}\n" };
+    let files = {
+        "main.baml": `
+            function G(a: string?) -> string {
+              let s = \`\${a}\`;
+              s
+            }
+        `,
+    };
     root.compiler.AssertHasMessage(files, "null");
     root.compiler.AssertLacksMessage(files, "it cannot be called")
 }

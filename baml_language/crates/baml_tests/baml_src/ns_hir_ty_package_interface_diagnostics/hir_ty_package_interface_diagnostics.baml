@@ -27,7 +27,7 @@ function ProjectDiagnostics(
 ) -> reflect.Diagnostic[] throws never {
     root.compiler
         .CompileDiagnostics(
-            { "ns_reflect/local.baml": "class Type<T> { value T }", "main.baml": source },
+            { "ns_reflect/local.baml": `class Type<T> { value T }`, "main.baml": source },
             packages = { "app": app },
         )
         .filter((diagnostic) -> bool {
@@ -36,7 +36,7 @@ function ProjectDiagnostics(
 }
 
 test "bare_type_is_not_a_value_type_annotation" {
-    let diagnostics = ProjectDiagnostics("function removed(value: type) -> type { value }", AppPackage());
+    let diagnostics = ProjectDiagnostics(`function removed(value: type) -> type { value }`, AppPackage());
     let count = 0;
     for (let diagnostic in diagnostics) {
         if (
@@ -55,7 +55,7 @@ test "mounted_type_validation_and_package_shadowing_are_fail_closed" {
     let app = AppPackage();
     root.compiler.AssertCompiles(
         {
-            "ns_reflect/local.baml": "class Type<T> { value T }",
+            "ns_reflect/local.baml": `class Type<T> { value T }`,
             "main.baml": `
                 function ok(
                     local: root.reflect.Type<int>,
@@ -73,8 +73,8 @@ test "mounted_type_validation_and_package_shadowing_are_fail_closed" {
     );
     root.compiler.AssertHasMessage(
         {
-            "ns_reflect/local.baml": "class Type<T> { value T }",
-            "main.baml": "function shadowed() -> unknown throws never { reflect.Type.of<int>() }",
+            "ns_reflect/local.baml": `class Type<T> { value T }`,
+            "main.baml": `function shadowed() -> unknown throws never { reflect.Type.of<int>() }`,
         },
         "unresolved name: `of`",
         packages = { "app": app },

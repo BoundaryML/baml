@@ -1,9 +1,12 @@
 function with_slow(body: string) -> string {
-    "class MyErr { msg: string }\n"
-        + "function slow(x: int) -> int throws MyErr {\n"
-        + "  if (x < 0) { throw MyErr { msg: \"neg\" }; }\n"
-        + "  x\n}\n"
-        + body
+    `
+        class MyErr { msg: string }
+        function slow(x: int) -> int throws MyErr {
+          if (x < 0) { throw MyErr { msg: "neg" }; }
+          x
+        }
+        ${body}
+    `
 }
 
 test "expression-position wildcard holes are rejected cleanly" {
@@ -47,32 +50,61 @@ test "expression-position wildcard holes are rejected cleanly" {
 }
 
 test "non-inferable declaration wildcard positions report E0147" {
-    root.compiler.AssertHasCode({ "return.baml": "function main() -> _ { 5 }" }, "E0147");
-    root.compiler.AssertHasCode(
-        { "parameter.baml": "function f(x: _) -> int { 0 }\nfunction main() -> int { 0 }" },
-        "E0147",
-    );
-    root.compiler.AssertHasCode(
-        { "field.baml": "class C { x: _ }\nfunction main() -> int { 0 }" },
-        "E0147",
-    );
-    root.compiler.AssertHasCode(
-        { "bound.baml": "function f<T extends _>(x: T) -> int { 0 }\nfunction main() -> int { 0 }" },
-        "E0147",
-    );
-    root.compiler.AssertHasCode(
-        { "requires.baml": "interface I requires _ {}\nfunction main() -> int { 0 }" },
-        "E0147",
-    );
+    root.compiler.AssertHasCode({ "return.baml": `function main() -> _ { 5 }` }, "E0147");
     root.compiler.AssertHasCode(
         {
-            "nested_throws.baml": "class Err<T> { v: T }\nfunction f() -> int throws Err<_> { throw Err<int> { v: 1 }; }\nfunction main() -> int { 0 }",
+            "parameter.baml": `
+                function f(x: _) -> int { 0 }
+                function main() -> int { 0 }
+            `,
         },
         "E0147",
     );
     root.compiler.AssertHasCode(
         {
-            "interface_throws.baml": "interface I {\n  function run(self) -> int throws _\n}\nfunction main() -> int { 0 }",
+            "field.baml": `
+                class C { x: _ }
+                function main() -> int { 0 }
+            `,
+        },
+        "E0147",
+    );
+    root.compiler.AssertHasCode(
+        {
+            "bound.baml": `
+                function f<T extends _>(x: T) -> int { 0 }
+                function main() -> int { 0 }
+            `,
+        },
+        "E0147",
+    );
+    root.compiler.AssertHasCode(
+        {
+            "requires.baml": `
+                interface I requires _ {}
+                function main() -> int { 0 }
+            `,
+        },
+        "E0147",
+    );
+    root.compiler.AssertHasCode(
+        {
+            "nested_throws.baml": `
+                class Err<T> { v: T }
+                function f() -> int throws Err<_> { throw Err<int> { v: 1 }; }
+                function main() -> int { 0 }
+            `,
+        },
+        "E0147",
+    );
+    root.compiler.AssertHasCode(
+        {
+            "interface_throws.baml": `
+                interface I {
+                  function run(self) -> int throws _
+                }
+                function main() -> int { 0 }
+            `,
         },
         "E0147",
     )
@@ -82,7 +114,12 @@ test "future wildcard inference preserves its precise contracts" {
     root.compiler.AssertHasCode(
         {
             "not_erased.baml": with_slow(
-                "function main() -> int throws never {\n  let fs: baml.future.Future<int, _>[] = [spawn { slow(1) }];\n  await fs[0]\n}\n",
+                `
+                    function main() -> int throws never {
+                      let fs: baml.future.Future<int, _>[] = [spawn { slow(1) }];
+                      await fs[0]
+                    }
+                `,
             ),
         },
         "E0096",
@@ -90,7 +127,12 @@ test "future wildcard inference preserves its precise contracts" {
     root.compiler.AssertHasCode(
         {
             "never.baml": with_slow(
-                "function main() -> int {\n  let fs: baml.future.Future<int, never>[] = [spawn { slow(1) }];\n  await fs[0]\n}\n",
+                `
+                    function main() -> int {
+                      let fs: baml.future.Future<int, never>[] = [spawn { slow(1) }];
+                      await fs[0]
+                    }
+                `,
             ),
         },
         "E0001",
@@ -98,7 +140,12 @@ test "future wildcard inference preserves its precise contracts" {
     root.compiler.AssertHasCode(
         {
             "wrong_value.baml": with_slow(
-                "function main() -> int {\n  let fs: baml.future.Future<string, _>[] = [spawn { slow(1) }];\n  0\n}\n",
+                `
+                    function main() -> int {
+                      let fs: baml.future.Future<string, _>[] = [spawn { slow(1) }];
+                      0
+                    }
+                `,
             ),
         },
         "E0001",

@@ -1,19 +1,28 @@
 function valid_tag() -> string {
-    "//baml:tagged_string\n"
-        + "function sql(body: (x: int) -> baml.TaggedString) -> string {\n"
-        + "  \"ok\"\n}\n"
+    `
+        //baml:tagged_string
+        function sql(body: (x: int) -> baml.TaggedString) -> string {
+          "ok"
+        }\n
+    `
 }
 
 function role_tag() -> string {
-    "//baml:tagged_string\n"
-        + "function chat(body: (role: string) -> baml.TaggedString) -> string {\n"
-        + "  \"ok\"\n}\n"
+    `
+        //baml:tagged_string
+        function chat(body: (role: string) -> baml.TaggedString) -> string {
+          "ok"
+        }\n
+    `
 }
 
 test "unmarked tagged-string function is rejected" {
     root.compiler.AssertHasMessage(
         {
-            "main.baml": "function sql(body: (x: int) -> baml.TaggedString) -> string { \"ok\" }\nfunction Demo() -> string { sql`hi ${1}` }\n",
+            "main.baml": `
+                function sql(body: (x: int) -> baml.TaggedString) -> string { "ok" }
+                function Demo() -> string { sql\`hi \${1}\` }
+            `,
         },
         "not a tagged-string function",
     )
@@ -21,7 +30,11 @@ test "unmarked tagged-string function is rejected" {
 
 test "unresolved tag reports exactly once" {
     root.compiler.AssertMessageCount(
-        { "main.baml": "function Demo() -> string { nope`hi ${1}` }\n" },
+        {
+            "main.baml": `
+                function Demo() -> string { nope\`hi \${1}\` }
+            `,
+        },
         "nope",
         1,
     )
@@ -29,7 +42,14 @@ test "unresolved tag reports exactly once" {
 
 test "non-function tagged-string target is rejected" {
     root.compiler.AssertHasMessage(
-        { "main.baml": "function Demo() -> string {\n  let sql = 3\n  sql`hi ${1}`\n}\n" },
+        {
+            "main.baml": `
+                function Demo() -> string {
+                  let sql = 3
+                  sql\`hi \${1}\`
+                }
+            `,
+        },
         "is not a function",
     )
 }
@@ -37,19 +57,31 @@ test "non-function tagged-string target is rejected" {
 test "tagged-string body parameter shape matrix is rejected" {
     root.compiler.AssertHasMessage(
         {
-            "wrong_name.baml": "//baml:tagged_string\nfunction sql(notbody: (x: int) -> baml.TaggedString) -> string { \"ok\" }\nfunction Demo() -> string { sql`hi ${1}` }\n",
+            "wrong_name.baml": `
+                //baml:tagged_string
+                function sql(notbody: (x: int) -> baml.TaggedString) -> string { "ok" }
+                function Demo() -> string { sql\`hi \${1}\` }
+            `,
         },
         "must be `body:",
     );
     root.compiler.AssertHasMessage(
         {
-            "wrong_return.baml": "//baml:tagged_string\nfunction sql(body: (x: int) -> string) -> string { \"ok\" }\nfunction Demo() -> string { sql`hi ${1}` }\n",
+            "wrong_return.baml": `
+                //baml:tagged_string
+                function sql(body: (x: int) -> string) -> string { "ok" }
+                function Demo() -> string { sql\`hi \${1}\` }
+            `,
         },
         "must be `body:",
     );
     root.compiler.AssertHasMessage(
         {
-            "missing.baml": "//baml:tagged_string\nfunction sql() -> string { \"ok\" }\nfunction Demo() -> string { sql`hi ${1}` }\n",
+            "missing.baml": `
+                //baml:tagged_string
+                function sql() -> string { "ok" }
+                function Demo() -> string { sql\`hi \${1}\` }
+            `,
         },
         "must be `body:",
     )
@@ -57,7 +89,12 @@ test "tagged-string body parameter shape matrix is rejected" {
 
 test "unknown tagged interpolation name is unresolved" {
     root.compiler.AssertHasMessage(
-        { "main.baml": role_tag() + "function Demo() -> string { chat`hello ${nonexistent}` }\n" },
+        {
+            "main.baml": role_tag()
+                + `
+                    function Demo() -> string { chat\`hello \${nonexistent}\` }
+                `,
+        },
         "unresolved name: `nonexistent`",
     )
 }
@@ -66,7 +103,9 @@ test "tagged for binding is out of scope after endfor" {
     root.compiler.AssertHasMessage(
         {
             "main.baml": role_tag()
-                + "function Demo(items: int[]) -> string { chat`${for (let x in items)}a${endfor}${x}` }\n",
+                + `
+                    function Demo(items: int[]) -> string { chat\`\${for (let x in items)}a\${endfor}\${x}\` }
+                `,
         },
         "unresolved name: `x`",
     )
@@ -75,7 +114,10 @@ test "tagged for binding is out of scope after endfor" {
 test "tagged for rejects a non-iterable collection" {
     root.compiler.AssertHasMessage(
         {
-            "main.baml": role_tag() + "function Demo(n: int) -> string { chat`${for (let x in n)}a${endfor}` }\n",
+            "main.baml": role_tag()
+                + `
+                    function Demo(n: int) -> string { chat\`\${for (let x in n)}a\${endfor}\` }
+                `,
         },
         "cannot iterate over type",
     )
@@ -84,7 +126,13 @@ test "tagged for rejects a non-iterable collection" {
 test "tagged body parameter does not leak after template" {
     root.compiler.AssertHasMessage(
         {
-            "main.baml": role_tag() + "function Demo() -> string {\n  let r = chat`hi ${role}`\n  role\n}\n",
+            "main.baml": role_tag()
+                + `
+                    function Demo() -> string {
+                      let r = chat\`hi \${role}\`
+                      role
+                    }
+                `,
         },
         "unresolved name: `role`",
     )

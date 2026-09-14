@@ -49,6 +49,9 @@ passes; the final full-workspace validation is tracked separately.
   blanket-impl diagnostic inventory explicit before inspecting its facts.
 - [x] CI performance follow-up: remove the standalone release-mode
   `trace_heap` leg; those tests remain covered by the normal workspace tranche.
+- [x] Readability follow-up: replace escaped inline BAML source maps across
+  compiler assertion and runtime-package utilities with backtick literals,
+  then format, validate, review, and push the result.
 
 Implementation started: 2026-09-12.
 
@@ -167,6 +170,14 @@ Progress:
   is the only diagnostic before inspecting the recovered implementation facts.
 - The profiler value-copy tests remain in the all-feature workspace nextest
   tranche, but no longer trigger a separate release build after that tranche.
+- The native compiler fixtures now use readable backtick source literals
+  instead of escaped one-line strings across assertion, package-compilation,
+  mixed-suite, and source-builder helpers. Nested templates retain literal
+  backticks/interpolations and generated-source trailing newlines explicitly.
+  This follow-up converted 528 ordinary-string program literals across 21
+  BAML files. The full 449-file BAML check, the offline native corpus, and the
+  1,564-test snapshot-owned CI tranche all pass; a fresh-agent semantic review
+  found no payload changes beyond source-only whitespace normalization.
 - Full validation is green after final review and PR follow-up: the offline
   native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and

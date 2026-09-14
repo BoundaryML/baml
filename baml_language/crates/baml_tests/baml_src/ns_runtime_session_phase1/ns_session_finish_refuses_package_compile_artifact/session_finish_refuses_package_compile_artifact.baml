@@ -1,6 +1,6 @@
 function main() -> bool {
     let session = reflect.Session.new();
-    let artifact = reflect.Package._compile({ "main.baml": "function ready() -> bool { true }" }, {});
+    let artifact = reflect.Package._compile({ "main.baml": `function ready() -> bool { true }` }, {});
     let rejected = false;
     let _ = session._finish<unknown>(artifact) catch (_) {
         _ => {
