@@ -23,9 +23,10 @@ The current Node bridge wrapper has pre-existing `HandleKey` versus protobuf `Lo
 python3 scripts/run.py --rate 300 --duration 300
 python3 scripts/run.py --rate 100 --duration 900
 python3 scripts/run.py --rate 300 --duration 0  # continue until Ctrl-C
+python3 scripts/run_cycled.py --rate 100 --duration 300 --on-seconds 30 --off-seconds 1
 ```
 
-The runner owns every child process, verifies each exact response before load, probes each target during sampling, captures Vegeta HTTP status counters, samples native RSS and CPU with `ps`, and shuts down only the processes it started. Results go to `results/<timestamp>-<revision>-<rate>rps/`, including the build manifest, configuration, process logs, 15-second samples, and a machine-readable summary with delivered RPS and an RSS slope fitted after the first minute.
+The runners own every child process, verify each exact response before load, probe each target during sampling, capture Vegeta HTTP status counters, sample native RSS and CPU with `ps`, and shut down only the processes they started. `run_cycled.py` keeps the applications alive while repeatedly starting load for the requested on period and leaving them idle for the requested off period. Results go to `results/<timestamp>-<revision>-<rate>rps/`, including the build manifest, configuration, process logs, samples, and a machine-readable summary with delivered RPS and an RSS slope fitted after the first minute.
 
 | Variant | URL | Load metrics |
 | --- | --- | --- |
@@ -40,6 +41,14 @@ The harness does not impose a per-process memory limit on macOS, so it measures 
 ## Initial native reproduction
 
 The first 15-minute run used the combined PR #4847 + PR #4811 worktree at `42365a45f9d7a3750ed72bd338006d369f6c0e41`, macOS arm64, Node 20.14.0, Python 3.10.0, and 300 RPS per target. All five targets stayed alive and returned only HTTP 200 responses, with approximately 272,400 completed requests each. After excluding the first minute, Node bridge RSS grew 16.46 MiB/min and Python bridge RSS grew 16.45 MiB/min. Python baseline was flat, Node baseline grew 0.31 MiB/min, and packed BAML grew 1.27 MiB/min. This reproduces the bridge-specific memory growth without Docker; [the retained summary](evidence/2026-09-11-pr4847-4811-300rps/summary.json) contains the measured values.
+
+## Quiet-window control without the background-GC fix
+
+A paired five-minute experiment rebuilt the native artifacts once from the same clean pre-#4870 commit `42365a45f9d7a3750ed72bd338006d369f6c0e41`, then ran 100 RPS per target continuously and with 30 seconds on followed by one second off. The cycled run started 10 load periods, accumulated 290.55 loaded seconds, delivered about 29,000 HTTP 200 responses per target at 100 RPS, and kept every target healthy. The continuous control delivered 30,000 HTTP 200 responses per target at 100 RPS and also kept every target healthy.
+
+The comparison uses the change between median RSS in minutes 2–3 and minutes 4–5, divided by two minutes, so one abrupt Node allocator release near the end of the continuous run does not dominate the result. Node BAML grew 4.94 MiB/min continuously and 1.03 MiB/min with quiet windows; Python BAML grew 5.32 MiB/min continuously and 0.14 MiB/min with quiet windows. Over the same windows, the Node baselines measured 1.14 and -0.50 MiB/min respectively, while both Python baselines were within 0.03 MiB/min of flat. In the cycled run, Node BAML moved from 163.69 MiB at two minutes to 166.64 MiB at the last sample, and Python BAML moved from 78.95 MiB to 79.23 MiB.
+
+This is evidence that regular one-second gaps let the existing 100 ms idle collector prevent the persistent bridge growth seen under continuous load. It rules out the original roughly request-proportional leak over this five-minute profile, but it does not prove that a slower leak cannot appear in a longer run. The retained [paired comparison](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/comparison.json), [cycled summary](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/cycled-summary.json), and [continuous summary](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/continuous-summary.json) record the derived measurements and request validation; both raw sample streams and build manifests are retained alongside them.
 
 ## Leak investigation and fix validation
 

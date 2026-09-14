@@ -1,0 +1,21 @@
+{
+  "source": "/Users/sam/baml-worktrees/baml/ecs-pr-4847-no4870/baml_language",
+  "revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "source_dirty": false,
+  "source_status": "",
+  "source_snapshot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "Python 3.10.0",
+  "node": "v20.14.0",
+  "node_binary": "/Users/sam/.local/share/mise/installs/node/20/bin/node",
+  "vegeta": "12.13.0",
+  "artifacts": {
+    "toolchain/baml-cli": "062c2325267dba183824001dc775950b7df4d6b30a2836fa8da38bf0dc918f28",
+    "toolchain/baml-pack-host": "7e747fcb5347ca66ca7f61a441ae7bb92a7a5ec40477138d120ee0554970092e",
+    "wheels/baml_bridge-0.19.0-cp310-abi3-macosx_11_0_arm64.whl": "cf5ab1b8090cc01cd067e730ed51957f6128c8f48c17dbdb21dab5eaa4252866",
+    "node-bridge/dist/baml_node.darwin-arm64.node": "4a3b4e4e02e761da85e3a4756ba0c3ce7ed145e61fa968a5ade3e62536cc3d3d",
+    "apps/baml-only/hello": "3fc1253ed5d664c2c61b0038586a0a421cd04be96b916948358fd8a6960234d8",
+    "tools/vegeta": "15d6cd01fc412e70a11243006de4e5fd68d505a13848ae3312d83d49b64fd087"
+  }
+}
