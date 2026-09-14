@@ -263,10 +263,15 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is captured by a nested closure.
+    /// Whether a nested closure captures this local.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
-    /// the value directly. Reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// the value directly, and reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// The slot holds a cell from the binding's [`StatementKind::FreshCell`]
+    /// onward — parameters from frame entry, where the emitter wraps them —
+    /// and every access is dominated by that statement (`verify_mir` checks
+    /// this). Set when the local is declared, from HIR's capture analysis;
+    /// nothing flips it afterwards.
     pub is_captured: bool,
 }
 
@@ -362,10 +367,20 @@ pub enum StatementKind<'db> {
     /// Drop a value (run destructor if any).
     Drop(Place),
 
-    /// Replace a captured local's cell with a fresh one.
-    /// Emitted at the top of for-loop iteration bodies so each iteration's
-    /// closures capture a distinct cell.
-    FreshCell(Local),
+    /// Give a captured local a new cell: the slot now points at a cell no
+    /// closure has captured yet.
+    ///
+    /// Emitted where the binding is created, so a declaration that runs once
+    /// per loop iteration hands each iteration's closures their own cell. The
+    /// new cell holds `null`, or — with `carry_value` — the value of the cell
+    /// it replaces, which is how a C-style `for` header binding is copied into
+    /// the next iteration before the step runs (JS/Go semantics).
+    ///
+    /// Only ever targets a local whose `is_captured` is set, and every read,
+    /// write, or closure capture of that local is dominated by one of its
+    /// `FreshCell`s: that is what makes a deref load discardable
+    /// ([`Rvalue::can_discard`]) and per-iteration closures correct.
+    FreshCell { local: Local, carry_value: bool },
 
     /// Compiler intrinsic — a void side effect (log, send event).
     /// Lowered from calls to `$compiler_intrinsic` functions.

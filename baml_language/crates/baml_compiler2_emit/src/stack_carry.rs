@@ -543,7 +543,9 @@ fn simulate_statement_stack<'db>(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::FreshCell(_) | StatementKind::Intrinsic { .. } | StatementKind::Nop => true,
+        StatementKind::FreshCell { .. } | StatementKind::Intrinsic { .. } | StatementKind::Nop => {
+            true
+        }
     }
 }
 

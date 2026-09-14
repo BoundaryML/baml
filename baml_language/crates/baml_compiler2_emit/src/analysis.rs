@@ -696,12 +696,13 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
                         collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
                     }
                 }
-                StatementKind::FreshCell(local) => {
-                    // FreshCell only has an effect when the local is captured
-                    // (it replaces the cell). For non-captured locals it's a no-op,
-                    // so don't add a use that would prevent Virtual classification.
-                    if body.local(*local).is_captured {
-                        def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                StatementKind::FreshCell { local, carry_value } => {
+                    // A definition of the pointer slot (it now holds a new
+                    // cell); carrying also reads the cell being replaced.
+                    let du = def_use.get_mut(local).unwrap();
+                    du.all_defs.push((block.id, stmt_ref));
+                    if *carry_value {
+                        du.uses.push(UseLocation {
                             block: block.id,
                             statement_ref: stmt_ref,
                         });
@@ -1484,7 +1485,8 @@ fn classify_locals(
             LocalClassification::Parameter
         } else if local_decl.is_captured {
             // Captured locals must always be Real - they need a stable stack slot
-            // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
+            // holding the cell (made by `FreshCell`, or the entry preamble for a
+            // parameter) that `LoadDeref`/`StoreDeref` go through.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
             LocalClassification::Real
         } else if narrow_bind_destinations.contains(&local) {
@@ -1801,7 +1803,7 @@ fn call_result_carried_into(terminator: Option<&Terminator<'_>>, block: BlockId)
 fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
     match kind {
         // Replaces a captured cell in place - doesn't touch the stack
-        StatementKind::FreshCell(_) => true,
+        StatementKind::FreshCell { .. } => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,

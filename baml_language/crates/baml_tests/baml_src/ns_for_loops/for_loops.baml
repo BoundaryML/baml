@@ -357,3 +357,56 @@ test "for_loop_generic_iterable_bound_over_list" {
 test "for_loop_generic_iterable_bound_over_string" {
     assert.equal(for_loops_count_bounded("abc"), 3)
 }
+
+// ── C-style header bindings are per-iteration ─────────────────────────────────
+//
+// `for (let i = …; cond; step)` gives `i` a fresh cell at the top of the step,
+// carrying its value: a closure made in one iteration keeps that iteration's
+// `i` while the step advances the next one's (JS and Go semantics).
+
+function for_loops_c_style_header_capture() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 1; i <= 3; i += 1) {
+        fs.push(() -> int { i })
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration" {
+    assert.equal(for_loops_c_style_header_capture(), [1, 2, 3])
+}
+
+// `continue` targets the step, so a skipped tail still gets its own cell.
+function for_loops_c_style_header_capture_continue() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 1; i <= 4; i += 1) {
+        if (i == 2) { continue }
+        fs.push(() -> int { i })
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration_continue" {
+    assert.equal(for_loops_c_style_header_capture_continue(), [1, 3, 4])
+}
+
+// A write in the body lands in the current iteration's cell; the step then
+// advances the next iteration's copy. Closures see 1, 3, 5, as in JS.
+function for_loops_c_style_header_capture_body_writes() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 0; i < 6; i += 1) {
+        fs.push(() -> int { i });
+        i += 1
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration_body_writes" {
+    assert.equal(for_loops_c_style_header_capture_body_writes(), [1, 3, 5])
+}

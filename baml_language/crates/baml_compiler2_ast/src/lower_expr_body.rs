@@ -4480,7 +4480,7 @@ impl LoweringContext {
                 condition: cond,
                 body: loop_body,
                 after: step,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init },
             },
             after_span,
         );
@@ -4756,7 +4756,7 @@ impl LoweringContext {
                             condition: *cond,
                             body: loop_body,
                             after: *step,
-                            origin: LoopOrigin::For,
+                            origin: LoopOrigin::For { init: *init },
                         },
                         span,
                     );
@@ -5847,7 +5847,7 @@ impl LoweringContext {
         //
         // C-style is desugared to:
         //   Stmt::Let { ... }   // init
-        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For }
+        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For { init } }
         // These two statements are wrapped in Expr::Block → Stmt::Expr so the
         // function can return a single StmtId.
         let range = node.span_range();
@@ -6006,7 +6006,7 @@ impl LoweringContext {
                 condition,
                 body,
                 after: after_stmt,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init: init_stmt },
             },
             range,
         );

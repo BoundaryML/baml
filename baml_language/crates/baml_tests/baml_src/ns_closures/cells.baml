@@ -107,3 +107,97 @@ function cells_spawn_starts_at_first_yield() -> int {
 test "cells_spawn_starts_at_first_yield" {
     assert.equal(cells_spawn_starts_at_first_yield(), 1)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A captured binding's cell is created where the binding is created. A
+// declaration that runs once per loop iteration therefore hands each
+// iteration's closures their own cell. Before, every captured local was celled
+// once at frame entry, so every iteration's closures shared one cell and all
+// reported the last iteration's value.
+
+function cells_let_in_while_body() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    let k = 0;
+    while (k < 3) {
+        let j = k * 10;
+        fs.push(() -> int { j });
+        k += 1
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "cells_let_in_while_body" {
+    assert.equal(cells_let_in_while_body(), [0, 10, 20])
+}
+
+function cells_let_in_for_in_body() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i in [1, 2, 3]) {
+        let j = i * 10;
+        fs.push(() -> int { j })
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "cells_let_in_for_in_body" {
+    assert.equal(cells_let_in_for_in_body(), [10, 20, 30])
+}
+
+// A match-arm binding is created when the arm is entered.
+function cells_match_binding_in_loop() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let v in [1, 2, 3]) {
+        match (v) {
+            let n => fs.push(() -> int { n * 100 })
+        }
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "cells_match_binding_in_loop" {
+    assert.equal(cells_match_binding_in_loop(), [100, 200, 300])
+}
+
+function cells_throws_int(x: int) -> int throws int {
+    throw x
+}
+
+// A catch clause's binding is created when the handler is entered, and a
+// catch arm's binding when the arm is.
+function cells_catch_clause_binding_in_loop() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i in [1, 2, 3]) {
+        let _ = cells_throws_int(i) catch (e) {
+            _ => { fs.push(() -> int { e }); 0 }
+        };
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "cells_catch_clause_binding_in_loop" {
+    assert.equal(cells_catch_clause_binding_in_loop(), [1, 2, 3])
+}
+
+function cells_catch_arm_binding_in_loop() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i in [1, 2, 3]) {
+        let _ = cells_throws_int(i) catch (e) {
+            let n: int => { fs.push(() -> int { n * 10 }); 0 }
+        };
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "cells_catch_arm_binding_in_loop" {
+    assert.equal(cells_catch_arm_binding_in_loop(), [10, 20, 30])
+}

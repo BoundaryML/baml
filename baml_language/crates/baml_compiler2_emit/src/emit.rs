@@ -985,23 +985,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.spawn_captured_captures
             .extend(spawn_captures.capture_indices);
 
-        // Emit cell-wrapping preamble: for each captured Real local, wrap the
-        // initial value in a Cell so that lambdas can share and mutate it.
-        // Emit at the start of the entry block before any user instructions.
-        // Note: Parameters that are captured also need cell wrapping.
-        for (i, local_decl) in mir.locals.iter().enumerate() {
-            if local_decl.is_captured {
-                let local = Local(i);
-                if let Some(&slot) = self.local_slots.get(&local) {
-                    // Load the current value (either 0 for uninitialized or param value),
-                    // wrap in a Cell, and store back.
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
-                    self.emit(Instruction::MakeCell);
-                    let inst = self.emit(Instruction::StoreVar(slot));
-                    self.set_var_operand(inst, slot);
-                }
+        // Wrap each captured parameter's value in a cell at entry. A parameter
+        // is the one binding created without a `FreshCell` — the caller wrote
+        // its value into the slot — so the frame preamble is where it gets its
+        // cell. Every other captured local's cell comes from its `FreshCell`.
+        for local in (1..=self.arity).map(Local) {
+            if !mir.local(local).is_captured {
+                continue;
             }
+            let Some(&slot) = self.local_slots.get(&local) else {
+                unreachable!("a captured parameter is always Real");
+            };
+            let inst = self.emit(Instruction::LoadVar(slot));
+            self.set_var_operand(inst, slot);
+            self.emit(Instruction::MakeCell);
+            let inst = self.emit(Instruction::StoreVar(slot));
+            self.set_var_operand(inst, slot);
         }
 
         // Build local type map for field name resolution (debug info).
@@ -1531,17 +1530,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
             }
-            StatementKind::FreshCell(local) => {
-                if self.captured_locals.contains(local) {
-                    if let Some(&slot) = self.local_slots.get(local) {
-                        let null_idx = self.add_constant(ConstValue::Null);
-                        let inst = self.emit(Instruction::LoadConst(null_idx));
-                        self.set_operand(inst, OperandMeta::Const("null".to_string()));
-                        self.emit(Instruction::MakeCell);
-                        let inst = self.emit(Instruction::StoreVar(slot));
-                        self.set_var_operand(inst, slot);
-                    }
+            StatementKind::FreshCell { local, carry_value } => {
+                debug_assert!(
+                    self.captured_locals.contains(local),
+                    "fresh_cell on {local}, which no closure captures"
+                );
+                let Some(&slot) = self.local_slots.get(local) else {
+                    unreachable!("a captured local is always Real");
+                };
+                if *carry_value {
+                    let inst = self.emit(Instruction::LoadDeref(slot));
+                    self.set_var_operand(inst, slot);
+                } else {
+                    let null_idx = self.add_constant(ConstValue::Null);
+                    let inst = self.emit(Instruction::LoadConst(null_idx));
+                    self.set_operand(inst, OperandMeta::Const("null".to_string()));
                 }
+                self.emit(Instruction::MakeCell);
+                let inst = self.emit(Instruction::StoreVar(slot));
+                self.set_var_operand(inst, slot);
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {

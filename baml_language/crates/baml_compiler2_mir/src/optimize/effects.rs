@@ -346,7 +346,7 @@ impl Facts {
                     self.lengths.insert(*local, range);
                 }
             }
-            StatementKind::FreshCell(local) => self.forget(*local),
+            StatementKind::FreshCell { local, .. } => self.forget(*local),
             // Aliasing writes may invalidate both a container and references
             // obtained through it. Do not try to infer disjointness here.
             StatementKind::Assign { .. }

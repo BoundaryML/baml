@@ -262,7 +262,7 @@ pub fn walk_statement_type_slots(kind: &StatementKind<'_>, f: &mut impl FnMut(u3
         StatementKind::VirtualFieldStore { iface, .. } => iface.for_each_type_arg_ref(f),
         // A `BindType` operand is a type *value* in a local, not a slot read.
         StatementKind::Drop(_)
-        | StatementKind::FreshCell(_)
+        | StatementKind::FreshCell { .. }
         | StatementKind::Intrinsic { .. }
         | StatementKind::Nop => {}
     }
@@ -433,7 +433,7 @@ pub fn statement_clobbers(
             out.order = true;
         }
         // The slot now points at a different cell: both change.
-        StatementKind::FreshCell(local) => {
+        StatementKind::FreshCell { local, .. } => {
             out.locals.insert(*local);
             out.cells.insert(CellId::Local(*local));
         }
