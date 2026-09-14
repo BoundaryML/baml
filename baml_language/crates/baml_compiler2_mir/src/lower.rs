@@ -2386,20 +2386,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
         );
-        self.bind_pattern_with_fresh_cells(elem_local, binding);
-        let names: Vec<Name> = self.body.patterns[binding]
-            .bound_names(&self.body.patterns)
-            .into_iter()
-            .cloned()
-            .collect();
-        for name in names {
-            if let Some(&local) = self.locals.get(&name)
-                && let Some(binding_id) =
-                    self.binding_id_for_statement_name(stmt_id, binding, &name)
-            {
-                self.binding_locals.insert(binding_id, local);
-            }
-        }
+        self.bind_pattern_with_fresh_cells(elem_local, binding, DefinitionSite::Statement(stmt_id));
 
         let body_temp = self.builder.temp(RuntimeTy::Void {
             attr: TyAttr::default(),
@@ -2836,25 +2823,21 @@ impl<'db> LoweringContext<'db> {
         self.binding_id_for_pattern_site_name(pattern, DefinitionSite::Statement(stmt_id), name)
     }
 
-    fn record_pattern_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
-        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
-            pattern,
-            DefinitionSite::PatternBinding(pattern),
-            name,
-        ) {
-            self.binding_locals.insert(binding_id, local);
-        }
-    }
-
-    // Catch-clause bindings (`catch (e, ctx)`) are registered in the semantic
-    // index under `DefinitionSite::CatchBinding`, not `PatternBinding`, so the
-    // catch-lowering paths must query with the matching site.
-    fn record_catch_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
-        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
-            pattern,
-            DefinitionSite::CatchBinding(pattern),
-            name,
-        ) {
+    /// Map the HIR binding `name` introduces in `pattern` at `site` to the
+    /// local that holds it.
+    ///
+    /// The site is the construct HIR registered the binding under — a `let`,
+    /// `for`, or `while let` statement, a match/if-let/catch-arm pattern, or a
+    /// catch clause's own bindings — and it is part of the binding's identity,
+    /// so a lookup under the wrong site finds nothing.
+    fn record_binding_local(
+        &mut self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+        name: &Name,
+        local: Local,
+    ) {
+        if let Some(binding_id) = self.binding_id_for_pattern_site_name(pattern, site, name) {
             self.binding_locals.insert(binding_id, local);
         }
     }
@@ -10721,7 +10704,11 @@ impl<'db> LoweringContext<'db> {
         // Then-branch: bind pattern locals, lower body, restore on exit.
         self.builder.set_current_block(bb_then);
         let saved_locals = self.locals.clone();
-        self.bind_pattern(scrutinee_local, pattern);
+        self.bind_pattern(
+            scrutinee_local,
+            pattern,
+            DefinitionSite::PatternBinding(pattern),
+        );
         self.lower_expr(then_branch, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
@@ -12401,21 +12388,7 @@ impl LoweringContext<'_> {
                 // No saved/restored locals — these flow forward like a
                 // plain `let`.
                 self.builder.set_current_block(bb_match);
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
-
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
             }
 
             AstStmt::Let {
@@ -12435,21 +12408,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
-
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
             }
 
             AstStmt::Let {
@@ -12615,20 +12574,11 @@ impl LoweringContext<'_> {
                 // back to the header.
                 self.builder.set_current_block(bb_body);
                 let saved_locals = self.locals.clone();
-                self.bind_pattern_with_fresh_cells(scrutinee_local, pattern);
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern_with_fresh_cells(
+                    scrutinee_local,
+                    pattern,
+                    DefinitionSite::Statement(stmt_id),
+                );
                 let body_temp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
@@ -13460,7 +13410,7 @@ impl<'db> LoweringContext<'db> {
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
                 let saved_locals = self.locals.clone();
-                self.bind_pattern(scrutinee, pattern);
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
@@ -13532,7 +13482,7 @@ impl<'db> LoweringContext<'db> {
             }
             let (pattern, body, _) = arms[idx];
             let saved_locals = self.locals.clone();
-            self.bind_pattern(scrutinee, pattern);
+            self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
@@ -13670,7 +13620,11 @@ impl<'db> LoweringContext<'db> {
                 self.builder.set_current_block(bb_body);
             }
             let saved_locals = self.locals.clone();
-            self.bind_pattern(scrutinee, arm.pattern);
+            self.bind_pattern(
+                scrutinee,
+                arm.pattern,
+                DefinitionSite::PatternBinding(arm.pattern),
+            );
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
@@ -13693,7 +13647,14 @@ impl<'db> LoweringContext<'db> {
 
                 self.builder.set_current_block(bb_body);
                 let saved_locals = self.locals.clone();
-                self.bind_pattern_inner(scrutinee, part, arm.pattern, part, false);
+                self.bind_pattern_inner(
+                    scrutinee,
+                    part,
+                    arm.pattern,
+                    part,
+                    false,
+                    DefinitionSite::PatternBinding(arm.pattern),
+                );
                 if let Some(guard) = arm.guard {
                     let bb_guarded = self.builder.create_block();
                     self.lower_condition(guard, bb_guarded, bb_next);
@@ -13722,7 +13683,11 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_body);
         let saved_locals = self.locals.clone();
-        self.bind_pattern(scrutinee, arm.pattern);
+        self.bind_pattern(
+            scrutinee,
+            arm.pattern,
+            DefinitionSite::PatternBinding(arm.pattern),
+        );
         if let Some(guard) = arm.guard {
             let bb_guarded = self.builder.create_block();
             self.lower_condition(guard, bb_guarded, bb_next);
@@ -14811,17 +14776,24 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
+    /// Bind the names `pat_id` introduces, registered under `site` — the
+    /// construct HIR registered them for.
+    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId, site: DefinitionSite) {
         // Pass the root pat_id through recursion: HIR registers bindings
         // keyed by the OUTER pattern PatId (the let-stmt's pattern, the
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false, site);
     }
 
-    fn bind_pattern_with_fresh_cells(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true);
+    fn bind_pattern_with_fresh_cells(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        site: DefinitionSite,
+    ) {
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true, site);
     }
 
     fn bind_pattern_inner(
@@ -14831,6 +14803,7 @@ impl<'db> LoweringContext<'db> {
         root: AstPatId,
         narrow_root: AstPatId,
         fresh_cell: bool,
+        site: DefinitionSite,
     ) {
         let scrutinee = self
             .tested_pattern_values
@@ -14869,12 +14842,12 @@ impl<'db> LoweringContext<'db> {
                     Place::local(local),
                     Rvalue::Use(Operand::Copy(Place::Local(bound_scrutinee))),
                 );
-                self.record_pattern_binding_local(root, &name, local);
+                self.record_binding_local(root, site, &name, local);
                 self.locals.insert(name, local);
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, fresh_cell);
+                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, fresh_cell, site);
                 }
             }
             AstPattern::Or(parts) => {
@@ -14883,15 +14856,15 @@ impl<'db> LoweringContext<'db> {
                 if bindings.is_empty() {
                     return;
                 }
-                self.declare_or_pattern_bindings(pat_id, root, fresh_cell);
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
+                self.declare_or_pattern_bindings(pat_id, root, fresh_cell, site);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
             }
             AstPattern::Class { fields, .. } => {
                 for f in fields {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
                     {
-                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, fresh_cell);
+                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, fresh_cell, site);
                     }
                 }
             }
@@ -14904,7 +14877,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell, site);
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -14917,7 +14890,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, fresh_cell);
+                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, fresh_cell, site);
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -14926,7 +14899,7 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell, site);
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -14973,7 +14946,13 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn declare_or_pattern_bindings(&mut self, pat_id: AstPatId, root: AstPatId, fresh_cell: bool) {
+    fn declare_or_pattern_bindings(
+        &mut self,
+        pat_id: AstPatId,
+        root: AstPatId,
+        fresh_cell: bool,
+        site: DefinitionSite,
+    ) {
         let mut bindings = Vec::new();
         self.collect_pattern_bindings(pat_id, &mut bindings);
         for (name, bind_pat) in bindings {
@@ -14983,7 +14962,7 @@ impl<'db> LoweringContext<'db> {
             if fresh_cell {
                 self.builder.fresh_cell(local);
             }
-            self.record_pattern_binding_local(root, &name, local);
+            self.record_binding_local(root, site, &name, local);
             self.locals.insert(name, local);
         }
     }
@@ -14994,6 +14973,7 @@ impl<'db> LoweringContext<'db> {
         parts: &[AstPatId],
         root: AstPatId,
         narrow_root: AstPatId,
+        site: DefinitionSite,
     ) {
         if parts.is_empty() {
             self.builder.unreachable();
@@ -15013,7 +14993,7 @@ impl<'db> LoweringContext<'db> {
             self.lower_pattern_test(scrutinee, part, body, next);
 
             self.builder.set_current_block(body);
-            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root);
+            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root, site);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
@@ -15034,6 +15014,7 @@ impl<'db> LoweringContext<'db> {
         pat_id: AstPatId,
         root: AstPatId,
         narrow_root: AstPatId,
+        site: DefinitionSite,
     ) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, .. } => {
@@ -15042,18 +15023,24 @@ impl<'db> LoweringContext<'db> {
                         Place::local(local),
                         Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
                     );
-                    self.record_pattern_binding_local(root, &name, local);
+                    self.record_binding_local(root, site, &name, local);
                 }
             }
             AstPattern::Or(parts) => {
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
             }
             AstPattern::Class { fields, .. } => {
                 for field in fields {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, field.pat, &field.field)
                     {
-                        self.assign_pattern_to_existing(field_local, field.pat, root, field.pat);
+                        self.assign_pattern_to_existing(
+                            field_local,
+                            field.pat,
+                            root,
+                            field.pat,
+                            site,
+                        );
                     }
                 }
             }
@@ -15066,7 +15053,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -15077,7 +15064,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat);
+                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat, site);
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -15086,7 +15073,7 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -15349,11 +15336,21 @@ impl LoweringContext<'_> {
                         },
                         None,
                     );
-                    self.record_catch_binding_local(clause.binding, &name, local);
+                    self.record_binding_local(
+                        clause.binding,
+                        DefinitionSite::CatchBinding(clause.binding),
+                        &name,
+                        local,
+                    );
                     (Some(local), Some(local))
                 }
                 Some(name) => {
-                    self.record_catch_binding_local(clause.binding, &name, error_local);
+                    self.record_binding_local(
+                        clause.binding,
+                        DefinitionSite::CatchBinding(clause.binding),
+                        &name,
+                        error_local,
+                    );
                     (Some(error_local), None)
                 }
                 None => (None, None),
@@ -15375,11 +15372,21 @@ impl LoweringContext<'_> {
                             },
                             None,
                         );
-                        self.record_catch_binding_local(st_pat, &name, local);
+                        self.record_binding_local(
+                            st_pat,
+                            DefinitionSite::CatchBinding(st_pat),
+                            &name,
+                            local,
+                        );
                         (Some(name), Some(local))
                     }
                     Some(name) => {
-                        self.record_catch_binding_local(st_pat, &name, payload);
+                        self.record_binding_local(
+                            st_pat,
+                            DefinitionSite::CatchBinding(st_pat),
+                            &name,
+                            payload,
+                        );
                         (Some(name), Some(payload))
                     }
                     None => (None, None),
@@ -15539,7 +15546,11 @@ impl LoweringContext<'_> {
             let saved_locals = self.locals.clone();
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
-            self.bind_pattern(error_local, arm.pattern);
+            self.bind_pattern(
+                error_local,
+                arm.pattern,
+                DefinitionSite::PatternBinding(arm.pattern),
+            );
             let rethrow_mark = self.catch_rethrow_locals.len();
             self.catch_rethrow_locals.push(error_local);
             if let Some(local) = clause.binding_copy_local {
