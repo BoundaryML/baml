@@ -22,10 +22,7 @@ export default defineConfig({
   // unresolvable from this project root ("Failed to resolve dependency"),
   // so only the app's own devDeps ride include.
   optimizeDeps: {
-    entries: [
-      resolve(projectRoot, 'src/**/*.browser.test.{ts,tsx}'),
-      resolve(projectRoot, 'vitest.setup.browser.ts'),
-    ],
+    entries: ['src/**/*.browser.test.{ts,tsx}', 'vitest.setup.browser.ts'],
     include: ['@testing-library/jest-dom/vitest', '@testing-library/react'],
   },
   plugins: [react()],
@@ -64,7 +61,7 @@ export default defineConfig({
           globals: true,
           include: ['src/**/*.test.{ts,tsx}'],
           name: 'unit',
-          setupFiles: [resolve(projectRoot, 'vitest.setup.ts')],
+          setupFiles: ['./vitest.setup.ts'],
         },
       },
       {
@@ -79,7 +76,7 @@ export default defineConfig({
           globals: true,
           include: ['src/**/*.browser.test.{ts,tsx}'],
           name: 'browser',
-          setupFiles: [resolve(projectRoot, 'vitest.setup.browser.ts')],
+          setupFiles: ['./vitest.setup.browser.ts'],
         },
       },
     ],
