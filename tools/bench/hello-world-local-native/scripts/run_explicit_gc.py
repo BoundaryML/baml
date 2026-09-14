@@ -21,9 +21,20 @@ def parse_heap_stats(body):
         prefix, field = key.split("_", 1)
         values.setdefault(prefix, {})[field] = int(raw)
     required = {"total_objects", "compile_time_objects", "runtime_objects", "active_handles", "tlab_chunks"}
-    if set(values) != {"before", "after"} or any(set(stats) != required for stats in values.values()):
-        raise RuntimeError(f"invalid /gc response: {body!r}")
+    if any(not required.issubset(stats) for stats in values.values()):
+        raise RuntimeError(f"invalid heap stats response: {body!r}")
     return values
+
+
+def sample_heap_stats(port):
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/stats", timeout=10) as response:
+        body = response.read().decode()
+        if response.status != 200 or response.headers.get_content_type() != "text/plain" or response.headers.get("Cache-Control") != "no-store":
+            raise RuntimeError(f"invalid /stats response metadata: {response.status} {response.headers}")
+    values = parse_heap_stats(body)
+    if set(values) != {"sample"}:
+        raise RuntimeError(f"invalid /stats response: {body!r}")
+    return values["sample"]
 
 
 def force_gc(port):
@@ -102,17 +113,20 @@ def main():
 
     def rss_sample(phase, cycle):
         stats = harness.process_stats(process.pid)
+        heap = sample_heap_stats(port) if stats.get("alive") else None
         value = {
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "elapsed_seconds": time.monotonic() - started,
             "phase": phase,
             "cycle": cycle,
             "process": stats,
+            "heap": heap,
         }
         samples.append(value)
         sample_file.write(json.dumps(value) + "\n")
         sample_file.flush()
-        print(f"t={value['elapsed_seconds'] / 60:.2f}m cycle={cycle} phase={phase} rss={stats.get('rss_bytes', 0) / 1048576:.2f}MiB", flush=True)
+        allocator_mib = heap.get("allocator_bytes_in_use", 0) / 1048576 if heap else 0
+        print(f"t={value['elapsed_seconds'] / 60:.2f}m cycle={cycle} phase={phase} rss={stats.get('rss_bytes', 0) / 1048576:.2f}MiB allocator_live={allocator_mib:.2f}MiB baml_slots={heap.get('runtime_objects', 0) if heap else 0} baml_capacity={heap.get('tracked_slot_capacity_bytes', 0) / 1048576 if heap else 0:.2f}MiB", flush=True)
         if not stats.get("alive"):
             raise RuntimeError("packed BAML process exited")
         return value

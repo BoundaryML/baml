@@ -101,14 +101,20 @@ def main():
     run("uv", "pip", "install", "--python", pyvenv / "bin/python", "maturin>=1.10,<2.0", "starlette==0.47.3", "uvicorn==0.35.0", "pydantic==2.11.9", "protobuf>=6.31.1", "typing-extensions>=4.14.0")
 
     if not args.skip_rust:
-        run("mise", "x", "-C", source, "--", "cargo", "build", "--release", "--locked", "-p", "baml_cli", "--bin", "baml-cli", "-p", "baml_pack_host", "--bin", "baml-pack-host", cwd=source, env=common_env)
+        cargo_build = ["mise", "x", "-C", source, "--", "cargo", "build", "--release", "--locked", "-p", "baml_cli", "--bin", "baml-cli", "-p", "baml_pack_host", "--bin", "baml-pack-host"]
+        if args.explicit_gc_diagnostic:
+            cargo_build.extend(["--features", "baml_pack_host/gc_profiling"])
+        run(*cargo_build, cwd=source, env=common_env)
         shutil.copy2(BUILD / "cargo-target/release/baml-cli", cli)
         shutil.copy2(BUILD / "cargo-target/release/baml-pack-host", pack_host)
         wheels = BUILD / "wheels"
         if wheels.exists():
             shutil.rmtree(wheels)
         wheels.mkdir()
-        run(pyvenv / "bin/maturin", "build", "--release", "--locked", "--interpreter", pyvenv / "bin/python", "--out", wheels, cwd=source / "sdks/python", env=common_env)
+        maturin_build = [pyvenv / "bin/maturin", "build", "--release", "--locked", "--interpreter", pyvenv / "bin/python", "--out", wheels]
+        if args.explicit_gc_diagnostic:
+            maturin_build.extend(["--features", "gc_profiling"])
+        run(*maturin_build, cwd=source / "sdks/python", env=common_env)
         wheel = next(wheels.glob("baml_bridge-*.whl"))
         run("uv", "pip", "install", "--reinstall", "--python", pyvenv / "bin/python", wheel)
 
