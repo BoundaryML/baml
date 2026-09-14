@@ -1142,6 +1142,44 @@ mod tests {
 
     // ── End-to-end walks ──────────────────────────────────────────────────────
 
+    /// An interface projection reads a member like any other receiver, so its
+    /// member name carries the member's kind — and ONLY the member name. The
+    /// span comes from the recorded member-name span; the fallback (the whole
+    /// `(B as Shows).show`) would have painted the receiver too.
+    #[test]
+    fn an_interface_projection_colours_only_its_member_name() {
+        let (db, file) = test_db(
+            r#"interface Shows {
+    function show(self) -> string throws never
+}
+
+class B { v: int }
+
+implement Shows for B {
+    function show(self) -> string throws never { "b" }
+}
+
+function projection(b: B) -> string throws never { (B as Shows).show(b) }
+"#,
+        );
+        let text = file.text(&db);
+        let member = text
+            .rfind(".show")
+            .unwrap_or_else(|| unreachable!("the fixture writes the projection last"))
+            + 1;
+        let tokens = semantic_tokens(&db, file);
+        let painted = tokens
+            .iter()
+            .find(|token| usize::from(token.range.start()) == member)
+            .unwrap_or_else(|| unreachable!("the projection's member name is classified"));
+        assert_eq!(
+            &text[usize::from(painted.range.start())..usize::from(painted.range.end())],
+            "show",
+            "only the name, not the receiver"
+        );
+        assert_eq!(painted.token_type, SemanticTokenType::Method);
+    }
+
     fn test_db(source: &str) -> (ProjectDatabase, SourceFile) {
         let mut db = ProjectDatabase::new();
         db.workspace(Path::new("/test"));

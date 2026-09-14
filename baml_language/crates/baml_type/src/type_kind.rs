@@ -119,6 +119,27 @@ pub struct BuiltinCompanion {
     /// their builtin a nominal companion — so a diagnostic must not tell
     /// the user they carry methods.
     pub carries_methods: bool,
+    /// Whether source reaches this builtin's members WITHOUT naming the
+    /// carrier class.
+    ///
+    /// `int.max_value()` does, so `baml.Int` is a spelling nobody writes and
+    /// an enumeration of the surface offers `int` instead. The containers do
+    /// not — neither `int[].filled` nor `map<string, int>.of` parses — so
+    /// `baml.Array` and `baml.Map` are the only handles a reader has on
+    /// those statics, and nor does `reflect.Type`, whose class name IS the
+    /// builtin's canonical spelling (TYPE_SYSTEM.md) rather than a stand-in
+    /// for one.
+    ///
+    /// Whether a carrier can be CONSTRUCTED and whether its path is worth
+    /// offering are different questions — every carrier here answers `no` to
+    /// the first — so a surface that hides names asks this, not merely
+    /// whether [`builtin_companion_of`] (or its `_decl` twin) matched.
+    ///
+    /// Derived by
+    /// [`CompilerAlias::members_reachable_without_carrier`](crate::compiler_aliases::CompilerAlias::members_reachable_without_carrier),
+    /// which states the rule once for the whole registry rather than per
+    /// carrier.
+    pub members_reachable_without_carrier: bool,
 }
 
 /// The builtin a companion carrier class stands in for, or `None` when the
@@ -151,6 +172,7 @@ fn companion(alias: &CompilerAlias) -> Option<BuiltinCompanion> {
             builtin: alias.display_name(),
             origin,
             carries_methods,
+            members_reachable_without_carrier: alias.members_reachable_without_carrier(),
         }),
         Construction::Alias | Construction::None => None,
     }
