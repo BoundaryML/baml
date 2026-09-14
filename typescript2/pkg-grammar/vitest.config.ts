@@ -1,21 +1,12 @@
 import { defineConfig } from "vitest/config";
 
-const packageDir = "typescript2/pkg-grammar";
-
 export default defineConfig({
   test: {
-    root: "../..",
-    include: [`${packageDir}/tests/**/*.test.ts`],
+    include: ["tests/**/*.test.ts"],
     reporters: process.env.CI
       ? [
           "default",
-          [
-            "junit",
-            {
-              addFileAttribute: true,
-              outputFile: `./${packageDir}/junit.xml`,
-            },
-          ],
+          ["junit", { addFileAttribute: true, outputFile: "./junit.xml" }],
         ]
       : ["default"],
   },
