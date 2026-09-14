@@ -101,6 +101,18 @@ pub struct HeapStats {
     pub tlab_chunks: usize,
     /// Exact Gen0 reservations, including unused slots and debug canaries.
     pub reserved_slots: usize,
+    /// Occupied/reserved slots in Gen0, Gen1, and Gen2.
+    pub generation_slots: [usize; 3],
+    /// Backing capacity in Gen0, Gen1, Gen2, and inactive scratch space.
+    pub capacity_slots: [usize; 4],
+    /// Actual objects allocated into TLAB reservations since the last collection.
+    pub allocations_since_gc: usize,
+    /// Size of one heap object slot, excluding separately allocated payloads.
+    pub object_slot_bytes: usize,
+    /// Backing bytes reserved for compile-time and runtime object slots.
+    pub tracked_slot_capacity_bytes: usize,
+    /// Weak heap-permit registry slots. Zero unless `gc_profiling` is enabled.
+    pub permit_holder_slots: usize,
 }
 
 /// Unified heap for the BEX virtual machine.
@@ -242,6 +254,9 @@ pub struct BexHeap {
     /// Actual object allocations since last GC (profiling only).
     allocs_since_gc: AtomicUsize,
 
+    /// Weak permit registry slots. Updated only in `gc_profiling` builds.
+    permit_holder_slots: AtomicUsize,
+
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
 }
@@ -365,6 +380,7 @@ impl BexHeap {
             gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
+            permit_holder_slots: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
@@ -1023,9 +1039,26 @@ impl BexHeap {
                 (*self.gen2.get()).len(),
             )
         };
+        // Capacity reads take each ChunkedVec's short read lock and are safe
+        // against concurrent Gen0 growth. GC cannot run while this builtin's
+        // VM holds an active heap permit, so the other generations cannot swap.
+        let capacity_slots = unsafe {
+            [
+                (*self.gen0.get()).capacity(),
+                (*self.gen1.get()).capacity(),
+                (*self.gen2.get()).capacity(),
+                (*self.inactive.get()).capacity(),
+            ]
+        };
         let ct_len = self.compile_time.len();
         let runtime = gen0_len + gen1_len + gen2_len;
         let total = ct_len + runtime;
+        let object_slot_bytes = std::mem::size_of::<Object>();
+        let tracked_slot_capacity_bytes = self
+            .compile_time
+            .capacity()
+            .saturating_add(capacity_slots.iter().sum())
+            .saturating_mul(object_slot_bytes);
 
         let tlab_chunks = self
             .gen0_next_chunk
@@ -1039,7 +1072,19 @@ impl BexHeap {
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
             tlab_chunks,
             reserved_slots: self.gen0_next_chunk.load(Ordering::Relaxed),
+            generation_slots: [gen0_len, gen1_len, gen2_len],
+            capacity_slots,
+            allocations_since_gc: self.allocs_since_gc.load(Ordering::Relaxed),
+            object_slot_bytes,
+            tracked_slot_capacity_bytes,
+            permit_holder_slots: self.permit_holder_slots.load(Ordering::Relaxed),
         }
+    }
+
+    /// Record the current size of the weak heap-permit registry.
+    #[cfg(feature = "gc_profiling")]
+    pub(crate) fn record_permit_holder_slots(&self, slots: usize) {
+        self.permit_holder_slots.store(slots, Ordering::Relaxed);
     }
 
     /// Whether the heap has spent its allocation allowance since the last full GC.

@@ -22,6 +22,9 @@ use ::std::{
     sync::{Arc, Weak},
 };
 
+#[cfg(feature = "gc_profiling")]
+use crate::BexHeap;
+
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
     #[cfg(target_pointer_width = "64")]
@@ -199,6 +202,8 @@ pub struct HeapPermitManager {
     active: Arc<tokio::sync::Semaphore>,
     /// Mutex must be held during GC (or other exclusive access operations) to prevent new permits being created during GC.
     holders: tokio::sync::Mutex<Vec<Weak<PermitCell<dyn RootHaver>>>>,
+    #[cfg(feature = "gc_profiling")]
+    heap: Option<Weak<BexHeap>>,
 }
 
 impl HeapPermitManager {
@@ -208,6 +213,23 @@ impl HeapPermitManager {
         Self {
             active: Arc::new(tokio::sync::Semaphore::const_new(MAX_PERMITS as usize)),
             holders: tokio::sync::Mutex::new(Vec::new()),
+            #[cfg(feature = "gc_profiling")]
+            heap: None,
+        }
+    }
+    /// Create a permit manager that exports its weak-registry size through heap stats.
+    pub fn for_heap(heap: &Arc<crate::BexHeap>) -> Self {
+        Self {
+            active: Arc::new(tokio::sync::Semaphore::const_new(MAX_PERMITS as usize)),
+            holders: tokio::sync::Mutex::new(Vec::new()),
+            #[cfg(feature = "gc_profiling")]
+            heap: Some(Arc::downgrade(heap)),
+        }
+    }
+    #[cfg(feature = "gc_profiling")]
+    fn record_holder_slots(&self, slots: usize) {
+        if let Some(heap) = self.heap.as_ref().and_then(Weak::upgrade) {
+            heap.record_permit_holder_slots(slots);
         }
     }
     /// Provides a new permit.
@@ -217,6 +239,8 @@ impl HeapPermitManager {
         debug_assert!(guard.len() < MAX_PERMITS as usize);
         let holder = Arc::new(PermitCell::new(with_roots));
         guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
+        #[cfg(feature = "gc_profiling")]
+        self.record_holder_slots(guard.len());
         let permit = InactiveHeapPermit {
             active: self.active.clone(),
             holder,
@@ -238,6 +262,8 @@ impl HeapPermitManager {
             .unwrap_or_else(|_| unreachable!("We do not close the semaphore"));
         let mut guard = self.holders.lock().await;
         guard.retain(|holder| holder.strong_count() > 0);
+        #[cfg(feature = "gc_profiling")]
+        self.record_holder_slots(guard.len());
         HeapGuard {
             guard,
             _permits: permits,

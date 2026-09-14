@@ -82,5 +82,6 @@ wasm-bindgen-futures = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]
+gc_profiling = [ "bex_engine/gc_profiling" ]
 aws-crypto = [ "bex_engine/aws-crypto", "bex_cache/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto", "bex_cache/ring-crypto" ]
