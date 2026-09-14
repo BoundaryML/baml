@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import matplotlib
@@ -70,13 +71,19 @@ def main():
     args = parser.parse_args()
     evidence = args.evidence_dir.resolve()
     output = (args.output or evidence / "gc-allocator-timeline.png").resolve()
-    targets = [
-        ("Pure BAML", load_samples(evidence / "pure-samples.jsonl")),
-        ("Python + BAML", load_samples(evidence / "python-samples.jsonl")),
+    target_files = [
+        ("Pure BAML", evidence / "pure-samples.jsonl"),
+        ("Python + BAML", evidence / "python-samples.jsonl"),
     ]
+    targets = [(title, load_samples(path)) for title, path in target_files if path.exists()]
+    if not targets:
+        parser.error(f"no pure-samples.jsonl or python-samples.jsonl found in {evidence}")
+    max_elapsed = max(sample["elapsed_seconds"] for _title, samples in targets for sample in samples)
+    x_max = max(61, math.ceil(max_elapsed))
+    x_tick = 60 if x_max > 180 else 30 if x_max > 90 else 10
 
     plt.style.use("seaborn-v0_8-whitegrid")
-    figure, axes = plt.subplots(4, 2, figsize=(16, 13), sharex="col", constrained_layout=False)
+    figure, axes = plt.subplots(4, len(targets), figsize=(max(12, 8 * len(targets)), 13), sharex="col", squeeze=False, constrained_layout=False)
     figure.subplots_adjust(left=0.075, right=0.98, top=0.88, bottom=0.15, hspace=0.22, wspace=0.16)
     figure.suptitle(args.title, fontsize=21, fontweight="bold", y=0.965)
     figure.text(0.5, 0.925, args.subtitle, ha="center", fontsize=12, color="#4a4a4a")
@@ -88,8 +95,8 @@ def main():
             decorate_gc(axis, samples)
             if args.mark_automatic_gc:
                 decorate_automatic_gc(axis, samples)
-            axis.set_xlim(0, 61)
-            axis.xaxis.set_major_locator(MultipleLocator(10))
+            axis.set_xlim(0, x_max)
+            axis.xaxis.set_major_locator(MultipleLocator(x_tick))
             axis.grid(True, color="#d9d9d9", linewidth=0.65, alpha=0.72)
             axis.spines[["top", "right"]].set_visible(False)
         axes[0][column].set_title(title, fontsize=16, fontweight="bold", pad=12)

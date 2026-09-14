@@ -1,0 +1,118 @@
+{
+  "experiment": {
+    "date": "2026-09-14",
+    "profile": "pure BAML under continuous load for 300 seconds followed by one explicit full-GC checkpoint",
+    "rate_rps": 4000,
+    "target": "baml-only",
+    "diagnostic_source_revision": "540971880764f64a21d23c68703902719efe7c7a",
+    "diagnostic_source_dirty": false,
+    "canary_base_revision": "e01f4e1a0ec0996b274ae68f15e5ffdefb977005",
+    "benchmark_parent_revision": "1b0a195885c3b739fe6b73a94455042b5053e8d0"
+  },
+  "traffic": {
+    "requests": 1199996,
+    "status_counts": {
+      "200": 1199996
+    },
+    "scheduled_load_seconds": 299.998845042,
+    "delivered_rps": 4000.0020661146204,
+    "alive_at_last_sample": true
+  },
+  "automatic_gc": {
+    "sampled_collection_count": 73,
+    "mean_interval_seconds": 4.096089116438356,
+    "median_interval_seconds": 4.000450333000003,
+    "minimum_interval_seconds": 3.9352407089999986,
+    "maximum_interval_seconds": 5.014289916999999,
+    "sampled_allocations_before_reset_median": 275339,
+    "sampled_allocations_before_reset_minimum": 235952,
+    "sampled_allocations_before_reset_maximum": 310445
+  },
+  "loaded_run": {
+    "sample_count": 300,
+    "rss_initial_mib": 35.625,
+    "rss_final_mib": 184.25,
+    "rss_peak_mib": 184.25,
+    "allocator_live_initial_mib": 18.913558959960938,
+    "allocator_live_final_sample_mib": 30.450424194335938,
+    "allocator_live_peak_mib": 101.40299987792969,
+    "allocator_reserved_initial_mib": 36.0,
+    "allocator_reserved_final_mib": 184.0,
+    "allocator_reserved_peak_mib": 184.0,
+    "runtime_objects_peak": 522917,
+    "permit_holder_slots_peak": 16317,
+    "allocator_blocks_in_use_peak": 506359,
+    "rss_linear_slope_mib_per_minute": 11.8271,
+    "rss_linear_slope_mib_per_minute_after_60s": 11.0349,
+    "rss_linear_slope_mib_per_minute_after_180s": 1.5188,
+    "rss_linear_slope_mib_per_minute_last_90s": 0.0354,
+    "rss_linear_slope_mib_per_minute_last_60s": 0.023,
+    "allocator_reserved_slope_mib_per_minute_last_90s": 0.0,
+    "rss_change_last_approximately_90s_mib": 0.046875,
+    "allocator_reserved_flat_final_seconds": 111.0,
+    "minute_windows": [
+      {
+        "start_seconds": 0,
+        "end_seconds": 60,
+        "rss_median_mib": 149.890625,
+        "allocator_live_median_mib": 58.071624755859375,
+        "allocator_live_minimum_mib": 18.913558959960938,
+        "allocator_live_maximum_mib": 99.60397338867188,
+        "allocator_reserved_median_mib": 156.0
+      },
+      {
+        "start_seconds": 60,
+        "end_seconds": 120,
+        "rss_median_mib": 154.46875,
+        "allocator_live_median_mib": 60.533599853515625,
+        "allocator_live_minimum_mib": 20.923995971679688,
+        "allocator_live_maximum_mib": 99.15444946289062,
+        "allocator_reserved_median_mib": 160.0
+      },
+      {
+        "start_seconds": 120,
+        "end_seconds": 180,
+        "rss_median_mib": 154.484375,
+        "allocator_live_median_mib": 60.736907958984375,
+        "allocator_live_minimum_mib": 20.853057861328125,
+        "allocator_live_maximum_mib": 99.08334350585938,
+        "allocator_reserved_median_mib": 160.0
+      },
+      {
+        "start_seconds": 180,
+        "end_seconds": 240,
+        "rss_median_mib": 184.203125,
+        "allocator_live_median_mib": 61.21820068359375,
+        "allocator_live_minimum_mib": 22.800201416015625,
+        "allocator_live_maximum_mib": 101.40299987792969,
+        "allocator_reserved_median_mib": 184.0
+      },
+      {
+        "start_seconds": 240,
+        "end_seconds": 300,
+        "rss_median_mib": 184.25,
+        "allocator_live_median_mib": 61.14122009277344,
+        "allocator_live_minimum_mib": 21.103240966796875,
+        "allocator_live_maximum_mib": 99.54837036132812,
+        "allocator_reserved_median_mib": 184.0
+      }
+    ]
+  },
+  "final_explicit_gc": {
+    "gc_elapsed_seconds": 0.003951250000000073,
+    "rss_before_mib": 184.25,
+    "rss_after_one_second_mib": 184.25,
+    "runtime_objects_before": 203973,
+    "runtime_objects_after": 15,
+    "permit_holder_slots_before": 6364,
+    "permit_holder_slots_after": 5,
+    "allocator_live_before_mib": 50.351654052734375,
+    "allocator_live_after_mib": 19.179229736328125,
+    "allocator_live_after_one_second_mib": 19.544403076171875,
+    "allocator_reserved_before_mib": 184.0,
+    "allocator_reserved_after_mib": 184.0,
+    "allocator_blocks_before": 276164,
+    "allocator_blocks_after": 129481
+  },
+  "interpretation": "At 4,000 RPS, pure BAML automatically collected throughout the five-minute run. The 73 sampled resets occurred about every four seconds, and each minute retained nearly the same malloc-live sawtooth: median live bytes moved only from 58.07 MiB in minute one to 61.14 MiB in minute five. RSS rose in discrete steps with malloc-reserved capacity, including a later expansion between roughly 154 and 204 seconds, then stabilized at 184.25 MiB while reserved capacity remained exactly 184 MiB for the final 111 seconds. One final explicit collection returned the managed runtime to 15 objects, weak permit registrations to five, and malloc-live memory to 19.18 MiB without reducing RSS or reserved capacity. This run does not show a request-proportional live-object leak in pure BAML; it shows bounded managed-memory sawteeth plus allocator high-water retention. The late allocator expansion means five minutes still cannot prove that the 184 MiB capacity level is a permanent plateau, but the final 90 seconds are inconsistent with a steady linear leak."
+}
