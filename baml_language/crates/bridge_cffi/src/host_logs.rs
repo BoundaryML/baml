@@ -6,10 +6,9 @@
 //! event is dropped at the call boundary. This module gives every host SDK the
 //! same behavior as the CLI flag through the `BAML_LOG` environment variable:
 //! when it names a level (`error`, `warn`, `info`, or `debug`), each function
-//! call made through [`crate::call_and_encode`] or
-//! [`crate::call_handle_and_encode`] captures its log events and writes them to
-//! stderr as `[LEVEL] body` lines, draining periodically so long-running calls
-//! stream their logs live.
+//! call made through [`crate::invoke_prepared`] captures its log events and
+//! writes them to stderr as `[LEVEL] body` lines, draining periodically so
+//! long-running calls stream their logs live.
 //!
 //! `BAML_LOG` is read at the start of each function call, so a host process may
 //! enable or disable log delivery between calls. Unset, empty, and `off` leave
