@@ -87,7 +87,9 @@ describe.runIf(isTestRuntime("node"))(
     it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, (ctx: TestContext) => {
       if (isLogSinkChild) return ctx.skip();
       const { combined } = runEmitLogsChild(undefined, "ts-quiet-marker");
-      expect(combined).not.toContain("info ts-quiet-marker");
+      // The bare marker covers every level's line, matching the Go and
+      // Python quiet-case assertions.
+      expect(combined).not.toContain("ts-quiet-marker");
     });
 
     // SDK_PARITY_LINT(skip): child-process entry point for the BAML_LOG stderr tests
