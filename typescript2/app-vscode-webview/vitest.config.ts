@@ -5,7 +5,6 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
-const packageDir = 'typescript2/app-vscode-webview';
 
 export default defineConfig({
   define: {
@@ -40,7 +39,6 @@ export default defineConfig({
     },
   },
   test: {
-    root: '../..',
     reporters: process.env.CI
       ? [
           'default',
@@ -48,7 +46,7 @@ export default defineConfig({
             'junit',
             {
               addFileAttribute: true,
-              outputFile: `./${packageDir}/junit.xml`,
+              outputFile: './junit.xml',
             },
           ],
         ]
@@ -62,9 +60,9 @@ export default defineConfig({
           },
           css: true,
           environment: 'jsdom',
-          exclude: [`${packageDir}/src/**/*.browser.test.{ts,tsx}`],
+          exclude: ['src/**/*.browser.test.{ts,tsx}'],
           globals: true,
-          include: [`${packageDir}/src/**/*.test.{ts,tsx}`],
+          include: ['src/**/*.test.{ts,tsx}'],
           name: 'unit',
           setupFiles: [resolve(projectRoot, 'vitest.setup.ts')],
         },
@@ -79,7 +77,7 @@ export default defineConfig({
             provider: playwright(),
           },
           globals: true,
-          include: [`${packageDir}/src/**/*.browser.test.{ts,tsx}`],
+          include: ['src/**/*.browser.test.{ts,tsx}'],
           name: 'browser',
           setupFiles: [resolve(projectRoot, 'vitest.setup.browser.ts')],
         },

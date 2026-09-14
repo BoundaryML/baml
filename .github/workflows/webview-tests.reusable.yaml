@@ -130,6 +130,8 @@ jobs:
           junit-path: typescript2/app-vscode-webview/junit.xml
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
+          normalize: prefix
+          path-prefix: typescript2/app-vscode-webview
           test-outcome: ${{ steps.unit-tests.outcome }}
           token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
@@ -194,5 +196,7 @@ jobs:
           junit-path: typescript2/app-vscode-webview/junit.xml
           # https://app.trunk.io/boundaryml/flaky-tests/collections/xl5LO9gK
           collection: xl5LO9gK
+          normalize: prefix
+          path-prefix: typescript2/app-vscode-webview
           test-outcome: ${{ steps.browser-tests.outcome }}
           token: ${{ secrets.TRUNK_ORG_TOKEN }}

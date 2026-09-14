@@ -146,9 +146,33 @@ def normalize_node_test(report: Path, args) -> int:
     return 0
 
 
+def normalize_prefix(report: Path, args) -> int:
+    """Re-root package-relative paths (vitest's) at the repo root."""
+    prefix = args.prefix.strip("/")
+    tree = ET.parse(report)
+    rewritten = 0
+
+    for element in tree.getroot().iter():
+        if element.tag not in ("testsuite", "testcase"):
+            continue
+        for attribute in ("file", "classname", "name"):
+            value = element.get(attribute)
+            if not value or value.startswith(f"{prefix}/"):
+                continue
+            if attribute == "file" or value.endswith((".ts", ".tsx", ".js", ".mjs")):
+                element.set(attribute, f"{prefix}/{value}")
+                if attribute == "file":
+                    rewritten += 1
+
+    tree.write(report, encoding="utf-8", xml_declaration=True)
+    print(f"re-rooted {rewritten} file paths under {prefix} in {report}")
+    return 0
+
+
 MODES = {
     "nextest": normalize_nextest,
     "node-test": normalize_node_test,
+    "prefix": normalize_prefix,
 }
 
 
@@ -168,6 +192,11 @@ def main() -> int:
         help="nextest mode: Cargo.toml the report came from",
     )
     parser.add_argument(
+        "--prefix",
+        default="",
+        help="prefix mode: repo-relative directory the paths are relative to",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="nextest mode: fail instead of warning on an unresolved testsuite",
@@ -179,6 +208,9 @@ def main() -> int:
         return 1
     if args.mode == "nextest" and not args.manifest_path:
         print("::error::nextest mode needs --manifest-path", file=sys.stderr)
+        return 1
+    if args.mode == "prefix" and not args.prefix:
+        print("::error::prefix mode needs --prefix", file=sys.stderr)
         return 1
 
     return MODES[args.mode](args.report, args)

@@ -68,9 +68,12 @@ that is why `ci-bridge` and `ci-cli-e2e` exist alongside `ci`.
 Trunk uses a test's file for CODEOWNERS and for flaky-test fix investigations,
 so reports are enriched where their runner can't do it:
 
-- **vitest** emits `file` with `addFileAttribute: true`, and each config sets
-  `root` to the repo so the paths come out repo-relative rather than
-  package-relative.
+- **vitest** emits `file` with `addFileAttribute: true`, but relative to the
+  package. The grammar configs set `root` to the repo so the paths come out
+  repo-relative directly; `app-vscode-webview` cannot, because rooting there
+  makes Vite resolve bare imports (`react/jsx-dev-runtime`) against the
+  repo-root `node_modules` instead of `typescript2/node_modules`. It stays
+  package-rooted and its report goes through `junit-normalize.py prefix`.
 - **nextest** cannot emit a file at all — libtest never tells it which source a
   test came from, so there is no config option and
   `cargo nextest list --message-format json` carries no path either.

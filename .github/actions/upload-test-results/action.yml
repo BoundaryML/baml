@@ -13,11 +13,15 @@ inputs:
     description: "Trunk test collection short ID. Each collection is a different grouping of tests, with its own monitors, quarantining settings, and ticketing settings."
     required: true
   normalize:
-    description: "Reporter fixup to apply before uploading: 'nextest', 'node-test', or 'none'."
+    description: "Reporter fixup to apply before uploading: 'nextest', 'node-test', 'prefix', or 'none'."
     required: false
     default: "none"
   cargo-manifest-path:
     description: "Cargo.toml the nextest report came from. Required when normalize is 'nextest'."
+    required: false
+    default: ""
+  path-prefix:
+    description: "Repo-relative directory the report's paths are relative to. Required when normalize is 'prefix'."
     required: false
     default: ""
   test-outcome:
@@ -43,7 +47,8 @@ runs:
           .github/scripts/junit-normalize.py "${{ inputs.normalize }}" \
           "${{ inputs.junit-path }}" \
           --repo-root . \
-          --manifest-path "${{ inputs.cargo-manifest-path || 'Cargo.toml' }}"
+          --manifest-path "${{ inputs.cargo-manifest-path || 'Cargo.toml' }}" \
+          --prefix "${{ inputs.path-prefix }}"
 
     # This sets the final exit code for the job. If there are no test files,
     # previous-step-outcome is used. If there are test files, the pass or fail
