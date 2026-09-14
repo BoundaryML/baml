@@ -41,7 +41,7 @@ passes; the final full-workspace validation is tracked separately.
   confirmed misses, then rerun affected validation.
 - [x] PR CI follow-up: repair the markdown/rustfmt pre-commit failures and
   replace the deleted `book_interfaces` workflow target with its native suite.
-- [ ] CodeRabbit follow-up: address all five inline findings, add mounted-
+- [x] CodeRabbit follow-up: address all five inline findings, add mounted-
   interface regressions, rerun affected validation, and resolve the threads.
 
 Implementation started: 2026-09-12.
@@ -152,12 +152,13 @@ Progress:
   native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and
   the post-review snapshot-owned job passes all 1,564 active Rust entries with
-  21 ignored and no unreferenced snapshots. The complementary workspace job
-  passed 4,352 tests with five skipped before the review; all compiler and CLI
-  code changed during review was then covered by focused package and end-to-end
-  runs. The PR follow-up also passes the repository's markdown/workflow hooks,
-  CI-configured rustfmt, and the three-case native Developer Docs gate.
-  `git diff --check` and the `.snap.new` scan are clean.
+  21 ignored and no unreferenced snapshots. The post-review complementary
+  workspace job passes all 4,377 active entries with seven skipped. The PR
+  follow-up also passes the repository's markdown/workflow hooks, CI-configured
+  rustfmt, and the three-case native Developer Docs gate. All five CodeRabbit
+  findings have focused regression coverage or a stronger retained oracle, and
+  all five review threads are answered and resolved. `git diff --check` and the
+  `.snap.new` scan are clean.
 
 ## Outcome
 
