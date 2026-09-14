@@ -119,11 +119,16 @@ def main():
     for name in ("node-baml", "python-baml"):
         run(cli, "generate", "--agent-skill-check", "off", cwd=apps / name, env=common_env)
     run(cli, "pack", "main", "--target", TARGET, "--output", apps / "baml-only/hello", "--no-progress", "--agent-skill-check", "off", cwd=apps / "baml-only", env=common_env)
-    diagnostic = None
+    diagnostics = []
     if args.explicit_gc_diagnostic:
-        diagnostic = apps / "baml-only-explicit-gc"
-        copy_tree(ROOT / "diagnostics/baml-only-explicit-gc", diagnostic)
-        run(cli, "pack", "main", "--target", TARGET, "--output", diagnostic / "hello", "--no-progress", "--agent-skill-check", "off", cwd=diagnostic, env=common_env)
+        pure_baml_diagnostic = apps / "baml-only-explicit-gc"
+        copy_tree(ROOT / "diagnostics/baml-only-explicit-gc", pure_baml_diagnostic)
+        run(cli, "pack", "main", "--target", TARGET, "--output", pure_baml_diagnostic / "hello", "--no-progress", "--agent-skill-check", "off", cwd=pure_baml_diagnostic, env=common_env)
+        diagnostics.append(pure_baml_diagnostic / "hello")
+        python_diagnostic = apps / "python-baml-explicit-gc"
+        copy_tree(ROOT / "diagnostics/python-baml-explicit-gc", python_diagnostic)
+        run(cli, "generate", "--agent-skill-check", "off", cwd=python_diagnostic, env=common_env)
+        diagnostics.extend([python_diagnostic / "server.py", python_diagnostic / "baml_sdk/_inlinedbaml.py"])
 
     source_node = Path(output("mise", "x", "-C", source, "--", "which", "node"))
     source_node_env = dict(common_env, PATH=str(source_node.parent) + os.pathsep + os.environ["PATH"])
@@ -163,8 +168,7 @@ def main():
     vegeta.chmod(0o755)
 
     artifacts = [cli, pack_host, next((BUILD / "wheels").glob("baml_bridge-*.whl")), bridge / "dist/baml_node.darwin-arm64.node", apps / "baml-only/hello", vegeta]
-    if diagnostic is not None:
-        artifacts.append(diagnostic / "hello")
+    artifacts.extend(diagnostics)
     manifest = {
         "source": str(source),
         "revision": revision,

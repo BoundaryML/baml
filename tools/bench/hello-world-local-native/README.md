@@ -57,11 +57,14 @@ The pure-BAML diagnostic requires `baml.sys.heap_stats()`. Build it explicitly f
 ```sh
 python3 scripts/build.py --baml-source /path/to/heap-stats-worktree/baml_language --explicit-gc-diagnostic
 python3 scripts/run_explicit_gc.py --rate 100 --duration 300 --load-seconds 30 --post-gc-seconds 2 --interval 5
+python3 scripts/run_explicit_gc.py --target python-baml --rate 100 --duration 300 --load-seconds 30 --post-gc-seconds 2 --interval 5
 ```
 
 The retained experiment used the clean pre-#4870 parent `42365a45f9d7a3750ed72bd338006d369f6c0e41` plus only the two read-only heap-stat commits from #4837; neither commit changes collection or allocation behavior. It completed 28,124 HTTP 200 requests and ten explicit GC checkpoints. Each complete 30-second burst left 96,143 runtime object slots before GC. Every major collection returned the heap to exactly 15 runtime objects, four active handles, and zero TLAB chunks while taking 4.2–8.4 ms.
 
 RSS did not decrease when the logical objects were reclaimed. It rose from 50.27 MiB before the first GC to 50.84 MiB afterward, reached 53.20 MiB by the third checkpoint, and stayed within 53.20–53.86 MiB through the final checkpoint. The fitted post-GC RSS slope from checkpoints 3–10 was 0.18 MiB/min. This rules out an accumulating live-object set and a collector correctness failure for this workload over five minutes. The earlier pure-BAML RSS curve primarily reflects the automatic collection cadence and allocator pages remaining resident after collection. The retained [analysis](evidence/2026-09-14-pre4870-pure-baml-explicit-gc-100rps/analysis.json) includes every checkpoint; the raw summary, samples, configuration, and build manifest are stored beside it.
+
+At 500 RPS, pure BAML expanded its allocator high-water mark from 89.38 MiB after the first GC to 104.56 MiB after the fourth, then plateaued: checkpoints 4–10 changed by only 0.047 MiB and fit 0.016 MiB/min. Every collection returned the managed heap to exactly 15 runtime objects, four handles, and zero TLAB chunks. Python BAML behaved differently. Even after every pause invoked both a BAML major GC and CPython generation-2 GC, its post-GC RSS rose from 111.39 to 116.97 MiB, fitting 1.38 MiB/min across all checkpoints and 1.51 MiB/min across checkpoints 4–10. The BAML heap had zero runtime objects before each diagnostic call and one response object afterward, while CPython collected 1,459 objects across the ten cycles. This localizes the retained Python-process growth outside the measured BAML heap, but five minutes cannot distinguish a native leak from allocator or runtime caches that plateau later. The retained [500 RPS comparison](evidence/2026-09-14-pre4870-explicit-gc-500rps/analysis.json) includes both raw sample streams and summaries.
 
 ## Leak investigation and fix validation
 
