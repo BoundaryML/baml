@@ -390,32 +390,14 @@ pub enum MemberResolution<'db, T = baml_type::Ty> {
     },
     /// A free function named by a package/namespace path.
     Free { func: FunctionRef<'db> },
-    /// A class-inherent method on a VALUE receiver (`p.get_name`): `self`
-    /// is bound. The owning class is the method's own
-    /// (`callable_owner_type`), never carried alongside it.
-    BoundMethod { func: FunctionRef<'db> },
-    /// A class-inherent method behind a TYPE qualifier (`Person.get_name`,
-    /// `Array.filled`): no receiver, `self` stays a parameter.
-    UnboundMethod { func: FunctionRef<'db> },
-    /// A VIRTUAL interface-method call: only the slot (interface +
-    /// member) is statically known; dispatch resolves to the receiver's
-    /// runtime impl.
-    InterfaceVirtualMethod {
-        interface: InterfaceRef<'db>,
-        method: baml_type::Name,
-    },
-    /// A CONCRETE interface-method call through a statically-matched
-    /// impl: `func` is the method the impl provides, or the interface's
-    /// default body when adopted.
-    InterfaceConcreteMethod {
-        impl_block: ImplRef<'db>,
-        func: FunctionRef<'db>,
-        /// The callee's OWNER frame, carried from resolution (see
-        /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
-        /// bindings for an override, `[Self, iface args..]` for a default.
-        frame_type_args: Vec<T>,
-        /// `true` when `func` is the interface's default body.
-        from_interface_default: bool,
+    /// A method access, by WHAT is called and whether the access binds its
+    /// `self` - two independent axes. `recv.m(..)` binds the receiver;
+    /// `Type.m(..)`, `I.m(recv, ..)` and `(C as I).m(recv, ..)` do not:
+    /// there `self`, when the callee takes one, is the written first
+    /// argument.
+    Method {
+        callee: MethodCallee<'db, T>,
+        receiver: Receiver,
     },
     /// A VIRTUAL interface-field access: read through the realized
     /// declaring-interface view (`view`, the runtime resolver's key)
@@ -428,18 +410,59 @@ pub enum MemberResolution<'db, T = baml_type::Ty> {
     },
 }
 
-impl<'db, T> MemberResolution<'db, T> {
-    /// The callable a resolution statically names, wherever it is
-    /// declared: the free function, the class method, the impl-provided (or
-    /// adopted) method, or — for a virtual slot — the interface's own
-    /// declaration of the method. Fields and variants name none.
+/// What a method access calls, by dispatch: the class-inherent method
+/// itself, an interface's VIRTUAL slot (only interface + member are
+/// statically known; the receiver's runtime impl answers), or a CONCRETE
+/// interface method through a statically-matched impl.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MethodCallee<'db, T = baml_type::Ty> {
+    /// A class-inherent method. The owning class is the method's own
+    /// (`callable_owner_type`), never carried alongside it.
+    Inherent(FunctionRef<'db>),
+    /// A virtual interface slot: dispatch resolves to the receiver's
+    /// runtime impl.
+    Virtual {
+        interface: InterfaceRef<'db>,
+        method: baml_type::Name,
+    },
+    /// A statically-matched impl's method: the method the impl provides,
+    /// or the interface's default body when adopted.
+    Concrete {
+        impl_block: ImplRef<'db>,
+        func: FunctionRef<'db>,
+        /// The callee's OWNER frame, carried from resolution (see
+        /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
+        /// bindings for a provided method, `[Self, iface args..]` for a
+        /// default.
+        frame_type_args: Vec<T>,
+        /// `true` when `func` is the interface's default body.
+        from_interface_default: bool,
+    },
+}
+
+/// Whether a method access supplies `self` from its root value. Taking
+/// `self` at all is the CALLEE's property (`callable_takes_self`), never
+/// the access's: an `Unbound` access to a `self`-taking method passes the
+/// receiver as the written first argument (`I.m(recv, ..)`); an `Unbound`
+/// access to a `self`-less one passes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Receiver {
+    /// The root value is bound as `self` (`recv.m(..)`): the access's type
+    /// has `self` stripped.
+    Bound,
+    /// No receiver is bound (`Type.m(..)`, `I.m(..)`, `(C as I).m(..)`):
+    /// the access's type keeps `self` when the callee takes one.
+    Unbound,
+}
+
+impl<'db, T> MethodCallee<'db, T> {
+    /// The callable statically named, wherever it is declared: the
+    /// inherent or impl-provided (or adopted) method itself, or - for a
+    /// virtual slot - the interface's own declaration of the method.
     pub fn callable(&self, db: &'db dyn baml_compiler2_ppir::Db) -> Option<FunctionRef<'db>> {
         match self {
-            MemberResolution::Free { func }
-            | MemberResolution::BoundMethod { func, .. }
-            | MemberResolution::UnboundMethod { func, .. }
-            | MemberResolution::InterfaceConcreteMethod { func, .. } => Some(*func),
-            MemberResolution::InterfaceVirtualMethod { interface, method } => match interface {
+            MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => Some(*func),
+            MethodCallee::Virtual { interface, method } => match interface {
                 DeclRef::Source(interface) => {
                     baml_compiler2_ppir::item_data::interface_data(db, *interface)
                         .methods
@@ -454,6 +477,18 @@ impl<'db, T> MemberResolution<'db, T> {
                     extern_interface_method(db, interface.head(db), method).map(DeclRef::External)
                 }
             },
+        }
+    }
+}
+
+impl<'db, T> MemberResolution<'db, T> {
+    /// The callable a resolution statically names, wherever it is
+    /// declared: a free function, or a method's [`MethodCallee::callable`].
+    /// Fields and variants name none.
+    pub fn callable(&self, db: &'db dyn baml_compiler2_ppir::Db) -> Option<FunctionRef<'db>> {
+        match self {
+            MemberResolution::Free { func } => Some(*func),
+            MemberResolution::Method { callee, .. } => callee.callable(db),
             MemberResolution::Field { .. }
             | MemberResolution::Variant { .. }
             | MemberResolution::InterfaceVirtualField { .. } => None,
@@ -5413,8 +5448,9 @@ impl<'db> InferenceContext<'db> {
         if self.type_refs.expr_type_args.contains_key(&call) {
             return;
         }
-        let Some(MemberResolution::BoundMethod {
-            func: DeclRef::Source(func),
+        let Some(MemberResolution::Method {
+            callee: MethodCallee::Inherent(DeclRef::Source(func)),
+            receiver: Receiver::Bound,
         }) = self.result.member_resolutions.get(&callee).cloned()
         else {
             return;
@@ -6046,7 +6082,11 @@ impl<'db> InferenceContext<'db> {
                     {
                         return (Ty::error(), false, None, false);
                     }
-                    let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                    let resolution = self.declarer_resolution(
+                        &interface_member.declarer,
+                        member,
+                        Receiver::Bound,
+                    );
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution, false);
                 }
@@ -6122,7 +6162,11 @@ impl<'db> InferenceContext<'db> {
                     {
                         return (Ty::error(), false, None, false);
                     }
-                    let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                    let resolution = self.declarer_resolution(
+                        &interface_member.declarer,
+                        member,
+                        Receiver::Bound,
+                    );
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution, false);
                 }
@@ -6265,10 +6309,13 @@ impl<'db> InferenceContext<'db> {
         self.register_callable_bounds(method, &instantiation, call);
         let fn_ty = instantiate_callable_signature(self.db, method, &instantiation);
         let bound = callable_takes_self(self.db, method);
-        let resolution = if bound {
-            MemberResolution::BoundMethod { func: method }
-        } else {
-            MemberResolution::UnboundMethod { func: method }
+        let resolution = MemberResolution::Method {
+            callee: MethodCallee::Inherent(method),
+            receiver: if bound {
+                Receiver::Bound
+            } else {
+                Receiver::Unbound
+            },
         };
         (fn_ty, bound, Some(resolution), false)
     }
@@ -6518,13 +6565,10 @@ impl<'db> InferenceContext<'db> {
         };
         let reference = body.display_expr(expr);
         let had_context = expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
-        let callable = match resolution {
-            MemberResolution::BoundMethod { func, .. }
-            | MemberResolution::InterfaceConcreteMethod { func, .. } => Some((func, true)),
-            MemberResolution::UnboundMethod { func, .. } => Some((func, false)),
-            MemberResolution::InterfaceVirtualMethod { .. } => {
-                resolution.callable(self.db).map(|func| (func, true))
-            }
+        let callable = match &resolution {
+            MemberResolution::Method { callee, receiver } => callee
+                .callable(self.db)
+                .map(|func| (func, *receiver == Receiver::Bound)),
             MemberResolution::Field { .. }
             | MemberResolution::Variant { .. }
             | MemberResolution::Free { .. }
@@ -7141,16 +7185,20 @@ impl<'db> InferenceContext<'db> {
         self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
         if let Some(record_at) = record_at {
             // The slot is what is statically known - interface plus member -
-            // recorded uniformly for every spelling and for default and
-            // required methods alike. Resolving it to a concrete impl is
-            // downstream's job: the VM keys on the receiver's runtime type
-            // and caches the target. A written `Self` narrows WHICH interface
-            // slot, never who answers it.
+            // recorded for default and required methods alike, and UNBOUND:
+            // every spelling of this tier is type-rooted, so `self` (when the
+            // method takes one) is the written first argument. Resolving the
+            // slot to a concrete impl is downstream's job: the VM keys on the
+            // receiver's runtime type and caches the target. A written `Self`
+            // narrows WHICH interface slot, never who answers it.
             self.write_member_resolution(
                 record_at,
-                MemberResolution::InterfaceVirtualMethod {
-                    interface: DeclRef::Source(interface),
-                    method: member.clone(),
+                MemberResolution::Method {
+                    callee: MethodCallee::Virtual {
+                        interface: DeclRef::Source(interface),
+                        method: member.clone(),
+                    },
+                    receiver: Receiver::Unbound,
                 },
             );
         }
@@ -7438,7 +7486,10 @@ impl<'db> InferenceContext<'db> {
             if let Some(record_at) = record_at {
                 self.write_member_resolution(
                     record_at,
-                    MemberResolution::UnboundMethod { func: callable },
+                    MemberResolution::Method {
+                        callee: MethodCallee::Inherent(callable),
+                        receiver: Receiver::Unbound,
+                    },
                 );
             }
             return Some(instantiate_callable_signature(
@@ -7476,7 +7527,10 @@ impl<'db> InferenceContext<'db> {
                 )
                 && interface_member.is_method
             {
-                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                // Type-qualified: `self`, when the method takes one, is the
+                // written first argument.
+                let resolution =
+                    self.declarer_resolution(&interface_member.declarer, member, Receiver::Unbound);
                 let fn_ty = match own {
                     OwnArgs::Call(call) => {
                         self.interface_member_callee(interface_member, call, false)
@@ -7679,8 +7733,9 @@ impl<'db> InferenceContext<'db> {
             if let Some(record_at) = record_at {
                 self.write_member_resolution(
                     record_at,
-                    MemberResolution::UnboundMethod {
-                        func: DeclRef::Source(method),
+                    MemberResolution::Method {
+                        callee: MethodCallee::Inherent(DeclRef::Source(method)),
+                        receiver: Receiver::Unbound,
                     },
                 );
             }
@@ -7694,8 +7749,9 @@ impl<'db> InferenceContext<'db> {
         if let Some(record_at) = record_at {
             self.write_member_resolution(
                 record_at,
-                MemberResolution::UnboundMethod {
-                    func: DeclRef::Source(method),
+                MemberResolution::Method {
+                    callee: MethodCallee::Inherent(DeclRef::Source(method)),
+                    receiver: Receiver::Unbound,
                 },
             );
         }
@@ -8998,7 +9054,10 @@ impl<'db> InferenceContext<'db> {
                     method,
                     &instantiation,
                 )),
-                Some(MemberResolution::BoundMethod { func: method }),
+                Some(MemberResolution::Method {
+                    callee: MethodCallee::Inherent(method),
+                    receiver: Receiver::Bound,
+                }),
             );
         }
         match crate::method_resolution::lookup_interface_member(
@@ -9012,7 +9071,8 @@ impl<'db> InferenceContext<'db> {
                 if self.reject_selfless_instance_member(&interface_member, member, at) {
                     return (Ty::error(), None);
                 }
-                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                let resolution =
+                    self.declarer_resolution(&interface_member.declarer, member, Receiver::Bound);
                 return (self.interface_member_value(interface_member), resolution);
             }
             crate::method_resolution::InterfaceMemberLookup::Ambiguous { sources, is_field } => {
@@ -9108,7 +9168,8 @@ impl<'db> InferenceContext<'db> {
                 if self.reject_selfless_instance_member(&interface_member, member, at) {
                     return (Ty::error(), None);
                 }
-                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                let resolution =
+                    self.declarer_resolution(&interface_member.declarer, member, Receiver::Bound);
                 (self.interface_member_value(interface_member), resolution)
             }
             crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
@@ -9160,6 +9221,7 @@ impl<'db> InferenceContext<'db> {
         &self,
         declarer: &crate::method_resolution::MemberDeclarer<'db>,
         member: &baml_type::Name,
+        receiver: Receiver,
     ) -> Option<MemberResolution<'db, Ty>> {
         use crate::method_resolution::MemberDeclarer;
         match declarer {
@@ -9173,22 +9235,26 @@ impl<'db> InferenceContext<'db> {
                 field_index: *field_index,
                 field: member.clone(),
             }),
-            MemberDeclarer::VirtualMethod { interface, .. } => {
-                Some(MemberResolution::InterfaceVirtualMethod {
+            MemberDeclarer::VirtualMethod { interface, .. } => Some(MemberResolution::Method {
+                callee: MethodCallee::Virtual {
                     interface: *interface,
                     method: member.clone(),
-                })
-            }
+                },
+                receiver,
+            }),
             MemberDeclarer::ImplMethod {
                 block,
                 func,
                 frame_type_args,
                 from_interface_default,
-            } => Some(MemberResolution::InterfaceConcreteMethod {
-                impl_block: *block,
-                func: *func,
-                frame_type_args: frame_type_args.clone(),
-                from_interface_default: *from_interface_default,
+            } => Some(MemberResolution::Method {
+                callee: MethodCallee::Concrete {
+                    impl_block: *block,
+                    func: *func,
+                    frame_type_args: frame_type_args.clone(),
+                    from_interface_default: *from_interface_default,
+                },
+                receiver,
             }),
             MemberDeclarer::ImplField { .. } => None,
         }
@@ -13175,24 +13241,28 @@ impl<'db> InferenceContext<'db> {
                 MemberResolution::Variant { enum_loc, variant }
             }
             MemberResolution::Free { func } => MemberResolution::Free { func },
-            MemberResolution::BoundMethod { func } => MemberResolution::BoundMethod { func },
-            MemberResolution::UnboundMethod { func } => MemberResolution::UnboundMethod { func },
-            MemberResolution::InterfaceVirtualMethod { interface, method } => {
-                MemberResolution::InterfaceVirtualMethod { interface, method }
-            }
-            MemberResolution::InterfaceConcreteMethod {
-                impl_block,
-                func,
-                frame_type_args,
-                from_interface_default,
-            } => MemberResolution::InterfaceConcreteMethod {
-                impl_block,
-                func,
-                frame_type_args: frame_type_args
-                    .iter()
-                    .map(|ty| self.materialize_ty(ty))
-                    .collect(),
-                from_interface_default,
+            MemberResolution::Method { callee, receiver } => MemberResolution::Method {
+                callee: match callee {
+                    MethodCallee::Inherent(func) => MethodCallee::Inherent(func),
+                    MethodCallee::Virtual { interface, method } => {
+                        MethodCallee::Virtual { interface, method }
+                    }
+                    MethodCallee::Concrete {
+                        impl_block,
+                        func,
+                        frame_type_args,
+                        from_interface_default,
+                    } => MethodCallee::Concrete {
+                        impl_block,
+                        func,
+                        frame_type_args: frame_type_args
+                            .iter()
+                            .map(|ty| self.materialize_ty(ty))
+                            .collect(),
+                        from_interface_default,
+                    },
+                },
+                receiver,
             },
             MemberResolution::InterfaceVirtualField {
                 interface,
@@ -13348,19 +13418,23 @@ fn finalize_member_resolution(
         MemberResolution::InterfaceVirtualField { view, .. } => {
             *view = ctx.finalize_ty(view).into_ty();
         }
-        MemberResolution::InterfaceConcreteMethod {
-            frame_type_args, ..
+        MemberResolution::Method {
+            callee: MethodCallee::Concrete {
+                frame_type_args, ..
+            },
+            ..
         } => {
             for ty in frame_type_args.iter_mut() {
                 *ty = ctx.finalize_ty(ty).into_ty();
             }
         }
-        MemberResolution::Field { .. }
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(_) | MethodCallee::Virtual { .. },
+            ..
+        }
+        | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::Free { .. }
-        | MemberResolution::BoundMethod { .. }
-        | MemberResolution::UnboundMethod { .. }
-        | MemberResolution::InterfaceVirtualMethod { .. } => {}
+        | MemberResolution::Free { .. } => {}
     }
 }
 

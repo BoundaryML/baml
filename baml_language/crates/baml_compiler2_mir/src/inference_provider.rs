@@ -17,6 +17,7 @@
 
 use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId, StmtId as AstStmtId};
 use baml_compiler2_hir::body::BodyOwnerId;
+pub(crate) use baml_compiler2_hir_ty::infer::Receiver;
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef},
     infer as hir_infer,
@@ -48,28 +49,14 @@ pub(crate) enum MemberResolution<'db> {
     },
     /// A free item accessed via a package/namespace path.
     Free { func_loc: FunctionRef<'db> },
-    /// A bound method reference: root is a value; type has `self` stripped.
-    BoundMethod { func_loc: FunctionRef<'db> },
-    /// An unbound method reference: root is a type name; type keeps `self`.
-    UnboundMethod { func_loc: FunctionRef<'db> },
-    /// A VIRTUAL interface-method call: only the slot (interface + member)
-    /// is statically known; dispatch resolves to the receiver's runtime impl.
-    InterfaceVirtualMethod {
-        iface_loc: InterfaceRef<'db>,
-        method: Name,
-    },
-    /// A CONCRETE interface-method call through a statically-matched impl.
-    InterfaceConcreteMethod {
-        impl_loc: ImplRef<'db>,
-        func_loc: FunctionRef<'db>,
-        /// The callee's OWNER frame, carried from resolution: the impl's
-        /// generic bindings (declaration order) for an override,
-        /// `[Self = receiver, iface args..]` for an adopted default. The
-        /// call site emits these ahead of the method's own type args per the
-        /// `[owner ++ own]` frame invariant — never re-derived by name.
-        frame_type_args: Vec<Tir2Ty>,
-        /// `true` when `func_loc` is the interface's default body.
-        from_interface_default: bool,
+    /// A method access: WHAT is called and whether the access binds its
+    /// `self` — `hir_ty`'s two independent axes, mirrored. `Bound` (`recv.m`)
+    /// has `self` stripped from the access's type; `Unbound` (`Type.m`,
+    /// `I.m(recv, ..)`) keeps it, the receiver being the written first
+    /// argument when the callee takes one.
+    Method {
+        callee: MethodCallee<'db>,
+        receiver: Receiver,
     },
     /// A VIRTUAL interface-field access through the realized declaring view.
     InterfaceVirtualField {
@@ -77,6 +64,32 @@ pub(crate) enum MemberResolution<'db> {
         interface: Tir2Ty,
         field_index: u32,
         field: Name,
+    },
+}
+
+/// What a method access calls — the mirror of `hir_ty`'s `MethodCallee`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum MethodCallee<'db> {
+    /// A class-inherent method.
+    Inherent(FunctionRef<'db>),
+    /// A VIRTUAL interface slot: only interface + member are statically
+    /// known; dispatch resolves to the receiver's runtime impl.
+    Virtual {
+        iface_loc: InterfaceRef<'db>,
+        method: Name,
+    },
+    /// A CONCRETE interface method through a statically-matched impl.
+    Concrete {
+        impl_loc: ImplRef<'db>,
+        func_loc: FunctionRef<'db>,
+        /// The callee's OWNER frame, carried from resolution: the impl's
+        /// generic bindings (declaration order) for a provided method,
+        /// `[Self = receiver, iface args..]` for an adopted default. The
+        /// call site emits these ahead of the method's own type args per the
+        /// `[owner ++ own]` frame invariant — never re-derived by name.
+        frame_type_args: Vec<Tir2Ty>,
+        /// `true` when `func_loc` is the interface's default body.
+        from_interface_default: bool,
     },
 }
 
@@ -392,28 +405,26 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             variant_name: variant.clone(),
         },
         hir_infer::MemberResolution::Free { func } => MemberResolution::Free { func_loc: *func },
-        hir_infer::MemberResolution::BoundMethod { func } => {
-            MemberResolution::BoundMethod { func_loc: *func }
-        }
-        hir_infer::MemberResolution::UnboundMethod { func } => {
-            MemberResolution::UnboundMethod { func_loc: *func }
-        }
-        hir_infer::MemberResolution::InterfaceVirtualMethod { interface, method } => {
-            MemberResolution::InterfaceVirtualMethod {
-                iface_loc: *interface,
-                method: method.clone(),
-            }
-        }
-        hir_infer::MemberResolution::InterfaceConcreteMethod {
-            impl_block,
-            func,
-            frame_type_args,
-            from_interface_default,
-        } => MemberResolution::InterfaceConcreteMethod {
-            impl_loc: *impl_block,
-            func_loc: *func,
-            frame_type_args: frame_type_args.clone(),
-            from_interface_default: *from_interface_default,
+        hir_infer::MemberResolution::Method { callee, receiver } => MemberResolution::Method {
+            callee: match callee {
+                hir_infer::MethodCallee::Inherent(func) => MethodCallee::Inherent(*func),
+                hir_infer::MethodCallee::Virtual { interface, method } => MethodCallee::Virtual {
+                    iface_loc: *interface,
+                    method: method.clone(),
+                },
+                hir_infer::MethodCallee::Concrete {
+                    impl_block,
+                    func,
+                    frame_type_args,
+                    from_interface_default,
+                } => MethodCallee::Concrete {
+                    impl_loc: *impl_block,
+                    func_loc: *func,
+                    frame_type_args: frame_type_args.clone(),
+                    from_interface_default: *from_interface_default,
+                },
+            },
+            receiver: *receiver,
         },
         hir_infer::MemberResolution::InterfaceVirtualField {
             interface,

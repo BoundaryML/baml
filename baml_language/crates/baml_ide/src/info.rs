@@ -1844,7 +1844,7 @@ pub(crate) fn type_impls<'db>(
 ) -> Vec<TypeImpl<'db>> {
     use baml_compiler2_hir_ty::{
         extern_loc::{exported_impl_identity, impl_identity},
-        impls::ResolvedImplOrigin,
+        impls::ResolvedImplFacts,
     };
 
     let Some(self_ty) = baml_compiler2_hir_ty::lower::declaration_self_ty(db, definition) else {
@@ -1882,8 +1882,8 @@ pub(crate) fn type_impls<'db>(
                     )
                 })
                 .collect();
-            let (block, field_links, methods) = match &resolved.origin {
-                ResolvedImplOrigin::Source { block, methods } => {
+            let (block, field_links, methods) = match &resolved.facts {
+                ResolvedImplFacts::Source { block, facts } => {
                     // Pair the block with its export row by the impl's
                     // coherence identity (interface instantiation +
                     // for-target + constraint set) — the ONE identity an
@@ -1894,7 +1894,8 @@ pub(crate) fn type_impls<'db>(
                         .impls
                         .iter()
                         .find(|row| exported_impl_identity(row) == identity);
-                    let methods = methods
+                    let methods = facts
+                        .methods
                         .iter()
                         .copied()
                         .filter(|&method_loc| {
@@ -1912,7 +1913,7 @@ pub(crate) fn type_impls<'db>(
                         .collect();
                     (Some(*block), impl_field_links(db, *block), methods)
                 }
-                ResolvedImplOrigin::External { block } => {
+                ResolvedImplFacts::External { block, .. } => {
                     (None, Vec::new(), exported_bodies(db, *block))
                 }
             };

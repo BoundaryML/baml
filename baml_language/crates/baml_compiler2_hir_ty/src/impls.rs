@@ -41,8 +41,7 @@ use baml_type::{
 use rustc_hash::FxHashMap;
 
 use crate::extern_loc::{
-    ExternFunctionLoc, ExternImplLoc, exported_impl_identity, extern_impl_block, extern_impl_facts,
-    extern_impl_method,
+    ExternImplLoc, exported_impl_identity, extern_impl_block, extern_impl_facts, extern_impl_method,
 };
 
 /// Recursion budget for verifying blanket bounds: a bounded blanket can
@@ -585,91 +584,81 @@ unsafe impl salsa::Update for MountedImplFacts {
     }
 }
 
+/// A resolved impl's identity WITH its facts, split once by where it is
+/// declared: the two lanes carry different fact payloads, so the block and
+/// the facts that describe it travel together and cannot disagree.
 #[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
-    Source(&'db ImplFacts<'db>),
-    /// An exported row's facts, re-hydrated through the tracked
-    /// [`extern_impl_facts`] and borrowed — the memoized candidate entry
-    /// stays fact-free, as for Source.
-    External(&'db MountedImplFacts),
+    /// A source block and its lowered facts.
+    Source {
+        block: ImplLoc<'db>,
+        facts: &'db ImplFacts<'db>,
+    },
+    /// An exported impl row of a package served from its interface — a
+    /// runtime mount and the precompiled stdlib alike: its identity is the
+    /// block, and its provided methods mint through it. Its facts are
+    /// re-hydrated through the tracked [`extern_impl_facts`] and borrowed —
+    /// the memoized candidate entry stays fact-free, as for Source.
+    External {
+        block: ExternImplLoc<'db>,
+        facts: &'db MountedImplFacts,
+    },
 }
 
-impl ResolvedImplFacts<'_> {
+impl<'db> ResolvedImplFacts<'db> {
+    /// The block these facts describe, wherever it is declared.
+    pub fn block(&self) -> crate::extern_loc::ImplRef<'db> {
+        match self {
+            Self::Source { block, .. } => baml_compiler2_hir::loc::DeclRef::Source(*block),
+            Self::External { block, .. } => baml_compiler2_hir::loc::DeclRef::External(*block),
+        }
+    }
+
     pub fn interface(&self) -> &baml_type::interned::ClosedInterface {
         match self {
-            Self::Source(facts) => &facts.interface,
-            Self::External(facts) => &facts.interface,
+            Self::Source { facts, .. } => &facts.interface,
+            Self::External { facts, .. } => &facts.interface,
         }
     }
 
     pub fn for_ty_pattern(&self) -> &baml_type::interned::ClosedTy {
         match self {
-            Self::Source(facts) => &facts.for_ty_pattern,
-            Self::External(facts) => &facts.for_ty_pattern,
+            Self::Source { facts, .. } => &facts.for_ty_pattern,
+            Self::External { facts, .. } => &facts.for_ty_pattern,
         }
     }
 
     pub fn generic_params(&self) -> &[(ParamTy, Vec<baml_type::interned::ClosedInterface>)] {
         match self {
-            Self::Source(facts) => &facts.generic_params,
-            Self::External(facts) => &facts.generic_params,
+            Self::Source { facts, .. } => &facts.generic_params,
+            Self::External { facts, .. } => &facts.generic_params,
         }
     }
 
     pub fn associated_types(&self) -> &[(Name, baml_type::interned::ClosedTy)] {
         match self {
-            Self::Source(facts) => &facts.associated_types,
-            Self::External(facts) => &facts.associated_types,
+            Self::Source { facts, .. } => &facts.associated_types,
+            Self::External { facts, .. } => &facts.associated_types,
         }
     }
-}
-
-/// The dispatch identity retained after matching an impl.
-#[derive(Clone, PartialEq)]
-pub enum ResolvedImplOrigin<'db> {
-    Source {
-        block: ImplLoc<'db>,
-        methods: &'db [baml_compiler2_hir::loc::FunctionLoc<'db>],
-    },
-    /// An exported impl row of a package served from its interface — a
-    /// runtime mount and the precompiled stdlib alike: its identity is the
-    /// block, and its provided methods mint through it.
-    External { block: ExternImplLoc<'db> },
 }
 
 /// One resolved impl plus the generic instantiation the match pinned.
 #[derive(Clone, PartialEq)]
 pub struct ResolvedImpl<'db> {
-    pub origin: ResolvedImplOrigin<'db>,
     pub facts: ResolvedImplFacts<'db>,
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
-/// A method an impl provides, by where its body lives: a source block's
-/// function item, or an exported row's identity.
-#[derive(Debug, Clone, Copy)]
-pub enum ProvidedMethod<'db> {
-    Source {
-        block: ImplLoc<'db>,
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    },
-    External(ExternFunctionLoc<'db>),
-}
-
-#[derive(Clone, PartialEq)]
-enum CachedResolvedImplOrigin<'db> {
-    /// Deliberately fact-free: source facts are Salsa-derived and must be
-    /// re-hydrated by `impls_for_type` so the caller records their live query
-    /// dependency rather than retaining a stale borrowed result here.
-    Source { block: ImplLoc<'db> },
-    /// Fact-free identity of an exported impl row; `impls_for_type`
-    /// re-hydrates its facts through the tracked [`extern_impl_facts`].
-    External { block: ExternImplLoc<'db> },
-}
-
+/// A memoized candidate: the impl's identity and the match's bindings.
+/// Deliberately fact-free: source facts are Salsa-derived and must be
+/// re-hydrated by `impls_for_type` so the caller records their live query
+/// dependency rather than retaining a stale borrowed result here; an
+/// exported row's facts re-hydrate through the tracked
+/// [`extern_impl_facts`].
 #[derive(Clone, PartialEq)]
 struct CachedResolvedImpl<'db> {
-    origin: CachedResolvedImplOrigin<'db>,
+    block: crate::extern_loc::ImplRef<'db>,
     bindings: FxHashMap<ParamTy, Ty>,
 }
 
@@ -751,34 +740,25 @@ impl<'db> ResolvedImpl<'db> {
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         name: &Name,
-    ) -> Option<ProvidedMethod<'db>> {
-        match &self.origin {
-            ResolvedImplOrigin::Source { block, methods } => methods
+    ) -> Option<crate::extern_loc::FunctionRef<'db>> {
+        match &self.facts {
+            ResolvedImplFacts::Source { facts, .. } => facts
+                .methods
                 .iter()
                 .copied()
                 .find(|&method| {
                     baml_compiler2_ppir::item_data::function_data(db, method).name == *name
                 })
-                .map(|func| ProvidedMethod::Source {
-                    block: *block,
-                    func,
-                }),
-            ResolvedImplOrigin::External { block } => {
-                extern_impl_method(db, *block, name).map(ProvidedMethod::External)
+                .map(baml_compiler2_hir::loc::DeclRef::Source),
+            ResolvedImplFacts::External { block, .. } => {
+                extern_impl_method(db, *block, name).map(baml_compiler2_hir::loc::DeclRef::External)
             }
         }
     }
 
     /// The block this impl is, wherever it is declared.
     pub fn block(&self) -> crate::extern_loc::ImplRef<'db> {
-        match self.origin {
-            ResolvedImplOrigin::Source { block, .. } => {
-                baml_compiler2_hir::loc::DeclRef::Source(block)
-            }
-            ResolvedImplOrigin::External { block } => {
-                baml_compiler2_hir::loc::DeclRef::External(block)
-            }
-        }
+        self.facts.block()
     }
 }
 
@@ -1070,25 +1050,23 @@ pub fn impls_for_type<'db>(
     }
     impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
         .iter()
-        .map(|cached| match &cached.origin {
-            CachedResolvedImplOrigin::Source { block } => {
-                let facts = impl_facts(db, *block)
-                    .resolved()
-                    .expect("cached source impl remains well formed");
-                ResolvedImpl {
-                    origin: ResolvedImplOrigin::Source {
-                        block: *block,
-                        methods: &facts.methods,
-                    },
-                    facts: ResolvedImplFacts::Source(facts),
-                    bindings: cached.bindings.clone(),
-                }
-            }
-            CachedResolvedImplOrigin::External { block } => ResolvedImpl {
-                origin: ResolvedImplOrigin::External { block: *block },
-                facts: ResolvedImplFacts::External(extern_impl_facts(db, *block)),
+        .map(|cached| {
+            let facts = match cached.block {
+                baml_compiler2_hir::loc::DeclRef::Source(block) => ResolvedImplFacts::Source {
+                    block,
+                    facts: impl_facts(db, block)
+                        .resolved()
+                        .expect("cached source impl remains well formed"),
+                },
+                baml_compiler2_hir::loc::DeclRef::External(block) => ResolvedImplFacts::External {
+                    block,
+                    facts: extern_impl_facts(db, block),
+                },
+            };
+            ResolvedImpl {
+                facts,
                 bindings: cached.bindings.clone(),
-            },
+            }
         })
         .filter(|resolved| {
             // `AnyClass` is an explicit narrowing surface, not another
@@ -1183,7 +1161,7 @@ fn impls_for_type_cached<'db>(
         // Do not short-circuit this iterator: `impl_facts` dependencies are
         // registered lazily as source rows are visited. This memoized query
         // must exhaust every visible package so later fact changes invalidate it.
-        for (origin, facts) in package_impl_candidates(db, package) {
+        for facts in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
             if !pattern_has_typevar && !eq_admitted(pattern, &concrete, &eq) {
@@ -1243,16 +1221,10 @@ fn impls_for_type_cached<'db>(
                 params.iter().all(|param| bindings.contains_key(param)),
                 "accepted impl candidate left a declared generic unbound"
             );
-            let origin = match (origin, facts) {
-                (ResolvedImplOrigin::Source { block, .. }, ResolvedImplFacts::Source(_)) => {
-                    CachedResolvedImplOrigin::Source { block }
-                }
-                (ResolvedImplOrigin::External { block }, ResolvedImplFacts::External(_)) => {
-                    CachedResolvedImplOrigin::External { block }
-                }
-                _ => unreachable!("impl candidate origin and facts have the same provenance"),
-            };
-            out.push(CachedResolvedImpl { origin, bindings });
+            out.push(CachedResolvedImpl {
+                block: facts.block(),
+                bindings,
+            });
         }
     }
     out
@@ -1261,18 +1233,12 @@ fn impls_for_type_cached<'db>(
 fn package_impl_candidates(
     db: &dyn baml_compiler2_ppir::Db,
     package: baml_base::SourceRoot,
-) -> impl Iterator<Item = (ResolvedImplOrigin<'_>, ResolvedImplFacts<'_>)> + '_ {
+) -> impl Iterator<Item = ResolvedImplFacts<'_>> + '_ {
     let source = package_impl_locs(db, package)
         .iter()
         .filter_map(move |&block| {
             let facts = impl_facts(db, block).resolved()?;
-            Some((
-                ResolvedImplOrigin::Source {
-                    block,
-                    methods: &facts.methods,
-                },
-                ResolvedImplFacts::Source(facts),
-            ))
+            Some(ResolvedImplFacts::Source { block, facts })
         });
     // ONE external lane: a runtime mount and the precompiled stdlib differ
     // in trust DATA on their rows, never in how their impls are reached.
@@ -1282,10 +1248,10 @@ fn package_impl_candidates(
             interface.impls.iter().map(move |row| {
                 let block = extern_impl_block(db, package, exported_impl_identity(row))
                     .unwrap_or_else(|| unreachable!("an exported impl row mints its block"));
-                (
-                    ResolvedImplOrigin::External { block },
-                    ResolvedImplFacts::External(extern_impl_facts(db, block)),
-                )
+                ResolvedImplFacts::External {
+                    block,
+                    facts: extern_impl_facts(db, block),
+                }
             })
         });
     source.chain(external)
@@ -1453,18 +1419,14 @@ fn resolve_within_depth<'db>(
     let eq = AliasOnlyFacts::memoized(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
-        for (origin, facts) in package_impl_candidates(db, package) {
+        for facts in package_impl_candidates(db, package) {
             let Some(bindings) = match_impl_head(db, &facts, concrete, interface, &eq) else {
                 continue;
             };
             if !bounds_hold(db, &facts, &bindings, depth, in_progress) {
                 continue;
             }
-            resolved = Some(ResolvedImpl {
-                origin,
-                facts,
-                bindings,
-            });
+            resolved = Some(ResolvedImpl { facts, bindings });
             break 'search;
         }
     }

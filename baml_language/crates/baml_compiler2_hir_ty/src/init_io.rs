@@ -234,45 +234,27 @@ fn resolved_function<'db>(
 ) -> Option<FunctionLoc<'db>> {
     use baml_compiler2_hir::loc::DeclRef;
 
-    use crate::infer::MemberResolution;
-    match resolution {
-        MemberResolution::Free {
-            func: DeclRef::Source(func),
-        }
-        | MemberResolution::BoundMethod {
-            func: DeclRef::Source(func),
+    use crate::infer::{MemberResolution, MethodCallee};
+    let func = match resolution {
+        MemberResolution::Free { func }
+        | MemberResolution::Method {
+            callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
+            ..
+        } => *func,
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { .. },
             ..
         }
-        | MemberResolution::UnboundMethod {
-            func: DeclRef::Source(func),
-            ..
-        }
-        | MemberResolution::InterfaceConcreteMethod {
-            func: DeclRef::Source(func),
-            ..
-        } => Some(*func),
+        | MemberResolution::Field { .. }
+        | MemberResolution::Variant { .. }
+        | MemberResolution::InterfaceVirtualField { .. } => return None,
+    };
+    match func {
+        DeclRef::Source(func) => Some(func),
         // A callee of a package served from its interface: no body to walk,
         // so the analysis skips it — the same deliberate under-approximation
         // as virtual dispatch (module docs).
-        MemberResolution::Free {
-            func: DeclRef::External(_),
-        }
-        | MemberResolution::BoundMethod {
-            func: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::UnboundMethod {
-            func: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::InterfaceConcreteMethod {
-            func: DeclRef::External(_),
-            ..
-        } => None,
-        MemberResolution::Field { .. }
-        | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualMethod { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
+        DeclRef::External(_) => None,
     }
 }
 

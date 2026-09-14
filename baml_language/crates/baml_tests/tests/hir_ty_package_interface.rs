@@ -774,8 +774,12 @@ fn source_and_extern_locs<'db>(
                     let facts = impl_facts(db, block)
                         .resolved()
                         .expect("the fixture's impl headers resolve");
-                    extern_impl_block(db, app, impl_identity(&ResolvedImplFacts::Source(facts)))
-                        .and_then(|block| extern_impl_method(db, block, &name))
+                    extern_impl_block(
+                        db,
+                        app,
+                        impl_identity(&ResolvedImplFacts::Source { block, facts }),
+                    )
+                    .and_then(|block| extern_impl_method(db, block, &name))
                 }
             };
             (function, loc)
@@ -908,7 +912,7 @@ fn impl_identity_agrees_between_a_source_block_and_its_exported_row() {
                 let facts = impl_facts(&db, block)
                     .resolved()
                     .expect("the fixture's impl headers resolve");
-                impl_identity(&ResolvedImplFacts::Source(facts))
+                impl_identity(&ResolvedImplFacts::Source { block, facts })
             })
             .collect();
         let from_rows: Vec<_> = package_interface(&db, app)

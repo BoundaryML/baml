@@ -500,7 +500,7 @@ fn lookup_impl_member<'db>(
             // interface's.
             if member.is_method {
                 match resolved.provided_method(db, name) {
-                    Some(crate::impls::ProvidedMethod::Source { block, func }) => {
+                    Some(callable) => {
                         // The provided method's frame: the impl's generic
                         // params realized through the match, in declaration
                         // order. A matched impl binds every declared param
@@ -510,31 +510,12 @@ fn lookup_impl_member<'db>(
                         // type. The own suffix (declared generics and
                         // synthetic effect params alike) stays rigid for the
                         // CALL SITE to finish, as on the class-method road.
+                        // The same discipline whichever lane the method comes
+                        // from: an exported row supplies its OWN refined
+                        // signature, `linkability` and `builtin_kind` (a
+                        // mounted `$rust_function` impl method stays reserved
+                        // through this row, not the interface's).
                         let frame_type_args = realized_impl_frame(&resolved);
-                        let callable = DeclRef::Source(func);
-                        member.ty = instantiate_callable_signature(db, callable, &frame_type_args);
-                        member.pending_own = (!callable_signature(db, callable)
-                            .generic_params
-                            .is_empty())
-                        .then(|| PendingOwnGenerics {
-                            callable,
-                            prefix: frame_type_args.clone(),
-                        });
-                        member.declarer = MemberDeclarer::ImplMethod {
-                            block: DeclRef::Source(block),
-                            func: callable,
-                            frame_type_args,
-                            from_interface_default: false,
-                        };
-                    }
-                    Some(crate::impls::ProvidedMethod::External(method)) => {
-                        // Same discipline off the exported row — its OWN
-                        // refined signature, its own `linkability` and
-                        // `builtin_kind` (a mounted `$rust_function` impl
-                        // method stays reserved through this row, not the
-                        // interface's).
-                        let frame_type_args = realized_impl_frame(&resolved);
-                        let callable = DeclRef::External(method);
                         member.ty = instantiate_callable_signature(db, callable, &frame_type_args);
                         member.pending_own = (!callable_signature(db, callable)
                             .generic_params

@@ -17,6 +17,7 @@ use indexmap::IndexMap;
 
 use crate::{
     builder::MirBuilder,
+    inference_provider::{MethodCallee, Receiver},
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
         ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
@@ -1388,15 +1389,15 @@ fn resolution_to_item_ref<'db>(
 ) -> Option<ItemRef<'db>> {
     use crate::inference_provider::MemberResolution;
     match res {
-        MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc }
-        | MemberResolution::UnboundMethod { func_loc }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-            Some(function_item_ref(db, *func_loc))
-        }
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-            Some(interface_slot_item_ref(db, *iface_loc, method))
-        }
+        MemberResolution::Free { func_loc } => Some(function_item_ref(db, *func_loc)),
+        MemberResolution::Method { callee, .. } => Some(match callee {
+            MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
+                function_item_ref(db, *func_loc)
+            }
+            MethodCallee::Virtual { iface_loc, method } => {
+                interface_slot_item_ref(db, *iface_loc, method)
+            }
+        }),
         MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
         | MemberResolution::InterfaceVirtualField { .. } => None,
@@ -1489,13 +1490,17 @@ fn resolution_func_loc<'db>(
     use crate::inference_provider::MemberResolution;
     match res {
         MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc }
-        | MemberResolution::UnboundMethod { func_loc }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
+        | MemberResolution::Method {
+            callee: MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. },
+            ..
+        } => match func_loc {
             DeclRef::Source(func_loc) => Some(*func_loc),
             DeclRef::External(_) => None,
         },
-        MemberResolution::InterfaceVirtualMethod { .. }
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { .. },
+            ..
+        }
         | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
         | MemberResolution::InterfaceVirtualField { .. } => None,
@@ -1513,13 +1518,17 @@ fn resolution_external_function<'db>(
     use crate::inference_provider::MemberResolution;
     match res {
         MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc }
-        | MemberResolution::UnboundMethod { func_loc }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
+        | MemberResolution::Method {
+            callee: MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. },
+            ..
+        } => match func_loc {
             DeclRef::Source(_) => None,
             DeclRef::External(function) => Some(*function),
         },
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => match iface_loc {
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { iface_loc, method },
+            ..
+        } => match iface_loc {
             DeclRef::Source(_) => None,
             DeclRef::External(interface) => extern_interface_method(db, interface.head(db), method),
         },
@@ -3564,7 +3573,7 @@ impl<'db> LoweringContext<'db> {
 
     /// A UFCS interface-item call — the `(Base as I).m(..)`, `I.m(..)`, and
     /// namespaced-path spellings, keyed off the TIR record rather than the
-    /// syntax: any callee that resolves to `InterfaceVirtualMethod` and
+    /// syntax: any callee that resolves to an UNBOUND virtual slot, and so
     /// carries its receiver (if any) as the written first argument.
     ///
     /// Two dispatch forms, split by whether the method takes `self`:
@@ -3584,38 +3593,21 @@ impl<'db> LoweringContext<'db> {
         dest: &Place,
     ) -> bool {
         use crate::inference_provider::MemberResolution;
-        // Spelling gate: UFCS forms only. A member-access callee carries its
-        // receiver in the base and is routed by the member roads; a
-        // local-rooted path is a member chain; `default.m(..)` is the
-        // impl-body delegation form with its own receiver discipline.
-        let is_ufcs = match &self.body.exprs[callee] {
-            AstExpr::QualifiedPath { .. } => true,
-            AstExpr::Path(segments) => {
-                segments.len() >= 2
-                    && segments[0].as_str() != "default"
-                    && self.binding_id_for_path(callee, &segments[0]).is_none()
-            }
-            // A TYPE-rooted member access is the same UFCS spelling wearing a
-            // different node: a member named with a contextual keyword
-            // (`K.extends`) is not accepted as a path segment, so it parses as
-            // a member access whose base is a type rather than a value.
-            AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
-                AstExpr::Path(segments) => {
-                    !segments.is_empty()
-                        && segments[0].as_str() != "default"
-                        && self.binding_id_for_path(*base, &segments[0]).is_none()
-                }
-                _ => false,
-            },
-            _ => false,
-        };
-        if !is_ufcs {
-            return false;
-        }
-        // A served interface's slot takes the UFCS dispatch road below.
-        let Some(MemberResolution::InterfaceVirtualMethod {
-            iface_loc: DeclRef::Source(iface_loc),
-            method,
+        // The resolution record routes it, never the spelling: an UNBOUND
+        // access to a virtual slot IS the UFCS form, whatever node it parsed
+        // as - `(Base as I).m`, `I.m`, `C.m`, or a type-rooted member access
+        // such as `K.extends` (a contextual-keyword member is not accepted as
+        // a path segment). A bound access carries its receiver in the base and
+        // is routed by the member roads; `default.m(..)` binds `default` as
+        // its receiver and has its own discipline. A served interface's slot
+        // takes the UFCS dispatch road below.
+        let Some(MemberResolution::Method {
+            callee:
+                MethodCallee::Virtual {
+                    iface_loc: DeclRef::Source(iface_loc),
+                    method,
+                },
+            receiver: Receiver::Unbound,
         }) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
         else {
             return false;
@@ -3704,15 +3696,18 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<bool> {
         use crate::inference_provider::MemberResolution;
         match resolution {
-            MemberResolution::BoundMethod { func_loc, .. }
-            | MemberResolution::UnboundMethod { func_loc, .. }
-            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                Some(callable_takes_self(self.db, *func_loc))
-            }
-            MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-                self.virtual_slot_takes_self(*iface_loc, method)
-            }
-            _ => None,
+            MemberResolution::Method { callee, .. } => match callee {
+                MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
+                    Some(callable_takes_self(self.db, *func_loc))
+                }
+                MethodCallee::Virtual { iface_loc, method } => {
+                    self.virtual_slot_takes_self(*iface_loc, method)
+                }
+            },
+            MemberResolution::Free { .. }
+            | MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => None,
         }
     }
 
@@ -3727,20 +3722,22 @@ impl<'db> LoweringContext<'db> {
     ) -> bool {
         use crate::inference_provider::MemberResolution;
         match resolution {
-            MemberResolution::BoundMethod { func_loc, .. }
-            | MemberResolution::UnboundMethod { func_loc, .. }
-            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => match func_loc {
-                DeclRef::Source(_) => true,
-                DeclRef::External(function) => {
-                    callable_takes_self(self.db, DeclRef::External(*function))
+            MemberResolution::Method { callee, .. } => match callee {
+                MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
+                    match func_loc {
+                        DeclRef::Source(_) => true,
+                        DeclRef::External(function) => {
+                            callable_takes_self(self.db, DeclRef::External(*function))
+                        }
+                    }
                 }
-            },
-            MemberResolution::InterfaceVirtualMethod { iface_loc, method } => match iface_loc {
-                DeclRef::Source(_) => true,
-                DeclRef::External(interface) => {
-                    self.virtual_slot_takes_self(DeclRef::External(*interface), method)
-                        == Some(true)
-                }
+                MethodCallee::Virtual { iface_loc, method } => match iface_loc {
+                    DeclRef::Source(_) => true,
+                    DeclRef::External(interface) => {
+                        self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                            == Some(true)
+                    }
+                },
             },
             MemberResolution::Free { .. }
             | MemberResolution::Field { .. }
@@ -3763,15 +3760,23 @@ impl<'db> LoweringContext<'db> {
 
         use crate::inference_provider::MemberResolution;
         match resolution {
-            MemberResolution::InterfaceVirtualMethod {
-                iface_loc: DeclRef::External(interface),
-                method,
+            MemberResolution::Method {
+                callee:
+                    MethodCallee::Virtual {
+                        iface_loc: DeclRef::External(interface),
+                        method,
+                    },
+                ..
             } => Some((
                 method.clone(),
                 self.virtual_slot_takes_self(DeclRef::External(*interface), method) == Some(true),
             )),
-            MemberResolution::InterfaceConcreteMethod {
-                func_loc: DeclRef::External(function),
+            MemberResolution::Method {
+                callee:
+                    MethodCallee::Concrete {
+                        func_loc: DeclRef::External(function),
+                        ..
+                    },
                 ..
             } => match function.slot(self.db) {
                 ExternalCallTarget::Interface { method, .. } => Some((
@@ -6131,9 +6136,13 @@ impl<'db> LoweringContext<'db> {
                 // other spelling takes (the frame realizes associated types
                 // the written qualifier omits). `self`, if the method takes
                 // one, stays an ordinary first parameter.
-                if let Some(MemberResolution::InterfaceVirtualMethod {
-                    iface_loc: DeclRef::Source(iface_loc),
-                    method,
+                if let Some(MemberResolution::Method {
+                    callee:
+                        MethodCallee::Virtual {
+                            iface_loc: DeclRef::Source(iface_loc),
+                            method,
+                        },
+                    ..
                 }) = self
                     .tir_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
@@ -6510,7 +6519,10 @@ impl<'db> LoweringContext<'db> {
                 // Note: for paths like `user.profile.items.slice`, the member_resolutions
                 // are [Field{profile}, Field{items}, BoundMethod{slice}], so we check last().
                 match member_resolutions.last() {
-                    Some(MemberResolution::BoundMethod { func_loc, .. }) => {
+                    Some(MemberResolution::Method {
+                        callee: MethodCallee::Inherent(func_loc),
+                        receiver: Receiver::Bound,
+                    }) => {
                         // A `self`-less method referenced through a receiver
                         // (`let m = f.make`): nothing to bind — currying the
                         // receiver would smuggle it into the first REAL
@@ -6572,8 +6584,10 @@ impl<'db> LoweringContext<'db> {
                     // to bind: it resolves type-keyed on the receiver's static
                     // type instead.
                     Some(
-                        resolution @ (MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. }),
+                        resolution @ MemberResolution::Method {
+                            callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                            ..
+                        },
                     ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {
                         if self.resolution_takes_self(resolution) == Some(false) {
                             // TIR rejects a `self`-less method reached through a value,
@@ -6586,10 +6600,15 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     Some(
-                        MemberResolution::UnboundMethod { .. }
+                        MemberResolution::Method {
+                            callee: MethodCallee::Inherent(_),
+                            receiver: Receiver::Unbound,
+                        }
                         | MemberResolution::Free { .. }
-                        | MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. },
+                        | MemberResolution::Method {
+                            callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                            ..
+                        },
                     ) => {
                         // Unbound method or free function reference — emit a plain function constant.
                         //
@@ -6637,7 +6656,10 @@ impl<'db> LoweringContext<'db> {
             {
                 use crate::inference_provider::MemberResolution;
                 match &resolution {
-                    MemberResolution::BoundMethod { .. } => {
+                    MemberResolution::Method {
+                        callee: MethodCallee::Inherent(_),
+                        receiver: Receiver::Bound,
+                    } => {
                         // Bound method reference via flat resolutions: emit MakeBoundMethod.
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
@@ -6669,18 +6691,23 @@ impl<'db> LoweringContext<'db> {
                     // Value-rooted interface-method reference: see the
                     // `member_resolutions` match above — the virtual-bound path
                     // below captures the receiver and binds its impl at runtime.
-                    MemberResolution::InterfaceVirtualMethod { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. }
-                        if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
+                    MemberResolution::Method {
+                        callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                        ..
+                    } if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
                     // TYPE-rooted interface-method VALUE reference
                     // (`let f = Greeter.greet`, `sort_by(Comparable.compare)`):
                     // the recorded frame resolves the callable — the same
                     // type-keyed road the qualified spelling takes. An
                     // interface method has no global function symbol, so the
                     // bare-constant road below can never serve it.
-                    MemberResolution::InterfaceVirtualMethod {
-                        iface_loc: DeclRef::Source(iface_loc),
-                        method,
+                    MemberResolution::Method {
+                        callee:
+                            MethodCallee::Virtual {
+                                iface_loc: DeclRef::Source(iface_loc),
+                                method,
+                            },
+                        ..
                     } => {
                         let method = method.clone();
                         let iface_loc = *iface_loc;
@@ -6699,11 +6726,18 @@ impl<'db> LoweringContext<'db> {
                         );
                         return;
                     }
-                    MemberResolution::UnboundMethod { .. }
+                    MemberResolution::Method {
+                        callee: MethodCallee::Inherent(_),
+                        receiver: Receiver::Unbound,
+                    }
                     | MemberResolution::Free { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. }
-                    | MemberResolution::InterfaceVirtualMethod {
-                        iface_loc: DeclRef::External(_),
+                    | MemberResolution::Method {
+                        callee:
+                            MethodCallee::Concrete { .. }
+                            | MethodCallee::Virtual {
+                                iface_loc: DeclRef::External(_),
+                                ..
+                            },
                         ..
                     } => {
                         // BUG: same frameless-constant hole as the
@@ -9088,7 +9122,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
-        // MemberResolution::BoundMethod/UnboundMethod/Free). Field and Variant resolutions are not callable.
+        // MemberResolution::Method/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
         let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
         let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
@@ -9107,11 +9141,7 @@ impl<'db> LoweringContext<'db> {
                 .is_some_and(|r| {
                     matches!(
                         r,
-                        MemberResolution::BoundMethod { .. }
-                            | MemberResolution::UnboundMethod { .. }
-                            | MemberResolution::Free { .. }
-                            | MemberResolution::InterfaceVirtualMethod { .. }
-                            | MemberResolution::InterfaceConcreteMethod { .. }
+                        MemberResolution::Method { .. } | MemberResolution::Free { .. }
                     )
                 })
             {
@@ -9135,27 +9165,31 @@ impl<'db> LoweringContext<'db> {
                 let method_takes_self = {
                     self.tir_resolution(self.expr_metadata_key(callee))
                         .is_some_and(|r| match r {
-                            MemberResolution::BoundMethod { func_loc, .. }
-                            | MemberResolution::UnboundMethod { func_loc, .. }
-                            | MemberResolution::Free { func_loc }
-                            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                                callable_takes_self(self.db, *func_loc)
-                            }
+                            MemberResolution::Free { func_loc }
+                            | MemberResolution::Method {
+                                callee:
+                                    MethodCallee::Inherent(func_loc)
+                                    | MethodCallee::Concrete { func_loc, .. },
+                                ..
+                            } => callable_takes_self(self.db, *func_loc),
                             // A virtual interface-method call on a source
                             // interface is always on a receiver, so it takes
                             // `self`; a served interface's row says.
-                            MemberResolution::InterfaceVirtualMethod {
-                                iface_loc: DeclRef::Source(_),
+                            MemberResolution::Method {
+                                callee: MethodCallee::Virtual { iface_loc, method },
                                 ..
-                            } => true,
-                            MemberResolution::InterfaceVirtualMethod {
-                                iface_loc: DeclRef::External(interface),
-                                method,
-                            } => {
-                                self.virtual_slot_takes_self(DeclRef::External(*interface), method)
-                                    == Some(true)
-                            }
-                            _ => false,
+                            } => match iface_loc {
+                                DeclRef::Source(_) => true,
+                                DeclRef::External(interface) => {
+                                    self.virtual_slot_takes_self(
+                                        DeclRef::External(*interface),
+                                        method,
+                                    ) == Some(true)
+                                }
+                            },
+                            MemberResolution::Field { .. }
+                            | MemberResolution::Variant { .. }
+                            | MemberResolution::InterfaceVirtualField { .. } => false,
                         })
                 };
                 if base_is_value && method_takes_self {
@@ -9167,9 +9201,13 @@ impl<'db> LoweringContext<'db> {
                     let callee_op = {
                         let resolution =
                             self.tir_resolution(self.expr_metadata_key(callee)).cloned();
-                        if let Some(MemberResolution::InterfaceConcreteMethod {
-                            func_loc: DeclRef::Source(_),
-                            frame_type_args,
+                        if let Some(MemberResolution::Method {
+                            callee:
+                                MethodCallee::Concrete {
+                                    func_loc: DeclRef::Source(_),
+                                    frame_type_args,
+                                    ..
+                                },
                             ..
                         }) = resolution.as_ref()
                         {
@@ -9204,9 +9242,13 @@ impl<'db> LoweringContext<'db> {
                     let callee_op = {
                         let resolution =
                             self.tir_resolution(self.expr_metadata_key(callee)).cloned();
-                        if let Some(MemberResolution::InterfaceConcreteMethod {
-                            func_loc: DeclRef::Source(_),
-                            frame_type_args,
+                        if let Some(MemberResolution::Method {
+                            callee:
+                                MethodCallee::Concrete {
+                                    func_loc: DeclRef::Source(_),
+                                    frame_type_args,
+                                    ..
+                                },
                             ..
                         }) = resolution.as_ref()
                         {
@@ -9255,9 +9297,13 @@ impl<'db> LoweringContext<'db> {
                     .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .cloned();
-                if let Some(MemberResolution::InterfaceConcreteMethod {
-                    func_loc: DeclRef::Source(_),
-                    frame_type_args,
+                if let Some(MemberResolution::Method {
+                    callee:
+                        MethodCallee::Concrete {
+                            func_loc: DeclRef::Source(_),
+                            frame_type_args,
+                            ..
+                        },
                     ..
                 }) = method_resolution.as_ref()
                 {
@@ -9270,25 +9316,29 @@ impl<'db> LoweringContext<'db> {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
-                let method_takes_self = method_resolution.as_ref().is_some_and(|r| match r {
-                    MemberResolution::BoundMethod { func_loc, .. }
-                    | MemberResolution::UnboundMethod { func_loc, .. }
-                    | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                        callable_takes_self(self.db, *func_loc)
-                    }
-                    MemberResolution::InterfaceVirtualMethod {
-                        iface_loc: DeclRef::Source(_),
-                        ..
-                    } => true,
-                    MemberResolution::InterfaceVirtualMethod {
-                        iface_loc: DeclRef::External(interface),
-                        method,
-                    } => {
-                        self.virtual_slot_takes_self(DeclRef::External(*interface), method)
-                            == Some(true)
-                    }
-                    _ => false,
-                });
+                let method_takes_self =
+                    method_resolution.as_ref().is_some_and(|r| match r {
+                        MemberResolution::Method {
+                            callee:
+                                MethodCallee::Inherent(func_loc)
+                                | MethodCallee::Concrete { func_loc, .. },
+                            ..
+                        } => callable_takes_self(self.db, *func_loc),
+                        MemberResolution::Method {
+                            callee: MethodCallee::Virtual { iface_loc, method },
+                            ..
+                        } => match iface_loc {
+                            DeclRef::Source(_) => true,
+                            DeclRef::External(interface) => {
+                                self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                                    == Some(true)
+                            }
+                        },
+                        MemberResolution::Free { .. }
+                        | MemberResolution::Field { .. }
+                        | MemberResolution::Variant { .. }
+                        | MemberResolution::InterfaceVirtualField { .. } => false,
+                    });
                 if !method_takes_self {
                     // Same class-frame rule as the MemberAccess spelling: the
                     // receiver prefix's static type fills the callee frame.
@@ -9325,9 +9375,13 @@ impl<'db> LoweringContext<'db> {
                 // For immediate calls, emit the callee as a plain function constant
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let flat_resolution = self.tir_resolution(self.expr_metadata_key(callee)).cloned();
-                if let Some(MemberResolution::InterfaceConcreteMethod {
-                    func_loc: DeclRef::Source(_),
-                    frame_type_args,
+                if let Some(MemberResolution::Method {
+                    callee:
+                        MethodCallee::Concrete {
+                            func_loc: DeclRef::Source(_),
+                            frame_type_args,
+                            ..
+                        },
                     ..
                 }) = flat_resolution.as_ref()
                 {
@@ -9669,19 +9723,22 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(target);
     }
 
-    /// Whether `callee` resolves to a `BoundMethod` — i.e. the call uses method
-    /// convention (`self` passed implicitly via the receiver). Mirrors TIR's
+    /// Whether `callee` resolves to a BOUND method access — i.e. the call uses
+    /// method convention (`self` passed implicitly via the receiver). Mirrors TIR's
     /// `callee_uses_method_call_convention`, which strips `self` so the call
     /// plan's `param_index` becomes receiver-relative.
     fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
         use crate::inference_provider::MemberResolution;
         let key = self.expr_metadata_key(callee);
-        // A served interface's virtual slot counts when its method takes
-        // `self`: the source lane's virtual road consumes those calls before
-        // this predicate runs, while the served lane's residual direct road
-        // still relies on it (converges when the roads do).
+        // A bound access IS the method convention, whatever it calls. A served
+        // interface's slot additionally counts when its row takes `self`: the
+        // served lane's residual direct road reaches UNBOUND slot spellings
+        // through here (converges at link-by-identity).
         let uses = |res: Option<&MemberResolution<'db>>| match res {
-            Some(MemberResolution::BoundMethod { .. }) => true,
+            Some(MemberResolution::Method {
+                receiver: Receiver::Bound,
+                ..
+            }) => true,
             Some(res) => self
                 .served_slot_method(res)
                 .is_some_and(|(_, takes_self)| takes_self),
@@ -10469,9 +10526,14 @@ impl<'db> LoweringContext<'db> {
             matches!(
                 r,
                 MemberResolution::Free { .. }
-                    | MemberResolution::UnboundMethod { .. }
-                    | MemberResolution::InterfaceVirtualMethod { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. }
+                    | MemberResolution::Method {
+                        callee: MethodCallee::Inherent(_),
+                        receiver: Receiver::Unbound,
+                    }
+                    | MemberResolution::Method {
+                        callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                        ..
+                    }
             )
         };
         let key = self.expr_metadata_key(base);
@@ -11005,7 +11067,10 @@ impl<'db> LoweringContext<'db> {
         {
             use crate::inference_provider::MemberResolution;
             match &resolution {
-                MemberResolution::BoundMethod { .. } => {
+                MemberResolution::Method {
+                    callee: MethodCallee::Inherent(_),
+                    receiver: Receiver::Bound,
+                } => {
                     // A `self`-less method has no receiver to bind: the base
                     // contributes only its STATIC type, whose class arguments
                     // fill the callee frame.
@@ -11032,7 +11097,11 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                MemberResolution::UnboundMethod { .. } | MemberResolution::Free { .. } => {
+                MemberResolution::Method {
+                    callee: MethodCallee::Inherent(_),
+                    receiver: Receiver::Unbound,
+                }
+                | MemberResolution::Free { .. } => {
                     // Unbound method or free function reference: emit a plain function constant.
                     let item = resolution_to_item_ref(self.db, &resolution);
                     if let Some(item) = item {
@@ -11043,8 +11112,10 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                MemberResolution::InterfaceVirtualMethod { .. }
-                | MemberResolution::InterfaceConcreteMethod { .. } => {
+                MemberResolution::Method {
+                    callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                    ..
+                } => {
                     // A member-access base is a *value*: a `self`-taking method
                     // captures the receiver and binds its impl at runtime (the
                     // virtual-bound path below); a `self`-LESS one has no

@@ -105,10 +105,7 @@ pub(super) fn classify_member(res: &MemberResolution<'_>) -> (SemanticTokenType,
         M::Field { .. } | M::InterfaceVirtualField { .. } => T::Property,
         M::Variant { .. } => T::EnumMember,
         M::Free { .. } => T::Function,
-        M::BoundMethod { .. }
-        | M::UnboundMethod { .. }
-        | M::InterfaceConcreteMethod { .. }
-        | M::InterfaceVirtualMethod { .. } => T::Method,
+        M::Method { .. } => T::Method,
     };
     (token_type, ModifierSet::empty())
 }

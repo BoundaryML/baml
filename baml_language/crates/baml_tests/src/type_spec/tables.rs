@@ -5,7 +5,7 @@
 //! per-road recording semantics the gate builds on.
 
 use baml_compiler2_hir_ty::{
-    infer::{CallTypeArgPlan, MemberResolution, infer_body},
+    infer::{CallTypeArgPlan, MemberResolution, MethodCallee, Receiver, infer_body},
     render::Viewpoint,
 };
 
@@ -33,17 +33,59 @@ fn member_resolutions(source: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The dispatch MODE of a resolution. A class-inherent method spells its
+/// binding too, as the historical names did; an interface method's binding
+/// is the separate axis [`receiver`] reads.
 fn kind(resolution: &MemberResolution<'_>) -> &'static str {
     match resolution {
         MemberResolution::Field { .. } => "Field",
         MemberResolution::Variant { .. } => "Variant",
         MemberResolution::Free { .. } => "Free",
-        MemberResolution::BoundMethod { .. } => "BoundMethod",
-        MemberResolution::UnboundMethod { .. } => "UnboundMethod",
-        MemberResolution::InterfaceVirtualMethod { .. } => "InterfaceVirtualMethod",
-        MemberResolution::InterfaceConcreteMethod { .. } => "InterfaceConcreteMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(_),
+            receiver: Receiver::Bound,
+        } => "BoundMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(_),
+            receiver: Receiver::Unbound,
+        } => "UnboundMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { .. },
+            ..
+        } => "InterfaceVirtualMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Concrete { .. },
+            ..
+        } => "InterfaceConcreteMethod",
         MemberResolution::InterfaceVirtualField { .. } => "InterfaceVirtualField",
     }
+}
+
+/// Every recorded METHOD resolution in `source` with whether the access
+/// binds its receiver, as sorted `(snippet, "Bound" | "Unbound")` pairs.
+fn method_receivers(source: &str) -> Vec<(String, &'static str)> {
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.file("test.baml", source);
+    let mut out = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&expr, resolution) in &result.member_resolutions {
+            let MemberResolution::Method { receiver, .. } = resolution else {
+                continue;
+            };
+            let range = source_map.expr_span(expr);
+            let receiver = match receiver {
+                Receiver::Bound => "Bound",
+                Receiver::Unbound => "Unbound",
+            };
+            out.push((source[range].to_string(), receiver));
+        }
+    }
+    out.sort();
+    out
 }
 
 #[test]
@@ -152,6 +194,64 @@ function mr_concrete(d: Dog) -> string throws never {
     assert!(
         resolutions.contains(&("d.describe".into(), "InterfaceConcreteMethod".into())),
         "concrete receiver resolves through the matched impl: {resolutions:?}"
+    );
+}
+
+/// The binding axis is independent of the dispatch mode: `recv.m()` binds
+/// its receiver whether the callee is inherent, a virtual slot, or a
+/// statically-matched impl; `I.m(recv)` and `(C as I).m(recv)` never do —
+/// there `self` is the written first argument.
+#[test]
+fn records_method_binding_axis() {
+    let source = r#"
+interface Counter {
+    function start(self) -> int throws never
+}
+class Tally {
+    n int
+    implements Counter {
+        function start(self) -> int throws never {
+            self.n
+        }
+    }
+}
+function mr_bound(t: Tally, c: Counter) -> int throws never {
+    t.start() + c.start()
+}
+function mr_unbound(t: Tally) -> int throws never {
+    Counter.start(t) + (Tally as Counter).start(t)
+}
+"#;
+    let kinds = member_resolutions(source);
+    let receivers = method_receivers(source);
+    assert!(
+        kinds.contains(&("t.start".into(), "InterfaceConcreteMethod".into()))
+            && receivers.contains(&("t.start".into(), "Bound")),
+        "concrete receiver access is Bound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        kinds.contains(&("c.start".into(), "InterfaceVirtualMethod".into()))
+            && receivers.contains(&("c.start".into(), "Bound")),
+        "existential receiver access is Bound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        kinds.contains(&("Counter.start".into(), "InterfaceVirtualMethod".into()))
+            && receivers.contains(&("Counter.start".into(), "Unbound")),
+        "interface-qualified access is Unbound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        receivers.iter().any(
+            |(snippet, receiver)| snippet.ends_with("Counter).start") && *receiver == "Unbound"
+        ),
+        "written-qualifier access is Unbound: {receivers:?}"
+    );
+    assert!(
+        !receivers.iter().any(|(snippet, receiver)| {
+            (snippet == "t.start" || snippet == "c.start") && *receiver == "Unbound"
+        }) && !receivers
+            .iter()
+            .any(|(snippet, receiver)| snippet.contains("Counter") && *receiver == "Bound"),
+        "no access records both bindings: {receivers:?}"
     );
 }
 

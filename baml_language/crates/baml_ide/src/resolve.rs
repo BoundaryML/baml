@@ -1351,7 +1351,7 @@ pub(crate) fn member_resolution_target<'db>(
     resolution: &baml_compiler2_hir_ty::infer::MemberResolution<'db>,
 ) -> Option<SymbolTarget<'db>> {
     use baml_compiler2_hir::loc::DeclRef;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
 
     match resolution {
         MemberResolution::Field {
@@ -1388,21 +1388,22 @@ pub(crate) fn member_resolution_target<'db>(
         MemberResolution::Free {
             func: DeclRef::Source(func),
         } => Some(SymbolTarget::Item(Definition::Function(*func))),
-        MemberResolution::BoundMethod {
-            func: DeclRef::Source(func),
-            ..
-        }
-        | MemberResolution::UnboundMethod {
-            func: DeclRef::Source(func),
-            ..
-        }
-        | MemberResolution::InterfaceConcreteMethod {
-            func: DeclRef::Source(func),
+        MemberResolution::Method {
+            callee:
+                MethodCallee::Inherent(DeclRef::Source(func))
+                | MethodCallee::Concrete {
+                    func: DeclRef::Source(func),
+                    ..
+                },
             ..
         } => Some(SymbolTarget::Method { func: *func }),
-        MemberResolution::InterfaceVirtualMethod {
-            interface: DeclRef::Source(interface),
-            method,
+        MemberResolution::Method {
+            callee:
+                MethodCallee::Virtual {
+                    interface: DeclRef::Source(interface),
+                    method,
+                },
+            ..
         } => {
             // Only the slot (interface + name) is known statically: address
             // the declaration — the required signature, or the default
@@ -1445,20 +1446,17 @@ pub(crate) fn member_resolution_target<'db>(
         | MemberResolution::Free {
             func: DeclRef::External(_),
         }
-        | MemberResolution::BoundMethod {
-            func: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::UnboundMethod {
-            func: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::InterfaceConcreteMethod {
-            func: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::InterfaceVirtualMethod {
-            interface: DeclRef::External(_),
+        | MemberResolution::Method {
+            callee:
+                MethodCallee::Inherent(DeclRef::External(_))
+                | MethodCallee::Concrete {
+                    func: DeclRef::External(_),
+                    ..
+                }
+                | MethodCallee::Virtual {
+                    interface: DeclRef::External(_),
+                    ..
+                },
             ..
         }
         | MemberResolution::InterfaceVirtualField {

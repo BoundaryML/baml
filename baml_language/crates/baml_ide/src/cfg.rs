@@ -642,7 +642,7 @@ fn resolved_call_function<'db>(
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use baml_compiler2_ast::Expr;
     use baml_compiler2_hir::loc::DeclRef;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
 
     let resolution = inference.member_resolutions.get(&callee).or_else(|| {
         inference
@@ -657,22 +657,23 @@ fn resolved_call_function<'db>(
             MemberResolution::Free {
                 func: DeclRef::Source(func),
             }
-            | MemberResolution::BoundMethod {
-                func: DeclRef::Source(func),
-                ..
-            }
-            | MemberResolution::UnboundMethod {
-                func: DeclRef::Source(func),
-                ..
-            }
-            | MemberResolution::InterfaceConcreteMethod {
-                func: DeclRef::Source(func),
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::Source(func))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::Source(func),
+                        ..
+                    },
                 ..
             },
         ) => Some(*func),
-        Some(MemberResolution::InterfaceVirtualMethod {
-            interface: DeclRef::Source(interface),
-            method,
+        Some(MemberResolution::Method {
+            callee:
+                MethodCallee::Virtual {
+                    interface: DeclRef::Source(interface),
+                    method,
+                },
+            ..
         }) => {
             let receiver = match &body.exprs[callee] {
                 Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
@@ -694,20 +695,17 @@ fn resolved_call_function<'db>(
             MemberResolution::Free {
                 func: DeclRef::External(_),
             }
-            | MemberResolution::BoundMethod {
-                func: DeclRef::External(_),
-                ..
-            }
-            | MemberResolution::UnboundMethod {
-                func: DeclRef::External(_),
-                ..
-            }
-            | MemberResolution::InterfaceConcreteMethod {
-                func: DeclRef::External(_),
-                ..
-            }
-            | MemberResolution::InterfaceVirtualMethod {
-                interface: DeclRef::External(_),
+            | MemberResolution::Method {
+                callee:
+                    MethodCallee::Inherent(DeclRef::External(_))
+                    | MethodCallee::Concrete {
+                        func: DeclRef::External(_),
+                        ..
+                    }
+                    | MethodCallee::Virtual {
+                        interface: DeclRef::External(_),
+                        ..
+                    },
                 ..
             }
             | MemberResolution::Field { .. }
@@ -727,7 +725,7 @@ fn dispatch_bindings_for_call(
     callee: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> CfgDispatchBindings {
     use baml_compiler2_ast::Expr;
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::infer::{MemberResolution, Receiver};
 
     let params = &baml_compiler2_ppir::item_data::function_data(db, callee).params;
     let callee_expr = match &body.exprs[call_expr] {
@@ -743,16 +741,17 @@ fn dispatch_bindings_for_call(
                 .and_then(|segment| segment.resolution.as_ref())
         })
     });
-    // Call plans index only the arguments provided by the caller. A bound
-    // method's declared `self` parameter is implicit, so shift those
-    // indices back into the declaration's full parameter list.
+    // Call plans index only the arguments provided by the caller. A BOUND
+    // access's declared `self` parameter is implicit, so shift those
+    // indices back into the declaration's full parameter list; an unbound
+    // access (`I.m(recv, ..)`) writes `self` as its first argument, so its
+    // plan already indexes the full list.
     let implicit_self = usize::from(matches!(
         resolution,
-        Some(
-            MemberResolution::BoundMethod { .. }
-                | MemberResolution::InterfaceConcreteMethod { .. }
-                | MemberResolution::InterfaceVirtualMethod { .. }
-        )
+        Some(MemberResolution::Method {
+            receiver: Receiver::Bound,
+            ..
+        })
     ));
     let mut bindings = CfgDispatchBindings::new();
     let mut record = |param_index: usize, arg_expr: baml_compiler2_ast::ExprId| {

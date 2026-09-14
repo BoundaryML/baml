@@ -155,7 +155,7 @@ pub fn operator_method<'db>(
 
     if let Some(goal) = operator_goal(db, dispatch.interface, rhs.as_ref())
         && let Some(resolved) = resolve_impl(db, &lhs, &goal)
-        && let Some(crate::impls::ProvidedMethod::Source { func, .. }) =
+        && let Some(baml_compiler2_hir::loc::DeclRef::Source(func)) =
             resolved.provided_method(db, &method_name)
     {
         return Some(func);
