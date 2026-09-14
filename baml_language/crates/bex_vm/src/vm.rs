@@ -19,6 +19,8 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
+use crate::vec_ext::{CopyVecExt, VecExt};
+
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
 /// vec the VM frame consumes. Each `(name, ty)` is placed at the index of the
 /// matching name in `param_names` (the callee's De Bruijn-ordered generic
@@ -4951,7 +4953,8 @@ impl BexVm {
                     // No bytecode handler remains for this native entry frame.
                     return Err(VmError::thrown_fresh(exception_value));
                 }
-                self.frames.pop();
+                // SAFETY: the branch above established that at least two frames remain.
+                unsafe { self.frames.no_return_pop() };
                 continue; // try next outer frame
             }
 
@@ -5374,7 +5377,8 @@ impl BexVm {
             .last()
             .is_some_and(|(cid, _)| *cid >= call_id)
         {
-            self.id_overrides.pop();
+            // SAFETY: the loop condition matched the last override.
+            unsafe { self.id_overrides.no_return_pop() };
         }
     }
 
@@ -5609,30 +5613,11 @@ impl BexVm {
             bf.faulting_pc = call_site;
         }
 
-        // Classify the callee with a single heap deref, extracting everything
-        // the slow paths need. A plain `Function` — the overwhelmingly common
-        // case, including all recursion — needs neither closure captures nor
-        // bound-method class args, so it takes the empty fast path. The
-        // `closure_type_args` are a Closure's captured type args; the
-        // `bound_method_class_type_args` are the bound method's curried type args
-        // (De Bruijn ordering: class args → `Self` ++ explicit call-site args,
-        // matching enclosing_generic_params() which puts class params first).
-        // Curried at `MakeBoundMethod` time (see `bound_method_curried_type_args`)
-        // so every callable value seeds its frame from its own type-args field —
-        // the same mechanism as `Closure::captured_type_args` /
-        // `GenericFunction::type_args`. Both are injected into the new
-        // BytecodeFrame after it is created.
-        let (is_host, closure_type_args, bound_method_class_type_args): (
-            bool,
-            Box<[bex_vm_types::RealizedTy]>,
-            Box<[bex_vm_types::RealizedTy]>,
-        ) = match self.get_object(callee_ptr) {
-            Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
-            Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
-            Object::BoundMethod(bm) => (false, Box::new([]), bm.type_args.clone()),
-            // Plain Function (fast path) and everything else: no extra args.
-            _ => (false, Box::new([]), Box::new([])),
-        };
+        // SAFETY: the active heap permit prevents collection throughout call
+        // setup, including stack/frame growth. Reuse this object and its resolved
+        // function only within this execution interval; exec reloads the function
+        // from the rooted frame after a yield.
+        let callee_object: &'static Object = unsafe { callee_ptr.get() };
 
         // A host closure isn't a Function/Closure/BoundMethod and dispatches via
         // a single-yield sys-op rather than a pushed frame. This path is reached
@@ -5644,7 +5629,7 @@ impl BexVm {
         // the caller pushed resumes — with the host result on the stack — once
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
-        if is_host {
+        if matches!(callee_object, Object::HostClosure(_)) {
             if runtime_id.is_some() {
                 return Err(self.invalid_argument_vm_error(
                     "explicit $id is not supported for host-callable values",
@@ -5654,20 +5639,25 @@ impl BexVm {
             return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
         }
 
-        // Specialized function wrappers seed frame.type_args so type-reifying
-        // bodies resolve their declaration's generics at runtime.
-        let specialized_type_args: Box<[bex_vm_types::RealizedTy]> =
-            match self.get_object(callee_ptr) {
-                Object::GenericFunction(gf) => gf.type_args.clone(),
-                _ => Box::new([]),
-            };
+        // Borrow wrapper type args until a frame or native call needs ownership.
+        // Plain functions use empty slices without temporary owned containers.
+        let (closure_type_args, bound_method_class_type_args, specialized_type_args): (
+            &[bex_vm_types::RealizedTy],
+            &[bex_vm_types::RealizedTy],
+            &[bex_vm_types::RealizedTy],
+        ) = match callee_object {
+            Object::Closure(c) => (&c.captured_type_args, &[], &[]),
+            Object::BoundMethod(bm) => (&[], &bm.type_args, &[]),
+            Object::GenericFunction(gf) => (&[], &[], &gf.type_args),
+            _ => (&[], &[], &[]),
+        };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
         // wrapping one. `callee_fn_ptr` is the heap pointer of the resolved
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
         // specialized wrapper), carried on call notifications so the engine can map
         // it to a `FunctionId` without a name lookup.
-        let (callee, callee_fn_ptr) = match self.get_object(callee_ptr) {
+        let (callee, callee_fn_ptr) = match callee_object {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
@@ -5729,7 +5719,6 @@ impl BexVm {
         // skip it but it's an easy and fast check.
         let callee_arity = callee.arity;
         let callee_kind = callee.kind;
-        let callee_name = callee.name.clone();
         let callee_function_id = callee.function_id;
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
@@ -5777,9 +5766,9 @@ impl BexVm {
                 // on the closure's `captured_type_args`. Use whichever is set.
                 let native_type_args: &[bex_vm_types::RealizedTy] =
                     if !specialized_type_args.is_empty() {
-                        &specialized_type_args
+                        specialized_type_args
                     } else {
-                        &closure_type_args
+                        closure_type_args
                     };
                 let restore_pending = if !native_type_args.is_empty() {
                     Some(std::mem::replace(
@@ -5904,23 +5893,28 @@ impl BexVm {
                     self.install_consumed_local_id_for_call(call_id, explicit_local_id);
                 }
 
-                self.frames.push(Frame::Bytecode(BytecodeFrame {
-                    function: callee_ptr,
-                    instruction_ptr: 0,
-                    locals_offset,
-                    type_args: initial_type_args.into_vec(),
-                    type_metadata: None,
-                    faulting_pc: 0,
-                    call_id,
-                    parent_call_id,
-                    function_id: callee_function_id,
+                // Construct after reserving capacity so the frame can be written
+                // directly into the vector instead of moved through a temporary.
+                self.frames.extend(std::iter::once_with(|| {
+                    Frame::Bytecode(BytecodeFrame {
+                        function: callee_ptr,
+                        instruction_ptr: 0,
+                        locals_offset,
+                        type_args: initial_type_args.to_vec(),
+                        type_metadata: None,
+                        faulting_pc: 0,
+                        call_id,
+                        parent_call_id,
+                        function_id: callee_function_id,
+                    })
                 }));
-                self.allocate_real_locals_for_frame(callee_ptr)?;
+                let new_len = self.stack.len() + callee.real_local_count;
+                self.stack.resize(new_len, Value::NULL);
 
                 // Update frame_idx to point to the new frame.
                 *frame_idx = self.frames.len() - 1;
 
-                *function = unsafe { self.load_function(*frame_idx)? };
+                *function = callee;
             }
 
             FunctionKind::SysOp(_) => {
@@ -5962,6 +5956,7 @@ impl BexVm {
             FunctionKind::NativeUnresolved => {
                 // This should never happen - native functions should be resolved
                 // by attach_builtins() before the VM runs.
+                let callee_name = callee.name.clone();
                 panic!(
                     "Unresolved native function '{callee_name}' - did you forget to call attach_builtins()?"
                 );
@@ -6662,21 +6657,17 @@ impl BexVm {
             };
             let mut pc = bf.instruction_ptr;
 
-            // ── Tight inner dispatch loop ─────────────────────────────────
-            // pc/code/function/frame_idx are kept as locals across many
-            // instructions — we only break out (re-extracting from the frame)
-            // on actual control-flow changes (Call, Return, Throw).
-            //
-            // Critical perf: simple ops (arithmetic, load/store, jumps within
-            // the same function) never touch the frame's instruction_ptr.
+            // `run_compact` owns the per-instruction loop. Only calls, returns,
+            // unwinds, yields, and errors reach this result handling. Calls or
+            // catches that stay in the same frame resume with the existing PC.
             loop {
                 let orig_frame_idx = frame_idx;
-                let step_result = self.step_compact(&mut pc, &mut frame_idx, &mut function, code);
+                let step_result = self.run_compact(&mut pc, &mut frame_idx, &mut function, code);
 
                 match step_result {
                     Ok(None) if frame_idx == orig_frame_idx => {
-                        // Simple op, frame unchanged. pc is already advanced
-                        // as a local — no frame write needed. Continue tight loop.
+                        // A native call or same-frame catch can finish without
+                        // changing frames. Resume the current code at its new PC.
                         continue;
                     }
                     Ok(None) => {
@@ -6708,11 +6699,12 @@ impl BexVm {
         }
     }
 
-    /// Execute a single compact-encoded instruction.
+    /// Run compact instructions until a call, return, unwind, yield, or error.
     ///
-    /// `pc` is a local from the caller's tight loop — operand reads advance it
-    /// directly without going through frame indirection. The caller saves `pc`
-    /// back to the frame after this returns.
+    /// Ordinary instructions continue here without constructing a step result or
+    /// checking the frame index. Instructions that can change frames return to
+    /// `exec_compact` before fetching again, so `code` always belongs to the
+    /// current frame. The caller retains PC writeback and exception handling.
     #[allow(
         clippy::too_many_lines,
         clippy::cast_possible_wrap,
@@ -6723,7 +6715,7 @@ impl BexVm {
         clippy::inline_always
     )]
     #[inline(always)]
-    fn step_compact(
+    fn run_compact(
         &mut self,
         pc: &mut usize,
         frame_idx: &mut usize,
@@ -6785,1332 +6777,1166 @@ impl BexVm {
             }
         }
 
-        // Read opcode byte and advance PC past it.
-        // SAFETY: PC is always in bounds (bytecode invariant).
-        // Read opcode byte and advance PC past it.
-        // SAFETY: PC is always in bounds (bytecode invariant).
-        #[allow(unsafe_code)]
-        let op_byte = unsafe { *code.get_unchecked(*pc) };
-        *pc += 1;
-        #[cfg(feature = "kperf")]
-        {
-            self.op_count += 1;
-        }
+        loop {
+            // Read opcode byte and advance PC past it.
+            // SAFETY: PC is always in bounds (bytecode invariant).
+            // Read opcode byte and advance PC past it.
+            // SAFETY: PC is always in bounds (bytecode invariant).
+            #[allow(unsafe_code)]
+            let op_byte = unsafe { *code.get_unchecked(*pc) };
+            *pc += 1;
+            #[cfg(feature = "kperf")]
+            {
+                self.op_count += 1;
+            }
 
-        // Record the innermost frame's current instruction start cheaply (one
-        // flat field store), instead of writing the frame's `faulting_pc` every
-        // op (which needs a bounds-checked index + enum match + store). Outer
-        // frames record their call-site PC at call time; read sites resolve the
-        // innermost frame from `cur_pc`.
-        self.cur_pc = *pc - 1;
+            // Record the innermost frame's current instruction start cheaply (one
+            // flat field store), instead of writing the frame's `faulting_pc` every
+            // op (which needs a bounds-checked index + enum match + store). Outer
+            // frames record their call-site PC at call time; read sites resolve the
+            // innermost frame from `cur_pc`.
+            self.cur_pc = *pc - 1;
 
-        // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
-        // own encoder which only emits valid opcode bytes.
-        #[allow(unsafe_code)]
-        let op: OpCode = unsafe { std::mem::transmute(op_byte) };
+            // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
+            // own encoder which only emits valid opcode bytes.
+            #[allow(unsafe_code)]
+            let op: OpCode = unsafe { std::mem::transmute(op_byte) };
 
-        // Tagged-int comparisons skip untagging by comparing bits directly
-        // (see `Value::tagged_int_add_checked` for the encoding rationale; the
-        // shift-left-by-1 preserves signed ordering between operands that
-        // share the same tag bit). Float comparisons unwrap two heap-boxed
-        // floats and apply the operator through `float_order` — BAML's total
-        // float order, so these stay identical to the `exec_cmpop` fallback and
-        // to `baml.ops.Compare for float`. Both pops are guaranteed Float by
-        // the bytecode encoder, so the `else` arms are unreachable.
-        macro_rules! cmp_int_op {
+            // Tagged-int comparisons skip untagging by comparing bits directly
+            // (see `Value::tagged_int_add_checked` for the encoding rationale; the
+            // shift-left-by-1 preserves signed ordering between operands that
+            // share the same tag bit). Float comparisons unwrap two heap-boxed
+            // floats and apply the operator through `float_order` — BAML's total
+            // float order, so these stay identical to the `exec_cmpop` fallback and
+            // to `baml.ops.Compare for float`. Both operands are guaranteed Float by
+            // the bytecode encoder, so the `else` arms are unreachable.
+            macro_rules! cmp_int_op {
             ($op:tt) => {{
-                let r = self.stack.ensure_pop();
-                let l = self.stack.ensure_pop();
+                let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                // SAFETY: the encoder validates two comparison operands.
                 self.stack
-                    .push(Value::bool((l.bits() as i64) $op (r.bits() as i64)));
+                    .replace_top_n::<2>(Value::bool((l.bits() as i64) $op (r.bits() as i64)));
             }};
         }
-        macro_rules! cmp_float_op {
-            ($op:expr) => {{
-                let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                    std::hint::unreachable_unchecked()
-                };
-                let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                    std::hint::unreachable_unchecked()
-                };
-                self.stack
-                    .push(Value::bool(bex_vm_types::float_order::apply($op, l, r)));
-            }};
-        }
-
-        // SAFETY: see above — bytecode invariants guarantee all reads are in bounds.
-        #[allow(unused_unsafe)]
-        unsafe {
-            match op {
-                // ── Common constants ──────────────────────────────────────────
-                OpCode::LoadNull => {
-                    self.stack.push(Value::NULL);
-                }
-                OpCode::LoadTrue => {
-                    self.stack.push(Value::bool(true));
-                }
-                OpCode::LoadFalse => {
-                    self.stack.push(Value::bool(false));
-                }
-                OpCode::LoadIntSmall => {
-                    let val = { read_i8_unchecked(code, pc) };
-                    self.stack.push(Value::int(i64::from(val)));
-                }
-
-                // ── LoadConst ─────────────────────────────────────────────────
-                OpCode::LoadConst => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let val = function.bytecode.resolved_constants[idx];
-                    self.stack.push(val);
-                }
-
-                // ── LoadVar / StoreVar ────────────────────────────────────────
-                OpCode::LoadVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+            macro_rules! cmp_float_op {
+                ($op:expr) => {{
+                    let Some(r) =
+                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(0)))
                     else {
-                        unreachable!()
+                        std::hint::unreachable_unchecked()
                     };
-                    let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let value = self.stack.get_at(stack_slot);
-                    self.stack.push(value);
-                }
-
-                OpCode::StoreVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    let Some(l) =
+                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(1)))
                     else {
-                        unreachable!()
+                        std::hint::unreachable_unchecked()
                     };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let value = self.stack.ensure_pop();
-                    self.store_local_value(local_var_index, value);
-                }
-
-                // ── Operand-movement superinstructions (CPython-style) ────────
-                // LoadVar2(a, b) == `LoadVar(a); LoadVar(b)`: push both locals.
-                OpCode::LoadVar2 => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                    let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
-                    self.stack.push(va);
-                    self.stack.push(vb);
-                }
-                // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
-                // local[a], then pop into local[b].
-                OpCode::StoreVar2 => {
-                    let a = { read_u32_unchecked(code, pc) as usize };
-                    let b = { read_u32_unchecked(code, pc) as usize };
-                    #[allow(unsafe_code)]
-                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
-                    else {
-                        unreachable!()
-                    };
-                    let off = bf.locals_offset;
-                    let sa = Self::local_slot_stack_index(off, a);
-                    let sb = Self::local_slot_stack_index(off, b);
-                    let va = self.stack.ensure_pop();
-                    let vb = self.stack.ensure_pop();
-                    self.store_local_value(sa, va);
-                    self.store_local_value(sb, vb);
-                }
-
-                OpCode::StoreVarLoadVar => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
-                    let value_slot = self.stack.ensure_slot_from_top(0);
-                    let value = self.stack[value_slot];
-                    self.store_local_value(local_var_index, value);
-                }
-
-                // ── LoadGlobal / StoreGlobal ──────────────────────────────────
-                OpCode::LoadGlobal => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let value = self.load_global_in(function.runtime_package, global_idx);
-                    self.stack.push(value);
-                }
-
-                OpCode::StoreGlobal => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let value = self.stack.ensure_pop();
-                    // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
-                    // and a write here is a VM internal error.
-                    self.store_global_in(function.runtime_package, global_idx, value)?;
-                }
-
-                // ── LoadField / StoreField / InitField ────────────────────────
-                OpCode::LoadField => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let top = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                    let load_result = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        instance
-                            .try_load_field(idx)
-                            .ok_or_else(|| instance.field_len())
-                    };
-                    let value = match load_result {
-                        Ok(value) => value,
-                        Err(length) => {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                    };
-                    self.stack.push(value);
-                }
-
-                OpCode::StoreField => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let new_value = self.stack.ensure_pop();
-                    let instance_value = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
-
-                    let store_error = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        (idx >= instance.field_len()).then_some(instance.field_len())
-                    };
-                    if let Some(length) = store_error {
-                        return Err(self.invalid_field_access_error(idx, length));
-                    }
-                    self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        unreachable!("already type-checked above");
-                    };
-                    instance.store_field(idx, new_value);
-                }
-
-                // ── VirtualLoadField / VirtualStoreField ──────────────────────
-                // The field analogue of `VirtualCall`: the operand indexes the
-                // *interface's* declared fields, and the receiver's resolved impl
-                // maps that to a physical slot. Open-world by construction — nothing
-                // here enumerates implementors, so a class from a later-loaded
-                // package resolves exactly like a local one.
-                OpCode::VirtualLoadField => {
-                    let field_index = { read_u32_unchecked(code, pc) as usize };
-                    let iface_value = self.stack.ensure_pop();
-                    let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
-                    let receiver = self.stack.ensure_pop();
-                    let slot = self.resolve_virtual_field_slot(
-                        receiver,
-                        iface_qtn,
-                        &iface_args,
-                        field_index,
-                    )?;
-                    let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
-                    let load_result = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        instance
-                            .try_load_field(slot)
-                            .ok_or_else(|| instance.field_len())
-                    };
-                    let value = match load_result {
-                        Ok(value) => value,
-                        Err(length) => return Err(self.invalid_field_access_error(slot, length)),
-                    };
-                    self.stack.push(value);
-                }
-
-                OpCode::VirtualStoreField => {
-                    let field_index = { read_u32_unchecked(code, pc) as usize };
-                    let iface_value = self.stack.ensure_pop();
-                    let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
-                    let new_value = self.stack.ensure_pop();
-                    let receiver = self.stack.ensure_pop();
-                    let slot = self.resolve_virtual_field_slot(
-                        receiver,
-                        iface_qtn,
-                        &iface_args,
-                        field_index,
-                    )?;
-                    let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
-                    let store_error = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        (slot >= instance.field_len()).then_some(instance.field_len())
-                    };
-                    if let Some(length) = store_error {
-                        return Err(self.invalid_field_access_error(slot, length));
-                    }
-                    self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        unreachable!("already type-checked above");
-                    };
-                    instance.store_field(slot, new_value);
-                }
-
-                OpCode::InitField => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let new_value = self.stack.ensure_pop();
-                    let instance_value = self.stack.ensure_pop();
-                    let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
-                    let store_error = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        (idx >= instance.field_len()).then_some(instance.field_len())
-                    };
-                    if let Some(length) = store_error {
-                        return Err(self.invalid_field_access_error(idx, length));
-                    }
-                    self.heap.write_barrier(obj_ptr, new_value);
-                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                        unreachable!("already type-checked above");
-                    };
-                    instance.store_field(idx, new_value);
-                    self.stack.push(instance_value);
-                }
-
-                OpCode::InitSpread => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let source_value = self.stack.ensure_pop();
-                    let dest_slot = self.stack.ensure_slot_from_top(0);
-                    let dest_value = self.stack[dest_slot];
-                    self.init_spread(
-                        dest_value,
-                        source_value,
-                        &function.bytecode.field_copy_sets[idx],
-                    )?;
-                }
-
-                // ── Pop / Copy ────────────────────────────────────────────────
-                OpCode::Pop => {
-                    let n = { read_u32_unchecked(code, pc) as usize };
-                    let drain_start = self.stack.len() - n;
-                    let drain_range = StackIndex::from_raw(drain_start)..;
-                    self.stack.drain(drain_range);
-                }
-
-                OpCode::Copy => {
-                    let offset = { read_u32_unchecked(code, pc) as usize };
-                    let index = self.stack.ensure_slot_from_top(offset);
-                    let value = self.stack[index];
-                    self.stack.push(value);
-                }
-
-                // ── Allocation opcodes ────────────────────────────────────────
-                OpCode::AllocArray => {
-                    let size = { read_u32_unchecked(code, pc) as usize };
-                    // The declared element type rides on top of the `size`
-                    // elements: a preceding `LoadType` pushed it, already resolved
-                    // against the frame's type args. Pop it before the values.
-                    let element_ty = self.ensure_pop_type()?;
-                    let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
-                    let array: Vec<Value> = self.stack.drain(drain_range).collect();
-                    let array_index = self.tlab.alloc_array(element_ty, array);
-                    self.stack.push(Value::object(array_index));
-                }
-
-                OpCode::AllocMap => {
-                    let n = { read_u32_unchecked(code, pc) as usize };
-                    // The declared value type rides on top, the key type just
-                    // below it (two `LoadType`s after the entries, already
-                    // resolved against the frame's type args). Pop both before
-                    // the entries.
-                    let value_ty = self.ensure_pop_type()?;
-                    let key_ty = self.ensure_pop_type()?;
-                    let map = if n > 0 {
-                        let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
-                        let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
-                        let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
-                        let values = self.stack[end_of_values..end_of_keys].iter().copied();
-                        let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                            let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
-                            self.get_object(obj_index).as_string().cloned()
-                        });
-                        let pairs = values
-                            .zip(keys)
-                            .map(|(val, key_res)| key_res.map(|k| (k, val)));
-                        let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
-                        self.stack.drain(end_of_values..);
-                        map
-                    } else {
-                        IndexMap::new()
-                    };
-                    let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
-                    self.stack.push(Value::object(obj_index));
-                }
-
-                OpCode::AllocInstance => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
-                    let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
-
-                    let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
-                        Box::default()
-                    } else {
-                        self.pop_type_args(ntypeargs)?.tys.into()
-                    };
-
-                    let Object::Class(class) = self.get_object(class_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Class.into(),
-                            got: ObjectType::of(self.get_object(class_ptr)).into(),
-                        }
-                        .into());
-                    };
-                    let mut fields = Vec::with_capacity(class.fields.len());
-                    fields.resize(class.fields.len(), Value::NULL);
-                    let instance_ptr =
-                        self.tlab
-                            .alloc(Object::Instance(bex_vm_types::types::Instance::new(
-                                class_ptr,
-                                class_type_args,
-                                fields,
-                            )));
-                    self.stack.push(Value::object(instance_ptr));
-                }
-
-                OpCode::InitInstance => {
-                    let plan_idx = { read_u32_unchecked(code, pc) as usize };
-                    let instance = self.alloc_initialized_instance(
-                        &function.bytecode.class_init_plans[plan_idx],
-                    )?;
-                    self.stack.push(instance);
-                }
-
-                OpCode::AllocVariant => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
-                    let variant_count = {
-                        let Object::Enum(enm) = self.get_object(enum_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Enum.into(),
-                                got: ObjectType::of(self.get_object(enum_ptr)).into(),
-                            }
-                            .into());
-                        };
-                        enm.variants.len()
-                    };
-                    let variant = self.stack.ensure_pop();
-                    let Some(variant_index) = variant.as_int() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&variant),
-                        }
-                        .into());
-                    };
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    if variant_index < 0 || variant_index as usize >= variant_count {
-                        return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                            VmPanic::IndexOutOfBounds {
-                                index: variant_index,
-                                length: variant_count,
-                            },
+                    // SAFETY: the encoder validates two comparison operands.
+                    self.stack
+                        .replace_top_n::<2>(Value::bool(bex_vm_types::float_order::apply(
+                            $op, l, r,
                         )));
+                }};
+            }
+
+            // SAFETY: see above — bytecode invariants guarantee all reads are in bounds.
+            #[allow(unused_unsafe)]
+            unsafe {
+                match op {
+                    // ── Common constants ──────────────────────────────────────────
+                    OpCode::LoadNull => {
+                        self.stack.push(Value::NULL);
                     }
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let variant_usize = variant_index as usize;
-                    let variant_ptr = self.tlab.alloc(Object::Variant(Variant {
-                        enm: enum_ptr,
-                        index: variant_usize,
-                    }));
-                    self.stack.push(Value::object(variant_ptr));
-                }
+                    OpCode::LoadTrue => {
+                        self.stack.push(Value::bool(true));
+                    }
+                    OpCode::LoadFalse => {
+                        self.stack.push(Value::bool(false));
+                    }
+                    OpCode::LoadIntSmall => {
+                        let val = { read_i8_unchecked(code, pc) };
+                        self.stack.push(Value::int(i64::from(val)));
+                    }
 
-                // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
-                OpCode::SysOp | OpCode::SysOpWithRuntimeId => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let runtime_id = if matches!(op, OpCode::SysOpWithRuntimeId) {
-                        Some(self.stack.ensure_pop())
-                    } else {
-                        None
-                    };
-                    let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.load_global_in(function.runtime_package, callee);
-                    // `as_object_ptr` only unwraps the value to a heap pointer
-                    // (the `FunctionType` argument is error-message metadata, not
-                    // an assertion). `dispatch_sysop_yield`'s own kind check is
-                    // therefore the load-bearing validation on this path — it
-                    // rejects a non-sys-op global before draining and yields.
-                    let callee_ptr =
-                        self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
-                    return Ok(Some(self.dispatch_sysop_yield(callee_ptr, runtime_id)?));
-                }
+                    // ── LoadConst ─────────────────────────────────────────────────
+                    OpCode::LoadConst => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let val = function.bytecode.resolved_constants[idx];
+                        self.stack.push(val);
+                    }
 
-                // ── Spawn (BEP-034) ────────────────────────────────────────────
-                OpCode::Spawn => {
-                    // Stack layout (pushed by emit in this order): closure, name,
-                    // config, the future's `T`, the future's `E`. So pop in
-                    // reverse: `E` (top), `T`, config, name, closure. The two
-                    // types were pushed by `LoadType`, already resolved against
-                    // this frame's type args, and travel with the request so the
-                    // engine can type the heap `Future` it allocates.
-                    let throws = self.ensure_pop_type()?;
-                    let returns = self.ensure_pop_type()?;
-                    // `config` is the optional `baml.spawn.SpawnConfig` from a
-                    // `with baml.spawn.options(...)` clause, or null.
-                    let config_value = self.stack.ensure_pop();
-                    let name_value = self.stack.ensure_pop();
-                    let closure_value = self.stack.ensure_pop();
-                    let closure_ptr =
-                        self.as_object_ptr(closure_value, ObjectType::Function(FunctionType::Any))?;
-                    let name_ptr = if name_value.is_null() {
-                        None
-                    } else if let Some(ptr) = name_value.as_object_ptr() {
-                        Some(ptr)
-                    } else {
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Object(ObjectType::String),
-                            got: self.type_of(&name_value),
-                        }
-                        .into());
-                    };
-                    let config_ptr = if config_value.is_null() {
-                        None
-                    } else if let Some(ptr) = config_value.as_object_ptr()
-                        && matches!(unsafe { ptr.get() }, Object::Instance(_))
-                    {
-                        // Must be an instance (`baml.spawn.Params`) — an
-                        // arbitrary heap object here would turn a local type
-                        // error into a VM→engine contract break downstream.
-                        Some(ptr)
-                    } else {
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Object(ObjectType::Instance),
-                            got: self.type_of(&config_value),
-                        }
-                        .into());
-                    };
-                    let pending_future = bex_vm_types::types::UnscheduledFuture {
-                        closure: closure_ptr,
-                        name: name_ptr,
-                        config: config_ptr,
-                        returns,
-                        throws,
-                    };
-                    let object_index = self
-                        .tlab
-                        .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
-
-                    return Ok(Some(VmExecState::Spawn {
-                        future: object_index,
-                    }));
-                }
-
-                // ── Call ──────────────────────────────────────────────────────
-                OpCode::Call | OpCode::CallWithRuntimeId => {
-                    let raw = read_u32_unchecked(code, pc);
-                    let ntypeargs = usize::from(read_u16_unchecked(code, pc));
-                    let runtime_id = if matches!(op, OpCode::CallWithRuntimeId) {
-                        Some(self.stack.ensure_pop())
-                    } else {
-                        None
-                    };
-                    let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.load_global_in(function.runtime_package, callee_global);
-                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
-                    let arg_count = match Self::recorded_call_layout(function, self.cur_pc) {
-                        Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
-                        None => arg_count,
-                    };
-
-                    let args_offset = self.stack.len().checked_sub(arg_count + ntypeargs).ok_or(
-                        VmInternalError::NotEnoughItemsOnStack(arg_count + ntypeargs),
-                    )?;
-                    let locals_offset = StackIndex::from_raw(args_offset);
-
-                    // Save pc as return address before pushing new frame.
-                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        verifier_unreachable!()
-                    };
-                    bf.instruction_ptr = *pc;
-
-                    let result = if ntypeargs == 0
-                        && self.pending_call_type_args.is_empty()
-                        && self.pending_call_type_values.is_empty()
-                    {
-                        // Ordinary non-generic calls have no pending type lane
-                        // to save or clear. Keep them off the richer BEP-066
-                        // exact-value path so a tiny function call does not
-                        // construct and move several empty collections.
-                        self.execute_call_from_locals_offset(
-                            callee_ptr,
-                            locals_offset,
-                            arg_count,
-                            runtime_id,
-                            frame_idx,
-                            function,
-                        )
-                    } else {
-                        let type_args = self.take_type_args_below_values(ntypeargs, arg_count)?;
-                        self.execute_call_from_locals_offset_with_type_args(
-                            callee_ptr,
-                            locals_offset,
-                            arg_count,
-                            CallOptions {
-                                runtime_id,
-                                type_args: &type_args.tys,
-                                type_values: &type_args.values,
-                            },
-                            frame_idx,
-                            function,
-                        )
-                    };
-                    return result;
-                }
-
-                // ── VirtualCall ───────────────────────────────────────────────
-                // Open-world interface dispatch: resolve the method at runtime
-                // from the receiver's concrete `Self` type, then take the shared
-                // frame-push call path (mirrors `Call`). Stack layout (top last):
-                // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
-                OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
-                    let nargs = read_u16_unchecked(code, pc) as usize;
-                    let ntypeargs = usize::from(read_u16_unchecked(code, pc));
-                    let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
-                        Some(self.stack.ensure_pop())
-                    } else {
-                        None
-                    };
-
-                    // Pop the method name (top) then the interface type. Keep
-                    // both as values until after the static-cache probe: their
-                    // contents are immutable at this bytecode site, and turning
-                    // them into owned names on every hit was measurable in
-                    // interface-heavy loops.
-                    let method_value = self.stack.ensure_pop();
-                    let iface_value = self.stack.ensure_pop();
-
-                    // A parameterized interface operand carries the runtime
-                    // definitions of its arguments (BEP-066). Resolution reads
-                    // only the realized `ty` off it, so without carrying the
-                    // overlay into the callee the impl body would lose the
-                    // argument's runtime declarations — reflection, rendering
-                    // and SAP inside an interface method would fail on a type
-                    // the caller can use fine.
-                    //
-                    // The clone is `O(defs)` on every dispatch that carries any
-                    let method_type_args = if ntypeargs == 0 {
-                        None
-                    } else {
-                        Some(self.take_type_args_below_values(ntypeargs, nargs)?)
-                    };
-
-                    let args_offset = self
-                        .stack
-                        .len()
-                        .checked_sub(nargs)
-                        .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
-                    // `Self` is the receiver's runtime concrete type; coherence makes
-                    // `(Self, iface<args>)` resolve to at most one impl. Off that rule
-                    // the method resolves through `rule_method_impl` (the provided
-                    // row, or the interface's default on a miss). `nargs` is the
-                    // interface method's slot count; the resolved impl may declare
-                    // extra optionals, so its value lane is remapped below. The
-                    // rule borrows `self`; scope it so the borrow ends before the
-                    // `&mut self` call below.
-                    let receiver = self.stack[StackIndex::from_raw(args_offset)];
-                    let cache_key = if function.runtime_package.is_null() {
-                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-                        let Object::Type(type_value) = self.get_object(iface_ptr) else {
-                            unreachable!("as_object_ptr(Type) guarantees a Type object")
+                    // ── LoadVar / StoreVar ────────────────────────────────────────
+                    OpCode::LoadVar => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
                         };
-                        let (interface_head, interface_args) = match &type_value.ty {
-                            bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
-                                (*head, args.clone())
-                            }
-                            other => unreachable!(
-                                "VirtualCall interface operand must be an Interface type, found {other:?}"
-                            ),
+                        let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
+                        let value = self.stack.get_at(stack_slot);
+                        self.stack.push(value);
+                    }
+
+                    OpCode::StoreVar => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
                         };
-                        self.static_virtual_receiver_key(receiver).map(|receiver| {
-                            StaticVirtualCallKey {
-                                caller_function_addr: std::ptr::from_ref(*function) as usize,
-                                call_pc: self.cur_pc,
-                                receiver,
-                                interface_head,
-                                interface_args,
-                            }
-                        })
-                    } else {
-                        self.runtime_virtual_call_cache_key(
-                            self.frames[*frame_idx].function(),
-                            iface_value,
-                            receiver,
-                        )?
-                    };
-                    let cached_target = cache_key
-                        .as_ref()
-                        .and_then(|key| self.static_virtual_call_cache.get(key))
-                        .cloned();
-                    let (callee_ptr, mut type_args) = if let Some(target) = cached_target {
-                        (target.callee, target.frame_type_args)
-                    } else {
-                        let method_name = self.as_string(&method_value)?.to_string();
-                        let (iface_qtn, iface_args) = {
-                            let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-                            match self.get_object(iface_ptr) {
-                                // The interface's input args select among a type's
-                                // impls of the same interface at several
-                                // instantiations. Associated types are outputs,
-                                // not part of the resolver key.
-                                Object::Type(type_value) => match &type_value.ty {
-                                    bex_vm_types::RealizedTy::Interface(
-                                        qtn,
-                                        args,
-                                        _assoc,
-                                        _attr,
-                                    ) => (*qtn, args.clone()),
-                                    other => unreachable!(
-                                        "VirtualCall interface operand must be an Interface type, found {other:?}"
-                                    ),
-                                },
-                                other => unreachable!(
-                                    "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                                    ObjectType::of(other)
-                                ),
-                            }
+                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                        let value = self.stack.ensure_pop();
+                        self.store_local_value(local_var_index, value);
+                    }
+
+                    // ── Operand-movement superinstructions (CPython-style) ────────
+                    // LoadVar2(a, b) == `LoadVar(a); LoadVar(b)`: push both locals.
+                    OpCode::LoadVar2 => {
+                        let a = { read_u32_unchecked(code, pc) as usize };
+                        let b = { read_u32_unchecked(code, pc) as usize };
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
                         };
-                        // `Self` is the receiver value's realized concrete type.
-                        let self_ty = bex_vm_types::RealizedTy::from(
-                            self.value_concrete_ty(receiver).unwrap_or_else(|| {
-                                unreachable!(
-                                    "value of kind {:?} cannot be a virtual-call receiver",
-                                    self.type_of(&receiver)
-                                )
-                            }),
-                        );
-                        let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
-                        let (rule, bound_args) = resolver
-                            .resolve_implements_rule(&self_ty, iface_qtn, &iface_args)
-                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            })?;
-                        let method = resolver
-                            .rule_method_impl(&rule, method_name.as_str())?
-                            .method;
-                        // `fqn` is the resolved callee's heap pointer (provided
-                        // row or adopted interface default) — invoke it directly.
-                        let callee = method.fqn;
-                        // Seed the callee frame: the impl's frame realized against
-                        // its bound args (the impl's own generics for a provided
-                        // method, or `[Self, interface args..]` for an adopted
-                        // default — associated types are never frame slots), then
-                        // the method-level type args — matching the callee's
-                        // De Bruijn layout `[owner… ++ method…]`.
-                        let frame = resolver.realize_frame(&method.frame, &bound_args)?;
-                        let cacheable = rule.is_static();
-                        if cacheable && let Some(cache_key) = cache_key {
-                            self.static_virtual_call_cache.insert(
-                                cache_key,
-                                StaticVirtualCallTarget {
-                                    callee,
-                                    frame_type_args: frame.clone(),
-                                },
-                            );
-                        }
-                        (callee, frame)
-                    };
-                    let nargs = match Self::recorded_call_layout(function, self.cur_pc) {
-                        Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
-                        None => nargs,
-                    };
-                    // The receiver's class-level slots need no exact carrier:
-                    // the resolver realizes them off `Self` as head-carrying
-                    // types, so `reflect.Type.of<T>()` in an impl or default-method
-                    // body dereferences the caller's own declaration rather
-                    // than deriving a fresh identity for it.
-                    let type_values = match method_type_args.as_ref() {
-                        Some(method) => append_virtual_method_type_args(&mut type_args, method),
-                        None => Vec::new(),
-                    };
-
-                    let locals_offset = StackIndex::from_raw(args_offset);
-
-                    // Save pc as return address before pushing the new frame.
-                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        verifier_unreachable!()
-                    };
-                    bf.instruction_ptr = *pc;
-
-                    let result = if type_args.is_empty()
-                        && method_type_args.is_none()
-                        && self.pending_call_type_args.is_empty()
-                        && self.pending_call_type_values.is_empty()
-                    {
-                        self.execute_call_from_locals_offset(
-                            callee_ptr,
-                            locals_offset,
-                            nargs,
-                            runtime_id,
-                            frame_idx,
-                            function,
-                        )
-                    } else {
-                        self.execute_call_from_locals_offset_with_type_args(
-                            callee_ptr,
-                            locals_offset,
-                            nargs,
-                            CallOptions {
-                                runtime_id,
-                                type_args: &type_args,
-                                type_values: &type_values,
-                            },
-                            frame_idx,
-                            function,
-                        )
-                    };
-                    return result;
-                }
-
-                // ── CallIndirect ──────────────────────────────────────────────
-                OpCode::CallIndirect | OpCode::CallIndirectWithRuntimeId => {
-                    let runtime_id = if matches!(op, OpCode::CallIndirectWithRuntimeId) {
-                        Some(self.stack.ensure_pop())
-                    } else {
-                        None
-                    };
-                    // Save pc as return address before any call.
-                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
-                        verifier_unreachable!()
-                    };
-                    bf.instruction_ptr = *pc;
-
-                    let callee_slot = self.stack.ensure_stack_top();
-                    let callee_value = self.stack[callee_slot];
-                    let callee_ptr =
-                        self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
-                    let obj = self.get_object(callee_ptr);
-
-                    if let Object::HostClosure(host_closure) = obj {
-                        if runtime_id.is_some() {
-                            return Err(self.invalid_argument_vm_error(
-                                "explicit $id is not supported for host-callable values",
-                            ));
-                        }
-                        // Host-callable dispatch via a single-yield sys-op. See
-                        // `Instruction::CallIndirect` / `host_closure_call_sysop`
-                        // for the args-layout rationale.
-                        let arity = host_closure.arity;
-                        let _popped_callee = self.stack.ensure_pop();
-                        let arity = match Self::recorded_call_layout(function, self.cur_pc) {
-                            Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
-                            None => arity,
+                        let off = bf.locals_offset;
+                        let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
+                        let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                        self.stack.push(va);
+                        self.stack.push(vb);
+                    }
+                    // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
+                    // local[a], then pop into local[b].
+                    OpCode::StoreVar2 => {
+                        let a = { read_u32_unchecked(code, pc) as usize };
+                        let b = { read_u32_unchecked(code, pc) as usize };
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
                         };
-                        // Defense-in-depth: see `Instruction::CallIndirect`
-                        // above — a `HostClosure` has no inner `Object::Function`
-                        // to cross-check `arity` against, so assert the operand
-                        // stack actually holds the declared args before draining.
-                        // Debug-only; the `checked_sub` below still guards
-                        // underflow in release builds.
-                        debug_assert!(
-                            self.stack.len() >= arity,
-                            "HostClosure CallIndirect: operand stack holds {} slots but declared arity is {arity}",
-                            self.stack.len(),
-                        );
-                        let args_offset = self
-                            .stack
-                            .len()
-                            .checked_sub(arity)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
-                        let user_args: Vec<Value> = self
-                            .stack
-                            .drain(StackIndex::from_raw(args_offset)..)
-                            .collect();
+                        let off = bf.locals_offset;
+                        let sa = Self::local_slot_stack_index(off, a);
+                        let sb = Self::local_slot_stack_index(off, b);
+                        let va = self.stack.ensure_pop();
+                        let vb = self.stack.ensure_pop();
+                        self.store_local_value(sa, va);
+                        self.store_local_value(sb, vb);
+                    }
 
-                        return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
-                    } else if let Object::BoundMethod(bm) = obj {
-                        let func_obj = unsafe { bm.function.get() };
-                        let full_arity = match func_obj {
-                            Object::Function(f) => f.arity,
-                            _ => {
+                    OpCode::StoreVarLoadVar => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                        let value_slot = self.stack.ensure_slot_from_top(0);
+                        let value = self.stack[value_slot];
+                        self.store_local_value(local_var_index, value);
+                    }
+
+                    // ── LoadGlobal / StoreGlobal ──────────────────────────────────
+                    OpCode::LoadGlobal => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let value = self.load_global_in(function.runtime_package, global_idx);
+                        self.stack.push(value);
+                    }
+
+                    OpCode::StoreGlobal => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let value = self.stack.ensure_pop();
+                        // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
+                        // and a write here is a VM internal error.
+                        self.store_global_in(function.runtime_package, global_idx, value)?;
+                    }
+
+                    // ── LoadField / StoreField / InitField ────────────────────────
+                    OpCode::LoadField => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let top = self.stack.ensure_pop();
+                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
+                        let load_result = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
                                 return Err(VmInternalError::TypeError {
-                                    expected: FunctionType::Callable.into(),
-                                    got: ObjectType::of(func_obj).into(),
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
                                 }
                                 .into());
+                            };
+                            instance
+                                .try_load_field(idx)
+                                .ok_or_else(|| instance.field_len())
+                        };
+                        let value = match load_result {
+                            Ok(value) => value,
+                            Err(length) => {
+                                return Err(self.invalid_field_access_error(idx, length));
                             }
                         };
-                        debug_assert!(
-                            full_arity >= 1,
-                            "BoundMethod's inner function must have self parameter"
-                        );
-                        let receiver = bm.receiver;
-                        let _popped = self.stack.ensure_pop();
-                        // The site pushed the method's visible slots; the
-                        // receiver joins them as the leading required slot.
-                        let recorded = Self::recorded_call_layout(function, self.cur_pc);
-                        let pushed = recorded.map_or(full_arity - 1, baml_type::CallLayout::len);
-                        let args_offset = self
-                            .stack
-                            .len()
-                            .checked_sub(pushed)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(pushed))?;
-                        self.stack.insert(args_offset, receiver);
-                        let full_arity = match recorded {
-                            Some(layout) => {
-                                let mut caller = layout.clone();
-                                caller.0.insert(0, None);
-                                self.remap_call_arguments(&caller, callee_ptr)?
-                            }
-                            None => full_arity,
+                        self.stack.push(value);
+                    }
+
+                    OpCode::StoreField => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let new_value = self.stack.ensure_pop();
+                        let instance_value = self.stack.ensure_pop();
+                        let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
+
+                        let store_error = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            (idx >= instance.field_len()).then_some(instance.field_len())
                         };
-                        let locals_offset = StackIndex::from_raw(args_offset);
-                        // Pass the BoundMethod pointer (not its inner function) so
-                        // `execute_call_from_locals_offset` seeds the receiver's
-                        // `class_type_args` into the new frame — generic instance
-                        // methods invoked through a bound-method value would
-                        // otherwise start with an empty class-type-arg prefix. The
-                        // receiver is already on the stack, and the helper resolves
-                        // the inner function itself without re-inserting it.
-                        if let Some(state) = self.execute_call_from_locals_offset(
-                            callee_ptr,
-                            locals_offset,
-                            full_arity,
-                            runtime_id,
-                            frame_idx,
-                            function,
-                        )? {
-                            return Ok(Some(state));
+                        if let Some(length) = store_error {
+                            return Err(self.invalid_field_access_error(idx, length));
                         }
-                    } else {
+                        self.heap.write_barrier(obj_ptr, new_value);
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        instance.store_field(idx, new_value);
+                    }
+
+                    // ── VirtualLoadField / VirtualStoreField ──────────────────────
+                    // The field analogue of `VirtualCall`: the operand indexes the
+                    // *interface's* declared fields, and the receiver's resolved impl
+                    // maps that to a physical slot. Open-world by construction — nothing
+                    // here enumerates implementors, so a class from a later-loaded
+                    // package resolves exactly like a local one.
+                    OpCode::VirtualLoadField => {
+                        let field_index = { read_u32_unchecked(code, pc) as usize };
+                        let iface_value = self.stack.ensure_pop();
+                        let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
+                        let receiver = self.stack.ensure_pop();
+                        let slot = self.resolve_virtual_field_slot(
+                            receiver,
+                            iface_qtn,
+                            &iface_args,
+                            field_index,
+                        )?;
+                        let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
+                        let load_result = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            instance
+                                .try_load_field(slot)
+                                .ok_or_else(|| instance.field_len())
+                        };
+                        let value = match load_result {
+                            Ok(value) => value,
+                            Err(length) => {
+                                return Err(self.invalid_field_access_error(slot, length));
+                            }
+                        };
+                        self.stack.push(value);
+                    }
+
+                    OpCode::VirtualStoreField => {
+                        let field_index = { read_u32_unchecked(code, pc) as usize };
+                        let iface_value = self.stack.ensure_pop();
+                        let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
+                        let new_value = self.stack.ensure_pop();
+                        let receiver = self.stack.ensure_pop();
+                        let slot = self.resolve_virtual_field_slot(
+                            receiver,
+                            iface_qtn,
+                            &iface_args,
+                            field_index,
+                        )?;
+                        let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
+                        let store_error = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            (slot >= instance.field_len()).then_some(instance.field_len())
+                        };
+                        if let Some(length) = store_error {
+                            return Err(self.invalid_field_access_error(slot, length));
+                        }
+                        self.heap.write_barrier(obj_ptr, new_value);
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        instance.store_field(slot, new_value);
+                    }
+
+                    OpCode::InitField => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let new_value = self.stack.ensure_pop();
+                        let instance_value = self.stack.ensure_pop();
+                        let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
+                        let store_error = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            (idx >= instance.field_len()).then_some(instance.field_len())
+                        };
+                        if let Some(length) = store_error {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
+                        self.heap.write_barrier(obj_ptr, new_value);
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        instance.store_field(idx, new_value);
+                        self.stack.push(instance_value);
+                    }
+
+                    OpCode::InitSpread => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let source_value = self.stack.ensure_pop();
+                        let dest_slot = self.stack.ensure_slot_from_top(0);
+                        let dest_value = self.stack[dest_slot];
+                        self.init_spread(
+                            dest_value,
+                            source_value,
+                            &function.bytecode.field_copy_sets[idx],
+                        )?;
+                    }
+
+                    // ── Pop / Copy ────────────────────────────────────────────────
+                    OpCode::Pop => {
+                        let n = { read_u32_unchecked(code, pc) as usize };
+                        // SAFETY: the encoder validates the instruction's stack effect.
+                        self.stack.truncate_suffix(n);
+                    }
+
+                    OpCode::Copy => {
+                        let offset = { read_u32_unchecked(code, pc) as usize };
+                        let index = self.stack.ensure_slot_from_top(offset);
+                        let value = self.stack[index];
+                        self.stack.push(value);
+                    }
+
+                    // ── Allocation opcodes ────────────────────────────────────────
+                    OpCode::AllocArray => {
+                        let size = { read_u32_unchecked(code, pc) as usize };
+                        // The declared element type rides on top of the `size`
+                        // elements: a preceding `LoadType` pushed it, already resolved
+                        // against the frame's type args. Pop it before the values.
+                        let element_ty = self.ensure_pop_type()?;
+                        let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
+                        let array: Vec<Value> = self.stack.drain(drain_range).collect();
+                        let array_index = self.tlab.alloc_array(element_ty, array);
+                        self.stack.push(Value::object(array_index));
+                    }
+
+                    OpCode::AllocMap => {
+                        let n = { read_u32_unchecked(code, pc) as usize };
+                        // The declared value type rides on top, the key type just
+                        // below it (two `LoadType`s after the entries, already
+                        // resolved against the frame's type args). Pop both before
+                        // the entries.
+                        let value_ty = self.ensure_pop_type()?;
+                        let key_ty = self.ensure_pop_type()?;
+                        let map = if n > 0 {
+                            let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
+                            let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
+                            let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
+                            let values = self.stack[end_of_values..end_of_keys].iter().copied();
+                            let keys = self.stack[idx_of_last_key..].iter().map(|k| {
+                                let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
+                                self.get_object(obj_index).as_string().cloned()
+                            });
+                            let pairs = values
+                                .zip(keys)
+                                .map(|(val, key_res)| key_res.map(|k| (k, val)));
+                            let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
+                            self.stack.drain(end_of_values..);
+                            map
+                        } else {
+                            IndexMap::new()
+                        };
+                        let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
+                        self.stack.push(Value::object(obj_index));
+                    }
+
+                    OpCode::AllocInstance => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
+                        let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+
+                        let class_type_args: Box<[bex_vm_types::RealizedTy]> = if ntypeargs == 0 {
+                            Box::default()
+                        } else {
+                            self.pop_type_args(ntypeargs)?.tys.into()
+                        };
+
+                        let Object::Class(class) = self.get_object(class_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Class.into(),
+                                got: ObjectType::of(self.get_object(class_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        let mut fields = Vec::with_capacity(class.fields.len());
+                        fields.resize(class.fields.len(), Value::NULL);
+                        let instance_ptr =
+                            self.tlab
+                                .alloc(Object::Instance(bex_vm_types::types::Instance::new(
+                                    class_ptr,
+                                    class_type_args,
+                                    fields,
+                                )));
+                        self.stack.push(Value::object(instance_ptr));
+                    }
+
+                    OpCode::InitInstance => {
+                        let plan_idx = { read_u32_unchecked(code, pc) as usize };
+                        let instance = self.alloc_initialized_instance(
+                            &function.bytecode.class_init_plans[plan_idx],
+                        )?;
+                        self.stack.push(instance);
+                    }
+
+                    OpCode::AllocVariant => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                        let variant_count = {
+                            let Object::Enum(enm) = self.get_object(enum_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Enum.into(),
+                                    got: ObjectType::of(self.get_object(enum_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            enm.variants.len()
+                        };
+                        let variant = self.stack.ensure_pop();
+                        let Some(variant_index) = variant.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&variant),
+                            }
+                            .into());
+                        };
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        if variant_index < 0 || variant_index as usize >= variant_count {
+                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: variant_index,
+                                    length: variant_count,
+                                },
+                            )));
+                        }
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        let variant_usize = variant_index as usize;
+                        let variant_ptr = self.tlab.alloc(Object::Variant(Variant {
+                            enm: enum_ptr,
+                            index: variant_usize,
+                        }));
+                        self.stack.push(Value::object(variant_ptr));
+                    }
+
+                    // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
+                    OpCode::SysOp | OpCode::SysOpWithRuntimeId => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let runtime_id = if matches!(op, OpCode::SysOpWithRuntimeId) {
+                            Some(self.stack.ensure_pop())
+                        } else {
+                            None
+                        };
+                        let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let callee_value = self.load_global_in(function.runtime_package, callee);
+                        // `as_object_ptr` only unwraps the value to a heap pointer
+                        // (the `FunctionType` argument is error-message metadata, not
+                        // an assertion). `dispatch_sysop_yield`'s own kind check is
+                        // therefore the load-bearing validation on this path — it
+                        // rejects a non-sys-op global before draining and yields.
+                        let callee_ptr =
+                            self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
+                        return Ok(Some(self.dispatch_sysop_yield(callee_ptr, runtime_id)?));
+                    }
+
+                    // ── Spawn (BEP-034) ────────────────────────────────────────────
+                    OpCode::Spawn => {
+                        // Stack layout (pushed by emit in this order): closure, name,
+                        // config, the future's `T`, the future's `E`. So pop in
+                        // reverse: `E` (top), `T`, config, name, closure. The two
+                        // types were pushed by `LoadType`, already resolved against
+                        // this frame's type args, and travel with the request so the
+                        // engine can type the heap `Future` it allocates.
+                        let throws = self.ensure_pop_type()?;
+                        let returns = self.ensure_pop_type()?;
+                        // `config` is the optional `baml.spawn.SpawnConfig` from a
+                        // `with baml.spawn.options(...)` clause, or null.
+                        let config_value = self.stack.ensure_pop();
+                        let name_value = self.stack.ensure_pop();
+                        let closure_value = self.stack.ensure_pop();
+                        let closure_ptr = self.as_object_ptr(
+                            closure_value,
+                            ObjectType::Function(FunctionType::Any),
+                        )?;
+                        let name_ptr = if name_value.is_null() {
+                            None
+                        } else if let Some(ptr) = name_value.as_object_ptr() {
+                            Some(ptr)
+                        } else {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Object(ObjectType::String),
+                                got: self.type_of(&name_value),
+                            }
+                            .into());
+                        };
+                        let config_ptr = if config_value.is_null() {
+                            None
+                        } else if let Some(ptr) = config_value.as_object_ptr()
+                            && matches!(unsafe { ptr.get() }, Object::Instance(_))
+                        {
+                            // Must be an instance (`baml.spawn.Params`) — an
+                            // arbitrary heap object here would turn a local type
+                            // error into a VM→engine contract break downstream.
+                            Some(ptr)
+                        } else {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Object(ObjectType::Instance),
+                                got: self.type_of(&config_value),
+                            }
+                            .into());
+                        };
+                        let pending_future = bex_vm_types::types::UnscheduledFuture {
+                            closure: closure_ptr,
+                            name: name_ptr,
+                            config: config_ptr,
+                            returns,
+                            throws,
+                        };
+                        let object_index = self
+                            .tlab
+                            .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
+
+                        return Ok(Some(VmExecState::Spawn {
+                            future: object_index,
+                        }));
+                    }
+
+                    // ── Call ──────────────────────────────────────────────────────
+                    OpCode::Call | OpCode::CallWithRuntimeId => {
+                        let raw = read_u32_unchecked(code, pc);
+                        let ntypeargs = usize::from(read_u16_unchecked(code, pc));
+                        let runtime_id = if matches!(op, OpCode::CallWithRuntimeId) {
+                            Some(self.stack.ensure_pop())
+                        } else {
+                            None
+                        };
+                        let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let callee_value =
+                            self.load_global_in(function.runtime_package, callee_global);
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
-                        let _popped_callee = self.stack.ensure_pop();
                         let arg_count = match Self::recorded_call_layout(function, self.cur_pc) {
                             Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
                             None => arg_count,
                         };
+
+                        let args_offset =
+                            self.stack.len().checked_sub(arg_count + ntypeargs).ok_or(
+                                VmInternalError::NotEnoughItemsOnStack(arg_count + ntypeargs),
+                            )?;
+                        let locals_offset = StackIndex::from_raw(args_offset);
+
+                        // Save pc as return address before pushing new frame.
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            verifier_unreachable!()
+                        };
+                        bf.instruction_ptr = *pc;
+
+                        let result = if ntypeargs == 0
+                            && self.pending_call_type_args.is_empty()
+                            && self.pending_call_type_values.is_empty()
+                        {
+                            // Ordinary non-generic calls have no pending type lane
+                            // to save or clear. Keep them off the richer BEP-066
+                            // exact-value path so a tiny function call does not
+                            // construct and move several empty collections.
+                            self.execute_call_from_locals_offset(
+                                callee_ptr,
+                                locals_offset,
+                                arg_count,
+                                runtime_id,
+                                frame_idx,
+                                function,
+                            )
+                        } else {
+                            let type_args =
+                                self.take_type_args_below_values(ntypeargs, arg_count)?;
+                            self.execute_call_from_locals_offset_with_type_args(
+                                callee_ptr,
+                                locals_offset,
+                                arg_count,
+                                CallOptions {
+                                    runtime_id,
+                                    type_args: &type_args.tys,
+                                    type_values: &type_args.values,
+                                },
+                                frame_idx,
+                                function,
+                            )
+                        };
+                        return result;
+                    }
+
+                    // ── VirtualCall ───────────────────────────────────────────────
+                    // Open-world interface dispatch: resolve the method at runtime
+                    // from the receiver's concrete `Self` type, then take the shared
+                    // frame-push call path (mirrors `Call`). Stack layout (top last):
+                    // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
+                    OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
+                        let nargs = read_u16_unchecked(code, pc) as usize;
+                        let ntypeargs = usize::from(read_u16_unchecked(code, pc));
+                        let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
+                            Some(self.stack.ensure_pop())
+                        } else {
+                            None
+                        };
+
+                        // Pop the method name (top) then the interface type. Keep
+                        // both as values until after the static-cache probe: their
+                        // contents are immutable at this bytecode site, and turning
+                        // them into owned names on every hit was measurable in
+                        // interface-heavy loops.
+                        let method_value = self.stack.ensure_pop();
+                        let iface_value = self.stack.ensure_pop();
+
+                        // A parameterized interface operand carries the runtime
+                        // definitions of its arguments (BEP-066). Resolution reads
+                        // only the realized `ty` off it, so without carrying the
+                        // overlay into the callee the impl body would lose the
+                        // argument's runtime declarations — reflection, rendering
+                        // and SAP inside an interface method would fail on a type
+                        // the caller can use fine.
+                        //
+                        // The clone is `O(defs)` on every dispatch that carries any
+                        let method_type_args = if ntypeargs == 0 {
+                            None
+                        } else {
+                            Some(self.take_type_args_below_values(ntypeargs, nargs)?)
+                        };
+
                         let args_offset = self
                             .stack
                             .len()
-                            .checked_sub(arg_count)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
-                        let locals_offset = StackIndex::from_raw(args_offset);
-                        if let Some(state) = self.execute_call_from_locals_offset(
-                            callee_ptr,
-                            locals_offset,
-                            arg_count,
-                            runtime_id,
-                            frame_idx,
-                            function,
-                        )? {
-                            return Ok(Some(state));
-                        }
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── Return ────────────────────────────────────────────────────
-                OpCode::Return => {
-                    let result = self.stack.ensure_pop();
-
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let (popped_call_id, popped_parent_call_id, locals_offset) =
-                        (bf.call_id, bf.parent_call_id, bf.locals_offset);
-
-                    self.stack.drain(locals_offset..);
-                    self.stack.push(result);
-                    self.frames.pop();
-                    self.exit_call(popped_call_id, popped_parent_call_id);
-                    // Update frame_idx so the outer loop detects the frame change
-                    // and re-extracts code/pc/function for the parent frame.
-                    if !self.frames.is_empty() {
-                        *frame_idx = self.frames.len() - 1;
-                    }
-                    if self.frames.is_empty() {
-                        return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
-                    }
-
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── Await ─────────────────────────────────────────────────────
-                OpCode::Await => {
-                    // Compact opcodes are 1 byte; rewinding by `AWAIT_OPCODE_LEN`
-                    // puts `pc` back at the `OpCode::Await` byte so the outer
-                    // exec loop re-executes the same Await on resume. The
-                    // regular (non-compact) path expresses the same intent by
-                    // explicitly setting `bf.instruction_ptr = instruction_ptr`.
-                    const AWAIT_OPCODE_LEN: usize = 1;
-                    let value = self.stack.ensure_stack_top();
-                    let wanted_type = bex_vm_types::types::FutureType::Any;
-                    let index = self.as_object_ptr(self.stack[value], wanted_type.into())?;
-                    let ready_value = {
-                        let Object::Future(awaiting) = self.get_object(index) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: wanted_type.into(),
-                                got: ObjectType::of(self.get_object(index)).into(),
-                            }
-                            .into());
-                        };
-                        match awaiting.read() {
-                            FutureRead::Pending(future_id) => {
-                                // Rewind pc to the Await opcode so the outer loop
-                                // saves a position that re-executes Await once the
-                                // future completes.
-                                *pc -= AWAIT_OPCODE_LEN;
-                                return Ok(Some(VmExecState::Await(future_id)));
-                            }
-                            FutureRead::Ready(v) => v,
-                            FutureRead::Error(value) => {
-                                awaiting.mark_observed();
-                                // The producer's trace belongs to this error. A catch
-                                // in a stdlib collector may have no user frames of its
-                                // own, so capturing only the awaiter's stack loses it.
-                                let trace = awaiting.error_trace();
-                                if !trace.is_empty() {
-                                    self.record_throw_context(value, Arc::from(trace), Value::NULL);
-                                    self.preserve_throw_context(value, value);
-                                }
-                                let origin = self.unwind_origin_for_frame(
-                                    *frame_idx,
-                                    self.cur_pc,
-                                    VmUnwindSource::FutureResume,
-                                );
-                                return Err(VmError::Thrown(
-                                    VmThrown::rethrow(value, VmUnwindSource::FutureResume, false)
-                                        .with_origin(origin),
-                                ));
-                            }
-                            FutureRead::Cancelled => {
-                                let value = self.panic_to_exception_value(VmPanic::Cancelled);
-                                let origin = self.unwind_origin_for_frame(
-                                    *frame_idx,
-                                    self.cur_pc,
-                                    VmUnwindSource::FutureResume,
-                                );
-                                return Err(VmError::Thrown(
-                                    VmThrown::fresh(value, VmUnwindSource::FutureResume)
-                                        .with_origin(origin),
-                                ));
-                            }
-                            FutureRead::InternalError(future_id) => {
-                                // Yield back to the engine; it will surface the original
-                                // error from the FutureManager's `SetOnce` (the entry is
-                                // leaked by design for InternalError).
-                                *pc -= AWAIT_OPCODE_LEN;
-                                return Ok(Some(VmExecState::Await(future_id)));
-                            }
-                        }
-                    };
-                    self.stack.pop();
-                    self.stack.push(ready_value);
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── AwaitAny (BEP-034 baml.future.__await_any) ─────────────────
-                OpCode::AwaitAny => {
-                    // Like Await, this opcode re-executes on resume, so the
-                    // array operand is peeked (not popped) until a winner is
-                    // found. Rewinding by `AWAIT_ANY_OPCODE_LEN` puts `pc`
-                    // back at the opcode byte for re-execution.
-                    const AWAIT_ANY_OPCODE_LEN: usize = 1;
-                    let top = self.stack.ensure_stack_top();
-                    let array_val = self.stack[top];
-                    // Scan the input futures in order. The first non-pending
-                    // future (settled with a value, error, or cancellation)
-                    // is the winner; otherwise gather the pending ids to park
-                    // on. `race`/`any` are built on "first to settle", so we
-                    // do not distinguish success from failure here.
-                    let mut pending_ids: Vec<FutureId> = Vec::new();
-                    let mut winner: Option<usize> = None;
-                    {
-                        let arr = self.as_array(&array_val)?;
-                        for (i, elem) in arr.iter().enumerate() {
-                            let fut_ptr = self.as_object_ptr(
-                                *elem,
-                                bex_vm_types::types::FutureType::Any.into(),
-                            )?;
-                            let Object::Future(fut) = self.get_object(fut_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: bex_vm_types::types::FutureType::Any.into(),
-                                    got: ObjectType::of(self.get_object(fut_ptr)).into(),
-                                }
-                                .into());
+                            .checked_sub(nargs)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
+                        // `Self` is the receiver's runtime concrete type; coherence makes
+                        // `(Self, iface<args>)` resolve to at most one impl. Off that rule
+                        // the method resolves through `rule_method_impl` (the provided
+                        // row, or the interface's default on a miss). `nargs` is the
+                        // interface method's slot count; the resolved impl may declare
+                        // extra optionals, so its value lane is remapped below. The
+                        // rule borrows `self`; scope it so the borrow ends before the
+                        // `&mut self` call below.
+                        let receiver = self.stack[StackIndex::from_raw(args_offset)];
+                        let cache_key = if function.runtime_package.is_null() {
+                            let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                            let Object::Type(type_value) = self.get_object(iface_ptr) else {
+                                unreachable!("as_object_ptr(Type) guarantees a Type object")
                             };
-                            match fut.read() {
-                                FutureRead::Pending(id) => pending_ids.push(id),
-                                // Ready / Error / Cancelled / InternalError all
-                                // count as "settled" — this index has won.
-                                _ => {
-                                    winner = Some(i);
-                                    break;
+                            let (interface_head, interface_args) = match &type_value.ty {
+                                bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
+                                    (*head, args.clone())
                                 }
-                            }
-                        }
-                    }
-                    match winner {
-                        Some(i) => {
-                            self.stack.pop();
-                            self.stack.push(Value::int(i as i64));
-                            if self.early_yield.should_early_yield() {
-                                return Ok(Some(VmExecState::EarlyYield));
-                            }
-                        }
-                        None => {
-                            // No input has settled yet — park until the first
-                            // does. Rewind pc so the opcode re-executes (with
-                            // the array still on the stack) once resumed.
-                            *pc -= AWAIT_ANY_OPCODE_LEN;
-                            return Ok(Some(VmExecState::AwaitAny(pending_ids)));
-                        }
-                    }
-                }
-
-                // ── Throw ─────────────────────────────────────────────────────
-                OpCode::Throw | OpCode::Rethrow => {
-                    let is_rethrow = op == OpCode::Rethrow;
-                    let value = self.stack.ensure_pop();
-                    let origin = self.unwind_origin_for_frame(
-                        *frame_idx,
-                        self.cur_pc,
-                        VmUnwindSource::Bytecode,
-                    );
-                    // Save pc before unwinding (handler lookup needs it).
-                    if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                        bf.instruction_ptr = *pc;
-                    }
-                    let thrown = if is_rethrow {
-                        VmThrown::rethrow(value, VmUnwindSource::Bytecode, true)
-                    } else {
-                        VmThrown::fresh(value, VmUnwindSource::Bytecode)
-                    }
-                    .with_origin(origin);
-                    self.try_unwind_exception(frame_idx, function, thrown)?;
-                    // A handler was found; sync the local `pc` to its entry.
-                    // When the handler is in the SAME frame, the dispatch loop
-                    // would otherwise `continue` with the stale post-throw `pc`
-                    // instead of jumping to the handler. (Cross-frame unwinds
-                    // reload `pc` on the frame switch, so this is a no-op there.)
-                    // Cold path — does not affect the hot per-instruction loop.
-                    if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
-                        *pc = bf.instruction_ptr;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── Jump opcodes ──────────────────────────────────────────────
-                OpCode::Jump => {
-                    let offset = read_i32_unchecked(code, pc);
-                    // offset is relative to instruction end (current pc)
-                    *pc = (*pc as i64 + offset as i64) as usize;
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
-                    let offset = read_i32_unchecked(code, pc);
-                    let cond = self.stack.ensure_pop();
-                    if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::JumpIfFalse => {
-                    let offset = read_i32_unchecked(code, pc);
-                    let top_slot = self.stack.ensure_stack_top();
-                    let cond = self.stack[top_slot];
-                    if cond == Value::bool(false) {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    }
-                }
-
-                OpCode::JumpIfFalseOrPop | OpCode::JumpIfTrueOrPop | OpCode::JumpIfNotNullOrPop => {
-                    let offset = read_i32_unchecked(code, pc);
-                    let cond = self.stack[self.stack.ensure_stack_top()];
-                    let taken = match op {
-                        OpCode::JumpIfFalseOrPop => cond == Value::bool(false),
-                        OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
-                        OpCode::JumpIfNotNullOrPop => !cond.is_null(),
-                        _ => unreachable!(),
-                    };
-                    if taken {
-                        *pc = (*pc as i64 + offset as i64) as usize;
-                    } else {
-                        self.stack.ensure_pop();
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── JumpTable ─────────────────────────────────────────────────
-                OpCode::JumpTable => {
-                    let table_idx = read_u32_unchecked(code, pc) as usize;
-                    let default_offset = read_i32_unchecked(code, pc);
-                    let discriminant = self.stack.ensure_pop();
-                    let Some(value) = discriminant.as_int() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&discriminant),
-                        }
-                        .into());
-                    };
-                    // Use pre-translated compact jump table (byte-offset-relative).
-                    let compact = function.bytecode.compact.as_ref().unwrap();
-                    let compact_table = &compact.jump_tables[table_idx];
-                    let offset = compact_table.lookup(value).unwrap_or(default_offset);
-                    *pc = (*pc as i64 + offset as i64) as usize;
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                // ── Discriminant ──────────────────────────────────────────────
-                OpCode::Discriminant => {
-                    let value = self.stack.ensure_pop();
-                    let Some(object_idx) = value.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Variant.into(),
-                            got: self.type_of(&value),
-                        }
-                        .into());
-                    };
-                    let variant_index = {
-                        let Object::Variant(variant) = self.get_object(object_idx) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Variant.into(),
-                                got: ObjectType::of(self.get_object(object_idx)).into(),
-                            }
-                            .into());
+                                other => unreachable!(
+                                    "VirtualCall interface operand must be an Interface type, found {other:?}"
+                                ),
+                            };
+                            self.static_virtual_receiver_key(receiver).map(|receiver| {
+                                StaticVirtualCallKey {
+                                    caller_function_addr: std::ptr::from_ref(*function) as usize,
+                                    call_pc: self.cur_pc,
+                                    receiver,
+                                    interface_head,
+                                    interface_args,
+                                }
+                            })
+                        } else {
+                            self.runtime_virtual_call_cache_key(
+                                self.frames[*frame_idx].function(),
+                                iface_value,
+                                receiver,
+                            )?
                         };
-                        variant.index
-                    };
-                    #[allow(clippy::cast_possible_wrap)]
-                    self.stack.push(Value::int(variant_index as i64));
-                }
+                        let cached_target = cache_key
+                            .as_ref()
+                            .and_then(|key| self.static_virtual_call_cache.get(key))
+                            .cloned();
+                        let (callee_ptr, mut type_args) = if let Some(target) = cached_target {
+                            (target.callee, target.frame_type_args)
+                        } else {
+                            let method_name = self.as_string(&method_value)?.to_string();
+                            let (iface_qtn, iface_args) = {
+                                let iface_ptr =
+                                    self.as_object_ptr(iface_value, ObjectType::Type)?;
+                                match self.get_object(iface_ptr) {
+                                    // The interface's input args select among a type's
+                                    // impls of the same interface at several
+                                    // instantiations. Associated types are outputs,
+                                    // not part of the resolver key.
+                                    Object::Type(type_value) => match &type_value.ty {
+                                        bex_vm_types::RealizedTy::Interface(
+                                            qtn,
+                                            args,
+                                            _assoc,
+                                            _attr,
+                                        ) => (*qtn, args.clone()),
+                                        other => unreachable!(
+                                            "VirtualCall interface operand must be an Interface type, found {other:?}"
+                                        ),
+                                    },
+                                    other => unreachable!(
+                                        "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                        ObjectType::of(other)
+                                    ),
+                                }
+                            };
+                            // `Self` is the receiver value's realized concrete type.
+                            let self_ty = bex_vm_types::RealizedTy::from(
+                                self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                                    unreachable!(
+                                        "value of kind {:?} cannot be a virtual-call receiver",
+                                        self.type_of(&receiver)
+                                    )
+                                }),
+                            );
+                            let resolver =
+                                crate::package_baml::ImplResolver::for_value(self, receiver);
+                            let (rule, bound_args) = resolver
+                                .resolve_implements_rule(&self_ty, iface_qtn, &iface_args)
+                                .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
+                                    method: method_name.clone(),
+                                })?;
+                            let method = resolver
+                                .rule_method_impl(&rule, method_name.as_str())?
+                                .method;
+                            // `fqn` is the resolved callee's heap pointer (provided
+                            // row or adopted interface default) — invoke it directly.
+                            let callee = method.fqn;
+                            // Seed the callee frame: the impl's frame realized against
+                            // its bound args (the impl's own generics for a provided
+                            // method, or `[Self, interface args..]` for an adopted
+                            // default — associated types are never frame slots), then
+                            // the method-level type args — matching the callee's
+                            // De Bruijn layout `[owner… ++ method…]`.
+                            let frame = resolver.realize_frame(&method.frame, &bound_args)?;
+                            let cacheable = rule.is_static();
+                            if cacheable && let Some(cache_key) = cache_key {
+                                self.static_virtual_call_cache.insert(
+                                    cache_key,
+                                    StaticVirtualCallTarget {
+                                        callee,
+                                        frame_type_args: frame.clone(),
+                                    },
+                                );
+                            }
+                            (callee, frame)
+                        };
+                        let nargs = match Self::recorded_call_layout(function, self.cur_pc) {
+                            Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                            None => nargs,
+                        };
+                        // The receiver's class-level slots need no exact carrier:
+                        // the resolver realizes them off `Self` as head-carrying
+                        // types, so `reflect.Type.of<T>()` in an impl or default-method
+                        // body dereferences the caller's own declaration rather
+                        // than deriving a fresh identity for it.
+                        let type_values = match method_type_args.as_ref() {
+                            Some(method) => append_virtual_method_type_args(&mut type_args, method),
+                            None => Vec::new(),
+                        };
 
-                // ── TypeTag ───────────────────────────────────────────────────
-                OpCode::TypeTag => {
-                    let value = self.stack.ensure_pop();
-                    let tag = value_type_tag(value);
-                    self.stack.push(Value::int(tag));
-                }
+                        let locals_offset = StackIndex::from_raw(args_offset);
 
-                // ── IsType ────────────────────────────────────────────────────
-                OpCode::IsType => {
-                    let const_idx = { read_u32_unchecked(code, pc) as usize };
-                    let value = self.stack.ensure_pop();
-                    let raw_const = &function.bytecode.constants[const_idx];
-                    let resolved_const = function.bytecode.resolved_constants[const_idx];
-                    let result = self.value_matches_type_constant(
-                        *frame_idx,
-                        value,
-                        raw_const,
-                        resolved_const,
-                    )?;
-                    self.stack.push(Value::bool(result));
-                }
+                        // Save pc as return address before pushing the new frame.
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            verifier_unreachable!()
+                        };
+                        bf.instruction_ptr = *pc;
 
-                OpCode::NarrowBind => {
-                    let const_idx = { read_u32_unchecked(code, pc) as usize };
-                    let destination = { read_u32_unchecked(code, pc) as usize };
-                    let value = self.stack.ensure_pop();
-                    let raw_const = &function.bytecode.constants[const_idx];
-                    let resolved_const = function.bytecode.resolved_constants[const_idx];
-                    let matched = self.value_matches_type_constant(
-                        *frame_idx,
-                        value,
-                        raw_const,
-                        resolved_const,
-                    )?;
-                    if matched {
+                        let result = if type_args.is_empty()
+                            && method_type_args.is_none()
+                            && self.pending_call_type_args.is_empty()
+                            && self.pending_call_type_values.is_empty()
+                        {
+                            self.execute_call_from_locals_offset(
+                                callee_ptr,
+                                locals_offset,
+                                nargs,
+                                runtime_id,
+                                frame_idx,
+                                function,
+                            )
+                        } else {
+                            self.execute_call_from_locals_offset_with_type_args(
+                                callee_ptr,
+                                locals_offset,
+                                nargs,
+                                CallOptions {
+                                    runtime_id,
+                                    type_args: &type_args,
+                                    type_values: &type_values,
+                                },
+                                frame_idx,
+                                function,
+                            )
+                        };
+                        return result;
+                    }
+
+                    // ── CallIndirect ──────────────────────────────────────────────
+                    OpCode::CallIndirect | OpCode::CallIndirectWithRuntimeId => {
+                        let runtime_id = if matches!(op, OpCode::CallIndirectWithRuntimeId) {
+                            Some(self.stack.ensure_pop())
+                        } else {
+                            None
+                        };
+                        // Save pc as return address before any call.
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            verifier_unreachable!()
+                        };
+                        bf.instruction_ptr = *pc;
+
+                        let callee_slot = self.stack.ensure_stack_top();
+                        let callee_value = self.stack[callee_slot];
+                        let callee_ptr =
+                            self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                        let obj = self.get_object(callee_ptr);
+
+                        if let Object::HostClosure(host_closure) = obj {
+                            if runtime_id.is_some() {
+                                return Err(self.invalid_argument_vm_error(
+                                    "explicit $id is not supported for host-callable values",
+                                ));
+                            }
+                            // Host-callable dispatch via a single-yield sys-op. See
+                            // `Instruction::CallIndirect` / `host_closure_call_sysop`
+                            // for the args-layout rationale.
+                            let arity = host_closure.arity;
+                            let _popped_callee = self.stack.ensure_pop();
+                            let arity = match Self::recorded_call_layout(function, self.cur_pc) {
+                                Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                                None => arity,
+                            };
+                            // Defense-in-depth: see `Instruction::CallIndirect`
+                            // above — a `HostClosure` has no inner `Object::Function`
+                            // to cross-check `arity` against, so assert the operand
+                            // stack actually holds the declared args before draining.
+                            // Debug-only; the `checked_sub` below still guards
+                            // underflow in release builds.
+                            debug_assert!(
+                                self.stack.len() >= arity,
+                                "HostClosure CallIndirect: operand stack holds {} slots but declared arity is {arity}",
+                                self.stack.len(),
+                            );
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(arity)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+                            let user_args: Vec<Value> = self
+                                .stack
+                                .drain(StackIndex::from_raw(args_offset)..)
+                                .collect();
+
+                            return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
+                        } else if let Object::BoundMethod(bm) = obj {
+                            let func_obj = unsafe { bm.function.get() };
+                            let full_arity = match func_obj {
+                                Object::Function(f) => f.arity,
+                                _ => {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: FunctionType::Callable.into(),
+                                        got: ObjectType::of(func_obj).into(),
+                                    }
+                                    .into());
+                                }
+                            };
+                            debug_assert!(
+                                full_arity >= 1,
+                                "BoundMethod's inner function must have self parameter"
+                            );
+                            let receiver = bm.receiver;
+                            let _popped = self.stack.ensure_pop();
+                            // The site pushed the method's visible slots; the
+                            // receiver joins them as the leading required slot.
+                            let recorded = Self::recorded_call_layout(function, self.cur_pc);
+                            let pushed =
+                                recorded.map_or(full_arity - 1, baml_type::CallLayout::len);
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(pushed)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(pushed))?;
+                            self.stack.insert(args_offset, receiver);
+                            let full_arity = match recorded {
+                                Some(layout) => {
+                                    let mut caller = layout.clone();
+                                    caller.0.insert(0, None);
+                                    self.remap_call_arguments(&caller, callee_ptr)?
+                                }
+                                None => full_arity,
+                            };
+                            let locals_offset = StackIndex::from_raw(args_offset);
+                            // Pass the BoundMethod pointer (not its inner function) so
+                            // `execute_call_from_locals_offset` seeds the receiver's
+                            // `class_type_args` into the new frame — generic instance
+                            // methods invoked through a bound-method value would
+                            // otherwise start with an empty class-type-arg prefix. The
+                            // receiver is already on the stack, and the helper resolves
+                            // the inner function itself without re-inserting it.
+                            if let Some(state) = self.execute_call_from_locals_offset(
+                                callee_ptr,
+                                locals_offset,
+                                full_arity,
+                                runtime_id,
+                                frame_idx,
+                                function,
+                            )? {
+                                return Ok(Some(state));
+                            }
+                        } else {
+                            let (callee_ptr, arg_count) =
+                                self.resolve_callable_target(callee_value)?;
+                            let _popped_callee = self.stack.ensure_pop();
+                            let arg_count = match Self::recorded_call_layout(function, self.cur_pc)
+                            {
+                                Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                                None => arg_count,
+                            };
+                            let args_offset = self
+                                .stack
+                                .len()
+                                .checked_sub(arg_count)
+                                .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
+                            let locals_offset = StackIndex::from_raw(args_offset);
+                            if let Some(state) = self.execute_call_from_locals_offset(
+                                callee_ptr,
+                                locals_offset,
+                                arg_count,
+                                runtime_id,
+                                frame_idx,
+                                function,
+                            )? {
+                                return Ok(Some(state));
+                            }
+                        }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                        // Return before fetching from potentially changed frame code.
+                        return Ok(None);
+                    }
+
+                    // ── Return ────────────────────────────────────────────────────
+                    OpCode::Return => {
+                        let result = self.stack.get_at(self.stack.ensure_stack_top());
+
                         let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                             unreachable!()
                         };
-                        let destination =
-                            Self::local_slot_stack_index(bf.locals_offset, destination);
-                        self.stack[destination] = value;
-                    }
-                    self.stack.push(Value::bool(matched));
-                }
+                        let (popped_call_id, popped_parent_call_id, locals_offset) =
+                            (bf.call_id, bf.parent_call_id, bf.locals_offset);
 
-                // ── DenseTag ──────────────────────────────────────────────────
-                #[allow(
-                    clippy::cast_sign_loss,
-                    clippy::cast_lossless,
-                    clippy::cast_possible_truncation
-                )]
-                OpCode::DenseTag => {
-                    let table_idx = { read_u32_unchecked(code, pc) as usize };
-                    let popped = self.stack.ensure_pop();
-                    let Some(tag) = popped.as_int() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&popped),
+                        // SAFETY: the compiler guarantees a result at or above the
+                        // callee's locals base. That base is therefore an existing
+                        // initialized slot, even for a zero-argument function with
+                        // no locals. Value is Copy, so discarded slots need no drop.
+                        // No allocation or GC point occurs between writing the
+                        // result and shortening the stack to the caller's new top.
+                        let consumed = self.stack.len() - locals_offset.raw();
+                        self.stack.replace_top_n_dynamic(consumed, result);
+                        // SAFETY: this instruction is executing the bytecode frame
+                        // accessed above; stack operations cannot remove that frame.
+                        unsafe { self.frames.no_return_pop() };
+                        self.exit_call(popped_call_id, popped_parent_call_id);
+                        // Update frame_idx so the outer loop detects the frame change
+                        // and re-extracts code/pc/function for the parent frame.
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
                         }
-                        .into());
-                    };
-                    let table = &function.bytecode.match_hash_tables[table_idx];
-                    let h = ((tag as u64).wrapping_mul(table.multiply) >> table.shift)
-                        & table.mask as u64;
-                    let entry = &table.entries[h as usize];
-                    if entry.expected_tag == tag {
-                        self.stack.push(Value::int(i64::from(entry.dense_index)));
-                    } else {
-                        self.stack.push(Value::int(-1));
-                    }
-                }
+                        if self.frames.is_empty() {
+                            return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
+                        }
 
-                // ── ThrowIfPanic ──────────────────────────────────────────────
-                OpCode::ThrowIfPanic => {
-                    let value = self.stack.ensure_pop();
-                    let is_panic = match value.as_object_ptr() {
-                        Some(ptr) => match self.get_object(ptr) {
-                            Object::Instance(instance) => {
-                                self.panic_class_ptrs.contains(&instance.class)
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                        // Return before fetching from potentially changed frame code.
+                        return Ok(None);
+                    }
+
+                    // ── Await ─────────────────────────────────────────────────────
+                    OpCode::Await => {
+                        // Compact opcodes are 1 byte; rewinding by `AWAIT_OPCODE_LEN`
+                        // puts `pc` back at the `OpCode::Await` byte so the outer
+                        // exec loop re-executes the same Await on resume. The
+                        // regular (non-compact) path expresses the same intent by
+                        // explicitly setting `bf.instruction_ptr = instruction_ptr`.
+                        const AWAIT_OPCODE_LEN: usize = 1;
+                        let value = self.stack.ensure_stack_top();
+                        let wanted_type = bex_vm_types::types::FutureType::Any;
+                        let index = self.as_object_ptr(self.stack[value], wanted_type.into())?;
+                        let ready_value = {
+                            let Object::Future(awaiting) = self.get_object(index) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: wanted_type.into(),
+                                    got: ObjectType::of(self.get_object(index)).into(),
+                                }
+                                .into());
+                            };
+                            match awaiting.read() {
+                                FutureRead::Pending(future_id) => {
+                                    // Rewind pc to the Await opcode so the outer loop
+                                    // saves a position that re-executes Await once the
+                                    // future completes.
+                                    *pc -= AWAIT_OPCODE_LEN;
+                                    return Ok(Some(VmExecState::Await(future_id)));
+                                }
+                                FutureRead::Ready(v) => v,
+                                FutureRead::Error(value) => {
+                                    awaiting.mark_observed();
+                                    // The producer's trace belongs to this error. A catch
+                                    // in a stdlib collector may have no user frames of its
+                                    // own, so capturing only the awaiter's stack loses it.
+                                    let trace = awaiting.error_trace();
+                                    if !trace.is_empty() {
+                                        self.record_throw_context(
+                                            value,
+                                            Arc::from(trace),
+                                            Value::NULL,
+                                        );
+                                        self.preserve_throw_context(value, value);
+                                    }
+                                    let origin = self.unwind_origin_for_frame(
+                                        *frame_idx,
+                                        self.cur_pc,
+                                        VmUnwindSource::FutureResume,
+                                    );
+                                    return Err(VmError::Thrown(
+                                        VmThrown::rethrow(
+                                            value,
+                                            VmUnwindSource::FutureResume,
+                                            false,
+                                        )
+                                        .with_origin(origin),
+                                    ));
+                                }
+                                FutureRead::Cancelled => {
+                                    let value = self.panic_to_exception_value(VmPanic::Cancelled);
+                                    let origin = self.unwind_origin_for_frame(
+                                        *frame_idx,
+                                        self.cur_pc,
+                                        VmUnwindSource::FutureResume,
+                                    );
+                                    return Err(VmError::Thrown(
+                                        VmThrown::fresh(value, VmUnwindSource::FutureResume)
+                                            .with_origin(origin),
+                                    ));
+                                }
+                                FutureRead::InternalError(future_id) => {
+                                    // Yield back to the engine; it will surface the original
+                                    // error from the FutureManager's `SetOnce` (the entry is
+                                    // leaked by design for InternalError).
+                                    *pc -= AWAIT_OPCODE_LEN;
+                                    return Ok(Some(VmExecState::Await(future_id)));
+                                }
                             }
-                            _ => false,
-                        },
-                        None => false,
-                    };
-                    if is_panic {
+                        };
+                        // SAFETY: the future operand remains on top until ready.
+                        self.stack.replace_top_n::<1>(ready_value);
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                    }
+
+                    // ── AwaitAny (BEP-034 baml.future.__await_any) ─────────────────
+                    OpCode::AwaitAny => {
+                        // Like Await, this opcode re-executes on resume, so the
+                        // array operand is peeked (not popped) until a winner is
+                        // found. Rewinding by `AWAIT_ANY_OPCODE_LEN` puts `pc`
+                        // back at the opcode byte for re-execution.
+                        const AWAIT_ANY_OPCODE_LEN: usize = 1;
+                        let top = self.stack.ensure_stack_top();
+                        let array_val = self.stack[top];
+                        // Scan the input futures in order. The first non-pending
+                        // future (settled with a value, error, or cancellation)
+                        // is the winner; otherwise gather the pending ids to park
+                        // on. `race`/`any` are built on "first to settle", so we
+                        // do not distinguish success from failure here.
+                        let mut pending_ids: Vec<FutureId> = Vec::new();
+                        let mut winner: Option<usize> = None;
+                        {
+                            let arr = self.as_array(&array_val)?;
+                            for (i, elem) in arr.iter().enumerate() {
+                                let fut_ptr = self.as_object_ptr(
+                                    *elem,
+                                    bex_vm_types::types::FutureType::Any.into(),
+                                )?;
+                                let Object::Future(fut) = self.get_object(fut_ptr) else {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: bex_vm_types::types::FutureType::Any.into(),
+                                        got: ObjectType::of(self.get_object(fut_ptr)).into(),
+                                    }
+                                    .into());
+                                };
+                                match fut.read() {
+                                    FutureRead::Pending(id) => pending_ids.push(id),
+                                    // Ready / Error / Cancelled / InternalError all
+                                    // count as "settled" — this index has won.
+                                    _ => {
+                                        winner = Some(i);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        match winner {
+                            Some(i) => {
+                                // SAFETY: the input array remains on top until ready.
+                                self.stack.replace_top_n::<1>(Value::int(i as i64));
+                                if self.early_yield.should_early_yield() {
+                                    return Ok(Some(VmExecState::EarlyYield));
+                                }
+                            }
+                            None => {
+                                // No input has settled yet — park until the first
+                                // does. Rewind pc so the opcode re-executes (with
+                                // the array still on the stack) once resumed.
+                                *pc -= AWAIT_ANY_OPCODE_LEN;
+                                return Ok(Some(VmExecState::AwaitAny(pending_ids)));
+                            }
+                        }
+                    }
+
+                    // ── Throw ─────────────────────────────────────────────────────
+                    OpCode::Throw | OpCode::Rethrow => {
+                        let is_rethrow = op == OpCode::Rethrow;
+                        let value = self.stack.ensure_pop();
                         let origin = self.unwind_origin_for_frame(
                             *frame_idx,
                             self.cur_pc,
@@ -8120,98 +7946,316 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        self.try_unwind_exception(
-                            frame_idx,
-                            function,
+                        let thrown = if is_rethrow {
                             VmThrown::rethrow(value, VmUnwindSource::Bytecode, true)
-                                .with_origin(origin),
-                        )?;
-                        // Sync the local `pc` to the handler entry (see
-                        // OpCode::Throw): a same-frame rethrow — an inner
-                        // wildcard catch rethrowing a panic to an outer catch in
-                        // the same function — must jump to the handler instead of
-                        // falling through to the not-a-panic continuation.
+                        } else {
+                            VmThrown::fresh(value, VmUnwindSource::Bytecode)
+                        }
+                        .with_origin(origin);
+                        self.try_unwind_exception(frame_idx, function, thrown)?;
+                        // A handler was found; sync the local `pc` to its entry.
+                        // When the handler is in the SAME frame, the dispatch loop
+                        // would otherwise `continue` with the stale post-throw `pc`
+                        // instead of jumping to the handler. (Cross-frame unwinds
+                        // reload `pc` on the frame switch, so this is a no-op there.)
+                        // Cold path — does not affect the hot per-instruction loop.
                         if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
                             *pc = bf.instruction_ptr;
                         }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                        // Return before fetching from potentially changed frame code.
+                        return Ok(None);
                     }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
+
+                    // ── Jump opcodes ──────────────────────────────────────────────
+                    OpCode::Jump => {
+                        let offset = read_i32_unchecked(code, pc);
+                        // offset is relative to instruction end (current pc)
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
                     }
-                }
 
-                // ── Unreachable ───────────────────────────────────────────────
-                OpCode::Unreachable => {
-                    return Err(VmError::thrown_fresh(
-                        self.panic_to_exception_value(VmPanic::Unreachable),
-                    ));
-                }
-
-                // ── MakeCell ──────────────────────────────────────────────────
-                OpCode::MakeCell => {
-                    let value = self.stack.ensure_pop();
-                    let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
-                    let ptr = self.tlab.alloc(cell);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeClosure ───────────────────────────────────────────────
-                OpCode::MakeClosure => {
-                    let obj_idx_raw = { read_u32_unchecked(code, pc) as usize };
-                    let capture_count = { read_u16_unchecked(code, pc) as usize };
-                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
-                    let mut captures = Vec::with_capacity(capture_count);
-                    for _ in 0..capture_count {
-                        captures.push(self.stack.ensure_pop());
+                    OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
+                        let offset = read_i32_unchecked(code, pc);
+                        let cond = self.stack.ensure_pop();
+                        if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
+                            *pc = (*pc as i64 + offset as i64) as usize;
+                        }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
                     }
-                    captures.reverse();
 
-                    let captured_type_args = self.pop_type_args(ntypeargs)?;
+                    OpCode::JumpIfFalse => {
+                        let offset = read_i32_unchecked(code, pc);
+                        let top_slot = self.stack.ensure_stack_top();
+                        let cond = self.stack[top_slot];
+                        if cond == Value::bool(false) {
+                            *pc = (*pc as i64 + offset as i64) as usize;
+                        }
+                    }
 
-                    let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
-                    let closure = Object::Closure(Closure {
-                        function: function_ptr,
-                        captures: captures.into_boxed_slice(),
-                        captured_type_args: captured_type_args.tys.into_boxed_slice(),
-                    });
-                    let ptr = self.tlab.alloc(closure);
-                    self.stack.push(Value::object(ptr));
-                }
+                    OpCode::JumpIfFalseOrPop
+                    | OpCode::JumpIfTrueOrPop
+                    | OpCode::JumpIfNotNullOrPop => {
+                        let offset = read_i32_unchecked(code, pc);
+                        let cond = self.stack[self.stack.ensure_stack_top()];
+                        let taken = match op {
+                            OpCode::JumpIfFalseOrPop => cond == Value::bool(false),
+                            OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
+                            OpCode::JumpIfNotNullOrPop => !cond.is_null(),
+                            _ => unreachable!(),
+                        };
+                        if taken {
+                            *pc = (*pc as i64 + offset as i64) as usize;
+                        } else {
+                            self.stack.ensure_pop();
+                        }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                    }
 
-                // ── LoadType ──────────────────────────────────────────────────
-                OpCode::LoadType => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let static_cache_key = match &function.bytecode.constants[idx] {
-                        ConstValue::Type(template)
-                            if function.runtime_package.is_null()
-                                && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
-                                && matches!(&self.frames[*frame_idx],
+                    // ── JumpTable ─────────────────────────────────────────────────
+                    OpCode::JumpTable => {
+                        let table_idx = read_u32_unchecked(code, pc) as usize;
+                        let default_offset = read_i32_unchecked(code, pc);
+                        let discriminant = self.stack.ensure_pop();
+                        let Some(value) = discriminant.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&discriminant),
+                            }
+                            .into());
+                        };
+                        // Use pre-translated compact jump table (byte-offset-relative).
+                        let compact = function.bytecode.compact.as_ref().unwrap();
+                        let compact_table = &compact.jump_tables[table_idx];
+                        let offset = compact_table.lookup(value).unwrap_or(default_offset);
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                    }
+
+                    // ── Discriminant ──────────────────────────────────────────────
+                    OpCode::Discriminant => {
+                        let value = self.stack.ensure_pop();
+                        let Some(object_idx) = value.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Variant.into(),
+                                got: self.type_of(&value),
+                            }
+                            .into());
+                        };
+                        let variant_index = {
+                            let Object::Variant(variant) = self.get_object(object_idx) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Variant.into(),
+                                    got: ObjectType::of(self.get_object(object_idx)).into(),
+                                }
+                                .into());
+                            };
+                            variant.index
+                        };
+                        #[allow(clippy::cast_possible_wrap)]
+                        self.stack.push(Value::int(variant_index as i64));
+                    }
+
+                    // ── TypeTag ───────────────────────────────────────────────────
+                    OpCode::TypeTag => {
+                        let value = self.stack.get_at(self.stack.ensure_stack_top());
+                        let tag = value_type_tag(value);
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::int(tag));
+                    }
+
+                    // ── IsType ────────────────────────────────────────────────────
+                    OpCode::IsType => {
+                        let const_idx = { read_u32_unchecked(code, pc) as usize };
+                        let value = self.stack.ensure_pop();
+                        let raw_const = &function.bytecode.constants[const_idx];
+                        let resolved_const = function.bytecode.resolved_constants[const_idx];
+                        let result = self.value_matches_type_constant(
+                            *frame_idx,
+                            value,
+                            raw_const,
+                            resolved_const,
+                        )?;
+                        self.stack.push(Value::bool(result));
+                    }
+
+                    OpCode::NarrowBind => {
+                        let const_idx = { read_u32_unchecked(code, pc) as usize };
+                        let destination = { read_u32_unchecked(code, pc) as usize };
+                        let value = self.stack.ensure_pop();
+                        let raw_const = &function.bytecode.constants[const_idx];
+                        let resolved_const = function.bytecode.resolved_constants[const_idx];
+                        let matched = self.value_matches_type_constant(
+                            *frame_idx,
+                            value,
+                            raw_const,
+                            resolved_const,
+                        )?;
+                        if matched {
+                            let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                                unreachable!()
+                            };
+                            let destination =
+                                Self::local_slot_stack_index(bf.locals_offset, destination);
+                            self.stack[destination] = value;
+                        }
+                        self.stack.push(Value::bool(matched));
+                    }
+
+                    // ── DenseTag ──────────────────────────────────────────────────
+                    #[allow(
+                        clippy::cast_sign_loss,
+                        clippy::cast_lossless,
+                        clippy::cast_possible_truncation
+                    )]
+                    OpCode::DenseTag => {
+                        let table_idx = { read_u32_unchecked(code, pc) as usize };
+                        let popped = self.stack.ensure_pop();
+                        let Some(tag) = popped.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&popped),
+                            }
+                            .into());
+                        };
+                        let table = &function.bytecode.match_hash_tables[table_idx];
+                        let h = ((tag as u64).wrapping_mul(table.multiply) >> table.shift)
+                            & table.mask as u64;
+                        let entry = &table.entries[h as usize];
+                        if entry.expected_tag == tag {
+                            self.stack.push(Value::int(i64::from(entry.dense_index)));
+                        } else {
+                            self.stack.push(Value::int(-1));
+                        }
+                    }
+
+                    // ── ThrowIfPanic ──────────────────────────────────────────────
+                    OpCode::ThrowIfPanic => {
+                        let value = self.stack.ensure_pop();
+                        let is_panic = match value.as_object_ptr() {
+                            Some(ptr) => match self.get_object(ptr) {
+                                Object::Instance(instance) => {
+                                    self.panic_class_ptrs.contains(&instance.class)
+                                }
+                                _ => false,
+                            },
+                            None => false,
+                        };
+                        if is_panic {
+                            let origin = self.unwind_origin_for_frame(
+                                *frame_idx,
+                                self.cur_pc,
+                                VmUnwindSource::Bytecode,
+                            );
+                            // Save pc before unwinding (handler lookup needs it).
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                                bf.instruction_ptr = *pc;
+                            }
+                            self.try_unwind_exception(
+                                frame_idx,
+                                function,
+                                VmThrown::rethrow(value, VmUnwindSource::Bytecode, true)
+                                    .with_origin(origin),
+                            )?;
+                            // Sync the local `pc` to the handler entry (see
+                            // OpCode::Throw): a same-frame rethrow — an inner
+                            // wildcard catch rethrowing a panic to an outer catch in
+                            // the same function — must jump to the handler instead of
+                            // falling through to the not-a-panic continuation.
+                            if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
+                                *pc = bf.instruction_ptr;
+                            }
+                        }
+                        if self.early_yield.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                        // Return before fetching from potentially changed frame code.
+                        return Ok(None);
+                    }
+
+                    // ── Unreachable ───────────────────────────────────────────────
+                    OpCode::Unreachable => {
+                        return Err(VmError::thrown_fresh(
+                            self.panic_to_exception_value(VmPanic::Unreachable),
+                        ));
+                    }
+
+                    // ── MakeCell ──────────────────────────────────────────────────
+                    OpCode::MakeCell => {
+                        let value = self.stack.ensure_pop();
+                        let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
+                        let ptr = self.tlab.alloc(cell);
+                        self.stack.push(Value::object(ptr));
+                    }
+
+                    // ── MakeClosure ───────────────────────────────────────────────
+                    OpCode::MakeClosure => {
+                        let obj_idx_raw = { read_u32_unchecked(code, pc) as usize };
+                        let capture_count = { read_u16_unchecked(code, pc) as usize };
+                        let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                        let mut captures = Vec::with_capacity(capture_count);
+                        for _ in 0..capture_count {
+                            captures.push(self.stack.ensure_pop());
+                        }
+                        captures.reverse();
+
+                        let captured_type_args = self.pop_type_args(ntypeargs)?;
+
+                        let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
+                        let closure = Object::Closure(Closure {
+                            function: function_ptr,
+                            captures: captures.into_boxed_slice(),
+                            captured_type_args: captured_type_args.tys.into_boxed_slice(),
+                        });
+                        let ptr = self.tlab.alloc(closure);
+                        self.stack.push(Value::object(ptr));
+                    }
+
+                    // ── LoadType ──────────────────────────────────────────────────
+                    OpCode::LoadType => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let static_cache_key = match &function.bytecode.constants[idx] {
+                            ConstValue::Type(template)
+                                if function.runtime_package.is_null()
+                                    && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
+                                    && matches!(&self.frames[*frame_idx],
                                     Frame::Bytecode(frame)
                                         if frame.type_metadata.as_ref()
                                             .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap))) =>
-                        {
-                            Some((std::ptr::from_ref(*function) as usize, idx))
-                        }
-                        ConstValue::Type(template) if !function.runtime_package.is_null() => {
-                            self.runtime_load_type_cache_key(*frame_idx, template, idx)
-                        }
-                        _ => None,
-                    };
-                    let cached_value = static_cache_key
-                        .and_then(|key| self.static_load_type_cache.get(&key).copied())
-                        .map(Value::object);
-                    let value = if let Some(value) = cached_value {
-                        value
-                    } else {
-                        let template = match &function.bytecode.constants[idx] {
-                            ConstValue::Type(t) => t.clone(),
-                            _ => {
-                                return Err(VmInternalError::UnexpectedConstantKind.into());
+                            {
+                                Some((std::ptr::from_ref(*function) as usize, idx))
                             }
+                            ConstValue::Type(template) if !function.runtime_package.is_null() => {
+                                self.runtime_load_type_cache_key(*frame_idx, template, idx)
+                            }
+                            _ => None,
                         };
+                        let cached_value = static_cache_key
+                            .and_then(|key| self.static_load_type_cache.get(&key).copied())
+                            .map(Value::object);
+                        let value = if let Some(value) = cached_value {
+                            value
+                        } else {
+                            let template = match &function.bytecode.constants[idx] {
+                                ConstValue::Type(t) => t.clone(),
+                                _ => {
+                                    return Err(VmInternalError::UnexpectedConstantKind.into());
+                                }
+                            };
 
-                        let exact_dynamic =
-                            if let bex_vm_types::TyTemplate::TypeArgRef(slot) = &template {
+                            let exact_dynamic = if let bex_vm_types::TyTemplate::TypeArgRef(slot) =
+                                &template
+                            {
                                 match &self.frames[*frame_idx] {
                                     Frame::Bytecode(frame) => frame
                                         .type_metadata
@@ -8223,460 +8267,417 @@ impl BexVm {
                             } else {
                                 None
                             };
-                        let value = if let Some(type_value) = exact_dynamic {
-                            Value::object(self.tlab.alloc_type(type_value))
-                        } else {
-                            let ty: bex_vm_types::RealizedTy = {
-                                // A fully-realized template narrows to `RealizedTy` in a
-                                // single validation walk — no substitution environment
-                                // needed. Otherwise resolve its frame refs (and reduce any
-                                // projection) against the frame's realized type args; the
-                                // result must be realized or it is an internal error, never
-                                // a `unknown` erasure.
-                                if let Ok(realized) =
-                                    <&bex_vm_types::RealizedTy>::try_from(&template)
-                                {
-                                    realized.clone()
+                            let value = if let Some(type_value) = exact_dynamic {
+                                Value::object(self.tlab.alloc_type(type_value))
+                            } else {
+                                let ty: bex_vm_types::RealizedTy = {
+                                    // A fully-realized template narrows to `RealizedTy` in a
+                                    // single validation walk — no substitution environment
+                                    // needed. Otherwise resolve its frame refs (and reduce any
+                                    // projection) against the frame's realized type args; the
+                                    // result must be realized or it is an internal error, never
+                                    // a `unknown` erasure.
+                                    if let Ok(realized) =
+                                        <&bex_vm_types::RealizedTy>::try_from(&template)
+                                    {
+                                        realized.clone()
+                                    } else {
+                                        let frame_type_args =
+                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                                bf.type_args.clone()
+                                            } else {
+                                                vec![]
+                                            };
+                                        template.substitute(&frame_type_args, self).map_err(
+                                            |e| VmInternalError::TypeSubstitution {
+                                                message: e.to_string(),
+                                            },
+                                        )?
+                                    }
+                                };
+                                if let Some(type_ptr) = self.current_runtime_declaration_type(&ty) {
+                                    Value::object(type_ptr)
                                 } else {
-                                    let frame_type_args =
-                                        if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                            bf.type_args.clone()
-                                        } else {
-                                            vec![]
-                                        };
-                                    template.substitute(&frame_type_args, self).map_err(|e| {
-                                        VmInternalError::TypeSubstitution {
-                                            message: e.to_string(),
-                                        }
-                                    })?
+                                    Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
                                 }
                             };
-                            if let Some(type_ptr) = self.current_runtime_declaration_type(&ty) {
-                                Value::object(type_ptr)
-                            } else {
-                                Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
+                            if let Some(cache_key) = static_cache_key
+                                && let Some(ptr) = value.as_object_ptr()
+                            {
+                                self.static_load_type_cache.insert(cache_key, ptr);
+                            }
+                            value
+                        };
+                        self.stack.push(value);
+                    }
+
+                    // ── Lexical runtime type binding ────────────────────────────
+                    OpCode::BindType => {
+                        let slot = read_u32_unchecked(code, pc) as usize;
+                        let value = self.stack.ensure_pop();
+                        let type_value = self.type_operand_value(value)?;
+                        let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
+                            unreachable!("compact bytecode runs in a bytecode frame")
+                        };
+                        frame
+                            .type_args
+                            .resize(slot + 1, bex_vm_types::RealizedTy::unknown());
+                        frame.type_args[slot] = type_value.ty.clone();
+                        let metadata = frame
+                            .type_metadata
+                            .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
+                        metadata.values.resize(slot + 1, None);
+                        metadata.values[slot] = Some(type_value);
+                    }
+                    // ── Package.current() ───────────────────────────────────────
+                    OpCode::LoadCurrentPackage => {
+                        let idx = read_u32_unchecked(code, pc) as usize;
+                        let package_name = {
+                            let value = function.bytecode.resolved_constants[idx];
+                            self.as_string(&value)?.to_string()
+                        };
+                        let value = crate::package_reflect::reflect::current_package_value(
+                            self,
+                            &package_name,
+                        );
+                        self.stack.push(value);
+                    }
+
+                    // ── MakeBoundMethod ───────────────────────────────────────────
+                    OpCode::MakeBoundMethod => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let receiver = self.stack.ensure_pop();
+                        let callee_value =
+                            self.load_global_in(function.runtime_package, global_idx);
+                        let function_ptr =
+                            self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                        // Curry the receiver's class type args (→ `Self`) into the
+                        // value now, so the bound method is fully realized and the
+                        // `CallIndirect` that invokes it needs no type-arg operands.
+                        // (Method-level fn generics — `b.m<int>` — are not yet
+                        // curried here; that needs turbofish-on-member-access
+                        // support and would append after these.)
+                        let type_args = self.bound_method_curried_type_args(receiver);
+                        let bound = Object::BoundMethod(BoundMethod {
+                            function: function_ptr,
+                            receiver,
+                            type_args,
+                        });
+                        let ptr = self.tlab.alloc(bound);
+                        self.stack.push(Value::object(ptr));
+                    }
+
+                    // ── MakeVirtualBoundMethod ────────────────────────────────────
+                    // The value analogue of `VirtualCall`: resolve the interface
+                    // method from the receiver's concrete `Self` at *bind* time (the
+                    // receiver value — and hence its type — is fixed here), producing
+                    // a regular `BoundMethod` that additionally carries the impl's
+                    // realized frame type args (a blanket impl's or adopted
+                    // default's frame, which the receiver's class args can't express).
+                    // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
+                    OpCode::MakeVirtualBoundMethod => {
+                        let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                        let method_value = self.stack.ensure_pop();
+                        let method_name = self.as_string(&method_value)?.to_string();
+                        let iface_value = self.stack.ensure_pop();
+                        // The method-level type args (a generic interface method's own
+                        // generics, specialized at the reference site) sit below the
+                        // interface type; they append to the resolved impl frame.
+                        let method_type_args = self.pop_type_args(ntypeargs)?;
+                        let receiver = self.stack.ensure_pop();
+                        // `Self` is the receiver value's realized concrete type.
+                        let self_ty = bex_vm_types::RealizedTy::from(
+                            self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                                unreachable!(
+                                    "value of kind {:?} cannot be a virtual bound-method receiver",
+                                    self.type_of(&receiver)
+                                )
+                            }),
+                        );
+                        let (function_ptr, type_args) = self.resolve_virtual_method(
+                            receiver,
+                            &self_ty,
+                            iface_value,
+                            &method_name,
+                            method_type_args,
+                        )?;
+                        let bound = Object::BoundMethod(BoundMethod {
+                            function: function_ptr,
+                            receiver,
+                            type_args: type_args.into_boxed_slice(),
+                        });
+                        let ptr = self.tlab.alloc(bound);
+                        self.stack.push(Value::object(ptr));
+                    }
+
+                    // ── MakeVirtualFunction ───────────────────────────────────────
+                    OpCode::MakeVirtualFunction => {
+                        let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                        let method_value = self.stack.ensure_pop();
+                        let method_name = self.as_string(&method_value)?.to_string();
+                        let iface_value = self.stack.ensure_pop();
+                        let method_type_args = self.pop_type_args(ntypeargs)?;
+                        let self_type_value = self.stack.ensure_pop();
+                        // `Self` is PASSED: a written (or frame-realized) type
+                        // operand — the only dispatch source for a method with no
+                        // `self` receiver. The compiler guarantees it is a
+                        // dispatchable concrete type by the time it gets here.
+                        let self_ty = {
+                            let self_ptr = self.as_object_ptr(self_type_value, ObjectType::Type)?;
+                            match self.get_object(self_ptr) {
+                                Object::Type(type_value) => type_value.ty.clone(),
+                                other => unreachable!(
+                                    "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                    ObjectType::of(other)
+                                ),
                             }
                         };
-                        if let Some(cache_key) = static_cache_key
-                            && let Some(ptr) = value.as_object_ptr()
-                        {
-                            self.static_load_type_cache.insert(cache_key, ptr);
-                        }
-                        value
-                    };
-                    self.stack.push(value);
-                }
-
-                // ── Lexical runtime type binding ────────────────────────────
-                OpCode::BindType => {
-                    let slot = read_u32_unchecked(code, pc) as usize;
-                    let value = self.stack.ensure_pop();
-                    let type_value = self.type_operand_value(value)?;
-                    let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
-                        unreachable!("compact bytecode runs in a bytecode frame")
-                    };
-                    frame
-                        .type_args
-                        .resize(slot + 1, bex_vm_types::RealizedTy::unknown());
-                    frame.type_args[slot] = type_value.ty.clone();
-                    let metadata = frame
-                        .type_metadata
-                        .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
-                    metadata.values.resize(slot + 1, None);
-                    metadata.values[slot] = Some(type_value);
-                }
-                // ── Package.current() ───────────────────────────────────────
-                OpCode::LoadCurrentPackage => {
-                    let idx = read_u32_unchecked(code, pc) as usize;
-                    let package_name = {
-                        let value = function.bytecode.resolved_constants[idx];
-                        self.as_string(&value)?.to_string()
-                    };
-                    let value =
-                        crate::package_reflect::reflect::current_package_value(self, &package_name);
-                    self.stack.push(value);
-                }
-
-                // ── MakeBoundMethod ───────────────────────────────────────────
-                OpCode::MakeBoundMethod => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let receiver = self.stack.ensure_pop();
-                    let callee_value = self.load_global_in(function.runtime_package, global_idx);
-                    let function_ptr =
-                        self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
-                    // Curry the receiver's class type args (→ `Self`) into the
-                    // value now, so the bound method is fully realized and the
-                    // `CallIndirect` that invokes it needs no type-arg operands.
-                    // (Method-level fn generics — `b.m<int>` — are not yet
-                    // curried here; that needs turbofish-on-member-access
-                    // support and would append after these.)
-                    let type_args = self.bound_method_curried_type_args(receiver);
-                    let bound = Object::BoundMethod(BoundMethod {
-                        function: function_ptr,
-                        receiver,
-                        type_args,
-                    });
-                    let ptr = self.tlab.alloc(bound);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeVirtualBoundMethod ────────────────────────────────────
-                // The value analogue of `VirtualCall`: resolve the interface
-                // method from the receiver's concrete `Self` at *bind* time (the
-                // receiver value — and hence its type — is fixed here), producing
-                // a regular `BoundMethod` that additionally carries the impl's
-                // realized frame type args (a blanket impl's or adopted
-                // default's frame, which the receiver's class args can't express).
-                // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
-                OpCode::MakeVirtualBoundMethod => {
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
-                    let method_value = self.stack.ensure_pop();
-                    let method_name = self.as_string(&method_value)?.to_string();
-                    let iface_value = self.stack.ensure_pop();
-                    // The method-level type args (a generic interface method's own
-                    // generics, specialized at the reference site) sit below the
-                    // interface type; they append to the resolved impl frame.
-                    let method_type_args = self.pop_type_args(ntypeargs)?;
-                    let receiver = self.stack.ensure_pop();
-                    // `Self` is the receiver value's realized concrete type.
-                    let self_ty = bex_vm_types::RealizedTy::from(
-                        self.value_concrete_ty(receiver).unwrap_or_else(|| {
-                            unreachable!(
-                                "value of kind {:?} cannot be a virtual bound-method receiver",
-                                self.type_of(&receiver)
-                            )
-                        }),
-                    );
-                    let (function_ptr, type_args) = self.resolve_virtual_method(
-                        receiver,
-                        &self_ty,
-                        iface_value,
-                        &method_name,
-                        method_type_args,
-                    )?;
-                    let bound = Object::BoundMethod(BoundMethod {
-                        function: function_ptr,
-                        receiver,
-                        type_args: type_args.into_boxed_slice(),
-                    });
-                    let ptr = self.tlab.alloc(bound);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeVirtualFunction ───────────────────────────────────────
-                OpCode::MakeVirtualFunction => {
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
-                    let method_value = self.stack.ensure_pop();
-                    let method_name = self.as_string(&method_value)?.to_string();
-                    let iface_value = self.stack.ensure_pop();
-                    let method_type_args = self.pop_type_args(ntypeargs)?;
-                    let self_type_value = self.stack.ensure_pop();
-                    // `Self` is PASSED: a written (or frame-realized) type
-                    // operand — the only dispatch source for a method with no
-                    // `self` receiver. The compiler guarantees it is a
-                    // dispatchable concrete type by the time it gets here.
-                    let self_ty = {
-                        let self_ptr = self.as_object_ptr(self_type_value, ObjectType::Type)?;
-                        match self.get_object(self_ptr) {
-                            Object::Type(type_value) => type_value.ty.clone(),
-                            other => unreachable!(
-                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                                ObjectType::of(other)
-                            ),
-                        }
-                    };
-                    let (function_ptr, type_args) = self.resolve_virtual_method(
-                        self_type_value,
-                        &self_ty,
-                        iface_value,
-                        &method_name,
-                        method_type_args,
-                    )?;
-                    // A capture-less closure is the unbound-callable carrier:
-                    // calling it seeds `frame.type_args` from
-                    // `captured_type_args`, exactly like the pooled
-                    // `GenericFunction` path (`MakeGenericFunctionFromValue`).
-                    let closure = Object::Closure(bex_vm_types::types::Closure {
-                        function: function_ptr,
-                        captures: Box::new([]),
-                        captured_type_args: type_args.into_boxed_slice(),
-                    });
-                    let ptr = self.tlab.alloc(closure);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeGenericFunction ───────────────────────────────────────
-                OpCode::MakeGenericFunction => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let function_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
-                    let type_args = self.pop_type_args(ntypeargs)?;
-                    let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
-                        function: function_global,
-                        type_args: type_args.tys.into_boxed_slice(),
-                        runtime_package: function.runtime_package,
-                    });
-                    let ptr = self.tlab.alloc(gf);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeGenericFunctionFromValue ──────────────────────────────
-                // Specialize a runtime callable value with explicit type args
-                // (`g<int>` where `g` is a local function value). Wrap it in a
-                // Closure whose `captured_type_args` are seeded into the frame on
-                // call — reusing the closure call path so the specialization is
-                // honoured at runtime instead of being erased.
-                OpCode::MakeGenericFunctionFromValue => {
-                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
-                    // The callable value was pushed last (top of stack); the
-                    // resolved `Object::Type` args sit beneath it.
-                    let callable = self.stack.ensure_pop();
-                    let type_args = self.pop_type_args(ntypeargs)?;
-                    // Resolve the callable to its inner Function pointer (and any
-                    // captures, if it is already a closure).
-                    let callable_ptr =
-                        self.as_object_ptr(callable, FunctionType::Callable.into())?;
-                    // A plain function or closure is wrapped in a closure
-                    // carrying the type args (closures carry over their existing
-                    // `captured_type_args` — the outer/class generic environment
-                    // — then append the new instantiation args in call order, so
-                    // a later indirect call seeds a complete `frame.type_args`).
-                    //
-                    // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
-                    // in a closure without losing its receiver, so it is passed
-                    // through unchanged: the explicit type args are dropped, but
-                    // the call still dispatches with the correct `self`. This is
-                    // correct for the common case of a method that does not reify
-                    // `T` at runtime, and — unlike closure-wrapping it — never
-                    // crashes. (`GenericFunction` does not reach here: TIR rejects
-                    // type args on an already-specialized value.)
-                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
-                        match self.get_object(callable_ptr) {
-                            Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
-                            Object::Closure(c) => Some((
-                                c.function,
-                                c.captures.to_vec(),
-                                c.captured_type_args.to_vec(),
-                            )),
-                            _ => None,
-                        };
-                    match wrap {
-                        Some((function_ptr, captures, mut captured_type_args)) => {
-                            captured_type_args.extend(type_args.tys);
-                            let closure = Object::Closure(Closure {
-                                function: function_ptr,
-                                captures: captures.into_boxed_slice(),
-                                captured_type_args: captured_type_args.into_boxed_slice(),
-                            });
-                            let ptr = self.tlab.alloc(closure);
-                            self.stack.push(Value::object(ptr));
-                        }
-                        None => self.stack.push(callable),
+                        let (function_ptr, type_args) = self.resolve_virtual_method(
+                            self_type_value,
+                            &self_ty,
+                            iface_value,
+                            &method_name,
+                            method_type_args,
+                        )?;
+                        // A capture-less closure is the unbound-callable carrier:
+                        // calling it seeds `frame.type_args` from
+                        // `captured_type_args`, exactly like the pooled
+                        // `GenericFunction` path (`MakeGenericFunctionFromValue`).
+                        let closure = Object::Closure(bex_vm_types::types::Closure {
+                            function: function_ptr,
+                            captures: Box::new([]),
+                            captured_type_args: type_args.into_boxed_slice(),
+                        });
+                        let ptr = self.tlab.alloc(closure);
+                        self.stack.push(Value::object(ptr));
                     }
-                }
 
-                // ── LoadDeref / StoreDeref ────────────────────────────────────
-                OpCode::LoadDeref => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let cell_value =
-                        self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
-                    let Some(cell_ptr) = cell_value.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: self.type_of(&cell_value),
-                        }
-                        .into());
-                    };
-                    let obj = unsafe { cell_ptr.get() };
-                    let Object::Cell(cell) = obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: ObjectType::of(obj).into(),
-                        }
-                        .into());
-                    };
-                    self.stack.push(cell.load());
-                }
+                    // ── MakeGenericFunction ───────────────────────────────────────
+                    OpCode::MakeGenericFunction => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let function_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                        let type_args = self.pop_type_args(ntypeargs)?;
+                        let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
+                            function: function_global,
+                            type_args: type_args.tys.into_boxed_slice(),
+                            runtime_package: function.runtime_package,
+                        });
+                        let ptr = self.tlab.alloc(gf);
+                        self.stack.push(Value::object(ptr));
+                    }
 
-                OpCode::StoreDeref => {
-                    let slot = { read_u32_unchecked(code, pc) as usize };
-                    let value = self.stack.ensure_pop();
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let cell_value =
-                        self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
-                    let Some(cell_ptr) = cell_value.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: self.type_of(&cell_value),
+                    // ── MakeGenericFunctionFromValue ──────────────────────────────
+                    // Specialize a runtime callable value with explicit type args
+                    // (`g<int>` where `g` is a local function value). Wrap it in a
+                    // Closure whose `captured_type_args` are seeded into the frame on
+                    // call — reusing the closure call path so the specialization is
+                    // honoured at runtime instead of being erased.
+                    OpCode::MakeGenericFunctionFromValue => {
+                        let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                        // The callable value was pushed last (top of stack); the
+                        // resolved `Object::Type` args sit beneath it.
+                        let callable = self.stack.ensure_pop();
+                        let type_args = self.pop_type_args(ntypeargs)?;
+                        // Resolve the callable to its inner Function pointer (and any
+                        // captures, if it is already a closure).
+                        let callable_ptr =
+                            self.as_object_ptr(callable, FunctionType::Callable.into())?;
+                        // A plain function or closure is wrapped in a closure
+                        // carrying the type args (closures carry over their existing
+                        // `captured_type_args` — the outer/class generic environment
+                        // — then append the new instantiation args in call order, so
+                        // a later indirect call seeds a complete `frame.type_args`).
+                        //
+                        // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
+                        // in a closure without losing its receiver, so it is passed
+                        // through unchanged: the explicit type args are dropped, but
+                        // the call still dispatches with the correct `self`. This is
+                        // correct for the common case of a method that does not reify
+                        // `T` at runtime, and — unlike closure-wrapping it — never
+                        // crashes. (`GenericFunction` does not reach here: TIR rejects
+                        // type args on an already-specialized value.)
+                        let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
+                            match self.get_object(callable_ptr) {
+                                Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
+                                Object::Closure(c) => Some((
+                                    c.function,
+                                    c.captures.to_vec(),
+                                    c.captured_type_args.to_vec(),
+                                )),
+                                _ => None,
+                            };
+                        match wrap {
+                            Some((function_ptr, captures, mut captured_type_args)) => {
+                                captured_type_args.extend(type_args.tys);
+                                let closure = Object::Closure(Closure {
+                                    function: function_ptr,
+                                    captures: captures.into_boxed_slice(),
+                                    captured_type_args: captured_type_args.into_boxed_slice(),
+                                });
+                                let ptr = self.tlab.alloc(closure);
+                                self.stack.push(Value::object(ptr));
+                            }
+                            None => self.stack.push(callable),
                         }
-                        .into());
-                    };
-                    self.heap.write_barrier(cell_ptr, value);
-                    let obj = unsafe { cell_ptr.get() };
-                    let Object::Cell(cell) = obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: ObjectType::of(obj).into(),
-                        }
-                        .into());
-                    };
-                    cell.store(value);
-                }
+                    }
 
-                // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
-                OpCode::LoadCapture => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let closure_ptr = bf.function;
-                    let obj = unsafe { closure_ptr.get() };
-                    let Object::Closure(closure) = obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Closure.into(),
-                            got: ObjectType::of(obj).into(),
-                        }
-                        .into());
-                    };
-                    let cell_value = closure.captures[idx];
-                    let Some(cell_ptr) = cell_value.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: self.type_of(&cell_value),
-                        }
-                        .into());
-                    };
-                    let cell_obj = unsafe { cell_ptr.get() };
-                    let Object::Cell(cell) = cell_obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: ObjectType::of(cell_obj).into(),
-                        }
-                        .into());
-                    };
-                    self.stack.push(cell.load());
-                }
+                    // ── LoadDeref / StoreDeref ────────────────────────────────────
+                    OpCode::LoadDeref => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
+                        let Some(cell_ptr) = cell_value.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        let obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(cell.load());
+                    }
 
-                OpCode::StoreCapture => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let value = self.stack.ensure_pop();
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let closure_ptr = bf.function;
-                    let obj = unsafe { closure_ptr.get() };
-                    let Object::Closure(closure) = obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Closure.into(),
-                            got: ObjectType::of(obj).into(),
-                        }
-                        .into());
-                    };
-                    let cell_value = closure.captures[idx];
-                    let Some(cell_ptr) = cell_value.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: self.type_of(&cell_value),
-                        }
-                        .into());
-                    };
-                    self.heap.write_barrier(cell_ptr, value);
-                    let cell_obj = unsafe { cell_ptr.get() };
-                    let Object::Cell(cell) = cell_obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Cell.into(),
-                            got: ObjectType::of(cell_obj).into(),
-                        }
-                        .into());
-                    };
-                    cell.store(value);
-                }
+                    OpCode::StoreDeref => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        let value = self.stack.ensure_pop();
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)];
+                        let Some(cell_ptr) = cell_value.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        self.heap.write_barrier(cell_ptr, value);
+                        let obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        cell.store(value);
+                    }
 
-                OpCode::CaptureRef => {
-                    let idx = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let closure_ptr = bf.function;
-                    let obj = unsafe { closure_ptr.get() };
-                    let Object::Closure(closure) = obj else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Closure.into(),
-                            got: ObjectType::of(obj).into(),
-                        }
-                        .into());
-                    };
-                    self.stack.push(closure.captures[idx]);
-                }
+                    // ── LoadCapture / StoreCapture / CaptureRef ───────────────────
+                    OpCode::LoadCapture => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let closure_ptr = bf.function;
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        let cell_value = closure.captures[idx];
+                        let Some(cell_ptr) = cell_value.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        let cell_obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = cell_obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(cell_obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(cell.load());
+                    }
 
-                // ── Array / Map element ops ───────────────────────────────────
-                OpCode::ContainerLen => {
-                    let container = self.stack.ensure_pop();
-                    let Some(ptr) = container.as_object_ptr() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: ObjectType::Array.into(),
-                            got: self.type_of(&container),
-                        }
-                        .into());
-                    };
-                    #[allow(clippy::cast_possible_wrap)]
-                    let len = match self.get_object(ptr) {
-                        Object::Array(arr) => arr.len() as i64,
-                        Object::Uint8Array(bytes) => bytes.len() as i64,
-                        Object::Map(map) => map.len() as i64,
-                        Object::String(s) => s.len() as i64,
-                        other => {
+                    OpCode::StoreCapture => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let value = self.stack.ensure_pop();
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let closure_ptr = bf.function;
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        let cell_value = closure.captures[idx];
+                        let Some(cell_ptr) = cell_value.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        self.heap.write_barrier(cell_ptr, value);
+                        let cell_obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = cell_obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(cell_obj).into(),
+                            }
+                            .into());
+                        };
+                        cell.store(value);
+                    }
+
+                    OpCode::CaptureRef => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let closure_ptr = bf.function;
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(closure.captures[idx]);
+                    }
+
+                    // ── Array / Map element ops ───────────────────────────────────
+                    OpCode::ContainerLen => {
+                        let container = self.stack.ensure_pop();
+                        let Some(ptr) = container.as_object_ptr() else {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Array.into(),
-                                got: ObjectType::of(other).into(),
+                                got: self.type_of(&container),
                             }
                             .into());
-                        }
-                    };
-                    self.stack.push(Value::int(len));
-                }
-
-                OpCode::LoadArrayElement => {
-                    let index_value = self.stack.ensure_pop();
-                    let array_value = self.stack.ensure_pop();
-                    let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    let Some(i) = index_value.as_int() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&index_value),
-                        }
-                        .into());
-                    };
-                    // Acquire the array's read lock for the duration of the
-                    // bounds-check + element load so it stays atomic against
-                    // a racing `push`/grow. Guard drops at the end of the
-                    // inner scope before any `&mut self` call. A negative index
-                    // counts from the end; one that still lands outside the
-                    // array reports the original index in the panic.
-                    let load_result: Result<Value, (i64, usize)> = {
-                        match self.get_object(array_obj_index) {
-                            Object::Array(arr) => {
-                                let guard = arr.lock();
-                                let len = guard.len();
-                                match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => Ok(guard[idx]),
-                                    None => Err((i, len)),
-                                }
-                            }
-                            Object::Uint8Array(bytes) => {
-                                let guard = bytes.lock();
-                                let len = guard.len();
-                                match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
-                                    None => Err((i, len)),
-                                }
-                            }
+                        };
+                        #[allow(clippy::cast_possible_wrap)]
+                        let len = match self.get_object(ptr) {
+                            Object::Array(arr) => arr.len() as i64,
+                            Object::Uint8Array(bytes) => bytes.len() as i64,
+                            Object::Map(map) => map.len() as i64,
+                            Object::String(s) => s.len() as i64,
                             other => {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Array.into(),
@@ -8684,509 +8685,573 @@ impl BexVm {
                                 }
                                 .into());
                             }
-                        }
-                    };
-                    let element = match load_result {
-                        Ok(v) => v,
-                        Err((idx, len)) => {
-                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                VmPanic::IndexOutOfBounds {
-                                    index: idx,
-                                    length: len,
-                                },
-                            )));
-                        }
-                    };
-                    self.stack.push(element);
-                }
-
-                OpCode::LoadMapElement => {
-                    let key_value = self.stack.ensure_pop();
-                    let map_value = self.stack.ensure_pop();
-                    let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
-                    let key = self.get_object(key_index).as_string()?.clone();
-                    // Take the map's read lock and copy out the value so the
-                    // guard releases before any `&mut self` call.
-                    let lookup_result: Result<Option<Value>, ObjectType> =
-                        match self.get_object(map_index) {
-                            Object::Map(map) => {
-                                let guard = map.lock();
-                                Ok(guard.get(&key).copied())
-                            }
-                            other => Err(ObjectType::of(other)),
                         };
-                    let value = match lookup_result {
-                        Ok(Some(v)) => v,
-                        Ok(None) => {
-                            return Err(VmError::thrown_fresh(
-                                self.panic_to_exception_value(VmPanic::MapKeyNotFound),
-                            ));
-                        }
-                        Err(got) => {
+                        self.stack.push(Value::int(len));
+                    }
+
+                    OpCode::LoadArrayElement => {
+                        let index_value = self.stack.ensure_pop();
+                        let array_value = self.stack.ensure_pop();
+                        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
+                        let Some(i) = index_value.as_int() else {
                             return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Map.into(),
-                                got: got.into(),
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&index_value),
                             }
                             .into());
-                        }
-                    };
-                    self.stack.push(value);
-                }
-
-                OpCode::StoreArrayElement => {
-                    let new_value = self.stack.ensure_pop();
-                    let index_value = self.stack.ensure_pop();
-                    let array_value = self.stack.ensure_pop();
-                    let array_object_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    let Some(i) = index_value.as_int() else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&index_value),
-                        }
-                        .into());
-                    };
-                    let new_value_u8: Option<u8> =
-                        new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                    let store_result: Result<(), (i64, usize)> = {
-                        match self.get_object(array_object_index) {
-                            Object::Array(arr) => {
-                                let mut guard = arr.lock_mut();
-                                let len = guard.len();
-                                match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => {
-                                        guard[idx] = new_value;
-                                        Ok(())
+                        };
+                        // Acquire the array's read lock for the duration of the
+                        // bounds-check + element load so it stays atomic against
+                        // a racing `push`/grow. Guard drops at the end of the
+                        // inner scope before any `&mut self` call. A negative index
+                        // counts from the end; one that still lands outside the
+                        // array reports the original index in the panic.
+                        let load_result: Result<Value, (i64, usize)> = {
+                            match self.get_object(array_obj_index) {
+                                Object::Array(arr) => {
+                                    let guard = arr.lock();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => Ok(guard[idx]),
+                                        None => Err((i, len)),
                                     }
-                                    None => Err((i, len)),
                                 }
-                            }
-                            Object::Uint8Array(bytes) => {
-                                let Some(byte_v) = new_value_u8 else {
+                                Object::Uint8Array(bytes) => {
+                                    let guard = bytes.lock();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                other => {
                                     return Err(VmInternalError::TypeError {
-                                        expected: bex_vm_types::types::Type::Int,
-                                        got: self.type_of(&new_value),
+                                        expected: ObjectType::Array.into(),
+                                        got: ObjectType::of(other).into(),
                                     }
                                     .into());
-                                };
-                                let mut guard = bytes.lock_mut();
-                                let len = guard.len();
-                                match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => {
-                                        guard[idx] = byte_v;
-                                        Ok(())
-                                    }
-                                    None => Err((i, len)),
                                 }
                             }
-                            other => {
+                        };
+                        let element = match load_result {
+                            Ok(v) => v,
+                            Err((idx, len)) => {
+                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: idx,
+                                        length: len,
+                                    },
+                                )));
+                            }
+                        };
+                        self.stack.push(element);
+                    }
+
+                    OpCode::LoadMapElement => {
+                        let key_value = self.stack.ensure_pop();
+                        let map_value = self.stack.ensure_pop();
+                        let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
+                        let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
+                        let key = self.get_object(key_index).as_string()?.clone();
+                        // Take the map's read lock and copy out the value so the
+                        // guard releases before any `&mut self` call.
+                        let lookup_result: Result<Option<Value>, ObjectType> =
+                            match self.get_object(map_index) {
+                                Object::Map(map) => {
+                                    let guard = map.lock();
+                                    Ok(guard.get(&key).copied())
+                                }
+                                other => Err(ObjectType::of(other)),
+                            };
+                        let value = match lookup_result {
+                            Ok(Some(v)) => v,
+                            Ok(None) => {
+                                return Err(VmError::thrown_fresh(
+                                    self.panic_to_exception_value(VmPanic::MapKeyNotFound),
+                                ));
+                            }
+                            Err(got) => {
                                 return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Array.into(),
-                                    got: ObjectType::of(other).into(),
+                                    expected: ObjectType::Map.into(),
+                                    got: got.into(),
+                                }
+                                .into());
+                            }
+                        };
+                        self.stack.push(value);
+                    }
+
+                    OpCode::StoreArrayElement => {
+                        let new_value = self.stack.ensure_pop();
+                        let index_value = self.stack.ensure_pop();
+                        let array_value = self.stack.ensure_pop();
+                        let array_object_index =
+                            self.as_object_ptr(array_value, ObjectType::Array)?;
+                        let Some(i) = index_value.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&index_value),
+                            }
+                            .into());
+                        };
+                        let new_value_u8: Option<u8> =
+                            new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
+                        let store_result: Result<(), (i64, usize)> = {
+                            match self.get_object(array_object_index) {
+                                Object::Array(arr) => {
+                                    let mut guard = arr.lock_mut();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => {
+                                            guard[idx] = new_value;
+                                            Ok(())
+                                        }
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                Object::Uint8Array(bytes) => {
+                                    let Some(byte_v) = new_value_u8 else {
+                                        return Err(VmInternalError::TypeError {
+                                            expected: bex_vm_types::types::Type::Int,
+                                            got: self.type_of(&new_value),
+                                        }
+                                        .into());
+                                    };
+                                    let mut guard = bytes.lock_mut();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => {
+                                            guard[idx] = byte_v;
+                                            Ok(())
+                                        }
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                other => {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: ObjectType::Array.into(),
+                                        got: ObjectType::of(other).into(),
+                                    }
+                                    .into());
+                                }
+                            }
+                        };
+                        match store_result {
+                            Ok(()) => {}
+                            Err((idx, len)) => {
+                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: idx,
+                                        length: len,
+                                    },
+                                )));
+                            }
+                        }
+                        self.heap.write_barrier(array_object_index, new_value);
+                    }
+
+                    OpCode::StoreMapElement => {
+                        let new_value = self.stack.ensure_pop();
+                        let key_value = self.stack.ensure_pop();
+                        let map_value = self.stack.ensure_pop();
+                        let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
+                        let key = self.get_object(key_index).as_string()?.clone();
+                        let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
+                        let store_result: Result<(), ObjectType> = {
+                            match self.get_object(map_index) {
+                                Object::Map(map) => {
+                                    let mut guard = map.lock_mut();
+                                    guard.insert(key, new_value);
+                                    Ok(())
+                                }
+                                other => Err(ObjectType::of(other)),
+                            }
+                        };
+                        match store_result {
+                            Ok(()) => {}
+                            Err(got) => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Map.into(),
+                                    got: got.into(),
                                 }
                                 .into());
                             }
                         }
-                    };
-                    match store_result {
-                        Ok(()) => {}
-                        Err((idx, len)) => {
+                        self.heap.write_barrier(map_index, new_value);
+                    }
+
+                    // ── Expanded arithmetic ───────────────────────────────────────
+                    OpCode::Add => self.exec_binop(BinOp::Add)?,
+                    OpCode::Sub => self.exec_binop(BinOp::Sub)?,
+                    OpCode::Mul => self.exec_binop(BinOp::Mul)?,
+                    OpCode::Div => self.exec_binop(BinOp::Div)?,
+                    OpCode::Mod => self.exec_binop(BinOp::Mod)?,
+                    OpCode::BitAnd => self.exec_binop(BinOp::BitAnd)?,
+                    OpCode::BitOr => self.exec_binop(BinOp::BitOr)?,
+                    OpCode::BitXor => self.exec_binop(BinOp::BitXor)?,
+                    OpCode::Shl => self.exec_binop(BinOp::Shl)?,
+                    OpCode::Shr => self.exec_binop(BinOp::Shr)?,
+
+                    // ── Expanded comparison ───────────────────────────────────────
+                    OpCode::Eq => self.exec_cmpop(CmpOp::Eq)?,
+                    OpCode::NotEq => self.exec_cmpop(CmpOp::NotEq)?,
+                    OpCode::Lt => self.exec_cmpop(CmpOp::Lt)?,
+                    OpCode::LtEq => self.exec_cmpop(CmpOp::LtEq)?,
+                    OpCode::Gt => self.exec_cmpop(CmpOp::Gt)?,
+                    OpCode::GtEq => self.exec_cmpop(CmpOp::GtEq)?,
+
+                    // ── Specialized int arithmetic (skip type dispatch) ───────────
+                    //
+                    // Operands are statically known to be `int`, so we untag via
+                    // `as_int` and operate on raw `i64`. Every op is checked: a
+                    // result outside the i63 range throws a catchable
+                    // `baml.panics.IntegerOverflow` (via `int_arith_result`)
+                    // rather than silently wrapping (old `tagged_int_add`/`_sub`)
+                    // or raw-Rust-panicking (old `Value::int(l * r)`). The overflow
+                    // branch is cold and ~never taken, so the hot path is the
+                    // checked op plus one predicted-not-taken branch.
+                    OpCode::AddInt => {
+                        let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        // Overflow-checked tagged add: hot path stays branchless
+                        // (no untag/retag), cold path untags only for the message.
+                        match Value::tagged_int_add_checked(l, r) {
+                            // SAFETY: the encoder validates two arithmetic operands.
+                            Some(v) => self.stack.replace_top_n::<2>(v),
+                            None => {
+                                // Preserve the old consumed-operand stack before
+                                // constructing and propagating the overflow error.
+                                self.stack.truncate_suffix(2);
+                                return Err(self.tagged_int_overflow(l, '+', r));
+                            }
+                        }
+                    }
+                    OpCode::SubInt => {
+                        let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        match Value::tagged_int_sub_checked(l, r) {
+                            // SAFETY: the encoder validates two arithmetic operands.
+                            Some(v) => self.stack.replace_top_n::<2>(v),
+                            None => {
+                                // Preserve the old error-path stack before error creation.
+                                self.stack.truncate_suffix(2);
+                                return Err(self.tagged_int_overflow(l, '-', r));
+                            }
+                        }
+                    }
+                    OpCode::MulInt => {
+                        let Some(r) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
+                        self.stack.push(v);
+                    }
+                    OpCode::DivInt => {
+                        let Some(r) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        if r == 0 {
                             return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                VmPanic::IndexOutOfBounds {
-                                    index: idx,
-                                    length: len,
+                                VmPanic::DivisionByZero {
+                                    left: Value::int(l),
+                                    right: Value::int(r),
                                 },
                             )));
                         }
+                        // r != 0 guaranteed above; `INT_MIN / -1` = 2^62 fits i64
+                        // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
+                        // range-check in finish_int catches it.
+                        let v = self.finish_int(l / r, l, '/', r)?;
+                        self.stack.push(v);
                     }
-                    self.heap.write_barrier(array_object_index, new_value);
-                }
-
-                OpCode::StoreMapElement => {
-                    let new_value = self.stack.ensure_pop();
-                    let key_value = self.stack.ensure_pop();
-                    let map_value = self.stack.ensure_pop();
-                    let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
-                    let key = self.get_object(key_index).as_string()?.clone();
-                    let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let store_result: Result<(), ObjectType> = {
-                        match self.get_object(map_index) {
-                            Object::Map(map) => {
-                                let mut guard = map.lock_mut();
-                                guard.insert(key, new_value);
-                                Ok(())
-                            }
-                            other => Err(ObjectType::of(other)),
+                    OpCode::ModInt => {
+                        let Some(r) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = self.stack.ensure_pop().as_int() else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        if r == 0 {
+                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                VmPanic::DivisionByZero {
+                                    left: Value::int(l),
+                                    right: Value::int(r),
+                                },
+                            )));
                         }
-                    };
-                    match store_result {
-                        Ok(()) => {}
-                        Err(got) => {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Map.into(),
-                                got: got.into(),
+                        // |l % r| < |r| <= 2^62, always within i63 range.
+                        let v = self.finish_int(l % r, l, '%', r)?;
+                        self.stack.push(v);
+                    }
+
+                    // ── Specialized float arithmetic (skip type dispatch) ─────────
+                    OpCode::AddFloat => {
+                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let v = Value::object(self.alloc_float(l + r));
+                        self.stack.push(v);
+                    }
+                    OpCode::SubFloat => {
+                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let v = Value::object(self.alloc_float(l - r));
+                        self.stack.push(v);
+                    }
+                    OpCode::MulFloat => {
+                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let v = Value::object(self.alloc_float(l * r));
+                        self.stack.push(v);
+                    }
+                    OpCode::DivFloat => {
+                        // IEEE-754: a zero divisor yields `±inf`, and `0.0 / 0.0`
+                        // yields `NaN`. Unlike `int` and `bigint`, `float` has
+                        // values for those results, so there is nothing to panic
+                        // about.
+                        let right_v = self.stack.ensure_pop();
+                        let left_v = self.stack.ensure_pop();
+                        let Some(r) = value_as_float(right_v) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(l) = value_as_float(left_v) else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let v = Value::object(self.alloc_float(l / r));
+                        self.stack.push(v);
+                    }
+
+                    // ── Specialized int comparison (skip type dispatch) ───────────
+                    OpCode::CmpIntEq => cmp_int_op!(==),
+                    OpCode::CmpIntNotEq => cmp_int_op!(!=),
+                    OpCode::CmpIntLt => cmp_int_op!(<),
+                    OpCode::CmpIntLtEq => cmp_int_op!(<=),
+                    OpCode::CmpIntGt => cmp_int_op!(>),
+                    OpCode::CmpIntGtEq => cmp_int_op!(>=),
+
+                    // ── Specialized float comparison (skip type dispatch) ─────────
+                    OpCode::CmpFloatEq => cmp_float_op!(CmpOp::Eq),
+                    OpCode::CmpFloatNotEq => cmp_float_op!(CmpOp::NotEq),
+                    OpCode::CmpFloatLt => cmp_float_op!(CmpOp::Lt),
+                    OpCode::CmpFloatLtEq => cmp_float_op!(CmpOp::LtEq),
+                    OpCode::CmpFloatGt => cmp_float_op!(CmpOp::Gt),
+                    OpCode::CmpFloatGtEq => cmp_float_op!(CmpOp::GtEq),
+
+                    // ── Specialized bigint comparison (skip type dispatch) ────────
+                    OpCode::CmpBigintEq => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::Eq, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+                    OpCode::CmpBigintNotEq => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::NotEq, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+                    OpCode::CmpBigintLt => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::Lt, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+                    OpCode::CmpBigintLtEq => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::LtEq, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+                    OpCode::CmpBigintGt => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::Gt, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+                    OpCode::CmpBigintGtEq => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let result = self.bigint_cmp(CmpOp::GtEq, l, r);
+                        self.stack.push(Value::bool(result));
+                    }
+
+                    // ── Specialized bigint arithmetic (skip type dispatch) ────────
+                    OpCode::AddBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Add, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::SubBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Sub, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::MulBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Mul, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::DivBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Div, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::ModBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Mod, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::BitAndBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::BitOrBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::BitOr, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::BitXorBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::BitXor, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::ShlBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Shl, l, r)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::ShrBigint => {
+                        let r = self.pop_bigint_operand();
+                        let l = self.pop_bigint_operand();
+                        let value = self.bigint_binop(BinOp::Shr, l, r)?;
+                        self.stack.push(value);
+                    }
+
+                    // ── Expanded unary ────────────────────────────────────────────
+                    OpCode::Not => {
+                        // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
+                        // agree, closing B-1071's asymmetry.
+                        let val = self.stack.get_at(self.stack.ensure_stack_top());
+                        let truthy = self.is_truthy(val);
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::bool(!truthy));
+                    }
+                    OpCode::Truthy => {
+                        let val = self.stack.get_at(self.stack.ensure_stack_top());
+                        let truthy = self.is_truthy(val);
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::bool(truthy));
+                    }
+                    OpCode::Neg => {
+                        let val = self.stack.ensure_pop();
+                        if let Some(n) = val.as_int() {
+                            // Negating INT_MIN = -2^62 yields 2^62, which fits i64
+                            // (INT_MIN != i64::MIN) but not i63, so the range-check
+                            // in try_int catches it.
+                            match Value::try_int(n.wrapping_neg()) {
+                                Some(v) => self.stack.push(v),
+                                None => {
+                                    return Err(
+                                        self.integer_overflow(format!("-({n}) overflows int"))
+                                    );
+                                }
+                            }
+                        } else if let Some(n) = value_as_float(val) {
+                            let v = Value::object(self.alloc_float(-n));
+                            self.stack.push(v);
+                        } else if let Some(ptr) = val.as_object_ptr() {
+                            // Bigint negation. Compute the negated value into an
+                            // owned `Arc` first so the immutable `get_object` borrow
+                            // is released before the `&mut self` `alloc_bigint`.
+                            let negated = match self.get_object(ptr) {
+                                Object::Bigint(bi) => {
+                                    Some(std::sync::Arc::new(-bi.as_ref().clone()))
+                                }
+                                _ => None,
+                            };
+                            match negated {
+                                Some(arc) => {
+                                    let result = self.alloc_bigint(arc)?;
+                                    self.stack.push(result);
+                                }
+                                None => {
+                                    return Err(VmInternalError::CannotApplyUnaryOp {
+                                        op: UnaryOp::Neg,
+                                        value: self.type_of(&val),
+                                    }
+                                    .into());
+                                }
+                            }
+                        } else {
+                            return Err(VmInternalError::CannotApplyUnaryOp {
+                                op: UnaryOp::Neg,
+                                value: self.type_of(&val),
                             }
                             .into());
                         }
                     }
-                    self.heap.write_barrier(map_index, new_value);
-                }
 
-                // ── Expanded arithmetic ───────────────────────────────────────
-                OpCode::Add => self.exec_binop(BinOp::Add)?,
-                OpCode::Sub => self.exec_binop(BinOp::Sub)?,
-                OpCode::Mul => self.exec_binop(BinOp::Mul)?,
-                OpCode::Div => self.exec_binop(BinOp::Div)?,
-                OpCode::Mod => self.exec_binop(BinOp::Mod)?,
-                OpCode::BitAnd => self.exec_binop(BinOp::BitAnd)?,
-                OpCode::BitOr => self.exec_binop(BinOp::BitOr)?,
-                OpCode::BitXor => self.exec_binop(BinOp::BitXor)?,
-                OpCode::Shl => self.exec_binop(BinOp::Shl)?,
-                OpCode::Shr => self.exec_binop(BinOp::Shr)?,
-
-                // ── Expanded comparison ───────────────────────────────────────
-                OpCode::Eq => self.exec_cmpop(CmpOp::Eq)?,
-                OpCode::NotEq => self.exec_cmpop(CmpOp::NotEq)?,
-                OpCode::Lt => self.exec_cmpop(CmpOp::Lt)?,
-                OpCode::LtEq => self.exec_cmpop(CmpOp::LtEq)?,
-                OpCode::Gt => self.exec_cmpop(CmpOp::Gt)?,
-                OpCode::GtEq => self.exec_cmpop(CmpOp::GtEq)?,
-
-                // ── Specialized int arithmetic (skip type dispatch) ───────────
-                //
-                // Operands are statically known to be `int`, so we untag via
-                // `as_int` and operate on raw `i64`. Every op is checked: a
-                // result outside the i63 range throws a catchable
-                // `baml.panics.IntegerOverflow` (via `int_arith_result`)
-                // rather than silently wrapping (old `tagged_int_add`/`_sub`)
-                // or raw-Rust-panicking (old `Value::int(l * r)`). The overflow
-                // branch is cold and ~never taken, so the hot path is the
-                // checked op plus one predicted-not-taken branch.
-                OpCode::AddInt => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    // Overflow-checked tagged add: hot path stays branchless
-                    // (no untag/retag), cold path untags only for the message.
-                    match Value::tagged_int_add_checked(l, r) {
-                        Some(v) => self.stack.push(v),
-                        None => return Err(self.tagged_int_overflow(l, '+', r)),
-                    }
-                }
-                OpCode::SubInt => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
-                    match Value::tagged_int_sub_checked(l, r) {
-                        Some(v) => self.stack.push(v),
-                        None => return Err(self.tagged_int_overflow(l, '-', r)),
-                    }
-                }
-                OpCode::MulInt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
-                    self.stack.push(v);
-                }
-                OpCode::DivInt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    if r == 0 {
-                        return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: Value::int(l),
-                                right: Value::int(r),
-                            },
-                        )));
-                    }
-                    // r != 0 guaranteed above; `INT_MIN / -1` = 2^62 fits i64
-                    // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
-                    // range-check in finish_int catches it.
-                    let v = self.finish_int(l / r, l, '/', r)?;
-                    self.stack.push(v);
-                }
-                OpCode::ModInt => {
-                    let Some(r) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = self.stack.ensure_pop().as_int() else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    if r == 0 {
-                        return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: Value::int(l),
-                                right: Value::int(r),
-                            },
-                        )));
-                    }
-                    // |l % r| < |r| <= 2^62, always within i63 range.
-                    let v = self.finish_int(l % r, l, '%', r)?;
-                    self.stack.push(v);
-                }
-
-                // ── Specialized float arithmetic (skip type dispatch) ─────────
-                OpCode::AddFloat => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let v = Value::object(self.alloc_float(l + r));
-                    self.stack.push(v);
-                }
-                OpCode::SubFloat => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let v = Value::object(self.alloc_float(l - r));
-                    self.stack.push(v);
-                }
-                OpCode::MulFloat => {
-                    let Some(r) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(self.stack.ensure_pop()) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let v = Value::object(self.alloc_float(l * r));
-                    self.stack.push(v);
-                }
-                OpCode::DivFloat => {
-                    // IEEE-754: a zero divisor yields `±inf`, and `0.0 / 0.0`
-                    // yields `NaN`. Unlike `int` and `bigint`, `float` has
-                    // values for those results, so there is nothing to panic
-                    // about.
-                    let right_v = self.stack.ensure_pop();
-                    let left_v = self.stack.ensure_pop();
-                    let Some(r) = value_as_float(right_v) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let Some(l) = value_as_float(left_v) else {
-                        std::hint::unreachable_unchecked()
-                    };
-                    let v = Value::object(self.alloc_float(l / r));
-                    self.stack.push(v);
-                }
-
-                // ── Specialized int comparison (skip type dispatch) ───────────
-                OpCode::CmpIntEq => cmp_int_op!(==),
-                OpCode::CmpIntNotEq => cmp_int_op!(!=),
-                OpCode::CmpIntLt => cmp_int_op!(<),
-                OpCode::CmpIntLtEq => cmp_int_op!(<=),
-                OpCode::CmpIntGt => cmp_int_op!(>),
-                OpCode::CmpIntGtEq => cmp_int_op!(>=),
-
-                // ── Specialized float comparison (skip type dispatch) ─────────
-                OpCode::CmpFloatEq => cmp_float_op!(CmpOp::Eq),
-                OpCode::CmpFloatNotEq => cmp_float_op!(CmpOp::NotEq),
-                OpCode::CmpFloatLt => cmp_float_op!(CmpOp::Lt),
-                OpCode::CmpFloatLtEq => cmp_float_op!(CmpOp::LtEq),
-                OpCode::CmpFloatGt => cmp_float_op!(CmpOp::Gt),
-                OpCode::CmpFloatGtEq => cmp_float_op!(CmpOp::GtEq),
-
-                // ── Specialized bigint comparison (skip type dispatch) ────────
-                OpCode::CmpBigintEq => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::Eq, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-                OpCode::CmpBigintNotEq => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::NotEq, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-                OpCode::CmpBigintLt => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::Lt, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-                OpCode::CmpBigintLtEq => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::LtEq, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-                OpCode::CmpBigintGt => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::Gt, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-                OpCode::CmpBigintGtEq => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let result = self.bigint_cmp(CmpOp::GtEq, l, r);
-                    self.stack.push(Value::bool(result));
-                }
-
-                // ── Specialized bigint arithmetic (skip type dispatch) ────────
-                OpCode::AddBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Add, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::SubBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Sub, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::MulBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Mul, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::DivBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Div, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::ModBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Mod, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::BitAndBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::BitOrBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::BitOr, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::BitXorBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::BitXor, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::ShlBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Shl, l, r)?;
-                    self.stack.push(value);
-                }
-                OpCode::ShrBigint => {
-                    let r = self.pop_bigint_operand();
-                    let l = self.pop_bigint_operand();
-                    let value = self.bigint_binop(BinOp::Shr, l, r)?;
-                    self.stack.push(value);
-                }
-
-                // ── Expanded unary ────────────────────────────────────────────
-                OpCode::Not => {
-                    // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
-                    // agree, closing B-1071's asymmetry.
-                    let val = self.stack.ensure_pop();
-                    let truthy = self.is_truthy(val);
-                    self.stack.push(Value::bool(!truthy));
-                }
-                OpCode::Truthy => {
-                    let val = self.stack.ensure_pop();
-                    let truthy = self.is_truthy(val);
-                    self.stack.push(Value::bool(truthy));
-                }
-                OpCode::Neg => {
-                    let val = self.stack.ensure_pop();
-                    if let Some(n) = val.as_int() {
-                        // Negating INT_MIN = -2^62 yields 2^62, which fits i64
-                        // (INT_MIN != i64::MIN) but not i63, so the range-check
-                        // in try_int catches it.
-                        match Value::try_int(n.wrapping_neg()) {
-                            Some(v) => self.stack.push(v),
-                            None => {
-                                return Err(self.integer_overflow(format!("-({n}) overflows int")));
-                            }
-                        }
-                    } else if let Some(n) = value_as_float(val) {
-                        let v = Value::object(self.alloc_float(-n));
-                        self.stack.push(v);
-                    } else if let Some(ptr) = val.as_object_ptr() {
-                        // Bigint negation. Compute the negated value into an
-                        // owned `Arc` first so the immutable `get_object` borrow
-                        // is released before the `&mut self` `alloc_bigint`.
-                        let negated = match self.get_object(ptr) {
-                            Object::Bigint(bi) => Some(std::sync::Arc::new(-bi.as_ref().clone())),
-                            _ => None,
+                    // ── SendEvent ─────────────────────────────────────────────────
+                    OpCode::SendEvent => {
+                        let data = self.stack.ensure_pop();
+                        let name_value = self.stack.ensure_pop();
+                        let event_name = self.as_string(&name_value)?.to_string();
+                        // This is the innermost executing frame, so its live PC is
+                        // `cur_pc` (the frame's `faulting_pc` is no longer updated
+                        // per-op; it only holds outer frames' call-site PCs).
+                        let cur_pc = self.cur_pc;
+                        let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
+                        {
+                            let pc = cur_pc;
+                            let func_obj = self.get_object(bf.function).as_callable().ok();
+                            func_obj
+                                .and_then(|func| {
+                                    if let Some(compact) = &func.bytecode.compact {
+                                        compact.line_entry_for_pc(pc)
+                                    } else {
+                                        func.bytecode.line_entry_for_pc(pc)
+                                    }
+                                })
+                                .map(Self::event_source_location_for_line_entry)
+                        } else {
+                            None
                         };
-                        match negated {
-                            Some(arc) => {
-                                let result = self.alloc_bigint(arc)?;
-                                self.stack.push(result);
-                            }
-                            None => {
-                                return Err(VmInternalError::CannotApplyUnaryOp {
-                                    op: UnaryOp::Neg,
-                                    value: self.type_of(&val),
-                                }
-                                .into());
-                            }
-                        }
-                    } else {
-                        return Err(VmInternalError::CannotApplyUnaryOp {
-                            op: UnaryOp::Neg,
-                            value: self.type_of(&val),
-                        }
-                        .into());
+                        return Ok(Some(VmExecState::Event {
+                            event_name,
+                            data,
+                            source_location,
+                        }));
                     }
                 }
-
-                // ── SendEvent ─────────────────────────────────────────────────
-                OpCode::SendEvent => {
-                    let data = self.stack.ensure_pop();
-                    let name_value = self.stack.ensure_pop();
-                    let event_name = self.as_string(&name_value)?.to_string();
-                    // This is the innermost executing frame, so its live PC is
-                    // `cur_pc` (the frame's `faulting_pc` is no longer updated
-                    // per-op; it only holds outer frames' call-site PCs).
-                    let cur_pc = self.cur_pc;
-                    let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                        let pc = cur_pc;
-                        let func_obj = self.get_object(bf.function).as_callable().ok();
-                        func_obj
-                            .and_then(|func| {
-                                if let Some(compact) = &func.bytecode.compact {
-                                    compact.line_entry_for_pc(pc)
-                                } else {
-                                    func.bytecode.line_entry_for_pc(pc)
-                                }
-                            })
-                            .map(Self::event_source_location_for_line_entry)
-                    } else {
-                        None
-                    };
-                    return Ok(Some(VmExecState::Event {
-                        event_name,
-                        data,
-                        source_location,
-                    }));
-                }
-            }
-        } // end unsafe block
-
-        Ok(None)
+            } // end unsafe block
+        }
     }
 }
 

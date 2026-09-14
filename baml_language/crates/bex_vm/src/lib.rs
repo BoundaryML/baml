@@ -24,6 +24,7 @@ pub mod reachable;
 mod type_context;
 mod type_match;
 pub mod types;
+mod vec_ext;
 pub mod vm;
 
 pub use errors::{StackFrame, VmPanic, format_traceback};

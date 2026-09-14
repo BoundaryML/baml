@@ -19,7 +19,7 @@ use bex_vm_types::{
     RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
 
-use crate::{BexVm, type_context::StructuralEquivCtx};
+use crate::{BexVm, type_context::StructuralEquivCtx, vec_ext::VecExt};
 
 /// A resolver candidate borrows an immutable rule from the heap. Every rule —
 /// compiled into the static image, owned by a runtime package, or registered
@@ -513,7 +513,11 @@ impl<'vm> ImplResolver<'vm> {
                     )
                 })
         });
-        stack.pop();
+        // SAFETY: this call pushed its goal, and recursive calls remove only theirs.
+        #[allow(unsafe_code)]
+        unsafe {
+            stack.no_return_pop();
+        };
         proven
     }
 
