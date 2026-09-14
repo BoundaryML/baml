@@ -72,7 +72,8 @@ function inspect(
     let bound: int = value.get()
     let defaulted: int[] = value.twice()
     let virtual: int[] = view.twice()
-    let inherited_default = view.root()
+    let inherited_default: (app.View<int> as app.Parent<Root = string>).Root = "root"
+    let inherited_call = view.root()
     let unbound: int = app.Entry.get(value)
     let chosen: app.Entry = app.choose(value)
     let status: app.Status = app.Status.Active
@@ -336,6 +337,15 @@ class ConcreteBatch {
 "#,
     );
 
+    let diagnostic_codes = collect_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.code())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_codes,
+        ["E0139"],
+        "the bare foreign blanket is deliberately rejected by the orphan rule"
+    );
     let impl_locs = baml_compiler2_ppir::item_data::file_impls(&db, file);
     let blanket =
         baml_compiler2_hir_ty::impls::impl_facts(&db, *impl_locs.first().expect("blanket impl"))

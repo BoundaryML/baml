@@ -44,6 +44,9 @@ passes; the final full-workspace validation is tracked separately.
   native suite.
 - [x] CodeRabbit follow-up: address all five inline findings, add mounted-
   interface regressions, rerun affected validation, and resolve the threads.
+- [x] Second CodeRabbit implementation follow-up: complete defaulted associated
+  bindings for mounted qualifier candidates and make the intentional E0139
+  blanket-impl diagnostic inventory explicit before inspecting its facts.
 
 Implementation started: 2026-09-12.
 
@@ -154,6 +157,12 @@ Progress:
   large-error threshold. It also updates the migrated discovery-cache assertion
   to use inline format capture. The full workspace/all-target/all-feature
   Clippy command passes.
+- The second CodeRabbit pass closes the mounted existential qualifier-default
+  gap. Loc-free candidates now fill exported defaults in declaration order with
+  progressively pinned `Self` before qualifier proof, while rigid bounds keep
+  defaults unfilled. Its regression pins an inherited `Root = string`; the
+  mounted blanket test separately asserts that its deliberate orphan-rule error
+  is the only diagnostic before inspecting the recovered implementation facts.
 - Full validation is green after final review and PR follow-up: the offline
   native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and
