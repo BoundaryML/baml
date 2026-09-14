@@ -1759,7 +1759,7 @@ fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> boo
 /// Whether frame slot 0 (`Self`) occurs illegally: any occurrence in a
 /// non-top position, or a top occurrence when `top_ok` is false.
 /// Projection bases are exempt.
-fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
+pub(crate) fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
     match ty.kind() {
         InferTy::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
         InferTy::AssociatedTypeProjection { .. } => false,

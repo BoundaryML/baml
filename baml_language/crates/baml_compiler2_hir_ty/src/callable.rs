@@ -6,13 +6,20 @@
 //! crate's first tracked query - the S3 incremental work generalizes the
 //! pattern to `infer_body` itself.
 
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_base::Name;
+use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
+use baml_type::{DeclName, ParamTy};
+
+use crate::extern_loc::{
+    ExternFunctionLoc, ExternRowAddr, FunctionRef, extern_function_row, extern_owner_generics,
+    extern_signature_ty,
+};
 
 /// The stable, source-location-free identity of a callable exported across a
 /// package boundary.  These names are exactly the material MIR needs to build
 /// its linked item reference; consumers must never fabricate a `FunctionLoc`
 /// for a source-less package.
-#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ExternalCallTarget<N: baml_type::Head = baml_type::DeclName> {
     /// A free function, named as an item: its package (the head's root at
     /// compile time, a spelling on the wire), namespace, and name.
@@ -291,5 +298,305 @@ pub fn function_signature_ty<'db>(
         return_type,
         generic_params: sig.generic_params[enclosing.min(sig.generic_params.len())..].to_vec(),
         builtin_kind,
+    }
+}
+
+// ── The one callable surface over provenance ─────────────────────────────────
+//
+// Every question a consumer asks of a callable is answered here for BOTH
+// lanes of [`FunctionRef`] by one function with one return type — a source
+// item through its salsa queries, an exported row through
+// [`crate::extern_loc`]'s — so no consumer keeps a twin helper per lane.
+
+/// The declaration-site resolved signature: own generics, every parameter
+/// (`self` included), the declared return type.
+pub fn callable_signature<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+) -> &'db FunctionSignatureTy {
+    match callable {
+        DeclRef::Source(function) => function_signature_ty(db, function),
+        DeclRef::External(function) => extern_signature_ty(db, function),
+    }
+}
+
+/// The effective error type: the signature's total `throws` for a source
+/// item (written when closed, body-inferred when open — the same value
+/// `function_signature` pairs with the parameters), the exported
+/// `callable_throws` for a row.
+pub fn callable_throws_of<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+) -> &'db baml_type::Ty {
+    match callable {
+        DeclRef::Source(function) => &crate::lower::function_signature(db, function).throws,
+        DeclRef::External(function) => &extern_function_row(db, function).callable_throws,
+    }
+}
+
+/// Whether the callable declares a `self` receiver — an instance method
+/// rather than a static one. The receiver is an ordinary first parameter
+/// named `self` (there is no separate receiver slot), so this is the whole
+/// test, in both lanes.
+pub fn callable_takes_self(db: &dyn baml_compiler2_ppir::Db, callable: FunctionRef<'_>) -> bool {
+    callable_signature(db, callable)
+        .params
+        .first()
+        .and_then(|param| param.name.as_ref())
+        .is_some_and(|name| name.as_str() == "self")
+}
+
+/// `Some` for a builtin-bodied callable.
+pub fn callable_builtin_kind(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> Option<baml_compiler2_ast::BuiltinKind> {
+    callable_signature(db, callable).builtin_kind
+}
+
+/// The callable's own short name, for diagnostics.
+pub fn callable_display_name<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+) -> &'db Name {
+    match callable {
+        DeclRef::Source(function) => {
+            &baml_compiler2_ppir::item_data::function_data(db, function).name
+        }
+        DeclRef::External(function) => &extern_function_row(db, function).name,
+    }
+}
+
+/// Call-site-suppliable generics with their bounds: the callable's OWN
+/// parameters minus the synthetic callback-effect parameters, which are
+/// inference-only and never participate in written arity.
+pub fn callable_user_generic_params(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> Vec<(ParamTy, Vec<baml_type::Interface>)> {
+    let own: Vec<(ParamTy, Vec<baml_type::Interface>)> = match callable {
+        DeclRef::Source(function) => {
+            let bounds = crate::lower::function_generic_bounds(db, function);
+            function_signature_ty(db, function)
+                .generic_params
+                .iter()
+                .map(|param| {
+                    (
+                        param.clone(),
+                        bounds.get(param).cloned().unwrap_or_default(),
+                    )
+                })
+                .collect()
+        }
+        DeclRef::External(function) => {
+            let row = extern_function_row(db, function);
+            row.generic_params
+                .iter()
+                .cloned()
+                .zip(row.generic_param_bounds.iter().cloned())
+                .collect()
+        }
+    };
+    own.into_iter()
+        .filter(|(param, _)| !baml_type::is_synthetic_effect_param(param.name()))
+        .collect()
+}
+
+/// A callable's full generic frame: the owner's prefix, then its own
+/// parameters, with the declared bound conjunction of every slot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallableFrame {
+    pub params: Vec<ParamTy>,
+    /// Per frame slot, that parameter's declared bounds (empty when none).
+    pub bounds: Vec<Vec<baml_type::Interface>>,
+    /// The first slot the CALL SITE supplies (turbofish or inferred). Slots
+    /// before it belong to the receiver: `Self` legitimately binds an
+    /// existential for virtual dispatch, and class/interface args were
+    /// judged at the receiver's own annotation.
+    pub own_start: usize,
+}
+
+/// The frame a call instantiates.
+///
+/// `own_start` is computed per lane exactly as the two bound-registration
+/// roads did before they shared this surface, and the formulas DIVERGE: a
+/// source item's own count is its DECLARED parameters (`function_data`), so
+/// a synthetic effect parameter elaborated onto the signature counts as
+/// part of the prefix; an exported row's own count is its whole `generic_params`
+/// (effect parameters included), so `own_start` is the owner frame's length.
+/// The difference only feeds the concreteness rule on effect slots, which
+/// no bound constrains; preserved verbatim rather than unified here, so the
+/// unification is its own reviewable change.
+pub fn callable_generic_frame(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> CallableFrame {
+    match callable {
+        DeclRef::Source(function) => {
+            let params = crate::lower::function_generic_frame(db, function);
+            let bounds = crate::package_interface::plain_bounds(
+                &params,
+                &crate::lower::function_generic_bounds(db, function),
+            );
+            let own = baml_compiler2_ppir::item_data::function_data(db, function)
+                .generic_params
+                .len();
+            CallableFrame {
+                own_start: params.len().saturating_sub(own),
+                params,
+                bounds,
+            }
+        }
+        DeclRef::External(function) => {
+            let (owner_params, owner_bounds) = extern_owner_generics(db, function);
+            let row = extern_function_row(db, function);
+            let mut params = owner_params.to_vec();
+            params.extend(row.generic_params.iter().cloned());
+            let mut bounds = owner_bounds.to_vec();
+            bounds.extend(row.generic_param_bounds.iter().cloned());
+            CallableFrame {
+                params,
+                bounds,
+                own_start: owner_params.len(),
+            }
+        }
+    }
+}
+
+/// The callable as a value of function type, instantiated at `instantiation`
+/// (one type per frame slot): parameters, return type, and effective throws
+/// with every frame variable substituted.
+pub fn instantiate_callable_signature<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+    instantiation: &[baml_type::interned::Ty],
+) -> baml_type::interned::Ty {
+    use baml_type::interned::{InferFunctionParamTy, InferTy, Ty};
+    let signature = callable_signature(db, callable);
+    let substitute =
+        |ty: &baml_type::Ty| crate::lower::substitute_params(&Ty::from_plain(ty), instantiation);
+    let params: Box<[InferFunctionParamTy]> = signature
+        .params
+        .iter()
+        .map(|param| InferFunctionParamTy {
+            name: param.name.clone(),
+            ty: substitute(&param.ty),
+            mode: param.mode,
+        })
+        .collect();
+    Ty::intern(InferTy::Function {
+        params,
+        ret: substitute(&signature.return_type),
+        throws: substitute(callable_throws_of(db, callable)),
+        attr: baml_type::TyAttr::default(),
+    })
+}
+
+/// The one-`Self` rule (spec: object safety for existential receivers): a
+/// NON-self parameter containing bare `Self`, or `Self` nested inside an
+/// invariant constructor in the return/throws, makes the method uncallable
+/// through an existential (a bare top-level `-> Self` collapses covariantly
+/// and stays legal). `Self.Assoc` projections are exempt — the
+/// existential's pins make them one concrete type. `Self` is frame slot 0
+/// in both lanes (the export asserts it), so one test serves both.
+pub fn callable_breaks_one_self(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> bool {
+    let signature = callable_signature(db, callable);
+    let self_in = |ty: &baml_type::Ty, top_ok: bool| {
+        crate::method_resolution::self_occurs(&baml_type::interned::Ty::from_plain(ty), top_ok)
+    };
+    signature
+        .params
+        .iter()
+        .skip(1)
+        .any(|param| self_in(&param.ty, false))
+        || self_in(&signature.return_type, true)
+        || self_in(callable_throws_of(db, callable), true)
+}
+
+/// What declares a callable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallableOwnerKind {
+    /// A top-level function.
+    Free,
+    /// A class-inherent method.
+    Class,
+    /// A method an interface declares (required or default).
+    Interface,
+    /// A method an `implements` block provides.
+    Impl,
+}
+
+pub fn callable_owner_kind(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> CallableOwnerKind {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+    match callable {
+        DeclRef::Source(function) => {
+            match baml_compiler2_ppir::item_data::method_owner(db, function) {
+                None => CallableOwnerKind::Free,
+                Some(MethodOwner::Class(_)) => CallableOwnerKind::Class,
+                Some(MethodOwner::Interface(_)) => CallableOwnerKind::Interface,
+                Some(MethodOwner::Impl(_)) => CallableOwnerKind::Impl,
+            }
+        }
+        DeclRef::External(function) => match function.addr(db) {
+            ExternRowAddr::Declared(ExternalCallTarget::Free { .. }) => CallableOwnerKind::Free,
+            ExternRowAddr::Declared(ExternalCallTarget::Method { .. }) => CallableOwnerKind::Class,
+            ExternRowAddr::Declared(ExternalCallTarget::Interface { .. }) => {
+                CallableOwnerKind::Interface
+            }
+            ExternRowAddr::ImplProvided { .. } => CallableOwnerKind::Impl,
+        },
+    }
+}
+
+/// The head of the declaration that owns a callable: the class for a class
+/// method, the interface for an interface method, the IMPLEMENTED interface
+/// for an impl-provided method; `None` for a free function (and for an
+/// impl whose header did not resolve).
+pub fn callable_owner_type(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> Option<DeclName> {
+    use baml_compiler2_ppir::item_data::MethodOwner;
+    match callable {
+        DeclRef::Source(function) => {
+            match baml_compiler2_ppir::item_data::method_owner(db, function)? {
+                MethodOwner::Class(class) => Some(crate::lower::class_qualified_name(db, class)),
+                MethodOwner::Interface(interface) => {
+                    Some(crate::lower::interface_qualified_name(db, interface))
+                }
+                MethodOwner::Impl(block) => Some(
+                    crate::impls::impl_facts(db, block)
+                        .resolved()?
+                        .interface
+                        .name
+                        .clone(),
+                ),
+            }
+        }
+        DeclRef::External(function) => match function.addr(db) {
+            ExternRowAddr::Declared(ExternalCallTarget::Free { .. }) => None,
+            ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => {
+                Some(class.clone())
+            }
+            ExternRowAddr::Declared(ExternalCallTarget::Interface { interface, .. }) => {
+                Some(interface.clone())
+            }
+            ExternRowAddr::ImplProvided { identity, .. } => Some(identity.interface.clone()),
+        },
+    }
+}
+
+/// Every `ExternFunctionLoc` is a `FunctionRef::External`; the conversion
+/// exists so a consumer holding a row identity can ask the shared surface
+/// without naming the variant.
+impl<'db> From<ExternFunctionLoc<'db>> for FunctionRef<'db> {
+    fn from(function: ExternFunctionLoc<'db>) -> Self {
+        DeclRef::External(function)
     }
 }

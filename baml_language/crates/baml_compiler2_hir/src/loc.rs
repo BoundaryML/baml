@@ -74,47 +74,34 @@ pub struct ImplLoc<'db> {
 /// `*Loc`-keyed maps whose live-only domain a reader cannot see. The variant
 /// determines which questions are even answerable:
 ///
-/// - [`DeclRef::Live`] — source available; type-checked here, bytecode
-///   emitted here. Everything is askable.
-/// - [`DeclRef::Spliced`] — source available (so type-checked here: every
-///   salsa query answers), but the compiled artifact comes from a cache —
-///   the precompiled-stdlib splice or a Stage-6 clean-file reuse.
+/// - [`DeclRef::Source`] — source available: type-checked by this database,
+///   every salsa query answers. Where its compiled artifact comes from
+///   (emitted here, spliced from the precompiled stdlib, reused clean) is
+///   PLACEMENT, a separate axis that emit's placement registry owns —
+///   resolution never depends on cache state, so provenance is two-valued.
 /// - [`DeclRef::External`] — no source: the declaration is known only
-///   through a mounted surface (a package-interface blob or an engine
-///   mount). Only its exported shape is askable; it has no slot, no pooled
-///   object, no body. `E` is a kind-specific interned extern identity
-///   (surface + path), minted ONCE at the mount boundary — downstream code
-///   compares ids and reads rows through memoized queries, never by
-///   re-resolving name bundles.
+///   through a package interface (a mounted blob, the precompiled stdlib in
+///   a runtime compile). Only its exported shape is askable; it has no
+///   slot, no pooled object, no body. `E` is a kind-specific interned extern
+///   identity, minted ONCE at the interface boundary from the lookup key —
+///   downstream code compares ids and reads rows through memoized queries,
+///   never by re-resolving name bundles.
 ///
 /// `L` is the kind's `*Loc` type (salsa's macros take no generics, so the
 /// seven loc structs stay concrete and this enum is generic over them); `E`
-/// is the kind's extern-loc type, defined where the mounted rows live.
+/// is the kind's extern-loc type, defined where the exported rows live.
+/// Equality is declaration identity: two refs are equal iff they name the
+/// same source item or the same exported row.
 ///
-/// EQUALITY is provenance-inclusive: `Live(x) != Spliced(x)` even though
-/// both name the same declaration. That is deliberate for registries (the
-/// variant IS part of the placement law), but it makes a `DeclRef`-keyed
-/// map wrong for "same declaration" questions — key those on
-/// [`Self::source_loc`] instead.
+/// There are deliberately no one-sided projections (`source_loc()` /
+/// `external()`): every consumer matches both arms, so handling one lane
+/// and dropping the other is a compile error, never a silent `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeclRef<L, E> {
-    /// Source available: type-checked and compiled by this database.
-    Live(L),
-    /// Source available and type-checked here; compiled artifact from cache.
-    Spliced(L),
-    /// Source unavailable: shape known only through a mounted surface.
+    /// Source available: type-checked by this database.
+    Source(L),
+    /// Source unavailable: shape known only through a package interface.
     External(E),
-}
-
-impl<L, E> DeclRef<L, E> {
-    /// The source-backed declaration, when there is one (`Live`/`Spliced`).
-    /// `None` IS the answer for an external — not a lookup failure.
-    pub fn source_loc(self) -> Option<L> {
-        match self {
-            DeclRef::Live(loc) | DeclRef::Spliced(loc) => Some(loc),
-            DeclRef::External(_) => None,
-        }
-    }
 }
 
 // ── Manual Debug impls ───────────────────────────────────────────────────────

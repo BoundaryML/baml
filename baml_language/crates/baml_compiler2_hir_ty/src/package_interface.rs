@@ -682,7 +682,7 @@ impl<N: Head> ExportedType<N> {
     }
 }
 
-fn plain_bounds(
+pub(crate) fn plain_bounds(
     params: &[ParamTy],
     bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Vec<Vec<baml_type::Interface>> {
@@ -1007,6 +1007,10 @@ fn lower_interface_export<'db>(
         .first()
         .cloned()
         .expect("interface frame starts with Self");
+    // The one-`Self` test over an exported signature
+    // (`callable_breaks_one_self`) recognizes `Self` as frame slot 0 by
+    // this exact identity; a rename of the slot must be loud here.
+    debug_assert_eq!(self_param, ParamTy::new(0, Name::new("Self")));
     let generic_params = crate::lower::interface_declared_params(db, interface_loc);
     let bounds = crate::lower::interface_scope_bounds(db, interface_loc);
     let ctx = crate::lower::lower_ctx_for_file(db, interface_loc.file(db))

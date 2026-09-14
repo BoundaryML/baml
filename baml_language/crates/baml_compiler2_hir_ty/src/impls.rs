@@ -1371,7 +1371,9 @@ fn package_impl_candidates(
     source.chain(immutable).chain(mounted)
 }
 
-fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedImplFacts {
+pub(crate) fn exported_impl_facts(
+    row: &crate::package_interface::ExportedImpl,
+) -> MountedImplFacts {
     let generic_params = row
         .generic_params
         .iter()

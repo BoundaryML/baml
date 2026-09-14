@@ -3403,8 +3403,10 @@ fn inject_clean_object_placeholders<'db>(
 }
 
 /// Where one source-visible function's compiled artifact lives, by
-/// provenance — the value type of [`FunctionPlacements`]. The variant IS the
-/// law (`hir::loc::DeclRef`'s emit-side mirror): only `Live` and `Spliced`
+/// PLACEMENT — the value type of [`FunctionPlacements`]. Placement is the
+/// axis `hir::loc::DeclRef` deliberately does not carry (every placed
+/// function is a `DeclRef::Source`; resolution never depends on cache
+/// state). The variant IS the law: only `Live` and `Spliced`
 /// functions have a pooled object here; a `ReusedClean` function's bytecode
 /// is reused per-file at link, and its "object index" is a PAST-THE-POOL
 /// placeholder that exists only so operand/name reversal and rule baking can

@@ -1,14 +1,27 @@
 //! BEP-066 package-interface schema and source-less resolution checkpoints.
 
-use baml_base::Name;
+use baml_base::{Name, SourceRoot};
+use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_hir_ty::{
-    callable::{ExternalCallTarget, ExternalLinkability},
+    callable::{
+        ExternalCallTarget, ExternalLinkability, callable_signature, callable_takes_self,
+        callable_throws_of, callable_user_generic_params, function_signature_ty,
+    },
+    extern_loc::{
+        ExternFunctionLoc, ExternRowAddr, exported_impl_identity, extern_class_method,
+        extern_function_named, extern_function_row, extern_impl_block, extern_impl_method,
+        extern_interface_method, extern_owner_generics, extern_signature_ty, impl_identity,
+    },
+    impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
-        ExportedType, ResolvedValue, export_interface, package_resolution_context,
+        ExportedFunction, ExportedImpl, ExportedType, ResolvedValue, export_interface,
+        exported_takes_self, package_interface, package_resolution_context,
+        reduce_ground_projections,
     },
 };
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::TestDbExt;
+use baml_type::{DeclName, ParamTy};
 
 const LIBRARY: &str = r#"
 interface Parent {
@@ -82,11 +95,15 @@ function inspect(
 "#;
 
 fn library_db() -> ProjectDatabase {
+    library_db_and_file().0
+}
+
+fn library_db_and_file() -> (ProjectDatabase, baml_base::SourceFile) {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-library"));
     db.dependency("app");
-    db.file("<builtin>/app/lib.baml", LIBRARY);
-    db
+    let file = db.file("<builtin>/app/lib.baml", LIBRARY);
+    (db, file)
 }
 
 fn library_blob() -> Vec<u8> {
@@ -627,4 +644,467 @@ function optional() -> int? throws never {
         2,
         "{errors:#?}"
     );
+}
+
+// ── The External lane's substrate: locs minted from rows ─────────────────────
+
+const GENERIC_IMPL_LIBRARY: &str = r#"
+interface Marker<T> {
+    function mark(self) -> T throws never
+}
+
+class Pair<A, B> {
+    first A
+    second B
+}
+
+implement<L, R extends Marker<int>> Marker<int> for Pair<L, R> {
+    function mark(self) -> int throws never {
+        self.second.mark()
+    }
+}
+"#;
+
+fn mounted_consumer() -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-extern"));
+    db.mount("app", library_blob());
+    db.file("main.baml", "function main() -> int throws never { 0 }");
+    db
+}
+
+fn dependency_db(source: &str) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-extern-dep"));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", source);
+    assert_no_diagnostic_errors(&db);
+    db
+}
+
+fn app_root(db: &ProjectDatabase) -> SourceRoot {
+    baml_compiler2_hir::package::spelling(db)
+        .root(&Name::new("app"))
+        .expect("app is installed")
+}
+
+/// Every function row `root` exports, each with the loc minted from the key
+/// it was found under.
+fn minted_rows<'db>(
+    db: &'db ProjectDatabase,
+    root: SourceRoot,
+) -> Vec<(ExternFunctionLoc<'db>, &'db ExportedFunction)> {
+    let interface = package_interface(db, root);
+    let mut rows = Vec::new();
+    for (namespace, functions) in &interface.functions {
+        for (name, row) in functions {
+            let loc = extern_function_named(db, root, namespace, name)
+                .expect("a declared free function mints");
+            rows.push((loc, row));
+        }
+    }
+    for (namespace, types) in &interface.types {
+        for (name, ty) in types {
+            let head = DeclName::in_root(root, namespace.clone(), name.clone());
+            match ty {
+                ExportedType::Class { methods, .. } => {
+                    for row in methods {
+                        let loc = extern_class_method(db, &head, &row.name)
+                            .expect("a declared class method mints");
+                        rows.push((loc, row));
+                    }
+                }
+                ExportedType::Interface {
+                    required_methods,
+                    default_methods,
+                    ..
+                } => {
+                    for row in required_methods.iter().chain(default_methods) {
+                        let loc = extern_interface_method(db, &head, &row.name)
+                            .expect("a declared interface method mints");
+                        rows.push((loc, row));
+                    }
+                }
+                ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => {}
+            }
+        }
+    }
+    for exported in &interface.impls {
+        let block = extern_impl_block(db, root, exported_impl_identity(exported))
+            .expect("an exported impl row mints");
+        for row in &exported.methods {
+            let loc =
+                extern_impl_method(db, block, &row.name).expect("a provided impl method mints");
+            rows.push((loc, row));
+        }
+    }
+    rows
+}
+
+/// Every function the library file declares, paired with the extern loc its
+/// export mints — `None` for a function the interface does not carry.
+fn source_and_extern_locs<'db>(
+    db: &'db ProjectDatabase,
+    file: baml_base::SourceFile,
+    app: SourceRoot,
+) -> Vec<(FunctionLoc<'db>, Option<ExternFunctionLoc<'db>>)> {
+    use baml_compiler2_ppir::item_data::{
+        MethodOwner, file_functions, function_data, method_owner,
+    };
+    file_functions(db, file)
+        .iter()
+        .map(|&function| {
+            let name = function_data(db, function).name.clone();
+            let loc = match method_owner(db, function) {
+                None => extern_function_named(db, app, &[], &name),
+                Some(MethodOwner::Class(class)) => extern_class_method(
+                    db,
+                    &baml_compiler2_hir_ty::lower::class_qualified_name(db, class),
+                    &name,
+                ),
+                Some(MethodOwner::Interface(interface)) => extern_interface_method(
+                    db,
+                    &baml_compiler2_hir_ty::lower::interface_qualified_name(db, interface),
+                    &name,
+                ),
+                Some(MethodOwner::Impl(block)) => {
+                    let facts = impl_facts(db, block)
+                        .resolved()
+                        .expect("the fixture's impl headers resolve");
+                    extern_impl_block(db, app, impl_identity(&ResolvedImplFacts::Source(facts)))
+                        .and_then(|block| extern_impl_method(db, block, &name))
+                }
+            };
+            (function, loc)
+        })
+        .collect()
+}
+
+#[test]
+fn extern_locs_are_interned_per_row_and_never_reach_across_families() {
+    let db = mounted_consumer();
+    let app = app_root(&db);
+    let choose =
+        extern_function_named(&db, app, &[], &Name::new("choose")).expect("choose is exported");
+    assert_eq!(
+        choose,
+        extern_function_named(&db, app, &[], &Name::new("choose")).unwrap()
+    );
+    let r#box = DeclName::in_root(app, Vec::new(), Name::new("Box"));
+    let get_value = extern_class_method(&db, &r#box, &Name::new("get_value"))
+        .expect("Box.get_value is exported");
+    assert_ne!(choose, get_value);
+    // A type is not a function row, and a class row holds no interface method.
+    assert!(extern_function_named(&db, app, &[], &Name::new("Box")).is_none());
+    assert!(extern_class_method(&db, &r#box, &Name::new("twice")).is_none());
+    let view = DeclName::in_root(app, Vec::new(), Name::new("View"));
+    assert!(extern_interface_method(&db, &view, &Name::new("get")).is_some());
+    assert!(extern_interface_method(&db, &view, &Name::new("twice")).is_some());
+    // `root` is Parent's row: a `requires` closure does not make it View's.
+    assert!(extern_interface_method(&db, &view, &Name::new("root")).is_none());
+    let parent = DeclName::in_root(app, Vec::new(), Name::new("Parent"));
+    assert!(extern_interface_method(&db, &parent, &Name::new("root")).is_some());
+}
+
+#[test]
+fn extern_function_row_is_total_over_every_minted_row() {
+    let db = mounted_consumer();
+    let app = app_root(&db);
+    let mut total = 0;
+    for root in db.source_roots() {
+        for (loc, row) in minted_rows(&db, root) {
+            assert!(std::ptr::eq(extern_function_row(&db, loc), row));
+            assert!(std::ptr::eq(
+                callable_signature(&db, DeclRef::External(loc)),
+                extern_signature_ty(&db, loc)
+            ));
+            total += 1;
+        }
+    }
+    // choose, Box.get_value, Parent.root, View.get, View.twice, and the `get`
+    // Entry's View impl provides.
+    assert_eq!(minted_rows(&db, app).len(), 6);
+    assert!(
+        total > 6,
+        "the stdlib packages contribute rows too: {total}"
+    );
+}
+
+#[test]
+fn a_declared_mint_address_equals_the_row_target() {
+    let db = mounted_consumer();
+    for root in db.source_roots() {
+        for (loc, row) in minted_rows(&db, root) {
+            match loc.addr(&db) {
+                ExternRowAddr::Declared(target) => assert_eq!(&row.target, target, "{}", row.name),
+                ExternRowAddr::ImplProvided { method, .. } => {
+                    assert_eq!(*method, row.name);
+                    assert!(
+                        matches!(row.target, ExternalCallTarget::Interface { .. }),
+                        "an impl-provided row's target is its interface's dispatch slot: {}",
+                        row.name
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn an_interface_method_mint_never_yields_an_impl_provided_row() {
+    let db = mounted_consumer();
+    let app = app_root(&db);
+    let interface = package_interface(&db, app);
+    let view = DeclName::in_root(app, Vec::new(), Name::new("View"));
+    let Some(ExportedType::Interface {
+        required_methods, ..
+    }) = interface.lookup_type(&[], &Name::new("View"))
+    else {
+        panic!("View is exported as an interface")
+    };
+    let declared = extern_interface_method(&db, &view, &Name::new("get")).unwrap();
+    assert!(std::ptr::eq(
+        extern_function_row(&db, declared),
+        &required_methods[0]
+    ));
+    let (exported, provided_row) = interface
+        .impls
+        .iter()
+        .find_map(|row| {
+            row.methods
+                .iter()
+                .find(|method| method.name.as_str() == "get")
+                .map(|method| (row, method))
+        })
+        .expect("Entry's View impl provides get");
+    let block = extern_impl_block(&db, app, exported_impl_identity(exported)).unwrap();
+    let provided = extern_impl_method(&db, block, &Name::new("get")).unwrap();
+    assert!(std::ptr::eq(
+        extern_function_row(&db, provided),
+        provided_row
+    ));
+    assert_ne!(declared, provided);
+    // Same dispatch slot, distinct rows: the ADDRESS is the identity, not
+    // the target.
+    assert_eq!(
+        extern_function_row(&db, declared).target,
+        extern_function_row(&db, provided).target
+    );
+    assert_eq!(provided.impl_block(&db), Some(block));
+    assert_eq!(declared.impl_block(&db), None);
+}
+
+#[test]
+fn impl_identity_agrees_between_a_source_block_and_its_exported_row() {
+    for source in [LIBRARY, GENERIC_IMPL_LIBRARY] {
+        let db = dependency_db(source);
+        let app = app_root(&db);
+        let from_source: Vec<_> = package_impl_locs(&db, app)
+            .iter()
+            .map(|&block| {
+                let facts = impl_facts(&db, block)
+                    .resolved()
+                    .expect("the fixture's impl headers resolve");
+                impl_identity(&ResolvedImplFacts::Source(facts))
+            })
+            .collect();
+        let from_rows: Vec<_> = package_interface(&db, app)
+            .impls
+            .iter()
+            .map(exported_impl_identity)
+            .collect();
+        assert!(!from_source.is_empty());
+        assert_eq!(from_source.len(), from_rows.len());
+        for identity in &from_source {
+            assert!(from_rows.contains(identity), "{identity:?}");
+            assert!(extern_impl_block(&db, app, identity.clone()).is_some());
+        }
+    }
+}
+
+#[test]
+fn impl_identity_ignores_written_parameter_names_but_not_bounds() {
+    let db = dependency_db(GENERIC_IMPL_LIBRARY);
+    let app = app_root(&db);
+    let row = &package_interface(&db, app).impls[0];
+    assert_eq!(row.generic_params.len(), 2, "the fixture impl is generic");
+    let renamed = rename_impl_params(row);
+    assert_ne!(renamed.generic_params, row.generic_params);
+    assert_eq!(
+        exported_impl_identity(&renamed),
+        exported_impl_identity(row)
+    );
+    let mut unbounded = row.clone();
+    unbounded.param_bounds = vec![Vec::new(); row.generic_params.len()];
+    assert_ne!(
+        exported_impl_identity(&unbounded),
+        exported_impl_identity(row)
+    );
+}
+
+fn rename_impl_params(row: &ExportedImpl) -> ExportedImpl {
+    fn rename(param: &ParamTy) -> ParamTy {
+        ParamTy::new(
+            param.index(),
+            Name::new(format!("Renamed{}", param.index())),
+        )
+    }
+    fn rewrite(ty: &baml_type::Ty) -> baml_type::Ty {
+        baml_type::unify::rewrite_ty(ty, &mut |ty| match ty {
+            baml_type::Ty::TypeVar(param, attr) => {
+                Some(baml_type::Ty::TypeVar(rename(param), attr.clone()))
+            }
+            _ => None,
+        })
+    }
+    ExportedImpl {
+        interface: row.interface.map_tys(rewrite),
+        for_ty_pattern: rewrite(&row.for_ty_pattern),
+        generic_params: row.generic_params.iter().map(rename).collect(),
+        param_bounds: row
+            .param_bounds
+            .iter()
+            .map(|bounds| bounds.iter().map(|bound| bound.map_tys(rewrite)).collect())
+            .collect(),
+        associated_types: row.associated_types.clone(),
+        field_links: row.field_links.clone(),
+        origin: row.origin.clone(),
+        methods: row.methods.clone(),
+    }
+}
+
+#[test]
+fn extern_signature_is_the_source_signature_after_export_reduction() {
+    let (db, file) = library_db_and_file();
+    let app = app_root(&db);
+    let mut compared = 0;
+    for (function, loc) in source_and_extern_locs(&db, file, app) {
+        let Some(loc) = loc else { continue };
+        let source = function_signature_ty(&db, function);
+        let exported = extern_signature_ty(&db, loc);
+        let reduce = |ty: &baml_type::Ty| reduce_ground_projections(&db, ty, 8);
+        assert_eq!(source.params.len(), exported.params.len());
+        for (from_source, from_row) in source.params.iter().zip(&exported.params) {
+            assert_eq!(from_source.name, from_row.name);
+            assert_eq!(from_source.mode, from_row.mode);
+            assert_eq!(reduce(&from_source.ty), from_row.ty);
+        }
+        assert_eq!(reduce(&source.return_type), exported.return_type);
+        assert_eq!(source.generic_params, exported.generic_params);
+        assert_eq!(source.builtin_kind, exported.builtin_kind);
+        assert_eq!(
+            callable_throws_of(&db, DeclRef::Source(function)),
+            callable_throws_of(&db, DeclRef::External(loc))
+        );
+        compared += 1;
+    }
+    assert!(compared >= 6, "{compared}");
+}
+
+#[test]
+fn callable_takes_self_agrees_across_lanes_and_with_the_export_predicate() {
+    let (db, file) = library_db_and_file();
+    let app = app_root(&db);
+    let (mut seen_instance, mut seen_static) = (false, false);
+    for (function, loc) in source_and_extern_locs(&db, file, app) {
+        let Some(loc) = loc else { continue };
+        let declared = baml_compiler2_ppir::item_data::function_data(&db, function)
+            .params
+            .first()
+            .is_some_and(|param| param.name.as_str() == "self");
+        let takes_self = callable_takes_self(&db, DeclRef::Source(function));
+        assert_eq!(takes_self, declared);
+        assert_eq!(takes_self, callable_takes_self(&db, DeclRef::External(loc)));
+        assert_eq!(
+            takes_self,
+            exported_takes_self(extern_function_row(&db, loc))
+        );
+        if takes_self {
+            seen_instance = true;
+        } else {
+            seen_static = true;
+        }
+    }
+    assert!(seen_instance && seen_static);
+}
+
+#[test]
+fn the_row_reproduces_the_external_callable_descriptor() {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(
+        "/hir-ty-package-interface-extern-parity",
+    ));
+    db.mount("app", library_blob());
+    db.file("main.baml", WITNESS_CONSUMER);
+    assert_no_diagnostic_errors(&db);
+    let workspace = db.workspace_root().unwrap();
+
+    let mut callables = Vec::new();
+    let ResolvedValue::Exported(choose) = package_resolution_context(&db, workspace)
+        .resolve_value(&db, &[Name::new("app"), Name::new("choose")], &[])
+        .expect("choose resolves")
+    else {
+        panic!("mounted result must not contain a FunctionLoc")
+    };
+    callables.push(choose.external.clone().expect("loc-free callable facts"));
+    let items = baml_compiler2_ppir::package_items(&db, workspace);
+    let Some(baml_compiler2_hir::contributions::Definition::Function(inspect)) =
+        items.lookup_value(&[], &Name::new("inspect"))
+    else {
+        panic!("inspect resolves")
+    };
+    let inference = baml_compiler2_hir_ty::infer::infer_body(
+        &db,
+        baml_compiler2_hir::body::BodyOwnerId::Function(inspect),
+    );
+    callables.extend(inference.member_resolutions.values().filter_map(
+        |resolution| match resolution {
+            baml_compiler2_hir_ty::infer::MemberResolution::External(callable) => {
+                Some(callable.clone())
+            }
+            _ => None,
+        },
+    ));
+    assert!(callables.len() >= 4, "{}", callables.len());
+
+    let mut families = std::collections::BTreeSet::new();
+    for callable in callables {
+        let loc = match &callable.target {
+            ExternalCallTarget::Free { function } => {
+                families.insert("free");
+                extern_function_named(&db, function.root(), function.namespace(), function.name())
+            }
+            ExternalCallTarget::Method { class, name } => {
+                families.insert("method");
+                extern_class_method(&db, class, name)
+            }
+            ExternalCallTarget::Interface { interface, method } => {
+                families.insert("interface");
+                extern_interface_method(&db, interface, method)
+            }
+        }
+        .expect("every carried descriptor names a row its target addresses");
+        let row = extern_function_row(&db, loc);
+        assert_eq!(callable.target, row.target);
+        assert_eq!(callable.linkability, row.linkability);
+        assert_eq!(callable.builtin_kind, row.builtin_kind);
+        assert_eq!(
+            callable.takes_self,
+            callable_takes_self(&db, DeclRef::External(loc))
+        );
+        assert_eq!(callable.generic_params, row.generic_params);
+        assert_eq!(callable.generic_param_bounds, row.generic_param_bounds);
+        let (owner_params, owner_bounds) = extern_owner_generics(&db, loc);
+        assert_eq!(callable.owner_generic_params.as_slice(), owner_params);
+        assert_eq!(callable.owner_generic_param_bounds.as_slice(), owner_bounds);
+        let user: Vec<_> = callable
+            .user_generic_params()
+            .map(|(param, bounds)| (param.clone(), bounds.to_vec()))
+            .collect();
+        assert_eq!(
+            user,
+            callable_user_generic_params(&db, DeclRef::External(loc))
+        );
+    }
+    assert_eq!(families.len(), 3, "{families:?}");
 }
