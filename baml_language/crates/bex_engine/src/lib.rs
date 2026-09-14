@@ -7560,26 +7560,151 @@ impl BexEngine {
         fn string(value: impl Into<String>) -> BexExternalValue {
             BexExternalValue::String(value.into().into())
         }
-        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
-            let span =
-                value
-                    .span
-                    .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
-                        class_name: "reflect.Span".to_string(),
+        fn span(value: bex_vm_types::RuntimeSourceSpan) -> BexExternalValue {
+            BexExternalValue::Instance {
+                class_name: "reflect.Span".to_string(),
+                type_args: Vec::new(),
+                fields: indexmap::indexmap! {
+                    "file".to_string() => string(value.file),
+                    "start".to_string() => BexExternalValue::Int(i64::try_from(value.start).expect("source offsets fit BAML int")),
+                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int")),
+                },
+            }
+        }
+        fn highlights(values: Vec<bex_vm_types::RuntimeDiagnosticHighlight>) -> BexExternalValue {
+            let items = values
+                .into_iter()
+                .map(|value| {
+                    let kind = match value.kind {
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType => {
+                            "identifier.type"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction => {
+                            "identifier.function"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField => {
+                            "identifier.field"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable => {
+                            "identifier.variable"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant => {
+                            "identifier.enum_variant"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute => {
+                            "identifier.attribute"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression => {
+                            "type_expression"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::Code => "code",
+                    };
+                    BexExternalValue::Instance {
+                        class_name: "reflect.DiagnosticHighlight".to_string(),
                         type_args: Vec::new(),
                         fields: indexmap::indexmap! {
-                            "file".to_string() => string(span.file),
-                            "start".to_string() => BexExternalValue::Int(i64::try_from(span.start).expect("source offsets fit BAML int")),
-                            "end".to_string() => BexExternalValue::Int(i64::try_from(span.end).expect("source offsets fit BAML int")),
+                            "start".to_string() => BexExternalValue::Int(i64::from(value.start)),
+                            "end".to_string() => BexExternalValue::Int(i64::from(value.end)),
+                            "kind".to_string() => string(kind),
                         },
-                    });
+                    }
+                })
+                .collect();
+            BexExternalValue::Array {
+                element_type: baml_type::RuntimeTy::unknown(),
+                items,
+            }
+        }
+        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
+            let span_value = value.span.map_or(BexExternalValue::Null, span);
+            let severity = match value.severity {
+                bex_vm_types::RuntimeDiagnosticSeverity::Error => "error",
+                bex_vm_types::RuntimeDiagnosticSeverity::Warning => "warning",
+                bex_vm_types::RuntimeDiagnosticSeverity::Info => "info",
+            };
+            let (phase, headline, primary_label, message_highlights, annotations, related_info) =
+                value.details.map_or_else(
+                    || {
+                        (
+                            BexExternalValue::Null,
+                            string(value.message.clone()),
+                            BexExternalValue::Null,
+                            highlights(Vec::new()),
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: Vec::new(),
+                            },
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: Vec::new(),
+                            },
+                        )
+                    },
+                    |details| {
+                        let phase = match details.phase {
+                            bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
+                            bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
+                            bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
+                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
+                        };
+                        let annotations = details
+                            .annotations
+                            .into_iter()
+                            .map(|annotation| BexExternalValue::Instance {
+                                class_name: "reflect.DiagnosticAnnotation".to_string(),
+                                type_args: Vec::new(),
+                                fields: indexmap::indexmap! {
+                                    "span".to_string() => span(annotation.span),
+                                    "message".to_string() => annotation.message.map_or(BexExternalValue::Null, string),
+                                    "message_highlights".to_string() => highlights(annotation.message_highlights),
+                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary),
+                                },
+                            })
+                            .collect();
+                        let related_info = details
+                            .related_info
+                            .into_iter()
+                            .map(|related| BexExternalValue::Instance {
+                                class_name: "reflect.DiagnosticRelatedInfo".to_string(),
+                                type_args: Vec::new(),
+                                fields: indexmap::indexmap! {
+                                    "span".to_string() => span(related.span),
+                                    "message".to_string() => string(related.message),
+                                    "message_highlights".to_string() => highlights(related.message_highlights),
+                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string),
+                                },
+                            })
+                            .collect();
+                        (
+                            string(phase),
+                            string(details.headline),
+                            details.primary_label.map_or(BexExternalValue::Null, string),
+                            highlights(details.message_highlights),
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: annotations,
+                            },
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: related_info,
+                            },
+                        )
+                    },
+                );
             BexExternalValue::Instance {
                 class_name: "reflect.Diagnostic".to_string(),
                 type_args: Vec::new(),
                 fields: indexmap::indexmap! {
                     "code".to_string() => string(value.code),
                     "message".to_string() => string(value.message),
-                    "span".to_string() => span,
+                    "span".to_string() => span_value,
+                    "severity".to_string() => string(severity),
+                    "phase".to_string() => phase,
+                    "headline".to_string() => headline,
+                    "primary_label".to_string() => primary_label,
+                    "message_highlights".to_string() => message_highlights,
+                    "annotations".to_string() => annotations,
+                    "related_info".to_string() => related_info,
                 },
             }
         }

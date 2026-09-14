@@ -1060,6 +1060,11 @@ pub fn validate_impl_signatures<'db>(
     };
 
     let mut diags = Vec::new();
+    let file = impl_loc.file(db);
+    let block = impl_block_data(db, impl_loc);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let current_package = pkg_info.root;
+    let pkg_id = pkg_info.root;
     let data = match impl_data(db, impl_loc).as_ref() {
         Ok(data) => data,
         // A cyclic header can't carry its own diagnostic — re-detect and
@@ -1070,25 +1075,140 @@ pub fn validate_impl_signatures<'db>(
                 ImplDiagnosticLocation::ForTarget,
             )];
         }
-        // BUG: `ImplData::interface` is a SOURCE `InterfaceLoc`, so an impl of
-        // a MOUNTED interface always lands here and every header diagnostic
-        // below is skipped — E0138, E0135, the orphan rule and signature
-        // conformance alike. `implement dep.I for true | false` is therefore
-        // accepted in silence, while the identical block against a local
-        // interface reports E0138. Not a soundness hole today (the header's
-        // own validity decision still withholds the facts from selection, so
-        // nothing dispatches to it) but a real diagnostic gap; it needs the
-        // mounted-interface impl validation slice.
-        Err(ImplDataError::InterfaceUnresolved { .. } | ImplDataError::Malformed) => return diags,
+        // `ImplData::interface` is source-loc based, so a source impl whose
+        // target is a mounted interface cannot enter the declaration-body
+        // conformance path below. Its loc-free `impl_facts`, however, already
+        // owns the canonical lowered header used by selection/export. Replay
+        // the validations that depend only on those SAME facts: this preserves
+        // E0138/E0135/E0139 for out-of-body impls and applies the interface's
+        // `requires` obligations to both in-body and out-of-body impls. Return
+        // after this slice so the source-backed path cannot report anything
+        // twice.
+        Err(ImplDataError::InterfaceUnresolved { .. }) => {
+            use crate::impls::ImplHeaderResolution;
+
+            let out_of_body = match &block.subject {
+                ImplSubjectData::InClass { out_of_body, .. } => *out_of_body,
+                ImplSubjectData::Free { .. } => true,
+            };
+
+            let (facts, for_ty, validate_requires) = match crate::impls::impl_facts(db, impl_loc) {
+                ImplHeaderResolution::Unresolved => return diags,
+                ImplHeaderResolution::Poisoned { unconstrained } => {
+                    if out_of_body {
+                        for name in unconstrained {
+                            diags.push((
+                                TirTypeError::UnconstrainedImplTypeParam { name: name.clone() },
+                                ImplDiagnosticLocation::Bound,
+                            ));
+                        }
+                    }
+                    return diags;
+                }
+                ImplHeaderResolution::NotImplementor { target, facts } => {
+                    if out_of_body {
+                        diags.push((
+                            TirTypeError::ImplTargetNotConcrete {
+                                target: target.clone(),
+                            },
+                            ImplDiagnosticLocation::ForTarget,
+                        ));
+                    }
+                    (facts, target.clone(), false)
+                }
+                ImplHeaderResolution::Resolved(facts) => {
+                    (facts, facts.for_ty_pattern.to_plain(), true)
+                }
+            };
+            let interface = facts.interface.to_plain();
+            // A successful loc-free resolution with no source `InterfaceLoc`
+            // should mean exactly a mounted interface. Keep this guard
+            // fail-closed if another unresolved source shape is introduced.
+            if !matches!(
+                crate::package_interface::mounted_type_row(db, &interface.name),
+                Some(crate::package_interface::ExportedType::Interface { .. })
+            ) {
+                return diags;
+            }
+            if out_of_body {
+                match orphan_check(
+                    current_package,
+                    &interface.name,
+                    &for_ty,
+                    &interface.generics,
+                ) {
+                    OrphanOutcome::Ok => {}
+                    OrphanOutcome::UncoveredParam(name) => diags.push((
+                        TirTypeError::ImplViolatesOrphanRule {
+                            interface: interface.name.clone(),
+                            uncovered_param: Some(name),
+                        },
+                        ImplDiagnosticLocation::InterfaceTarget,
+                    )),
+                    OrphanOutcome::NoLocalType => diags.push((
+                        TirTypeError::ImplViolatesOrphanRule {
+                            interface: interface.name.clone(),
+                            uncovered_param: None,
+                        },
+                        ImplDiagnosticLocation::InterfaceTarget,
+                    )),
+                }
+            }
+
+            // E0125: mounted interface exports carry their transitive
+            // `requires` closure in symbolic form. Realize that closure with
+            // this impl's receiver and interface arguments, normalize any
+            // `Self.member` projections through the same fact oracle as the
+            // source-interface path, then ask the shared membership oracle.
+            if validate_requires {
+                let bounds: TypeVarBoundsMap = facts
+                    .generic_params
+                    .iter()
+                    .map(|(param, bounds)| {
+                        (
+                            param.clone(),
+                            bounds
+                                .iter()
+                                .map(baml_type::interned::ClosedInterface::to_plain)
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                let ctx = crate::facts::Facts::with_bounds(db, bounds.into_iter().collect());
+                for required in crate::impls::direct_requires_closure_plain(
+                    db,
+                    &interface,
+                    &for_ty,
+                    crate::impls::REQUIRES_CLOSURE_FUEL,
+                ) {
+                    let required_ty = baml_type::normalize::normalize(&required.to_ty(), &ctx);
+                    if baml_type_runtime::contains_error_recovery(&required_ty) {
+                        continue;
+                    }
+                    let Some(required) = required_ty.as_interface() else {
+                        continue;
+                    };
+                    let concrete = crate::impls::interned_ty(&for_ty);
+                    let required_interned =
+                        baml_type::interned::InferInterface::from_constraint(&required);
+                    if !crate::impls::implements_interface(db, &concrete, &required_interned) {
+                        diags.push((
+                            TirTypeError::MissingRequiredInterface {
+                                interface: interface.name.clone(),
+                                required,
+                            },
+                            ImplDiagnosticLocation::InterfaceTarget,
+                        ));
+                    }
+                }
+            }
+            return diags;
+        }
+        Err(ImplDataError::Malformed) => return diags,
     };
     let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
         return diags;
     };
-    let file = impl_loc.file(db);
-    let block = impl_block_data(db, impl_loc);
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let current_package = pkg_info.root;
-    let pkg_id = pkg_info.root;
 
     // The canonical algebra context: hir_ty's fact oracle carrying the impl's
     // own param env (TIR's `GlobalTypeContext` role).

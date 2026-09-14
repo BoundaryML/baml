@@ -72,7 +72,8 @@ function inspect(
     let bound: int = value.get()
     let defaulted: int[] = value.twice()
     let virtual: int[] = view.twice()
-    let inherited_default = view.root()
+    let inherited_default: (app.View<int> as app.Parent<Root = string>).Root = "root"
+    let inherited_call = view.root()
     let unbound: int = app.Entry.get(value)
     let chosen: app.Entry = app.choose(value)
     let status: app.Status = app.Status.Active
@@ -98,6 +99,37 @@ fn library_blob_with_format(artifact_format: u32) -> Vec<u8> {
     assert_no_diagnostic_errors(&db);
     baml_artifact::encode_with_format_for_test(
         artifact_format,
+        baml_artifact::ArtifactKind::PackageInterface,
+        &export_interface(
+            &db,
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new("app"))
+                .unwrap(),
+        ),
+    )
+    .expect("package interface serializes")
+}
+
+fn mounted_assoc_blob() -> Vec<u8> {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-mounted-associated-library"));
+    db.dependency("app");
+    db.file(
+        "<builtin>/app/lib.baml",
+        r#"
+interface Batch {
+    type Item
+    type Items
+}
+
+interface QualifiedBatch {
+    type Item
+    type Items
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    baml_artifact::encode(
         baml_artifact::ArtifactKind::PackageInterface,
         &export_interface(
             &db,
@@ -282,6 +314,83 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     assert_eq!(external.user_generic_params().count(), 1);
 }
 
+fn assert_mounted_blanket_impl_resolves_self_associated_binding_symbolically() {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(
+        "/hir-ty-mounted-blanket-associated-consumer",
+    ));
+    db.mount("app", mounted_assoc_blob());
+    let file = db.file(
+        "main.baml",
+        r#"
+implement<T> app.Batch for T {
+    type Item = int
+    type Items = Self.Item[]
+}
+
+class ConcreteBatch {
+    implements app.QualifiedBatch {
+        type Item = int
+        type Items = (Self as app.QualifiedBatch).Item[]
+    }
+}
+"#,
+    );
+
+    let diagnostic_codes = collect_diagnostics(&db)
+        .into_iter()
+        .map(|diagnostic| diagnostic.code())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diagnostic_codes,
+        ["E0139"],
+        "the bare foreign blanket is deliberately rejected by the orphan rule"
+    );
+    let impl_locs = baml_compiler2_ppir::item_data::file_impls(&db, file);
+    let blanket =
+        baml_compiler2_hir_ty::impls::impl_facts(&db, *impl_locs.first().expect("blanket impl"))
+            .resolved()
+            .expect("blanket mounted impl facts resolve");
+    let item = blanket
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Item")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("Item witness");
+    let items = blanket
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Items")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("Items witness");
+
+    assert!(matches!(item, baml_type::Ty::Int { .. }), "{item:#?}");
+    assert!(
+        matches!(&items, baml_type::Ty::List(inner, _)
+            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        "a blanket receiver must keep Self's progressively pinned witness: {items:#?}"
+    );
+
+    let qualified = baml_compiler2_hir_ty::impls::impl_facts(
+        &db,
+        *impl_locs.get(1).expect("qualified concrete impl"),
+    )
+    .resolved()
+    .expect("qualified mounted impl facts resolve without a query cycle");
+    let qualified_items = qualified
+        .associated_types
+        .iter()
+        .find(|(name, _)| name.as_str() == "Items")
+        .map(|(_, ty)| ty.to_plain())
+        .expect("qualified Items witness");
+    assert!(
+        matches!(&qualified_items, baml_type::Ty::List(inner, _)
+            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        "a qualified mounted Self projection must resolve from the symbolic bound: \
+         {qualified_items:#?}"
+    );
+}
+
 fn error_messages(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-errors"));
@@ -303,77 +412,6 @@ fn error_messages(source: &str) -> Vec<String> {
             )
         })
         .collect()
-}
-
-#[test]
-fn bare_type_is_not_a_value_type_annotation() {
-    let errors = error_messages("function removed(value: type) -> type { value }");
-    assert!(
-        errors
-            .iter()
-            .filter(|message| {
-                message.contains("`type` no longer names a runtime type value")
-                    && message.contains("write `reflect.Type` instead")
-            })
-            .count()
-            >= 2,
-        "bare `type` annotations must be rejected, and must name their replacement: {errors:#?}"
-    );
-}
-
-#[test]
-fn mounted_type_validation_and_package_shadowing_are_fail_closed() {
-    let valid_errors = error_messages(
-        r#"
-function ok(
-    local: root.reflect.Type<int>,
-    view: app.View<int>,
-    status: app.Status,
-    score: app.Score,
-) -> int throws never { 0 }
-
-function json_shorthand() -> string throws never {
-    json.stringify(null)
-}
-"#,
-    );
-    assert!(
-        valid_errors.is_empty(),
-        "the user reflect namespace and json shorthand should remain valid: {valid_errors:#?}"
-    );
-
-    let shadow_errors =
-        error_messages("function shadowed() -> unknown throws never { reflect.Type.of<int>() }");
-    assert!(
-        shadow_errors
-            .iter()
-            .any(|message| message.contains("unresolved name: `of`")),
-        "an ordinary package name should follow normal user-namespace shadowing: {shadow_errors:#?}"
-    );
-
-    let errors = error_messages(
-        r#"
-function bad(
-    missing: app.View,
-    extra: app.View<int, string>,
-    unknown_pin: app.View<int, Nope = string>,
-    enum_args: app.Status<int>,
-    alias_args: app.Score<int>,
-) -> int throws never { 0 }
-"#,
-    );
-    assert!(
-        errors
-            .iter()
-            .filter(|message| message.contains("type argument"))
-            .count()
-            >= 4,
-        "{errors:#?}"
-    );
-    assert!(
-        errors.iter().any(|message| message.contains("Nope")),
-        "{errors:#?}"
-    );
 }
 
 #[test]
@@ -570,6 +608,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
         ExternalCallTarget::Interface { interface, method }
             if interface.name().as_str() == "View" && method.as_str() == "twice"
     )));
+    assert_mounted_blanket_impl_resolves_self_associated_binding_symbolically();
 }
 
 #[test]

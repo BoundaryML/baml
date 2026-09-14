@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+   ╭─[error_surface_names.baml:8:14]
+ 8 │         _ => "not a ParseError",
+   ·              ──────────────────
+   ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[error_surface_names.baml:35:14]
+ 35 │         _ => "not a ParseError",
+    ·              ──────────────────
+    ╰────

@@ -1,361 +1,139 @@
-//! Stream type expansion snapshot tests for PPIR → HIR → TIR pipeline.
+//! Stream type expansion snapshots for the PPIR → HIR → TIR pipeline.
 //!
-//! Tests that `@stream.*` annotations produce correct `stream_*` class/alias
-//! definitions, matching the expansion rules in `01b-stream-expansion-rules.md`.
+//! The six matrices below preserve the original twenty-three scenarios while
+//! making each semantic case visible through descriptive declarations.
 
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
 
-// ── Default expansion (no annotations) ──────────────────────────────────────
-
 #[test]
-fn primitives_get_null_union() {
+fn stream_default_expansion_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        "\
+        r#"
+// primitives_get_null_union
 class Primitives {
     name string
     count int
     flag bool
     score float
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
 }
 
-#[test]
-fn enum_field_unchanged() {
-    let mut db = make_db();
-    db.file(
-        "enums.baml",
-        "\
+// enum_field_unchanged
 enum Status {
     Active
     Inactive
-}",
-    );
-    let file = db.file(
-        "test.baml",
-        "\
+}
 class WithEnum {
     status Status
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
 }
 
-#[test]
-fn class_field_gets_stream_prefix() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class Inner {
+class DefaultInner {
     value string
 }
 
-class Outer {
-    inner Inner
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
+// class_field_gets_stream_prefix
+class ClassFieldOuter {
+    inner DefaultInner
 }
 
-#[test]
-fn literal_fields_unchanged() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
+// literal_fields_unchanged
 class WithLiterals {
     type "resume"
     version 1
     enabled true
 }
+
+// list_field_recurses
+class WithLists {
+    strings string[]
+    ints int[]
+    classes DefaultInner[]
+}
+
+// map_field_recurses_value
+class WithMaps {
+    simple map<string, int>
+    complex map<string, DefaultInner>
+}
+
+// union_field_recurses_variants
+class WithUnions {
+    simple int | string
+    with_class DefaultInner | string
+    mixed int | DefaultInner
+}
+
+// optional_expands_to_union_with_null
+class WithOptionals {
+    name string?
+    inner DefaultInner?
+}
+
+// type_alias_expansion
+type SimpleAlias = string
+type ClassAlias = DefaultInner
+type UnionAlias = int | DefaultInner
+type OptionalAlias = DefaultInner?
+
+// recursive_class
+class TreeNode {
+    value string
+    children TreeNode[]
+}
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
 #[test]
-fn list_field_recurses() {
+fn stream_annotation_semantics_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-class WithLists {
-    strings string[]
-    ints int[]
-    classes Inner[]
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn map_field_recurses_value() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-class WithMaps {
-    simple map<string, int>
-    complex map<string, Inner>
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn union_field_recurses_variants() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-class WithUnions {
-    simple int | string
-    with_class Inner | string
-    mixed int | Inner
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn optional_expands_to_union_with_null() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-class WithOptionals {
-    name string?
-    inner Inner?
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn type_alias_expansion() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-type SimpleAlias = string
-type ClassAlias = Inner
-type UnionAlias = int | Inner
-type OptionalAlias = Inner?",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn recursive_class() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class TreeNode {
-    value string
-    children TreeNode[]
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-// ── @stream.done ────────────────────────────────────────────────────────────
-
-#[test]
-fn stream_done_field_keeps_type_as_is() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
+        r#"
+// stream_done_field_keeps_type_as_is
 class WithDone {
     name string @stream.done
     age int
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
 }
 
-#[test]
-fn stream_done_block_attr() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
+// stream_done_block_attr. The holder is intentional: block attributes are
+// consumed when the annotated class is reached through a referenced type path.
 class AtomicPoint {
     @@stream.done
     x float
     y float
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
+}
+class DoneReferences {
+    point AtomicPoint
 }
 
-// ── @stream.not_null ────────────────────────────────────────────────────────
-
-#[test]
-fn stream_not_null_field() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class WithNotNull {
-    gpa float @stream.not_null
+// stream_not_null_field, repaired to the supported must_exist spelling.
+class WithMustExist {
+    gpa float @stream.must_exist
     name string
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
 }
 
-#[test]
-fn stream_not_null_block_attr_on_referenced_class() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-class NotNullEducation {
-    @@stream.not_null
+// stream_not_null_block_attr_on_referenced_class, likewise repaired. Both
+// singular and list references exercise lookup of the block attribute.
+class MustExistEducation {
+    @@stream.must_exist
     school string
     year int
 }
-
-class References {
-    education NotNullEducation
-    educations NotNullEducation[]
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
+class MustExistReferences {
+    education MustExistEducation
+    educations MustExistEducation[]
 }
 
-// ── Combined annotations ────────────────────────────────────────────────────
-
-#[test]
-fn stream_done_and_not_null() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
+// stream_done_and_not_null, repaired to done + must_exist.
 class Combined {
-    id string @stream.done @stream.not_null
+    id string @stream.done @stream.must_exist
     name string @stream.done
-    age int @stream.not_null
+    age int @stream.must_exist
     score float
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-// ── Cross-file ──────────────────────────────────────────────────────────────
-
-#[test]
-fn cross_file_class_reference() {
-    let mut db = make_db();
-    db.file(
-        "inner.baml",
-        "\
-class Education {
-    school string
-    year int
-}",
-    );
-    let file = db.file(
-        "test.baml",
-        "\
-class Resume {
-    name string
-    education Education[]
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-// ── Bug 1: pending_default alias resolution ─────────────────────────────────
-
-#[test]
-fn type_alias_to_list_in_union_gets_correct_pending_default() {
-    // type Ints = int[] — in a union, pending_default should resolve the alias
-    // and return EmptyArray (not Null). This means the stream expansion should
-    // NOT prepend an extra null to the union.
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-type Ints = int[]
-
-class WithAliasUnion {
-    data Ints | string
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn chained_alias_to_list_in_union() {
-    // A -> B -> int[] — chained aliases should also resolve correctly
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-type IntList = int[]
-type MyList = IntList
-
-class WithChainedAlias {
-    data MyList | string
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-#[test]
-fn type_alias_to_map_in_union_gets_empty_map_default() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "\
-type Config = map<string, string>
-
-class WithMapAlias {
-    settings Config | int
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-// ── Bug 2: field attributes lost on $stream ─────────────────────────────────
-
-#[test]
-fn field_alias_preserved_on_stream_class() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-class WithAlias {
-    bar string @alias("baz")
-    count int @alias("cnt")
 }
 "#,
     );
@@ -363,11 +141,72 @@ class WithAlias {
 }
 
 #[test]
-fn field_description_preserved_stream_done_stripped() {
+fn stream_cross_file_reference() {
+    let mut db = make_db();
+    db.file(
+        "inner.baml",
+        r#"
+class Education {
+    school string
+    year int
+}
+"#,
+    );
+    let file = db.file(
+        "test.baml",
+        r#"
+// cross_file_class_reference
+class Resume {
+    name string
+    education Education[]
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn stream_pending_default_alias_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
+// type_alias_to_list_in_union_gets_correct_pending_default
+type Ints = int[]
+class WithAliasUnion {
+    data Ints | string
+}
+
+// chained_alias_to_list_in_union
+type IntList = int[]
+type MyList = IntList
+class WithChainedAlias {
+    data MyList | string
+}
+
+// type_alias_to_map_in_union_gets_empty_map_default
+type Config = map<string, string>
+class WithMapAlias {
+    settings Config | int
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn stream_field_metadata_matrix() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+// field_alias_preserved_on_stream_class
+class WithAlias {
+    bar string @alias("baz")
+    count int @alias("cnt")
+}
+
+// field_description_preserved_stream_done_stripped
 class WithDesc {
     name string @description("The name") @stream.done
     age int @description("Age in years")
@@ -377,21 +216,8 @@ class WithDesc {
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
-// ── Bug 3: package-scoped keys ──────────────────────────────────────────────
-// Cross-package collision tests require multi-package test infrastructure.
-// Covered by manual verification: ensure @@stream.* attrs from builtins
-// don't leak into user types with the same name.
-// TODO: Add project-based test in projects/stream_crosspackage/ once
-// multi-package test support is available.
-
-// ── Generic args threaded through stream-expanded references ────────────────
-
 #[test]
-fn stream_companion_preserves_generic_args_in_class_field() {
-    // `Container.inner: Box<int>` should round-trip into `Container$stream`
-    // with `inner: null | Box$stream<int>`. Without threading `generic_args`
-    // through PPIR's stream rewrite, `Box$stream` would lose its arg and
-    // mismatch the synthesized `Box$stream<T>` arity.
+fn stream_generic_argument_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -400,31 +226,13 @@ class Box<T> {
     value T
 }
 
+// stream_companion_preserves_generic_args_in_class_field
 class Container {
     inner Box<int>
 }
-"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
 
-#[test]
-fn stream_companion_preserves_generic_args_for_llm_return_type() {
-    // Reviewer's exact scenario: an LLM function returning `Box<int>` pulls
-    // the stream-expanded `Box$stream<int>` type companion into play. With
-    // generic-arg threading, the reference matches `Box$stream<T>`'s arity.
-    // (The legacy LLM `$stream`/`@parse_stream` function companions are gone;
-    // the class-level `$stream` type expansion is what this pins now.)
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-class Box<T> {
-    value T
-}
-
-client Dummy = openai.ResponsesClient.new(model = "gpt-4");
-
+// stream_companion_preserves_generic_args_for_llm_return_type
+client Dummy = openai.ResponsesClient.new(model = "gpt-4")
 function GetBoxedInt() -> Box<int> {
     client: Dummy
     prompt: `Give me a box`

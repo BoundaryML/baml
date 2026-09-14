@@ -1470,9 +1470,18 @@ impl<'db> LowerCtx<'db> {
                     return Some(def);
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
-                let dep_items = baml_compiler2_ppir::package_items(self.db, package);
-                if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
-                    return Some(def);
+                // A source root served from a package interface may also carry
+                // link-only PPIR stubs so emit can allocate import slots. Those
+                // stubs are deliberately type-erased (notably generic function
+                // parameters become `unknown`) and must never win semantic
+                // resolution over the mounted interface row. Inference falls
+                // through to `resolve_exported_value` for that authoritative
+                // signature.
+                if !is_served_from_interface(self.db, package) {
+                    let dep_items = baml_compiler2_ppir::package_items(self.db, package);
+                    if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
+                        return Some(def);
+                    }
                 }
             }
         }
@@ -2378,6 +2387,35 @@ pub fn owner_impl_target<'db>(
     function: FunctionLoc<'db>,
     frame: &[baml_type::ParamTy],
 ) -> Option<baml_type::Interface> {
+    // A mounted interface has no source declaration loc, so its impl's
+    // associated bindings are canonicalized by the loc-free fact extractor.
+    // Read that sequential result here as well: method signatures and bodies
+    // project `Self.Member` through this target, and independently re-lowering
+    // `type Items = Self.Item[]` would forget the earlier `Item` pin.
+    if let Some(MethodOwner::Impl(impl_loc)) =
+        baml_compiler2_ppir::item_data::method_owner(db, function)
+        && let Some(facts) = crate::impls::impl_facts(db, impl_loc).for_display()
+    {
+        let interface = facts.interface.to_plain();
+        if crate::package_interface::mounted_type_row(db, &interface.name).is_some() {
+            let mut pins = interface.associated_types.to_vec();
+            for (name, ty) in &facts.associated_types {
+                let ty = ty.to_plain();
+                if let Some((_, existing)) = pins.iter_mut().find(|(existing, _)| existing == name)
+                {
+                    *existing = ty;
+                } else {
+                    pins.push((name.clone(), ty));
+                }
+            }
+            return Some(baml_type::Interface::new(
+                interface.name,
+                interface.generics,
+                pins.into(),
+            ));
+        }
+    }
+
     let target = baml_compiler2_ppir::item_data::method_interface_target(db, function).as_ref()?;
     // The impl's bounds ride along: a written `type Member = T.Item`
     // binding must find `Item`'s declaring interface through `T`'s bound.

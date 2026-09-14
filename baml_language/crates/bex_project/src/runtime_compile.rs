@@ -9,7 +9,10 @@ use std::{
 };
 
 use baml_base::Name;
-use baml_compiler_diagnostics::{DiagnosticId, Severity};
+use baml_compiler_diagnostics::{
+    DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
+    DiagnosticPhase, Severity,
+};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
 use baml_compiler2_emit::emit_units_with_stdlib;
@@ -23,7 +26,9 @@ use baml_type::TypeName;
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
-    RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimePackageMount,
+    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
+    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
+    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimePackageMount,
     RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
     RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind,
     SessionVisibleSymbol,
@@ -301,40 +306,43 @@ fn enrich_runtime_mount(
         }
     }
 
-    /// `<T extends A & B, U>` for the function's own generic parameters, or
-    /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
-    /// this world cannot name is dropped rather than widened).
-    fn stub_generics(
-        function: &ExportedFunction<TypeName>,
+    fn stub_interface(
+        interface: &baml_type::Interface<TypeName>,
+        viewpoint: &StubViewpoint<'_>,
+    ) -> Option<String> {
+        (!viewpoint.hides_interface(interface)).then(|| {
+            baml_type::Ty::Interface(
+                interface.name.clone(),
+                interface.generics.clone(),
+                interface.associated_types.clone(),
+                baml_type::TyAttr::default(),
+            )
+            .to_string()
+        })
+    }
+
+    /// Render a declaration's generic frame, retaining every source-spellable
+    /// bound. Link-only stubs are the source declarations the conformance
+    /// checker sees, so dropping interface generic bounds here would make a
+    /// mounted declaration weaker than the package interface that owns it.
+    fn stub_generic_params(
+        generic_params: &[baml_type::ParamTy],
+        generic_param_bounds: &[Vec<baml_type::Interface<TypeName>>],
         viewpoint: &StubViewpoint<'_>,
         spell_bounds: bool,
     ) -> String {
-        let generics = function
-            .generic_params
+        let generics = generic_params
             .iter()
             .enumerate()
             .filter(|(_, param)| !baml_type::is_synthetic_effect_param(param.name()))
             .map(|(index, param)| {
                 let bounds = if spell_bounds {
-                    function
-                        .generic_param_bounds
+                    generic_param_bounds
                         .get(index)
-                        .map(|bounds| {
-                            bounds
-                                .iter()
-                                .filter(|bound| !viewpoint.hides_interface(bound))
-                                .map(|bound| {
-                                    baml_type::Ty::Interface(
-                                        bound.name.clone(),
-                                        bound.generics.clone(),
-                                        bound.associated_types.clone(),
-                                        baml_type::TyAttr::default(),
-                                    )
-                                    .to_string()
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|bound| stub_interface(bound, viewpoint))
+                        .collect::<Vec<_>>()
                 } else {
                     Vec::new()
                 };
@@ -350,6 +358,22 @@ fn enrich_runtime_mount(
         } else {
             format!("<{}>", generics.join(", "))
         }
+    }
+
+    /// `<T extends A & B, U>` for the function's own generic parameters, or
+    /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
+    /// this world cannot name is dropped rather than widened).
+    fn stub_generics(
+        function: &ExportedFunction<TypeName>,
+        viewpoint: &StubViewpoint<'_>,
+        spell_bounds: bool,
+    ) -> String {
+        stub_generic_params(
+            &function.generic_params,
+            &function.generic_param_bounds,
+            viewpoint,
+            spell_bounds,
+        )
     }
 
     /// The link stub for a free function (or, when its owner has no source
@@ -498,6 +522,7 @@ fn enrich_runtime_mount(
         message: error.to_string(),
         severity: RuntimeDiagnosticSeverity::Error,
         span: None,
+        details: None,
     })?;
     let alias = own_aliases
         .first()
@@ -521,6 +546,7 @@ fn enrich_runtime_mount(
                     fields,
                     methods,
                     generic_params,
+                    generic_param_bounds,
                     ..
                 } => {
                     // The emitter needs a concrete class object in the mounted
@@ -533,16 +559,12 @@ fn enrich_runtime_mount(
                         && export_namespace.iter().all(source_identifier)
                         && fields.iter().all(|(name, ..)| source_identifier(name));
                     if class_stub {
-                        let generics = generic_params
-                            .iter()
-                            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>();
-                        let generic_suffix = if generics.is_empty() {
-                            String::new()
-                        } else {
-                            format!("<{}>", generics.join(", "))
-                        };
+                        let generic_suffix = stub_generic_params(
+                            generic_params,
+                            generic_param_bounds,
+                            &viewpoint,
+                            true,
+                        );
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
                         for (field, ty, attrs) in fields.iter() {
                             // Source-backed lookup wins before the mounted
@@ -586,6 +608,8 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
+                    param_bounds,
+                    requires,
                     associated_types,
                     fields,
                     required_methods,
@@ -594,18 +618,33 @@ fn enrich_runtime_mount(
                 } => {
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
-                    let generics = generic_params
+                    let generic_suffix =
+                        stub_generic_params(generic_params, param_bounds, &viewpoint, true);
+                    let requires = requires
                         .iter()
-                        .map(ToString::to_string)
+                        .filter_map(|required| stub_interface(required, &viewpoint))
                         .collect::<Vec<_>>();
-                    let generic_suffix = if generics.is_empty() {
+                    let requires_suffix = if requires.is_empty() {
                         String::new()
                     } else {
-                        format!("<{}>", generics.join(", "))
+                        format!(" requires {}", requires.join(", "))
                     };
-                    let mut source = format!("interface {name}{generic_suffix} {{\n");
+                    let mut source =
+                        format!("interface {name}{generic_suffix}{requires_suffix} {{\n");
                     for associated in associated_types {
-                        writeln!(&mut source, "  type {}", associated.name)
+                        let bound = associated
+                            .bound
+                            .as_ref()
+                            .and_then(|bound| stub_interface(bound, &viewpoint))
+                            .map_or_else(String::new, |bound| format!(" extends {bound}"));
+                        // An unspellable default still means the binding is
+                        // optional. Widen only that value to `unknown`, just as
+                        // field/method slots do, rather than turning a valid
+                        // mounted impl into a false "missing binding" error.
+                        let default = associated.default.as_ref().map_or_else(String::new, |ty| {
+                            format!(" = {}", stub_type(ty, &viewpoint))
+                        });
+                        writeln!(&mut source, "  type {}{bound}{default}", associated.name)
                             .expect("writing to String is infallible");
                     }
                     for (field, ty, attrs) in fields {
@@ -678,6 +717,7 @@ fn enrich_runtime_mount(
         ),
         severity: RuntimeDiagnosticSeverity::Error,
         span: None,
+        details: None,
     };
     for mount in &package.types {
         for class in &mount.classes {
@@ -844,6 +884,7 @@ fn enrich_runtime_mount(
             ),
             severity: RuntimeDiagnosticSeverity::Error,
             span: None,
+            details: None,
         })?;
         // When the export name is the root declaration's own item name, the
         // item row already spells it with the same identity.
@@ -861,6 +902,7 @@ fn enrich_runtime_mount(
                     message: format!("duplicate exported type name `{}`", mount.export_name),
                     severity: RuntimeDiagnosticSeverity::Error,
                     span: None,
+                    details: None,
                 });
             }
             None => {
@@ -950,6 +992,7 @@ fn enrich_runtime_mount(
             message: error.to_string(),
             severity: RuntimeDiagnosticSeverity::Error,
             span: None,
+            details: None,
         })
 }
 
@@ -971,14 +1014,133 @@ fn owned_diagnostic(
     diagnostic: &baml_compiler_diagnostics::Diagnostic,
     session: bool,
 ) -> RuntimeCompileDiagnostic {
-    let span = diagnostic.primary_span().and_then(|span| {
+    fn owned_span(db: &ProjectDatabase, span: baml_base::Span) -> Option<RuntimeSourceSpan> {
         db.file_id_to_path(span.file_id)
             .map(|path| RuntimeSourceSpan {
                 file: runtime_relative_virtual_path(path),
                 start: usize::from(span.range.start()),
                 end: usize::from(span.range.end()),
             })
-    });
+    }
+
+    fn highlight_kind(kind: DiagnosticMessageKind) -> RuntimeDiagnosticHighlightKind {
+        match kind {
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => {
+                RuntimeDiagnosticHighlightKind::IdentifierType
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => {
+                RuntimeDiagnosticHighlightKind::IdentifierFunction
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => {
+                RuntimeDiagnosticHighlightKind::IdentifierField
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => {
+                RuntimeDiagnosticHighlightKind::IdentifierVariable
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::EnumVariant) => {
+                RuntimeDiagnosticHighlightKind::IdentifierEnumVariant
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => {
+                RuntimeDiagnosticHighlightKind::IdentifierAttribute
+            }
+            DiagnosticMessageKind::TypeExpression => RuntimeDiagnosticHighlightKind::TypeExpression,
+            DiagnosticMessageKind::Code => RuntimeDiagnosticHighlightKind::Code,
+        }
+    }
+
+    fn owned_text(
+        text: &str,
+        highlights: &[DiagnosticMessageHighlight],
+        session: bool,
+    ) -> (String, Vec<RuntimeDiagnosticHighlight>) {
+        let rendered = if session {
+            demangle_session_names(text)
+        } else {
+            text.to_string()
+        };
+        let highlights = highlights
+            .iter()
+            .filter_map(|highlight| {
+                let start = usize::try_from(highlight.start).ok()?;
+                let end = usize::try_from(highlight.end).ok()?;
+                if start > end
+                    || end > text.len()
+                    || !text.is_char_boundary(start)
+                    || !text.is_char_boundary(end)
+                {
+                    return None;
+                }
+                let (start, end) = if session {
+                    (
+                        demangle_session_names(&text[..start]).len(),
+                        demangle_session_names(&text[..end]).len(),
+                    )
+                } else {
+                    (start, end)
+                };
+                Some(RuntimeDiagnosticHighlight {
+                    start: u32::try_from(start).ok()?,
+                    end: u32::try_from(end).ok()?,
+                    kind: highlight_kind(highlight.kind),
+                })
+            })
+            .collect();
+        (rendered, highlights)
+    }
+
+    let span = diagnostic
+        .primary_span()
+        .and_then(|span| owned_span(db, span));
+    let (headline, message_highlights) =
+        owned_text(&diagnostic.message, &diagnostic.message_highlights, session);
+    let primary_label = diagnostic
+        .annotations
+        .iter()
+        .find(|annotation| annotation.is_primary)
+        .and_then(|annotation| annotation.message.as_deref())
+        .map(|label| owned_text(label, &[], session).0);
+    let annotations = diagnostic
+        .annotations
+        .iter()
+        .filter_map(|annotation| {
+            let span = owned_span(db, annotation.span)?;
+            let (message, message_highlights) = annotation.message.as_deref().map_or_else(
+                || (None, Vec::new()),
+                |message| {
+                    let (message, highlights) =
+                        owned_text(message, &annotation.message_highlights, session);
+                    (Some(message), highlights)
+                },
+            );
+            Some(RuntimeDiagnosticAnnotation {
+                span,
+                message,
+                message_highlights,
+                is_primary: annotation.is_primary,
+            })
+        })
+        .collect();
+    let related_info = diagnostic
+        .related_info
+        .iter()
+        .filter_map(|related| {
+            let span = owned_span(db, related.span).or_else(|| {
+                related.file_path.as_ref().map(|file| RuntimeSourceSpan {
+                    file: file.clone(),
+                    start: usize::from(related.span.range.start()),
+                    end: usize::from(related.span.range.end()),
+                })
+            })?;
+            let (message, message_highlights) =
+                owned_text(&related.message, &related.message_highlights, session);
+            Some(RuntimeDiagnosticRelatedInfo {
+                span,
+                message,
+                message_highlights,
+                file_path: related.file_path.clone(),
+            })
+        })
+        .collect();
     RuntimeCompileDiagnostic {
         code: diagnostic.code().to_string(),
         message: if session {
@@ -992,6 +1154,19 @@ fn owned_diagnostic(
             Severity::Info => RuntimeDiagnosticSeverity::Info,
         },
         span,
+        details: Some(Box::new(RuntimeDiagnosticDetails {
+            headline,
+            primary_label,
+            phase: match diagnostic.phase {
+                DiagnosticPhase::Parse => RuntimeDiagnosticPhase::Parse,
+                DiagnosticPhase::Hir => RuntimeDiagnosticPhase::Hir,
+                DiagnosticPhase::Validation => RuntimeDiagnosticPhase::Validation,
+                DiagnosticPhase::Type => RuntimeDiagnosticPhase::Type,
+            },
+            message_highlights,
+            annotations,
+            related_info,
+        })),
     }
 }
 
@@ -1037,6 +1212,7 @@ fn runtime_diagnostic(
             start,
             end,
         }),
+        details: None,
     }
 }
 
@@ -2135,6 +2311,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message,
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         })?;
         // This local is the transience guarantee: no handle to `db` occurs in
@@ -2188,6 +2365,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message: format!("cannot mount package `{alias}`: {error}"),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         };
         // A mount reaches the sibling mounts its interface names (the edges its
@@ -2349,6 +2527,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         start: 0,
                         end: 0,
                     }),
+                    details: None,
                 }]);
             };
             // The check runs in the compiler's context, which names declarations
@@ -2420,6 +2599,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         message: error.to_string(),
                         severity: RuntimeDiagnosticSeverity::Error,
                         span: None,
+                        details: None,
                     }]
                 })?;
         let emitted = emit_units_with_stdlib(
@@ -2434,6 +2614,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message: error.to_string(),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         })?;
         let mut units: Vec<_> = emitted
@@ -2457,6 +2638,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                                     message,
                                     severity: RuntimeDiagnosticSeverity::Error,
                                     span: None,
+                                    details: None,
                                 }]
                             },
                         )?;
@@ -2483,10 +2665,92 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler_diagnostics::{Diagnostic, DiagnosticText};
     use baml_compiler2_hir::file_package::file_package;
     use baml_compiler2_hir_ty::package_interface::{FunctionThrowSets, PackageInterface};
 
     use super::*;
+
+    #[test]
+    fn runtime_diagnostic_retains_structured_compiler_metadata() {
+        let mut db = ProjectDatabase::new();
+        let workspace = db
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
+            .unwrap();
+        let primary_file = db.add_or_update_file_in(
+            workspace,
+            &runtime_source_virtual_path("primary.baml"),
+            "0123456789",
+        );
+        let related_file = db.add_or_update_file_in(
+            workspace,
+            &runtime_source_virtual_path("related.baml"),
+            "abcdefghij",
+        );
+        let primary = baml_base::Span::new(
+            primary_file.file_id(&db),
+            rowan::TextRange::new(1.into(), 4.into()),
+        );
+        let secondary = baml_base::Span::new(
+            related_file.file_id(&db),
+            rowan::TextRange::new(2.into(), 5.into()),
+        );
+        let diagnostic = Diagnostic::warning(
+            DiagnosticId::TypeMismatch,
+            DiagnosticText::new()
+                .text("cannot use ")
+                .type_expr("string")
+                .text(" here"),
+        )
+        .with_primary(
+            primary,
+            DiagnosticText::new().text("expected ").type_expr("int"),
+        )
+        .with_secondary(
+            secondary,
+            DiagnosticText::new()
+                .text("value declared as ")
+                .type_expr("string"),
+        )
+        .with_related(
+            secondary,
+            DiagnosticText::new().text("declaration of ").code("value"),
+        )
+        .with_phase(DiagnosticPhase::Type);
+
+        let owned = owned_diagnostic(&db, &diagnostic, false);
+        assert_eq!(owned.severity, RuntimeDiagnosticSeverity::Warning);
+        assert_eq!(owned.message, "cannot use `string` here: expected `int`");
+        assert_eq!(
+            owned.span,
+            Some(RuntimeSourceSpan {
+                file: "primary.baml".to_string(),
+                start: 1,
+                end: 4,
+            })
+        );
+        let details = owned.details.expect("source diagnostics retain detail");
+        assert_eq!(details.phase, RuntimeDiagnosticPhase::Type);
+        assert_eq!(details.headline, "cannot use `string` here");
+        assert_eq!(details.primary_label.as_deref(), Some("expected `int`"));
+        assert_eq!(details.message_highlights.len(), 1);
+        assert_eq!(
+            details.message_highlights[0].kind,
+            RuntimeDiagnosticHighlightKind::TypeExpression
+        );
+        assert_eq!(details.annotations.len(), 2);
+        assert!(details.annotations[0].is_primary);
+        assert_eq!(details.annotations[0].message_highlights.len(), 1);
+        assert!(!details.annotations[1].is_primary);
+        assert_eq!(details.annotations[1].span.file, "related.baml");
+        assert_eq!(details.related_info.len(), 1);
+        assert_eq!(details.related_info[0].message, "declaration of `value`");
+        assert_eq!(details.related_info[0].message_highlights.len(), 1);
+        assert_eq!(details.related_info[0].span.file, "related.baml");
+    }
 
     #[test]
     fn unspellable_package_detection_is_recursive() {
