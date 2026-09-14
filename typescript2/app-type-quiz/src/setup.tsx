@@ -2,6 +2,13 @@
 // knobs behind both.
 
 import { useState } from 'react';
+import {
+  type JudgeSettings,
+  judgeReady,
+  loadJudge,
+  MODELS,
+  saveJudge,
+} from './judge';
 import { PointsRule, percent } from './panels';
 import {
   defaultKnobs,
@@ -45,12 +52,20 @@ export function Setup({
   const [defaults] = useState(() => knobValues(defaultKnobs()));
   const [practice, setPractice] = useState(false);
   const [count, setCount] = useState(10);
-  const [full, setFull] = useState(false);
   const [bar, setBar] = useState(defaults.bar);
   const [strict, setStrict] = useState(defaults.strict);
   const [target, setTarget] = useState(defaults.target);
   const [budget, setBudget] = useState(defaults.budget);
   const [contrast, setContrast] = useState(defaults.contrast);
+  const [judge, setJudge] = useState<JudgeSettings>(loadJudge);
+  const keepJudge = (next: JudgeSettings) => {
+    setJudge(next);
+    saveJudge(next);
+  };
+  // Giving reasons is what a judge reads, so a sitting that has one to ask
+  // starts out asking for them. Without a key the marking would fall to the
+  // learner, which is a thing to opt into rather than to be handed.
+  const [full, setFull] = useState(() => judgeReady(judge));
   const knobs: KnobValues = {
     ...defaults,
     bar,
@@ -98,7 +113,9 @@ export function Setup({
           onChange={(e) => setFull(e.target.checked)}
           type="checkbox"
         />
-        Ask why, and mark your own reasoning after each case
+        {judgeReady(judge)
+          ? 'Ask why a program is rejected, and have the judge mark your reasoning'
+          : 'Ask why a program is rejected, and mark your own reasoning'}
       </label>
       <details>
         <summary>Tuning</summary>
@@ -162,6 +179,42 @@ export function Setup({
             />
           </label>
         )}
+      </details>
+      <details>
+        <summary>Judge</summary>
+        <p className="note">
+          With a key, a model marks your reasoning against the case's own
+          explanation, in place of your marking it yourself, and says what the
+          reasoning did not reach. That is one call on your key per case you
+          give a reason for, and you are not asked to mark your own while there
+          is a key set. The key is kept in this browser and sent only to
+          Anthropic, with each judgement; this site has no server, and nothing
+          of ours ever sees it. Clear the field to stop.
+        </p>
+        <label>
+          Anthropic API key
+          <input
+            autoComplete="off"
+            onChange={(e) => keepJudge({ ...judge, key: e.target.value })}
+            placeholder="sk-ant-…"
+            spellCheck={false}
+            type="password"
+            value={judge.key}
+          />
+        </label>
+        <label>
+          Model
+          <select
+            onChange={(e) => keepJudge({ ...judge, model: e.target.value })}
+            value={judge.model}
+          >
+            {MODELS.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </details>
       <div className="choices">
         <button

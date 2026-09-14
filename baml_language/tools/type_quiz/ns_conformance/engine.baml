@@ -803,6 +803,37 @@ test "choice: the order of the two is all that `compiles_first` decides" {
     )
 }
 
+/// The rule names of a rubric, which is all a pin needs of it.
+function rules_in(claims: root.engine.Claim[]) -> string[] throws never {
+    claims.map((claim) -> {
+        claim.rule.name
+    })
+}
+
+/// What a reason is marked against follows the answer it was given for.
+///
+/// A learner who picks one of two programs is asked why the OTHER one fails,
+/// so the rubric is what the two agree about plus what is true of the one
+/// they say is rejected — the part that actually decides it. Marking that
+/// reason against the agreed part alone would credit a learner for the setup
+/// and ask nothing about the difference, which is the whole question. The two
+/// answers therefore draw different rubrics, and the one that commits to
+/// nothing draws none.
+function rubric_report() -> string throws never {
+    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
+        ?? return "no choice";
+    let revealed = root.engine.reveal(choice);
+    let alone = root.engine.reveal(paired(true).case);
+    `first=${rules_in(root.engine.rubric(revealed, root.engine.Chose { second: false }))} second=${rules_in(root.engine.rubric(revealed, root.engine.Chose { second: true }))} unsure=${rules_in(root.engine.rubric(revealed, null))} alone=${rules_in(root.engine.rubric(alone, root.engine.VerdictKind.Rejected))}`
+}
+
+test "rubric: a reason is marked against the claims its own question turns on" {
+    assert.equal(
+        rubric_report(),
+        `first=["axiom", "other-way"] second=["axiom", "one-way"] unsure=[] alone=["axiom", "one-way"]`,
+    )
+}
+
 test "choice: a question turns on what its programs agree about" {
     assert.equal(
         shared_report(),

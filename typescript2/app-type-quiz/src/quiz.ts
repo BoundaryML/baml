@@ -62,8 +62,8 @@ const SAIDS: readonly string[] = [
 export function wordsFor(programs: number): [Said, string][] {
   return programs > 1
     ? [
-        ['first', 'The first'],
-        ['second', 'The second'],
+        ['first', 'The first compiles'],
+        ['second', 'The second compiles'],
       ]
     : [
         ['compiles', 'It compiles'],
@@ -75,9 +75,17 @@ export function isSaid(value: unknown): value is Said {
   return typeof value === 'string' && SAIDS.includes(value);
 }
 
-/** What a learner said about one question. */
-export function given(said: Said, reasoning: string, mark: string): Given {
-  return new GivenClass({ mark, reasoning, said });
+/**
+ * What a learner said about one question, and who marked the reasoning:
+ * the model's name when the grader did, empty when they marked their own.
+ */
+export function given(
+  said: Said,
+  reasoning: string,
+  mark: string,
+  markedBy = '',
+): Given {
+  return new GivenClass({ mark, marked_by: markedBy, reasoning, said });
 }
 
 /**
@@ -147,14 +155,22 @@ export function answerCase(
   return answer_case(profile, knobs, item, seed, said);
 }
 
-/** The sitting as the JSON a learner takes away; `baml run review` reads it. */
+/** The commit this build is of, stamped in at build time (vite.config.ts). */
+declare const __TYPE_QUIZ_COMMIT__: string;
+
+/**
+ * The sitting as the JSON a learner takes away; `baml run review` reads it.
+ *
+ * Stamped with the commit the bridge, the SDK and this page were built from,
+ * so a file that comes back weeks later says which bank generated its cases.
+ */
 export function transcriptJson(
   session: number,
   full: boolean,
   knobs: Knobs,
   history: Taken[],
 ): string {
-  return adaptive_json(session, full, knobs, history);
+  return adaptive_json(session, full, knobs, history, __TYPE_QUIZ_COMMIT__);
 }
 
 /** What a learner who reasons as the naive model `id` does believes. */

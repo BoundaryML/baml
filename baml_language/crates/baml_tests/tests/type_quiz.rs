@@ -35,6 +35,12 @@ fn type_quiz_conformance() {
         .args(["run", "-p", "baml_cli", "--", "test", "--from"])
         .arg(workspace_root.join("tools/type_quiz"))
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Most of the suite compiles programs through the real compiler, and on
+        // a shared runner with the rest of `baml_tests` alongside, the CLI's
+        // default five-minute cap per test is met by the slowest of them with
+        // nothing wrong. Fifteen minutes is the ceiling for a stall, not a
+        // budget the suite uses: the whole of it runs in five on an idle core.
+        .env("BAML_TEST_TIMEOUT_MS", "900000")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", &cache_dir)
         .env("BAML_PROFILE_DIR", tmp.path().join("profiles-v1"))

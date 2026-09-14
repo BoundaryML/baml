@@ -219,11 +219,12 @@ function said(compiles: bool, reasoning: string, mark: string) -> root.Given thr
         },
         reasoning,
         mark,
+        marked_by: "",
     }
 }
 
 function unsure() -> root.Given throws never {
-    root.Given { said: "unsure", reasoning: "", mark: "" }
+    root.Given { said: "unsure", reasoning: "", mark: "", marked_by: "" }
 }
 
 /// Answering with the key's verdict is right and answering with the other is
@@ -398,6 +399,7 @@ function every_shape() -> root.engine.Transcript throws never {
         null,
     ];
     root.engine.Transcript {
+        built: null,
         mode: root.engine.Mode.Full,
         seed: 7,
         exchanges: marks.map((mark) -> {

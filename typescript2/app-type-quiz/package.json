@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "generate": "cd ../../baml_language && cargo run -q -p baml_cli -- generate --project tools/type_quiz --output-dir ../typescript2/app-type-quiz/src/baml_sdk",
-    "build:wasm": "wasm-pack build ../../baml_language/crates/fmt_wasm --target web --out-dir ../../../typescript2/app-type-quiz/wasm --out-name fmt_wasm --release",
+    "build:wasm": "wasm-pack build ../../baml_language/crates/baml_fmt_wasm --target web --out-dir ../../../typescript2/app-type-quiz/wasm --release",
     "prepare:deps": "pnpm build:bridge && pnpm generate && pnpm build:wasm",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "if [ -e src/baml_sdk/index.ts ] && [ -e wasm/baml_fmt_wasm.js ]; then tsc --noEmit; else echo 'app-type-quiz: typecheck skipped: generated inputs are absent (pnpm prepare:deps builds them; the app CI job checks them)'; fi",
     "test:smoke": "node scripts/smoke.mjs",
-    "build:bridge": "cd ../../baml_language/sdks/typescript/bridge_typescript_web && pnpm install && pnpm build:debug"
+    "build:bridge": "cd ../../baml_language/sdks/typescript/bridge_typescript_web && pnpm install && pnpm build:debug",
+    "typecheck:strict": "tsc --noEmit"
   },
   "dependencies": {
     "@b/pkg-grammar-hljs": "workspace:*",

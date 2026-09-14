@@ -103,7 +103,7 @@ async function question(page) {
   ).map((b) => b.trim());
   const wanted =
     programs > 1
-      ? ['The first', 'The second']
+      ? ['The first compiles', 'The second compiles']
       : ['It compiles', 'It is rejected'];
   for (const word of [...wanted, 'Not sure']) {
     expect(buttons.includes(word), `no "${word}" button among ${buttons}`);
@@ -309,6 +309,13 @@ try {
     transcript.learner !== null && transcript.learner.knobs.practice === true,
     'the transcript does not carry what the model concluded',
   );
+  // Stamped with the commit the bridge and SDK were built from, so a file
+  // that comes back later says which bank made its cases.
+  expect(
+    typeof transcript.built === 'string' &&
+      /^[0-9a-f]{40}$/.test(transcript.built),
+    `the transcript is not stamped with the toolchain commit: ${JSON.stringify(transcript.built)}`,
+  );
   const held = transcript.exchanges.filter((e) => e.answer.said === null);
   expect(
     held.length === seen.held,
@@ -338,8 +345,108 @@ try {
     `the second slot does not hold the mastery sitting: ${second}`,
   );
 
+  // Who marks the reasoning. With no key the learner marks their own, which
+  // is the fallback; with one stored, the sitting asks for reasons by
+  // default and says the judge will read them. The judgement itself is a
+  // call on a real key, so it is not made here: what is checked is that the
+  // page asks the right marker, and that a mark made by hand still lands.
+  await page.locator('button:has-text("New sitting")').first().click();
+  await page.waitForSelector('button:has-text("Start")', WAIT);
+  const asks = page.locator('label.check:has-text("Ask why")');
+  expect(
+    (await asks.textContent()).includes('mark your own reasoning'),
+    `with no key the learner should mark their own: ${await asks.textContent()}`,
+  );
+  expect(
+    !(await asks.locator('input').isChecked()),
+    "with no key, asking why should be the learner's to turn on",
+  );
+  await page.evaluate(() =>
+    window.localStorage.setItem(
+      'type-quiz/judge',
+      JSON.stringify({ key: 'sk-ant-not-a-key', model: 'claude-sonnet-4-5' }),
+    ),
+  );
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('button:has-text("New sitting")', WAIT);
+  await page.locator('button:has-text("New sitting")').first().click();
+  await page.waitForSelector('button:has-text("Start")', WAIT);
+  const judged = page.locator('label.check:has-text("Ask why")');
+  expect(
+    (await judged.textContent()).includes('have the judge mark'),
+    `with a key the judge should mark: ${await judged.textContent()}`,
+  );
+  expect(
+    await judged.locator('input').isChecked(),
+    'a stored key should turn on asking why, since reasons are what it reads',
+  );
+
+  // Back to no key, and sit two cases the whole way: reasons asked for after
+  // the answer and only where there is one to give, skipped on the first and
+  // given on the second. A reason that was typed and then skipped is not a
+  // reason: nothing is marked, and nothing was sent anywhere.
+  await page.evaluate(() => window.localStorage.removeItem('type-quiz/judge'));
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('button:has-text("New sitting")', WAIT);
+  await page.locator('button:has-text("New sitting")').first().click();
+  await page.waitForSelector('button:has-text("Start")', WAIT);
+  await page.click('label:has-text("Practice") input[type=radio]');
+  await page.fill('label:has-text("Practice") input.count', '2');
+  await page.locator('label.check:has-text("Ask why") input').check();
+  await page.click('button:has-text("Start")');
+
+  for (const at of [1, 2]) {
+    const skipping = at === 1;
+    await progress(page, `Case ${at} of 2`);
+    const one = await question(page);
+    // A reason is asked for only where there is one to give: on a rejection,
+    // or on either program of a pair. Saying a lone program compiles is asked
+    // nothing, so the answer here is the one that leads to the box.
+    const explains = one.programs > 1 ? one.buttons[0] : 'It is rejected';
+    await page.click(`.question .choices button:text-is("${explains}")`);
+    await page.waitForSelector('.why textarea', WAIT);
+    const askedWhy = await text(page, 'label.why');
+    expect(
+      one.programs > 1
+        ? askedWhy.includes('fail')
+        : askedWhy.includes('reject'),
+      `the reason asked for does not name what failed: ${askedWhy}`,
+    );
+    await page.fill('.why textarea', 'the argument is in a contravariant slot');
+    await page.click(
+      skipping
+        ? 'button:text-is("Skip the reason")'
+        : 'button:text-is("That is my reasoning")',
+    );
+    await page.waitForSelector('.reveal', WAIT);
+    const markers = (
+      await page.locator('.reveal .choices button').allTextContents()
+    ).map((b) => b.trim());
+    const marks = ['Sound', 'Partial', 'Wrong'];
+    if (skipping) {
+      expect(
+        !marks.some((word) => markers.includes(word)),
+        `a reason typed and then skipped is still being marked: ${markers}`,
+      );
+      await page.click('.reveal .choices button:text-is("Next")');
+    } else {
+      for (const word of marks) {
+        expect(
+          markers.includes(word),
+          `with no key the reveal should ask the learner to mark: ${markers}`,
+        );
+      }
+      expect(
+        !markers.some((b) => b.includes('judge')),
+        `with no key the reveal should not offer a judge: ${markers}`,
+      );
+      await page.click('.reveal .choices button:text-is("Sound")');
+    }
+  }
+  await page.waitForSelector('.done', WAIT);
+
   console.log(
-    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, and a mastery sitting shows no total`,
+    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, a mastery sitting shows no total, and a reason is asked only where there is one to give, skipped or marked by the learner when no judge is set`,
   );
 } catch (error) {
   failure = error;

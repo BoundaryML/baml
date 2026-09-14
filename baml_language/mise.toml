@@ -93,6 +93,10 @@ set -euo pipefail
 # The CLI writes its home, cache and profile streams beside the package unless
 # told otherwise, which leaves a few hundred megabytes under tools/type_quiz.
 # Keep all three under target/, as crates/baml_tests/tests/type_quiz.rs does.
+# The per-test cap is raised for the same reason it is there: the suite
+# compiles thousands of generated programs, and several of its tests take
+# minutes on a loaded machine, where the 300 s default reports work that was
+# only slow as work that failed.
 home="$PWD/target/baml-type-quiz-home"
 mkdir -p "$home"
 printf '[update]\nauto_check = false\n' > "$home/config.toml"
@@ -100,6 +104,7 @@ BAML_CLI_ALLOW_DIRECT=1 \
 BAML_HOME="$home" \
 BAML_CACHE_DIR="$PWD/target/baml-type-quiz-cache" \
 BAML_PROFILE_DIR="$PWD/target/baml-type-quiz-profiles" \
+BAML_TEST_TIMEOUT_MS=900000 \
     cargo run -p baml_cli -- test --from tools/type_quiz
 '''
 

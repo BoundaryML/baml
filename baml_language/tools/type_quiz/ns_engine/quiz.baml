@@ -198,6 +198,41 @@ class Revealed {
     difference: string,
 }
 
+/// A program's files as the one text a reader is shown.
+function source_of(files: map<string, string>) -> string throws never {
+    files.values().join("\n")
+}
+
+/// The claims a reason given for `said` has to reach.
+///
+/// Everything the programs shown have in common, and then what is true of
+/// the one the learner says the compiler rejects. That second part is the
+/// whole of what a rejection turns on, and it is exactly what a learner
+/// giving a reason was asked to explain — so the rubric follows the question
+/// rather than being assembled beside it, and a reason cannot be marked
+/// against claims that decide nothing it was asked about. Someone who
+/// committed to nothing was asked for nothing, and has no rubric.
+///
+/// With one program the claims are all shared, and its own are empty, so the
+/// same expression covers it: there is no case here for one program and
+/// another for two.
+function rubric(revealed: Revealed, said: Said?) -> Claim[] throws never {
+    let at = match (said) {
+        null => {
+            return [];
+        },
+        VerdictKind => 0,
+        let chose: Chose => {
+            if (chose.second) {
+                0
+            } else {
+                1
+            }
+        },
+    };
+    revealed.shared.concat(revealed.programs.at(at)?.claims ?? [])
+}
+
 function reveal(posed: Posed) -> Revealed throws never {
     let cases = cases_of(posed);
     let shared = shared_claims(

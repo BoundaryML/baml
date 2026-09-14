@@ -251,16 +251,67 @@ The `live` profile is reserved for calibrating the answer grader against a
 real model. It selects no tests yet, and `baml-cli` exits 5 on an empty
 selection, so there is nothing to run under it until the grader lands.
 
+## The judge
+
+In a sitting that asks why, a model marks the learner's reasoning against
+the case's own explanation, and the learner's own hand is what stands in when
+there is no model to ask: `engine.judge_reasoning` takes the revealed case
+whole and works out what the model is told — the programs as text, what the
+compiler makes of each, the rubric, what the learner claimed and what they
+were asked to explain — and gets back `Grade { understanding, feedback,
+missed }`: sound, partial or wrong; a short paragraph to the learner; and the
+rubric lines their reasoning did not reach. A right answer for a wrong
+reason is wrong. The verdict itself is never the model's to decide: the key
+decided that, and `judge` in the engine reads only the key. Who marked a case
+travels with it, as `Given.marked_by`: the model's name for a judgement, empty
+for a mark the learner made themselves.
+
+Everything the grader is told follows from the answer, so none of it can
+belong to a different question. `said_of` reads the five words an answer is
+given in, once, and `rubric`, `answer_sentence` and `asked_sentence` all work
+from the value it returns. The rubric is what the programs shown agree about
+plus what is true of the one the learner says the compiler rejects: for a
+pair, that second part is what actually decides the case and is exactly what
+they were asked to explain, and marking their reason against the agreed part
+alone would credit them for the setup while asking nothing about the
+difference. With one program the claims are all shared and its own are empty,
+so the same expression covers both and there is no case for one and a case
+for two.
+
+A judgement that could not be made comes back as a value, not a throw:
+`judge_reasoning` returns `Grade | Unjudged`, and `Unjudged.why` carries the
+failure's own rendering — which of a refused key, an unreachable model and a
+spent quota it was is the only thing the learner can act on, and paraphrasing
+it would throw that away. The catch names the whole error channel of a client
+call (`ai.errors.Failure` and the four the runtime itself raises), so a new
+channel stops the package compiling rather than reaching a learner as a
+blank.
+
+**The key is the learner's, and it goes nowhere of ours.** The page keeps it
+in the browser and passes it into each call; `judge_client` builds an
+Anthropic client with it and the header Anthropic documents for a request
+made from a browser, and that one request is the only thing it touches. The
+site is static — it has no server — so there is nothing for a key to be sent
+to but the provider. Nothing in this package reads an environment variable
+on the quiz path. The grader's calibration fixtures (`ns_conformance/
+grader.baml`) run only under the `live` profile and only when
+`ANTHROPIC_API_KEY` is set, so CI, which runs offline, never calls a model.
+
 ## Standing a model in for a learner
 
-`harness/take_quiz.mjs` has a language model sit the quiz, in mastery mode,
-exactly as the page puts it: the same adaptive selection, the same three
-answers, the same reveal after each one.
+`ns_harness/take_quiz.baml` has a language model sit the quiz, in mastery
+mode, exactly as the page puts it: the same adaptive selection, the same three
+answers, the same reveal after each one. It drives the quiz in-process through
+`adaptive_step`, so a step costs only what the model takes to answer.
 
 ```
-node tools/type_quiz/harness/take_quiz.mjs \
+baml run take_quiz --from tools/type_quiz -- \
     --sessions 3 --models opus,sonnet,haiku --out target/type-quiz-llm
 ```
+
+from `baml_language`, where TYPE_SYSTEM.md and target/ are. Every model sits
+every session; `--concurrency` bounds how many sittings run at once;
+`--max N` stops a sitting after N answers, for a cheap end-to-end check.
 
 Every model sits every session, so until their answers part company they are
 asked the same questions. Runs are written as they go and resume where they
@@ -286,8 +337,8 @@ login, so a harness that passed the environment through would spend API
 credits without anyone choosing to. Measured, not assumed: with an invalid key
 the call fails outright and the CLI says the key wins over the login; with the
 key unset it succeeds on the login. So `--billing plan` is the default and
-unsets the key for the models, and `--billing api` is something you have to
-ask for. The cost a run reports is what its tokens would cost at API rates —
+unsets the key for the models (through `env -u`), and `--billing api` is
+something you have to ask for. The cost a run reports is what its tokens would cost at API rates —
 on the plan nothing is charged and it is only a proxy for how much quota went.
 Measured at the start of a sitting, where context is smallest: about $0.02 a
 question for haiku, $0.10 for sonnet, $0.16 for opus, roughly doubling by the
@@ -357,29 +408,6 @@ minimal single-file packages; none is fixed at the time of writing.
    into a fresh local first does not help; the same code with `top` a literal
    works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
    which `pick` in `ns_engine/sample.baml` uses.
-12. **An empty class in a union matches any JSON object, so its siblings
-   decode as it.** With `type M = Empty | Named`, `baml.json.to_string` writes
-   a `Named { model: "m" }` as `{"model":"m"}` and `from_string<M>` reads it
-   back as `Empty`, silently. Decoding takes the first member that fits and an
-   empty class fits everything, so listing it last happens to work, which makes
-   correctness depend on the order of a type alias. The transcript's
-   "who marked this" therefore carries an optional model id rather than the
-   union that would say it better.
-11. **String literals have no numeric or unicode escape.** `"\u{1F411}"` is
-   nine characters and `"\x41"` is four: only `\\`, `\"`, `\n`, `\r` and `\t`
-   are escapes, so a character outside them can only be written as itself. The
-   renderer's `quote` in `ns_algebra/render.baml` therefore cannot spell a
-   control character at all, and the name pools hold the characters they mean.
-13. **The generated SDK's bytecode is stamped with the git commit, so the web
-   app breaks on every commit.** `baml_sdk` records the toolchain as a commit
-   hash and the bridge refuses a mismatch —
-   `generated bytecode: toolchain <a>; this runtime: <b> — regenerate baml_sdk
-   and rebuild the bridge from the same commit`. Nothing about the compiler
-   need have changed: committing this package is enough to strand a bridge
-   built an hour ago, and the bridge is a multi-minute wasm build. A
-   fingerprint over the bytecode format and the compiler's own sources would
-   refuse the pairs that actually disagree.
-
 10. **A local inferred from a `match` with a `.map` arm is typed wrongly, and
    a method call on it fails at run time.** With `type Either = Wrapped |
    string`,
@@ -392,3 +420,26 @@ minimal single-file packages; none is fixed at the time of writing.
    string[] = …`), consuming it through a free function
    (`baml.Array.length(lines)`), or returning the `match` directly instead of
    binding it. This package annotates.
+11. **String literals have no numeric or unicode escape.** `"\u{1F411}"` is
+   nine characters and `"\x41"` is four: only `\\`, `\"`, `\n`, `\r` and `\t`
+   are escapes, so a character outside them can only be written as itself. The
+   renderer's `quote` in `ns_algebra/render.baml` therefore cannot spell a
+   control character at all, and the name pools hold the characters they mean.
+12. **An empty class in a union matches any JSON object, so its siblings
+   decode as it.** With `type M = Empty | Named`, `baml.json.to_string` writes
+   a `Named { model: "m" }` as `{"model":"m"}` and `from_string<M>` reads it
+   back as `Empty`, silently. Decoding takes the first member that fits and an
+   empty class fits everything, so listing it last happens to work, which makes
+   correctness depend on the order of a type alias. The transcript's
+   "who marked this" therefore carries an optional model id rather than the
+   union that would say it better.
+13. **The generated SDK's bytecode is stamped with the git commit, so the web
+   app breaks on every commit.** `baml_sdk` records the toolchain as a commit
+   hash and the bridge refuses a mismatch —
+   `generated bytecode: toolchain <a>; this runtime: <b> — regenerate baml_sdk
+   and rebuild the bridge from the same commit`. Nothing about the compiler
+   need have changed: committing this package is enough to strand a bridge
+   built an hour ago, and the bridge is a multi-minute wasm build. A
+   fingerprint over the bytecode format and the compiler's own sources would
+   refuse the pairs that actually disagree.
+

@@ -71,9 +71,12 @@ class Given {
     said: string,
     /// What they said it turns on. Empty when they were not asked.
     reasoning: string,
-    /// How they marked their own reasoning: `sound`, `partial`, `wrong`, or
-    /// empty when they did not mark it.
+    /// How the reasoning was marked: `sound`, `partial`, `wrong`, or empty
+    /// when it was not marked.
     mark: string,
+    /// Who marked it: the model's name when the grader did, empty when the
+    /// learner marked their own against the explanation they were shown.
+    marked_by: string,
 }
 
 /// `given.said` as what the engine reads, or `null` when the learner
@@ -85,19 +88,7 @@ class Given {
 /// - `baml.panics.Unreachable` if the word is not one this surface offers, for
 ///   the same reason as `marked_given`.
 function said_given(given: Given) -> root.engine.Said? throws never {
-    if (given.said == "compiles") {
-        root.engine.VerdictKind.Compiles
-    } else if (given.said == "rejected") {
-        root.engine.VerdictKind.Rejected
-    } else if (given.said == "first") {
-        root.engine.Chose { second: false }
-    } else if (given.said == "second") {
-        root.engine.Chose { second: true }
-    } else if (given.said == "unsure") {
-        null
-    } else {
-        throw baml.panics.Unreachable { message: `no such answer: ${given.said}` }
-    }
+    root.engine.said_of(given.said)
 }
 
 /// `given.mark` as the engine's own word for it, or `null` when unmarked.
@@ -119,7 +110,12 @@ function marked_given(given: Given) -> root.engine.Reasoning? throws never {
     } else {
         throw baml.panics.Unreachable { message: `no such mark: ${given.mark}` }
     };
-    root.engine.Reasoning { understanding, marked_by: null }
+    let marked_by = if (given.marked_by == "") {
+        null
+    } else {
+        given.marked_by
+    };
+    root.engine.Reasoning { understanding, marked_by }
 }
 
 /// Answer the `index`-th question: the case is worked out again from the
@@ -174,7 +170,7 @@ function sitting_of(
             answer_at(seed, length, index, answers[index])
         })
         .collect();
-    root.engine.Transcript { mode: mode_of(full), seed, exchanges, learner: null }
+    root.engine.Transcript { mode: mode_of(full), seed, exchanges, learner: null, built: null }
 }
 
 /// How a sitting has gone so far.
@@ -245,7 +241,11 @@ function read_back(transcript: root.engine.Transcript) -> string throws never {
         let learned: root.engine.Learned => concluded(learned),
         null => "",
     };
-    `${score.answers_right} of ${score.asked} answers right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}${learned}`
+    let built = match (transcript.built) {
+        let commit: string => `\nsat against the bank built at ${commit}`,
+        null => "",
+    };
+    `${score.answers_right} of ${score.asked} answers right; reasoning ${score.sound} sound, ${score.partial} partial, ${score.wrong} wrong, ${score.unmarked} unmarked\n${standing}${learned}${built}`
 }
 
 /// What the model concluded about the learner, as a line of the review.
@@ -550,6 +550,7 @@ function adaptive_sitting(
     full: bool,
     knobs: root.engine.Knobs,
     taken: Taken[],
+    built: string?,
 ) -> root.engine.Transcript throws never {
     root.engine.Transcript {
         mode: mode_of(full),
@@ -558,6 +559,7 @@ function adaptive_sitting(
             judged(knobs, t.item, t.seed, t.given).exchange
         }),
         learner: root.engine.Learned { knobs, profile: replay(knobs, taken) },
+        built,
     }
 }
 
@@ -567,8 +569,9 @@ function adaptive_json(
     full: bool,
     knobs: root.engine.Knobs,
     taken: Taken[],
+    built: string?,
 ) -> string throws never {
-    baml.json.to_string(adaptive_sitting(session, full, knobs, taken)) catch_all (e) {
+    baml.json.to_string(adaptive_sitting(session, full, knobs, taken, built)) catch_all (e) {
         baml.json.SerializationError => `{"error":"${e}"}`,
     }
 }
@@ -683,7 +686,7 @@ function driven(session: int, answers: string) -> Driven throws never {
                 ?? throw baml.panics.Unreachable {
                     message: `the sitting from ${session} has no question ${taken.length()}`,
                 };
-            let given = Given { said, reasoning: "", mark: "" };
+            let given = Given { said, reasoning: "", mark: "", marked_by: "" };
             taken.push(Taken { item: next.prompt.item, seed: next.prompt.seed, given });
             observe_answer(carried, knobs, next.prompt.item, next.prompt.seed, given)
         },
@@ -700,7 +703,7 @@ function programs_of(prompt: root.engine.Prompt) -> string[] throws never {
         null => {},
     }
     shown.map((files) -> {
-        files.values().join("\n")
+        root.engine.source_of(files)
     })
 }
 
@@ -797,7 +800,7 @@ function adaptive_step(session: int, answers: string) -> string throws never {
 /// - As `driven`.
 function adaptive_record(session: int, answers: string) -> string throws never {
     let knobs = root.engine.default_knobs();
-    adaptive_json(session, false, knobs, driven(session, answers).taken)
+    adaptive_json(session, false, knobs, driven(session, answers).taken, null)
 }
 
 /// What a learner who reasons as the naive model `id` does believes, in the

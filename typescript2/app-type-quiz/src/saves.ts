@@ -20,6 +20,9 @@ export interface SavedAnswer {
   said: Said;
   reasoning: string;
   mark: string;
+  /** Who marked it: a model's name, or absent when the learner did. Saves
+   * from before the grader have no such field, and read as self-marked. */
+  marked_by?: string;
 }
 
 export interface Save {
@@ -162,9 +165,16 @@ function asAnswer(value: unknown): SavedAnswer | string {
   if (typeof value.mark !== 'string') {
     return 'no mark';
   }
+  // Absent in saves from before the grader, which were all self-marked.
+  if (value.marked_by !== undefined && typeof value.marked_by !== 'string') {
+    return 'marked_by is not a name';
+  }
   return {
     item: value.item,
     mark: value.mark,
+    ...(typeof value.marked_by === 'string' && value.marked_by !== ''
+      ? { marked_by: value.marked_by }
+      : {}),
     reasoning: value.reasoning,
     said: value.said,
     seed: value.seed,

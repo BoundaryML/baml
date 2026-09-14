@@ -267,6 +267,28 @@ pre.case code {
   color: var(--wrong);
 }
 
+.judged {
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  background: #1f2530;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.judged p:last-child,
+.judged ul:last-child {
+  margin-bottom: 0;
+}
+
+.judged ul {
+  padding-left: 1.1rem;
+  margin: 0.4rem 0 0;
+}
+
+.judged li {
+  margin: 0.3rem 0;
+}
+
 /* ─── the slots ─── */
 
 .home {

@@ -1,0 +1,171 @@
+# Builds the type-system quiz (typescript2/app-type-quiz) and publishes it to
+# the repository's GitHub Pages site under `type-quiz/`.
+#
+# The site is shared with the stdlib matrix, which publishes to the root, so
+# this workflow writes only its own directory of the `gh-pages` branch and
+# keeps everything else: two tools, one site, each deploying on its own. That
+# needs the Pages source set to the `gh-pages` branch rather than to an
+# Actions artifact — an artifact deploy replaces the whole site — and until it
+# is, this workflow is inert: it pushes a branch nothing serves.
+#
+# Bridge, SDK and app are built from ONE checkout in ONE job, and must be: the
+# SDK's bytecode is stamped with the commit it was generated at and the bridge
+# refuses a mismatch, so a bridge from an earlier build strands the page.
+#
+# On a pull request touching the app or the package it is built from, this is
+# the app's real check — the workspace-wide typecheck skips it, since the
+# generated inputs do not exist in a bare checkout — and nothing is published.
+name: Type quiz (Pages)
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - "typescript2/app-type-quiz/**"
+      - "baml_language/tools/type_quiz/**"
+      - "baml_language/crates/baml_fmt_wasm/**"
+      - ".github/workflows/type-quiz-pages.yml"
+  pull_request:
+    paths:
+      - "typescript2/app-type-quiz/**"
+      - "baml_language/tools/type_quiz/**"
+      - "baml_language/crates/baml_fmt_wasm/**"
+      - ".github/workflows/type-quiz-pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: type-quiz-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      publish: ${{ steps.mode.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js, pnpm, and wasm-pack
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
+
+      - name: Setup Rust WASM target
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-wasm"
+          save-if: false
+
+      # The release bridge: 15 MB of WebAssembly, against 100 for the debug
+      # build the local `pnpm prepare:deps` makes.
+      - name: Build the web bridge
+        working-directory: baml_language/sdks/typescript/bridge_typescript_web
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+          pnpm build
+          test -s dist/wasm/bridge_web_core_bg.wasm
+
+      - name: Build the compiler
+        working-directory: baml_language
+        run: cargo build -p baml_cli
+
+      - name: Install workspace dependencies
+        working-directory: typescript2
+        run: pnpm install --frozen-lockfile
+
+      # The SDK and the formatter are generated from this checkout, beside the
+      # bridge built from it: the same commit throughout.
+      - name: Generate the SDK and build the formatter
+        working-directory: typescript2/app-type-quiz
+        env:
+          BAML_AGENT_SKILL_CHECK: "off"
+        run: |
+          set -euo pipefail
+          pnpm generate
+          pnpm build:wasm
+          test -s src/baml_sdk/index.ts
+          test -s wasm/baml_fmt_wasm_bg.wasm
+
+      - name: Typecheck and lint
+        working-directory: typescript2/app-type-quiz
+        run: |
+          set -euo pipefail
+          pnpm typecheck:strict
+          pnpm exec biome check src scripts
+
+      - name: Build the site
+        working-directory: typescript2/app-type-quiz
+        env:
+          TYPE_QUIZ_COMMIT: ${{ github.sha }}
+        run: pnpm build
+
+      - name: Drive it in a browser
+        working-directory: typescript2/app-type-quiz
+        env:
+          BAML_AGENT_SKILL_CHECK: "off"
+        run: |
+          set -euo pipefail
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:smoke
+
+      - name: Publish?
+        id: mode
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" && "${{ github.ref }}" == "refs/heads/canary" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the site
+        if: steps.mode.outputs.publish == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: type-quiz-site
+          path: typescript2/app-type-quiz/dist
+          if-no-files-found: error
+
+  publish:
+    name: Publish to gh-pages/type-quiz
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: type-quiz-site
+          path: site
+
+      # Only this tool's directory is replaced; the rest of the branch — the
+      # other tool at the root — is kept as it is.
+      - name: Push type-quiz/ to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: site
+          destination_dir: type-quiz
+          keep_files: true
+          commit_message: "type-quiz: ${{ github.sha }}"

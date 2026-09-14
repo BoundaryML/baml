@@ -962,6 +962,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_fmt_wasm"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_fmt",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "baml_ide"
 version = "0.0.0-beta"
 dependencies = [
@@ -3288,14 +3296,6 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "fmt_wasm"
-version = "0.0.0-beta"
-dependencies = [
- "baml_fmt",
- "wasm-bindgen",
 ]
 
 [[package]]

@@ -293,10 +293,6 @@ function logistic(x: float) -> float throws never {
     1.0 / (1.0 + baml.Float.exp(0.0 - x))
 }
 
-function logit(p: float) -> float throws never {
-    baml.Float.ln(p / (1.0 - p))
-}
-
 /// `numerator / denominator`, with the denominator held off zero. Every
 /// division below is by a probability the model itself produced, and one of
 /// them can come arbitrarily close to zero.

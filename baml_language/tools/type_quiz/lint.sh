@@ -57,7 +57,7 @@ scan() {
 # Generation must be a pure function of the seed. The stdlib's random
 # generators carry hidden mutable state, so only root.engine.Seed may be used.
 scan "the stdlib random package is banned; draw from root.engine.Seed" \
-    'baml\.random' ns_engine ns_algebra ns_bank ns_conformance
+    'baml\.random' ns_engine ns_algebra ns_bank ns_conformance ns_harness
 
 # Layering: engine <- algebra <- bank <- conformance, never the reverse.
 # BAML namespaces cannot declare a dependency direction, so this does.
@@ -75,6 +75,6 @@ scan "ns_bank must not reference conformance" \
 # language model and its wildcards are error catch-alls; every catch arm in
 # the three layers below names the error it handles.
 scan "wildcard match arms are banned outside ns_engine" \
-    '(^|[^[:alnum:]_])_[[:space:]]*(if[^,]*)?=>' ns_algebra ns_bank ns_conformance main.baml
+    '(^|[^[:alnum:]_])_[[:space:]]*(if[^,]*)?=>' ns_algebra ns_bank ns_conformance ns_harness main.baml
 
 exit $status

@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatSource, loadFormatter } from './format';
 import { Home } from './home';
+import {
+  type Grade,
+  type JudgeSettings,
+  judgeReady,
+  judgeReasoning,
+  loadJudge,
+} from './judge';
 import { Claims, PointsRule, Program, Prose, signed, Teach } from './panels';
 import {
   type Answered,
@@ -89,17 +96,48 @@ type Phase =
   | { kind: 'setup'; slot: number }
   | { kind: 'asking'; live: Live; next: Next; shown: Shown[] }
   | {
+      kind: 'why';
+      live: Live;
+      next: Next;
+      shown: Shown[];
+      said: Said;
+      why: string;
+    }
+  | {
       kind: 'revealed';
       live: Live;
       next: Next;
       shown: Shown[];
       said: Said;
+      why: string;
       answered: Answered;
     }
   | { kind: 'done'; live: Live; standing: Standing; starved: boolean }
   | { kind: 'broken'; message: string };
 
-type Posed = Extract<Phase, { kind: 'asking' | 'revealed' }>;
+type Posed = Extract<Phase, { kind: 'asking' | 'why' | 'revealed' }>;
+
+/**
+ * Whether an answer is one with anything to explain.
+ *
+ * A program the compiler accepts breaks no rule, and the rules it does not
+ * break are not a reason: asking why it compiles gets the learner restating
+ * the program. What has a reason is a rejection — one rule, named, that the
+ * program runs into — so that is what is asked for, on the one program that
+ * was rejected and on the one of two the learner says fails. Holding back has
+ * nothing to explain by definition.
+ */
+function asksWhy(said: Said, programs: number): boolean {
+  if (said === 'unsure') {
+    return false;
+  }
+  return programs > 1 || said === 'rejected';
+}
+
+/** The program the learner's answer says the compiler rejects. */
+function failingOne(said: Said): string {
+  return said === 'first' ? 'second' : 'first';
+}
 
 const storage = window.localStorage;
 
@@ -126,6 +164,7 @@ function savedAnswer(kept: Taken): SavedAnswer {
   return {
     item: kept.item,
     mark: kept.given.mark,
+    marked_by: kept.given.marked_by,
     reasoning: kept.given.reasoning,
     said,
     seed: kept.seed.toString(),
@@ -147,7 +186,11 @@ function saveOf(live: Live): Save {
 function heldBy(save: Save): { knobs: Knobs; history: Taken[] } {
   return {
     history: save.answers.map((a) =>
-      taken(a.item, BigInt(a.seed), given(a.said, a.reasoning, a.mark)),
+      taken(
+        a.item,
+        BigInt(a.seed),
+        given(a.said, a.reasoning, a.mark, a.marked_by ?? ''),
+      ),
     ),
     knobs: knobsFrom(save.knobs),
   };
@@ -194,53 +237,162 @@ function download(name: string, json: string): void {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Where a case's reasoning stands with its marker.
+ *
+ * The judge is the marker whenever there is one to ask, so `asking` is where
+ * a case with a key and a reason begins; `by hand` is what is left when there
+ * is no judge, and `nothing` is a case with no reasoning to mark at all. A
+ * learner who has set a key is never asked to mark their own reasoning:
+ * marking is the thing they set it to have done. Holding the grade inside the
+ * judged state rather than beside it keeps a mark without a judgement, or a
+ * judgement still in flight, unrepresentable.
+ */
+type Judging =
+  | { kind: 'asking' }
+  | { kind: 'judged'; grade: Grade; mark: string }
+  | { kind: 'failed'; why: string }
+  | { kind: 'by hand' }
+  | { kind: 'nothing' };
+
+/**
+ * Where a reveal starts: who is to mark this case, if anyone.
+ *
+ * A reason is the whole condition. Only a sitting that asks why can produce
+ * one, so there is nothing to check about the sitting here: a case with a
+ * reason has one to mark, and a case without has nothing to mark whatever
+ * mode it was answered in.
+ */
+function marker(judge: JudgeSettings, reasoning: string): Judging {
+  if (reasoning.trim() === '') {
+    return { kind: 'nothing' };
+  }
+  return judgeReady(judge) ? { kind: 'asking' } : { kind: 'by hand' };
+}
+
 function Reveal({
-  answered,
-  full,
+  revealed,
+  said,
+  reasoning,
   onKeep,
   onLeave,
 }: {
-  answered: Answered;
-  full: boolean;
-  onKeep: (mark: string) => void;
+  revealed: Revealed;
+  said: Said;
+  reasoning: string;
+  onKeep: (mark: string, markedBy?: string) => void;
   onLeave: () => void;
 }) {
   // The shared claims only, and only when there is more than one program to
   // share them: with one, they were shown under it.
-  const shared =
-    answered.revealed.programs.length > 1 ? answered.revealed.shared : [];
+  const shared = revealed.programs.length > 1 ? revealed.shared : [];
+  const [judge] = useState(loadJudge);
+  const [judging, setJudging] = useState<Judging>(() =>
+    marker(judge, reasoning),
+  );
+  // Asked from an effect rather than during the render that reaches
+  // `asking`, so a second render — which is every render in development —
+  // cannot spend the key twice on one case.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (judging.kind !== 'asking' || asked.current) {
+      return;
+    }
+    asked.current = true;
+    const ask = async () => {
+      try {
+        const judged = await judgeReasoning(judge, revealed, said, reasoning);
+        // Only if the learner has not moved on in the meantime.
+        setJudging((was) => {
+          if (was.kind !== 'asking') {
+            return was;
+          }
+          return judged.kind === 'grade'
+            ? { grade: judged.grade, kind: 'judged', mark: judged.mark }
+            : judged;
+        });
+      } catch (error: unknown) {
+        setJudging((was) =>
+          was.kind === 'asking' ? { kind: 'failed', why: String(error) } : was,
+        );
+      }
+    };
+    void ask();
+  }, [judging.kind, judge, revealed, said, reasoning]);
+  const again = () => {
+    asked.current = false;
+    setJudging({ kind: 'asking' });
+  };
   return (
     <div className="reveal">
       <Claims claims={shared} />
-      {full ? (
-        <div className="choices">
-          <span className="ask">Your reasoning was</span>
-          <button onClick={() => onKeep('sound')} type="button">
-            Sound
-          </button>
-          <button onClick={() => onKeep('partial')} type="button">
-            Partial
-          </button>
-          <button onClick={() => onKeep('wrong')} type="button">
-            Wrong
-          </button>
-          <button className="quiet" onClick={() => onKeep('')} type="button">
-            Skip
-          </button>
-          <button className="quiet leave" onClick={onLeave} type="button">
-            Leave
-          </button>
-        </div>
-      ) : (
-        <div className="choices">
-          <button onClick={() => onKeep('')} type="button">
-            Next
-          </button>
-          <button className="quiet leave" onClick={onLeave} type="button">
-            Leave
-          </button>
+      {judging.kind === 'judged' && (
+        <div className="judged">
+          <p className="mark">
+            The judge marks this <strong>{judging.mark}</strong>.
+          </p>
+          <p>
+            <Prose text={judging.grade.feedback} />
+          </p>
+          {judging.grade.missed.length > 0 && (
+            <>
+              <p className="ask">What the reasoning did not reach</p>
+              <ul>
+                {judging.grade.missed.map((line) => (
+                  <li key={line}>
+                    <Prose text={line} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
+      {judging.kind === 'failed' && (
+        <p className="notice">The judge could not answer. {judging.why}</p>
+      )}
+      <div className="choices">
+        {judging.kind === 'asking' && <span className="ask">Judging…</span>}
+        {judging.kind === 'judged' && (
+          <button
+            onClick={() => onKeep(judging.mark, judge.model)}
+            type="button"
+          >
+            Next
+          </button>
+        )}
+        {judging.kind === 'failed' && (
+          <button onClick={again} type="button">
+            Ask the judge again
+          </button>
+        )}
+        {judging.kind === 'by hand' && (
+          <>
+            <span className="ask">Your reasoning was</span>
+            <button onClick={() => onKeep('sound')} type="button">
+              Sound
+            </button>
+            <button onClick={() => onKeep('partial')} type="button">
+              Partial
+            </button>
+            <button onClick={() => onKeep('wrong')} type="button">
+              Wrong
+            </button>
+          </>
+        )}
+        {judging.kind !== 'judged' && (
+          <button
+            className={judging.kind === 'nothing' ? undefined : 'quiet'}
+            onClick={() => onKeep('')}
+            type="button"
+          >
+            {judging.kind === 'nothing' ? 'Next' : 'Skip'}
+          </button>
+        )}
+        <button className="quiet leave" onClick={onLeave} type="button">
+          Leave
+        </button>
+      </div>
     </div>
   );
 }
@@ -296,22 +448,22 @@ function outcome(revealed: Revealed): string {
 
 function Question({
   phase,
-  reasoning,
   onReasoning,
   onAnswer,
+  onGive,
   onKeep,
   onLeave,
 }: {
   phase: Posed;
-  reasoning: string;
   onReasoning: (text: string) => void;
   onAnswer: (said: Said) => void;
-  onKeep: (mark: string) => void;
+  onGive: (why: string) => void;
+  onKeep: (mark: string, markedBy?: string) => void;
   onLeave: () => void;
 }) {
   const { live, next, shown } = phase;
-  const asked =
-    phase.kind === 'asking' ? live.history.length + 1 : live.history.length;
+  const answered = phase.kind === 'revealed';
+  const asked = answered ? live.history.length : live.history.length + 1;
   // In practice the count is known; in a mastery sitting the end is the
   // model's to call, and no meter is shown along the way, since a visible
   // one gets played to.
@@ -331,15 +483,13 @@ function Question({
   return (
     <section className="question">
       <p className="progress">{progress}</p>
-      {shown.length > 1 && phase.kind === 'asking' && (
+      {shown.length > 1 && !answered && (
         <p className="ask">
-          One of these two the compiler accepts and the other it rejects. Which
-          is which?
+          The compiler accepts one of these two and rejects the other. Which one
+          does it accept?
         </p>
       )}
-      {phase.kind === 'asking' && next.teach !== null && (
-        <Teach rule={next.teach} />
-      )}
+      {!answered && next.teach !== null && <Teach rule={next.teach} />}
       {phase.kind === 'revealed' && <Mark answered={phase.answered} />}
       {revealed !== null && revealed.difference !== '' && (
         <p className="difference">
@@ -356,17 +506,6 @@ function Question({
       ))}
       {phase.kind === 'asking' && (
         <>
-          {live.full && (
-            <label className="why">
-              Why?
-              <textarea
-                onChange={(e) => onReasoning(e.target.value)}
-                placeholder="What does this case turn on?"
-                rows={3}
-                value={reasoning}
-              />
-            </label>
-          )}
           <div className="choices">
             {ordered.map(([said, label]) => (
               <button key={said} onClick={() => onAnswer(said)} type="button">
@@ -387,12 +526,44 @@ function Question({
           <PointsRule points={pointsOf(live.knobs)} />
         </>
       )}
+      {phase.kind === 'why' && (
+        <>
+          <label className="why">
+            {shown.length > 1
+              ? `You said the ${phase.said} compiles. Why does the ${failingOne(phase.said)} fail?`
+              : 'Why does the compiler reject it?'}
+            <textarea
+              onChange={(e) => onReasoning(e.target.value)}
+              placeholder="Which rule does it run into?"
+              rows={3}
+              value={phase.why}
+            />
+          </label>
+          <div className="choices">
+            <button
+              disabled={phase.why.trim() === ''}
+              onClick={() => onGive(phase.why)}
+              type="button"
+            >
+              That is my reasoning
+            </button>
+            <button className="quiet" onClick={() => onGive('')} type="button">
+              Skip the reason
+            </button>
+            <button className="quiet leave" onClick={onLeave} type="button">
+              Leave
+            </button>
+          </div>
+          <PointsRule points={pointsOf(live.knobs)} />
+        </>
+      )}
       {phase.kind === 'revealed' && (
         <Reveal
-          answered={phase.answered}
-          full={live.full}
           onKeep={onKeep}
           onLeave={onLeave}
+          reasoning={phase.why}
+          revealed={phase.answered.revealed}
+          said={phase.said}
         />
       )}
     </section>
@@ -403,7 +574,6 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>({ kind: 'home' });
   const [slots, setSlots] = useState<Slot[]>(() => readSlots(storage));
   const [ready, setReady] = useState(false);
-  const [reasoning, setReasoning] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -445,7 +615,6 @@ export default function App() {
           slot,
         };
         store(live);
-        setReasoning('');
         return advance(live);
       }),
     [move, store],
@@ -453,10 +622,7 @@ export default function App() {
 
   const resume = useCallback(
     (slot: number, save: Save) =>
-      move('resuming the sitting', () => {
-        setReasoning('');
-        return advance(fromSave(slot, save));
-      }),
+      move('resuming the sitting', () => advance(fromSave(slot, save))),
     [move],
   );
 
@@ -464,13 +630,13 @@ export default function App() {
   // leaves at the reveal has still answered, and coming back must not show
   // them the same case now that they have seen its answer.
   const answer = useCallback(
-    (said: Said) => {
-      if (phase.kind !== 'asking') {
+    (said: Said, why: string) => {
+      if (phase.kind !== 'asking' && phase.kind !== 'why') {
         return;
       }
       const { live, next, shown } = phase;
       move('answering', () => {
-        const what = given(said, reasoning, '');
+        const what = given(said, why, '');
         const answered = answerCase(
           live.profile,
           live.knobs,
@@ -487,17 +653,64 @@ export default function App() {
           profile: answered.profile,
         };
         store(after);
-        return { answered, kind: 'revealed', live: after, next, said, shown };
+        return {
+          answered,
+          kind: 'revealed',
+          live: after,
+          next,
+          said,
+          shown,
+          why,
+        };
       });
     },
-    [phase, reasoning, move, store],
+    [phase, move, store],
+  );
+
+  // The reason, once the phase holding the answer it explains is the one on
+  // screen. The answer travels in the phase rather than beside it, so a
+  // reason can never be filed against a different one.
+  // The text as it is typed, on the phase that asked for it. A page-wide
+  // box would still be holding what was typed after a learner chose not to
+  // give it, and the answer, the judge and the transcript would each have to
+  // remember to ignore it.
+  const writing = useCallback((text: string) => {
+    setPhase((was) => (was.kind === 'why' ? { ...was, why: text } : was));
+  }, []);
+
+  const give = useCallback(
+    (why: string) => {
+      if (phase.kind !== 'why') {
+        return;
+      }
+      answer(phase.said, why);
+    },
+    [phase, answer],
+  );
+
+  // What the learner says first is the verdict. A reason is asked for after
+  // it and only where there is one to give, so the question they answer is
+  // never the question they are about to be asked to explain.
+  const say = useCallback(
+    (said: Said) => {
+      if (phase.kind !== 'asking') {
+        return;
+      }
+      const { live, next, shown } = phase;
+      if (live.full && asksWhy(said, shown.length)) {
+        setPhase({ kind: 'why', live, next, said, shown, why: '' });
+        return;
+      }
+      answer(said, '');
+    },
+    [phase, answer],
   );
 
   // In full mode the learner marks their own reasoning against the
   // derivation they have just been shown. The mark is kept for the
   // transcript and is not evidence: the profile already moved on the verdict.
   const keep = useCallback(
-    (mark: string) => {
+    (mark: string, markedBy = '') => {
       if (phase.kind !== 'revealed') {
         return;
       }
@@ -510,18 +723,17 @@ export default function App() {
         const marked = taken(
           last.item,
           last.seed,
-          given(said, reasoning, mark),
+          given(said, phase.why, mark, markedBy),
         );
         const after: Live = {
           ...live,
           history: [...live.history.slice(0, -1), marked],
         };
         store(after);
-        setReasoning('');
         return advance(after);
       });
     },
-    [phase, reasoning, move, store],
+    [phase, move, store],
   );
 
   const exportHistory = useCallback(
@@ -583,14 +795,16 @@ export default function App() {
         />
       )}
 
-      {(phase.kind === 'asking' || phase.kind === 'revealed') && (
+      {(phase.kind === 'asking' ||
+        phase.kind === 'why' ||
+        phase.kind === 'revealed') && (
         <Question
-          onAnswer={answer}
+          onAnswer={say}
+          onGive={give}
           onKeep={keep}
           onLeave={home}
-          onReasoning={setReasoning}
+          onReasoning={writing}
           phase={phase}
-          reasoning={reasoning}
         />
       )}
 

@@ -1,5 +1,5 @@
 [package]
-name = "fmt_wasm"
+name = "baml_fmt_wasm"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

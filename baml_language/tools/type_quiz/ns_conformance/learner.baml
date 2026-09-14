@@ -163,7 +163,7 @@ function sit_from(
     } else {
         0
     };
-    let given = root.Given { said: learner(put), reasoning: "", mark: "" };
+    let given = root.Given { said: learner(put), reasoning: "", mark: "", marked_by: "" };
     let after = root.observe_answer(profile, knobs, next.prompt.item, next.prompt.seed, given);
     let kept = root.Taken { item: next.prompt.item, seed: next.prompt.seed, given };
     sit_from(
@@ -572,9 +572,9 @@ function answered_report() -> string throws never {
     let seed = next.prompt.seed;
     let put = root.put_at(knobs, item, seed);
     let answers = [
-        root.Given { said: right_word(put), reasoning: "", mark: "" },
-        root.Given { said: wrong_word(put), reasoning: "", mark: "" },
-        root.Given { said: "unsure", reasoning: "", mark: "" },
+        root.Given { said: right_word(put), reasoning: "", mark: "", marked_by: "" },
+        root.Given { said: wrong_word(put), reasoning: "", mark: "", marked_by: "" },
+        root.Given { said: "unsure", reasoning: "", mark: "", marked_by: "" },
     ];
     let answered = answers.map((given) -> {
         root.answer_case(profile, knobs, item, seed, given)
@@ -606,8 +606,8 @@ function adaptive_round_trip() -> string throws never {
     // transcript has always held the second and never the first.
     let knobs = root.engine.Knobs { ...root.engine.default_knobs(), budget: 12, contrast: 1.0 };
     let sat = sit(typescripter, knobs, 9);
-    let expected = root.adaptive_sitting(9, false, knobs, sat.taken);
-    let text = root.adaptive_json(9, false, knobs, sat.taken);
+    let expected = root.adaptive_sitting(9, false, knobs, sat.taken, "test-build");
+    let text = root.adaptive_json(9, false, knobs, sat.taken, "test-build");
     let back = baml.json.from_string<root.engine.Transcript>(text) catch_all (e) {
         baml.json.ParseError => {
             return "parsing threw";
