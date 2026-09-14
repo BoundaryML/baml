@@ -347,7 +347,7 @@ pub struct RuntimeCompileDiagnostic {
     pub message: String,
     pub severity: RuntimeDiagnosticSeverity,
     pub span: Option<RuntimeSourceSpan>,
-    pub details: Option<RuntimeDiagnosticDetails>,
+    pub details: Option<Box<RuntimeDiagnosticDetails>>,
 }
 
 /// Successful compiler output retained by the runtime.

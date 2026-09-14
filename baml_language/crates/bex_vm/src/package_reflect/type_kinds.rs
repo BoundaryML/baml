@@ -1526,7 +1526,7 @@ fn alloc_compilation_error_with_span(
                     Severity::Info => bex_vm_types::RuntimeDiagnosticSeverity::Info,
                 },
                 span: source_span,
-                details: Some(bex_vm_types::RuntimeDiagnosticDetails {
+                details: Some(Box::new(bex_vm_types::RuntimeDiagnosticDetails {
                     headline: diagnostic.message.clone(),
                     primary_label: diagnostic
                         .annotations
@@ -1544,7 +1544,7 @@ fn alloc_compilation_error_with_span(
                     message_highlights: highlights,
                     annotations: Vec::new(),
                     related_info: Vec::new(),
-                }),
+                })),
             };
             super::reflect::diagnostic_value(vm, &runtime)
         })

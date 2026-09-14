@@ -172,8 +172,7 @@ fn list_unfiltered_cold_equals_warm() {
     );
     assert!(
         populated_output.contains("root::suite::nested::deep"),
-        "unfiltered list should render the nested leaf, got:\n{}",
-        populated_output,
+        "unfiltered list should render the nested leaf, got:\n{populated_output}",
     );
 }
 

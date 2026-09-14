@@ -39,8 +39,9 @@ passes; the final full-workspace validation is tracked separately.
   unreferenced check, and the full workspace nextest jobs.
 - [x] Final review: have a fresh subagent inspect the complete diff and fix all
   confirmed misses, then rerun affected validation.
-- [x] PR CI follow-up: repair the markdown/rustfmt pre-commit failures and
-  replace the deleted `book_interfaces` workflow target with its native suite.
+- [x] PR CI follow-up: repair the markdown, rustfmt, and Clippy pre-commit
+  failures and replace the deleted `book_interfaces` workflow target with its
+  native suite.
 - [x] CodeRabbit follow-up: address all five inline findings, add mounted-
   interface regressions, rerun affected validation, and resolve the threads.
 
@@ -148,6 +149,11 @@ Progress:
   diagnostics through the host boundary, and removed one stale ignored TIR
   specification whose syntax no longer parses. Focused validation for every
   correction passes.
+- The final Clippy follow-up keeps the richer diagnostic payload while boxing
+  its optional details, reducing `RuntimeCompileDiagnostic` below Clippy's
+  large-error threshold. It also updates the migrated discovery-cache assertion
+  to use inline format capture. The full workspace/all-target/all-feature
+  Clippy command passes.
 - Full validation is green after final review and PR follow-up: the offline
   native corpus selects 4,488 cases and reports 4,485 passes plus two expected
   tolerated failures (one fail-fast child is intentionally not executed), and
@@ -155,10 +161,10 @@ Progress:
   21 ignored and no unreferenced snapshots. The post-review complementary
   workspace job passes all 4,377 active entries with seven skipped. The PR
   follow-up also passes the repository's markdown/workflow hooks, CI-configured
-  rustfmt, and the three-case native Developer Docs gate. All five CodeRabbit
-  findings have focused regression coverage or a stronger retained oracle, and
-  all five review threads are answered and resolved. `git diff --check` and the
-  `.snap.new` scan are clean.
+  rustfmt and Clippy, and the three-case native Developer Docs gate. All five
+  CodeRabbit findings have focused regression coverage or a stronger retained
+  oracle, and all five review threads are answered and resolved.
+  `git diff --check` and the `.snap.new` scan are clean.
 
 ## Outcome
 

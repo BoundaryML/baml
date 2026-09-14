@@ -1154,7 +1154,7 @@ fn owned_diagnostic(
             Severity::Info => RuntimeDiagnosticSeverity::Info,
         },
         span,
-        details: Some(RuntimeDiagnosticDetails {
+        details: Some(Box::new(RuntimeDiagnosticDetails {
             headline,
             primary_label,
             phase: match diagnostic.phase {
@@ -1166,7 +1166,7 @@ fn owned_diagnostic(
             message_highlights,
             annotations,
             related_info,
-        }),
+        })),
     }
 }
 
