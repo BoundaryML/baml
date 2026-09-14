@@ -8,7 +8,7 @@ use baml_type::{Int63, Literal, RuntimeTy};
 
 use crate::{
     BinOp, Constant, IndexKind, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator, UnaryOp,
+    Terminator, UnaryOp, memory,
 };
 
 const MIN: i64 = Int63::MIN.get();
@@ -548,6 +548,7 @@ impl Analysis {
             .iter()
             .map(|region| region.handler)
             .collect();
+        let clobber_model = memory::ClobberModel::for_body(body);
         let mut entries = vec![None; body.blocks.len()];
         let mut work = VecDeque::new();
         for entry in std::iter::once(body.entry).chain(handlers.iter().copied()) {
@@ -564,12 +565,11 @@ impl Analysis {
                 continue;
             };
             match term {
-                Terminator::Call { .. }
-                | Terminator::VirtualCall { .. }
-                | Terminator::SysOp { .. }
-                | Terminator::Await { .. }
-                | Terminator::AwaitAny { .. }
-                | Terminator::Spawn { .. } => facts = Facts::default(),
+                // Anything that may run code this frame cannot see writes every
+                // heap location, and every fact here is about one.
+                term if memory::terminator_clobbers(body, clobber_model, term).heap => {
+                    facts = Facts::default();
+                }
                 Terminator::ShortCircuit { destination, .. } => {
                     if let Place::Local(local) = destination {
                         facts.forget(*local);
