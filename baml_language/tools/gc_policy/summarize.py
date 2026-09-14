@@ -7,6 +7,22 @@ from pathlib import Path
 import statistics
 
 
+def paired_ratio_summary(pairs, key):
+    values = [(pair['baseline'].get(key), pair['candidate'].get(key)) for pair in pairs]
+    if any(baseline is None or candidate in (None, 0) for baseline, candidate in values):
+        return '-'
+    ratios = [baseline / candidate for baseline, candidate in values]
+    return f'{statistics.median(ratios):.2f}× ({min(ratios):.2f}–{max(ratios):.2f})'
+
+
+def paired_median_summary(pairs, key):
+    values = [(pair['baseline'].get(key), pair['candidate'].get(key)) for pair in pairs]
+    if any(baseline is None or candidate is None for baseline, candidate in values):
+        return '-'
+    return (f'{statistics.median(baseline for baseline, _ in values):.1f} → '
+            f'{statistics.median(candidate for _, candidate in values):.1f}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
@@ -83,17 +99,17 @@ def main():
     for case, pairs in sorted(by_case.items()):
         assert len(pairs) == manifest['repeats']
         med = lambda variant, key: statistics.median(p[variant][key] for p in pairs)
-        ratios = [p['baseline']['elapsed_seconds'] / p['candidate']['elapsed_seconds'] for p in pairs]
-        cpu_ratios = [p['baseline']['process_cpu_seconds'] / p['candidate']['process_cpu_seconds'] for p in pairs]
-        rss = f'{med("baseline", "peak_sampled_rss_mib"):.1f} → {med("candidate", "peak_sampled_rss_mib"):.1f}'
+        wall = paired_ratio_summary(pairs, 'elapsed_seconds')
+        cpu = paired_ratio_summary(pairs, 'process_cpu_seconds')
+        rss = paired_median_summary(pairs, 'peak_sampled_rss_mib')
         collection_counts = (f'{med("baseline", "minor_count"):.0f}/{med("baseline", "major_count"):.0f} → '
                              f'{med("candidate", "minor_count"):.0f}/{med("candidate", "major_count"):.0f}')
         pauses = []
         for variant in ['baseline', 'candidate']:
             values = [p[variant]['recorded_max_pause_ms'] for p in pairs]
             pauses.append(f'{statistics.median(values):.1f}' if all(v is not None for v in values) else '-')
-        lines.append(f'| {case} | {statistics.median(ratios):.2f}× ({min(ratios):.2f}–{max(ratios):.2f}) | '
-                     f'{statistics.median(cpu_ratios):.2f}× ({min(cpu_ratios):.2f}–{max(cpu_ratios):.2f}) | '
+        lines.append(f'| {case} | {wall} | '
+                     f'{cpu} | '
                      f'{rss} | {collection_counts} | {pauses[0]} → {pauses[1]} |')
     lines += ['', '## Where collection time went', '',
               'Medians of per-run totals for all engine collections captured on the experiment executor.', '',
