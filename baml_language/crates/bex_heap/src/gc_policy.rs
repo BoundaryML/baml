@@ -1,4 +1,4 @@
-//! Allocation spending requests a full collection at the next VM safe point.
+//! Allocation spending requests a collection at the next VM safe point.
 //!
 //! This is headroom between collections, not a hard heap or RSS limit. Charges
 //! count reserved object slots only, including unused TLAB capacity. Indirect
@@ -8,8 +8,10 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use crate::BexHeap;
+use crate::{BexHeap, CollectionLevel};
 
+pub(crate) const MIN_MINOR_BUDGET: usize = 8 * 1024 * 1024;
+const MAX_MINOR_BUDGET: usize = 32 * 1024 * 1024;
 pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
 const LIVE_HEADROOM: usize = 4;
 pub(crate) const FIRST_TLAB_SLOTS: usize = 32;
@@ -20,24 +22,47 @@ pub const POLL_INTERVAL: u64 = 4096;
 /// Diagnostic snapshot. Concurrent allocation may advance spending while read.
 #[derive(Debug, Clone, Copy)]
 pub struct GcBudgetSnapshot {
+    /// Bytes of object slots reserved since the last minor or full GC.
+    pub bytes_since_minor_gc: usize,
     /// Bytes of object slots reserved since the last full GC; excludes payloads.
     pub bytes_since_full_gc: usize,
+    pub minor_budget_bytes: usize,
     pub full_budget_bytes: usize,
+    pub minor_collections: usize,
     pub full_collections: usize,
 }
 
 pub(crate) struct AllocationBudget {
-    spent: AtomicUsize,
-    budget: AtomicUsize,
+    minor_spent: AtomicUsize,
+    full_spent: AtomicUsize,
+    minor_budget: AtomicUsize,
+    full_budget: AtomicUsize,
+    minor_collections: AtomicUsize,
     full_collections: AtomicUsize,
     pressure: Arc<AtomicBool>,
+}
+
+fn add_saturating(counter: &AtomicUsize, bytes: usize) -> usize {
+    let old = counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
+            Some(old.saturating_add(bytes))
+        })
+        .expect("update always succeeds");
+    old.saturating_add(bytes)
+}
+
+fn minor_budget_for(full_budget: usize) -> usize {
+    (full_budget / 4).clamp(MIN_MINOR_BUDGET, MAX_MINOR_BUDGET)
 }
 
 impl AllocationBudget {
     pub(crate) fn new() -> Self {
         Self {
-            spent: AtomicUsize::new(0),
-            budget: AtomicUsize::new(MIN_FULL_BUDGET),
+            minor_spent: AtomicUsize::new(0),
+            full_spent: AtomicUsize::new(0),
+            minor_budget: AtomicUsize::new(MIN_MINOR_BUDGET),
+            full_budget: AtomicUsize::new(MIN_FULL_BUDGET),
+            minor_collections: AtomicUsize::new(0),
             full_collections: AtomicUsize::new(0),
             pressure: Arc::new(AtomicBool::new(false)),
         }
@@ -47,33 +72,48 @@ impl AllocationBudget {
         if bytes == 0 {
             return;
         }
-        let old = self
-            .spent
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
-                Some(old.saturating_add(bytes))
-            })
-            .expect("update always succeeds");
-        if old.saturating_add(bytes) >= self.budget.load(Ordering::Relaxed) {
+        let minor_spent = add_saturating(&self.minor_spent, bytes);
+        let full_spent = add_saturating(&self.full_spent, bytes);
+        if minor_spent >= self.minor_budget.load(Ordering::Relaxed)
+            || full_spent >= self.full_budget.load(Ordering::Relaxed)
+        {
             // No collection here: allocation and mutation can hold unpublished
             // pointers or container locks. The VM cooperates at a safe point.
             self.pressure.store(true, Ordering::Relaxed);
         }
     }
 
-    pub(crate) fn due(&self) -> bool {
-        self.spent.load(Ordering::Relaxed) >= self.budget.load(Ordering::Relaxed)
+    pub(crate) fn due(&self) -> Option<CollectionLevel> {
+        if self.full_spent.load(Ordering::Relaxed) >= self.full_budget.load(Ordering::Relaxed) {
+            Some(CollectionLevel::Major)
+        } else if self.minor_spent.load(Ordering::Relaxed)
+            >= self.minor_budget.load(Ordering::Relaxed)
+        {
+            Some(CollectionLevel::Minor)
+        } else {
+            None
+        }
+    }
+
+    /// Called with all mutators parked after a minor collection. Young debt is
+    /// paid, but cumulative debt remains so repeated minors cannot postpone a full GC.
+    pub(crate) fn after_minor(&self) {
+        self.minor_spent.store(0, Ordering::Relaxed);
+        self.minor_collections.fetch_add(1, Ordering::Relaxed);
+        self.pressure.store(self.due().is_some(), Ordering::Relaxed);
     }
 
     /// Called with all mutators parked, after full collection has moved survivors.
-    /// Collector copies are not allocation spending. Minor GC never resets this.
+    /// Collector copies are not allocation spending.
     pub(crate) fn after_full(&self, live_slot_bytes: usize) {
-        self.spent.store(0, Ordering::Relaxed);
-        self.budget.store(
-            live_slot_bytes
-                .saturating_mul(LIVE_HEADROOM)
-                .max(MIN_FULL_BUDGET),
-            Ordering::Relaxed,
-        );
+        let full_budget = live_slot_bytes
+            .saturating_mul(LIVE_HEADROOM)
+            .max(MIN_FULL_BUDGET);
+        self.minor_spent.store(0, Ordering::Relaxed);
+        self.full_spent.store(0, Ordering::Relaxed);
+        self.full_budget.store(full_budget, Ordering::Relaxed);
+        self.minor_budget
+            .store(minor_budget_for(full_budget), Ordering::Relaxed);
         self.pressure.store(false, Ordering::Relaxed);
         self.full_collections.fetch_add(1, Ordering::Relaxed);
     }
@@ -82,8 +122,11 @@ impl AllocationBudget {
 impl BexHeap {
     pub fn gc_budget(&self) -> GcBudgetSnapshot {
         GcBudgetSnapshot {
-            bytes_since_full_gc: self.gc_policy.spent.load(Ordering::Relaxed),
-            full_budget_bytes: self.gc_policy.budget.load(Ordering::Relaxed),
+            bytes_since_minor_gc: self.gc_policy.minor_spent.load(Ordering::Relaxed),
+            bytes_since_full_gc: self.gc_policy.full_spent.load(Ordering::Relaxed),
+            minor_budget_bytes: self.gc_policy.minor_budget.load(Ordering::Relaxed),
+            full_budget_bytes: self.gc_policy.full_budget.load(Ordering::Relaxed),
+            minor_collections: self.gc_policy.minor_collections.load(Ordering::Relaxed),
             full_collections: self.gc_policy.full_collections.load(Ordering::Relaxed),
         }
     }
@@ -101,26 +144,37 @@ mod tests {
     use crate::{CollectionLevel, Tlab};
 
     #[test]
-    fn full_budget_tracks_spending_and_live_headroom() {
+    fn minor_and_full_budgets_track_independent_spending() {
         let p = AllocationBudget::new();
         p.charge(0);
-        assert!(!p.due());
-        p.charge(MIN_FULL_BUDGET - 1);
-        assert!(!p.due());
+        assert_eq!(p.due(), None);
+        p.charge(MIN_MINOR_BUDGET - 1);
+        assert_eq!(p.due(), None);
         p.charge(1);
-        assert!(p.due());
+        assert_eq!(p.due(), Some(CollectionLevel::Minor));
         assert!(p.pressure.load(Ordering::Relaxed));
-        p.after_full(MIN_FULL_BUDGET);
-        assert!(!p.due());
+        p.after_minor();
+        assert_eq!(p.due(), None);
         assert!(!p.pressure.load(Ordering::Relaxed));
-        assert_eq!(p.budget.load(Ordering::Relaxed), 4 * MIN_FULL_BUDGET);
+        assert_eq!(p.full_spent.load(Ordering::Relaxed), MIN_MINOR_BUDGET);
+        assert_eq!(p.minor_collections.load(Ordering::Relaxed), 1);
+        p.charge(MIN_FULL_BUDGET - MIN_MINOR_BUDGET);
+        assert_eq!(p.due(), Some(CollectionLevel::Major));
+        p.after_full(MIN_FULL_BUDGET);
+        assert_eq!(p.due(), None);
+        assert!(!p.pressure.load(Ordering::Relaxed));
+        assert_eq!(p.full_budget.load(Ordering::Relaxed), 4 * MIN_FULL_BUDGET);
+        assert_eq!(p.minor_budget.load(Ordering::Relaxed), MAX_MINOR_BUDGET);
         p.after_full(0);
-        assert_eq!(p.budget.load(Ordering::Relaxed), MIN_FULL_BUDGET);
+        assert_eq!(p.full_budget.load(Ordering::Relaxed), MIN_FULL_BUDGET);
+        assert_eq!(p.minor_budget.load(Ordering::Relaxed), MIN_MINOR_BUDGET);
         p.charge(usize::MAX);
         p.charge(1);
-        assert_eq!(p.spent.load(Ordering::Relaxed), usize::MAX);
+        assert_eq!(p.minor_spent.load(Ordering::Relaxed), usize::MAX);
+        assert_eq!(p.full_spent.load(Ordering::Relaxed), usize::MAX);
         p.after_full(usize::MAX);
-        assert_eq!(p.budget.load(Ordering::Relaxed), usize::MAX);
+        assert_eq!(p.full_budget.load(Ordering::Relaxed), usize::MAX);
+        assert_eq!(p.minor_budget.load(Ordering::Relaxed), MAX_MINOR_BUDGET);
     }
 
     #[test]
@@ -132,6 +186,8 @@ mod tests {
             heap.collect_garbage_minor(&[]);
         }
         assert_eq!(heap.gc_budget().bytes_since_full_gc, MIN_FULL_BUDGET);
+        assert_eq!(heap.gc_budget().bytes_since_minor_gc, 0);
+        assert_eq!(heap.gc_budget().minor_collections, 1);
         assert_eq!(heap.should_collect(), Some(CollectionLevel::Major));
         assert!(heap.gc_pressure().load(Ordering::Relaxed));
         // SAFETY: standalone heap, no concurrent users or retained pointers.

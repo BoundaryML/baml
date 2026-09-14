@@ -1042,9 +1042,9 @@ impl BexHeap {
         }
     }
 
-    /// Whether the heap has spent its allocation allowance since the last full GC.
+    /// Whether the heap has spent either its young or full allocation allowance.
     pub fn should_gc(&self) -> bool {
-        self.gc_policy.due()
+        self.gc_policy.due().is_some()
     }
 
     /// Reset the allocation counter after GC.

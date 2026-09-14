@@ -317,16 +317,15 @@ impl BexEngine {
         }
         let _checking = GcCheckGuard(&self.checking_gc);
         // No active heap permit yet. Incoming external values/handles own roots.
-        if idle_due || self.heap.should_gc() {
-            self.collect_garbage_with_reason(
-                CollectionLevel::Major,
-                if idle_due {
-                    "idle_on_entry"
-                } else {
-                    "allocation_on_entry"
-                },
-            )
-            .await;
+        let requested = if idle_due {
+            Some((CollectionLevel::Major, "idle_on_entry"))
+        } else {
+            self.heap
+                .should_collect()
+                .map(|level| (level, "allocation_on_entry"))
+        };
+        if let Some((level, reason)) = requested {
+            self.collect_garbage_with_reason(level, reason).await;
         }
     }
 

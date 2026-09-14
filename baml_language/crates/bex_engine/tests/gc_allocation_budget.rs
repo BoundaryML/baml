@@ -86,6 +86,25 @@ async fn short_calls_service_pressure_on_next_entry() {
     engine.shutdown().await;
 }
 
+#[tokio::test]
+async fn short_lived_allocation_triggers_minor_before_full() {
+    let engine = engine();
+    for n in 0..30_000 {
+        let result = call(&engine, "Tiny", vec![Ext::Int(n)], true).await;
+        let Ext::Instance { fields, .. } = result else {
+            panic!("expected copied instance")
+        };
+        assert_eq!(fields["value"], Ext::Int(n));
+        let budget = engine.heap().gc_budget();
+        if budget.minor_collections > 0 {
+            assert_eq!(budget.full_collections, 0);
+            engine.shutdown().await;
+            return;
+        }
+    }
+    panic!("short-lived allocation should exhaust the minor budget");
+}
+
 // Import spends the budget after the entry check. A short spawn must service
 // that debt before returning, and preserve both the captured strings and the
 // future handle when the child has not yet acquired its first heap permit.
@@ -274,7 +293,7 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_handle() {
+async fn completed_bridge_call_leaves_minor_debt_for_next_entry_and_preserves_its_handle() {
     let engine = engine();
     let mut n = 0;
     let retained = loop {
@@ -297,6 +316,8 @@ async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_hand
         call(&engine, "Read", vec![retained], true).await,
         Ext::Int(n)
     );
-    assert_eq!(engine.heap().gc_budget().full_collections, 1);
+    let budget = engine.heap().gc_budget();
+    assert_eq!(budget.minor_collections, 1);
+    assert_eq!(budget.full_collections, 0);
     engine.shutdown().await;
 }

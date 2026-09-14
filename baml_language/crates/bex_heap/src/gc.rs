@@ -85,10 +85,10 @@ pub struct GcStats {
 }
 
 impl BexHeap {
-    /// Automatic collections are full collections, requested by allocation spending.
+    /// Select the collection level requested by allocation spending.
     /// This reads only atomics; moving collection still requires exclusive heap access.
     pub fn should_collect(&self) -> Option<CollectionLevel> {
-        self.gc_policy.due().then_some(CollectionLevel::Major)
+        self.gc_policy.due()
     }
 
     /// Run a full garbage collection with the given roots.
@@ -1639,7 +1639,8 @@ impl BexHeap {
 
         self.update_handles(&forwarding);
 
-        // A minor collection does not satisfy the full-GC allocation budget.
+        // A minor collection pays young debt without erasing cumulative full-GC debt.
+        self.gc_policy.after_minor();
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
