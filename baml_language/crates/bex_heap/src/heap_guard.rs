@@ -218,12 +218,12 @@ impl HeapPermitManager {
         }
     }
     /// Create a permit manager that exports its weak-registry size through heap stats.
-    pub fn for_heap(heap: &Arc<crate::BexHeap>) -> Self {
+    pub fn for_heap(_heap: &Arc<crate::BexHeap>) -> Self {
         Self {
             active: Arc::new(tokio::sync::Semaphore::const_new(MAX_PERMITS as usize)),
             holders: tokio::sync::Mutex::new(Vec::new()),
             #[cfg(feature = "gc_profiling")]
-            heap: Some(Arc::downgrade(heap)),
+            heap: Some(Arc::downgrade(_heap)),
         }
     }
     #[cfg(feature = "gc_profiling")]
