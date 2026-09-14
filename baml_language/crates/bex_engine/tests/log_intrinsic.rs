@@ -15,7 +15,6 @@ use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
     logger::{TraceLogDrainReport, TraceLogger},
 };
-use bex_events::prof::backend::{ProfilerConfig, ProfilerSession};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -25,19 +24,9 @@ async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
     let snapshot = compile_for_engine(source);
-    let (profiler_session, diagnostic) = ProfilerSession::from_config(ProfilerConfig {
-        enabled: false,
-        ..ProfilerConfig::default()
-    });
-    assert!(diagnostic.is_none());
     let engine = Arc::new(
-        BexEngine::new_with_profiler_session(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-            profiler_session,
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
     let logs = TraceLogger::bounded(16);
     let result = engine

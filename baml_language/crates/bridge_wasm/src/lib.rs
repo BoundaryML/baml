@@ -687,9 +687,7 @@ async fn expand_test_set(
 
     let call_id = sys_types::CallId::next();
     let registry_value = bex_project::BexExternalValue::Handle(lease.handle.clone());
-    let context = bex_project::FunctionCallContextBuilder::new(call_id)
-        .suppress_internal_profile()
-        .build();
+    let context = bex_project::FunctionCallContextBuilder::new(call_id).build();
     let expand_error = match lease
         .engine
         .call_function(
@@ -729,9 +727,7 @@ async fn serialize_registry(
     engine: &Arc<bex_project::BexEngine>,
     registry: bex_project::BexExternalValue,
 ) -> Vec<u8> {
-    let context = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .suppress_internal_profile()
-        .build();
+    let context = bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
     match engine
         .call_function(
             "testing.TestRegistry.serialize",

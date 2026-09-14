@@ -75,7 +75,7 @@ name = "runtime_benchmark"
 harness = false
 
 [[bench]]
-name = "profiling_overhead"
+name = "call_overhead"
 harness = false
 
 [[bench]]

@@ -9,18 +9,9 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
 };
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct LocalIdCaptureOverrides {
-    pub inputs: Option<bool>,
-    pub output: Option<bool>,
-    pub error: Option<bool>,
-}
-
 #[derive(Debug)]
 pub(crate) struct LocalIdState {
-    pub boundary_id: BoundaryId,
     pub encoded: String,
-    pub capture: LocalIdCaptureOverrides,
     pub consumed: bool,
 }
 
@@ -35,18 +26,14 @@ impl LocalIdState {
         }
         self.consumed = true;
         Ok(ConsumedLocalId {
-            boundary_id: self.boundary_id,
             encoded: self.encoded.clone(),
-            capture: self.capture,
         })
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ConsumedLocalId {
-    pub boundary_id: BoundaryId,
     pub encoded: String,
-    pub capture: LocalIdCaptureOverrides,
 }
 
 impl BamlNamespaceId for PackageBoundaryImpl {
@@ -68,9 +55,7 @@ impl BamlPackageBoundary for PackageBoundaryImpl {
         let boundary_id = BoundaryId::from_bytes(id);
         let encoded = RuntimeId::Boundary(boundary_id).encode();
         let state = LocalIdState {
-            boundary_id,
             encoded,
-            capture: LocalIdCaptureOverrides::default(),
             consumed: false,
         };
         Ok(alloc_local_id(vm, state))
@@ -79,33 +64,15 @@ impl BamlPackageBoundary for PackageBoundaryImpl {
 
 impl BamlClassLocalId for PackageBoundaryImpl {
     fn capture(
-        vm: &mut BexVm,
-        localid: &Value,
-        inputs: Option<bool>,
-        output: Option<bool>,
-        error: Option<bool>,
+        _vm: &mut BexVm,
+        _localid: &Value,
+        _inputs: Option<bool>,
+        _output: Option<bool>,
+        _error: Option<bool>,
     ) -> Result<Value, VmRustFnError> {
-        let state = local_id_state(vm, *localid)?;
-        let mut guard = state.lock().map_err(|_| VmBamlError::InvalidArgument {
-            message: "boundary.LocalId state is unavailable".to_string(),
-        })?;
-        if guard.consumed {
-            return Err(VmBamlError::InvalidArgument {
-                message: "cannot change capture policy after a boundary.LocalId has been consumed"
-                    .to_string(),
-            }
-            .into());
-        }
-        if let Some(inputs) = inputs {
-            guard.capture.inputs = Some(inputs);
-        }
-        if let Some(output) = output {
-            guard.capture.output = Some(output);
-        }
-        if let Some(error) = error {
-            guard.capture.error = Some(error);
-        }
-        Ok(*localid)
+        Err(VmBamlError::InvalidArgument {
+            message: "profiling capture is unavailable: the old runtime tracing pipeline has been removed".to_string(),
+        }.into())
     }
 }
 

@@ -128,11 +128,11 @@ jobs:
         run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Release leg: the profiler's value copy carries `debug_assert`-adjacent
+      # Release leg: structured-log value copying carries `debug_assert`-adjacent
       # logic whose behavior must not change when debug assertions are
       # compiled out (PR #4548 review A.1). Narrow on purpose — this module,
       # not the workspace.
-      - name: "Run profiler value-copy tests in release mode"
+      - name: "Run structured-log value-copy tests in release mode"
         run: cargo test --release -p bex_engine --lib trace_heap
         working-directory: baml_language
 
@@ -446,16 +446,10 @@ jobs:
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Profiling-specific test binaries opt in explicitly; keeping
-      # BAML_PROFILE off for the general suite avoids filling the Windows
-      # runner with incidental `.bamlprof` files. Run the two binaries that
-      # drive CLI binary e2e separately after the disk cleanup below. The
-      # runtime corpus remains in its existing Linux snapshot job.
+      # CLI binary e2e tests run separately after disk cleanup below.
       - name: "Run tests"
         run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus)'
         working-directory: baml_language
-        env:
-          BAML_PROFILE: "0"
 
       - name: "Free disk for CLI binary e2e tests"
         run: |
@@ -476,7 +470,6 @@ jobs:
         run: cargo nextest run -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
         working-directory: baml_language
         env:
-          BAML_PROFILE: "0"
           BAML_PACK_HOST_PREBUILT: "1"
 
       - name: "Show sccache stats"
