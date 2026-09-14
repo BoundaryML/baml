@@ -74,6 +74,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baml-source", type=Path, default=ROOT.parents[2] / "baml_language", help="Path to a baml_language workspace")
     parser.add_argument("--skip-rust", action="store_true", help="Reuse the CLI, pack host, Python bridge, and Node addon for the same source revision")
+    parser.add_argument("--explicit-gc-diagnostic", action="store_true", help="Build the pure-BAML explicit-GC diagnostic, which requires baml.sys.heap_stats()")
     args = parser.parse_args()
     source = args.baml_source.expanduser().resolve()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
@@ -118,6 +119,11 @@ def main():
     for name in ("node-baml", "python-baml"):
         run(cli, "generate", "--agent-skill-check", "off", cwd=apps / name, env=common_env)
     run(cli, "pack", "main", "--target", TARGET, "--output", apps / "baml-only/hello", "--no-progress", "--agent-skill-check", "off", cwd=apps / "baml-only", env=common_env)
+    diagnostic = None
+    if args.explicit_gc_diagnostic:
+        diagnostic = apps / "baml-only-explicit-gc"
+        copy_tree(ROOT / "diagnostics/baml-only-explicit-gc", diagnostic)
+        run(cli, "pack", "main", "--target", TARGET, "--output", diagnostic / "hello", "--no-progress", "--agent-skill-check", "off", cwd=diagnostic, env=common_env)
 
     source_node = Path(output("mise", "x", "-C", source, "--", "which", "node"))
     source_node_env = dict(common_env, PATH=str(source_node.parent) + os.pathsep + os.environ["PATH"])
@@ -157,6 +163,8 @@ def main():
     vegeta.chmod(0o755)
 
     artifacts = [cli, pack_host, next((BUILD / "wheels").glob("baml_bridge-*.whl")), bridge / "dist/baml_node.darwin-arm64.node", apps / "baml-only/hello", vegeta]
+    if diagnostic is not None:
+        artifacts.append(diagnostic / "hello")
     manifest = {
         "source": str(source),
         "revision": revision,
@@ -169,6 +177,7 @@ def main():
         "node": output(node20, "--version"),
         "node_binary": str(node20),
         "vegeta": VEGETA_VERSION,
+        "explicit_gc_diagnostic": args.explicit_gc_diagnostic,
         "artifacts": {str(path.relative_to(BUILD)): digest(path) for path in artifacts},
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

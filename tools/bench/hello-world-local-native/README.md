@@ -50,6 +50,19 @@ The comparison uses the change between median RSS in minutes 2–3 and minutes 4
 
 This is evidence that regular one-second gaps let the existing 100 ms idle collector prevent the persistent bridge growth seen under continuous load. It rules out the original roughly request-proportional leak over this five-minute profile, but it does not prove that a slower leak cannot appear in a longer run. The retained [paired comparison](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/comparison.json), [cycled summary](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/cycled-summary.json), and [continuous summary](evidence/2026-09-14-pre4870-cycled-vs-continuous-100rps/continuous-summary.json) record the derived measurements and request validation; both raw sample streams and build manifests are retained alongside them.
 
+## Pure BAML explicit-GC checkpoints
+
+The pure-BAML diagnostic requires `baml.sys.heap_stats()`. Build it explicitly from a source checkout containing that read-only diagnostic and run 30-second load periods separated by forced major collections:
+
+```sh
+python3 scripts/build.py --baml-source /path/to/heap-stats-worktree/baml_language --explicit-gc-diagnostic
+python3 scripts/run_explicit_gc.py --rate 100 --duration 300 --load-seconds 30 --post-gc-seconds 2 --interval 5
+```
+
+The retained experiment used the clean pre-#4870 parent `42365a45f9d7a3750ed72bd338006d369f6c0e41` plus only the two read-only heap-stat commits from #4837; neither commit changes collection or allocation behavior. It completed 28,124 HTTP 200 requests and ten explicit GC checkpoints. Each complete 30-second burst left 96,143 runtime object slots before GC. Every major collection returned the heap to exactly 15 runtime objects, four active handles, and zero TLAB chunks while taking 4.2–8.4 ms.
+
+RSS did not decrease when the logical objects were reclaimed. It rose from 50.27 MiB before the first GC to 50.84 MiB afterward, reached 53.20 MiB by the third checkpoint, and stayed within 53.20–53.86 MiB through the final checkpoint. The fitted post-GC RSS slope from checkpoints 3–10 was 0.18 MiB/min. This rules out an accumulating live-object set and a collector correctness failure for this workload over five minutes. The earlier pure-BAML RSS curve primarily reflects the automatic collection cadence and allocator pages remaining resident after collection. The retained [analysis](evidence/2026-09-14-pre4870-pure-baml-explicit-gc-100rps/analysis.json) includes every checkpoint; the raw summary, samples, configuration, and build manifest are stored beside it.
+
 ## Leak investigation and fix validation
 
 The shared Node and Python slope suggested a request-proportional allocation below both language adapters. A direct `bex_engine` scalar workload confirmed that hypothesis: 100,000 calls allocated no BAML heap slots but increased RSS from 279.53 to 368.64 MiB. Each call created a short-lived VM and registered a weak root holder in `HeapPermitManager::new_permit`. Dead registrations were removed only when `request_park` initiated GC, so a scalar function that never allocated BAML heap objects also never cleaned the registry.

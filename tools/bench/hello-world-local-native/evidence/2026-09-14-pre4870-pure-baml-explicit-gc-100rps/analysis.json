@@ -1,0 +1,171 @@
+{
+  "tested_base_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "diagnostic_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "diagnostic_only_commits": [
+    {
+      "revision": "a3f8f540b3",
+      "description": "Expose existing runtime heap counters through baml.sys.heap_stats()"
+    },
+    {
+      "revision": "9f8ec6f68d",
+      "description": "Use checked conversion for heap counters"
+    }
+  ],
+  "collector_changes_from_tested_base": false,
+  "load": {
+    "rate_rps": 100,
+    "load_seconds_per_full_cycle": 30,
+    "wall_duration_seconds": 300,
+    "gc_checkpoints": 10
+  },
+  "requests": 28124,
+  "status_counts": {
+    "200": 28124
+  },
+  "full_cycle_runtime_objects_before_gc": 96143,
+  "full_cycle_runtime_objects_after_gc": 15,
+  "full_cycle_runtime_objects_collected": 96128,
+  "post_gc_active_handles": 4,
+  "post_gc_tlab_chunks": 0,
+  "post_gc_rss_mib": {
+    "first": 50.84375,
+    "cycle_3": 53.203125,
+    "last": 53.859375,
+    "min_cycles_3_plus": 53.203125,
+    "max_cycles_3_plus": 53.859375,
+    "slope_cycles_3_plus_mib_per_minute": 0.18099153341690993
+  },
+  "interpretation": "Every explicit major GC returned the runtime heap to the same 15-object live set with stable handles and no TLAB reservations. RSS did not fall because allocator pages remained resident, but it stabilized after allocator warmup. This is evidence against a live-object leak or collector correctness failure in this workload and points to automatic collection cadence plus allocator high-water retention.",
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "elapsed_seconds": 30.081946625,
+      "runtime_objects_before": 96096,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96081,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 50.265625,
+      "rss_after_mib": 50.84375,
+      "rss_after_2s_mib": 50.84375,
+      "gc_milliseconds": 8.43204199999903
+    },
+    {
+      "cycle": 2,
+      "elapsed_seconds": 62.180153083,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.15625,
+      "rss_after_mib": 53.171875,
+      "rss_after_2s_mib": 53.171875,
+      "gc_milliseconds": 7.443457999997349
+    },
+    {
+      "cycle": 3,
+      "elapsed_seconds": 94.237552291,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.203125,
+      "rss_after_mib": 53.203125,
+      "rss_after_2s_mib": 53.203125,
+      "gc_milliseconds": 4.337415999998484
+    },
+    {
+      "cycle": 4,
+      "elapsed_seconds": 126.33203825,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.484375,
+      "rss_after_mib": 53.484375,
+      "rss_after_2s_mib": 53.484375,
+      "gc_milliseconds": 6.035249999996495
+    },
+    {
+      "cycle": 5,
+      "elapsed_seconds": 158.413985708,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.484375,
+      "rss_after_mib": 53.484375,
+      "rss_after_2s_mib": 53.484375,
+      "gc_milliseconds": 5.565666999984842
+    },
+    {
+      "cycle": 6,
+      "elapsed_seconds": 190.46686616600002,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.515625,
+      "rss_after_mib": 53.515625,
+      "rss_after_2s_mib": 53.515625,
+      "gc_milliseconds": 4.189999999994143
+    },
+    {
+      "cycle": 7,
+      "elapsed_seconds": 222.547613375,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.609375,
+      "rss_after_mib": 53.609375,
+      "rss_after_2s_mib": 53.609375,
+      "gc_milliseconds": 4.227082999989307
+    },
+    {
+      "cycle": 8,
+      "elapsed_seconds": 254.653212125,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.859375,
+      "rss_after_mib": 53.859375,
+      "rss_after_2s_mib": 53.859375,
+      "gc_milliseconds": 6.239167000018142
+    },
+    {
+      "cycle": 9,
+      "elapsed_seconds": 286.746936333,
+      "runtime_objects_before": 96143,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 96128,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.859375,
+      "rss_after_mib": 53.859375,
+      "rss_after_2s_mib": 53.859375,
+      "gc_milliseconds": 6.313540999997258
+    },
+    {
+      "cycle": 10,
+      "elapsed_seconds": 300.076430833,
+      "runtime_objects_before": 36111,
+      "runtime_objects_after": 15,
+      "runtime_objects_collected": 36096,
+      "active_handles_after": 4,
+      "tlab_chunks_after": 0,
+      "rss_before_mib": 53.859375,
+      "rss_after_mib": 53.859375,
+      "rss_after_2s_mib": 53.859375,
+      "gc_milliseconds": 3.9969999999698302
+    }
+  ]
+}
