@@ -78,22 +78,25 @@ def main():
              'Baseline and candidate are invoked with the same workload, warmup and requested policy settings. '
              + manifest.get('change', 'The candidate optimizes the unhandled-spawn-error scan.') +
              ' Binary hashes and experiment settings are recorded in the manifest.', '',
-             '| Case | Baseline s | Candidate s | Speedup (paired range) | Candidate peak slots MiB | Candidate longest recorded pause ms |',
+             '| Case | Wall speedup | CPU speedup | Peak RSS MiB (base → candidate) | Collections (minor/major, base → candidate) | Longest pause ms (base → candidate) |',
              '|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):
         assert len(pairs) == manifest['repeats']
         med = lambda variant, key: statistics.median(p[variant][key] for p in pairs)
         ratios = [p['baseline']['elapsed_seconds'] / p['candidate']['elapsed_seconds'] for p in pairs]
-        slots = '-' if case == 'concurrent' else f'{med("candidate", "peak_slot_mib"):.1f}'
-        pauses = [p['candidate']['recorded_max_pause_ms'] for p in pairs]
-        pause = f'{statistics.median(pauses):.1f}' if all(p is not None for p in pauses) else '-'
-        lines.append(f'| {case} | {med("baseline", "elapsed_seconds"):.3f} | '
-                     f'{med("candidate", "elapsed_seconds"):.3f} | {statistics.median(ratios):.2f}× '
-                     f'({min(ratios):.2f}–{max(ratios):.2f}) | {slots} | {pause} |')
+        cpu_ratios = [p['baseline']['process_cpu_seconds'] / p['candidate']['process_cpu_seconds'] for p in pairs]
+        rss = f'{med("baseline", "peak_sampled_rss_mib"):.1f} → {med("candidate", "peak_sampled_rss_mib"):.1f}'
+        collections = (f'{med("baseline", "minor_count"):.0f}/{med("baseline", "major_count"):.0f} → '
+                       f'{med("candidate", "minor_count"):.0f}/{med("candidate", "major_count"):.0f}')
+        pauses = []
+        for variant in ['baseline', 'candidate']:
+            values = [p[variant]['recorded_max_pause_ms'] for p in pairs]
+            pauses.append(f'{statistics.median(values):.1f}' if all(v is not None for v in values) else '-')
+        lines.append(f'| {case} | {statistics.median(ratios):.2f}× ({min(ratios):.2f}–{max(ratios):.2f}) | '
+                     f'{statistics.median(cpu_ratios):.2f}× ({min(cpu_ratios):.2f}–{max(cpu_ratios):.2f}) | '
+                     f'{rss} | {collections} | {pauses[0]} → {pauses[1]} |')
     lines += ['', '## Where collection time went', '',
-              'Medians of per-run totals for explicitly requested, measured collections. '
-              'The concurrent case can also trigger automatic collections; these are emitted by '
-              'the engine tracing target but are not included in this harness’s returned-statistics files.', '',
+              'Medians of per-run totals for all engine collections captured on the experiment executor.', '',
               '| Case | Binary | Trace/copy ms | Error/finalizer scans ms | Pointer fixup ms | Reclaim ms | Wait to park ms |',
               '|---|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):

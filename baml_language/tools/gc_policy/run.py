@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--allow-legacy-binaries', action='store_true',
                         help='Explicitly allow binaries without build.py provenance')
     parser.add_argument('--allow-unprofiled', action='store_true', help='Timing-only feature-off comparison')
+    parser.add_argument('--policy', help='Override the harness policy for both binaries')
     parser.add_argument('--timeout', type=float, default=300)
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[2]
@@ -81,6 +82,7 @@ def main():
         seed=4202, repeats=args.repeats, cases=cases, change=args.change,
         build_provenance={name: f'{name}-build.json' if name in provenance else None for name in variants},
         allow_unprofiled=args.allow_unprofiled,
+        policy_override=args.policy,
     )
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Keep baseline/candidate adjacent, randomize their order inside each pair,
@@ -98,7 +100,7 @@ def main():
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})
-                env.update(GC_POLICY=policy, GC_TRACE=str(out / f'{name}.cycles.json'))
+                env.update(GC_POLICY=args.policy or policy, GC_TRACE=str(out / f'{name}.cycles.json'))
                 try:
                     run = subprocess.run([str(variants[variant]), '--ignored', '--nocapture', '--exact', test],
                                          cwd=workspace, env=env, text=True, capture_output=True, timeout=args.timeout)
