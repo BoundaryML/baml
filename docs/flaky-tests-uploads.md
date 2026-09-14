@@ -59,8 +59,9 @@ Fork PRs get no token, so the upload is skipped and the action fails the job
 itself when the tests failed.
 
 Two gotchas. Upload before anything that clears `target/` — the Windows leg's
-`cargo clean` is why its upload sits above it. And give a second nextest run in
-the same job its own profile, or it overwrites the first one's report.
+`cargo clean` is why its first upload sits above it. And give a second nextest
+run in the same job its own profile, or it overwrites the first one's report:
+that is why `ci-bridge` and `ci-cli-e2e` exist alongside `ci`.
 
 ## File paths
 
@@ -89,11 +90,8 @@ so reports are enriched where their runner can't do it:
 
 ## Not covered
 
-These run in CI but upload nothing: `wasm-pack test` and `tree-sitter test`
-emit no JUnit, and the Windows `Run CLI binary e2e tests` step is a second
-nextest run in a job whose `ci` profile has already been uploaded, so it has
-no profile of its own. (On musl `pack_e2e` rides the main run and *is*
-reported.)
+These run in CI but upload nothing, because their runners emit no JUnit:
+`wasm-pack test` and `tree-sitter test`.
 
 Each `sdk_test_*` fixture gate is one Rust test that shells out to a whole
 foreign suite (`pytest`, `gradle test`, `go test`, `dotnet run`, …), so

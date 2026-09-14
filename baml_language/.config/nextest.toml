@@ -299,3 +299,8 @@ path = "junit.xml"
 # under the bridge outcome whenever the bridge run dies before writing.
 [profile.ci-bridge.junit]
 path = "junit.xml"
+
+# The windows CLI e2e step runs after the job's `ci` report is already
+# uploaded, so it reports separately for the same reason as the bridge.
+[profile.ci-cli-e2e.junit]
+path = "junit.xml"

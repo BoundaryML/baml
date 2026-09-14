@@ -519,11 +519,25 @@ jobs:
         working-directory: baml_language
 
       - name: "Run CLI binary e2e tests (windows)"
-        run: cargo nextest run -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
+        id: cli-e2e-test
+        continue-on-error: true
+        run: cargo nextest run --profile ci-cli-e2e -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
           BAML_PACK_HOST_PREBUILT: "1"
+
+      - name: "Upload CLI e2e test results to Trunk"
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci-cli-e2e/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.cli-e2e-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
       - name: "Show sccache stats"
         if: always()
