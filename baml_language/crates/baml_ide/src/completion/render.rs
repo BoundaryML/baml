@@ -31,18 +31,34 @@ pub(super) fn member(
     decl: &MemberDecl<'_>,
     form: MemberForm,
 ) -> (Option<String>, Option<String>) {
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::extern_loc::{
+        extern_class_row, extern_enum_row, extern_function_row,
+    };
+
+    let style = match form {
+        MemberForm::Instance => info::instance_completion_sig_style(),
+        MemberForm::Qualified => info::method_sig_style(),
+    };
     match decl {
-        MemberDecl::Method(function) => {
+        MemberDecl::Method(DeclRef::Source(function)) => {
             let data = baml_compiler2_ppir::item_data::function_data(db, *function);
-            let style = match form {
-                MemberForm::Instance => info::instance_completion_sig_style(),
-                MemberForm::Qualified => info::method_sig_style(),
-            };
             let signature =
                 info::resolved_function_sig_parts(db, *function, None).render(db, file, style);
             (Some(signature), data.docstring.clone())
         }
-        MemberDecl::EnumVariant { enum_loc, index } => {
+        // A served package's row: its resolved signature, exactly as hover
+        // renders it. Rows carry no docstrings.
+        MemberDecl::Method(DeclRef::External(function)) => {
+            let signature =
+                crate::render::FnSigParts::of_exported(extern_function_row(db, *function))
+                    .render(db, file, style);
+            (Some(signature), None)
+        }
+        MemberDecl::EnumVariant {
+            enum_loc: DeclRef::Source(enum_loc),
+            index,
+        } => {
             let data = baml_compiler2_ppir::item_data::enum_data(db, *enum_loc);
             (
                 Some(data.name.as_str().to_string()),
@@ -51,7 +67,23 @@ pub(super) fn member(
                     .and_then(|variant| variant.docstring.clone()),
             )
         }
-        MemberDecl::ClassField { class, index } => {
+        MemberDecl::EnumVariant {
+            enum_loc: DeclRef::External(enum_loc),
+            ..
+        } => (
+            Some(
+                extern_enum_row(db, *enum_loc)
+                    .head
+                    .name()
+                    .as_str()
+                    .to_string(),
+            ),
+            None,
+        ),
+        MemberDecl::ClassField {
+            class: DeclRef::Source(class),
+            index,
+        } => {
             let data = baml_compiler2_ppir::item_data::class_data(db, *class);
             let ty = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *class)
                 .get(*index)
@@ -63,7 +95,20 @@ pub(super) fn member(
                     .and_then(|field| field.docstring.clone()),
             )
         }
-        MemberDecl::InterfaceField { interface, index } => {
+        MemberDecl::ClassField {
+            class: DeclRef::External(class),
+            index,
+        } => {
+            let ty = extern_class_row(db, *class)
+                .fields
+                .get(*index)
+                .map(|(_, ty, _)| crate::render::display_ty_canonical_for_file(db, file, ty));
+            (ty, None)
+        }
+        MemberDecl::InterfaceField {
+            interface: DeclRef::Source(interface),
+            index,
+        } => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, *interface);
             (
                 None,
@@ -72,9 +117,10 @@ pub(super) fn member(
                     .and_then(|field| field.docstring.clone()),
             )
         }
-        // A mounted package exports rows, not declarations: the name is all
-        // there is to show until the row itself is threaded through.
-        MemberDecl::Mounted => (None, None),
+        MemberDecl::InterfaceField {
+            interface: DeclRef::External(_),
+            ..
+        } => (None, None),
     }
 }
 

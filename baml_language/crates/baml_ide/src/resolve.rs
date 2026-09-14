@@ -14,7 +14,7 @@ use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::Expr;
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc},
+    loc::{DeclRef, FunctionLoc, InterfaceLoc},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
 };
@@ -58,30 +58,35 @@ pub enum SymbolTarget<'db> {
         func_scope: FileScopeId,
         binding: BindingId,
     },
-    /// A class field, by position in the class's field list.
+    /// A class field, by position in the class's field list — a source
+    /// class's, or a served package's exported row's.
     Field {
-        class: ClassLoc<'db>,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         field_index: usize,
     },
     /// An enum variant, by position in the enum's variant list.
     Variant {
-        enum_loc: EnumLoc<'db>,
+        enum_loc: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
         variant_index: usize,
     },
     /// A method with a concrete body: a class method, an `implements`-block
     /// method, or an interface *default* method.
-    Method { func: FunctionLoc<'db> },
+    Method {
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+    },
     /// A required (signature-only) interface method, by position.
     InterfaceRequiredMethod {
-        iface: InterfaceLoc<'db>,
+        iface: baml_compiler2_hir_ty::extern_loc::InterfaceRef<'db>,
         method_index: usize,
     },
     /// An interface field declaration, by position.
     InterfaceField {
-        iface: InterfaceLoc<'db>,
+        iface: baml_compiler2_hir_ty::extern_loc::InterfaceRef<'db>,
         field_index: usize,
     },
-    /// An interface's associated-type declaration, by position.
+    /// An interface's associated-type declaration, by position. Reached
+    /// from declaration sites only (no member resolution names one), so
+    /// it is a source declaration by construction.
     AssociatedType {
         iface: InterfaceLoc<'db>,
         assoc_index: usize,
@@ -766,7 +771,10 @@ fn member_at<'db>(
                 .fields
                 .iter()
                 .position(|field| field.name.as_str() == token_text)?;
-            Some(SymbolTarget::Field { class, field_index })
+            Some(SymbolTarget::Field {
+                class: DeclRef::Source(class),
+                field_index,
+            })
         }
         // Cursor on a variant declaration inside an enum body.
         ScopeKind::Enum => {
@@ -779,7 +787,7 @@ fn member_at<'db>(
                 .iter()
                 .position(|variant| variant.name.as_str() == token_text)?;
             Some(SymbolTarget::Variant {
-                enum_loc,
+                enum_loc: DeclRef::Source(enum_loc),
                 variant_index,
             })
         }
@@ -1191,7 +1199,9 @@ fn operator_target_at(
         .and_then(|rhs| inference.type_of_expr.get(&rhs))
         .map(baml_type::interned::Ty::from_plain);
     let func = ops::operator_method(db, dispatch, &lhs_ty, rhs_ty.as_ref())?;
-    Some(SymbolTarget::Method { func })
+    Some(SymbolTarget::Method {
+        func: DeclRef::Source(func),
+    })
 }
 
 /// Cursor on a declaration-position name the scope tree cannot see: a
@@ -1212,7 +1222,9 @@ fn declaration_name_at(
         if hit(item_data::function_source_map(db, *func).name_span)
             && item_data::method_owner(db, *func).is_some()
         {
-            return Some(SymbolTarget::Method { func: *func });
+            return Some(SymbolTarget::Method {
+                func: DeclRef::Source(*func),
+            });
         }
     }
 
@@ -1232,7 +1244,7 @@ fn declaration_name_at(
         for (field_index, span) in source_map.field_name_spans.iter().enumerate() {
             if hit(*span) {
                 return Some(SymbolTarget::InterfaceField {
-                    iface: *iface,
+                    iface: DeclRef::Source(*iface),
                     field_index,
                 });
             }
@@ -1345,41 +1357,54 @@ fn member_access_at<'db>(
     member_resolution_target(db, resolution?)
 }
 
-/// Map an inference [`MemberResolution`] to a [`SymbolTarget`].
+/// Map an inference [`MemberResolution`] to a [`SymbolTarget`], whichever
+/// lane the declaration lives in: a served package's row is as addressable
+/// a target as a source item (hover, usages), it just has no span to
+/// navigate to.
 pub(crate) fn member_resolution_target<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     resolution: &baml_compiler2_hir_ty::infer::MemberResolution<'db>,
 ) -> Option<SymbolTarget<'db>> {
-    use baml_compiler2_hir::loc::DeclRef;
-    use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
+    use baml_compiler2_hir_ty::{
+        extern_loc::{
+            extern_class_row, extern_enum_row, extern_interface_method, extern_interface_row,
+        },
+        infer::{MemberResolution, MethodCallee},
+    };
 
     match resolution {
-        MemberResolution::Field {
-            class: DeclRef::Source(class),
-            field,
-        } => {
-            // Read the canonical (PPIR) tree, not the HIR pre-expansion tree:
-            // an inferred `class` can be a synthetic `$stream` class (the
-            // type of a streamed partial), which is absent pre-expansion.
-            // Its field name-spans alias the user-authored class's, so
-            // navigation still lands on real source.
-            let field_index = item_data::class_data(db, *class)
-                .fields
-                .iter()
-                .position(|f| f.name == *field)?;
+        MemberResolution::Field { class, field } => {
+            let field_index = match class {
+                // Read the canonical (PPIR) tree, not the HIR pre-expansion
+                // tree: an inferred `class` can be a synthetic `$stream` class
+                // (the type of a streamed partial), which is absent
+                // pre-expansion. Its field name-spans alias the user-authored
+                // class's, so navigation still lands on real source.
+                DeclRef::Source(class) => item_data::class_data(db, *class)
+                    .fields
+                    .iter()
+                    .position(|f| f.name == *field)?,
+                DeclRef::External(class) => extern_class_row(db, *class)
+                    .fields
+                    .iter()
+                    .position(|(name, ..)| name == field)?,
+            };
             Some(SymbolTarget::Field {
                 class: *class,
                 field_index,
             })
         }
-        MemberResolution::Variant {
-            enum_loc: DeclRef::Source(enum_loc),
-            variant,
-        } => {
-            let variant_index = item_data::enum_data(db, *enum_loc)
-                .variants
-                .iter()
-                .position(|v| v.name == *variant)?;
+        MemberResolution::Variant { enum_loc, variant } => {
+            let variant_index = match enum_loc {
+                DeclRef::Source(enum_loc) => item_data::enum_data(db, *enum_loc)
+                    .variants
+                    .iter()
+                    .position(|v| v.name == *variant)?,
+                DeclRef::External(enum_loc) => extern_enum_row(db, *enum_loc)
+                    .variants
+                    .iter()
+                    .position(|name| name == variant)?,
+            };
             Some(SymbolTarget::Variant {
                 enum_loc: *enum_loc,
                 variant_index,
@@ -1388,81 +1413,69 @@ pub(crate) fn member_resolution_target<'db>(
         MemberResolution::Free {
             func: DeclRef::Source(func),
         } => Some(SymbolTarget::Item(Definition::Function(*func))),
+        // A served package's free function is a top-level ITEM, and `Item`
+        // carries source definitions only until the definition lane gains
+        // its own provenance-total ref.
+        MemberResolution::Free {
+            func: DeclRef::External(_),
+        } => None,
         MemberResolution::Method {
-            callee:
-                MethodCallee::Inherent(DeclRef::Source(func))
-                | MethodCallee::Concrete {
-                    func: DeclRef::Source(func),
-                    ..
-                },
+            callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
             ..
         } => Some(SymbolTarget::Method { func: *func }),
         MemberResolution::Method {
-            callee:
-                MethodCallee::Virtual {
-                    interface: DeclRef::Source(interface),
-                    method,
-                },
+            callee: MethodCallee::Virtual { interface, method },
             ..
         } => {
             // Only the slot (interface + name) is known statically: address
             // the declaration — the required signature, or the default
             // method's definition.
-            let iface_data = item_data::interface_data(db, *interface);
-            if let Some(method_index) = iface_data
-                .required_methods
-                .iter()
-                .position(|m| m.name == *method)
-            {
-                return Some(SymbolTarget::InterfaceRequiredMethod {
-                    iface: *interface,
-                    method_index,
-                });
+            match interface {
+                DeclRef::Source(interface) => {
+                    let iface_data = item_data::interface_data(db, *interface);
+                    if let Some(method_index) = iface_data
+                        .required_methods
+                        .iter()
+                        .position(|m| m.name == *method)
+                    {
+                        return Some(SymbolTarget::InterfaceRequiredMethod {
+                            iface: DeclRef::Source(*interface),
+                            method_index,
+                        });
+                    }
+                    let default_loc = *iface_data
+                        .default_methods
+                        .iter()
+                        .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?;
+                    Some(SymbolTarget::Method {
+                        func: DeclRef::Source(default_loc),
+                    })
+                }
+                DeclRef::External(interface) => {
+                    let row = extern_interface_row(db, *interface);
+                    if let Some(method_index) =
+                        row.required_methods.iter().position(|m| m.name == *method)
+                    {
+                        return Some(SymbolTarget::InterfaceRequiredMethod {
+                            iface: DeclRef::External(*interface),
+                            method_index,
+                        });
+                    }
+                    let default = extern_interface_method(db, row.head, method)?;
+                    Some(SymbolTarget::Method {
+                        func: DeclRef::External(default),
+                    })
+                }
             }
-            let default_loc = *iface_data
-                .default_methods
-                .iter()
-                .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?;
-            Some(SymbolTarget::Method { func: default_loc })
         }
         MemberResolution::InterfaceVirtualField {
-            interface: DeclRef::Source(interface),
+            interface,
             field_index,
             ..
         } => Some(SymbolTarget::InterfaceField {
             iface: *interface,
             field_index: *field_index as usize,
         }),
-        // A served package's rows have no `SourceFile` and no span in this
-        // database by construction: nothing to navigate to.
-        MemberResolution::Field {
-            class: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::Variant {
-            enum_loc: DeclRef::External(_),
-            ..
-        }
-        | MemberResolution::Free {
-            func: DeclRef::External(_),
-        }
-        | MemberResolution::Method {
-            callee:
-                MethodCallee::Inherent(DeclRef::External(_))
-                | MethodCallee::Concrete {
-                    func: DeclRef::External(_),
-                    ..
-                }
-                | MethodCallee::Virtual {
-                    interface: DeclRef::External(_),
-                    ..
-                },
-            ..
-        }
-        | MemberResolution::InterfaceVirtualField {
-            interface: DeclRef::External(_),
-            ..
-        } => None,
     }
 }
 
@@ -1510,7 +1523,10 @@ fn constructor_field_at<'db>(
             .fields
             .iter()
             .position(|f| f.name == field.name)?;
-        return Some(SymbolTarget::Field { class, field_index });
+        return Some(SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        });
     }
     None
 }
@@ -1548,7 +1564,10 @@ pub fn target_definition<'db>(
                 }
             }
         }
-        SymbolTarget::Field { class, field_index } => {
+        SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        } => {
             let range = *item_data::class_source_map(db, class)
                 .field_name_spans
                 .get(field_index)?;
@@ -1558,7 +1577,7 @@ pub fn target_definition<'db>(
             })
         }
         SymbolTarget::Variant {
-            enum_loc,
+            enum_loc: DeclRef::Source(enum_loc),
             variant_index,
         } => {
             let range = *item_data::enum_source_map(db, enum_loc)
@@ -1569,12 +1588,14 @@ pub fn target_definition<'db>(
                 range,
             })
         }
-        SymbolTarget::Method { func } => Some(Location {
+        SymbolTarget::Method {
+            func: DeclRef::Source(func),
+        } => Some(Location {
             file: func.file(db),
             range: item_data::function_source_map(db, func).name_span,
         }),
         SymbolTarget::InterfaceRequiredMethod {
-            iface,
+            iface: DeclRef::Source(iface),
             method_index,
         } => {
             let range = item_data::interface_source_map(db, iface)
@@ -1586,7 +1607,10 @@ pub fn target_definition<'db>(
                 range,
             })
         }
-        SymbolTarget::InterfaceField { iface, field_index } => {
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::Source(iface),
+            field_index,
+        } => {
             let range = *item_data::interface_source_map(db, iface)
                 .field_name_spans
                 .get(field_index)?;
@@ -1605,5 +1629,26 @@ pub fn target_definition<'db>(
                 range,
             })
         }
+        // A served package's rows have no `SourceFile` and no span in this
+        // database by construction: nothing to navigate to.
+        SymbolTarget::Field {
+            class: DeclRef::External(_),
+            ..
+        }
+        | SymbolTarget::Variant {
+            enum_loc: DeclRef::External(_),
+            ..
+        }
+        | SymbolTarget::Method {
+            func: DeclRef::External(_),
+        }
+        | SymbolTarget::InterfaceRequiredMethod {
+            iface: DeclRef::External(_),
+            ..
+        }
+        | SymbolTarget::InterfaceField {
+            iface: DeclRef::External(_),
+            ..
+        } => None,
     }
 }

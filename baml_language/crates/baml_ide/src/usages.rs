@@ -39,7 +39,7 @@ use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
-    loc::FunctionLoc,
+    loc::{DeclRef, FunctionLoc},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
         BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
@@ -431,8 +431,14 @@ fn find_member_usages(
                 }
             }
 
-            // Constructor-literal keys (fields only).
-            if let SymbolTarget::Field { class, .. } = target {
+            // Constructor-literal keys (fields only). A served class's
+            // literals are keyed on its exported row, which the key walk
+            // does not read yet — its member accesses are still found above.
+            if let SymbolTarget::Field {
+                class: DeclRef::Source(class),
+                ..
+            } = target
+            {
                 collect_constructor_key_usages(
                     db,
                     sf,
@@ -452,30 +458,60 @@ fn find_member_usages(
 /// The declared name of a member target (for the text pre-filter and key
 /// matching).
 fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>) -> Option<Name> {
+    use baml_compiler2_hir_ty::extern_loc::{
+        extern_class_row, extern_enum_row, extern_function_row, extern_interface_row,
+    };
     match target {
-        SymbolTarget::Field { class, field_index } => item_data::class_data(db, class)
-            .fields
-            .get(field_index)
-            .map(|f| f.name.clone()),
+        SymbolTarget::Field { class, field_index } => match class {
+            DeclRef::Source(class) => item_data::class_data(db, class)
+                .fields
+                .get(field_index)
+                .map(|f| f.name.clone()),
+            DeclRef::External(class) => extern_class_row(db, class)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.clone()),
+        },
         SymbolTarget::Variant {
             enum_loc,
             variant_index,
-        } => item_data::enum_data(db, enum_loc)
-            .variants
-            .get(variant_index)
-            .map(|v| v.name.clone()),
-        SymbolTarget::Method { func } => Some(item_data::function_data(db, func).name.clone()),
+        } => match enum_loc {
+            DeclRef::Source(enum_loc) => item_data::enum_data(db, enum_loc)
+                .variants
+                .get(variant_index)
+                .map(|v| v.name.clone()),
+            DeclRef::External(enum_loc) => extern_enum_row(db, enum_loc)
+                .variants
+                .get(variant_index)
+                .cloned(),
+        },
+        SymbolTarget::Method { func } => Some(match func {
+            DeclRef::Source(func) => item_data::function_data(db, func).name.clone(),
+            DeclRef::External(func) => extern_function_row(db, func).name.clone(),
+        }),
         SymbolTarget::InterfaceRequiredMethod {
             iface,
             method_index,
-        } => item_data::interface_data(db, iface)
-            .required_methods
-            .get(method_index)
-            .map(|m| m.name.clone()),
-        SymbolTarget::InterfaceField { iface, field_index } => item_data::interface_data(db, iface)
-            .fields
-            .get(field_index)
-            .map(|f| f.name.clone()),
+        } => match iface {
+            DeclRef::Source(iface) => item_data::interface_data(db, iface)
+                .required_methods
+                .get(method_index)
+                .map(|m| m.name.clone()),
+            DeclRef::External(iface) => extern_interface_row(db, iface)
+                .required_methods
+                .get(method_index)
+                .map(|m| m.name.clone()),
+        },
+        SymbolTarget::InterfaceField { iface, field_index } => match iface {
+            DeclRef::Source(iface) => item_data::interface_data(db, iface)
+                .fields
+                .get(field_index)
+                .map(|f| f.name.clone()),
+            DeclRef::External(iface) => extern_interface_row(db, iface)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.clone()),
+        },
         // Associated types appear only in TYPE positions, which carry no
         // inference records — the walker finds no body usages (honest
         // absence until type-reference resolution is recorded).

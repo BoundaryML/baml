@@ -970,6 +970,7 @@ dependencies = [
 name = "baml_ide"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_codegen_types",

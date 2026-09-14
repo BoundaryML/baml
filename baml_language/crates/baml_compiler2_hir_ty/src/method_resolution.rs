@@ -16,7 +16,7 @@
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, InterfaceLoc},
+    loc::{ClassLoc, DeclRef, FunctionLoc, InterfaceLoc},
 };
 use baml_type::{
     DeclName, Name, ParamTy, TyAttr,
@@ -1146,27 +1146,29 @@ pub struct MemberCandidate<'db> {
     pub decl: MemberDecl<'db>,
 }
 
-/// The declaration an enumerated member came from.
+/// The declaration an enumerated member came from, wherever it lives: a
+/// source item this database type-checks, or the identity of a served
+/// package's exported row (whose facts every consumer reads through the
+/// `extern_loc` row reads).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemberDecl<'db> {
-    /// A method with a source declaration — class-inherent, or an
-    /// interface's required/default method.
-    Method(FunctionLoc<'db>),
-    /// A field of a source class, by index into its declared field list.
-    ClassField { class: ClassLoc<'db>, index: usize },
-    /// A field of a source interface, by index into its declared field list.
+    /// A method: class-inherent, or an interface's required/default method.
+    Method(crate::extern_loc::FunctionRef<'db>),
+    /// A field of a class, by index into its declared field list.
+    ClassField {
+        class: crate::extern_loc::ClassRef<'db>,
+        index: usize,
+    },
+    /// A field of an interface, by index into its declared field list.
     InterfaceField {
-        interface: InterfaceLoc<'db>,
+        interface: crate::extern_loc::InterfaceRef<'db>,
         index: usize,
     },
     /// An enum variant, by index into its declared variant list.
     EnumVariant {
-        enum_loc: EnumLoc<'db>,
+        enum_loc: crate::extern_loc::EnumRef<'db>,
         index: usize,
     },
-    /// Declared by a mounted package: there is no source declaration to
-    /// point at, only the exported row.
-    Mounted,
 }
 
 /// The tier an enumerated member came from.
@@ -1211,7 +1213,10 @@ pub fn member_candidates<'db>(
                 false,
                 false,
                 MemberSource::Inherent,
-                MemberDecl::ClassField { class, index },
+                MemberDecl::ClassField {
+                    class: DeclRef::Source(class),
+                    index,
+                },
             );
         }
         for (name, is_static, method) in declared_methods(db, &data.methods) {
@@ -1221,32 +1226,36 @@ pub fn member_candidates<'db>(
                 true,
                 is_static,
                 MemberSource::Inherent,
-                MemberDecl::Method(method),
+                MemberDecl::Method(DeclRef::Source(method)),
             );
         }
     } else if let Some((qtn, _)) = external_class_for_type(facts, receiver, 8)
-        && let Some(crate::package_interface::ExportedType::Class {
-            fields, methods, ..
-        }) = crate::package_interface::mounted_type_row(db, &qtn)
+        && let Some(class) = crate::extern_loc::mounted_class_loc(db, &qtn)
     {
-        for (name, ..) in fields {
+        let row = crate::extern_loc::extern_class_row(db, class);
+        for (index, (name, ..)) in row.fields.iter().enumerate() {
             push_candidate(
                 &mut out,
                 name.clone(),
                 false,
                 false,
                 MemberSource::Inherent,
-                MemberDecl::Mounted,
+                MemberDecl::ClassField {
+                    class: DeclRef::External(class),
+                    index,
+                },
             );
         }
-        for method in methods {
+        for exported in row.methods {
+            let method = crate::extern_loc::extern_class_method(db, row.head, &exported.name)
+                .unwrap_or_else(|| unreachable!("a method row of the class mints"));
             push_candidate(
                 &mut out,
-                method.name.clone(),
+                exported.name.clone(),
                 true,
-                !crate::package_interface::exported_takes_self(method),
+                !crate::callable::callable_takes_self(db, DeclRef::External(method)),
                 MemberSource::Inherent,
-                MemberDecl::Mounted,
+                MemberDecl::Method(DeclRef::External(method)),
             );
         }
     }
@@ -1317,7 +1326,7 @@ pub fn type_member_candidates<'db>(
                     true,
                     is_static,
                     MemberSource::Inherent,
-                    MemberDecl::Method(method),
+                    MemberDecl::Method(DeclRef::Source(method)),
                 );
             }
             // Impl-provided members: a bare `C.member` also resolves as
@@ -1345,7 +1354,10 @@ pub fn type_member_candidates<'db>(
                     false,
                     true,
                     MemberSource::Inherent,
-                    MemberDecl::EnumVariant { enum_loc, index },
+                    MemberDecl::EnumVariant {
+                        enum_loc: DeclRef::Source(enum_loc),
+                        index,
+                    },
                 );
             }
             // An enum is a concrete type like any other: it cannot carry an
@@ -1371,7 +1383,7 @@ pub fn type_member_candidates<'db>(
                     true,
                     is_static,
                     MemberSource::Inherent,
-                    MemberDecl::Method(method),
+                    MemberDecl::Method(DeclRef::Source(method)),
                 );
             }
         }
@@ -1457,27 +1469,30 @@ fn interface_member_rows<'db>(
     existential: bool,
 ) -> Vec<(Name, bool, bool, MemberDecl<'db>)> {
     let mut rows = Vec::new();
-    if let Some(crate::package_interface::ExportedType::Interface {
-        fields,
-        required_methods,
-        default_methods,
-        ..
-    }) = crate::package_interface::mounted_type_row(db, &target.name)
-    {
-        for (name, ..) in fields {
-            rows.push((name.clone(), false, false, MemberDecl::Mounted));
+    if let Some(interface) = crate::extern_loc::mounted_interface_loc(db, &target.name) {
+        let row = crate::extern_loc::extern_interface_row(db, interface);
+        for (index, (name, ..)) in row.fields.iter().enumerate() {
+            rows.push((
+                name.clone(),
+                false,
+                false,
+                MemberDecl::InterfaceField {
+                    interface: DeclRef::External(interface),
+                    index,
+                },
+            ));
         }
-        for row in required_methods.iter().chain(default_methods) {
-            let method = extern_interface_method(db, &target.name, &row.name)
+        for exported in row.required_methods.iter().chain(row.default_methods) {
+            let method = extern_interface_method(db, row.head, &exported.name)
                 .unwrap_or_else(|| unreachable!("a row of the interface mints"));
             if existential && callable_breaks_one_self(db, DeclRef::External(method)) {
                 continue;
             }
             rows.push((
-                row.name.clone(),
+                exported.name.clone(),
                 true,
                 !crate::package_interface::exported_takes_self(extern_function_row(db, method)),
-                MemberDecl::Mounted,
+                MemberDecl::Method(DeclRef::External(method)),
             ));
         }
         return rows;
@@ -1491,14 +1506,22 @@ fn interface_member_rows<'db>(
             field.name.clone(),
             false,
             false,
-            MemberDecl::InterfaceField { interface, index },
+            MemberDecl::InterfaceField {
+                interface: DeclRef::Source(interface),
+                index,
+            },
         ));
     }
     for (name, is_static, method) in declared_methods(db, &data.methods) {
         if existential && callable_breaks_one_self(db, DeclRef::Source(method)) {
             continue;
         }
-        rows.push((name, true, is_static, MemberDecl::Method(method)));
+        rows.push((
+            name,
+            true,
+            is_static,
+            MemberDecl::Method(DeclRef::Source(method)),
+        ));
     }
     rows
 }

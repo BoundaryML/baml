@@ -1559,14 +1559,18 @@ fn describe_type_method(
     // mounted/precompiled impl's method shows in the listing with its
     // signature and nothing more.
     for imp in crate::info::type_impls(db, viewer, definition) {
-        for body in imp.methods {
-            if let crate::info::ImplMethodBody::Source { method, exported } = body
+        for func in imp.methods {
+            if let baml_compiler2_hir::loc::DeclRef::Source(method) = func
                 && baml_compiler2_ppir::item_data::function_data(db, method)
                     .name
                     .as_str()
                     == member_name
             {
-                candidates.push((method, exported, Some(imp.label.clone())));
+                candidates.push((
+                    method,
+                    crate::info::impl_method_row(db, func),
+                    Some(imp.label.clone()),
+                ));
             }
         }
     }

@@ -32,6 +32,8 @@ pub mod export;
 pub mod info;
 pub mod line_index;
 pub mod listing;
+#[cfg(test)]
+mod mounted_package_tests;
 pub mod outline;
 pub mod param_schema;
 pub mod render;
