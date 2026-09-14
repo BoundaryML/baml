@@ -394,7 +394,7 @@ large_stack_arrays = "allow"
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = "s"   # smallest; try "s" if perf matters
+opt-level = 3     # prioritize runtime speed
 strip = "symbols" # still keep your strip -x in packaging
 # `unwind` for every artifact — see the "Why panic = unwind" note below the
 # profile overrides.
@@ -497,8 +497,7 @@ inherits = "release"
 # Measured cost on `baml-cli`, aarch64-apple-darwin, identical release settings
 # except `panic` (2026-08-18): 24.65 MiB (abort) -> 30.87 MiB (unwind),
 # +6.23 MiB / +25%: `__text` +2.63 MB (landing pads), `__eh_frame` +2.32 MB,
-# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. Nothing else in the
-# profile can shave this — LTO, opt-level and strip are already at their
-# size-minimizing settings — so the size-gate ceilings carry it explicitly
-# (`.cargo/size-gate.toml`). wasm32 is unaffected: it has no unwinding and
-# behaves as `abort` regardless of this setting.
+# `__gcc_except_tab` +1.19 MB, `__unwind_info` +0.32 MB. These measurements used
+# the earlier size-focused release configuration. Release now prioritizes speed
+# with opt-level=3; artifact size budgets are tracked in `.cargo/size-gate.toml`.
+# wasm32 has no unwinding and behaves as `abort` regardless of the panic setting.
