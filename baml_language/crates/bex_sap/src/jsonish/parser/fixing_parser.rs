@@ -197,6 +197,74 @@ mod tests {
         }
     }
 
+    // Regression tests for the \uXXXX escape handling in still-open strings.
+    // The old code re-read the peeked 'u' as the first of the 4 hex digits,
+    // dropping the 4th digit ("✅" became the raw text "\u270"), and never
+    // decoded the escape at all.
+
+    #[test]
+    fn test_partial_string_unicode_escape_decoded() {
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{"answer": "\u2705 still streaming"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, obj_cmplt) => {
+                assert_eq!(obj_cmplt, &CompletionState::Incomplete);
+                match &fields[0] {
+                    (key, Value::String(s, s_cmplt)) => {
+                        assert_eq!(key, "answer");
+                        assert_eq!(s, "✅ still streaming");
+                        assert_eq!(s_cmplt, &CompletionState::Incomplete);
+                    }
+                    _ => panic!("Expected string field, got: {:?}", fields[0]),
+                }
+            }
+            _ => panic!("Expected object, got: {:?}", vals[0].0),
+        }
+    }
+
+    #[test]
+    fn test_partial_string_ending_in_unicode_escape() {
+        // The escape is the very last thing in the chunk: all 4 hex digits
+        // arrived, so it must decode even though the string is still open.
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{"answer": "done \u2705"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, _) => match &fields[0] {
+                (_, Value::String(s, _)) => assert_eq!(s, "done ✅"),
+                _ => panic!("Expected string field, got: {:?}", fields[0]),
+            },
+            _ => panic!("Expected object, got: {:?}", vals[0].0),
+        }
+    }
+
+    #[test]
+    fn test_partial_string_truncated_unicode_escape_kept_raw() {
+        // The stream ended mid-escape; keep the raw text so no input is lost.
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{"answer": "done \u27"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, _) => match &fields[0] {
+                (_, Value::String(s, _)) => assert_eq!(s, r#"done \u27"#),
+                _ => panic!("Expected string field, got: {:?}", fields[0]),
+            },
+            _ => panic!("Expected object, got: {:?}", vals[0].0),
+        }
+    }
+
+    #[test]
+    fn test_partial_string_lone_surrogate_kept_raw() {
+        // A lone UTF-16 surrogate half is not a valid char; keep the raw text.
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{"answer": "\ud83d smile"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, _) => match &fields[0] {
+                (_, Value::String(s, _)) => assert_eq!(s, r#"\ud83d smile"#),
+                _ => panic!("Expected string field, got: {:?}", fields[0]),
+            },
+            _ => panic!("Expected object, got: {:?}", vals[0].0),
+        }
+    }
+
     #[test]
     fn test_partial_unquoted_toplevel_no_char_duplication() {
         // InNothing: unquoted string at top level, stream ends without '{' or '['.
