@@ -130,12 +130,17 @@ def notify(
             console.print(f"[red]error[/] {loc}{e.message}")
         raise typer.Exit(1)
     try:
-        now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
-        msgs = compose_handoff(sched, now.date(), wc)
-        reminders = [(at, m) for at, m in compose_reminders(sched, now.date(), wc) if at > now]
+        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        msgs = compose_handoff(sched, today, wc)
+        reminders = compose_reminders(sched, today, wc)
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
+
+    def _pending(reminders):
+        # Slack rejects post_at values in the past, so filter against a fresh clock.
+        now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+        return [(at, m) for at, m in reminders if at > now]
 
     if post_to_slack:
         from oncall.slack import post as slack_post
@@ -143,17 +148,17 @@ def notify(
 
         for message in msgs:
             slack_post(wc, message.channel, message.text, blocks=message.blocks)
-        for post_at, message in reminders:
+        scheduled = 0
+        for post_at, message in _pending(reminders):
             slack_schedule(wc, message.channel, message.text, post_at, blocks=message.blocks)
-        console.print(
-            f"[green]posted {len(msgs)} message(s), scheduled {len(reminders)} reminder(s)[/]"
-        )
+            scheduled += 1
+        console.print(f"[green]posted {len(msgs)} message(s), scheduled {scheduled} reminder(s)[/]")
     else:
         for message in msgs:
             console.print(f"[bold]→ {message.channel}[/]")
             console.print(message.text)
             console.print()
-        for post_at, message in reminders:
+        for post_at, message in _pending(reminders):
             console.print(f"[bold]→ {message.channel}[/] (scheduled for {post_at.isoformat()})")
             console.print(message.text)
             console.print()
