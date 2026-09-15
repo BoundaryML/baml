@@ -70,5 +70,17 @@
     "height": 509,
     "sourceHash": "18ee321561f40b76d65862d5571cdbb201b61fe4a87f6dc8e817b2c6b4da27d9",
     "width": 870
+  },
+  "vision-ask": {
+    "description": "System: everything until the next role: ${role(\"system\")}\n        Answer the user's question about the image.. User: text and image until the prompt ends: ${role(\"user\")}\n        ${question}\n        ${photo}. BAML inserts the image here: ${photo}",
+    "height": 701,
+    "sourceHash": "2ad9ee4d7c99021c295a0bd1f7686a7bde5454aa706d232a6c946555e62d1db5",
+    "width": 830
+  },
+  "vision-extract": {
+    "description": "Defines the output schema: Receipt. Inserts that schema into the system message: ${ctx.output_format()}",
+    "height": 506,
+    "sourceHash": "d3ae86640e4facb558497094b92a10836a405392212b647470e658d8dfe0cedd",
+    "width": 974
   }
 }

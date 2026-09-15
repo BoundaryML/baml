@@ -75,6 +75,7 @@ export const documentationNavigation: DocumentationGroup[] = [
             href: '/examples/classify-support-tickets',
             label: 'Classify support tickets',
           },
+          { href: '/examples/vision', label: 'Images and vision models' },
         ],
         href: '/examples',
         label: 'Examples',
