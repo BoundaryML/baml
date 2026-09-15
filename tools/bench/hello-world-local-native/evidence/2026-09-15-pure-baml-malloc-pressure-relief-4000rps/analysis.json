@@ -61,7 +61,7 @@
     "The unchanged 160 MiB malloc reservation is allocator-owned virtual address space retained at its high-water mark.",
     "After GC, vmmap attributed only 24.9 MiB of the malloc zone to dirty pages even though ps-style RSS counted 144.9 MiB resident. The 76 MiB of completely empty MALLOC_SMALL regions was almost entirely clean, so it does not represent 76 MiB of live or dirty process memory.",
     "The remaining dirty allocator fragmentation was about 5.5 MiB, or 22% of dirty malloc-zone bytes; it was bounded and far smaller than the apparent RSS gap.",
-    "Maximal malloc_zone_pressure_relief found no additional releasable bytes because the allocator had already made its empty pages reclaimable. Keeping the address mappings and clean pages visible in RSS is not a classical memory leak.",
+    "Maximal malloc_zone_pressure_relief reported zero bytes released and RSS did not fall. This establishes that the call caused no additional unmapping; it does not prove that every clean page was immediately kernel-reclaimable or rule out future address-space growth. The separate vmmap measurements show that clean pages, rather than live allocations or dirty fragmentation, dominate the apparent RSS gap.",
     "This run reproduced a late allocator expansion from 156 MiB to 160 MiB at 202 seconds while the live-byte sawtooth continued to reclaim. RSS was exactly flat for the final 60 loaded seconds. A longer run is still needed to prove a permanent plateau, but the retained floor observed here is allocator high-water behavior rather than unreachable live allocations."
   ]
 }

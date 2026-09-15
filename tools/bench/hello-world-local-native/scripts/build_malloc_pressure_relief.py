@@ -40,6 +40,8 @@ def main():
     base_manifest = json.loads(base_manifest_path.read_text())
     if not base_manifest.get("explicit_gc_diagnostic"):
         parser.error("the base build lacks explicit-GC diagnostics")
+    if base_manifest.get("source_dirty") is not False:
+        parser.error("the base build must use clean source; rebuild it before continuing")
     try:
         verify_base_artifacts(base_manifest)
     except RuntimeError as error:

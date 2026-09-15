@@ -218,14 +218,14 @@ def main():
             vmmap("after-gc")
             checkpoint["before_relief"] = sample("before_relief", include_heap=False)
 
-            relief_started = time.monotonic()
             checkpoint["pressure_relief"] = invoke_pressure_relief(process.pid, probe_result)
+            relief_completed = time.monotonic()
             checkpoint["after_relief_immediate"] = sample("after_relief_immediate", include_heap=False)
             delayed = []
             for delay in (0.1, 0.5, 1.0, 5.0, args.final_delay):
                 if delay > args.final_delay or (delayed and delay == delayed[-1]["delay_seconds"]):
                     continue
-                time.sleep(max(0, relief_started + delay - time.monotonic()))
+                time.sleep(max(0, relief_completed + delay - time.monotonic()))
                 delayed.append({"delay_seconds": delay, "sample": sample(f"after_relief_{delay:g}s", include_heap=False)})
             checkpoint["after_relief_delayed"] = delayed
             vmmap("after-relief")
