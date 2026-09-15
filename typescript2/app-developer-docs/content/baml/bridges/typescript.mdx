@@ -1,6 +1,6 @@
 ---
 title: TypeScript bridge
-description: Type mappings, generated client calls, streaming behavior, and TypeScript-specific boundaries.
+description: Generate a Node.js SDK, call BAML functions, and read streamed results.
 breadcrumbs:
   - href: /baml
     label: BAML
@@ -9,9 +9,47 @@ breadcrumbs:
   - label: TypeScript
 ---
 
-## Compatibility
+Call BAML from a Node.js application using a generated `baml_sdk` and the `@boundaryml/baml-bridge` runtime. These examples use **Canary** and the generator’s default `preserve-case` naming convention.
 
-Generate the TypeScript client with the same BAML toolchain selected by the project. Application code imports generated symbols locally; the runtime package provides the supporting media and execution types.
+## Generate the SDK
+
+Start with a [BAML project](/baml/get-started), then run these commands from its root:
+
+```sh
+baml generate add typescript/node
+baml generate
+npm init -y
+npm pkg set type=module
+npm install @boundaryml/baml-bridge
+npm install --save-dev tsx typescript @types/node
+```
+
+The runtime uses ES modules. These commands initialize a new Node.js package; in an existing application, use its ES-module configuration.
+
+Run `generate add` once. It adds a generator to `baml.toml`; `baml generate` writes `baml_sdk/` beside that file. Regenerate after changing BAML source.
+
+Match the runtime package version to the toolchain version printed by `baml --version`. If npm’s default release differs, install that exact version with `npm install @boundaryml/baml-bridge@<version>`.
+
+## Call a function
+
+With `return_number` from [Get started](/baml/get-started), create `app.ts` beside `baml.toml`:
+
+```typescript
+import { return_number_async } from "./baml_sdk/index.js"
+
+async function main() {
+  const value = await return_number_async(42)
+  console.log(value)
+}
+
+main().catch(console.error)
+```
+
+Run it with `npx tsx app.ts`. It prints `42`.
+
+The Node.js generator exports both `return_number`, which returns synchronously, and `return_number_async`, which returns a promise. Use the async form in a server so a BAML call does not block its JavaScript thread. Import from `baml_sdk/index.js` so the SDK initializes its runtime and type mappings.
+
+## Compatibility
 
 <BridgeCompatibility id="typescript" view="compatibility" />
 
@@ -19,27 +57,39 @@ Generate the TypeScript client with the same BAML toolchain selected by the proj
 
 <BridgeCompatibility id="typescript" view="types" />
 
-## Generated client
+## Call a model
 
-Import `b` from the generated client directory and await the method matching the BAML function name.
+Add the BAML source from [Classify support tickets](/examples/classify-support-tickets), run `baml generate`, and set `OPENAI_API_KEY` in the server’s environment:
 
 ```typescript
-import { b } from "./baml_client"
-import type { Category } from "./baml_client/types"
+import { classify_message_async, type Category } from "./baml_sdk/index.js"
 
 export async function classify(input: string): Promise<Category> {
-  return b.ClassifyMessage(input)
+  return classify_message_async(input)
 }
 ```
 
 ## Streaming
 
-Streaming calls live under `b.stream`. The generated stream API exposes incremental values and a final typed result; use the adapter appropriate to the application framework at its outer boundary.
+For an LLM function, the generator also exports a `$stream_async` function. Read partial values with `nextAsync()` until it returns `ai.stream.Done`, then call `finalAsync()` for the complete result:
 
 ```typescript
-const stream = b.stream.ClassifyMessage(input)
-const response = stream.toStreamable()
+import { ai, classify_message$stream_async } from "./baml_sdk/index.js"
+
+export async function streamCategory(input: string) {
+  const stream = await classify_message$stream_async(input)
+  while (true) {
+    const partial: unknown = await stream.nextAsync()
+    if (partial instanceof ai.stream.Done) break
+    console.log(partial)
+  }
+  return await stream.finalAsync()
+}
 ```
+
+Canary’s generated stream type currently omits the `Done` sentinel from `nextAsync()`’s return type. The example narrows from `unknown` to check the runtime sentinel.
+
+A partial value can be `null`; it does not mean the stream has ended. Calls and stream reads can fail, so handle rejections at your application boundary.
 
 ## Transition rules
 
@@ -48,5 +98,3 @@ const response = stream.toStreamable()
 ## Gotchas
 
 <BridgeCompatibility id="typescript" view="gotchas" />
-
-Continue with the [function reference](/baml/language/functions) to review the source declaration behind generated calls.

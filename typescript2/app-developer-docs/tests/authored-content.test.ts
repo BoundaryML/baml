@@ -4,7 +4,10 @@ import { relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { z } from 'zod';
 import { bridgeDataSchema, loadBridgeData } from '../lib/content/bridges.ts';
-import { loadProjectSnippet } from '../lib/snippets/discovery';
+import {
+  loadProjectSnippet,
+  loadStandaloneSnippet,
+} from '../lib/snippets/discovery';
 import { selectProjectFiles } from '../lib/snippets/selection';
 
 const expectedAuthoredRoutes = [
@@ -78,14 +81,23 @@ test('authored MDX never embeds a second BAML source block', async () => {
 });
 
 test('authored excerpts resolve to canonical project regions and internal links resolve', async () => {
-  const files = (
-    await collectFiles(resolve(process.cwd(), 'content/baml/book'))
-  ).filter((path) => path.endsWith('.mdx'));
-  files.push(resolve(process.cwd(), 'content/examples/vision.mdx'));
+  const files = (await collectFiles(resolve(process.cwd(), 'content'))).filter(
+    (path) => path.endsWith('.mdx'),
+  );
   for (const path of files) {
     const source = await readFile(path, 'utf8');
     for (const match of source.matchAll(
-      /<BamlProject id="([^"]+)"(?: file="([^"]+)" regions=\{(\[[^\]]+\])\})?\s*\/>/g,
+      /<BamlSnippet id="([^"]+)"(?: region="([^"]+)")?\s*\/>/g,
+    )) {
+      const snippet = await loadStandaloneSnippet(match[1]);
+      if (match[2])
+        assert.ok(
+          snippet.parsed.regions.has(match[2]),
+          `${path}: missing region ${match[2]}`,
+        );
+    }
+    for (const match of source.matchAll(
+      /<BamlProject id="([^"]+)"(?: file="([^"]+)" regions=\{(\[[^\]]+\])\})?(?: annotation="[^"]+")?\s*\/>/g,
     )) {
       const project = await loadProjectSnippet(match[1]);
       const regions = match[3]
@@ -115,7 +127,7 @@ test('authored excerpts resolve to canonical project regions and internal links 
         continue;
       }
       assert.ok(
-        expectedAuthoredRoutes.includes(href),
+        ['/', '/baml/packages', ...expectedAuthoredRoutes].includes(href),
         `${path}: broken authored link ${href}`,
       );
     }

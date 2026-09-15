@@ -1,27 +1,65 @@
 ---
 title: Get started
-description: The shortest path from installing BAML to checking your first function.
+description: Install Canary, create a project, and run your first BAML function.
 breadcrumbs:
   - href: /baml
     label: BAML
   - label: Get started
 ---
 
+Run a BAML function from the terminal. This first example needs no model provider or API key.
+
 ## Install the toolchain
 
-Install the BAML CLI and editor support for your environment. The versioned CLI reference remains the canonical source for exact installation methods and supported environments.
+On macOS or Linux with Homebrew:
+
+```sh
+brew install baml
+```
+
+For other installation methods, see the [BAML installer](https://boundaryml.com/quickstart).
+
+These guides use **Canary**. Select it and download the latest toolchain:
+
+```sh
+baml toolchain use canary
+baml toolchain update
+baml --version
+```
 
 ## Create a project
 
-A normal BAML project contains a `baml.toml` file and a `baml_src/` directory. Put your functions and types under that source directory so the ordinary toolchain can discover them.
-
-```text
-my-project/
-├── baml.toml
-└── baml_src/
-    └── main.baml
+```sh
+baml new my-project
+cd my-project
 ```
 
-## Check your work
+This creates `baml.toml` and `baml_src/main.baml`. Replace the contents of `main.baml` with:
 
-Use the CLI to check the project before generating or running client code. Continue to the [BAML CLI overview](/cli) for the versioned command surface.
+<BamlSnippet id="functions/return-number" />
+
+## Check and run
+
+```sh
+baml check
+baml run return_number -- --value 42
+```
+
+The function returns `42`. Put function arguments after `--`; use `baml run return_number -- --help` to see the accepted arguments.
+
+## Add editor support
+
+For VS Code:
+
+```sh
+baml ide install --code
+```
+
+If you use a coding agent, run `baml agent install` in the project to install the toolchain’s BAML skill.
+
+## Next steps
+
+- [Classify support tickets](/examples/classify-support-tickets): call a model and get an enum value back.
+- [Work with images](/examples/vision): mix images and text in a prompt.
+- [TypeScript bridge](/baml/bridges/typescript): call BAML from a Node.js application.
+- [The BAML book](/baml/book): learn errors, interfaces, and concurrency.

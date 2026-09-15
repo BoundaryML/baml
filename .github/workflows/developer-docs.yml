@@ -258,7 +258,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.18.1-nightly.20260901.a' }}
+      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.19.0' }}
       VERCEL_ENV: preview
     steps:
       - name: Checkout
@@ -310,6 +310,19 @@ jobs:
           curl --fail --silent --output "$RUNNER_TEMP/package-child.html" \
             "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id/current"
           grep -q "boundary.id.current" "$RUNNER_TEMP/package-child.html"
+          # Next.js can encode catch-all params differently for metadata and pages.
+          curl --fail --silent --output "$RUNNER_TEMP/stream-type.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/ai/Agent%24stream"
+          grep -q 'ai.Agent' "$RUNNER_TEMP/stream-type.html"
+          curl --fail --silent --output "$RUNNER_TEMP/record.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/baml/csv/Record"
+          python3 - "$RUNNER_TEMP/record.html" <<'PY_CHECK'
+          import re, sys
+          html = open(sys.argv[1]).read()
+          assert len(re.findall(r'<h1[ >]', html)) == 1, 'Docstrings must not add page titles'
+          ids = re.findall(r' id="([^"]+)"', html)
+          assert len(ids) == len(set(ids)), 'Member and section IDs must be unique'
+          PY_CHECK
           curl --fail --silent --output "$RUNNER_TEMP/cli.html" \
             "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add"
           grep -q "baml generate add" "$RUNNER_TEMP/cli.html"
