@@ -1418,7 +1418,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call => {
+            OpCode::Call | OpCode::CallExactArgs => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;

@@ -1078,6 +1078,12 @@ pub enum OpCode {
     JumpIfFalseOrPop,
     JumpIfTrueOrPop,
     JumpIfNotNullOrPop,
+
+    /// Load-time specialization of `Call` for a plain bytecode function whose
+    /// arguments already match its parameters, with no type arguments. Uses
+    /// the same u32 global + u16 zero operands as `Call`, preserving every PC.
+    /// This opcode is never emitted into serialized `Instruction` streams.
+    CallExactArgs,
 }
 
 impl OpCode {
@@ -1213,7 +1219,7 @@ impl OpCode {
             | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call | Self::MakeGenericFunction => 7,
+            Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1364,6 +1370,7 @@ impl TryFrom<u8> for OpCode {
 
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             x if x == Self::Truthy as u8 => Ok(Self::Truthy),
+            x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             _ => Err(byte),
         }
     }
@@ -1478,6 +1485,7 @@ impl std::fmt::Display for OpCode {
 
             Self::Spawn => "SPAWN",
             Self::Call => "CALL",
+            Self::CallExactArgs => "CALL_EXACT_ARGS",
 
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
