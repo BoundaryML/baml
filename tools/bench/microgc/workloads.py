@@ -141,23 +141,11 @@ function run_batch(count: int) -> null {{
 
 
 def hardcoded_scalars_body() -> str:
-    bindings = "\n".join(f"    let f{index:04d} = {(index + 1) / 1000:.3f};" for index in range(1000))
-    match_arms = "\n".join(f"        {index} => f{index:04d}," for index in range(1000))
-    return f"""function bind_1000_hardcoded_floats(selector: int) -> float {{
-{bindings}
-    match (selector) {{
-{match_arms}
-        _ => f0999,
-    }}
-}}
-
-function run_batch(count: int) -> null {{
+    bindings = "\n".join(f"        let f{index:05d} = {(index + 1) / 10000:.4f};" for index in range(10000))
+    return f"""function run_batch(count: int) -> null {{
     let i = 0;
     while (i < count) {{
-        let selected = bind_1000_hardcoded_floats(i % 1000);
-        if (selected <= 0.0 || selected > 1.0) {{
-            baml.sys.panic("unexpected selected float");
-        }};
+{bindings}
         i += 1;
     }}
 }}"""
@@ -191,9 +179,9 @@ WORKLOADS: Dict[str, Workload] = {
             float_map_body(),
         ),
         Workload(
-            "hardcoded-scalars-1000",
-            "One thousand hardcoded float locals without an array or map per iteration",
-            500_000,
+            "hardcoded-scalars-10000",
+            "Ten thousand hardcoded float locals without a selector, array, or map per iteration",
+            10_000_000,
             hardcoded_scalars_body(),
         ),
     )

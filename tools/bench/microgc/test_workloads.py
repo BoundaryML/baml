@@ -20,10 +20,12 @@ class WorkloadTests(unittest.TestCase):
         self.assertIn('values.set("k0000", 2.17)', source)
         self.assertIn('values.set("k0999", 2.17)', source)
 
-    def test_hardcoded_scalars_do_not_use_a_container(self) -> None:
-        source = WORKLOADS["hardcoded-scalars-1000"].source()
-        self.assertEqual(source.count("    let f"), 1000)
-        self.assertEqual(source.count(" => f"), 1001)
+    def test_ten_thousand_hardcoded_scalars_do_not_use_a_container(self) -> None:
+        source = WORKLOADS["hardcoded-scalars-10000"].source()
+        self.assertEqual(source.count("        let f"), 10000)
+        self.assertIn("let f00000 = 0.0001;", source)
+        self.assertIn("let f09999 = 1.0000;", source)
+        self.assertNotIn("match (", source)
         self.assertNotIn("baml.Array", source)
         self.assertNotIn("map<", source)
 
