@@ -86,6 +86,14 @@ Effect's logomark comes from the official Effect website repository:
 `Effect-TS/website`, commit `bf4625446a02894046b6937a317dde2cde115fe7`,
 `apps/web/public/assets/effect-logo/logo-symbol/effect-logomark-black.svg`.
 
+## LLM prompts
+
+Use concrete client values, such as `openai.ResponsesClient.new(...)`, instead of provider/model string shorthand. Declare a named client when examples share the same configuration.
+
+Use `snake_case` for BAML function names, including LLM functions. To override the provider for one LLM call, pass `client = model` directly to the function.
+
+Put task instructions and `${ctx.output_format()}` in the system message. Keep user-supplied text, questions, and images in user messages.
+
 ## Canonical code excerpts
 
 A project excerpt uses the complete project as its compilation unit:

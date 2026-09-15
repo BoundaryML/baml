@@ -1,0 +1,352 @@
+---
+title: Work with images and vision models
+description: Mix text and images in a prompt, extract typed data, and choose your model provider.
+breadcrumbs:
+  - href: /examples
+    label: Examples
+  - label: Images and vision models
+---
+
+A vision-language model (VLM) accepts images alongside text. In BAML, declare an `image` argument and place it in the prompt where you want the model to see it.
+
+This example uses a receipt. The same pattern works for screenshots, diagrams, and photographs.
+
+<div className="vision-result">
+  <figure>
+    <img src="/examples/vision/receipt.png" alt="Sample receipt from Paper Cup Cafe: latte $4.50, iced tea $3.00, sandwich $8.00, tax $1.24, total $16.74 USD." width="620" height="720" />
+    <figcaption>Sample input · <a href="/examples/vision/receipt.png" download>Download PNG</a></figcaption>
+  </figure>
+  <div className="vision-result-copy">
+    <p className="vision-label">Ask a question</p>
+    <p>Which items on this receipt are drinks?</p>
+    <p className="vision-label">Expected answer</p>
+    <p>The latte and the iced tea.</p>
+    <p className="vision-caption">Illustrative answer. Model responses can vary.</p>
+  </div>
+</div>
+
+## Ask a question about an image
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["ask-image"]} annotation="vision-ask" />
+
+- `Vision` configures an OpenAI Responses client. The examples below reuse it with `client: Vision`.
+- `role("system")` starts a system message. Everything after a role marker belongs to that role until the next marker or the end of the prompt.
+- `question` supplies the user’s question.
+- `${photo}` inserts the image value. BAML serializes it as image content in the provider’s request.
+- `string` gives you a text response. You can also return a class, as shown in [Extract structured data](#extract-structured-data).
+
+### Run the example
+
+Use **BAML canary** for these examples. Install the [BAML CLI](/cli), then select the channel, update it, and create a project:
+
+```bash
+baml toolchain use canary
+baml toolchain update
+baml new vision-example
+cd vision-example
+```
+
+Download [main.baml](/examples/vision/source) into `baml_src/`, replacing the generated file. Save [receipt.png](/examples/vision/receipt.png) in the `vision-example` directory, then set your API key:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+You can pass arguments from the CLI or keep the call in a BAML function.
+
+**Pass arguments from the CLI**
+
+Call `ask_image` directly to change the image or question without editing BAML:
+
+```bash
+baml run ask_image -- \
+  --question "Which items on this receipt are drinks?" \
+  --json-args '{"photo": {
+    "kind": "image", "source": "file",
+    "value": "receipt.png", "mime": "image/png"
+  }}'
+```
+
+- Put function arguments after `--`.
+- Pass the string argument with `--question` and the image value with `--json-args`.
+- Run `baml run ask_image -- --help` to see the arguments generated from the function signature.
+
+**Keep the call in BAML**
+
+Use `ask_receipt` when you want to save the image-loading step and question in your code:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["ask-receipt"]} />
+
+```bash
+baml run ask_receipt
+```
+
+Both options call the same `ask_image` function. The download includes `ask_receipt` and every other function on this page.
+
+Only have credentials for another provider? Jump to [Choose a model and provider](#choose-a-model-and-provider).
+
+## Mix text and images
+
+Put task instructions in the system message. Keep user-supplied context, questions, and images in the user message. Text can appear before or after an image.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["context"]} />
+
+- Use `context` for information you supply, such as the task you're working on.
+- Use `question` for what you want the model to answer.
+- Interpolate the `image` value itself. Putting a file path or URL in a plain string does not attach the image.
+
+Run `baml run ask_receipt_with_context`. For the sample receipt, the drinks total is $7.50 before tax.
+
+## Pass multiple images
+
+Label the images to make references such as “before” and “after” explicit.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["compare-images"]} />
+
+<div className="vision-image-pair">
+  <figure>
+    <img src="/examples/vision/receipt.png" alt="Original receipt with a latte, iced tea, and sandwich." width="620" height="720" loading="lazy" />
+    <figcaption>Before</figcaption>
+  </figure>
+  <figure>
+    <img src="/examples/vision/receipt-updated.png" alt="Updated receipt with a $2.50 cookie added and a total of $19.44 USD." width="620" height="720" loading="lazy" />
+    <figcaption>After · one cookie added</figcaption>
+  </figure>
+</div>
+
+Save [receipt-updated.png](/examples/vision/receipt-updated.png) beside the original, then run:
+
+```bash
+baml run compare_receipts
+```
+
+### Accept a list of images
+
+If the image count varies, put each image and its label in a class and pass an array. BAML preserves image values inside the array when it builds the prompt.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["image-list"]} />
+
+<details>
+<summary>Call it with labeled receipts</summary>
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["image-list-call"]} />
+
+Run `baml run compare_labeled_receipts` after downloading both images.
+
+</details>
+
+### Control the layout with a loop
+
+Use a loop in the prompt to put each label immediately before its image:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["image-list-loop"]} />
+
+- `${for (let item in photos)}` repeats the prompt content through `${endfor}` for each item.
+- `${item.label}` inserts the label as text; `${item.photo}` inserts image content.
+- Use this form to control the text and spacing around each image. Interpolating `${photos}` directly uses BAML's default formatting for the array and its objects.
+
+To try it with the same receipts, change `ask_images` to `ask_images_loop` in `compare_labeled_receipts`, then run `baml run compare_labeled_receipts`.
+
+This sends the images together in one model request. To process each image independently, call the function separately for each image.
+
+## Extract structured data
+
+Return a class when you need fields your application can use.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["receipt-type"]} />
+
+Use that class as the function's return type. Put `ctx.output_format()` in the system message with the extraction instructions. The user message contains the receipt image.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["extract"]} annotation="vision-extract" />
+
+- `ctx` is the prompt context BAML supplies to the function.
+- `ctx.output_format()` generates output instructions from `Receipt`, including its fields, types, and descriptions. Interpolating it here adds those instructions to the system message.
+- Update `Receipt` when the output shape changes. BAML generates the corresponding instructions; you don't need to repeat the schema in your prompt.
+
+For the sample receipt, an expected result is:
+
+```json
+{
+  "merchant": "PAPER CUP CAFE",
+  "items": [
+    { "name": "Latte", "quantity": 1, "price": 4.5 },
+    { "name": "Iced tea", "quantity": 1, "price": 3.0 },
+    { "name": "Sandwich", "quantity": 1, "price": 8.0 }
+  ],
+  "total": 16.74,
+  "currency": "USD"
+}
+```
+
+Use the fields directly:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["use-result"]} />
+
+Run `baml run receipt_summary`.
+
+- `float?` and `string?` allow missing values to be `null`.
+- The prompt asks the model not to guess unreadable fields.
+- A result with the right types can still contain misread values. Check extracted fields against the image when accuracy matters.
+
+## Load your own images
+
+Use the constructor that matches where your image comes from. These calls reuse `read_receipt`.
+
+### Image URL
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["input-url"]} />
+
+Use a direct image URL that can be fetched without your browser session. Depending on the client, BAML or the provider downloads the image. A link to a page containing an image is not the image URL.
+
+### Local file
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["input-file"]} />
+
+The file must exist on the machine running BAML. In these CLI examples, `receipt.png` is relative to the directory you run the command from. Use an absolute path if needed.
+
+### Upload or base64 content
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["input-upload"]} />
+
+Pass the base64-encoded file contents without a `data:image/...;base64,` prefix. Set the MIME type to match the file, such as `image/png` or `image/jpeg`.
+
+## Choose a model and provider
+
+BAML includes clients for OpenAI, Anthropic, and Google, among others. Each client converts the prompt's text and images into its provider's request format. Your selected model must support image input.
+
+Pass `client = model` directly to `read_receipt` to override its default for one call. The function returns a `Receipt` as usual; its prompt and return type stay the same.
+
+Choose a provider you have access to:
+
+<ProviderTabs>
+<div>
+
+Set `OPENAI_API_KEY`.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["openai"]} />
+
+```bash
+baml run read_with_openai --output-format json
+```
+
+</div>
+<div>
+
+Set `ANTHROPIC_API_KEY`.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["anthropic"]} />
+
+```bash
+baml run read_with_anthropic --output-format json
+```
+
+</div>
+<div>
+
+Set `GOOGLE_API_KEY`.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["google"]} />
+
+```bash
+baml run read_with_google --output-format json
+```
+
+</div>
+</ProviderTabs>
+
+Only the selected client's credentials are needed. Using Anthropic or Google here does not require an OpenAI key, even though `read_receipt` declares OpenAI as its default.
+
+Provider support does not make every model interchangeable. Check your chosen model's image formats, size limits, and image-count limits: [OpenAI vision](https://developers.openai.com/api/docs/guides/images-vision), [Claude vision](https://platform.claude.com/docs/en/build-with-claude/vision), and [Gemini image understanding](https://ai.google.dev/gemini-api/docs/image-understanding).
+
+## Compare models on the same image
+
+Use the same image, prompt, and return type for each model. Keep the model identifier beside its result so you can compare extracted fields.
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["compare-models"]} />
+
+Run `baml run compare_models --output-format json`. This makes three sequential requests and requires credentials for all three providers. An error stops the comparison. For concurrent requests or collecting failures alongside successes, see [Run work concurrently](/baml/book/concurrency).
+
+Compare each result with the receipt: were all three items found, was tax excluded from item prices, and was the total read as $16.74?
+
+## Connect another provider
+
+### OpenAI-compatible endpoint
+
+If your provider supports the OpenAI Chat Completions API with image inputs, use `openai.GenericClient`:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["custom-provider"]} />
+
+- Replace `your-vision-model-id` with a vision model available on your endpoint.
+- Set `VISION_BASE_URL` to the API root, such as `https://your-host.example/v1`. The client appends `/chat/completions`.
+- Set `VISION_API_KEY` to that provider's key. Omit `api_key` if the endpoint requires no authentication.
+- For additional headers or request fields, inspect `baml describe openai.GenericClient`.
+
+Run `baml run read_with_custom_provider --output-format json`.
+
+An endpoint that supports text-only Chat Completions is not enough: it must also accept image content parts.
+
+### Local vision model
+
+Start an OpenAI-compatible server with a vision model loaded, then point BAML at its API root:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["local-provider"]} />
+
+Change the port if needed. Pass the model identifier reported by your server:
+
+```bash
+baml run read_with_local_model -- --model_id your-loaded-model-id
+```
+
+The server must support base64 image inputs because this example reads a local file. Server startup and model installation depend on the serving software you choose.
+
+### Implement a custom client: Cloudflare Workers AI
+
+This example connects to Cloudflare's native endpoint for [Llama 3.2 Vision](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/). It sends the image in a separate `image` field and reads the answer from `result.response`.
+
+Cloudflare also offers an [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/). Use `openai.GenericClient` for that endpoint. Implement `ai.Client` when you need a provider's native request or response format.
+
+Pass the custom client to the same `read_receipt` function:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["cloudflare-use"]} />
+
+Create a [Workers AI API token](https://developers.cloudflare.com/workers-ai/get-started/rest-api/), then complete Cloudflare's [model license setup](https://developers.cloudflare.com/workers-ai/guides/tutorials/llama-vision-tutorial/#1-agree-to-metas-license). Run:
+
+```bash
+export CLOUDFLARE_API_TOKEN="your-api-token"
+baml run read_with_cloudflare --output-format json -- --account_id your-account-id
+```
+
+The [downloadable source](/examples/vision/source) includes the complete implementation below.
+
+<details>
+<summary>Complete Cloudflare client implementation</summary>
+
+These classes describe Cloudflare's request and response JSON:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["cloudflare-types"]} />
+
+The client translates the prompt, sends the request, and returns the model's text:
+
+<BamlProject id="vision" file="baml_src/main.baml" regions={["cloudflare-client"]} />
+
+</details>
+
+- **Keep your prompt and return type.** `input.prompt(...)` renders the system instructions, output schema, user text, and image. BAML parses the returned text into `Receipt`.
+- **Translate the image.** `build_request` preserves message roles and puts the image in Cloudflare's separate field. During a call, `resolve_media` reads files or downloads URLs and produces base64 data.
+- **Preview without I/O.** `render` requires a base64 image and redacts the token. It does not read image files or fetch URLs.
+- **Handle HTTP failures.** `send_as` checks the status, decodes the JSON envelope, and applies a 60-second request timeout. `to_turn` checks the envelope's `success` field before returning text.
+
+This example supports one image per call, system and user messages, and non-streaming text responses. It rejects tools, conversation history, and extra images. It does not record usage or call traces. The request and response handling is tested with fixtures; a live Cloudflare model call requires your account and token.
+
+## Troubleshoot image inputs
+
+- **The image URL cannot be fetched.** Check that it returns image bytes and does not require cookies or an expired signed URL. For a private upload, send base64 content instead.
+- **The model rejects images.** Check the model's input capabilities and the endpoint's support for image content parts.
+- **The request is too large.** Reduce the number of images or resize them within the provider's limits. Keep text large enough to read.
+- **Small or rotated text is misread.** Rotate the image upright, use a sharper original, or send a crop around the relevant content.
+- **Fields are missing or wrong.** Allow `null` where information may be absent. Inspect the source image and refine field descriptions rather than assuming every image contains every field.
+- **A local image fails in request preview.** `@build_request` does not read local image files. Use a URL or base64 value to inspect the request, then use a normal function call to process the local file.
+
+## Share your provider
+
+Built a custom client and want it added to BAML's standard library? [Contact us on Discord](https://boundaryml.com/discord) with your implementation and a link to the provider's API documentation.

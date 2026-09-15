@@ -22,6 +22,7 @@ const expectedAuthoredRoutes = [
   '/cli',
   '/examples',
   '/examples/classify-support-tickets',
+  '/examples/vision',
   '/tutorials',
   '/tutorials/structured-extraction',
 ];
@@ -76,10 +77,11 @@ test('authored MDX never embeds a second BAML source block', async () => {
   }
 });
 
-test('book excerpts resolve to canonical project regions and internal links resolve', async () => {
+test('authored excerpts resolve to canonical project regions and internal links resolve', async () => {
   const files = (
     await collectFiles(resolve(process.cwd(), 'content/baml/book'))
   ).filter((path) => path.endsWith('.mdx'));
+  files.push(resolve(process.cwd(), 'content/examples/vision.mdx'));
   for (const path of files) {
     const source = await readFile(path, 'utf8');
     for (const match of source.matchAll(
@@ -104,6 +106,14 @@ test('book excerpts resolve to canonical project regions and internal links reso
       /\]\((\/[^)#]+)(?:#[^)]*)?\)|href="(\/[^"#]+)"/g,
     )) {
       const href = match[1] ?? match[2];
+      if (href.startsWith('/examples/vision/')) {
+        const target =
+          href === '/examples/vision/source'
+            ? resolve(process.cwd(), 'app/examples/vision/source/route.ts')
+            : resolve(process.cwd(), `public${href}`);
+        await readFile(target);
+        continue;
+      }
       assert.ok(
         expectedAuthoredRoutes.includes(href),
         `${path}: broken authored link ${href}`,

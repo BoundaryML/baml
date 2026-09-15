@@ -15,47 +15,54 @@ import {
   languageTabDefinition,
 } from '@/lib/content/language-tabs';
 
-export function LanguageTabs({
+export interface ExampleTab {
+  label: string;
+  logo?: string;
+  monochrome?: boolean;
+}
+
+export function ExampleTabs({
   children,
-  languages,
+  label,
+  tabs,
 }: {
   children: ReactNode;
-  languages: LanguageTabName[];
+  label: string;
+  tabs: ExampleTab[];
 }) {
   const id = useId();
   const [selected, setSelected] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const panels = Children.toArray(children).filter(isValidElement);
-  const definitions = languages.map(languageTabDefinition);
 
   return (
     <div className="language-tabs">
       <div
-        aria-label="Comparison language"
+        aria-label={label}
         className="language-tabs-list not-typeset"
         role="tablist"
       >
-        {languages.map((language, index) => (
+        {tabs.map((tab, index) => (
           <button
             aria-controls={`${id}-panel-${index}`}
             aria-selected={selected === index}
             id={`${id}-tab-${index}`}
-            key={language}
+            key={tab.label}
             onClick={() => setSelected(index)}
             onKeyDown={(event) => {
               let next: number;
               switch (event.key) {
                 case 'ArrowRight':
-                  next = (index + 1) % languages.length;
+                  next = (index + 1) % tabs.length;
                   break;
                 case 'ArrowLeft':
-                  next = (index + languages.length - 1) % languages.length;
+                  next = (index + tabs.length - 1) % tabs.length;
                   break;
                 case 'Home':
                   next = 0;
                   break;
                 case 'End':
-                  next = languages.length - 1;
+                  next = tabs.length - 1;
                   break;
                 default:
                   return;
@@ -71,15 +78,17 @@ export function LanguageTabs({
             tabIndex={selected === index ? 0 : -1}
             type="button"
           >
-            <Image
-              alt=""
-              className="language-tabs-logo"
-              data-monochrome={definitions[index].monochrome}
-              height={16}
-              src={definitions[index].logo}
-              width={16}
-            />
-            {language}
+            {tab.logo ? (
+              <Image
+                alt=""
+                className="language-tabs-logo"
+                data-monochrome={tab.monochrome}
+                height={16}
+                src={tab.logo}
+                width={16}
+              />
+            ) : null}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -89,7 +98,7 @@ export function LanguageTabs({
           className="language-tabs-panel"
           hidden={selected !== index}
           id={`${id}-panel-${index}`}
-          key={languages[index]}
+          key={tabs[index].label}
           role="tabpanel"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Tab lets keyboard readers enter the selected panel's content.
           tabIndex={0}
@@ -98,5 +107,36 @@ export function LanguageTabs({
         </div>
       ))}
     </div>
+  );
+}
+
+export function LanguageTabs({
+  children,
+  languages,
+}: {
+  children: ReactNode;
+  languages: LanguageTabName[];
+}) {
+  return (
+    <ExampleTabs
+      label="Comparison language"
+      tabs={languages.map((language) => ({
+        label: language,
+        ...languageTabDefinition(language),
+      }))}
+    >
+      {children}
+    </ExampleTabs>
+  );
+}
+
+export function ProviderTabs({ children }: { children: ReactNode }) {
+  return (
+    <ExampleTabs
+      label="Vision model provider"
+      tabs={[{ label: 'OpenAI' }, { label: 'Anthropic' }, { label: 'Google' }]}
+    >
+      {children}
+    </ExampleTabs>
   );
 }
