@@ -21,7 +21,6 @@ workspace = true
 baml_builtins2 = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_type = { workspace = true }
-bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
@@ -52,7 +51,7 @@ tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning the watcher.
 # `getrandom/js` is required for the `getrandom::getrandom` calls in
-# `package_baml/{bigint,float,id}.rs` to build for wasm at all (getrandom 0.2
+# `package_baml/{bigint,float}.rs` to build for wasm at all (getrandom 0.2
 # hard-errors on wasm*-unknown-unknown otherwise). The feature used to arrive
 # by unification through `sys_llm`; that crate is gone, so enable it on the
 # crate that actually calls getrandom.

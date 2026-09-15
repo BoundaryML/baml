@@ -488,7 +488,6 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Call {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -496,31 +495,23 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::VirtualCall {
-                    args,
-                    runtime_id,
-                    destination,
-                    ..
+                    args, destination, ..
                 } => {
                     // No callee operand: the method is resolved at runtime from
                     // `iface` (a type template, not a value local).
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -528,9 +519,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     for a in args {
                         scan_operand(a, &mut set);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        scan_operand(runtime_id, &mut set);
-                    }
+
                     scan_place(destination, &mut set);
                 }
                 Terminator::Spawn {
@@ -802,7 +791,6 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
         Terminator::Call {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -810,30 +798,22 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -841,9 +821,7 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
-            if let Some(runtime_id) = runtime_id {
-                count_in_operand(runtime_id, uses);
-            }
+
             count_dest_place(destination, uses);
         }
         Terminator::Spawn {
@@ -1199,43 +1177,22 @@ fn apply_subst_to_terminator<'db>(
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call {
-            callee,
-            args,
-            runtime_id,
-            ..
-        } => {
+        Terminator::Call { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
-            }
         }
-        Terminator::SysOp {
-            callee,
-            args,
-            runtime_id,
-            ..
-        } => {
+        Terminator::SysOp { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
-            }
         }
-        Terminator::VirtualCall {
-            args, runtime_id, ..
-        } => {
+        Terminator::VirtualCall { args, .. } => {
             // No callee operand — only the value args are substituted.
             for arg in args {
                 apply_subst_to_operand(arg, subst);
-            }
-            if let Some(runtime_id) = runtime_id {
-                apply_subst_to_operand(runtime_id, subst);
             }
         }
         Terminator::Spawn {
@@ -1552,7 +1509,6 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Call {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1560,15 +1516,12 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             ..
         } => {
@@ -1576,24 +1529,17 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::VirtualCall {
-            args,
-            runtime_id,
-            destination,
-            ..
+            args, destination, ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 remap_operand(arg, map);
             }
-            if let Some(runtime_id) = runtime_id {
-                remap_operand(runtime_id, map);
-            }
+
             remap_place(destination, map);
         }
         Terminator::Spawn {
@@ -1829,7 +1775,6 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                 Terminator::Call {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -1837,30 +1782,22 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::VirtualCall {
-                    args,
-                    runtime_id,
-                    destination,
-                    ..
+                    args, destination, ..
                 } => {
                     // No callee operand — the method is resolved at runtime from `iface`.
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
-                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -1868,9 +1805,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
-                    if let Some(runtime_id) = runtime_id {
-                        check_operand(runtime_id, &blk);
-                    }
+
                     check_place(destination, &blk);
                 }
                 Terminator::Spawn {

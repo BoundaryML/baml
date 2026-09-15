@@ -39,7 +39,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// constant; canary/dev builds were covered by the `BUILD_FINGERPRINT`
 /// equality check, which is exactly the gap this constant exists to close
 /// for stable builds.)
-pub const FORMAT_VERSION: u32 = 7;
+///
+/// Version 8 removes the runtime-ID instruction variants, renumbering the
+/// serialized instructions and compact opcodes.
+/// Version 9 removes serialized function capture-policy fields.
+pub const FORMAT_VERSION: u32 = 9;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.

@@ -16,9 +16,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
-    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
-    UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
+    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -1116,8 +1115,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0, // assigned at engine init (interim provider)
+
             runtime_package: bex_vm_types::HeapPtr::null(),
         };
         // The layout-baking bit is a pure function of the finished bytecode's
@@ -2396,7 +2394,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2416,19 +2414,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                    }
-                    let instruction = if runtime_id.is_some() {
-                        Instruction::CallWithRuntimeId {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
-                    } else {
-                        Instruction::Call {
-                            callee: global_callee,
-                            ntypeargs,
-                        }
+
+                    let instruction = Instruction::Call {
+                        callee: global_callee,
+                        ntypeargs,
                     };
                     // Pulling nested argument producers may install their own
                     // debug spans. Restore the terminator's enclosing call span
@@ -2452,12 +2441,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
-                    let instruction = if let Some(runtime_id) = runtime_id {
-                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                        Instruction::CallIndirectWithRuntimeId
-                    } else {
-                        Instruction::CallIndirect
-                    };
+                    let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     self.record_call_layout(inst, argument_layout.as_ref());
@@ -2472,7 +2456,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2489,19 +2473,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                }
+
                 let nargs = args.len() - ntypeargs;
                 let nargs = u16::try_from(nargs)
                     .unwrap_or_else(|_| unreachable!("a call's argument count fits in u16"));
                 let ntypeargs = u16::try_from(*ntypeargs)
                     .unwrap_or_else(|_| unreachable!("a call's type-argument count fits in u16"));
-                let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
-                } else {
-                    Instruction::VirtualCall { nargs, ntypeargs }
-                };
+                let instruction = Instruction::VirtualCall { nargs, ntypeargs };
                 let inst = self.emit(instruction);
                 self.record_call_layout(inst, argument_layout.as_ref());
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
@@ -2520,7 +2498,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::SysOp {
                 callee,
                 args,
-                runtime_id,
+
                 destination,
                 target,
                 unwind: _,
@@ -2541,14 +2519,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                if let Some(runtime_id) = runtime_id {
-                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
-                }
-                let inst = if runtime_id.is_some() {
-                    self.emit(Instruction::SysOpWithRuntimeId(global_callee))
-                } else {
-                    self.emit(Instruction::SysOp(global_callee))
-                };
+
+                let inst = self.emit(Instruction::SysOp(global_callee));
                 if let Some(item) = &callee_item {
                     self.set_operand(inst, OperandMeta::Callable(item.to_string()));
                 }

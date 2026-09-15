@@ -1946,8 +1946,7 @@ fn prune_session_init_tail(
         let mut pending = None;
         for instruction in &init.bytecode.instructions {
             match instruction {
-                Instruction::Call { callee, .. }
-                | Instruction::CallWithRuntimeId { callee, .. } => {
+                Instruction::Call { callee, .. } => {
                     pending = selected_slot_map.get(&callee.raw()).copied();
                 }
                 Instruction::StoreGlobal(target) => {

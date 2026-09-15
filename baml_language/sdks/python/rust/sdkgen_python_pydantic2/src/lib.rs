@@ -1226,14 +1226,14 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
-        let partial_name = cg_name("boundary", &["id"], "Partial");
-        let final_name = cg_name("boundary", &["id"], "Final");
+        let partial_name = cg_name("factory", &["id"], "Partial");
+        let final_name = cg_name("factory", &["id"], "Final");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
         pool.insert(done_name.clone(), class(done_name));
         pool.insert(partial_name.clone(), class(partial_name.clone()));
         pool.insert(final_name.clone(), class(final_name.clone()));
         pool.insert(
-            cg_name("boundary", &[], "id"),
+            cg_name("factory", &[], "id"),
             zero_arg_func(
                 "id",
                 Ty::String {
@@ -1244,7 +1244,7 @@ mod tests {
             ),
         );
         pool.insert(
-            cg_name("boundary", &["id"], "current"),
+            cg_name("factory", &["id"], "current"),
             zero_arg_func(
                 "current",
                 class_ty(
@@ -1257,14 +1257,14 @@ mod tests {
         );
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("vendor/boundary/__init__.py")];
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains("import importlib\n"));
         assert!(leaf.contains("_id_namespace = importlib.import_module(\".id\", __name__)"));
         assert!(leaf.contains(
             "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
         ));
 
-        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
         assert!(!pyi.contains("from . import id\n"));
         assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
         assert!(pyi.contains("    def __call__(self) -> str: ...\n"));
@@ -1272,7 +1272,7 @@ mod tests {
             "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
         ));
         assert!(pyi.contains(
-            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Partial, _BamlStreamDone], vendor.boundary.id.Partial, vendor.boundary.id.Final]: ...\n"
+            "    def current(self) -> _BamlStream[typing.Union[vendor.factory.id.Partial, _BamlStreamDone], vendor.factory.id.Partial, vendor.factory.id.Final]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));

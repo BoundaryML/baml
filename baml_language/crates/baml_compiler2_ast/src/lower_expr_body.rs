@@ -2836,14 +2836,6 @@ impl LoweringContext {
                     span: token.text_range(),
                 });
         }
-        if let Some(token) = &name_token
-            && token.text() == "$id"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                    span: token.text_range(),
-                });
-        }
 
         let name = name_token.map(|t| Name::new(t.text()));
 
@@ -3017,17 +3009,6 @@ impl LoweringContext {
         let pat = match value_pattern {
             Some(child) => self.lower_pattern(&child),
             None => {
-                // Shorthand `{ f }` → bind to a local of the same name. `_`
-                // canonicalises to `Wildcard`, same rule as elsewhere.
-                // A shorthand binding named `$id` would be silently dead
-                // (reads hit the runtime-identity special form first) —
-                // reject it like every other `$id` binding site.
-                if field_name.as_str() == "$id" {
-                    self.diags
-                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                            span: field_span,
-                        });
-                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -3652,13 +3633,6 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.span_range());
         }
 
-        // Check if single segment is a literal keyword.
-        //
-        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
-        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
-        // dotted paths), so the special form is owned downstream — TIR types
-        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
-        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
