@@ -1460,11 +1460,11 @@ fn resolution_func_loc<'db>(
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     use crate::inference_provider::MemberResolution;
     match res {
-        MemberResolution::Free { func_loc }
+        MemberResolution::Free { func }
         | MemberResolution::Method {
-            callee: MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. },
+            callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
             ..
-        } => match func_loc {
+        } => match func {
             DeclRef::Source(func_loc) => Some(*func_loc),
             DeclRef::External(_) => None,
         },
@@ -1486,26 +1486,9 @@ fn resolution_external_function<'db>(
     db: &'db dyn crate::Db,
     res: &crate::inference_provider::MemberResolution<'db>,
 ) -> Option<ExternFunctionLoc<'db>> {
-    use crate::inference_provider::MemberResolution;
-    match res {
-        MemberResolution::Free { func_loc }
-        | MemberResolution::Method {
-            callee: MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. },
-            ..
-        } => match func_loc {
-            DeclRef::Source(_) => None,
-            DeclRef::External(function) => Some(*function),
-        },
-        MemberResolution::Method {
-            callee: MethodCallee::Virtual { iface_loc, method },
-            ..
-        } => match iface_loc {
-            DeclRef::Source(_) => None,
-            DeclRef::External(interface) => extern_interface_method(db, interface.head(db), method),
-        },
-        MemberResolution::Field { .. }
-        | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
+    match res.callable(db)? {
+        DeclRef::Source(_) => None,
+        DeclRef::External(function) => Some(function),
     }
 }
 
@@ -1935,11 +1918,10 @@ struct LoweringContext<'db> {
     catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
-    // THE inference table store: converted once at construction into
-    // MIR's own consumption vocabulary, whichever engine produced them.
-    // Scopes outside this function answer `None`, and at least one caller
-    // (`try_lower_to_string_fallback`) keys behavior on that absence.
-    tables: crate::inference_provider::ProviderTables<'db>,
+    // THE inference tables: `hir_ty`'s results for this body and, for a
+    // function, its parameter defaults, borrowed from the tracked queries
+    // (a `let` has no parameter-default scope; it answers `None`).
+    tables: crate::inference_provider::InferenceTables<'db>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
     // access through the interface dispatch machinery. A bound *is* an interface
@@ -2666,14 +2648,9 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(db);
 
-        // --- Collect per-scope TIR inference views (func + all descendants) ---
-        // Borrows the Salsa-cached `infer_scope_types` results instead of
-        // deep-copying every table into merged per-function maps (the old
-        // scheme cloned the whole inference output of every function on each
-        // construction). Lookups dispatch through the `tir_*` accessors.
-        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted);
-        // the accessors read the converted tables instead.
-        let tables = crate::inference_provider::ProviderTables::for_function(db, func_loc);
+        // --- Inference: the body's and parameter defaults' results ---
+        // Lookups dispatch through the `tir_*` accessors.
+        let tables = crate::inference_provider::InferenceTables::for_function(db, func_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
@@ -2796,13 +2773,9 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree let has a recorded scope")
             .file_scope_id(db);
 
-        // --- Collect per-scope TIR inference views (let + all descendants) ---
-        // Borrows the Salsa-cached `infer_scope_types` results instead of
-        // deep-copying every table into merged per-function maps (the old
-        // scheme cloned the whole inference output of every let initializer on each
-        // construction). Lookups dispatch through the `tir_*` accessors.
-        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted).
-        let tables = crate::inference_provider::ProviderTables::for_let(db, let_loc);
+        // --- Inference: the initializer's results ---
+        // Lookups dispatch through the `tir_*` accessors.
+        let tables = crate::inference_provider::InferenceTables::for_let(db, let_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_id = file_package(db, file).root;
@@ -3118,54 +3091,65 @@ impl<'db> LoweringContext<'db> {
 
     // --- Inference views ---
     //
-    // Point lookups into the one converted table store (MIR's own
-    // consumption vocabulary, built at construction from whichever engine
-    // backs this run). `MetadataScope::Body` reads a scope's body tables;
-    // `MetadataScope::ParameterDefault` its default-parameter tables.
+    // Point lookups into `hir_ty`'s results for the body being lowered
+    // (`MetadataScope::Body`) or its parameter defaults
+    // (`MetadataScope::ParameterDefault`), borrowed as recorded.
 
-    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope).expr_type(key.expr)
+    fn tir_tables(
+        &self,
+        scope: MetadataScope,
+    ) -> Option<&'db crate::inference_provider::InferenceResult<'db>> {
+        self.tables.for_scope(scope)
     }
 
-    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.0).pat_type(key.1)
+    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+        self.tir_tables(key.scope)?.type_of_expr.get(&key.expr)
+    }
+
+    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&'db Tir2Ty> {
+        self.tir_tables(key.0)?.type_of_pat.get(&key.1)
     }
 
     fn tir_resolution(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&crate::inference_provider::MemberResolution<'db>> {
-        self.tables.for_scope(key.scope).resolution(key.expr)
+    ) -> Option<&'db crate::inference_provider::MemberResolution<'db>> {
+        self.tir_tables(key.scope)?
+            .member_resolutions
+            .get(&key.expr)
     }
 
-    /// The recorded resolution for a virtual interface-field access: the realized
-    /// declaring-interface view plus the field's index in it.
-    ///
-    /// Authoritative, and preferred over re-deriving a view from the receiver's type.
-    /// It is what the type checker actually resolved through — which is the only
-    /// thing that answers a *union* receiver, where the serving interface is the one
-    /// every arm shares and is not recoverable from the receiver type alone.
+    /// Whether the checker resolved `key`'s callee through a language-sugar
+    /// tier (`to_string` / `to_json` / `from_json`): the callee is typed as
+    /// the desugar target and records no member resolution.
+    fn tir_desugared_callee(&self, key: ExprMetadataKey) -> bool {
+        self.tir_tables(key.scope)
+            .is_some_and(|tables| tables.desugared_callees.contains(&key.expr))
+    }
+
     /// The interface view and field index a recorded member resolution carries
     /// when it is a virtual-field read — source or mounted interface alike; every
-    /// other resolution kind is `None`. The one projection both the expression
-    /// road and the path ladder read TIR's answer through.
+    /// other resolution kind is `None`. Authoritative, and preferred over
+    /// re-deriving a view from the receiver's type: it is what the type checker
+    /// actually resolved through, which is the only thing that answers a *union*
+    /// receiver, where the serving interface is the one every arm shares and is
+    /// not recoverable from the receiver type alone. The one projection both the
+    /// expression road and the path ladder read the checker's answer through.
     fn virtual_field_view_of(
         &self,
         resolution: &crate::inference_provider::MemberResolution<'_>,
     ) -> Option<(InterfaceTypeView, u32)> {
         use crate::inference_provider::MemberResolution;
-        let (interface, field_index) = match resolution {
-            MemberResolution::InterfaceVirtualField {
-                interface,
-                field_index,
-                ..
-            } => (interface, *field_index),
-            _ => return None,
-        };
-        let Tir2Ty::Interface(tn, args, assoc, _) = interface else {
+        let MemberResolution::InterfaceVirtualField {
+            view, field_index, ..
+        } = resolution
+        else {
             return None;
         };
-        Some(((self.wire(tn), args.clone(), assoc.clone()), field_index))
+        let Tir2Ty::Interface(tn, args, assoc, _) = view else {
+            return None;
+        };
+        Some(((self.wire(tn), args.clone(), assoc.clone()), *field_index))
     }
 
     fn tir_virtual_field_view(&self, key: ExprMetadataKey) -> Option<(InterfaceTypeView, u32)> {
@@ -3173,9 +3157,9 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The recorded virtual-field view of member segment `seg_idx` of a path
-    /// ladder (1-based within the path: segment 0 is the root). TIR records
-    /// one resolution per member segment and the writeback finalizes each,
-    /// so a ladder's interface field reads resolve exactly like an
+    /// ladder (1-based within the path: segment 0 is the root). The checker
+    /// records one resolution per member segment and the writeback finalizes
+    /// each, so a ladder's interface field reads resolve exactly like an
     /// expression's — through the interface the access was CHECKED against,
     /// never re-derived from the segment's type.
     fn tir_path_segment_virtual_field_view(
@@ -3184,47 +3168,77 @@ impl<'db> LoweringContext<'db> {
         seg_idx: usize,
     ) -> Option<(InterfaceTypeView, u32)> {
         let member_index = seg_idx.checked_sub(1)?;
-        self.virtual_field_view_of(self.tir_path_member_resolutions(key)?.get(member_index)?)
+        self.virtual_field_view_of(self.tir_path_member_resolution(key, member_index)?)
     }
 
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
-        self.tables
-            .for_scope(key.scope)
-            .is_exhaustive_match(key.expr)
+        self.tir_tables(key.scope)
+            .is_none_or(|tables| tables.is_exhaustive_match(key.expr))
     }
 
-    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope).path_root_type(key.expr)
+    /// The value-rooted ladder recorded for a path expression.
+    fn tir_path(
+        &self,
+        scope: MetadataScope,
+        expr: AstExprId,
+    ) -> Option<&'db crate::inference_provider::ResolvedPath<'db>> {
+        self.tir_tables(scope)?.path_resolutions.get(&expr)
     }
 
-    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.0).path_segment_type(key.1, key.2)
+    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+        self.tir_path(key.scope, key.expr)?
+            .segments
+            .first()
+            .map(|segment| &segment.ty)
     }
 
-    fn tir_path_member_resolutions(
+    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&'db Tir2Ty> {
+        self.tir_path(key.0, key.1)?
+            .segments
+            .get(key.2)
+            .map(|segment| &segment.ty)
+    }
+
+    /// The resolution of member segment `member_index` (0 = the first member
+    /// after the root) of a fully resolved ladder.
+    fn tir_path_member_resolution(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&[crate::inference_provider::MemberResolution<'db>]> {
-        self.tables
-            .for_scope(key.scope)
-            .path_member_resolutions(key.expr)
+        member_index: usize,
+    ) -> Option<&'db crate::inference_provider::MemberResolution<'db>> {
+        self.tir_path(key.scope, key.expr)?
+            .member_resolution(member_index)
     }
 
-    fn tir_call_plan(&self, key: ExprMetadataKey) -> Option<&crate::inference_provider::CallPlan> {
-        self.tables.for_scope(key.scope).call_plan(key.expr)
+    /// The final segment's resolution of a fully resolved ladder — what a
+    /// value-rooted path names.
+    fn tir_path_final_resolution(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db crate::inference_provider::MemberResolution<'db>> {
+        self.tir_path(key.scope, key.expr)?
+            .final_member_resolution()
+    }
+
+    fn tir_call_plan(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db crate::inference_provider::CallPlan> {
+        self.tir_tables(key.scope)?.call_plans.get(&key.expr)
     }
 
     fn tir_type_binding(
         &self,
         stmt: AstStmtId,
-    ) -> Option<&crate::inference_provider::ScopedTypeBinding> {
-        self.tables
-            .for_scope(self.current_metadata_scope)
-            .type_binding(stmt)
+    ) -> Option<&'db crate::inference_provider::ScopedTypeBinding> {
+        self.tir_tables(self.current_metadata_scope)?
+            .type_bindings
+            .get(&stmt)
     }
 
     fn tir_truthy_condition(&self, key: ExprMetadataKey) -> bool {
-        self.tables.for_scope(key.scope).truthy_condition(key.expr)
+        self.tir_tables(key.scope)
+            .is_some_and(|tables| tables.is_truthy_condition(key.expr))
     }
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
@@ -3653,7 +3667,7 @@ impl<'db> LoweringContext<'db> {
         let Some(MemberResolution::Method {
             callee:
                 MethodCallee::Virtual {
-                    iface_loc: DeclRef::Source(iface_loc),
+                    interface: DeclRef::Source(iface_loc),
                     method,
                 },
             receiver: Receiver::Unbound,
@@ -3746,11 +3760,11 @@ impl<'db> LoweringContext<'db> {
         use crate::inference_provider::MemberResolution;
         match resolution {
             MemberResolution::Method { callee, .. } => match callee {
-                MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
-                    Some(callable_takes_self(self.db, *func_loc))
+                MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => {
+                    Some(callable_takes_self(self.db, *func))
                 }
-                MethodCallee::Virtual { iface_loc, method } => {
-                    self.virtual_slot_takes_self(*iface_loc, method)
+                MethodCallee::Virtual { interface, method } => {
+                    self.virtual_slot_takes_self(*interface, method)
                 }
             },
             MemberResolution::Free { .. }
@@ -3772,15 +3786,13 @@ impl<'db> LoweringContext<'db> {
         use crate::inference_provider::MemberResolution;
         match resolution {
             MemberResolution::Method { callee, .. } => match callee {
-                MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
-                    match func_loc {
-                        DeclRef::Source(_) => true,
-                        DeclRef::External(function) => {
-                            callable_takes_self(self.db, DeclRef::External(*function))
-                        }
+                MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => match func {
+                    DeclRef::Source(_) => true,
+                    DeclRef::External(function) => {
+                        callable_takes_self(self.db, DeclRef::External(*function))
                     }
-                }
-                MethodCallee::Virtual { iface_loc, method } => match iface_loc {
+                },
+                MethodCallee::Virtual { interface, method } => match interface {
                     DeclRef::Source(_) => true,
                     DeclRef::External(interface) => {
                         self.virtual_slot_takes_self(DeclRef::External(*interface), method)
@@ -3812,7 +3824,7 @@ impl<'db> LoweringContext<'db> {
             MemberResolution::Method {
                 callee:
                     MethodCallee::Virtual {
-                        iface_loc: DeclRef::External(interface),
+                        interface: DeclRef::External(interface),
                         method,
                     },
                 ..
@@ -3823,7 +3835,7 @@ impl<'db> LoweringContext<'db> {
             MemberResolution::Method {
                 callee:
                     MethodCallee::Concrete {
-                        func_loc: DeclRef::External(function),
+                        func: DeclRef::External(function),
                         ..
                     },
                 ..
@@ -5366,8 +5378,7 @@ impl<'db> LoweringContext<'db> {
         let key = self.expr_metadata_key(callee);
         match &self.body.exprs[callee] {
             AstExpr::Path(segments) if segments.len() >= 2 => self
-                .tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last())
+                .tir_path_final_resolution(key)
                 .and_then(|res| resolution_external_function(self.db, res))
                 .or_else(|| {
                     self.tir_resolution(key)
@@ -6086,7 +6097,7 @@ impl<'db> LoweringContext<'db> {
     ) -> (Vec<AstExprId>, Option<AstExprId>) {
         let runtime_id = self
             .tir_call_plan(self.expr_metadata_key(expr_id))
-            .and_then(|plan| plan.side_channels.runtime_id);
+            .and_then(|plan| plan.runtime_id);
         let ordinary_args = args
             .iter()
             .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
@@ -6214,7 +6225,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(MemberResolution::Method {
                     callee:
                         MethodCallee::Virtual {
-                            iface_loc: DeclRef::Source(iface_loc),
+                            interface: DeclRef::Source(iface_loc),
                             method,
                         },
                     ..
@@ -6576,28 +6587,25 @@ impl<'db> LoweringContext<'db> {
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
+        use crate::inference_provider::MemberResolution;
         // Multi-segment paths (e.g. baml.http.fetch, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
-            // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
-            // This takes priority over the flat resolutions map since infer_local_rooted_path
-            // moves resolutions from the flat map into path_member_resolutions.
-            if let Some(member_resolutions) = self
-                .tir_path_member_resolutions(self.expr_metadata_key(expr_id))
-                .map(<[_]>::to_vec)
+            // A value-rooted ladder takes priority over the flat resolution
+            // map: the checker records a local-rooted path's members in the
+            // ladder and only package-rooted paths in the flat map.
             {
-                use crate::inference_provider::MemberResolution;
-                // The last resolution corresponds to the final segment of the path.
-                // - If the last resolution is a BoundMethod/UnboundMethod/Free, this path is a
-                //   callee reference; emit a function constant. The receiver will be prepended
-                //   by lower_call.
-                // - If the last resolution is a Field, this is a pure field-chain access.
-                // Note: for paths like `user.profile.items.slice`, the member_resolutions
-                // are [Field{profile}, Field{items}, BoundMethod{slice}], so we check last().
-                match member_resolutions.last() {
-                    Some(MemberResolution::Method {
-                        callee: MethodCallee::Inherent(func_loc),
-                        receiver: Receiver::Bound,
-                    }) => {
+                // The final member's resolution decides the shape: a method or
+                // free item makes the path a callee reference (a function
+                // constant; `lower_call` prepends the receiver), a field a pure
+                // field chain. For `user.profile.items.slice` the ladder is
+                // [Field{profile}, Field{items}, Method{slice}].
+                match self.tir_path_final_resolution(self.expr_metadata_key(expr_id)) {
+                    Some(
+                        resolution @ MemberResolution::Method {
+                            callee: MethodCallee::Inherent(func_loc),
+                            receiver: Receiver::Bound,
+                        },
+                    ) => {
                         // A `self`-less method referenced through a receiver
                         // (`let m = f.make`): nothing to bind — currying the
                         // receiver would smuggle it into the first REAL
@@ -6607,8 +6615,7 @@ impl<'db> LoweringContext<'db> {
                         // an empty frame).
                         let takes_self = callable_takes_self(self.db, *func_loc);
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
-                        let resolution = member_resolutions.into_iter().last().unwrap();
-                        if let Some(item) = resolution_callee(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, resolution) {
                             if !takes_self {
                                 // TIR admitted the reference, so a missing
                                 // prefix type or dispatch view is an internal
@@ -6675,7 +6682,7 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     Some(
-                        MemberResolution::Method {
+                        resolution @ (MemberResolution::Method {
                             callee: MethodCallee::Inherent(_),
                             receiver: Receiver::Unbound,
                         }
@@ -6683,7 +6690,7 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::Method {
                             callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
                             ..
-                        },
+                        }),
                     ) => {
                         // Unbound method or free function reference — emit a plain function constant.
                         //
@@ -6698,8 +6705,7 @@ impl<'db> LoweringContext<'db> {
                         // mounted UFCS `let f = app.Widget.describe;`). Close
                         // by routing those through `MakeVirtualFunction` with
                         // the resolution's carried frame.
-                        let resolution = member_resolutions.into_iter().last().unwrap();
-                        if let Some(item) = resolution_callee(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, resolution) {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -6729,7 +6735,6 @@ impl<'db> LoweringContext<'db> {
                 .tir_resolution(self.expr_metadata_key(expr_id))
                 .cloned()
             {
-                use crate::inference_provider::MemberResolution;
                 match &resolution {
                     MemberResolution::Method {
                         callee: MethodCallee::Inherent(_),
@@ -6779,7 +6784,7 @@ impl<'db> LoweringContext<'db> {
                     MemberResolution::Method {
                         callee:
                             MethodCallee::Virtual {
-                                iface_loc: DeclRef::Source(iface_loc),
+                                interface: DeclRef::Source(iface_loc),
                                 method,
                             },
                         ..
@@ -6810,7 +6815,7 @@ impl<'db> LoweringContext<'db> {
                         callee:
                             MethodCallee::Concrete { .. }
                             | MethodCallee::Virtual {
-                                iface_loc: DeclRef::External(_),
+                                interface: DeclRef::External(_),
                                 ..
                             },
                         ..
@@ -8277,18 +8282,21 @@ impl<'db> LoweringContext<'db> {
         if !is_sugar_callee(&callee_expr, "to_string") {
             return false;
         }
-        // Fires only when the checker left the callee *untyped* (`Error`) — no
-        // real `to_string` method resolved. A real implementor (any `baml.ToString`
-        // / interface impl) types the callee as a method and is dispatched by the
-        // normal paths. Key on the callee's TIR type, not on resolution presence: a
-        // generic typevar receiver records a placeholder resolution yet still has an
-        // untyped callee, and must take the fallback rather than ICE on it.
-        // A nullable receiver types the missing member as `Error | null`, so test
-        // the non-null part (matches the TIR fallback gate).
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
+        // Fires when the checker resolved the call through the sugar tier
+        // (`desugared_callees`) or left the callee *untyped* (`Error`) — no
+        // real `to_string` method resolved. A real implementor (any
+        // `baml.ToString` / interface impl) types the callee as a method and
+        // is dispatched by the normal paths. The untyped leg keys on the
+        // callee's type, not on resolution presence: a generic typevar receiver
+        // records a placeholder resolution yet still has an untyped callee, and
+        // must take the fallback rather than ICE on it. A nullable receiver
+        // types the missing member as `Error | null`, so test the non-null part.
+        let key = self.expr_metadata_key(callee);
+        let sugar = self.tir_desugared_callee(key)
+            || self
+                .tir_expr_type(key)
+                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
+        if !sugar {
             return false;
         }
         let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
@@ -8439,11 +8447,14 @@ impl<'db> LoweringContext<'db> {
         if !is_sugar_callee(&callee_expr, "to_json") {
             return false;
         }
-        // Fires only when TIR left the callee untyped (no real `to_json` method).
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
+        // Fires when the checker desugared the call or left the callee untyped
+        // (no real `to_json` method).
+        let key = self.expr_metadata_key(callee);
+        let sugar = self.tir_desugared_callee(key)
+            || self
+                .tir_expr_type(key)
+                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
+        if !sugar {
             return false;
         }
         let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
@@ -8599,10 +8610,12 @@ impl<'db> LoweringContext<'db> {
         if !static_receiver {
             return false;
         }
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
+        let key = self.expr_metadata_key(callee);
+        let sugar = self.tir_desugared_callee(key)
+            || self
+                .tir_expr_type(key)
+                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
+        if !sugar {
             return false;
         }
 
@@ -9221,20 +9234,20 @@ impl<'db> LoweringContext<'db> {
                 let method_takes_self = {
                     self.tir_resolution(self.expr_metadata_key(callee))
                         .is_some_and(|r| match r {
-                            MemberResolution::Free { func_loc }
+                            MemberResolution::Free { func }
                             | MemberResolution::Method {
                                 callee:
-                                    MethodCallee::Inherent(func_loc)
-                                    | MethodCallee::Concrete { func_loc, .. },
+                                    MethodCallee::Inherent(func)
+                                    | MethodCallee::Concrete { func, .. },
                                 ..
-                            } => callable_takes_self(self.db, *func_loc),
+                            } => callable_takes_self(self.db, *func),
                             // A virtual interface-method call on a source
                             // interface is always on a receiver, so it takes
                             // `self`; a served interface's row says.
                             MemberResolution::Method {
-                                callee: MethodCallee::Virtual { iface_loc, method },
+                                callee: MethodCallee::Virtual { interface, method },
                                 ..
-                            } => match iface_loc {
+                            } => match interface {
                                 DeclRef::Source(_) => true,
                                 DeclRef::External(interface) => {
                                     self.virtual_slot_takes_self(
@@ -9260,7 +9273,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(MemberResolution::Method {
                             callee:
                                 MethodCallee::Concrete {
-                                    func_loc: DeclRef::Source(_),
+                                    func: DeclRef::Source(_),
                                     frame_type_args,
                                     ..
                                 },
@@ -9301,7 +9314,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(MemberResolution::Method {
                             callee:
                                 MethodCallee::Concrete {
-                                    func_loc: DeclRef::Source(_),
+                                    func: DeclRef::Source(_),
                                     frame_type_args,
                                     ..
                                 },
@@ -9325,14 +9338,13 @@ impl<'db> LoweringContext<'db> {
                 (callee_op, self.lower_call_arg_operands(expr_id, args))
             }
         } else if let AstExpr::Path(segments) = callee_expr {
-            // Check path_member_resolutions first (local-rooted paths like `self.method()`
+            // The value-rooted ladder first (local-rooted paths like `self.method()`
             // or `obj.field.method()`). The last resolution determines if the final segment
             // is a method call (e.g. for `user.profile.items.slice`, resolutions are
             // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
             let is_local_method = segments.len() >= 2
                 && self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .is_some_and(|r| self.resolution_is_method_call(r));
             // Also check flat resolutions (package-path method call, kept for compatibility).
             let is_pkg_method = !is_local_method
@@ -9350,13 +9362,12 @@ impl<'db> LoweringContext<'db> {
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let receiver_segments = &segments[..segments.len() - 1];
                 let method_resolution = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .cloned();
                 if let Some(MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
-                            func_loc: DeclRef::Source(_),
+                            func: DeclRef::Source(_),
                             frame_type_args,
                             ..
                         },
@@ -9372,29 +9383,26 @@ impl<'db> LoweringContext<'db> {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
-                let method_takes_self =
-                    method_resolution.as_ref().is_some_and(|r| match r {
-                        MemberResolution::Method {
-                            callee:
-                                MethodCallee::Inherent(func_loc)
-                                | MethodCallee::Concrete { func_loc, .. },
-                            ..
-                        } => callable_takes_self(self.db, *func_loc),
-                        MemberResolution::Method {
-                            callee: MethodCallee::Virtual { iface_loc, method },
-                            ..
-                        } => match iface_loc {
-                            DeclRef::Source(_) => true,
-                            DeclRef::External(interface) => {
-                                self.virtual_slot_takes_self(DeclRef::External(*interface), method)
-                                    == Some(true)
-                            }
-                        },
-                        MemberResolution::Free { .. }
-                        | MemberResolution::Field { .. }
-                        | MemberResolution::Variant { .. }
-                        | MemberResolution::InterfaceVirtualField { .. } => false,
-                    });
+                let method_takes_self = method_resolution.as_ref().is_some_and(|r| match r {
+                    MemberResolution::Method {
+                        callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
+                        ..
+                    } => callable_takes_self(self.db, *func),
+                    MemberResolution::Method {
+                        callee: MethodCallee::Virtual { interface, method },
+                        ..
+                    } => match interface {
+                        DeclRef::Source(_) => true,
+                        DeclRef::External(interface) => {
+                            self.virtual_slot_takes_self(DeclRef::External(*interface), method)
+                                == Some(true)
+                        }
+                    },
+                    MemberResolution::Free { .. }
+                    | MemberResolution::Field { .. }
+                    | MemberResolution::Variant { .. }
+                    | MemberResolution::InterfaceVirtualField { .. } => false,
+                });
                 if !method_takes_self {
                     // Same class-frame rule as the MemberAccess spelling: the
                     // receiver prefix's static type fills the callee frame.
@@ -9434,7 +9442,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
-                            func_loc: DeclRef::Source(_),
+                            func: DeclRef::Source(_),
                             frame_type_args,
                             ..
                         },
@@ -9784,11 +9792,7 @@ impl<'db> LoweringContext<'db> {
                 .is_some_and(|(_, takes_self)| takes_self),
             None => false,
         };
-        uses(self.tir_resolution(key))
-            || uses(
-                self.tir_path_member_resolutions(key)
-                    .and_then(|resolutions| resolutions.last()),
-            )
+        uses(self.tir_resolution(key)) || uses(self.tir_path_final_resolution(key))
     }
 
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
@@ -9815,12 +9819,11 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 }
             } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
+                // Multi-segment: the value-rooted ladder's final resolution first
+                // (local-rooted paths like `file.read_string`), then the flat
+                // resolution (package paths).
                 let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .and_then(|res| resolution_func_loc(res));
                 if from_pmr.is_some() {
                     from_pmr
@@ -9892,12 +9895,11 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 }
             } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
+                // Multi-segment: the value-rooted ladder's final resolution first
+                // (local-rooted paths like `file.read_string`), then the flat
+                // resolution (package paths).
                 let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .and_then(|res| resolution_func_loc(res));
                 if from_pmr.is_some() {
                     from_pmr
@@ -9954,12 +9956,11 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 }
             } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
+                // Multi-segment: the value-rooted ladder's final resolution first
+                // (local-rooted paths like `file.read_string`), then the flat
+                // resolution (package paths).
                 let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .and_then(|res| resolution_func_loc(res));
                 if from_pmr.is_some() {
                     from_pmr
@@ -10060,8 +10061,7 @@ impl<'db> LoweringContext<'db> {
                 }
             } else {
                 let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .tir_path_final_resolution(self.expr_metadata_key(callee))
                     .and_then(|res| resolution_func_loc(res));
                 if from_pmr.is_some() {
                     from_pmr
@@ -10162,8 +10162,7 @@ impl<'db> LoweringContext<'db> {
                         }
                     } else {
                         let from_pmr = self
-                            .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                            .and_then(|resolutions| resolutions.last())
+                            .tir_path_final_resolution(self.expr_metadata_key(callee))
                             .and_then(|res| resolution_func_loc(res));
                         if from_pmr.is_some() {
                             from_pmr
@@ -10589,8 +10588,7 @@ impl<'db> LoweringContext<'db> {
         let key = self.expr_metadata_key(base);
         // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
         if let Some(item) = self
-            .tir_path_member_resolutions(key)
-            .and_then(|rs| rs.last())
+            .tir_path_final_resolution(key)
             .filter(|r| is_fn(r))
             .and_then(|r| resolution_callee(self.db, r))
         {

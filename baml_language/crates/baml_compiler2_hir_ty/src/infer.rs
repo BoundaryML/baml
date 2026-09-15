@@ -519,6 +519,35 @@ pub struct ResolvedPathSegment<'db, T = baml_type::Ty> {
     pub resolution: Option<MemberResolution<'db, T>>,
 }
 
+impl<'db, T> ResolvedPath<'db, T> {
+    /// The member segments (everything after the root, which performs no
+    /// member access), when every one of them resolved: a partial ladder
+    /// still types each segment, but its members cannot be consumed
+    /// positionally.
+    fn resolved_members(&self) -> Option<&[ResolvedPathSegment<'db, T>]> {
+        let members = self.segments.get(1..)?;
+        members
+            .iter()
+            .all(|segment| segment.resolution.is_some())
+            .then_some(members)
+    }
+
+    /// The resolution of member `member_index` (0 = the first segment after
+    /// the root), or `None` when any member is unresolved.
+    pub fn member_resolution(&self, member_index: usize) -> Option<&MemberResolution<'db, T>> {
+        self.resolved_members()?
+            .get(member_index)?
+            .resolution
+            .as_ref()
+    }
+
+    /// The final member's resolution, or `None` when any member is
+    /// unresolved.
+    pub fn final_member_resolution(&self) -> Option<&MemberResolution<'db, T>> {
+        self.resolved_members()?.last()?.resolution.as_ref()
+    }
+}
+
 /// A recorded coercion step at an expression, consumed structurally by
 /// MIR lowering - rust-analyzer's `Adjustment { kind, target }` exactly
 /// (their infer.rs Adjust family: NeverToAny/Deref/Borrow/Pointer; BAML
@@ -596,6 +625,16 @@ impl<T> Default for CallPlan<T> {
             slots: Vec::new(),
             runtime_id: None,
         }
+    }
+}
+
+impl<T> CallPlan<T> {
+    /// The written arguments the plan bound, in parameter order.
+    pub fn provided_args(&self) -> impl Iterator<Item = ExprId> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { arg, .. } => Some(*arg),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
     }
 }
 
@@ -1211,11 +1250,9 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// S16: MIR synthesizes the recorded coercions instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
     /// Callee expressions the walk resolved through a LANGUAGE-SUGAR
-    /// tier (`to_string`/`to_json`/`from_json` lang-item desugars).
-    /// Recorded as POSITIVE knowledge; TIR's convention leaves these
-    /// callees untyped and MIR keys the desugar on that absence, so the
-    /// provider omits their expr types (post-flip, MIR reads this table
-    /// directly instead of an absence).
+    /// tier (`to_string`/`to_json`/`from_json` lang-item desugars): the
+    /// callee is typed as the desugar target and records no member
+    /// resolution; MIR lowers the sugar on this mark.
     pub desugared_callees: rustc_hash::FxHashSet<ExprId>,
 }
 
@@ -1243,6 +1280,24 @@ impl<T> InferenceResult<'_, T> {
             expr_adjustments: FxHashMap::default(),
             desugared_callees: rustc_hash::FxHashSet::default(),
         }
+    }
+}
+
+impl<T> InferenceResult<'_, T> {
+    /// Whether `expr` holds a condition the checker marked for truthiness
+    /// coercion ([`Adjust::Truthy`]).
+    pub fn is_truthy_condition(&self, expr: ExprId) -> bool {
+        self.expr_adjustments.get(&expr).is_some_and(|adjustments| {
+            adjustments
+                .iter()
+                .any(|adjustment| matches!(adjustment.kind, Adjust::Truthy))
+        })
+    }
+
+    /// Whether the `match` at `expr` was proved exhaustive: absence from
+    /// [`Self::non_exhaustive_matches`] is the proof.
+    pub fn is_exhaustive_match(&self, expr: ExprId) -> bool {
+        !self.non_exhaustive_matches.contains(&expr)
     }
 }
 
@@ -6253,9 +6308,8 @@ impl<'db> InferenceContext<'db> {
                 && member.as_str() == "to_json"
                 && let Some(fn_ty) = self.json_desugar_callee("from", resolved.clone())
             {
-                // Desugar tiers record nothing: MIR keys the sugar on the
-                // ABSENCE of a resolution (TIR's convention); the callee
-                // gets a desugared_callees mark instead.
+                // Desugar tiers record no resolution; the callee gets a
+                // `desugared_callees` mark, which MIR lowers the sugar on.
                 return (fn_ty, true, None, true);
             }
             // `recv.to_string()` with no real `implements baml.ToString`
