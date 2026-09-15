@@ -153,3 +153,13 @@ Download status, analysis, verification, and task-event evidence before deletion
 ```sh
 npx cdk destroy hello-ramp-001 -c run=hello-ramp-001 -c images=artifacts/rampup-001/images.json -c profile=profiles/ramp-100.json
 ```
+
+## Render retained threshold charts
+
+`scripts/render_threshold_charts.py` downloads the retained ARM64 pre/post threshold events from CloudWatch Logs, joins them to AWS/ECS CPU and memory metrics, writes the source JSON, and renders fifteen per-benchmark Matplotlib charts plus the highest-passing-RPS overview. CPU and memory have 60-second CloudWatch granularity, so the JSON preserves all datapoints and records which point nearest each 30-second phase midpoint was selected.
+
+```sh
+python3 -m venv /tmp/baml-threshold-charts-venv
+/tmp/baml-threshold-charts-venv/bin/pip install -r chart-requirements.txt
+/tmp/baml-threshold-charts-venv/bin/python scripts/render_threshold_charts.py --aws-profile "$AWS_PROFILE" --output-dir ~/thoughts/sam-projects/baml-in-prod5/hello-world-bench/cloudwatch-threshold-charts
+```
