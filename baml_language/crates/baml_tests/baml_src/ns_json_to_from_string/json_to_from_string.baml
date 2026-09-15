@@ -326,6 +326,77 @@ test "skip_field_still_emitted_in_json" {
     )
 }
 
+// ─── Bigint round-trip ────────────────────────────────────────────────────────
+//
+// The wire format is a decimal JSON string (matching SAP's BamlBigint), so the
+// to_string pin below keeps the encoder and decoder from drifting.
+
+class Timing { elapsed_ms bigint }
+
+test "bigint_to_string_wire_format" {
+    assert.equal(baml.json.to_string(12n), "\"12\"")
+}
+
+test "bare_bigint_roundtrip" {
+    assert.equal(baml.json.from_string<bigint>(baml.json.to_string(12n)), 12n)
+}
+
+test "negative_bigint_roundtrip" {
+    assert.equal(baml.json.from_string<bigint>(baml.json.to_string(-12n)), -12n)
+}
+
+// 2^63: outside the BAML int range, so this proves decoding is not routed
+// through i64.
+test "bigint_roundtrip_beyond_int_range" {
+    assert.equal(
+        baml.json.from_string<bigint>(baml.json.to_string(9223372036854775808n)),
+        9223372036854775808n,
+    )
+}
+
+function bigint_field_roundtrip_value() -> bigint {
+    let t: Timing = Timing { elapsed_ms: 12n };
+    let s: string = baml.json.to_string(t);
+    let d: Timing = baml.json.from_string<Timing>(s);
+    d.elapsed_ms
+}
+
+test "bigint_field_roundtrip" {
+    assert.equal(bigint_field_roundtrip_value(), 12n)
+}
+
+// Interop: a bare JSON integer number also decodes into bigint.
+test "bigint_from_json_number" {
+    assert.equal(baml.json.from_string<bigint>("12"), 12n)
+}
+
+test "bigint_decode_rejects_nondigit_string" {
+    {
+        let b: bigint = baml.json.from_string<bigint>("\"abc\"");
+        baml.sys.panic("expected from_string to throw")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
+test "bigint_decode_rejects_float" {
+    {
+        let b: bigint = baml.json.from_string<bigint>("12.5");
+        baml.sys.panic("expected from_string to throw")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
+test "bigint_decode_rejects_bool" {
+    {
+        let b: bigint = baml.json.from_string<bigint>("true");
+        baml.sys.panic("expected from_string to throw")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
 // ─── json passthrough via TypeAlias ──────────────────────────────────────────
 
 function from_string_json_passthrough_int_match() -> bool {
