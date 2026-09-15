@@ -31,7 +31,7 @@ fn install_signal_handler() -> std::io::Result<()> {
     unsafe {
         let mut action: libc::sigaction = std::mem::zeroed();
         action.sa_sigaction = request_relief as *const () as libc::sighandler_t;
-        action.sa_flags = 0;
+        action.sa_flags = libc::SA_RESTART;
         libc::sigemptyset(&raw mut action.sa_mask);
         if libc::sigaction(libc::SIGUSR2, &raw const action, std::ptr::null_mut()) != 0 {
             return Err(std::io::Error::last_os_error());
