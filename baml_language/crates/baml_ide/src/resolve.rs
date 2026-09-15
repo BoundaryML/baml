@@ -1357,11 +1357,6 @@ pub(crate) fn member_resolution_target<'db>(
 
     match resolution {
         MemberResolution::Field { class, field } => {
-            // Read the canonical (PPIR) tree, not the HIR pre-expansion tree:
-            // an inferred `class` can be a synthetic `$stream` class (the
-            // type of a streamed partial), which is absent pre-expansion.
-            // Its field name-spans alias the user-authored class's, so
-            // navigation still lands on real source.
             let field_index = item_data::class_data(db, *class)
                 .fields
                 .iter()

@@ -433,16 +433,6 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
     // never taint a scope, so unrelated type errors elsewhere in the file are
     // unaffected.
     let tainted = parse_error_tainted_scopes(index, &parse_errors);
-    // Drive inference with PPIR's canonical (post-`$stream`-expansion) ScopeIds,
-    // not HIR's. `ScopeId` is a Salsa *tracked* struct, so HIR's index and
-    // PPIR's expanded index mint distinct Salsa IDs for the same
-    // (file, FileScopeId) pair; keying `infer_scope_types` with HIR IDs here
-    // made every scope in a `$stream`-expanded file get inferred a second time
-    // when TIR/MIR later asked with the PPIR ID. The original file's scopes are
-    // a prefix of the expanded index — the same invariant `infer_scope_types`
-    // relies on when it resolves a `FileScopeId` in the expanded arena — and we
-    // iterate only that prefix, so synthetic `*$stream` scopes are never
-    // visited and diagnostics are unchanged.
     // Body-owner granularity (hir_ty infers whole bodies, lambdas in the
     // owner's arena): an owner is suppressed when ITS scope or any
     // descendant scope is parse-tainted - the same cascades the per-scope
@@ -566,14 +556,13 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
         }
         // CLASS generic-bound diagnostics.
         //
-        // BUG: an unresolved field type is reported twice — once at the
+        // BUG: an unresolved field type was reported twice — once at the
         // field's type-ref span (from `class_lowering_diagnostics`) and once
-        // at an EMPTY range rendered as `1:1`. Reproduce: `class Bad { x
-        // Undefined }` alone in a project; `baml check` prints two E0002 for
-        // it (`bad.baml:1:1` and `bad.baml:2:7-2:16`), the LSP publishes both.
-        // Suspect (unverified): the class's synthesized `$stream` companion
-        // re-lowers the same annotation with an empty declaration span
-        // through a walk other than the guarded one below.
+        // at an EMPTY range rendered as `1:1`. The suspected cause (a class's
+        // synthesized `$stream` companion re-lowering the same annotation at
+        // an empty declaration span) no longer exists, and `class Bad { x
+        // Undefined }` alone in a project now reports it once. Left recorded
+        // in case the empty-range report returns by another road.
         for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
             for (range, error) in
                 baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)

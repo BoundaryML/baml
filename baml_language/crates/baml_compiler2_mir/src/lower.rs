@@ -107,14 +107,11 @@ pub fn resolved_aliases_for_package(
 /// Every type alias a package declares, resolved to its (one-level) value
 /// through `hir_ty`'s lowering, keyed by qualified name.
 ///
-/// Two enumerations, deliberately unioned. HIR's `package_items` is the only
-/// view that covers a *mounted* package (a runtime compile's dependencies have
-/// no source files to walk), but it predates ppir's synthesis. ppir's
-/// `file_type_aliases` adds the synthesized `*$stream` companion aliases,
-/// which exist only in the expansion set. An alias this map is missing cannot
-/// be classified (recursive → pooled as a declaration) or expanded
-/// (non-recursive → inlined) — it survives as a name nothing declares, which
-/// `lower_to_runtime` now rejects.
+/// Enumerated through HIR's `package_items`, the only view that covers a
+/// *mounted* package (a runtime compile's dependencies have no source files to
+/// walk). An alias this map is missing cannot be classified (recursive →
+/// pooled as a declaration) or expanded (non-recursive → inlined) — it
+/// survives as a name nothing declares, which `lower_to_runtime` now rejects.
 fn collect_type_aliases(
     db: &dyn crate::Db,
     pkg_id: baml_base::SourceRoot,
@@ -135,20 +132,6 @@ fn collect_type_aliases(
                     value,
                 );
             }
-        }
-    }
-    for &file in pkg_id.files(db) {
-        for &loc in baml_compiler2_ppir::item_data::file_type_aliases(db, file) {
-            let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
-            let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc);
-            aliases.insert(
-                baml_compiler2_hir_ty::lower::qualify_def(
-                    db,
-                    Definition::TypeAlias(loc),
-                    &data.name,
-                ),
-                value,
-            );
         }
     }
     aliases
@@ -1780,10 +1763,6 @@ fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> Pr
 #[salsa::tracked(returns(ref))]
 fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> PackageLoweringData {
     use baml_compiler2_hir::package::package_dependency_closure;
-    // The canonical (PPIR) item view: includes synthesized `*$stream` classes,
-    // whose fields must be projectable like any other class's. TIR already
-    // resolves types against this view; using HIR's pre-expansion view here
-    // made MIR ICE on field access against a `$stream` partial.
     use baml_compiler2_ppir::package_items;
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
@@ -5391,7 +5370,7 @@ impl<'db> LoweringContext<'db> {
             let span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
             // Two functions can carry a tagged template at the *same* source
-            // span — notably a new-mode LLM function and its `$stream`
+            // span — notably a new-mode LLM function and its `@spec`
             // companion, both synthesized from the one `prompt`…`` at
             // `llm_body_def.span`. A bare range match would pick whichever
             // lambda scope appears first in the file (the oneshot body's),
@@ -10099,12 +10078,6 @@ impl<'db> LoweringContext<'db> {
     fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = pkg_info.root;
-        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
-        // args synthesized by PPIR companions reference `*$stream` classes
-        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
-        // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `_ParseCache._new`
-        // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         lower_expr_in_scope(
             self.db,

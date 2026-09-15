@@ -36,8 +36,8 @@ pub(crate) enum Surface {
     LanguageInternal,
     /// Spelled with `$`. The lexer takes `$` both leading (the form
     /// `$rust_function` uses) and infix, so these are ordinary identifiers:
-    /// `testing.$invoke_collector` compiles, and `Doc$stream` is a real type
-    /// (`expected int, found Doc$stream`).
+    /// `testing.$invoke_collector` compiles, and a user-written `Doc$partial`
+    /// is a real type (`expected int, found Doc$partial`).
     ///
     /// A NAME heuristic, not a provenance fact — and a weak one. Corpus-wide
     /// it has exactly one inhabitant, `testing.$invoke_collector`, which is

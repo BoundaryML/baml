@@ -22,7 +22,7 @@ use baml_type::{DeclName, Freshness, ParamTy, Ty as TirTy, TyAttr};
 // ---------------------------------------------------------------------------
 
 /// Build a `cg::Name` from a `DeclName`. Preserves `pkg`, the full
-/// namespace path, and the bare name (including any `$stream` suffix).
+/// namespace path, and the bare name.
 fn name_from_qtn(spelling: &Spelling, qtn: &DeclName) -> cg::Name {
     spelling.wire(qtn)
 }

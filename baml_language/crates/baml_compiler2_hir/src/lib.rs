@@ -172,8 +172,7 @@ unsafe impl salsa::Update for FileAst {
 /// CST → AST lowering for one file, computed once and shared.
 ///
 /// Salsa-tracked because several different consumers need a file's AST items:
-/// both `file_semantic_index` queries (HIR + PPIR), `ppir_expansion_items`,
-/// PPIR's two project-wide expansion-map collectors, and the LSP check pass.
+/// `file_semantic_index` and the LSP check pass.
 /// Before this query existed each of them re-lowered the syntax tree from
 /// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
 /// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).

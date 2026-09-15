@@ -1380,7 +1380,7 @@ impl<'db> LowerCtx<'db> {
 
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
-    /// package-prefixed; (3) the `$stream` companion fallback.
+    /// package-prefixed.
     fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
@@ -1429,30 +1429,11 @@ impl<'db> LowerCtx<'db> {
             }
         }
 
-        // `$stream` companions of classes/aliases resolve through their base
-        // name; the caller re-qualifies under the `$stream` name.
-        if let Some(base) = item.as_str().strip_suffix("$stream") {
-            let mut base_segments = segments.to_vec();
-            *base_segments.last_mut().expect("non-empty") = Name::new(base);
-            return self.resolve_type(&base_segments).filter(|def| match def {
-                ResolvedTypeDefinition::Source(Definition::Class(_) | Definition::TypeAlias(_)) => {
-                    true
-                }
-                ResolvedTypeDefinition::Exported(exported) => matches!(
-                    exported.as_ref(),
-                    crate::package_interface::ExportedType::Class { .. }
-                        | crate::package_interface::ExportedType::TypeAlias { .. }
-                ),
-                ResolvedTypeDefinition::Source(_) => false,
-            });
-        }
-
         None
     }
 
     /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
-    /// algorithm over `lookup_value` (functions, clients, lets). No
-    /// `$stream` fallback: companions are functions with their own names.
+    /// algorithm over `lookup_value` (functions, clients, lets).
     pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
         let (item, seg_ns) = segments.split_last()?;
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
@@ -1565,8 +1546,7 @@ impl<'db> LowerCtx<'db> {
     }
 
     /// TIR's `qualify_def`: the qualified name comes from the DEFINITION's
-    /// file, while the short name is what the user wrote (which is what
-    /// keeps `$stream` companions distinct from their base).
+    /// file, while the short name is what the user wrote.
     fn qualify(&self, def: Definition<'db>, short: &Name) -> DeclName {
         let info = baml_compiler2_hir::file_package::file_package(self.db, def.file(self.db));
         DeclName::in_root(info.root, info.namespace_path, short.clone())
@@ -2768,13 +2748,6 @@ pub fn class_lowering_diagnostics<'db>(
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
-    // PPIR synthesizes `$stream` companions with an empty declaration span.
-    // Their field types originate in the source class, whose lowering walk
-    // already owns any diagnostics; reporting the clone produces a duplicate
-    // at the synthetic 0..0 range.
-    if source_map.span.is_empty() {
-        return Vec::new();
-    }
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
         .with_frame(frame)

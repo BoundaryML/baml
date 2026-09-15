@@ -21,8 +21,8 @@
 //! Impls are top-level records referenced by id from the items they attach
 //! to — a blanket impl (`implements<T> Concrete for T`) attaches to every
 //! item and must not be duplicated into each. The export set is explicit:
-//! synthetic items (`$stream` companions, `$new` constructors) are listed
-//! and flagged, never silently dropped.
+//! synthetic items (`$new` constructors, `@`-companions) are listed and
+//! flagged, never silently dropped.
 //!
 //! One document covers one package. References may cross packages — a field
 //! type's head, an attached impl declared downstream — and stay

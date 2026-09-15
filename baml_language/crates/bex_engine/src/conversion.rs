@@ -338,12 +338,9 @@ fn portable_type_def(
         let Object::Package(package) = (unsafe { owner.get() }) else {
             continue;
         };
-        // A package contributes its whole surface, minus the `$stream`
-        // companions, which are synthesized rather than written.
+        // A package contributes its whole surface.
         for ptr in package.classes.values().copied() {
-            if !class_ptrs.contains(&ptr)
-                && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.item_name().as_str().ends_with("$stream"))
-            {
+            if !class_ptrs.contains(&ptr) {
                 class_ptrs.push(ptr);
             }
         }

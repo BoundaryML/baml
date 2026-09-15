@@ -1,21 +1,14 @@
-//! Pre-Processed Intermediate Representation (PPIR) for compiler2.
+//! The item layer compiler2 reads: per-item firewall queries over HIR's item
+//! tree, name resolution, and the body/signature queries TIR and MIR consume.
 //!
-//! Pipeline: CST -> AST -> HIR (raw) -> PPIR (expansion + canonical) -> TIR.
-//!
-//! PPIR uses HIR's `package_items` for symbol classification (class vs enum vs alias),
-//! then synthesizes `*$stream` AST items and provides canonical queries that include
-//! both original and synthetic items.
-//!
-//! **No union simplification in PPIR.** Deferred to TIR.
+//! Pipeline: CST -> AST -> HIR -> PPIR -> TIR.
 
-pub mod expand;
 pub mod item_data;
 pub mod resolve;
-pub mod ty;
 
 use std::sync::Arc;
 
-use baml_base::{Name, SourceFile, attr::TyAttrValue};
+use baml_base::{Name, SourceFile};
 use baml_compiler2_ast as ast;
 use baml_compiler2_hir::{
     contributions::FileSymbolContributions,
@@ -24,429 +17,21 @@ use baml_compiler2_hir::{
     package::{PackageItems, PackageItemsExtra},
     semantic_index::FileSemanticIndex,
 };
-use baml_type::DeclName;
-pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use indexmap::{IndexMap, IndexSet};
-use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 use text_size::TextRange;
-pub use ty::{CannotBeStreamedOrigin, PpirRawField, PpirTy, PpirTypeAttrs};
 
 // -- Db trait -----------------------------------------------------------------
 
 #[salsa::db]
 pub trait Db: baml_compiler2_hir::Db {}
 
-// -- Tracked structs ----------------------------------------------------------
+// -- Item queries -------------------------------------------------------------
 
-/// Per-file synthetic AST items produced by PPIR expansion.
-#[salsa::tracked]
-pub struct PpirExpansionItems<'db> {
-    #[tracked]
-    #[returns(ref)]
-    pub items: Vec<ast::Item>,
-}
-
-// -- Block attributes ---------------------------------------------------------
-
-/// The files the expansion-map collectors scan: every file of every
-/// non-`Stdlib` source root, in table order.
-///
-/// The stdlib exclusion preserves the pre-source-root behavior, where the
-/// collectors scanned the project's user files and the embedded stdlib stubs
-/// were held in a separate input they never saw.
-fn expansion_map_files(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-) -> impl Iterator<Item = SourceFile> {
-    baml_compiler2_hir::package::world_roots(db, root)
-        .iter()
-        .filter(|root| match root.kind(db) {
-            baml_base::SourceRootKind::Stdlib => false,
-            baml_base::SourceRootKind::Dependency
-            | baml_base::SourceRootKind::Workspace
-            | baml_base::SourceRootKind::Dynamic => true,
-        })
-        .flat_map(|root| root.files(db).iter().copied())
-}
-
-/// Collect all @@ block attributes per type across all non-stdlib files.
-pub fn collect_block_attrs(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-) -> FxHashMap<DeclName, Vec<Name>> {
-    let mut result = FxHashMap::default();
-    for file in expansion_map_files(db, root) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        // Reuse the memoized CST → AST lowering instead of re-lowering here.
-        let items = &baml_compiler2_hir::file_ast(db, file).items;
-        for item in items {
-            let (name, item_attrs) = match item {
-                ast::Item::Class(c) => (&c.name, &c.attributes),
-                ast::Item::Enum(e) => (&e.name, &e.attributes),
-                _ => continue,
-            };
-            let attr_names: Vec<Name> = item_attrs.iter().map(|a| a.name.clone()).collect();
-            if !attr_names.is_empty() {
-                let decl =
-                    DeclName::in_root(pkg_info.root, pkg_info.namespace_path.clone(), name.clone());
-                result
-                    .entry(decl)
-                    .or_insert_with(Vec::new)
-                    .extend(attr_names);
-            }
-        }
-    }
-    result
-}
-
-/// Collect type alias bodies (qualified path → `PpirTy`) across all
-/// non-stdlib files.
-pub fn collect_alias_bodies(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-) -> FxHashMap<DeclName, PpirTy> {
-    let mut result = FxHashMap::default();
-    for file in expansion_map_files(db, root) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        // Reuse the memoized CST → AST lowering instead of re-lowering here.
-        let items = &baml_compiler2_hir::file_ast(db, file).items;
-        for item in items {
-            if let ast::Item::TypeAlias(a) = item {
-                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
-                    PpirTy::CannotBeStreamed {
-                        origin: ty::CannotBeStreamedOrigin::Unknown,
-                        attrs: PpirTypeAttrs::default(),
-                    },
-                );
-                let decl = DeclName::in_root(
-                    pkg_info.root,
-                    pkg_info.namespace_path.clone(),
-                    a.name.clone(),
-                );
-                result.insert(decl, ty);
-            }
-        }
-    }
-    result
-}
-
-// -- Project-wide expansion maps (memoized) -----------------------------------
-
-/// The whole-project maps consumed by [`ppir_expansion_items`] when building a
-/// file's `*$stream` companions.
-///
-/// Both maps are derived by scanning **every** non-stdlib file (see
-/// [`collect_block_attrs`] / [`collect_alias_bodies`]). `ppir_expansion_items`
-/// is a per-file query, so computing these inline made expansion `O(files²)`:
-/// each of N files re-lowered all N files. Wrapping them in a single
-/// root-table-keyed [`salsa::tracked`] query ([`expansion_maps_within`])
-/// computes them once and shares the result across every file's expansion.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ProjectExpansionMaps {
-    /// `@@` block attributes per type, keyed by fully-qualified path.
-    pub block_attrs: FxHashMap<DeclName, Vec<Name>>,
-    /// Type alias bodies keyed by fully-qualified path.
-    pub alias_bodies: FxHashMap<DeclName, PpirTy>,
-}
-
-/// # Safety
-///
-/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
-/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ProjectExpansionMaps {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-/// The [`ProjectExpansionMaps`] of `root`'s world — the block attributes and
-/// alias bodies of every non-stdlib package the root's files may reference
-/// ([`baml_compiler2_hir::package::world_roots`]) — memoized per root. A
-/// package expands against what it can name, never against another
-/// workspace root that happens to share the database.
-#[salsa::tracked(returns(ref))]
-pub fn expansion_maps_within(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-) -> ProjectExpansionMaps {
-    ProjectExpansionMaps {
-        block_attrs: collect_block_attrs(db, root),
-        alias_bodies: collect_alias_bodies(db, root),
-    }
-}
-
-// -- Helpers ------------------------------------------------------------------
-
-/// Build a map of all packages' items for cross-package type classification.
-/// The packages a file in `root` may spell by a leading path segment, keyed by
-/// that spelling: the package itself under its own name (a named package may
-/// qualify its own items — `baml.Array` inside the `baml` package), and each
-/// dependency under the name `root`'s edge gives it. Nothing else resolves,
-/// whatever the database holds.
-fn reachable_package_items(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-) -> FxHashMap<Name, &baml_compiler2_hir::package::PackageItems<'_>> {
-    // The HIR (pre-expansion) view: expansion is what PRODUCES this crate's
-    // `package_items`, so reading that here would be a query cycle.
-    let mut result = FxHashMap::default();
-    if let Some(self_name) = root.self_name(db) {
-        result.insert(
-            self_name,
-            baml_compiler2_hir::package::package_items(db, root),
-        );
-    }
-    for dependency in root.dependencies(db) {
-        result
-            .entry(dependency.name.clone())
-            .or_insert_with(|| baml_compiler2_hir::package::package_items(db, dependency.root));
-    }
-    result
-}
-
-fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
-    ast::RawAttribute {
-        name: SmolStr::new(name),
-        args: Vec::new(),
-        span: TextRange::default(),
-    }
-}
-
-// -- Salsa queries ------------------------------------------------------------
-
-/// Compute synthetic `*$stream` AST items for a single file in one pass.
-#[salsa::tracked]
-pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems<'_> {
-    // Reuse the memoized CST → AST lowering instead of re-lowering here.
-    let items = &baml_compiler2_hir::file_ast(db, file).items;
-
-    // Get HIR classification for the file's package (original types only)
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
-
-    // The packages this file's package may spell, for foreign type references.
-    let all_package_items = reachable_package_items(db, pkg_info.root);
-
-    // Get @@ block attributes and alias bodies. Memoized once per package
-    // world so this per-file query doesn't re-scan (and re-lower) every file
-    // on every file — which made expansion O(files²).
-    let expansion_maps = expansion_maps_within(db, pkg_info.root);
-    let block_attrs = &expansion_maps.block_attrs;
-    let alias_bodies = &expansion_maps.alias_bodies;
-
-    let mut synthetic_items = Vec::new();
-    let mut seen_class_names = FxHashSet::default();
-    let mut seen_alias_names = FxHashSet::default();
-
-    for item in items {
-        match item {
-            ast::Item::Class(c) => {
-                if c.name.ends_with("$stream") {
-                    continue;
-                }
-                if !seen_class_names.insert(c.name.clone()) {
-                    continue;
-                }
-
-                // Clone the original class and rename it
-                let mut stream_class = c.clone();
-                stream_class.name = SmolStr::new(format!("{}$stream", c.name));
-                // A $stream class does not *inherit* its base's methods — neither direct ones
-                // nor those an in-body `implements` block contributes (a method valid for the
-                // base need not be for its stream companion). A stream class participates in an
-                // interface only if the user *explicitly* implements it (`implement Foo for
-                // Bar$stream { ... }`, a separate out-of-body impl that is untouched here).
-                // Dropping the cloned in-body `implements` blocks also drops the interface
-                // obligations that would otherwise require those methods. Generic params are
-                // preserved so that field types referencing them (e.g. `v: T`) round-trip
-                // through as `Ty::TypeVar` instead of collapsing to `Ty::Error`.
-                stream_class.methods.clear();
-                stream_class.implements.clear();
-                // Use a dummy span so the synthetic class doesn't shadow the
-                // original in offset-based scope lookup (scope_at_offset
-                // iterates in reverse and would find this scope first if it
-                // shared the original class's span).
-                stream_class.span = TextRange::default();
-                stream_class.name_span = TextRange::default();
-
-                // Transform each field in-place
-                stream_class.fields.retain_mut(|field| {
-                    let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
-                    let ctx = ExpandCtx {
-                        namespace_path: &pkg_info.namespace_path,
-                        package_items,
-                        all_package_items: &all_package_items,
-                        block_attrs,
-                        alias_bodies,
-                    };
-                    let (stream_type, sap_attrs) = stream_expand(&ppir_ty, &ctx);
-
-                    // Build the new type expr from stream_expand result
-                    let mut type_expr = stream_type.to_type_expr();
-
-                    // Build type-level SAP attrs
-                    if sap_attrs.parse_without_null == TyAttrValue::Set {
-                        type_expr
-                            .attrs_mut()
-                            .push(make_raw_attr_no_args("sap.parse_without_null"));
-                    }
-                    if sap_attrs.pending_never == TyAttrValue::Set {
-                        type_expr
-                            .attrs_mut()
-                            .push(make_raw_attr_no_args("sap.pending_never"));
-                    }
-                    if sap_attrs.in_progress_never == TyAttrValue::Set {
-                        type_expr
-                            .attrs_mut()
-                            .push(make_raw_attr_no_args("sap.in_progress_never"));
-                    }
-
-                    // Preserve non-stream type attributes from the original outermost TypeExpr
-                    for attr in field.type_expr.attrs() {
-                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                            type_expr.attrs_mut().push(attr.clone());
-                        }
-                    }
-
-                    // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = ast::TypeExpr {
-                        span: field.type_expr.span,
-                        ..type_expr
-                    };
-
-                    // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
-                    field.attributes.retain(|a| !a.name.starts_with("stream."));
-
-                    true
-                });
-
-                // Transform class-level attributes: strip stream.*, add sap.* equivalents
-                let has_stream_done = stream_class
-                    .attributes
-                    .iter()
-                    .any(|a| a.name == "stream.done");
-                stream_class
-                    .attributes
-                    .retain(|a| !a.name.starts_with("stream."));
-                if has_stream_done {
-                    stream_class
-                        .attributes
-                        .push(make_raw_attr_no_args("sap.in_progress_never"));
-                }
-
-                synthetic_items.push(ast::Item::Class(stream_class));
-            }
-            ast::Item::TypeAlias(a) => {
-                if a.name.ends_with("$stream") {
-                    continue;
-                }
-                if !seen_alias_names.insert(a.name.clone()) {
-                    continue;
-                }
-
-                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
-                    PpirTy::CannotBeStreamed {
-                        origin: ty::CannotBeStreamedOrigin::Unknown,
-                        attrs: PpirTypeAttrs::default(),
-                    },
-                );
-
-                let ctx = ExpandCtx {
-                    namespace_path: &pkg_info.namespace_path,
-                    package_items,
-                    all_package_items: &all_package_items,
-                    block_attrs,
-                    alias_bodies,
-                };
-                let expanded_body = expand_partial(&ty, &ctx);
-
-                // Clone original alias and modify
-                let mut stream_alias = a.clone();
-                stream_alias.name = SmolStr::new(format!("{}$stream", a.name));
-                // Use dummy spans to avoid shadowing the original in scope_at_offset.
-                stream_alias.span = TextRange::default();
-                stream_alias.name_span = TextRange::default();
-
-                let mut new_type_expr = expanded_body.to_type_expr();
-
-                // Preserve non-stream type attributes from original alias body
-                if let Some(orig_spanned) = &a.type_expr {
-                    for attr in orig_spanned.attrs() {
-                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                            new_type_expr.attrs_mut().push(attr.clone());
-                        }
-                    }
-                }
-
-                stream_alias.type_expr = Some(ast::TypeExpr {
-                    span: a
-                        .type_expr
-                        .as_ref()
-                        .map_or(TextRange::default(), |s| s.span),
-                    ..new_type_expr
-                });
-
-                synthetic_items.push(ast::Item::TypeAlias(stream_alias));
-            }
-            _ => {}
-        }
-    }
-
-    PpirExpansionItems::new(db, synthetic_items)
-}
-
-// -- Canonical queries (original + *$stream) ----------------------------------
-
-/// Canonical semantic index: original AST items + PPIR synthetic *$stream items.
-///
-/// When a file has no synthetic `*$stream` items, the post-expansion index is
-/// byte-for-byte the pre-expansion one (same AST items from `file_ast`, same
-/// builder, same file range), so this delegates to HIR's already-computed index
-/// instead of rebuilding scopes/bindings/contributions a second time.
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> &FileSemanticIndex<'_> {
-    let expansion = ppir_expansion_items(db, file);
-    if expansion.items(db).is_empty() {
-        return baml_compiler2_hir::file_semantic_index(db, file);
-    }
-    file_semantic_index_expanded(db, file)
+    baml_compiler2_hir::file_semantic_index(db, file)
 }
 
-/// The merged (original + `*$stream`) index for files that actually have
-/// synthetic items. Callers must go through [`file_semantic_index`].
-#[salsa::tracked(returns(ref), no_eq)]
-fn file_semantic_index_expanded(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-    let file_range = tree.text_range();
-    // Reuse the memoized CST → AST lowering instead of re-lowering here.
-    let ast_result = baml_compiler2_hir::file_ast(db, file);
-    let mut items = ast_result.items.clone();
-    // Synthetic `*$stream` items are appended, so the original items stay a
-    // prefix of the merged index.
-    items.extend(ppir_expansion_items(db, file).items(db).iter().cloned());
-
-    // Re-run HIR builder on merged items
-    baml_compiler2_hir::SemanticIndexBuilder::new(db, file)
-        .with_lowering_diagnostics(ast_result.diagnostics.clone())
-        .with_env_var_refs(ast_result.env_var_refs.clone())
-        .build(&items, file_range)
-}
-
-/// Canonical symbol contributions (original + *$stream types).
+/// Symbol contributions for a file.
 pub fn file_symbol_contributions(
     db: &dyn Db,
     file: SourceFile,
@@ -455,7 +40,7 @@ pub fn file_symbol_contributions(
     Arc::clone(&index.symbol_contributions)
 }
 
-/// Canonical item tree (original + *$stream types).
+/// The file's item tree.
 ///
 /// `pub(crate)`: the raw `ItemTree` is the substrate the `item_data` firewall
 /// queries are built on. Consumers use the enumeration
@@ -467,7 +52,7 @@ pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     Arc::clone(&index.item_tree)
 }
 
-/// Canonical item-tree source map (original + *$stream types).
+/// The file's item-tree source map.
 ///
 /// `pub(crate)`: spans are served by the per-item `*_source_map` firewall
 /// queries in `item_data`.
@@ -476,10 +61,7 @@ pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<It
     Arc::clone(&index.item_tree_source_map)
 }
 
-/// Canonical function body — uses PPIR's item tree (includes synthetic companions).
-///
-/// TIR should call this instead of `baml_compiler2_hir::body::function_body`
-/// so that PPIR-synthesized functions (like `@stream`) are found.
+/// A function's body.
 ///
 /// Salsa-tracked (mirroring HIR's `function_body`): MIR lowering fetches the
 /// callee's body at every direct-call site, and the untracked version cloned
@@ -507,7 +89,7 @@ pub fn function_body<'db>(
     Arc::new(body)
 }
 
-/// Canonical function body source map — uses PPIR's item tree.
+/// A function's body source map.
 pub fn function_body_source_map<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -522,10 +104,7 @@ pub fn function_body_source_map<'db>(
     }
 }
 
-/// Canonical body for any body owner (rust-analyzer's `DefWithBodyId`
-/// pattern). Functions go through PPIR's item tree so synthetic companions
-/// are found; PPIR never synthesizes lets, so HIR's `let_body` is canonical
-/// for them.
+/// The body of any body owner (rust-analyzer's `DefWithBodyId` pattern).
 pub fn body<'db>(
     db: &'db dyn Db,
     owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
@@ -542,7 +121,7 @@ pub fn body<'db>(
     }
 }
 
-/// Canonical body source map for any body owner (spans only).
+/// The body source map of any body owner (spans only).
 pub fn body_source_map<'db>(
     db: &'db dyn Db,
     owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
@@ -577,8 +156,8 @@ pub fn body_scope<'db>(
     }
 }
 
-/// Every body owner in `file`: functions (methods and synthetic companions
-/// included), then top-level lets, each group in source order.
+/// Every body owner in `file`: functions (methods included), then top-level
+/// lets, each group in source order.
 pub fn file_body_owners(
     db: &dyn Db,
     file: baml_base::SourceFile,
@@ -594,10 +173,10 @@ pub fn file_body_owners(
     functions.chain(lets).collect()
 }
 
-/// Canonical per-body type references for a function (rust-analyzer's
+/// Per-body type references for a function (rust-analyzer's
 /// bodies-own-their-type-refs shape): every type expression written inside
-/// the body, lowered once into a span-free store. Salsa-tracked over PPIR's
-/// canonical body, so downstream type queries depend on structure only.
+/// the body, lowered once into a span-free store. Salsa-tracked, so
+/// downstream type queries depend on structure only.
 #[salsa::tracked]
 pub fn function_body_type_refs<'db>(
     db: &'db dyn Db,
@@ -686,7 +265,7 @@ pub fn parameter_defaults_type_refs<'db>(
     Arc::new(baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0)
 }
 
-/// Canonical function signature — uses PPIR's item tree.
+/// A function's signature.
 pub fn function_signature<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -721,7 +300,7 @@ pub fn function_signature<'db>(
     })
 }
 
-/// Canonical elaborated callable signature — uses PPIR's item tree.
+/// A function's elaborated callable signature.
 pub fn elaborated_function_signature<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -770,7 +349,7 @@ pub fn elaborated_function_signature<'db>(
     )
 }
 
-/// Canonical function parameter defaults — uses PPIR's item tree.
+/// A function's parameter defaults.
 pub fn function_parameter_defaults<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -789,7 +368,7 @@ pub fn function_parameter_defaults<'db>(
     })
 }
 
-/// Canonical function signature source map — uses PPIR's item tree.
+/// A function's signature source map.
 pub fn function_signature_source_map<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -811,7 +390,7 @@ pub fn function_signature_source_map<'db>(
     }
 }
 
-/// Canonical elaborated callable signature source map — spans are unchanged by
+/// Elaborated callable signature source map — spans are unchanged by
 /// bounded signature elaboration, so this mirrors `function_signature_source_map`.
 pub fn elaborated_function_signature_source_map<'db>(
     db: &'db dyn Db,
@@ -820,7 +399,7 @@ pub fn elaborated_function_signature_source_map<'db>(
     function_signature_source_map(db, function)
 }
 
-/// Canonical namespace items (original + *$stream types).
+/// The items of one namespace.
 #[salsa::tracked(returns(ref))]
 pub fn namespace_items<'db>(
     db: &'db dyn Db,
@@ -848,7 +427,6 @@ pub fn namespace_items<'db>(
         .collect();
     matching_files.sort_by_key(|a| a.path(db));
 
-    // Uses PPIR's file_symbol_contributions (canonical, includes *$stream types).
     let mut type_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
     let mut value_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
 
@@ -912,7 +490,7 @@ pub fn namespace_items<'db>(
     }
 }
 
-/// Canonical package items (original + *$stream types).
+/// The items of one package.
 #[salsa::tracked(returns(ref))]
 pub fn package_items<'db>(db: &'db dyn Db, root: baml_base::SourceRoot) -> PackageItems<'db> {
     // Consumers observe the insertion order of `namespaces`, so namespace

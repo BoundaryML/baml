@@ -1227,8 +1227,7 @@ fn expanded_type_value_nominals(
     // The type's heads reach every declaration it depends on, and each runtime
     // declaration's `owner` reaches the package that declared it — so the set
     // to render is a walk, not a table. A package contributes its whole surface
-    // (a `Package.compile` result renders as the source it was compiled from),
-    // minus the `$stream` companions, which are synthesized rather than written.
+    // (a `Package.compile` result renders as the source it was compiled from).
     let (mut class_ptrs, mut enum_ptrs) = crate::reachable::all_nominals(vm, &type_value.ty);
     let owners = class_ptrs
         .iter()
@@ -1250,12 +1249,7 @@ fn expanded_type_value_nominals(
                 enum_ptrs.push(ptr);
             }
         }
-        for ptr in package.classes.values().copied().filter(|ptr| {
-            !matches!(
-                vm.get_object(*ptr),
-                Object::Class(class) if class.name.item_name().as_str().ends_with("$stream")
-            )
-        }) {
+        for ptr in package.classes.values().copied() {
             if !class_ptrs.contains(&ptr) {
                 class_ptrs.push(ptr);
             }

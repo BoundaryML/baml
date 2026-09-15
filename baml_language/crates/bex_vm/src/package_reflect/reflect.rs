@@ -1300,9 +1300,6 @@ impl BamlClassPackage for PackageReflectImpl {
             return None;
         };
         let local = local_name(name.as_str())?;
-        if local.name.as_str().ends_with("$stream") {
-            return None;
-        }
         let class_ptr = package.classes.get(&local).copied()?;
         let runtime_type = stored_package_type(package, &local);
         Some(package_class_type(vm, runtime_type, class_ptr))
@@ -1482,7 +1479,6 @@ impl BamlClassPackage for PackageReflectImpl {
         let entries = package
             .classes
             .iter()
-            .filter(|(name, _)| !name.name.as_str().ends_with("$stream"))
             .map(|(name, &class)| (name.clone(), class, stored_package_type(package, name)))
             .collect::<Vec<_>>();
         entries
