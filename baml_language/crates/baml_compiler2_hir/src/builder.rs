@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 /// Known type-level attribute names (not field attrs, which are
-/// `disambiguate::FIELD_ATTR_NAMES`'s business). Public so completion can
+/// `baml_compiler2_ast::FIELD_ATTR_NAMES`'s business). Public so completion can
 /// enumerate exactly what this validation accepts.
 pub const KNOWN_TYPE_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
 
@@ -1735,6 +1735,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for field in &class.fields {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
+                    self.validate_stream_attributes(&field.attributes, is_builtin_file);
                     self.validate_internal_attributes(
                         &field.attributes,
                         is_builtin_file,
@@ -2125,6 +2126,27 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         Self::collect_unknown_type_attrs(type_expr, &mut self.diagnostics);
+    }
+
+    /// Reject a `@stream.*` field attribute outside [`KNOWN_TYPE_ATTRS`]. Other
+    /// unknown names pass through as user schema annotations.
+    fn validate_stream_attributes(
+        &mut self,
+        attributes: &[ast::RawAttribute],
+        is_builtin_file: bool,
+    ) {
+        if is_builtin_file {
+            return;
+        }
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if name.starts_with("stream.") && !KNOWN_TYPE_ATTRS.contains(&name) {
+                self.diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
+                    attr_name: attr.name.clone(),
+                    span: attr.span,
+                });
+            }
+        }
     }
 
     fn collect_unknown_type_attrs(

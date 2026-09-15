@@ -2866,6 +2866,16 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse the `@attr`s trailing a field, enum variant, or config item.
+    ///
+    /// Attributes attach to declarations, never to types: a type parse stops
+    /// at `@` and leaves the attributes to the declaration that owns them.
+    fn parse_trailing_attributes(&mut self) {
+        while self.at(TokenKind::At) {
+            self.parse_at_attribute();
+        }
+    }
+
     /// Parse an `@@attr`, such as `@@stream.done`.
     pub(crate) fn parse_atat_attribute(&mut self) {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
@@ -3001,14 +3011,6 @@ impl<'a> Parser<'a> {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
                     p.parse_type_primary(consume_union);
-                } else if p.at(TokenKind::At) {
-                    // All attributes (both type and field) are consumed inside TYPE_EXPR.
-                    // Disambiguation happens during lowering, which has the structural
-                    // context to classify field vs type attributes.
-                    if p.peek(1).is_none() {
-                        break;
-                    }
-                    p.parse_at_attribute();
                 } else {
                     break;
                 }
@@ -3449,10 +3451,8 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Optional field attributes (@alias, etc.)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_at_attribute();
-            }
+            // Optional variant attributes (@alias, etc.)
+            p.parse_trailing_attributes();
         });
     }
 
@@ -4139,6 +4139,7 @@ impl<'a> Parser<'a> {
                     p.error(format!("field '{name}' is missing a type annotation"), span);
                 }
             }
+            p.parse_trailing_attributes();
         });
     }
 
@@ -7951,10 +7952,8 @@ impl<'a> Parser<'a> {
                 p.parse_config_value();
             }
 
-            // Optional field attributes after config value (e.g., args { ... } @some_attr(...))
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_at_attribute();
-            }
+            // Optional attributes after config value (e.g., args { ... } @some_attr(...))
+            p.parse_trailing_attributes();
         });
     }
 
@@ -8337,11 +8336,6 @@ impl<'a> Parser<'a> {
             // Type definition. Runtime type atoms are accepted here too; the
             // declaration checker reports that they have no lexical scope.
             p.parse_type();
-
-            // Optional attributes (not including those taken by the type)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_at_attribute();
-            }
 
             // Optional semicolon
             p.eat(TokenKind::Semicolon);
@@ -9422,6 +9416,74 @@ interface Response {
             .collect();
 
         assert_eq!(attrs.len(), 1, "expected interface method block attribute");
+    }
+
+    #[test]
+    fn field_and_variant_attributes_are_declaration_children() {
+        let source = r#"
+class A {
+  a int @alias("x") @stream.done
+  b map<string, int>
+    @description("next line")
+  c string
+  d () -> int @alias("d")
+  e () -> int throws never @alias("e")
+}
+
+enum E {
+  X @alias("x") @skip
+  Y
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let attribute_counts = |kind| {
+            root.descendants()
+                .filter(|n| n.kind() == kind)
+                .map(|n| {
+                    n.children()
+                        .filter(|c| c.kind() == SyntaxKind::ATTRIBUTE)
+                        .count()
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(attribute_counts(SyntaxKind::FIELD), [2, 1, 0, 1, 1]);
+        assert_eq!(attribute_counts(SyntaxKind::ENUM_VARIANT), [2, 0]);
+    }
+
+    #[test]
+    fn attributes_in_type_positions_are_parse_errors() {
+        // Only a field or enum variant takes attributes, after its complete type.
+        // The parser does not recognize an attribute anywhere else, so such
+        // source must never parse cleanly or fold the attribute into the type.
+        for source in [
+            "class A {\n  a int @stream.done | string\n}\n",
+            "class A {\n  a () -> int @stream.done throws never\n}\n",
+            "class A {\n  a map<string, int @stream.done>\n}\n",
+            "type X = int @stream.done;\n",
+            "function f(a: int @stream.done) -> int {\n  a\n}\n",
+            "function f() -> int @stream.done {\n  1\n}\n",
+            "function f() -> int {\n  let x: int @stream.done = 1;\n  x\n}\n",
+            "function f(t: reflect.Type) -> int {\n  type T = unreflect(t) @alias(\"x\")\n  1\n}\n",
+            "function f(x: int | string) -> int {\n  match (x) {\n    int @stream.done => 1,\n    _ => 0,\n  }\n}\n",
+        ] {
+            let (root, errors) = parse_source(source);
+
+            assert!(
+                !errors.is_empty(),
+                "an attribute in a type position parsed without errors:\n{source}"
+            );
+            assert!(
+                root.descendants()
+                    .filter(|n| n.kind() == SyntaxKind::ATTRIBUTE)
+                    .all(|attr| attr
+                        .parent()
+                        .is_none_or(|parent| parent.kind() != SyntaxKind::TYPE_EXPR)),
+                "an attribute was parsed as part of a type in:\n{source}"
+            );
+        }
     }
 
     #[test]

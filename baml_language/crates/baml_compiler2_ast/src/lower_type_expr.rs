@@ -3,8 +3,7 @@
 //! Adapts the logic from `TypeRef::from_ast()` in `baml_compiler_hir/src/type_ref.rs`.
 //! The output is the same recursive structure but as `ast::TypeExpr` instead of `TypeRef`.
 //!
-//! Each `TypeExpr` variant carries `attrs: Vec<RawAttribute>` populated from
-//! ATTRIBUTE children of the corresponding CST `TYPE_EXPR` node.
+//! Source types carry no attributes (BEP-075), so every lowered node's `attrs` is empty.
 
 use baml_base::Name;
 use baml_compiler_syntax::{
@@ -16,122 +15,44 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        AssociatedTypeBinding, FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr,
-        TypeExprKind,
+        AssociatedTypeBinding, FunctionTypeParam as AstFunctionTypeParam, TypeExpr, TypeExprKind,
     },
-    lower_cst::lower_attribute,
     lowering_diagnostic::TypeExprOwner,
 };
-
-/// Collect ATTRIBUTE children from a CST `TypeExpr` node.
-fn collect_type_attrs(type_expr: &CstTypeExpr) -> Vec<RawAttribute> {
-    type_expr
-        .syntax()
-        .children()
-        .filter_map(baml_compiler_syntax::ast::Attribute::cast)
-        .filter_map(|attr| lower_attribute(&attr))
-        .collect()
-}
 
 /// Convert a CST `TypeExpr` node to our `ast::TypeExpr` recursive enum.
 ///
 /// Called by `lower_cst.rs` for field/alias/param/return-type positions.
-/// Hoists trailing union attrs at the outermost level.
 pub(crate) fn lower_type_expr_node(
     type_expr: &CstTypeExpr,
     diags: &mut Vec<LoweringDiagnostic>,
     owner: TypeExprOwner,
 ) -> TypeExpr {
-    lower_type_expr_inner(type_expr, true, diags, owner)
-}
-
-/// Inner recursive lowering. `hoist_trailing` controls whether trailing attrs
-/// after the last PIPE in a union are moved to the Union node (true only at
-/// the outermost level).
-fn lower_type_expr_inner(
-    type_expr: &CstTypeExpr,
-    hoist_trailing: bool,
-    diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
-) -> TypeExpr {
-    // For unions, use the specialized path that distributes attrs per-member
     if type_expr.is_union() {
-        return lower_union_with_attrs(type_expr, hoist_trailing, diags, owner);
+        return lower_union(type_expr, diags, owner);
     }
 
-    let attrs = collect_type_attrs(type_expr);
     let base = lower_base(type_expr, diags, owner);
-    let mut result = apply_modifiers(base, &type_expr.postfix_modifiers());
-    *result.attrs_mut() = attrs;
-    result
+    apply_modifiers(base, &type_expr.postfix_modifiers())
 }
 
-/// Lower a union `TYPE_EXPR`, distributing attrs to the correct members
-/// based on positional ordering of CST children.
-///
-/// `hoist_trailing` is `true` when lowering a class field definition, so that
-/// when parsing `field: string | int @foo`, the `@foo` is hoisted to the union;
-/// but in recursive calls, it is false, so `(string | int @foo | float)` sees `@foo`
-/// applied to the `int` variant of the union.
-fn lower_union_with_attrs(
+/// Lower a union `TYPE_EXPR` member by member.
+fn lower_union(
     type_expr: &CstTypeExpr,
-    hoist_trailing: bool,
     diags: &mut Vec<LoweringDiagnostic>,
     owner: TypeExprOwner,
 ) -> TypeExpr {
-    let member_parts = type_expr.union_member_parts();
-
-    // Lower each member — this puts per-member attrs on each variant
-    let mut variants: Vec<TypeExpr> = member_parts
+    let variants: Vec<TypeExpr> = type_expr
+        .union_member_parts()
         .iter()
         .map(|m| lower_union_member(m, diags, owner))
         .collect();
-
-    let mut union_attrs = Vec::new();
-
-    if hoist_trailing {
-        // Identify "trailing" attrs: ATTRIBUTE nodes that appear after the
-        // last PIPE in the CST. These were grouped into the last member by
-        // `union_member_parts()`, but they should go on the outer Union.
-        //
-        // Walk CST children to find the position of the last PIPE, then collect
-        // ATTRIBUTE spans that come after it.
-        let mut trailing_attr_spans: Vec<text_size::TextRange> = Vec::new();
-
-        // First, count PIPEs to find the last one
-        let children: Vec<_> = type_expr.syntax().children_with_tokens().collect();
-        let last_pipe_idx = children.iter().rposition(
-            |c| matches!(c, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::PIPE),
-        );
-
-        if let Some(last_pipe_idx) = last_pipe_idx {
-            for child in &children[(last_pipe_idx + 1)..] {
-                if let rowan::NodeOrToken::Node(node) = child {
-                    if node.kind() == SyntaxKind::ATTRIBUTE {
-                        trailing_attr_spans.push(node.span_range());
-                    }
-                }
-            }
-        }
-
-        // Move trailing attrs from the last variant to the Union's attrs
-        if !trailing_attr_spans.is_empty() {
-            if let Some(last_variant) = variants.last_mut() {
-                let all_attrs = std::mem::take(last_variant.attrs_mut());
-                let (trailing, member): (Vec<_>, Vec<_>) = all_attrs
-                    .into_iter()
-                    .partition(|a| trailing_attr_spans.contains(&a.span));
-                *last_variant.attrs_mut() = member;
-                union_attrs = trailing;
-            }
-        }
-    }
 
     // Apply postfix modifiers (e.g., `(A | B)[]`)
     apply_modifiers(
         TypeExprKind::Union {
             variants,
-            attrs: union_attrs,
+            attrs: vec![],
         }
         .at(type_expr.syntax().span_range()),
         &type_expr.postfix_modifiers(),
@@ -168,7 +89,7 @@ fn apply_modifiers(
 }
 
 /// Extract the base type (function types, parens, terminals).
-/// No modifier or attr handling. Unions are handled by `lower_union_with_attrs`.
+/// No modifier handling. Unions are handled by `lower_union`.
 fn lower_base(
     type_expr: &CstTypeExpr,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -206,10 +127,8 @@ fn lower_base_terminal(
     // full member chain after `(base as I)` and fold it into nested projections here.
     if let Some((base, interface, member)) = type_expr.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_inner(&base, false, diags, owner)),
-            interface: Some(Box::new(lower_type_expr_inner(
-                &interface, false, diags, owner,
-            ))),
+            base: Box::new(lower_type_expr_node(&base, diags, owner)),
+            interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
             member: Name::new(member.text()),
             attrs: vec![],
         }
@@ -228,18 +147,18 @@ fn lower_base_terminal(
                 let optional = p.is_optional();
                 let ty = p
                     .ty()
-                    .map(|t| lower_type_expr_inner(&t, false, diags, owner))
+                    .map(|t| lower_type_expr_node(&t, diags, owner))
                     .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
-            .map(|t| lower_type_expr_inner(&t, false, diags, owner))
+            .map(|t| lower_type_expr_node(&t, diags, owner))
             .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
         let throws = type_expr
             .function_throws_type()
-            .map(|t| Box::new(lower_type_expr_inner(&t, false, diags, owner)));
+            .map(|t| Box::new(lower_type_expr_node(&t, diags, owner)));
         return TypeExprKind::Function {
             params,
             ret: Box::new(ret),
@@ -251,10 +170,7 @@ fn lower_base_terminal(
 
     // Handle parenthesized types like `(int | string)`
     if let Some(inner) = type_expr.inner_type_expr() {
-        // For parenthesized types, attrs go on the inner type via recursive lowering.
-        // If the outer node had attrs collected, we'd need to merge, but in practice
-        // the parser puts attrs at the outermost level.
-        return lower_type_expr_inner(&inner, false, diags, owner);
+        return lower_type_expr_node(&inner, diags, owner);
     }
 
     // Handle parenthesized unions: `(A | B)` where the union is inside parens
@@ -264,7 +180,7 @@ fn lower_base_terminal(
             let members: Vec<TypeExpr> = params
                 .iter()
                 .filter_map(FunctionTypeParam::ty)
-                .map(|t| lower_type_expr_inner(&t, false, diags, owner))
+                .map(|t| lower_type_expr_node(&t, diags, owner))
                 .collect();
             if !members.is_empty() {
                 return TypeExprKind::Union {
@@ -339,7 +255,7 @@ fn lower_base_type(
         // Named type (primitive or user-defined), preserving generic args
         let generic_args: Vec<TypeExpr> = args
             .iter()
-            .map(|arg| lower_type_expr_inner(arg, false, diags, owner))
+            .map(|arg| lower_type_expr_node(arg, diags, owner))
             .collect();
         return lower_from_type_name_with_generic_args(
             &name,
@@ -359,19 +275,11 @@ fn lower_union_member(
     diags: &mut Vec<LoweringDiagnostic>,
     owner: TypeExprOwner,
 ) -> TypeExpr {
-    // Collect attributes from the union member's CST subtree
-    let attrs: Vec<RawAttribute> = parts
-        .attributes()
-        .filter_map(|attr| lower_attribute(&attr))
-        .collect();
-
     let base = lower_union_member_base(parts, diags, owner);
-    let mut result = apply_modifiers(base, &parts.postfix_modifiers());
-    result.attrs_mut().extend(attrs);
-    result
+    apply_modifiers(base, &parts.postfix_modifiers())
 }
 
-/// Extract the base type from union member parts (no modifiers or attrs).
+/// Extract the base type from union member parts (no modifiers).
 fn lower_union_member_base(
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -391,10 +299,8 @@ fn lower_union_member_base(
     }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_inner(&base, false, diags, owner)),
-            interface: Some(Box::new(lower_type_expr_inner(
-                &interface, false, diags, owner,
-            ))),
+            base: Box::new(lower_type_expr_node(&base, diags, owner)),
+            interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
             member: Name::new(member.text()),
             attrs: vec![],
         }
@@ -403,7 +309,7 @@ fn lower_union_member_base(
 
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
     if let Some(type_expr) = parts.type_expr() {
-        return lower_type_expr_inner(&type_expr, false, diags, owner);
+        return lower_type_expr_node(&type_expr, diags, owner);
     }
 
     // Check for FUNCTION_TYPE_PARAM child (new parser structure for parenthesized types)
@@ -413,7 +319,7 @@ fn lower_union_member_base(
             .find(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
         {
             if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr) {
-                return lower_type_expr_inner(&type_expr, false, diags, owner);
+                return lower_type_expr_node(&type_expr, diags, owner);
             }
         }
     }
@@ -474,7 +380,7 @@ fn lower_union_member_base(
 
         let generic_args: Vec<TypeExpr> = type_arg_exprs
             .iter()
-            .map(|arg| lower_type_expr_inner(arg, false, diags, owner))
+            .map(|arg| lower_type_expr_node(arg, diags, owner))
             .collect();
 
         return match name.as_str() {
@@ -513,7 +419,7 @@ pub(crate) fn lower_associated_type_binding(
     let name = binding.name()?;
     let ty = binding
         .default_or_binding()
-        .map(|ty| lower_type_expr_inner(&ty, false, diags, owner))
+        .map(|ty| lower_type_expr_node(&ty, diags, owner))
         .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),

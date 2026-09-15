@@ -1400,14 +1400,6 @@ impl LoweringContext {
 
     /// Lower an associated binding written in this body, collecting its
     /// lowering diagnostics with the body's.
-    ///
-    /// This is the item-level helper, which lowers the binding's right-hand
-    /// side WITHOUT hoisting a union's trailing attributes to the union node.
-    /// The body used to keep its own copy that hoisted, justified only by the
-    /// `unreflect` carriers it had to allocate - and those no longer exist, so
-    /// a body-written `Iface<Item = A | B @attr>` now attaches `@attr` to `B`
-    /// exactly as the same text in a declaration always has: one road, one
-    /// answer.
     fn lower_body_associated_type_binding(
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
@@ -5615,26 +5607,6 @@ impl LoweringContext {
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
         {
             Some(type_expr) => {
-                // The parser folds attributes into the type expression for
-                // field declarations; a binding has no field to attach one
-                // to, so none may be written here.
-                for attr in type_expr
-                    .syntax()
-                    .descendants()
-                    .filter(|node| node.kind() == SyntaxKind::ATTRIBUTE)
-                {
-                    let attr_name = attr
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .find(|token| token.kind() == SyntaxKind::WORD)
-                        .map(|token| token.text().to_string())
-                        .unwrap_or_default();
-                    self.diags
-                        .push(LoweringDiagnostic::FieldAttributeInTypePosition {
-                            attr_name,
-                            span: attr.text_range(),
-                        });
-                }
                 match Self::whole_unreflect_marker(&type_expr) {
                     Some(marker) => {
                         TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker))

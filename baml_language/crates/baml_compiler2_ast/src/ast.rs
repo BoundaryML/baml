@@ -214,7 +214,8 @@ impl TypeExpr {
 }
 
 impl TypeExprKind {
-    /// Access the type-level attributes on this type expression.
+    /// Access the attributes on this type expression. Source types never carry
+    /// attributes (BEP-075); only compiler-synthesized types do.
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
             Self::Path { attrs, .. }
@@ -244,7 +245,7 @@ impl TypeExprKind {
         }
     }
 
-    /// Mutable access to the type-level attributes on this type expression.
+    /// Mutable access to the attributes on this type expression. See [`Self::attrs`].
     pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
         match self {
             Self::Path { attrs, .. }
