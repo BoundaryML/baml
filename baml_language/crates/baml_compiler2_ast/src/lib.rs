@@ -30,7 +30,7 @@ pub use lower_cst::{
     SHORTHAND_PROVIDERS, lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
     lower_session_file_with_path_and_test_owner,
 };
-pub use lower_expr_body::{EnvVarRef, synthesize_spec_stream_body};
+pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.

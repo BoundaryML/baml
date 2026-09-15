@@ -1142,20 +1142,18 @@ pub(crate) fn synthesize_spec_agent_run_body(
     (body, source_map)
 }
 
-/// Synthesize the `@stream` companion body (built at PPIR level, where the
-/// stream-expanded return type is known) — one-turn streaming over the
+/// Synthesize the `@stream` companion body — one-turn streaming over the
 /// function's own spec:
 ///
 /// ```baml
-/// ai.stream.from_spec<Out$stream, Out>(Fn@spec(p1, p2), client = client)
+/// ai.stream.from_spec<Out, Out>(Fn@spec(p1, p2), client = client)
 /// ```
 ///
-/// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
-/// stdlib reifies both types from its own frame via `reflect.Type.of`.
-/// `client` is the companion's injected `ai.StreamingClient? = null`
-/// override; `from_spec` falls back to the spec's default client when it
-/// is null.
-pub fn synthesize_spec_stream_body(
+/// `type_args` is the explicit `<TStream, TFinal>` pair, so the stdlib
+/// reifies both types from its own frame via `reflect.Type.of`. `client` is
+/// the companion's injected `ai.stream.StreamingClient? = null` override;
+/// `from_spec` falls back to the spec's default client when it is null.
+pub(crate) fn synthesize_spec_stream_body(
     function_name: &str,
     params: &[Param],
     generic_param_names: &[Name],

@@ -6365,9 +6365,9 @@ fn attach_function_metadata<'db>(
     //
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
-    // The stream return type is now carried by the synthesized `$stream` companion's
-    // own `return_type` (see ppir's `companion_stream_return_type`), so the old
-    // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+    // The stream return type is now carried by the `@stream` companion's own
+    // `return_type` (see `baml_compiler2_ast`'s `companions::llm_stream`), so the
+    // old emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format()` should be re-verified against canary's streaming.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
