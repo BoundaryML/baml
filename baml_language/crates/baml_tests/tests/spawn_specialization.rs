@@ -84,6 +84,46 @@ async fn captured_int_arithmetic_uses_generic_binop() {
 }
 
 #[tokio::test]
+async fn captured_bigint_arithmetic_uses_generic_binop() {
+    let output = baml_test!(
+        r#"
+        function main() -> bigint {
+            let value = 1n;
+            let f = spawn { value };
+            let _ = await f;
+            value + 1n
+        }
+        "#
+    );
+
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> bigint {
+        load_var ?1
+        make_cell
+        store_var ?1
+        load_const 1n
+        store_deref ?1
+        load_var value
+        make_closure .<lambda(main, 0)>, 1
+        load_const null
+        load_const null
+        load_type bigint
+        load_type never
+        spawn
+        store_var _4
+        load_var _4
+        await
+        pop 1
+        load_deref ?1
+        load_const 1n
+        bin_op +
+        return
+    }
+    ");
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(2.into())));
+}
+
+#[tokio::test]
 async fn spawned_closure_capture_marks_transitive_cells() {
     let output = baml_test!(
         r#"
