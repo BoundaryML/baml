@@ -1,0 +1,7 @@
+{
+  "name": "sustain-node-only-arm64-10000",
+  "mode": "sustain",
+  "rate_per_target": 10000,
+  "on_seconds": 4,
+  "off_seconds": 1
+}

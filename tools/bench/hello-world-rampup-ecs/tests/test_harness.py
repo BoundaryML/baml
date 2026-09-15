@@ -4,6 +4,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
+from scripts.local_binary_search import midpoint
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -20,6 +22,10 @@ analyze = module('analyze', 'scripts/analyze.py')
 
 
 class HarnessTest(unittest.TestCase):
+    def test_binary_search_midpoint_respects_resolution(self):
+        self.assertEqual(midpoint(5000, 10000, 100), 7500)
+        self.assertEqual(midpoint(5000, 7500, 100), 6200)
+
     def test_emf_bounded_batches_and_errors(self):
         lines = []
         c = load.Collector({'RunName': 'test', 'Variant': 'node-only', 'Architecture': 'arm64'}, lines.append)

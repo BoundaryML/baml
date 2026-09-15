@@ -105,6 +105,22 @@ python3 scripts/analyze.py --name hello-sustain-001 --aws-profile "$AWS_PROFILE"
 python3 scripts/verify.py --name hello-sustain-001 --minutes 15
 ```
 
+## Drive one public target from the local computer
+
+For a local Vegeta experiment, deploy exactly one workload cell with no AWS load task. `--local-load-cidr` must be the caller's current public IPv4 `/32`; the target uses bridge networking with fixed host ports 8080 and 9091, and the security group admits only that address. This mode deliberately changes the network path from the comparable in-VPC benchmark, so report it separately.
+
+```sh
+python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-local-node-10k-01 --images artifacts/rampup-001/images.json --profile profiles/sustain-node-only-arm64-10000.json --load-count 0 --target-cell node-only-arm64 --local-load-cidr "$(curl -fsS https://checkip.amazonaws.com)/32"
+```
+
+The stack outputs `TargetUrl`. Local Vegeta must bound request timeouts inside the one-second off-window; otherwise an overloaded attack is still draining when the next cycle begins. Preserve the binary result stream and use `vegeta report -type=json` so overload errors remain countable. At high concurrency, explicitly cap `-max-connections` below the local operating system's ephemeral-port capacity.
+
+Run a 30-second-per-candidate binary search with the local client after establishing one passing lower bound and one failing upper bound. `--verify-lower` prevents a search across an invalid bracket when the public network path behaves differently from the in-VPC path.
+
+```sh
+python3 scripts/local_binary_search.py --url http://TARGET_PUBLIC_IP:8080/ --lower 2000 --upper 5000 --resolution 100 --seconds 30 --connections 1000 --timeout-ms 800 --verify-lower --output artifacts/hello-local-node-10k-01/local-binary-search.jsonl
+```
+
 ## Cleanup
 
 Download status, analysis, verification, and task-event evidence before deletion. Log groups are retained for seven days and their names cannot be reused immediately.

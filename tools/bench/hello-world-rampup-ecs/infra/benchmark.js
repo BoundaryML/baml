@@ -90,11 +90,15 @@ class FoundationStack extends cdk.Stack {
 
 class BenchmarkStack extends cdk.Stack {
   constructor(scope, id, props) {
-    const { foundation, images, profile, appCount = 1, loadCount = 1, ...stackProps } = props;
+    const { foundation, images, profile, appCount = 1, loadCount = 1, targetCell, localLoadCidr, ...stackProps } = props;
     super(scope, id, stackProps);
     validateRun(id, images, profile);
     if (![0, 1].includes(appCount) || ![0, 1].includes(loadCount)) throw new Error('Counts must be 0 or 1');
+    if (targetCell && !cells().some(cell => cell.name === targetCell)) throw new Error(`Unknown target cell: ${targetCell}`);
+    if (localLoadCidr && !/^([0-9]{1,3}\.){3}[0-9]{1,3}\/32$/.test(localLoadCidr)) throw new Error('localLoadCidr must be an IPv4 /32');
+    if (localLoadCidr && (!targetCell || loadCount !== 0)) throw new Error('localLoadCidr requires one targetCell and loadCount=0');
     const run = id;
+    const selectedCells = targetCell ? cells().filter(cell => cell.name === targetCell) : cells();
     const vpc = foundation.vpc;
     const subnet = vpc.publicSubnets[0];
     const cluster = new ecs.CfnCluster(this, 'Cluster', { clusterName: run, clusterSettings: [{ name: 'containerInsights', value: 'enhanced' }] });
@@ -111,11 +115,11 @@ class BenchmarkStack extends cdk.Stack {
     const appSg = new ec2.SecurityGroup(this, 'AppSecurityGroup', { vpc, description: `${run} private workload tasks` });
     const loadSg = new ec2.SecurityGroup(this, 'LoadSecurityGroup', { vpc, description: `${run} load host` });
     for (const port of [8080, 9091]) appSg.addIngressRule(loadSg, ec2.Port.tcp(port));
+    if (localLoadCidr) for (const port of [8080, 9091]) hostSg.addIngressRule(ec2.Peer.ipv4(localLoadCidr), ec2.Port.tcp(port), 'Local benchmark client only');
     const namespace = new servicediscovery.PrivateDnsNamespace(this, 'Namespace', { name: `${run}.hello.internal`, vpc });
-    const amis = {
-      arm64: ssm.StringParameter.valueForTypedStringParameterV2(this, '/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id', ssm.ParameterValueType.AWS_EC2_IMAGE_ID),
-      x64: ssm.StringParameter.valueForTypedStringParameterV2(this, '/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id', ssm.ParameterValueType.AWS_EC2_IMAGE_ID),
-    };
+    const requiredArchitectures = new Set([...selectedCells.map(cell => cell.arch), ...(loadCount ? ['x64'] : [])]);
+    const amis = Object.fromEntries([...requiredArchitectures].map(arch => [arch,
+      ssm.StringParameter.valueForTypedStringParameterV2(this, `/aws/service/ecs/optimized-ami/amazon-linux-2023/${arch === 'arm64' ? 'arm64/recommended' : 'recommended'}/image_id`, ssm.ParameterValueType.AWS_EC2_IMAGE_ID)]));
     const makeInstance = (name, arch, load = false) => {
       const userData = ec2.UserData.forLinux();
       userData.addCommands('swapoff --all', 'systemctl mask swap.target', "cat >> /etc/ecs/ecs.config <<'EOF'", `ECS_CLUSTER=${run}`,
@@ -138,34 +142,40 @@ class BenchmarkStack extends cdk.Stack {
       taskDefinition: task.ref, desiredCount: load ? loadCount : appCount, launchType: 'EC2', schedulingStrategy: 'REPLICA',
       deploymentConfiguration: { minimumHealthyPercent: 0, maximumPercent: 100 },
       placementConstraints: [{ type: 'memberOf', expression: `attribute:bench.target == ${load ? 'load' : name}` }],
-      ...(!load ? { networkConfiguration: { awsvpcConfiguration: { subnets: [subnet.subnetId], securityGroups: [appSg.securityGroupId], assignPublicIp: 'DISABLED' } } } : {}) });
-    const loadInstance = makeInstance('load', 'x64', true);
-    for (const { variant, arch, name } of cells()) {
+      ...(!load && !localLoadCidr ? { networkConfiguration: { awsvpcConfiguration: { subnets: [subnet.subnetId], securityGroups: [appSg.securityGroupId], assignPublicIp: 'DISABLED' } } } : {}) });
+    const loadInstance = loadCount ? makeInstance('load', 'x64', true) : undefined;
+    for (const { variant, arch, name } of selectedCells) {
       const key = logical(name);
       const instance = makeInstance(name, arch);
       const discovery = new servicediscovery.CfnService(this, `${key}Discovery`, { name, namespaceId: namespace.namespaceId,
         dnsConfig: { dnsRecords: [{ type: 'A', ttl: 10 }], routingPolicy: 'MULTIVALUE' }, healthCheckCustomConfig: { failureThreshold: 1 } });
-      const task = new ecs.CfnTaskDefinition(this, `${key}Task`, { family: `${run}-${name}`, requiresCompatibilities: ['EC2'], networkMode: 'awsvpc',
+      const task = new ecs.CfnTaskDefinition(this, `${key}Task`, { family: `${run}-${name}`, requiresCompatibilities: ['EC2'], networkMode: localLoadCidr ? 'bridge' : 'awsvpc',
         cpu: '1024', memory: '1024', executionRoleArn: executionRole.roleArn,
         runtimePlatform: { operatingSystemFamily: 'LINUX', cpuArchitecture: matrix.architectures[arch].ecs },
         containerDefinitions: [{ name: 'app', image: images[name], essential: true, cpu: 1024, memory: 1024,
-          portMappings: [{ containerPort: 8080 }, { containerPort: 9091 }],
+          portMappings: [{ containerPort: 8080, ...(localLoadCidr ? { hostPort: 8080 } : {}) }, { containerPort: 9091, ...(localLoadCidr ? { hostPort: 9091 } : {}) }],
           environment: Object.entries({ BAML_PROFILE: '0', BAML_TELEMETRY_DISABLED: '1', BAML_LOG: 'off' }).map(([name, value]) => ({ name, value })),
           logConfiguration: logConfig(appLogs, name) }] });
-      const service = new ecs.CfnService(this, `${key}Service`, { ...makeServiceProps(task, name), serviceRegistries: [{ registryArn: discovery.attrArn }] });
+      const service = new ecs.CfnService(this, `${key}Service`, { ...makeServiceProps(task, name), ...(!localLoadCidr ? { serviceRegistries: [{ registryArn: discovery.attrArn }] } : {}) });
       service.addResourceDependency(instance);
-      const load = normalizeProfile(profile, { variant, arch, name });
-      const env = { RunName: run, Variant: variant, Architecture: arch, START_RATE_PER_TARGET: String(load.start),
-        RATE_STEP_PER_TARGET: String(load.increase), RATE_STEP_SECONDS: String(load.every), MAX_RATE_PER_TARGET: String(load.maximum),
-        ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
-      if (variant !== 'baml-only') env.PROCESS_METRICS_URL = `http://${name}.${run}.hello.internal:9091/metrics`;
-      const loadTask = new ecs.CfnTaskDefinition(this, `${key}LoadTask`, { family: `${run}-load-${name}`, requiresCompatibilities: ['EC2'], networkMode: 'bridge',
-        cpu: String(matrix.load_task_cpu), memory: String(matrix.load_task_memory_mib), executionRoleArn: executionRole.roleArn,
-        containerDefinitions: [{ name: 'load', image: images.load, essential: true, cpu: matrix.load_task_cpu, memory: matrix.load_task_memory_mib, stopTimeout: 30,
-          environment: Object.entries(env).map(([name, value]) => ({ name, value })), logConfiguration: logConfig(loadLogs, name) }] });
-      const loadService = new ecs.CfnService(this, `${key}LoadService`, makeServiceProps(loadTask, name, true));
-      loadService.addResourceDependency(loadInstance);
-      loadService.addResourceDependency(service);
+      if (loadCount) {
+        const load = normalizeProfile(profile, { variant, arch, name });
+        const env = { RunName: run, Variant: variant, Architecture: arch, START_RATE_PER_TARGET: String(load.start),
+          RATE_STEP_PER_TARGET: String(load.increase), RATE_STEP_SECONDS: String(load.every), MAX_RATE_PER_TARGET: String(load.maximum),
+          ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
+        if (variant !== 'baml-only') env.PROCESS_METRICS_URL = `http://${name}.${run}.hello.internal:9091/metrics`;
+        const loadTask = new ecs.CfnTaskDefinition(this, `${key}LoadTask`, { family: `${run}-load-${name}`, requiresCompatibilities: ['EC2'], networkMode: 'bridge',
+          cpu: String(matrix.load_task_cpu), memory: String(matrix.load_task_memory_mib), executionRoleArn: executionRole.roleArn,
+          containerDefinitions: [{ name: 'load', image: images.load, essential: true, cpu: matrix.load_task_cpu, memory: matrix.load_task_memory_mib, stopTimeout: 30,
+            environment: Object.entries(env).map(([name, value]) => ({ name, value })), logConfiguration: logConfig(loadLogs, name) }] });
+        const loadService = new ecs.CfnService(this, `${key}LoadService`, makeServiceProps(loadTask, name, true));
+        loadService.addResourceDependency(loadInstance);
+        loadService.addResourceDependency(service);
+      }
+      if (localLoadCidr) {
+        new cdk.CfnOutput(this, 'TargetPublicIp', { value: instance.attrPublicIp });
+        new cdk.CfnOutput(this, 'TargetUrl', { value: `http://${instance.attrPublicIp}:8080/` });
+      }
     }
     const taskEvents = new events.CfnRule(this, 'TaskEvents', { eventPattern: { source: ['aws.ecs'], 'detail-type': ['ECS Task State Change'], detail: { clusterArn: [cluster.attrArn] } },
       targets: [{ arn: eventLogs.logGroupArn, id: 'TaskEventLogs' }] });

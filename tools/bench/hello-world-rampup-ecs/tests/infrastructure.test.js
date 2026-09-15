@@ -85,3 +85,17 @@ test('comparison dashboard keeps twenty series and valid unique metric ids', () 
     assert.equal(new Set(metrics.map(m => m.at(-1).id)).size, metrics.length);
   }
 });
+test('local load mode exposes only one target to one client and creates no AWS load generator', () => {
+  const f = fixtures();
+  const r = resources(new BenchmarkStack(f.app, 'local-node', { ...f, images, profile: ramp, targetCell: 'node-only-arm64', loadCount: 0, localLoadCidr: '203.0.113.8/32' }));
+  const values = Object.values(r);
+  assert.equal(values.filter(v => v.Type === 'AWS::EC2::Instance').length, 1);
+  const tasks = values.filter(v => v.Type === 'AWS::ECS::TaskDefinition').map(v => v.Properties);
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].NetworkMode, 'bridge');
+  assert.equal(tasks[0].RuntimePlatform.CpuArchitecture, 'ARM64');
+  assert.deepEqual(tasks[0].ContainerDefinitions[0].PortMappings[0], { ContainerPort: 8080, HostPort: 8080 });
+  const ingress = values.flatMap(v => v.Properties?.SecurityGroupIngress || []);
+  assert.equal(ingress.filter(rule => rule.CidrIp === '203.0.113.8/32').length, 2);
+  assert.throws(() => new BenchmarkStack(f.app, 'bad-local', { ...f, images, profile: ramp, targetCell: 'node-only-arm64', localLoadCidr: '0.0.0.0/0' }));
+});

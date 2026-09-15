@@ -15,5 +15,6 @@ if (run) {
   const images = Object.fromEntries(Object.entries(manifest.images).map(([name, item]) => [name, item.image]));
   const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
   new BenchmarkStack(app, run, { env, foundation, images, profile,
-    appCount: Number(app.node.tryGetContext('appCount') ?? 1), loadCount: Number(app.node.tryGetContext('loadCount') ?? 1) });
+    appCount: Number(app.node.tryGetContext('appCount') ?? 1), loadCount: Number(app.node.tryGetContext('loadCount') ?? 1),
+    targetCell: app.node.tryGetContext('targetCell'), localLoadCidr: app.node.tryGetContext('localLoadCidr') });
 }

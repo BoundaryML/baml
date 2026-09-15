@@ -22,6 +22,10 @@ def main():
     up.add_argument('--profile', type=Path, required=True, help='Load profile JSON')
     up.add_argument('--app-count', type=int, choices=[0, 1], default=1)
     up.add_argument('--load-count', type=int, choices=[0, 1], default=1)
+    up.add_argument('--target-cell', choices=['python-only-arm64', 'python-only-x64', 'python-baml-arm64', 'python-baml-x64',
+                                              'node-only-arm64', 'node-only-x64', 'node-baml-arm64', 'node-baml-x64',
+                                              'baml-only-arm64', 'baml-only-x64'])
+    up.add_argument('--local-load-cidr', help='Expose a single target to this IPv4 /32; requires --target-cell and --load-count 0')
     status = sub.add_parser('status')
     status.add_argument('--name', required=True)
     a = p.parse_args()
@@ -35,10 +39,13 @@ def main():
         return json.loads(subprocess.check_output(aws + list(args) + ['--output', 'json']))
 
     if a.command == 'up':
+        if a.local_load_cidr and (not a.target_cell or a.load_count != 0 or not re.fullmatch(r'(?:[0-9]{1,3}\.){3}[0-9]{1,3}/32', a.local_load_cidr)):
+            p.error('--local-load-cidr requires a valid IPv4 /32, --target-cell, and --load-count 0')
         output = ROOT / 'artifacts' / a.name / 'outputs.json'
         output.parent.mkdir(parents=True, exist_ok=True)
         config = {'run': a.name, 'region': a.region, 'profile': json.loads(a.profile.read_text()),
-                  'images': json.loads(a.images.read_text()), 'app_count': a.app_count, 'load_count': a.load_count}
+                  'images': json.loads(a.images.read_text()), 'app_count': a.app_count, 'load_count': a.load_count,
+                  'target_cell': a.target_cell, 'local_load_cidr': a.local_load_cidr}
         config_path = output.parent / 'deployment-config.json'
         if config_path.exists():
             stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
@@ -50,7 +57,9 @@ def main():
         subprocess.run(['npx', 'cdk', 'deploy', a.name, '--require-approval', 'never',
             '--outputs-file', str(output), '--output', str(output.parent / 'cdk.out'), '-c', f'run={a.name}',
             '-c', f'images={a.images.resolve()}', '-c', f'profile={a.profile.resolve()}',
-            '-c', f'appCount={a.app_count}', '-c', f'loadCount={a.load_count}'], cwd=ROOT, env=env, check=True)
+            '-c', f'appCount={a.app_count}', '-c', f'loadCount={a.load_count}',
+            *(['-c', f'targetCell={a.target_cell}'] if a.target_cell else []),
+            *(['-c', f'localLoadCidr={a.local_load_cidr}'] if a.local_load_cidr else [])], cwd=ROOT, env=env, check=True)
         print(f'Run {a.name}: CloudWatch dashboard {a.name}. Inspect status and task-events before calling this a pass.')
     else:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
