@@ -19,7 +19,10 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
-use crate::vec_ext::{CopyVecExt, VecExt};
+use crate::{
+    telemetry::{ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryState},
+    vec_ext::{CopyVecExt, VecExt},
+};
 
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
 /// vec the VM frame consumes. Each `(name, ty)` is placed at the index of the
@@ -209,6 +212,8 @@ pub struct BytecodeFrame {
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
     /// source location capture.
     pub(crate) faulting_pc: usize,
+    /// Producer-only invocation state. `None` means the invocation is hidden.
+    pub(crate) telemetry: Option<FrameTelemetry>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -353,6 +358,7 @@ pub(crate) mod tests {
     use crate::{
         indexable::EvalStack,
         package_baml::{NativeCallResult, NativeFunction},
+        telemetry::TelemetryState,
     };
 
     fn early_yield_for_test() -> EarlyYieldCheck {
@@ -390,6 +396,8 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            telemetry: TelemetryState::new_root(),
+            pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
         }
@@ -410,6 +418,7 @@ pub(crate) mod tests {
             real_local_count: 0,
             bytecode: Bytecode::default(),
             kind: FunctionKind::Native(native as *const ()),
+            telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -1112,6 +1121,13 @@ pub struct BexVm {
     /// Engine-local logical thread identity for structured logs.
     pub thread_id: u64,
 
+    /// VM-owned producer state. It deliberately has no transport or buffer.
+    telemetry: TelemetryState,
+
+    /// Semantic wait currently handed to the engine. The frame index is kept
+    /// so resumption updates exactly one invocation in O(1).
+    pending_telemetry_wait: Option<(usize, ClockInstant)>,
+
     /// BEP-042 cause chain across a transparent re-raise: the `cause` context
     /// computed at each error value's original (fresh) throw site, keyed by the
     /// thrown value. A later *rethrow* of the same value (a non-throwing
@@ -1228,7 +1244,10 @@ pub enum VmExecState {
     /// BEP-034 phase D′: this used to be `ScheduleFuture` and covered
     /// both sys-ops and spawns; sys-ops have moved to the dedicated
     /// single-yield `SysOp` variant below.
-    Spawn { future: HeapPtr },
+    Spawn {
+        future: HeapPtr,
+        telemetry: crate::telemetry::ThreadSpawnContext,
+    },
 
     /// BEP-034 phase D′: VM is invoking a sys-op and wants its return
     /// value pushed back on the stack.
@@ -1689,6 +1708,8 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            telemetry: TelemetryState::new_root(),
+            pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
         }
@@ -3416,6 +3437,7 @@ impl BexVm {
         // stack so a nested entry over live frames cannot wipe in-flight
         // throw state.
         if self.frames.is_empty() {
+            self.telemetry.start_thread();
             self.thrown_value_causes.clear();
             self.thrown_value_contexts.clear();
             self.preserved_throw_contexts.clear();
@@ -3468,6 +3490,27 @@ impl BexVm {
 
         match callable_kind {
             FunctionKind::Bytecode => {
+                // SAFETY: the active heap permit prevents collection here. A
+                // closure remains in the frame because capture opcodes need it,
+                // while producer identity uses its underlying function.
+                let (function_ref, function_identity) = match unsafe { dispatch_ptr.get() } {
+                    Object::Function(function) => (function.as_ref(), dispatch_ptr),
+                    Object::Closure(closure) => match unsafe { closure.function.get() } {
+                        Object::Function(function) => (function.as_ref(), closure.function),
+                        other => {
+                            unreachable!("closure entry must reference a function, got {other:?}")
+                        }
+                    },
+                    other => unreachable!("bytecode entry must be callable, got {other:?}"),
+                };
+                let frame_telemetry = self.telemetry.enter_bytecode(
+                    function_ref,
+                    function_identity,
+                    None,
+                    0,
+                    false,
+                    args,
+                );
                 self.pending_call_type_args.clone_from(&effective_type_args);
                 self.pending_call_type_values
                     .clone_from(&effective_type_values);
@@ -3486,6 +3529,7 @@ impl BexVm {
                     type_args: effective_type_args,
                     type_metadata,
                     faulting_pc: 0,
+                    telemetry: frame_telemetry,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -3616,6 +3660,7 @@ impl BexVm {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -3646,6 +3691,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
+            telemetry: None,
         }));
     }
 
@@ -3693,6 +3739,7 @@ impl BexVm {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -3720,6 +3767,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
+            telemetry: None,
         }));
     }
 
@@ -4685,6 +4733,7 @@ impl BexVm {
         thrown: VmThrown,
     ) -> Result<(), VmError> {
         let exception_value = thrown.value;
+        let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
         let is_rethrow = thrown.language_is_rethrow;
 
         // BEP-042 cause chain: identify the error currently being handled at
@@ -4854,12 +4903,14 @@ impl BexVm {
 
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
+                self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace: trace.to_vec(),
                 });
             }
 
+            self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
@@ -5314,7 +5365,9 @@ impl BexVm {
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
-            return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
+            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+            self.begin_telemetry_wait(*frame_idx);
+            return Ok(Some(state));
         }
 
         // Borrow wrapper type args until a frame or native call needs ownership.
@@ -5541,6 +5594,26 @@ impl BexVm {
                     closure_type_args
                 };
 
+                let actual_caller = self.frame_function_identity(*frame_idx);
+                let caller_is_observed = matches!(
+                    self.frames.get(*frame_idx),
+                    Some(Frame::Bytecode(BytecodeFrame {
+                        telemetry: Some(_),
+                        ..
+                    }))
+                );
+                let caller_pc = u32::try_from(call_site).unwrap_or(u32::MAX);
+                let args = &self.stack.0
+                    [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
+                let frame_telemetry = self.telemetry.enter_bytecode(
+                    callee,
+                    callee_fn_ptr,
+                    actual_caller,
+                    caller_pc,
+                    caller_is_observed,
+                    args,
+                );
+
                 // Construct after reserving capacity so the frame can be written
                 // directly into the vector instead of moved through a temporary.
                 self.frames.extend(std::iter::once_with(|| {
@@ -5551,6 +5624,7 @@ impl BexVm {
                         type_args: initial_type_args.to_vec(),
                         type_metadata: None,
                         faulting_pc: 0,
+                        telemetry: frame_telemetry,
                     })
                 }));
                 let new_len = self.stack.len() + callee.real_local_count;
@@ -5595,7 +5669,9 @@ impl BexVm {
                         && specialized_type_args.is_empty(),
                     "sysop dispatch received type args, which it cannot thread to the op",
                 );
-                return Ok(Some(self.dispatch_sysop_yield(callee_fn_ptr)?));
+                let state = self.dispatch_sysop_yield(callee_fn_ptr)?;
+                self.begin_telemetry_wait(*frame_idx);
+                return Ok(Some(state));
             }
 
             FunctionKind::NativeUnresolved => {
@@ -5867,12 +5943,131 @@ impl BexVm {
         }
     }
 
+    /// Resolve a frame's callable wrapper to the underlying function object
+    /// used as stable call-path identity.
+    fn frame_function_identity(&self, frame_idx: usize) -> Option<HeapPtr> {
+        let ptr = self.frames.get(frame_idx)?.function();
+        // SAFETY: the frame roots `ptr` and execution holds the heap permit.
+        match unsafe { ptr.get() } {
+            Object::Function(_) => Some(ptr),
+            Object::Closure(closure) => Some(closure.function),
+            Object::BoundMethod(method) => Some(method.function),
+            Object::GenericFunction(function) => self.generic_function_authored_ptr(function).ok(),
+            _ => None,
+        }
+    }
+
+    /// Complete producer state while the frame and its function identity are
+    /// still present. Taking the optional state makes completion idempotent on
+    /// error funnels that retain the root frame long enough to report a trace.
+    fn complete_bytecode_invocation(
+        &mut self,
+        frame_idx: usize,
+        outcome: InvocationOutcome,
+        value: Option<Value>,
+    ) {
+        let telemetry = match self.frames.get_mut(frame_idx) {
+            Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
+            _ => None,
+        };
+        let Some(telemetry) = telemetry else {
+            return;
+        };
+        // SAFETY: the frame remains rooted until after producer completion.
+        let function = unsafe { self.load_function(frame_idx) }
+            .expect("bytecode frame must retain its function through completion");
+        self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
+    }
+
+    #[allow(clippy::inline_always, reason = "measured producer return fast path")]
+    #[inline(always)]
+    fn complete_bytecode_invocation_with_function(
+        &mut self,
+        function: &Function,
+        telemetry: FrameTelemetry,
+        outcome: InvocationOutcome,
+        value: Option<Value>,
+    ) {
+        self.telemetry
+            .complete_invocation(telemetry, function, outcome, value);
+    }
+
+    fn telemetry_outcome_for_exception(&self, value: Value) -> InvocationOutcome {
+        let Some(ptr) = value.as_object_ptr() else {
+            return InvocationOutcome::Errored;
+        };
+        let Object::Instance(instance) = self.get_object(ptr) else {
+            return InvocationOutcome::Errored;
+        };
+        if self
+            .panic_class_ptrs
+            .get(PanicClass::Cancelled as usize)
+            .is_some_and(|class| *class == instance.class)
+        {
+            InvocationOutcome::Cancelled
+        } else if self
+            .panic_class_ptrs
+            .get(PanicClass::Exit as usize)
+            .is_some_and(|class| *class == instance.class)
+        {
+            InvocationOutcome::Exited
+        } else {
+            InvocationOutcome::Errored
+        }
+    }
+
+    #[allow(clippy::inline_always, reason = "semantic wait producer fast path")]
+    #[inline(always)]
+    fn begin_telemetry_wait(&mut self, frame_idx: usize) {
+        let observed = matches!(
+            self.frames.get(frame_idx),
+            Some(Frame::Bytecode(BytecodeFrame {
+                telemetry: Some(_),
+                ..
+            }))
+        );
+        if observed {
+            debug_assert!(self.pending_telemetry_wait.is_none());
+            self.pending_telemetry_wait = Some((frame_idx, ClockInstant::now()));
+        }
+    }
+
+    #[allow(clippy::inline_always, reason = "semantic wait producer fast path")]
+    #[inline(always)]
+    fn finish_telemetry_wait(&mut self) {
+        let Some((frame_idx, started_at)) = self.pending_telemetry_wait.take() else {
+            return;
+        };
+        let elapsed = started_at.elapsed_until(ClockInstant::now());
+        if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx)
+            && let Some(telemetry) = &mut frame.telemetry
+        {
+            telemetry.add_await(elapsed);
+        }
+    }
+
+    /// Finalize every still-open observed invocation and then the logical
+    /// thread. The engine calls this exactly once when it chooses a terminal
+    /// outcome (including cancellation races and explicit process exit).
+    pub fn finish_telemetry(&mut self, outcome: InvocationOutcome) {
+        self.finish_telemetry_wait();
+        for frame_idx in (0..self.frames.len()).rev() {
+            self.complete_bytecode_invocation(frame_idx, outcome, None);
+        }
+        self.telemetry.complete_thread(outcome);
+    }
+
+    pub fn configure_spawn_telemetry(&mut self, context: crate::telemetry::ThreadSpawnContext) {
+        self.telemetry.configure_spawn(context);
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        self.finish_telemetry_wait();
         // Keep GC polling progress across engine handoffs. Returning from
         // exec (for example, to spawn a child) does not necessarily release
         // the heap permit. The checker resets its own counter when it polls.
@@ -5923,6 +6118,7 @@ impl BexVm {
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
+        self.finish_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
             let trace = self.capture_user_stack_trace();
@@ -6916,7 +7112,9 @@ impl BexVm {
                         // rejects a non-sys-op global before draining and yields.
                         let callee_ptr =
                             self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
-                        return Ok(Some(self.dispatch_sysop_yield(callee_ptr)?));
+                        let state = self.dispatch_sysop_yield(callee_ptr)?;
+                        self.begin_telemetry_wait(*frame_idx);
+                        return Ok(Some(state));
                     }
 
                     // ── Spawn (BEP-034) ────────────────────────────────────────────
@@ -6976,8 +7174,19 @@ impl BexVm {
                             .tlab
                             .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
 
+                        let actual_caller = self.frame_function_identity(*frame_idx);
+                        let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
+                        let callee = match self.get_object(closure_ptr) {
+                            Object::Closure(closure) => closure.function,
+                            Object::Function(_) => closure_ptr,
+                            _ => closure_ptr,
+                        };
+                        let telemetry =
+                            self.telemetry
+                                .spawn_context(actual_caller, caller_pc, callee);
                         return Ok(Some(VmExecState::Spawn {
                             future: object_index,
+                            telemetry,
                         }));
                     }
 
@@ -7013,16 +7222,35 @@ impl BexVm {
                                         || VmInternalError::NotEnoughItemsOnStack(callee.arity),
                                     )?,
                                 );
-                                let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
-                                    verifier_unreachable!()
-                                };
-                                caller.instruction_ptr = *pc;
-                                caller.faulting_pc = self.cur_pc;
                                 if self.frames.len() >= MAX_FRAMES {
                                     return Err(VmError::thrown_fresh(
                                         self.panic_to_exception_value(VmPanic::StackOverflow),
                                     ));
                                 }
+                                let actual_caller = self.frame_function_identity(*frame_idx);
+                                let caller_is_observed = matches!(
+                                    self.frames.get(*frame_idx),
+                                    Some(Frame::Bytecode(BytecodeFrame {
+                                        telemetry: Some(_),
+                                        ..
+                                    }))
+                                );
+                                let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
+                                let args = &self.stack.0[locals_offset.raw()
+                                    ..locals_offset.raw().saturating_add(callee.arity)];
+                                let frame_telemetry = self.telemetry.enter_bytecode(
+                                    callee,
+                                    callee_ptr,
+                                    actual_caller,
+                                    caller_pc,
+                                    caller_is_observed,
+                                    args,
+                                );
+                                let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
+                                    verifier_unreachable!()
+                                };
+                                caller.instruction_ptr = *pc;
+                                caller.faulting_pc = self.cur_pc;
                                 self.frames.extend(std::iter::once_with(|| {
                                     Frame::Bytecode(BytecodeFrame {
                                         function: callee_ptr,
@@ -7031,6 +7259,7 @@ impl BexVm {
                                         type_args: Vec::new(),
                                         type_metadata: None,
                                         faulting_pc: 0,
+                                        telemetry: frame_telemetry,
                                     })
                                 }));
                                 if callee.real_local_count != 0 {
@@ -7348,7 +7577,9 @@ impl BexVm {
                                 .drain(StackIndex::from_raw(args_offset)..)
                                 .collect();
 
-                            return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
+                            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+                            self.begin_telemetry_wait(*frame_idx);
+                            return Ok(Some(state));
                         } else if let Object::BoundMethod(bm) = obj {
                             let func_obj = unsafe { bm.function.get() };
                             let full_arity = match func_obj {
@@ -7439,10 +7670,20 @@ impl BexVm {
                     OpCode::Return => {
                         let result = self.stack.get_at(self.stack.ensure_stack_top());
 
-                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
                             unreachable!()
                         };
                         let locals_offset = bf.locals_offset;
+                        let frame_telemetry = bf.telemetry.take();
+
+                        if let Some(frame_telemetry) = frame_telemetry {
+                            self.complete_bytecode_invocation_with_function(
+                                function,
+                                frame_telemetry,
+                                InvocationOutcome::Ok,
+                                Some(result),
+                            );
+                        }
 
                         // SAFETY: the compiler guarantees a result at or above the
                         // callee's locals base. That base is therefore an existing
@@ -7503,6 +7744,7 @@ impl BexVm {
                                     // saves a position that re-executes Await once the
                                     // future completes.
                                     *pc -= AWAIT_OPCODE_LEN;
+                                    self.begin_telemetry_wait(*frame_idx);
                                     return Ok(Some(VmExecState::Await(future_id)));
                                 }
                                 FutureRead::Ready(v) => v,
@@ -7531,6 +7773,7 @@ impl BexVm {
                                     // error from the FutureManager's `SetOnce` (the entry is
                                     // leaked by design for InternalError).
                                     *pc -= AWAIT_OPCODE_LEN;
+                                    self.begin_telemetry_wait(*frame_idx);
                                     return Ok(Some(VmExecState::Await(future_id)));
                                 }
                             }
@@ -7596,6 +7839,7 @@ impl BexVm {
                                 // does. Rewind pc so the opcode re-executes (with
                                 // the array still on the stack) once resumed.
                                 *pc -= AWAIT_ANY_OPCODE_LEN;
+                                self.begin_telemetry_wait(*frame_idx);
                                 return Ok(Some(VmExecState::AwaitAny(pending_ids)));
                             }
                         }
@@ -8951,6 +9195,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
+        self.telemetry.collect_roots(roots);
 
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
@@ -9056,6 +9301,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         for frame in &mut self.frames {
             frame.forward_roots(roots);
         }
+        self.telemetry.forward_roots(roots);
     }
 }
 

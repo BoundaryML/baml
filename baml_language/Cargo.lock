@@ -1427,6 +1427,7 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "btel_types",
  "chacha20poly1305",
  "console",
  "getrandom 0.2.17",
@@ -1436,6 +1437,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rand_xoshiro",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
  "sha2",
@@ -1460,6 +1462,7 @@ dependencies = [
  "bex_resource_types",
  "bex_str",
  "borsh",
+ "btel_types",
  "hex",
  "indexmap",
  "num-bigint",
@@ -1723,6 +1726,10 @@ dependencies = [
  "memchr",
  "serde",
 ]
+
+[[package]]
+name = "btel_types"
+version = "0.0.0-beta"
 
 [[package]]
 name = "bumpalo"

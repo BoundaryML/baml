@@ -1095,6 +1095,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
+            telemetry_policy_id: bex_vm_types::TelemetryPolicyId::default(),
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
