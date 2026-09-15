@@ -7,18 +7,34 @@ breadcrumbs:
   - label: Classify support tickets
 ---
 
+Create a [Canary project](/baml/get-started) first. This example uses OpenAI and requires an `OPENAI_API_KEY`.
+
 ## Source
+
+Put this code in `baml_src/main.baml`:
 
 <BamlSnippet id="examples/classify-support-tickets" />
 
 ## Call it
 
-```typescript
-import { b } from "./baml_client"
+From the project root:
 
-const category = await b.ClassifyMessage(
-  "I was charged twice for my order",
-)
+```sh
+export OPENAI_API_KEY="your-api-key"
+baml check
+baml run classify_message -- --input "I was charged twice for my order"
+```
+
+The expected category is `Refund`; model responses can vary.
+
+For Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then call the async export:
+
+```typescript
+import { classify_message_async } from "./baml_sdk/index.js"
+
+export async function classifyTicket(message: string) {
+  return await classify_message_async(message)
+}
 ```
 
 ## Why this shape

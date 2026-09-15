@@ -2,9 +2,9 @@ schemaVersion: 1
 id: typescript
 compatibility:
   - concern: Calls
-    behavior: Generated methods are asynchronous and return promises.
+    behavior: Node.js exports synchronous functions and promise-returning _async variants.
   - concern: Names
-    behavior: BAML function and type names remain visible in generated code.
+    behavior: The default preserve-case convention keeps BAML names. Async variants add _async.
   - concern: Regeneration
     behavior: Generated files are replaced; application edits belong elsewhere.
 types:
@@ -18,16 +18,16 @@ types:
     host: T[]
     notes: Element types remain explicit.
   - baml: T?
-    host: Nullable generated type
+    host: T | null
     notes: Do not use truthiness when zero or empty text is valid.
   - baml: class
-    host: Generated object type
+    host: Generated class
     notes: Fields preserve their declared names and types.
   - baml: enum
     host: Generated enum
     notes: Import the generated symbol instead of duplicating literals.
 transitions:
-  - Generated client calls return promises; await them before using the typed result.
+  - Await the _async variants before using their results. Synchronous variants block until completion.
   - Regenerate after changing a BAML function, class, enum, or generator configuration.
   - Treat partial streaming values separately from the final typed result.
 gotchas:
