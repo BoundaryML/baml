@@ -50,7 +50,7 @@ Target options:
           passed once. Mutually exclusive with `<TARGET>` and `--expression`.
 
   -e, --expression <EXPRESSION>
-          Evaluate a BAML expression.
+          Evaluate a BAML expression; not compatible with `--file`.
 
           Use `-e @file` to read an expression from a file or `-e -` for standard input. Mutually
           exclusive with `<TARGET>` and `--function`.
@@ -60,7 +60,7 @@ Target options:
 
 Project options:
       --file <PATH>
-          Load one standalone source file instead of discovering a project.
+          Load one standalone source file; not compatible with `--expression`.
 
           Runs its `main` function when no target is supplied. Mutually exclusive with `--project`.
 
