@@ -92,54 +92,49 @@ jobs:
             echo "Local time is $local_now, not the midnight hour; the other cron entry owns tonight."
           fi
 
-      - name: Check out the nightly selection script
+      - name: Check out the nightly selection tool
         if: ${{ steps.clock.outputs.proceed == 'true' }}
         uses: actions/checkout@v7.0.1
         with:
+          ref: canary
           path: nightly-dispatch-tools
-          sparse-checkout: scripts/baml_nightly_select.py
+          fetch-depth: 10
+          sparse-checkout: tools/baml_nightly_select.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Validate CI run freshness and select the newest green canary commit
-        id: select
+      - name: Query the 100 most recent workflow runs
+        id: recent-runs
         if: ${{ steps.clock.outputs.proceed == 'true' }}
+        continue-on-error: true
         run: |
           set -euo pipefail
-          runs="$RUNNER_TEMP/canary-ci-runs.json"
-          commits="$RUNNER_TEMP/canary-commits.json"
-          # Snapshot ancestry first so a push between requests cannot make the
-          # commits query demand a run newer than the runs query could see.
-          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" > "$commits"
-          echo "::group::100 most recent canary commits"
-          jq . "$commits"
-          echo "::endgroup::"
-          # Fetch only runs new enough to belong to this commit window. Broad
-          # `gh run list --limit 1000` queries have returned snapshots many days
-          # out of date and have timed out while fetching irrelevant old pages.
-          # See https://github.com/orgs/community/discussions/24626
-          # Fetch all states and filter for success locally. The Python selector
-          # below hard-fails if any commit older than 10 minutes lacks a run.
-          oldest_commit="$(jq -r '.[-1].commit.committer.date' "$commits")"
-          gh api --method GET \
-            "repos/$GH_REPO/actions/workflows/ci.yaml/runs" \
-            -f branch=canary \
-            -f event=push \
-            -f created=">=$oldest_commit" \
-            -f per_page=100 \
-            --paginate --slurp |
-            jq '[.[].workflow_runs[] |
-              {headSha: .head_sha, databaseId: .id, conclusion, createdAt: .created_at}]' \
-              > "$runs"
-          # Check age when the snapshot is complete; slow API requests must
-          # not extend the ten-minute visibility grace period.
+          python3 nightly-dispatch-tools/tools/baml_nightly_select.py fetch-recent \
+            --repo "$GH_REPO" \
+            --output "$RUNNER_TEMP/recent-workflow-runs.json"
+
+      - name: Query CI runs for the 10 most recent canary commits
+        id: commit-runs
+        if: ${{ always() && steps.clock.outputs.proceed == 'true' }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 nightly-dispatch-tools/tools/baml_nightly_select.py fetch-commits \
+            --repo "$GH_REPO" \
+            --checkout nightly-dispatch-tools \
+            --output "$RUNNER_TEMP/commit-workflow-runs.json"
+
+      - name: Select the newest green canary commit
+        id: select
+        if: ${{ always() && steps.clock.outputs.proceed == 'true' }}
+        run: |
+          set -euo pipefail
           observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "::group::Unfiltered canary push CI runs"
-          jq . "$runs"
-          echo "::endgroup::"
-          python3 nightly-dispatch-tools/scripts/baml_nightly_select.py \
-            --commits "$commits" --runs "$runs" \
-            --observed-at "$observed_at" --output "$GITHUB_OUTPUT"
+          python3 nightly-dispatch-tools/tools/baml_nightly_select.py select \
+            --recent "$RUNNER_TEMP/recent-workflow-runs.json" \
+            --commits "$RUNNER_TEMP/commit-workflow-runs.json" \
+            --observed-at "$observed_at" \
+            --output "$GITHUB_OUTPUT"
 
       - name: Decide whether canary moved since the last nightly
         id: decide
