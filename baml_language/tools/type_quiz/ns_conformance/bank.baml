@@ -813,16 +813,27 @@ function depth_report() -> string throws never {
                 })
                 .collect()
         });
-    let spread = [0, 1, 2, 3, 4].map((d) -> {
-        `${d}:${depths.filter((got) -> {
-            got == d
-        }).length()}`
-    });
+    // Every depth drawn, not a fixed window: a bucket list that stops short
+    // hides the deepest cases from the report whose whole subject is how deep
+    // the bank goes.
+    let deepest = depths.reduce(
+        (acc, got) -> {
+            acc.max(got)
+        },
+        0,
+    );
+    let spread = baml.iter.Range.new(0, deepest + 1)
+        .map((d) -> {
+            `${d}:${depths.filter((got) -> {
+                got == d
+            }).length()}`
+        })
+        .collect();
     `cases=${depths.length()} rules=${spread}`
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=312 rules=["0:0", "1:232", "2:48", "3:16", "4:8"]`)
+    assert.equal(depth_report(), `cases=312 rules=["0:0", "1:232", "2:48", "3:16", "4:8", "5:8"]`)
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────

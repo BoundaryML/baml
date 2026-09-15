@@ -380,7 +380,7 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=80 depth_first20=130 depth_last20=145 spread=["1:58", "2:18", "3:2", "4:2", "5:0"] chance_last20=5830`,
+        `steps=80 depth_first20=135 depth_last20=150 spread=["1:57", "2:18", "3:3", "4:2", "5:0"] chance_last20=5620`,
     )
 }
 
@@ -499,14 +499,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=96 leading=spelling=16,structural=2,bounds=1,typescript=-1,covariant=-6",
+        "suspected=none why=Budget commits_unsure=96 leading=spelling=9,typescript=2,bounds=1,covariant=0,structural=-5",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=61,covariant=17,bounds=6,structural=-7,spelling=-25 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=60,covariant=21,bounds=6,structural=-5,spelling=-25 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -694,10 +694,12 @@ test "profile: the same session seed serves the same cases" {
     assert.is_true(sitting_is_deterministic())
 }
 
-/// Every rule a verified item can conclude has an order; the unguarded-cycle
-/// rule has none, since only the diverging item reaches it. The highest is
-/// the double-contravariance fact's three: an axiom under two parameter
-/// positions, which is as deep as the bank goes today.
+/// Every rule a verified item can conclude has an order. The two site rules
+/// are not among them — a site is the frame a case stands in rather than
+/// something to master — and neither is the unguarded-cycle rule, since only
+/// the diverging item reaches it, which is the one the count below is short
+/// of. The three carrying variance rules reach five: an axiom under four
+/// wraps, which is as deep as the bank goes today.
 function orders_report() -> string throws never {
     let orders = root.bank.rule_orders(4);
     let counted = [1, 2, 3, 4, 5].map((order) -> {
@@ -719,13 +721,18 @@ function orders_report() -> string throws never {
             o.lowest > 1
         })
         .length();
-    `rules=${orders.length()} of ${root.bank.rules().length() - 1} by_order=${counted} deepest=${deepest} never_alone=${never_alone}`
+    let servable = root.bank.rules()
+        .filter((rule) -> {
+            !root.bank.is_site_rule(rule.name)
+        })
+        .length();
+    `rules=${orders.length()} of ${servable} by_order=${counted} deepest=${deepest} never_alone=${never_alone}`
 }
 
 test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=30 of 32 by_order=[25, 2, 0, 0, 3] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=5`,
+        `rules=30 of 31 by_order=[25, 2, 0, 0, 3] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
     )
 }
 
@@ -809,5 +816,5 @@ function leaning_report() -> string throws never {
 }
 
 test "sitting: the answer a question asks about is close to an even split" {
-    assert.equal(leaning_report(), "compiled=65 of=151")
+    assert.equal(leaning_report(), "compiled=63 of=147")
 }

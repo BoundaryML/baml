@@ -638,9 +638,6 @@ function times_in(rules: string[], rule: string) -> float throws never {
 
 /// The profile after `seen`. A pure function: the old profile is untouched.
 function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile throws never {
-    let before = profile.skills.map((skill) -> {
-        floor_of(profile, knobs, skill)
-    });
     let commit_rate = commits(profile, knobs);
     let q = knowing(profile, knobs, seen.rules, seen.traps.length());
     let chance = chances(q, knobs, commit_rate);

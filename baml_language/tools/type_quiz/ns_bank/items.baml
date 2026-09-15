@@ -376,7 +376,12 @@ class UnguardedCycleItem {
             } else {
                 ["E0068"]
             };
-            let prefix = source.slice(0, source.index_of(a) ?? 0);
+            // The alias's own name, which this source always spells: byte
+            // zero would be a region pointing at whatever happens to be
+            // first, and a wrong region reads as a compiler disagreement.
+            let at = source.index_of(a)
+                ?? throw baml.panics.Unreachable { message: `no \`${a}\` in the case it names` };
+            let prefix = source.slice(0, at);
             let start = prefix.to_utf8().length();
             let trace = [
                 root.engine.Claim {

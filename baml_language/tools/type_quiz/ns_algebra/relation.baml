@@ -147,8 +147,16 @@ function under(d: Derivation, model: Model) -> Knowledge throws never {
     last_state(trajectory(d, model))
 }
 
+/// Where a trajectory ends.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the trajectory is empty. Every trajectory
+///   starts from what the derivation already knows, so an empty one is a
+///   defect here rather than a pair nothing is known about — and standing an
+///   equivalence in for it would hand a caller a relation no step derived.
 function last_state(states: Knowledge[]) -> Knowledge throws never {
-    states.at(-1) ?? Relation.Equiv
+    states.at(-1) ?? throw baml.panics.Unreachable { message: "a trajectory with no states" }
 }
 
 /// How many times the trajectory turns a subtype into a supertype or back.
