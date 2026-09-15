@@ -1255,6 +1255,23 @@ impl MirFunctionId<'_> {
             }
         }
     }
+
+    /// This identity as a [`fmt::Display`] value that renders
+    /// [`Self::link_name`] when formatted, not when created.
+    pub fn display<'a>(&'a self, db: &'a dyn crate::Db) -> impl fmt::Display + 'a {
+        // Assertion messages format their arguments only when they fire, so
+        // a caller that never fails never pays for `definition_link_name`.
+        struct Lazy<'a, 'db> {
+            db: &'a dyn crate::Db,
+            id: &'a MirFunctionId<'db>,
+        }
+        impl fmt::Display for Lazy<'_, '_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.id.link_name(self.db))
+            }
+        }
+        Lazy { db, id: self }
+    }
 }
 
 impl<'db> FunctionOwner<'db> {

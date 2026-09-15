@@ -4989,7 +4989,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
-        optimize::optimize_function(&mut mir, self.opt);
+        optimize::optimize_function(self.db, &mut mir, self.opt);
 
         // Drain any lambda functions lowered during this function's body into the
         // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
@@ -5336,7 +5336,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(&mut lambda_mir, self.opt);
+        optimize::optimize_function(self.db, &mut lambda_mir, self.opt);
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
@@ -5909,7 +5909,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(&mut lambda_mir, self.opt);
+        optimize::optimize_function(self.db, &mut lambda_mir, self.opt);
         lambda_mir.lambdas = nested_lambdas;
 
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);

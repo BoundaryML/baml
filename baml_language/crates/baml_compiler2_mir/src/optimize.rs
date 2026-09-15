@@ -7,8 +7,8 @@
 //! 4. RPO block reordering
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt;
 
-#[cfg(debug_assertions)]
 use crate::{
     BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, Place, Terminator,
@@ -18,14 +18,21 @@ mod effects;
 mod values;
 
 /// Run all optimization passes on a MIR function.
-pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
+pub(crate) fn optimize_function(
+    db: &dyn crate::Db,
+    func: &mut MirFunction<'_>,
+    opt: crate::OptLevel,
+) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
     optimize_body(body, func.arity, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(body, &format!("{:?}", func.identity));
+    // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
+    // profile and the call folds away in release.
+    if cfg!(debug_assertions) {
+        verify_mir(body, &func.identity.display(db));
+    }
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
@@ -35,8 +42,9 @@ pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
 pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::OptLevel) {
     optimize_body(body, 0, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(body, "$init_let._");
+    if cfg!(debug_assertions) {
+        verify_mir(body, &"$init_let._");
+    }
 }
 
 fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
@@ -1640,10 +1648,10 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 
 /// Verify MIR structural invariants after optimization.
 ///
-/// Debug-only — catches invariant drift between lowering, optimization, and
-/// downstream consumers. Modeled after V1's `verifier.rs`.
-#[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody<'_>, name: &str) {
+/// Called only under debug assertions — catches invariant drift between
+/// lowering, optimization, and downstream consumers. Modeled after V1's
+/// `verifier.rs`. `name` is rendered only inside a failing assertion.
+fn verify_mir(body: &MirFunctionBody<'_>, name: &dyn fmt::Display) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 
