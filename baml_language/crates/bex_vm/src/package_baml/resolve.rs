@@ -335,7 +335,7 @@ impl<'vm> ImplResolver<'vm> {
         concrete_ty: &RealizedTy,
         iface_args: &[RealizedTy],
     ) -> Option<Vec<RealizedTy>> {
-        let type_args = self.rule_applies(rule, concrete_ty, &mut Vec::new())?;
+        let type_args = self.rule_applies(rule, concrete_ty, iface_args, &mut Vec::new())?;
         // Select on the interface's input args only (associated types are outputs).
         let rule_args: Vec<RealizedTy> = rule
             .interface_args
@@ -521,7 +521,7 @@ impl<'vm> ImplResolver<'vm> {
         // mutably inside the predicate, so the candidates are collected first.
         let candidates = self.rules_for(iface);
         let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(&rule, concrete_ty, stack)
+            self.rule_applies(&rule, concrete_ty, requested_args, stack)
                 .is_some_and(|bindings| {
                     self.interface_request_matches(
                         &rule,
@@ -535,12 +535,15 @@ impl<'vm> ImplResolver<'vm> {
         proven
     }
 
-    /// Match a rule's `for_ty_pattern` against `concrete_ty`, then discharge its
-    /// bounds. On success returns the bound generic args in de Bruijn order.
+    /// Match a rule's `for_ty_pattern` against `concrete_ty`, bind whatever
+    /// generics that leaves open from the request's interface args, then
+    /// discharge the rule's bounds. On success returns the bound generic args
+    /// in de Bruijn order.
     fn rule_applies(
         self,
         rule: &RuntimeImplRule,
         concrete_ty: &RealizedTy,
+        requested_args: &[RealizedTy],
         stack: &mut Vec<Obligation>,
     ) -> Option<Vec<RealizedTy>> {
         let base = concrete_base(concrete_ty);
@@ -549,8 +552,20 @@ impl<'vm> ImplResolver<'vm> {
         if !self.match_template(&rule.for_ty_pattern, concrete_ty, &mut bindings) {
             return None;
         }
-        // The for-type pattern must constrain every generic param — a param the
-        // pattern never mentions could not be inferred from the receiver.
+        // A generic the for-type pattern never mentions is bound from the
+        // interface arguments instead (`implements<T, E> Modifier<T, E> for
+        // Limit`): unify the rule's interface args with the requested ones,
+        // into the same bindings. A slot that stays open cannot be inferred
+        // from this request, so the rule does not apply. A fully constrained
+        // rule takes the identical path it always has: this unification only
+        // runs when the pattern left something open, and an empty request (a
+        // non-generic interface) has nothing to bind.
+        if bindings.iter().any(Option::is_none)
+            && !requested_args.is_empty()
+            && !self.all_match(&rule.interface_args, requested_args, &mut bindings)
+        {
+            return None;
+        }
         let type_args: Vec<RealizedTy> = bindings.into_iter().collect::<Option<_>>()?;
 
         // Bounds as nested obligations (rustc winnowing): every interface in a param's

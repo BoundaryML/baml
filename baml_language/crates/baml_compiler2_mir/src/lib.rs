@@ -2,6 +2,7 @@ mod builder;
 mod inference_provider;
 mod ir;
 mod lower;
+pub mod memory;
 mod optimize;
 pub mod pretty;
 

@@ -48,6 +48,7 @@ pub(super) const MIR: &[Example] = &[
         path: "ns_fixtures/ns_short_circuit_locals/short_circuit_locals.baml",
         functions: &[
             "chained_and",
+            "coalesced_lengths_compared_apart",
             "conditional_short_circuit_in_loop",
             "mixed_join",
         ],
@@ -107,12 +108,13 @@ pub(super) const BYTECODE: &[Example] = &[
         path: "ns_fixtures/ns_short_circuit_locals/short_circuit_locals.baml",
         functions: &[
             "user.fixtures.short_circuit_locals.chained_and",
+            "user.fixtures.short_circuit_locals.coalesced_lengths_compared_apart",
             "user.fixtures.short_circuit_locals.conditional_short_circuit",
             "user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop",
             "user.fixtures.short_circuit_locals.initialized_local_in_branch_loop",
             "user.fixtures.short_circuit_locals.mixed_join",
         ],
-        reason: "All five predecessor-coverage regressions: stack-carried values versus local slots.",
+        reason: "The predecessor-coverage regressions and a use forwarded past a second carried value: stack-carried values versus local slots.",
     },
     Example {
         path: "ns_fixtures/ns_lambda_basic/lambda_basic.baml",

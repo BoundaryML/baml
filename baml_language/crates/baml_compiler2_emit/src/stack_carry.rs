@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator,
+    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue,
+    StatementKind, Terminator,
 };
 use baml_type::{Literal, RuntimeTy, TyTemplate};
 
@@ -189,18 +189,23 @@ fn is_stack_carry_use_safe(
     }
 
     let du = &def_use[&local];
-    if du.uses.len() != 1 {
+    let [raw_use] = du.uses.as_slice() else {
         return false;
-    }
+    };
 
-    let Some(use_loc) = resolve_effective_use_location(&du.uses[0], body, classifications, def_use)
+    let Some(use_loc) = resolve_effective_use_location(raw_use, body, classifications, def_use)
     else {
         return false;
     };
     let mut sim = StackCarrySim::new();
     let mut start_statement = 0;
     let mut current_block = match kind {
-        StackCarryKind::PhiLike => use_loc.block,
+        // `is_stack_covered_phi` proves the value is on the stack on entry to
+        // the block holding the local's one use. Virtual forwarding may move
+        // the effective use into a later block; the walk below must then cover
+        // every block from that entry to the use, so that a branch, or another
+        // value carried above this one, in between keeps this local in a slot.
+        StackCarryKind::PhiLike => raw_use.block,
         StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand => {
             let Some(def) = &du.def else {
                 return false;
@@ -501,8 +506,9 @@ fn simulate_statement_stack<'db>(
                     }
                 }
             }
-            Place::Capture(_) => {
-                // StoreCapture: evaluate rvalue (pops 1), no stack-carry interaction.
+            Place::Deref(_) => {
+                // StoreDeref/StoreCapture: evaluate rvalue (pops 1), no
+                // stack-carry interaction.
                 if !simulate_rvalue_pull_stack(
                     value,
                     sim,
@@ -515,6 +521,7 @@ fn simulate_statement_stack<'db>(
                 }
                 sim.pop_n(1)
             }
+            Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
             Place::Field { .. } | Place::Index { .. } => {
                 let mut sink = StackCarryPullSink {
                     sim,
@@ -538,7 +545,9 @@ fn simulate_statement_stack<'db>(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::FreshCell(_) | StatementKind::Intrinsic { .. } | StatementKind::Nop => true,
+        StatementKind::FreshCell { .. } | StatementKind::Intrinsic { .. } | StatementKind::Nop => {
+            true
+        }
     }
 }
 
@@ -930,8 +939,9 @@ fn simulate_store_place_stack(
                 LocalStoreBehavior::KeepOnStack => true,
             }
         }
-        // Capture stores: pop 1 (same as StoreSlot).
-        Place::Capture(_) => sim.pop_n(1),
+        // Stores through a cell: pop 1 (same as StoreSlot).
+        Place::Deref(_) => sim.pop_n(1),
+        Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
         Place::Field { .. } | Place::Index { .. } => false,
     }
 }
@@ -1286,6 +1296,7 @@ fn place_mentions_local(place: &Place, local: Local) -> bool {
     match place {
         Place::Local(l) => *l == local,
         Place::Field { base, .. } => place_mentions_local(base, local),
+        Place::Deref(cell) => cell.local() == Some(local),
         Place::Index { base, index, .. } => *index == local || place_mentions_local(base, local),
         Place::Capture(_) => false,
     }
@@ -1332,6 +1343,9 @@ fn numeric_operand_kind<'db>(
 fn numeric_place_kind(body: &MirFunctionBody<'_>, place: &Place) -> Option<NumericKind> {
     match place {
         Place::Local(local) => numeric_ty_kind(&body.local(*local).ty),
+        // A captured local's declared type is the type of the value in its cell.
+        Place::Deref(CellId::Local(local)) => numeric_ty_kind(&body.local(*local).ty),
+        Place::Deref(CellId::Capture(_)) => None,
         Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => None,
     }
 }
@@ -1631,8 +1645,20 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
+    fn load_deref_local(&mut self, _local: Local) -> Result<(), Self::Error> {
+        // LoadDeref pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // LoadCapture pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_ref(&mut self, _idx: usize) -> Result<(), Self::Error> {
+        // CaptureRef pushes one value onto the stack.
         self.sim.push();
         Ok(())
     }
@@ -1666,14 +1692,6 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
 
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
         if !self.sim.pop_n(n) {
-            return Err(());
-        }
-        Ok(())
-    }
-
-    fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
-        // StoreCapture pops one value (the value to store into the capture cell).
-        if !self.sim.pop_n(1) {
             return Err(());
         }
         Ok(())

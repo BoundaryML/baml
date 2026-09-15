@@ -23,11 +23,11 @@ async fn non_spawn_captured_int_arithmetic_keeps_specialized_op() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        load_var ?1
+        load_const null
         make_cell
-        store_var ?1
+        store_var counter
         load_const 0
         store_deref ?1
         load_var counter
@@ -39,7 +39,7 @@ async fn non_spawn_captured_int_arithmetic_keeps_specialized_op() {
         add_int
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -58,9 +58,9 @@ async fn captured_int_arithmetic_uses_generic_binop() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        load_var ?1
+        load_const null
         make_cell
-        store_var ?1
+        store_var value
         load_const 1
         store_deref ?1
         load_var value
@@ -99,14 +99,14 @@ async fn spawned_closure_capture_marks_transitive_cells() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
-        load_var ?1
+        load_const null
         make_cell
-        store_var ?1
-        load_var ?2
-        make_cell
-        store_var ?2
+        store_var counter
         load_const 1
         store_deref ?1
+        load_const null
+        make_cell
+        store_var bump
         load_var counter
         make_closure .<lambda(main, 0)>, 1
         store_deref ?2
@@ -145,9 +145,9 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> float {
-        load_var ?1
+        load_const null
         make_cell
-        store_var ?1
+        store_var values
         load_const 1.0
         load_type float
         alloc_array 1

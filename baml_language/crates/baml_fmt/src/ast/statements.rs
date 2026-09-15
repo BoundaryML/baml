@@ -577,6 +577,9 @@ impl FromCST for ForStmt {
 
             let semicolon = it.expect_parse()?;
 
+            // BUG: the parser accepts an empty step, `for (let i = 0; i < n;)`,
+            // and the AST lowers it as a loop with no step, but this AST has
+            // no representation for it and the formatter rejects the file.
             let update = it.expect_next("an expression")?;
             let update = Expression::from_cst(update)?;
 

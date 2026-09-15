@@ -19,6 +19,7 @@ num-bigint = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
+subenum = { workspace = true }
 
 [lints]
 workspace = true
