@@ -342,7 +342,11 @@ impl BexEngine {
                 .map(|level| (level, "allocation_on_entry"))
         };
         if let Some((level, reason)) = requested {
-            let _ = self.collect_garbage_with_reason(level, reason, true).await;
+            // Idle cleanup is release-driven, so the allocation-policy recheck
+            // after parking must not cancel it.
+            let _ = self
+                .collect_garbage_with_reason(level, reason, !idle_due)
+                .await;
         }
     }
 
