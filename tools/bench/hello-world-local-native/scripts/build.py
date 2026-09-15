@@ -113,7 +113,7 @@ def main():
         wheels.mkdir()
         maturin_build = [pyvenv / "bin/maturin", "build", "--release", "--locked", "--interpreter", pyvenv / "bin/python", "--out", wheels]
         if args.explicit_gc_diagnostic:
-            maturin_build.extend(["--features", "gc_profiling"])
+            maturin_build.extend(["--features", "gc_profiling,allocation_profiling"])
         run(*maturin_build, cwd=source / "sdks/python", env=common_env)
         wheel = next(wheels.glob("baml_bridge-*.whl"))
         run("uv", "pip", "install", "--reinstall", "--python", pyvenv / "bin/python", wheel)
@@ -132,7 +132,7 @@ def main():
             copy_tree(ROOT / "diagnostics" / name, pure_baml_diagnostic)
             run(cli, "pack", "main", "--target", TARGET, "--output", pure_baml_diagnostic / "hello", "--no-progress", "--agent-skill-check", "off", cwd=pure_baml_diagnostic, env=common_env)
             diagnostics.append(pure_baml_diagnostic / "hello")
-        for name in ("python-baml-explicit-gc", "python-baml-response-allocation"):
+        for name in ("python-baml-explicit-gc", "python-baml-response-allocation", "python-baml-allocation-attribution"):
             python_diagnostic = apps / name
             copy_tree(ROOT / "diagnostics" / name, python_diagnostic)
             run(cli, "generate", "--agent-skill-check", "off", cwd=python_diagnostic, env=common_env)
@@ -190,6 +190,7 @@ def main():
         "node_binary": str(node20),
         "vegeta": VEGETA_VERSION,
         "explicit_gc_diagnostic": args.explicit_gc_diagnostic,
+        "allocation_profiling": args.explicit_gc_diagnostic,
         "artifacts": {str(path.relative_to(BUILD)): digest(path) for path in artifacts},
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

@@ -1,0 +1,216 @@
+Process:         python3.10 [51180]
+Path:            /Users/USER/*/python3.10
+Load Address:    0x102e50000
+Identifier:      python3.10
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  Python [51176]
+Target Type:     live task
+
+Date/Time:       2026-09-14 23:38:24.186 -0700
+Launch Time:     2026-09-14 23:38:22.743 -0700
+OS Version:      macOS 26.6.2 (25G83)
+Report Version:  7
+Analysis Tool:   /usr/bin/heap
+
+Physical footprint:         117.4M
+Physical footprint (peak):  155.4M
+Idle exit:                  untracked
+----
+
+Process 51180: 1 zone
+Zone DefaultMallocZone_0x102e70000: Overall size: 787472KB; 768452 nodes malloced for 70819KB (8% of capacity)
+
+Zone DefaultMallocZone_0x102e70000: 768452 nodes - Sizes: 4096KB[2] 2816KB[1] 896KB[1] 608KB[1] 512KB[1] 192KB[1] 160KB[1] 128KB[3] 96KB[4] 64KB[10] 32KB[3] 21.5KB[3] 21KB[1] 18.5KB[4] 18KB[2] 17KB[1] 16KB[25] 12KB[1] 11.5KB[1] 11KB[5] 10.5KB[1] 9.5KB[19] 9KB[2] 8.5KB[2] 8KB[140] 7.5KB[5] 7KB[6] 6.5KB[5] 6KB[10] 5.5KB[28] 5KB[62] 4.5KB[28] 4KB[71] 3.5KB[85] 3KB[205] 2.5KB[431] 2KB[427] 1.5KB[1676] 1KB[80] 1008[34] 992[82] 976[1541] 960[138] 944[1537] 928[52] 912[23] 896[60] 880[50] 864[59] 848[37] 832[87] 816[37] 800[55] 784[35] 768[90] 752[28] 736[248] 720[247] 704[722] 688[62] 672[99] 656[36] 640[160] 624[81] 608[125] 592[80] 576[1032] 560[149] 544[161] 528[176] 512[180] 496[96] 480[150] 464[159] 448[210] 432[37] 416[114] 400[98] 384[235] 368[2193] 352[92] 336[98] 320[350] 304[133] 288[310] 272[942] 256[4259] 240[2430] 224[287] 208[307] 192[690] 176[777] 160[534] 144[150897] 128[8282] 112[467] 96[1429] 80[2697] 64[5382] 48[11645] 32[344319] 16[217976] 
+
+All zones: 768452 nodes malloced - Sizes: 4096KB[2] 2816KB[1] 896KB[1] 608KB[1] 512KB[1] 192KB[1] 160KB[1] 128KB[3] 96KB[4] 64KB[10] 32KB[3] 21.5KB[3] 21KB[1] 18.5KB[4] 18KB[2] 17KB[1] 16KB[25] 12KB[1] 11.5KB[1] 11KB[5] 10.5KB[1] 9.5KB[19] 9KB[2] 8.5KB[2] 8KB[140] 7.5KB[5] 7KB[6] 6.5KB[5] 6KB[10] 5.5KB[28] 5KB[62] 4.5KB[28] 4KB[71] 3.5KB[85] 3KB[205] 2.5KB[431] 2KB[427] 1.5KB[1676] 1KB[80] 1008[34] 992[82] 976[1541] 960[138] 944[1537] 928[52] 912[23] 896[60] 880[50] 864[59] 848[37] 832[87] 816[37] 800[55] 784[35] 768[90] 752[28] 736[248] 720[247] 704[722] 688[62] 672[99] 656[36] 640[160] 624[81] 608[125] 592[80] 576[1032] 560[149] 544[161] 528[176] 512[180] 496[96] 480[150] 464[159] 448[210] 432[37] 416[114] 400[98] 384[235] 368[2193] 352[92] 336[98] 320[350] 304[133] 288[310] 272[942] 256[4259] 240[2430] 224[287] 208[307] 192[690] 176[777] 160[534] 144[150897] 128[8282] 112[467] 96[1429] 80[2697] 64[5382] 48[11645] 32[344319] 16[217976] 
+
+Found:  172 ObjC classes  48 Swift classes  66 CFTypes
+Type names for non-objects could be derived from allocation backtraces if the process used MallocStackLogging
+
+-----------------------------------------------------------------------
+Zone DefaultMallocZone_0x102e70000: 768452 nodes (72518160 bytes)
+
+   COUNT      BYTES       AVG   CLASS_NAME                                        TYPE    BINARY
+   =====      =====       ===   ==========                                        ====    ======
+  217973    3487568      16.0   non-object                                                
+  343875   11004000      32.0   non-object                                                
+   11577     555696      48.0   non-object                                                
+    5249     335936      64.0   non-object                                                
+    2654     212320      80.0   non-object                                                
+    1413     135648      96.0   non-object                                                
+     391      43792     112.0   non-object                                                
+    8128    1040384     128.0   non-object                                                
+  150825   21718800     144.0   non-object                                                
+     499      79840     160.0   non-object                                                
+     760     133760     176.0   non-object                                                
+     684     131328     192.0   non-object                                                
+     303      63024     208.0   non-object                                                
+     286      64064     224.0   non-object                                                
+    2429     582960     240.0   non-object                                                
+    4257    1089792     256.0   non-object                                                
+     940     255680     272.0   non-object                                                
+     310      89280     288.0   non-object                                                
+     132      40128     304.0   non-object                                                
+     350     112000     320.0   non-object                                                
+      96      32256     336.0   non-object                                                
+      92      32384     352.0   non-object                                                
+    2192     806656     368.0   non-object                                                
+     235      90240     384.0   non-object                                                
+      98      39200     400.0   non-object                                                
+     114      47424     416.0   non-object                                                
+      37      15984     432.0   non-object                                                
+     210      94080     448.0   non-object                                                
+     159      73776     464.0   non-object                                                
+     149      71520     480.0   non-object                                                
+      96      47616     496.0   non-object                                                
+     179      91648     512.0   non-object                                                
+     176      92928     528.0   non-object                                                
+     161      87584     544.0   non-object                                                
+     149      83440     560.0   non-object                                                
+    1030     593280     576.0   non-object                                                
+      80      47360     592.0   non-object                                                
+     125      76000     608.0   non-object                                                
+      81      50544     624.0   non-object                                                
+     160     102400     640.0   non-object                                                
+      36      23616     656.0   non-object                                                
+      99      66528     672.0   non-object                                                
+      62      42656     688.0   non-object                                                
+     722     508288     704.0   non-object                                                
+     247     177840     720.0   non-object                                                
+     248     182528     736.0   non-object                                                
+      28      21056     752.0   non-object                                                
+      90      69120     768.0   non-object                                                
+      35      27440     784.0   non-object                                                
+      55      44000     800.0   non-object                                                
+      37      30192     816.0   non-object                                                
+      87      72384     832.0   non-object                                                
+      37      31376     848.0   non-object                                                
+      59      50976     864.0   non-object                                                
+      50      44000     880.0   non-object                                                
+      60      53760     896.0   non-object                                                
+      23      20976     912.0   non-object                                                
+      52      48256     928.0   non-object                                                
+    1537    1450928     944.0   non-object                                                
+     138     132480     960.0   non-object                                                
+    1541    1504016     976.0   non-object                                                
+      82      81344     992.0   non-object                                                
+      34      34272    1008.0   non-object                                                
+      79      80896    1024.0   non-object                                                
+    1674    2571264    1536.0   non-object                                                
+     427     874496    2048.0   non-object                                                
+     431    1103360    2560.0   non-object                                                
+     205     629760    3072.0   non-object                                                
+      84     301056    3584.0   non-object                                                
+      70     286720    4096.0   non-object                                                
+      28     129024    4608.0   non-object                                                
+      62     317440    5120.0   non-object                                                
+      28     157696    5632.0   non-object                                                
+      10      61440    6144.0   non-object                                                
+       5      33280    6656.0   non-object                                                
+       6      43008    7168.0   non-object                                                
+       5      38400    7680.0   non-object                                                
+     140    1146880    8192.0   non-object                                                
+       2      17408    8704.0   non-object                                                
+       2      18432    9216.0   non-object                                                
+      19     184832    9728.0   non-object                                                
+       1      10752   10752.0   non-object                                                
+       5      56320   11264.0   non-object                                                
+       1      11776   11776.0   non-object                                                
+       1      12288   12288.0   non-object                                                
+      25     409600   16384.0   non-object                                                
+       1      17408   17408.0   non-object                                                
+       2      36864   18432.0   non-object                                                
+       4      75776   18944.0   non-object                                                
+       1      21504   21504.0   non-object                                                
+       3      66048   22016.0   non-object                                                
+       3      98304   32768.0   non-object                                                
+      10     655360   65536.0   non-object                                                
+       4     393216   98304.0   non-object                                                
+       3     393216  131072.0   non-object                                                
+       1     163840  163840.0   non-object                                                
+       1     196608  196608.0   non-object                                                
+       1     524288  524288.0   non-object                                                
+       1     622592  622592.0   non-object                                                
+       1     917504  917504.0   non-object                                                
+       1    2883584  2883584.0   non-object                                                
+       2    8388608  4194304.0   non-object                                                
+       4        192      48.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       2        128      64.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       1         96      96.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      70       7840     112.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+     148      18944     128.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      71      10224     144.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      32       5120     160.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      14       2464     176.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       3        576     192.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       2        416     208.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       1        224     224.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+     428      13696      32.0   Class.data (class_rw_t)                           C       libobjc.A.dylib
+     121       7744      64.0   pthread_mutex_t                                   C       libpthread.dylib
+       1       4096    4096.0   @autoreleasepool content                          C       libobjc.A.dylib
+       3         48      16.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1         48      48.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1         64      64.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1       3584    3584.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       2       3072    1536.0   Class.data.methods.lists (method_list_t)          C       libobjc.A.dylib
+       1         32      32.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       3        240      80.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1         96      96.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       2        224     112.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       4        512     128.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        144     144.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        160     160.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        192     192.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        240     240.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        256     256.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        304     304.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        480     480.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       9        288      32.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1         64      64.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1        128     128.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1        256     256.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1       1024    1024.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+      21       1680      80.0   Class.data.readonly (class_ro_t)                  C       libobjc.A.dylib
+      24       1152      48.0   CFData                                            ObjC    CoreFoundation
+       2        384     192.0   CFData                                            ObjC    CoreFoundation
+      17       1360      80.0   dispatch_semaphore_t                              ObjC    libdispatch.dylib
+      24       1152      48.0   Class.data.extended (class_rw_ext_t)              C       libobjc.A.dylib
+       2        544     272.0   ColorSyncProfile                                  CFType  ColorSync
+       1        512     512.0   ColorSyncProfile                                  CFType  ColorSync
+       1        336     336.0   CFDictionary (Key Storage)                        C       CoreFoundation
+       1        576     576.0   CFDictionary (Key Storage)                        C       CoreFoundation
+       1        336     336.0   CFDictionary (Value Storage)                      C       CoreFoundation
+       1        576     576.0   CFDictionary (Value Storage)                      C       CoreFoundation
+       2        224     112.0   NSMutableDictionary (Storage)                     C       CoreFoundation
+       1        368     368.0   NSMutableDictionary (Storage)                     C       CoreFoundation
+       5        480      96.0   xpc_dictionary_t                                  ObjC    libxpc.dylib
+       2        192      96.0   CGColor                                           CFType  CoreGraphics
+       2        224     112.0   CGColor                                           CFType  CoreGraphics
+       2        416     208.0   pthread_rwlock_t                                  C       libpthread.dylib
+       4        384      96.0   CGColorSpace                                      CFType  CoreGraphics
+       2        352     176.0   Swift._ContiguousArrayStorage<Swift.String>       Swift   libswiftCore.dylib
+       2        320     160.0   Swift.StringStorage                               Swift   libswiftCore.dylib
+       6        288      48.0   xpc_string_t                                      ObjC    libxpc.dylib
+       4        192      48.0   _NSStateMarker                                    ObjC    AppKit
+       2        192      96.0   NSURL                                             ObjC    CoreFoundation
+       1         80      80.0   CFString                                          ObjC    CoreFoundation
+       1         96      96.0   CFString                                          ObjC    CoreFoundation
+       1        176     176.0   _NSThreadData                                     ObjC    Foundation
+       5        160      32.0   NSMutableDictionary                               ObjC    CoreFoundation
+       2         96      48.0   Swift._ContiguousArrayStorage<Swift.UInt8>        Swift   libswiftCore.dylib
+       1         64      64.0   Swift._ContiguousArrayStorage<Swift.UInt8>        Swift   libswiftCore.dylib
+       2        128      64.0   CFDictionary                                      ObjC    CoreFoundation
+       1        128     128.0   dispatch_queue_t (serial)                         ObjC    libdispatch.dylib
+       1         80      80.0   Foundation.LockedState<Foundation._NSSwiftProcessInfo.State>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         64      64.0   Swift._ContiguousArrayStorage<Swift.Array<Swift.UInt8>>  Swift   libswiftCore.dylib
+       1         64      64.0   _NSMainThread                                     ObjC    Foundation
+       1         64      64.0   _NSSwiftProcessInfo                               Swift   Foundation
+       1         64      64.0   xpc_array_t (Storage)                             C       libxpc.dylib
+       1         64      64.0   xpc_pipe_t                                        ObjC    libxpc.dylib
+       1         48      48.0   Foundation.LockedState<Foundation._ProcessInfo.State>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         48      48.0   Foundation.LockedState<Swift.Optional<Swift.String>>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         48      48.0   xpc_array_t                                       ObjC    libxpc.dylib
+       1         32      32.0   _ProcessInfo                                      Swift   Foundation
+
