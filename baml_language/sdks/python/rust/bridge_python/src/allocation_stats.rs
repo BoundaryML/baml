@@ -99,6 +99,39 @@ fn record_realloc(old_size: usize, new_size: usize) {
     update_peak(live_bytes);
 }
 
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code, reason = "calls the macOS malloc zone statistics API")]
+fn process_allocator_stats() -> [u64; 4] {
+    #[repr(C)]
+    #[derive(Default)]
+    struct MallocStatistics {
+        blocks_in_use: std::os::raw::c_uint,
+        size_in_use: usize,
+        max_size_in_use: usize,
+        size_allocated: usize,
+    }
+
+    unsafe extern "C" {
+        fn malloc_zone_statistics(zone: *mut std::ffi::c_void, stats: *mut MallocStatistics);
+    }
+
+    let mut stats = MallocStatistics::default();
+    // SAFETY: Apple's malloc API accepts a null zone to aggregate every zone
+    // in the current process and initializes the caller-owned output struct.
+    unsafe { malloc_zone_statistics(std::ptr::null_mut(), &mut stats) };
+    [
+        stats.blocks_in_use.into(),
+        stats.size_in_use as u64,
+        stats.max_size_in_use as u64,
+        stats.size_allocated as u64,
+    ]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn process_allocator_stats() -> [u64; 4] {
+    [0; 4]
+}
+
 #[allow(
     unsafe_code,
     reason = "delegates Rust allocations to System while counting them"
@@ -148,8 +181,13 @@ pub fn snapshot() -> Vec<(&'static str, u64)> {
     let bucket_blocks: [u64; 9] =
         std::array::from_fn(|index| LIVE_BUCKET_BLOCKS[index].load(Ordering::Relaxed));
     let strings = bex_str::allocation_stats();
+    let allocator = process_allocator_stats();
 
     let mut values = vec![
+        ("allocator_blocks_in_use", allocator[0]),
+        ("allocator_bytes_in_use", allocator[1]),
+        ("allocator_bytes_high_water", allocator[2]),
+        ("allocator_bytes_reserved", allocator[3]),
         ("rust_alloc_calls_total", alloc_calls),
         ("rust_alloc_zeroed_calls_total", alloc_zeroed_calls),
         ("rust_realloc_calls_total", realloc_calls),
