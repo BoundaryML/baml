@@ -266,11 +266,9 @@ const SECTIONS: Section[] = [
     title: 'Better testing',
   },
   {
-    // {elephant} marks the four elephant-in-the-room sections: will I have to
-    // rewrite everything, can models write this, where are the packages, and
-    // how do these people make money. The art is a placeholder until the
-    // generated lamb/elephant images land.
-    art: '/elephants/elephant-adoption.png',
+    // The four elephant-in-the-room sections: will I have to rewrite
+    // everything, can models write this, where are the packages, and how do
+    // these people make money.
     body: 'You can if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Even tracing. Sh{lamb}t just works.',
     id: 'adopting',
     matrix: {
@@ -290,29 +288,26 @@ const SECTIONS: Section[] = [
     num: 7,
     readMore: 'Incremental adoption',
     sign: 'Do not rewrite your codebase in BAML.',
-    title: '{elephant} I’m hyped. How do I port my codebase to BAML?',
+    title: 'I’m hyped. How do I port my codebase to BAML?',
   },
   {
-    art: '/elephants/elephant-models.png',
     body: 'Decide for yourself. BAML reads like TypeScript and is already an official language on GitHub, so models should know most of it. We don’t leave the rest up to vibes. We measure how agents write programs: how long it takes, what it costs, how many turns. `baml describe` wasn’t a coincidence. It’s a science.\nAnd remember, today is the worst the models will ever be at BAML.',
     id: 'models-write',
     num: 8,
     readMore: 'Agent tries BAML',
-    title: '{elephant} Can models actually write BAML?',
+    title: 'Can models actually write BAML?',
   },
   {
-    art: '/elephants/elephant-packages.png',
     body: '`npm install is-even`. It depends on `is-odd`? That depends on `is-number`?! 🤯 We’re rethinking package management from first principles. For now, we’ve shipped a thorough standard library. For anything else, ask Claude to port what you need, or pass functions over the bridge.\nBesides, no packages means no supply chain attacks. QED.',
     id: 'packages',
     num: 9,
-    title: '{elephant} Is there an ecosystem?',
+    title: 'Is there an ecosystem?',
   },
   {
-    art: '/elephants/elephant-money.png',
     body: 'No thank you.\nThe BAML language is and will always be open. Apache-2, free, works offline.\nWe make money on Boundary Web Services. Build the language, the runtime, and the tracing layer, and you can make things nobody else can. We think you’ll love paying for some of them.\nSome of you may wish to build your own cloud. Good luck and Claudespeed.\nFor the rest, we’re launching with observability, and saving you from Datadog. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
     id: 'money',
     num: 10,
-    title: '{elephant} Are you trying to get bought by {acquirer}',
+    title: 'Are you trying to get bought by {acquirer}',
   },
 ];
 
@@ -589,9 +584,8 @@ a.wib-fab img { height: 1.1em; width: auto; filter: brightness(0) invert(1); }
 }
 `;
 
-// Section titles can carry two tokens: {elephant} renders the section's art
-// (placeholder until the generated lamb/elephant images land) and {acquirer}
-// renders the cycling company name.
+// Section titles can carry two tokens: {elephant} (legacy marker, rendered as
+// no-op) and {acquirer} (cycling company name).
 function renderTitle(s: Section) {
   return s.title.split(/(\{elephant\}|\{acquirer\})/).map((part, i) => {
     if (part === '{elephant}') {
