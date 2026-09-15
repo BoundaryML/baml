@@ -8,6 +8,7 @@ use std::fmt;
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
+use subenum::subenum;
 
 // ============================================================================
 // Optimization Level
@@ -744,9 +745,19 @@ pub enum IndexKind {
 /// A place in memory (lvalue).
 ///
 /// Places represent locations that can be read from or written to.
+///
+/// Cell access is explicit. A local a closure captures
+/// ([`LocalDecl::is_captured`]) holds a cell pointer, and `Local(l)` names
+/// that pointer; `Capture(i)` names the pointer in a closure's capture array.
+/// Those two variants are also [`CellId`], the identity of a cell; the value
+/// behind one is `Deref(cell)`, and every read or write of a captured binding
+/// goes through it. Only a `MakeClosure` capture operand and a `FreshCell`
+/// target name the pointer bare. `verify_mir` checks all of this.
+#[subenum(CellId(derive(Copy)))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Place {
-    /// A local variable: `_1`
+    /// A local variable: `_1`. For a captured local, its cell pointer.
+    #[subenum(CellId)]
     Local(Local),
 
     /// Field access: `_1.field_idx`
@@ -759,12 +770,36 @@ pub enum Place {
         kind: IndexKind,
     },
 
-    /// A captured variable in a closure body, by capture index.
-    ///
-    /// `Capture(idx)` refers to the `idx`-th capture in the enclosing
-    /// `Object::Closure.captures` array.  Reads emit `LoadCapture(idx)` and
-    /// writes emit `StoreCapture(idx)`.  Only valid inside a lambda body.
+    /// The cell pointer in the `idx`-th slot of the enclosing
+    /// `Object::Closure.captures` array. Reading it bare emits `CaptureRef`
+    /// (forwarding the cell to a nested closure); the value behind it is
+    /// `Deref(Capture(idx))`. Only valid inside a lambda body.
+    #[subenum(CellId)]
     Capture(usize),
+
+    /// The value in a cell: `*_1`, `*capture[0]`.
+    ///
+    /// Reads emit `LoadDeref`/`LoadCapture` and writes `StoreDeref`/`StoreCapture`.
+    Deref(CellId),
+}
+
+impl CellId {
+    /// The local whose slot holds this cell's pointer, if it is a local's cell.
+    pub fn local(&self) -> Option<Local> {
+        match self {
+            CellId::Local(local) => Some(*local),
+            CellId::Capture(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for CellId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CellId::Local(l) => write!(f, "{l}"),
+            CellId::Capture(idx) => write!(f, "capture[{idx}]"),
+        }
+    }
 }
 
 impl Place {
@@ -774,10 +809,14 @@ impl Place {
     }
 
     /// Get the base local of this place, if it is rooted in a local.
+    ///
+    /// Transparent through `Deref`: the local whose cell holds the value is
+    /// still the local the place is rooted in.
     pub fn base_local(&self) -> Option<Local> {
         match self {
             Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
+            Place::Deref(cell) => cell.local(),
             Place::Capture(_) => None,
         }
     }
@@ -790,6 +829,7 @@ impl fmt::Display for Place {
             Place::Field { base, field } => write!(f, "{base}.{field}"),
             Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
             Place::Capture(idx) => write!(f, "capture[{idx}]"),
+            Place::Deref(cell) => write!(f, "*{cell}"),
         }
     }
 }
@@ -1037,7 +1077,9 @@ impl Rvalue<'_> {
     pub(crate) fn can_discard_with(&self, in_bounds: impl Fn(&Place) -> bool) -> bool {
         fn read(place: &Place, in_bounds: &impl Fn(&Place) -> bool) -> bool {
             match place {
-                Place::Local(_) | Place::Capture(_) => true,
+                // A deref load cannot fail: every access of a captured local is
+                // dominated by its `FreshCell` (`verify_mir`), so the cell exists.
+                Place::Local(_) | Place::Capture(_) | Place::Deref(_) => true,
                 // A fixed field projection is type-checked, not a user accessor.
                 // An indexing operation in its base still needs its own proof.
                 Place::Field { base, .. } => read(base, in_bounds),

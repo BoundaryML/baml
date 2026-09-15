@@ -673,8 +673,12 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
                             });
                         }
                         Place::Local(_) => {}
+                        // A store through a cell reads the pointer local.
+                        Place::Deref(_) => {
+                            collect_uses_in_place(destination, block.id, stmt_ref, &mut def_use);
+                        }
                         Place::Capture(_) => {
-                            // StoreCapture — no local use to record.
+                            unreachable!("a bare capture is a pointer nothing stores to")
                         }
                     }
 
@@ -758,6 +762,11 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
 fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
     match place {
         Place::Local(local) => f(*local),
+        Place::Deref(cell) => {
+            if let Some(local) = cell.local() {
+                f(local);
+            }
+        }
         Place::Capture(_) => {
             // A capture slot is a cell in the closure object, not a local:
             // there is no local-level definition to count. As a resource it
@@ -1174,7 +1183,7 @@ impl Clobbers {
                 let terminator = block
                     .terminator
                     .as_ref()
-                    .map(|terminator| memory::terminator_clobbers(body, model, terminator))
+                    .map(|terminator| memory::terminator_clobbers(model, terminator))
                     .unwrap_or_default();
                 let mut all = entry.clone();
                 for statement in &statements {
@@ -2191,8 +2200,8 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, CatchRegion, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement,
-        Terminator,
+        BasicBlock, CatchRegion, CellId, Constant, LocalDecl, MirFunctionBody, Operand, Place,
+        Statement, Terminator,
     };
     use baml_type::{RuntimeTy, TyAttr};
 
@@ -2555,6 +2564,17 @@ mod tests {
         }
     }
 
+    /// `destination = *cell`: read the value behind a captured local's cell.
+    fn copy_cell_into(destination: Local, cell: Local) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::Copy(Place::Deref(CellId::Local(cell)))),
+            },
+            span: None,
+        }
+    }
+
     /// Two sequential binding blocks reuse one frame slot; the descriptor
     /// computed under the first is consumed after the second has rebound it.
     fn sibling_rebinding_body(rebinds_between: bool) -> MirFunctionBody<'static> {
@@ -2720,7 +2740,7 @@ mod tests {
     fn captured_read_across_blocks(between: Terminator<'static>) -> MirFunctionBody<'static> {
         MirFunctionBody {
             blocks: vec![
-                block(0, vec![copy_into(Local(1), Local(2))], between),
+                block(0, vec![copy_cell_into(Local(1), Local(2))], between),
                 block(1, vec![copy_into(Local(0), Local(1))], Terminator::Return),
             ],
             entry: BlockId(0),
@@ -2792,7 +2812,7 @@ mod tests {
         let read_capture = Statement {
             kind: StatementKind::Assign {
                 destination: Place::Local(Local(1)),
-                value: Rvalue::Use(Operand::Copy(Place::Capture(0))),
+                value: Rvalue::Use(Operand::Copy(Place::Deref(CellId::Capture(0)))),
             },
             span: None,
         };
@@ -2802,7 +2822,7 @@ mod tests {
                 block(
                     1,
                     vec![
-                        assign_int(Place::Capture(0), 5),
+                        assign_int(Place::Deref(CellId::Capture(0)), 5),
                         copy_into(Local(0), Local(1)),
                     ],
                     Terminator::Return,
@@ -2826,7 +2846,7 @@ mod tests {
             blocks: vec![
                 block(
                     0,
-                    vec![copy_into(Local(2), Local(1))],
+                    vec![copy_cell_into(Local(2), Local(1))],
                     call_into_dest(Local(3), 1),
                 ),
                 block(1, vec![copy_into(Local(0), Local(2))], Terminator::Return),

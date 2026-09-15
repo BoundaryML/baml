@@ -13,6 +13,7 @@ use baml_base::Span;
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    memory::{self, CellId},
 };
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
@@ -278,12 +279,6 @@ enum PendingJumpTarget {
     Trap,
 }
 
-#[derive(Default)]
-struct SpawnCaptures {
-    locals: HashSet<Local>,
-    capture_indices: HashSet<usize>,
-}
-
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
@@ -405,11 +400,6 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Capture slots whose cell may be read or written by a spawned thread.
     spawn_captured_captures: HashSet<usize>,
 
-    /// When `true`, the current operand load is for a `MakeClosure` capture operand.
-    /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
-    /// pointer itself) rather than `LoadDeref` (which would dereference the cell).
-    loading_for_closure_capture: bool,
-
     /// Reference record every resolution this codegen performs writes into
     /// (see [`crate::UnitReferences`]): each function/`let` global-slot
     /// resolution and each class/enum object-index resolution records the
@@ -491,7 +481,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
-            loading_for_closure_capture: false,
         }
     }
 
@@ -571,8 +560,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Resolve the type of a MIR Place by walking from the root local through projections.
     fn resolve_place_type(&self, place: &Place) -> Option<bex_vm_types::RuntimeTy> {
         match place {
+            // A captured local's declared type is its value's type, so a bare
+            // `Local` reports the value type while naming a pointer; nothing
+            // asks for a bare pointer's type.
             Place::Local(local) => self.local_types.get(local).cloned(),
             Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
+            Place::Deref(CellId::Local(local)) => self.local_types.get(local).cloned(),
+            Place::Deref(CellId::Capture(idx)) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
@@ -631,138 +625,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn collect_spawn_captures(&self) -> SpawnCaptures {
-        let mut captures = SpawnCaptures::default();
-        let mut seen = HashSet::new();
-
-        for block in &self.body.blocks {
-            let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
-                continue;
-            };
-
-            self.collect_spawn_closure_captures(closure, &mut captures, &mut seen);
-        }
-
-        captures
-    }
-
-    fn collect_spawn_closure_captures(
-        &self,
-        operand: &Operand<'ctx>,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        if let Some(Rvalue::MakeClosure {
-            captures: closure_captures,
-            ..
-        }) = self.local_def_rvalue_for_operand(operand)
-        {
-            for capture in closure_captures {
-                self.collect_spawn_shared_operand(capture, captures, seen);
-            }
-            return;
-        }
-
-        self.collect_spawn_shared_operand(operand, captures, seen);
-    }
-
-    fn collect_spawn_shared_operand(
-        &self,
-        operand: &Operand<'ctx>,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                self.collect_spawn_shared_place(place, captures, seen);
-            }
-            Operand::Constant(_) => {}
-        }
-    }
-
-    fn collect_spawn_shared_place(
-        &self,
-        place: &Place,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        match place {
-            Place::Local(local) => self.collect_spawn_shared_local(*local, captures, seen),
-            Place::Capture(idx) => {
-                captures.capture_indices.insert(*idx);
-            }
-            Place::Field { base, .. } => self.collect_spawn_shared_place(base, captures, seen),
-            Place::Index { base, index, .. } => {
-                self.collect_spawn_shared_place(base, captures, seen);
-                self.collect_spawn_shared_local(*index, captures, seen);
-            }
-        }
-    }
-
-    fn collect_spawn_shared_local(
-        &self,
-        local: Local,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        let local = match self.analysis.classifications.get(&local).copied() {
-            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(local),
-            _ => local,
-        };
-
-        if !seen.insert(local) {
-            return;
-        }
-
-        if self.local_slots.contains_key(&local) {
-            captures.locals.insert(local);
-        }
-
-        match self.local_def_rvalue(local) {
-            Some(Rvalue::MakeClosure {
-                captures: closure_captures,
-                ..
-            }) => {
-                for capture in closure_captures {
-                    self.collect_spawn_shared_operand(capture, captures, seen);
-                }
-            }
-            Some(Rvalue::Use(operand)) => {
-                self.collect_spawn_shared_operand(operand, captures, seen);
-            }
-            Some(Rvalue::MakeBoundMethod { receiver, .. }) => {
-                self.collect_spawn_shared_operand(receiver, captures, seen);
-            }
-            _ => {}
-        }
-    }
-
-    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue<'ctx>> {
-        self.analysis
-            .def_use
-            .get(&local)
-            .and_then(|du| du.def.as_ref())
-            .map(|def| &def.rvalue)
-    }
-
-    fn local_def_rvalue_for_operand(&self, operand: &Operand<'ctx>) -> Option<&Rvalue<'ctx>> {
-        let place = match operand {
-            Operand::Copy(place) | Operand::Move(place) => place,
-            Operand::Constant(_) => return None,
-        };
-
-        let Place::Local(local) = place else {
-            return None;
-        };
-
-        let local = match self.analysis.classifications.get(local).copied() {
-            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(*local),
-            _ => *local,
-        };
-
-        self.local_def_rvalue(local)
-    }
-
     fn local_reads_spawn_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
         if self.spawn_captured_locals.contains(&local) {
             return true;
@@ -789,7 +651,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn place_reads_spawn_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
         match place {
             Place::Local(local) => self.local_reads_spawn_captured_local(*local, seen),
-            Place::Capture(idx) => self.spawn_captured_captures.contains(idx),
+            // A bare capture is a pointer, never an arithmetic operand.
+            Place::Capture(_) => false,
+            Place::Deref(CellId::Local(local)) => self.spawn_captured_locals.contains(local),
+            Place::Deref(CellId::Capture(idx)) => self.spawn_captured_captures.contains(idx),
             Place::Field { base, .. } => self.place_reads_spawn_captured_local(base, seen),
             Place::Index { base, index, .. } => {
                 self.place_reads_spawn_captured_local(base, seen)
@@ -980,10 +845,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.local_slots.contains_key(&local).then_some(local)
             })
             .collect();
-        let spawn_captures = self.collect_spawn_captures();
-        self.spawn_captured_locals = spawn_captures.locals;
-        self.spawn_captured_captures
-            .extend(spawn_captures.capture_indices);
+        for cell in memory::spawn_shared_cells(mir) {
+            match cell {
+                CellId::Local(local) => {
+                    self.spawn_captured_locals.insert(local);
+                }
+                CellId::Capture(idx) => {
+                    self.spawn_captured_captures.insert(idx);
+                }
+            }
+        }
 
         // Wrap each captured parameter's value in a cell at entry. A parameter
         // is the one binding created without a `FreshCell` — the caller wrote
@@ -1495,15 +1366,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 }
 
                 match destination {
-                    Place::Local(_) => {
-                        // Local assignment: emit rvalue then store
+                    Place::Local(_) | Place::Deref(_) => {
+                        // Evaluate the rvalue, then store to the slot or through the cell.
                         self.emit_rvalue_pull(value);
                         self.emit_store_place(destination);
                     }
-                    Place::Capture(idx) => {
-                        // Capture store: evaluate rvalue, then StoreCapture.
-                        self.emit_rvalue_pull(value);
-                        unwrap_infallible(self.store_capture_value(*idx));
+                    Place::Capture(_) => {
+                        unreachable!("a bare capture is a pointer nothing stores to")
                     }
                     Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
@@ -1759,7 +1628,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             | LocalClassification::AggregateOperand
                     )
             }
-            Place::Capture(_) => false,
+            Place::Deref(_) | Place::Capture(_) => false,
         }
     }
 
@@ -1881,12 +1750,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             for template in type_arg_templates {
                 unwrap_infallible(self.load_type(template));
             }
-            let prev = self.loading_for_closure_capture;
-            self.loading_for_closure_capture = true;
+            // Each capture operand is a bare cell pointer: a captured local's
+            // slot (`LoadVar`) or one of this closure's captures (`CaptureRef`).
             for capture in captures {
                 self.emit_operand_pull(capture);
             }
-            self.loading_for_closure_capture = prev;
             unwrap_infallible(self.make_closure_with_type_args(
                 *lambda_idx,
                 captures.len(),
@@ -2256,15 +2124,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let classification = self.analysis.classifications[local];
                 match pull_semantics::local_store_behavior(classification) {
                     LocalStoreBehavior::StoreSlot => {
-                        let slot = self.local_slots[local];
-                        if self.captured_locals.contains(local) {
-                            // Captured local: store through the cell.
-                            self.emit(Instruction::StoreDeref(slot));
-                        } else {
-                            // Normal local: direct slot store (folds a preceding
-                            // StoreVar into StoreVar2).
-                            self.emit_store_var(slot);
-                        }
+                        debug_assert!(
+                            !self.captured_locals.contains(local),
+                            "bare store to captured {local}"
+                        );
+                        // Direct slot store (folds a preceding StoreVar into StoreVar2).
+                        self.emit_store_var(self.local_slots[local]);
                     }
                     LocalStoreBehavior::KeepOnStack => {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
@@ -2276,10 +2141,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                 }
             }
-            Place::Capture(idx) => {
-                // StoreCapture for lambda body capture stores.
+            Place::Deref(CellId::Local(local)) => {
+                debug_assert!(
+                    self.captured_locals.contains(local),
+                    "deref of uncaptured {local}"
+                );
+                self.emit(Instruction::StoreDeref(self.local_slots[local]));
+            }
+            Place::Deref(CellId::Capture(idx)) => {
                 self.emit(Instruction::StoreCapture(*idx));
             }
+            Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
             Place::Field { .. } | Place::Index { .. } => {
                 unreachable!(
                     "Field/Index stores are handled in emit_statement, not emit_store_place"
@@ -3376,13 +3248,9 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                     .as_ref()
                     .map(|def| def.rvalue.clone())
                     .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                // MakeClosure must be handled specially: its captures need to load
-                // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
-                // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
-                // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod / MakeVirtualBoundMethod / VirtualFieldAccess must
-                // also be handled specially: none is handled by `walk_rvalue_pull`
-                // (which panics on them), so route through `emit_rvalue_pull`.
+                // MakeClosure, MakeBoundMethod, MakeVirtualBoundMethod, and
+                // VirtualFieldAccess are materialized only by `emit_rvalue_pull`
+                // (`walk_rvalue_pull` panics on them), so route through it.
                 // BinaryOp must be routed through `emit_rvalue_pull` so that the
                 // type-aware specialization in `try_specialize_binary_op` can fire
                 // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
@@ -3413,25 +3281,19 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             LocalClassification::CopyOf => {
                 // Copy propagation: load from source slot directly.
                 let source = self.analysis.resolve_copy_source(local);
-                let slot = self.local_slots[&source];
-                if self.captured_locals.contains(&source) && !self.loading_for_closure_capture {
-                    self.emit(Instruction::LoadDeref(slot));
-                } else {
-                    self.emit_load_var(slot);
-                }
+                debug_assert!(
+                    !self.captured_locals.contains(&source),
+                    "copy of captured {source}"
+                );
+                self.emit_load_var(self.local_slots[&source]);
                 LocalPullAction::Done
             }
             LocalClassification::Parameter
             | LocalClassification::Real
             | LocalClassification::Dead => {
-                let slot = self.local_slots[&local];
-                if self.captured_locals.contains(&local) && !self.loading_for_closure_capture {
-                    // Captured local: load the value through the cell.
-                    self.emit(Instruction::LoadDeref(slot));
-                } else {
-                    // Normal local or loading cell pointer for MakeClosure.
-                    self.emit_load_var(slot);
-                }
+                // The slot's value; for a captured local that is its cell
+                // pointer, which only a closure capture operand reads bare.
+                self.emit_load_var(self.local_slots[&local]);
                 LocalPullAction::Done
             }
         };
@@ -3854,15 +3716,22 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
-    fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error> {
-        if self.loading_for_closure_capture {
-            // When building a MakeClosure capture list, we want to forward the
-            // raw cell pointer from this closure's capture slot to the inner
-            // closure — not read through the cell to get the inner value.
-            self.emit(Instruction::CaptureRef(idx));
-        } else {
-            self.emit(Instruction::LoadCapture(idx));
-        }
+    fn load_deref_local(&mut self, local: Local) -> Result<(), Self::Error> {
+        debug_assert!(
+            self.captured_locals.contains(&local),
+            "deref of uncaptured {local}"
+        );
+        self.emit(Instruction::LoadDeref(self.local_slots[&local]));
+        Ok(())
+    }
+
+    fn load_capture_value(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::LoadCapture(idx));
+        Ok(())
+    }
+
+    fn load_capture_ref(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::CaptureRef(idx));
         Ok(())
     }
 
@@ -3901,11 +3770,6 @@ impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
         self.emit(Instruction::Pop(n));
-        Ok(())
-    }
-
-    fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::StoreCapture(idx));
         Ok(())
     }
 }

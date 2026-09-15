@@ -20,23 +20,15 @@
 //! any call, await, or spawn, so nothing this frame does or does not do to a
 //! cell says anything about its stability across one of those.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_type::{Literal, RuntimeTy};
 
+pub use crate::ir::CellId;
 use crate::{
     AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, Rvalue,
     StatementKind, Terminator, UnaryOp,
 };
-
-/// A cell: the heap box a captured binding lives in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CellId {
-    /// The cell a captured local of this frame points at.
-    Local(Local),
-    /// The cell behind a capture slot of this closure.
-    Capture(usize),
-}
 
 /// A set of resources, read by an evaluation or written by an instruction.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -298,33 +290,145 @@ pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMu
 // Reads
 // ---------------------------------------------------------------------------
 
-/// Record the resources reading a local's slot touches.
-///
-/// A captured local names two: the slot, which holds the cell pointer, and
-/// the cell, which holds the value. Until cell access is explicit in the IR a
-/// read cannot say which it wants, so it claims both.
-fn local_reads(body: &MirFunctionBody<'_>, local: Local, out: &mut Resources) {
-    out.locals.insert(local);
-    if body.local(local).is_captured {
-        out.cells.insert(CellId::Local(local));
+/// The cell a place reads or writes through, if it goes through one.
+pub fn place_cell(place: &Place) -> Option<CellId> {
+    match place {
+        Place::Deref(cell) => Some(*cell),
+        Place::Field { base, .. } | Place::Index { base, .. } => place_cell(base),
+        Place::Local(_) | Place::Capture(_) => None,
     }
 }
 
+/// Whether evaluating an rvalue reads through a cell anywhere.
+pub fn rvalue_reads_cell(rvalue: &Rvalue<'_>) -> bool {
+    let mut reads = false;
+    walk_rvalue_places(rvalue, &mut |place| reads |= place_cell(place).is_some());
+    reads
+}
+
+/// The cells a body shares with the tasks it spawns: every cell a spawned
+/// closure captures, and every cell a closure stored in one of those cells
+/// captures in turn (a spawned body that calls a captured closure reaches
+/// that closure's cells).
+///
+/// Computed from MIR alone. A spawn's closure operand is followed through
+/// single-definition copies to its `MakeClosure`; a cell holding a closure is
+/// followed through every store into it. Emit's arithmetic specialization
+/// declines on these cells: another task may write them at any point.
+pub fn spawn_shared_cells<'a, 'db>(body: &'a MirFunctionBody<'db>) -> HashSet<CellId> {
+    struct Defs<'a, 'db> {
+        local_defs: HashMap<Local, Vec<&'a Rvalue<'db>>>,
+        cell_stores: HashMap<CellId, Vec<&'a Rvalue<'db>>>,
+    }
+    struct Walk<'a, 'db> {
+        pending: Vec<&'a Rvalue<'db>>,
+        followed_locals: HashSet<Local>,
+        followed_cells: HashSet<CellId>,
+    }
+    impl<'a, 'db> Walk<'a, 'db> {
+        // Reach the closure value an operand holds: a local's single
+        // definition, or the stores into the cell the operand reads through.
+        fn follow_operand(&mut self, defs: &Defs<'a, 'db>, operand: &Operand<'db>) {
+            let (Operand::Copy(place) | Operand::Move(place)) = operand else {
+                return;
+            };
+            match place_cell(place) {
+                Some(cell) => self.follow_cell(defs, cell),
+                None => {
+                    if let Place::Local(local) = place
+                        && self.followed_locals.insert(*local)
+                        && let Some([def]) = defs.local_defs.get(local).map(Vec::as_slice)
+                    {
+                        self.pending.push(def);
+                    }
+                }
+            }
+        }
+
+        fn follow_cell(&mut self, defs: &Defs<'a, 'db>, cell: CellId) {
+            if self.followed_cells.insert(cell) {
+                self.pending
+                    .extend(defs.cell_stores.get(&cell).into_iter().flatten());
+            }
+        }
+    }
+
+    let mut local_defs: HashMap<Local, Vec<&'a Rvalue<'db>>> = HashMap::new();
+    let mut cell_stores: HashMap<CellId, Vec<&'a Rvalue<'db>>> = HashMap::new();
+    for block in &body.blocks {
+        for stmt in &block.statements {
+            let StatementKind::Assign { destination, value } = &stmt.kind else {
+                continue;
+            };
+            match destination {
+                Place::Local(local) => local_defs.entry(*local).or_default().push(value),
+                Place::Deref(cell) => cell_stores.entry(*cell).or_default().push(value),
+                Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {}
+            }
+        }
+    }
+
+    let defs = Defs {
+        local_defs,
+        cell_stores,
+    };
+    let mut walk = Walk {
+        pending: Vec::new(),
+        followed_locals: HashSet::new(),
+        followed_cells: HashSet::new(),
+    };
+    for block in &body.blocks {
+        if let Some(Terminator::Spawn { closure, .. }) = &block.terminator {
+            walk.follow_operand(&defs, closure);
+        }
+    }
+
+    let mut shared = HashSet::new();
+    while let Some(rvalue) = walk.pending.pop() {
+        match rvalue {
+            Rvalue::MakeClosure { captures, .. } => {
+                for capture in captures {
+                    let (Operand::Copy(place) | Operand::Move(place)) = capture else {
+                        continue;
+                    };
+                    let cell = CellId::try_from(place.clone())
+                        .unwrap_or_else(|_| unreachable!("a capture operand is a cell pointer"));
+                    shared.insert(cell);
+                    // The closure a shared cell holds is reachable from the task.
+                    walk.follow_cell(&defs, cell);
+                }
+            }
+            Rvalue::Use(operand) => walk.follow_operand(&defs, operand),
+            _ => {}
+        }
+    }
+    shared
+}
+
 /// Record the resources reading a place touches.
-pub fn place_reads(body: &MirFunctionBody<'_>, place: &Place, out: &mut Resources) {
+///
+/// A bare local names its slot, which for a captured local holds the cell
+/// pointer; the value behind it is `Deref`, which names the cell and the slot
+/// the pointer was loaded from. A bare capture is the pointer in the closure's
+/// capture array, which nothing writes.
+pub fn place_reads(place: &Place, out: &mut Resources) {
     match place {
-        Place::Local(local) => local_reads(body, *local, out),
-        Place::Capture(idx) => {
-            out.cells.insert(CellId::Capture(*idx));
+        Place::Local(local) => {
+            out.locals.insert(*local);
+        }
+        Place::Capture(_) => {}
+        Place::Deref(cell) => {
+            out.cells.insert(*cell);
+            out.locals.extend(cell.local());
         }
         Place::Field { base, field } => {
             out.fields.insert(*field);
-            place_reads(body, base, out);
+            place_reads(base, out);
         }
         Place::Index { base, index, .. } => {
             out.elements = true;
-            local_reads(body, *index, out);
-            place_reads(body, base, out);
+            out.locals.insert(*index);
+            place_reads(base, out);
         }
     }
 }
@@ -341,7 +445,7 @@ pub fn rvalue_reads(
     track_type_slots: bool,
 ) -> Resources {
     let mut out = Resources::default();
-    walk_rvalue_places(rvalue, &mut |place| place_reads(body, place, &mut out));
+    walk_rvalue_places(rvalue, &mut |place| place_reads(place, &mut out));
     // Reads beyond the operands themselves. Exhaustive so a new variant that
     // reads the heap has to say so here.
     match rvalue {
@@ -385,18 +489,14 @@ pub fn rvalue_reads(
 // ---------------------------------------------------------------------------
 
 /// Record the resources a store to a place writes.
-fn place_writes(body: &MirFunctionBody<'_>, place: &Place, out: &mut Resources) {
+fn place_writes(place: &Place, out: &mut Resources) {
     match place {
         Place::Local(local) => {
-            if body.local(*local).is_captured {
-                // The store goes into the cell; the slot keeps its pointer.
-                out.cells.insert(CellId::Local(*local));
-            } else {
-                out.locals.insert(*local);
-            }
+            out.locals.insert(*local);
         }
-        Place::Capture(idx) => {
-            out.cells.insert(CellId::Capture(*idx));
+        Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
+        Place::Deref(cell) => {
+            out.cells.insert(*cell);
         }
         Place::Field { field, .. } => {
             out.fields.insert(*field);
@@ -418,7 +518,7 @@ pub fn statement_clobbers(
     let mut out = Resources::default();
     match kind {
         StatementKind::Assign { destination, value } => {
-            place_writes(body, destination, &mut out);
+            place_writes(destination, &mut out);
             if model.registers_observed && !out.locals.is_empty() {
                 out.order = true;
             }
@@ -458,11 +558,7 @@ pub fn statement_clobbers(
 /// A call, await, spawn, or sys-op runs code this frame cannot see (a closure
 /// holding one of its cells, another task, a host operation), so it writes
 /// every heap location; a throw is an event.
-pub fn terminator_clobbers(
-    body: &MirFunctionBody<'_>,
-    model: ClobberModel,
-    terminator: &Terminator<'_>,
-) -> Resources {
+pub fn terminator_clobbers(model: ClobberModel, terminator: &Terminator<'_>) -> Resources {
     let mut out = Resources::default();
     match terminator {
         Terminator::Goto { .. }
@@ -473,18 +569,18 @@ pub fn terminator_clobbers(
         Terminator::NarrowBind { destination, .. } => {
             out.locals.insert(*destination);
         }
-        Terminator::ShortCircuit { destination, .. } => place_writes(body, destination, &mut out),
+        Terminator::ShortCircuit { destination, .. } => place_writes(destination, &mut out),
         Terminator::Call { destination, .. }
         | Terminator::VirtualCall { destination, .. }
         | Terminator::SysOp { destination, .. }
         | Terminator::Await { destination, .. }
         | Terminator::AwaitAny { destination, .. } => {
-            place_writes(body, destination, &mut out);
+            place_writes(destination, &mut out);
             out.heap = true;
             out.order = true;
         }
         Terminator::Spawn { future, .. } => {
-            place_writes(body, future, &mut out);
+            place_writes(future, &mut out);
             out.heap = true;
             out.order = true;
         }
@@ -616,7 +712,7 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
 /// Whether a place goes through an index projection anywhere in its chain.
 fn place_indexes(place: &Place) -> bool {
     match place {
-        Place::Local(_) | Place::Capture(_) => false,
+        Place::Local(_) | Place::Capture(_) | Place::Deref(_) => false,
         Place::Index { .. } => true,
         Place::Field { base, .. } => place_indexes(base),
     }
@@ -633,6 +729,10 @@ fn operand_could_be_int<'db>(body: &MirFunctionBody<'db>, operand: &Operand<'db>
         Operand::Constant(c) => matches!(c, Constant::Int(_)),
         Operand::Copy(place) | Operand::Move(place) => match place {
             Place::Local(local) => ty_could_be_int(&body.local(*local).ty),
+            // A captured local's declared type is the type of the value in
+            // its cell.
+            Place::Deref(CellId::Local(local)) => ty_could_be_int(&body.local(*local).ty),
+            Place::Deref(CellId::Capture(_)) => true,
             // A field / index / capture read carries no type here.
             Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => true,
         },

@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use baml_base::Name;
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    BasicBlock, BlockId, CatchRegion, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, Place, Terminator, memory,
 };
 
@@ -366,6 +366,8 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
         match p {
             Place::Local(_) => {}
             Place::Capture(_) => {}
+            // The local behind a deref can't be replaced with a constant.
+            Place::Deref(cell) => set.extend(cell.local()),
             Place::Field { base, .. } => {
                 // The base local of a field projection can't be replaced with a constant.
                 if let Place::Local(l) = base.as_ref() {
@@ -681,6 +683,12 @@ fn count_in_place(p: &Place, uses: &mut [usize]) {
                 // Captures have no local base — nothing to count.
                 break;
             }
+            Place::Deref(cell) => {
+                if let Some(local) = cell.local() {
+                    uses[local.0] += 1;
+                }
+                break;
+            }
             Place::Field { base, .. } => cur = base,
             Place::Index { base, index, .. } => {
                 uses[index.0] += 1;
@@ -932,11 +940,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                     continue;
                 }
 
-                // Captured locals need a stable slot so emit can wrap them in a
-                // cell and closure construction can pass that cell pointer.
-                if body.locals[dest.0].is_captured {
-                    continue;
-                }
+                // A captured local's slot holds its cell pointer, written only
+                // by `FreshCell`; a value store goes through `Deref`.
+                debug_assert!(
+                    !body.locals[dest.0].is_captured,
+                    "bare store to captured {dest}"
+                );
 
                 // Skip locals with multiple definition sites (phi-like).
                 if defs[dest.0] != 1 {
@@ -948,9 +957,14 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                         if src.0 >= 1
                             && src.0 <= arity
                             && defs[src.0] == 0
-                            && !body.locals[src.0].is_captured
                             && !place_bound.contains(dest) =>
                     {
+                        // A bare captured parameter would be its cell pointer,
+                        // which no `Use` reads.
+                        debug_assert!(
+                            !body.locals[src.0].is_captured,
+                            "bare read of captured {src}"
+                        );
                         // Copy of param — substitute. Skip locals that appear
                         // as a Place::Index index, since removing the copy would
                         // leave the destination Place referencing a dead local.
@@ -1046,9 +1060,11 @@ fn propagate_block_param_copies(body: &mut MirFunctionBody<'_>, arity: usize) {
                 && (1..=arity).contains(&source.0)
                 && defs[source.0] > 0
                 && body.locals[destination.0].name.is_none()
-                && !body.locals[destination.0].is_captured
-                && !body.locals[source.0].is_captured
             {
+                debug_assert!(
+                    !body.locals[destination.0].is_captured && !body.locals[source.0].is_captured,
+                    "bare value access of a captured local"
+                );
                 copies.insert(destination, Operand::copy_local(*source));
             }
         }
@@ -1090,6 +1106,13 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand<'_>
         }
         Place::Capture(_) => {
             // Captures are indexed into the closure's capture array — no local to substitute.
+        }
+        Place::Deref(cell) => {
+            // A cell's local is a captured local's pointer, never substituted:
+            // copy propagation only ever maps uncaptured temps.
+            if let Some(local) = cell.local() {
+                debug_assert!(!subst.contains_key(&local), "substituting captured {local}");
+            }
         }
         Place::Field { base, .. } => {
             apply_subst_to_place_locals(base, subst);
@@ -1443,6 +1466,11 @@ fn remap_place(p: &mut Place, map: &[Option<Local>]) {
         Place::Capture(_) => {
             // Capture indices index into the closure's captures array — no local to remap.
         }
+        Place::Deref(cell) => {
+            if let CellId::Local(local) = cell {
+                remap_local(local, map);
+            }
+        }
         Place::Field { base, .. } => remap_place(base, map),
         Place::Index { base, index, .. } => {
             remap_local(index, map);
@@ -1713,6 +1741,17 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
                 }
                 Place::Capture(_) => {
                     // Capture index — no local to check.
+                    break;
+                }
+                Place::Deref(cell) => {
+                    // The value in a cell: a local's cell is a captured local's.
+                    if let CellId::Local(l) = cell {
+                        check_local(*l, ctx);
+                        assert!(
+                            body.local(*l).is_captured,
+                            "deref of uncaptured {l} in {ctx} of MIR function {name}",
+                        );
+                    }
                     break;
                 }
                 Place::Field { base, .. } => cur = base,
@@ -2066,7 +2105,7 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
     let edges = |term: &Terminator<'_>| -> Vec<(BlockId, Option<Local>)> {
         let local_of = |place: &Place| match place {
             Place::Local(local) => Some(*local),
-            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => None,
+            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } | Place::Deref(_) => None,
         };
         match term {
             Terminator::Goto { target } => vec![(*target, None)],
@@ -2149,11 +2188,20 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
     }
 
     // Transfer function, without checks: the checks run once at the fixpoint.
+    // A store through a captured local's cell gives the binding its value.
     let transfer = |state: &mut State, kind: &crate::StatementKind<'_>| match kind {
         crate::StatementKind::Assign {
             destination: Place::Local(local),
             ..
         } => state.assigned[local.0] = true,
+        crate::StatementKind::Assign {
+            destination: Place::Deref(cell),
+            ..
+        } => {
+            if let Some(local) = cell.local() {
+                state.assigned[local.0] = true;
+            }
+        }
         crate::StatementKind::FreshCell { local, carry_value } => {
             state.celled[local.0] = true;
             // The new cell holds `null` unless the old value was carried.
@@ -2238,12 +2286,31 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 );
             }
         };
+        // A value read. A bare captured local or capture is a cell pointer,
+        // which only a closure capture operand or a `FreshCell` may name.
         let read_place = |state: &State, place: &Place| {
             let mut place = place;
             loop {
                 match place {
-                    Place::Local(local) => break read_local(state, *local, "read of"),
-                    Place::Capture(_) => break,
+                    Place::Local(local) => {
+                        check!(
+                            !is_captured(*local),
+                            "bare read of captured {local}'s pointer in {block_id:?} of {name}"
+                        );
+                        break read_local(state, *local, "read of");
+                    }
+                    Place::Capture(_) => {
+                        check!(
+                            false,
+                            "bare read of a capture pointer in {block_id:?} of {name}"
+                        );
+                    }
+                    Place::Deref(cell) => {
+                        if let Some(local) = cell.local() {
+                            read_local(state, local, "read through");
+                        }
+                        break;
+                    }
                     Place::Field { base, .. } => place = base,
                     Place::Index { base, index, .. } => {
                         read_local(state, *index, "index read of");
@@ -2257,17 +2324,26 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
             Operand::Constant(_) => {}
         };
         // A destination: its projections are reads, and a captured local is
-        // written through its cell.
+        // written only through its cell, which must exist.
         let write_place = |state: &State, place: &Place| match place {
-            Place::Local(local) => {
-                if is_captured(*local) {
+            Place::Local(local) => check!(
+                !is_captured(*local),
+                "bare store to captured {local}'s pointer in {block_id:?} of {name}"
+            ),
+            Place::Deref(cell) => {
+                if let Some(local) = cell.local() {
                     check!(
                         state.celled[local.0],
-                        "write to captured {local} in {block_id:?} of {name} before its cell exists"
+                        "write through captured {local} in {block_id:?} of {name} before its cell exists"
                     );
                 }
             }
-            Place::Capture(_) => {}
+            Place::Capture(_) => {
+                check!(
+                    false,
+                    "store to a bare capture pointer in {block_id:?} of {name}"
+                );
+            }
             Place::Field { .. } | Place::Index { .. } => read_place(state, place),
         };
 

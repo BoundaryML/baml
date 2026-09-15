@@ -201,3 +201,44 @@ function cells_catch_arm_binding_in_loop() -> int[] {
 test "cells_catch_arm_binding_in_loop" {
     assert.equal(cells_catch_arm_binding_in_loop(), [10, 20, 30])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A sys-op binds its result to a local; any other destination — a field, a
+// capture, or the cell behind a captured binding — is written from that local
+// once the op returns. The write-back used to be skipped for every non-local
+// destination, so the result was silently dropped.
+
+class CellsClock {
+    at baml.time.Instant?
+}
+
+function cells_sysop_into_field() -> bool {
+    let clock = CellsClock { at: null };
+    clock.at = baml.time.Instant.now();
+    clock.at != null
+}
+
+test "cells_sysop_into_field" {
+    assert.is_true(cells_sysop_into_field())
+}
+
+function cells_sysop_into_capture() -> bool {
+    let at: baml.time.Instant? = null;
+    let read = () -> void { at = baml.time.Instant.now() };
+    read();
+    at != null
+}
+
+test "cells_sysop_into_capture" {
+    assert.is_true(cells_sysop_into_capture())
+}
+
+function cells_sysop_into_captured_let() -> bool {
+    let at = baml.time.Instant.now();
+    let f = () -> baml.time.Instant { at };
+    f() == at
+}
+
+test "cells_sysop_into_captured_let" {
+    assert.is_true(cells_sysop_into_captured_let())
+}

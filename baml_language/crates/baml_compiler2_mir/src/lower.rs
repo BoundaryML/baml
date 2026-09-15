@@ -8,6 +8,7 @@ use baml_type::{
 use indexmap::IndexMap;
 
 use crate::{
+    CellId,
     builder::MirBuilder,
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
@@ -2810,6 +2811,16 @@ impl<'db> LoweringContext<'db> {
             .is_some_and(|scope| scope.captured_bindings.contains(&binding))
     }
 
+    /// The place holding a binding's value: the local itself, or the cell
+    /// behind it when a closure captures the binding.
+    fn value_place(&self, local: Local) -> Place {
+        if self.builder.local_decl(local).is_captured {
+            Place::Deref(CellId::Local(local))
+        } else {
+            Place::Local(local)
+        }
+    }
+
     /// The local holding the method's `self` parameter, while lowering the
     /// method's own frame.
     // BUG: inside a nested lambda `self` is a capture rather than a local, so a
@@ -2983,20 +2994,24 @@ impl<'db> LoweringContext<'db> {
         self.binding_locals.get(&binding_id).copied()
     }
 
+    /// The place holding the value of the binding `name` resolves to at
+    /// `expr_id`: a local, or the value behind a cell for a captured binding
+    /// or a capture.
     fn place_for_path(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
         let binding_id = self.binding_id_for_path(expr_id, name)?;
         if let Some(&local) = self.binding_locals.get(&binding_id) {
-            return Some(Place::Local(local));
+            return Some(self.value_place(local));
         }
         if let Some(capture) = self
             .capture_indices
             .as_ref()
             .and_then(|captures| captures.get(&binding_id).copied())
         {
-            return Some(Place::Capture(capture));
+            return Some(Place::Deref(CellId::Capture(capture)));
         }
         if self.tagged_body_param_bindings.get(name) == Some(&binding_id) {
-            return Some(Place::Capture(self.ensure_transitive_capture(binding_id)));
+            let capture = self.ensure_transitive_capture(binding_id);
+            return Some(Place::Deref(CellId::Capture(capture)));
         }
         None
     }
@@ -4845,7 +4860,7 @@ impl<'db> LoweringContext<'db> {
                 Place::local(test_local),
                 Rvalue::BinaryOp {
                     op: BinOp::Eq,
-                    left: Operand::Copy(Place::local(param_local)),
+                    left: Operand::Copy(self.value_place(param_local)),
                     right: Operand::Constant(Constant::OmittedArg),
                 },
             );
@@ -4859,10 +4874,11 @@ impl<'db> LoweringContext<'db> {
             );
 
             self.builder.set_current_block(default_block);
+            let param_value = self.value_place(param_local);
             self.lower_default_expr(
                 default_ref.expr.expr(),
                 &parameter_defaults.defaults,
-                Place::local(param_local),
+                param_value,
             );
             if !self.builder.is_current_terminated() {
                 self.builder.goto(next_block);
@@ -6979,13 +6995,18 @@ impl<'db> LoweringContext<'db> {
                         self.builder.local_ty(root_local)
                     }
                 }
-                Place::Capture(_) => {
+                Place::Deref(CellId::Local(local)) => self
+                    .path_root_ty(expr_id)
+                    .unwrap_or_else(|| self.builder.local_ty(local)),
+                Place::Deref(CellId::Capture(_)) => {
                     self.path_root_ty(expr_id)
                         .unwrap_or_else(|| RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         })
                 }
-                _ => unreachable!("path roots are locals or captures"),
+                Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
+                    unreachable!("path roots are locals or the values in cells")
+                }
             };
             (place, ty)
         } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0]) {
@@ -7000,7 +7021,7 @@ impl<'db> LoweringContext<'db> {
             // routing below resolve the field view (same path as
             // `self.as<I>.field`). Without this the `default` root is not a
             // local -> null -> `string + null` VM crash.
-            let place = Place::Local(self_local);
+            let place = self.value_place(self_local);
             let ty = self
                 .path_root_ty(expr_id)
                 .unwrap_or_else(|| self.builder.local_ty(self_local));
@@ -8966,7 +8987,7 @@ impl<'db> LoweringContext<'db> {
                 let frame_type_arg_ops = self.emit_frame_type_arg_ops(&frame_tys);
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
-                all_args.push(Operand::Copy(Place::Local(self_local)));
+                all_args.push(Operand::Copy(self.value_place(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
                 let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
                 let target = self.builder.create_block();
@@ -9675,8 +9696,11 @@ impl<'db> LoweringContext<'db> {
             //     <args ...>
             //     SYS_OP g
             //     <store dest>
-            let dest_local = match dest {
-                Place::Local(l) => l,
+            // The terminator binds a local; any other destination (a field,
+            // an element, the value behind a cell) is written from a temp
+            // once the op has returned.
+            let dest_local = match &dest {
+                Place::Local(l) => *l,
                 _ => self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 }),
@@ -9702,6 +9726,15 @@ impl<'db> LoweringContext<'db> {
                 target,
                 unwind,
             );
+            if !matches!(dest, Place::Local(_)) {
+                self.builder.set_current_block(target);
+                let after = self.builder.create_block();
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Copy(Place::local(dest_local))));
+                self.builder.goto(after);
+                self.builder.set_current_block(after);
+                return;
+            }
         } else {
             // Call destinations must be Place::Local in MIR. If `dest` is a
             // projection (Field/Index) or a capture, call into a temp local
@@ -11465,7 +11498,11 @@ impl<'db> LoweringContext<'db> {
         let expr = &self.body.exprs[expr_id];
         if let AstExpr::Path(segments) = expr {
             if segments.len() == 1 {
-                if let Some(local) = self.local_for_path(expr_id, &segments[0]) {
+                if let Some(local) = self.local_for_path(expr_id, &segments[0])
+                    // A captured local holds a cell pointer, not the value;
+                    // the caller copies the value through the cell instead.
+                    && !self.builder.local_decl(local).is_captured
+                {
                     return Some(local);
                 }
             }
@@ -12578,23 +12615,21 @@ impl LoweringContext<'_> {
                     None => self.builder.temp(local_ty.clone()),
                 };
 
+                let value = self.value_place(local);
                 if let Some(init) = initializer {
-                    self.lower_expr(init, Place::local(local));
+                    self.lower_expr(init, value);
                 } else {
-                    self.builder.assign(
-                        Place::local(local),
-                        Rvalue::Use(Operand::Constant(Constant::Null)),
-                    );
+                    self.builder
+                        .assign(value, Rvalue::Use(Operand::Constant(Constant::Null)));
                 }
 
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.
                 for extra in names.iter().skip(1) {
                     let alias = self.declare_binding(pattern, site, extra, local_ty.clone());
-                    self.builder.assign(
-                        Place::local(alias),
-                        Rvalue::Use(Operand::Copy(Place::Local(local))),
-                    );
+                    let (alias_value, value) = (self.value_place(alias), self.value_place(local));
+                    self.builder
+                        .assign(alias_value, Rvalue::Use(Operand::Copy(value)));
                 }
             }
 
@@ -12932,13 +12967,17 @@ impl LoweringContext<'_> {
                             Place::Local(local) => self
                                 .path_root_ty(expr_id)
                                 .unwrap_or_else(|| self.builder.local_ty(local)),
-                            Place::Capture(_) => {
-                                self.path_root_ty(expr_id)
-                                    .unwrap_or_else(|| RuntimeTy::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
+                            Place::Deref(CellId::Local(local)) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| self.builder.local_ty(local)),
+                            Place::Deref(CellId::Capture(_)) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| RuntimeTy::Unknown {
+                                    attr: TyAttr::default(),
+                                }),
+                            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
+                                unreachable!("path roots are locals or the values in cells")
                             }
-                            _ => unreachable!("path roots are locals or captures"),
                         };
                         (place, ty)
                     } else {
@@ -14961,8 +15000,9 @@ impl<'db> LoweringContext<'db> {
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self.declare_binding(root, site, &name, ty);
+                let value = self.value_place(local);
                 self.builder.assign(
-                    Place::local(local),
+                    value,
                     Rvalue::Use(Operand::Copy(Place::Local(bound_scrutinee))),
                 );
                 // Recurse into the sub-pattern so inner bindings (e.g.
@@ -15142,10 +15182,9 @@ impl<'db> LoweringContext<'db> {
                         "or-pattern binding `{name}` was not declared ahead of its alternatives"
                     )
                 };
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                );
+                let value = self.value_place(local);
+                self.builder
+                    .assign(value, Rvalue::Use(Operand::Copy(Place::Local(scrutinee))));
             }
             AstPattern::Or(parts) => {
                 self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
@@ -15397,10 +15436,9 @@ impl LoweringContext<'_> {
                     attr: TyAttr::default(),
                 },
             );
-            ctx.builder.assign(
-                Place::local(local),
-                Rvalue::Use(Operand::Copy(Place::Local(source))),
-            );
+            let value = ctx.value_place(local);
+            ctx.builder
+                .assign(value, Rvalue::Use(Operand::Copy(Place::Local(source))));
             Some(local)
         }
 
