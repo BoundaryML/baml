@@ -651,7 +651,7 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
 /// trap and which handler receives it. Only arithmetic can fail, and only `/`
 /// fails for every operand type. The rest are `int`-only failures — `float`
 /// saturates to infinity or NaN, `bigint` grows, and `string + string` is
-/// concatenation — so they ask [`operand_could_be_int`]. Bitwise and/or/xor and
+/// concatenation — so they ask `operand_could_be_int`. Bitwise and/or/xor and
 /// the comparisons stay in range whatever the operands are.
 ///
 /// Matched exhaustively on purpose. This is a soundness predicate, and a

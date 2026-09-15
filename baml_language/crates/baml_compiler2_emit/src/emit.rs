@@ -856,10 +856,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
         }
 
+        // Build local type map for field name resolution (debug info).
+        for (i, local_decl) in mir.locals.iter().enumerate() {
+            self.local_types
+                .insert(Local(i), bex_vm_types::anchor_runtime_ty(&local_decl.ty));
+        }
+
+        // Build slot name mapping for debug metadata.
+        self.slot_names = Self::build_local_names(mir, &self.local_slots);
+
         // Wrap each captured parameter's value in a cell at entry. A parameter
         // is the one binding created without a `FreshCell` — the caller wrote
         // its value into the slot — so the frame preamble is where it gets its
         // cell. Every other captured local's cell comes from its `FreshCell`.
+        // Emitted after the slot names exist so the instructions carry them.
         for local in (1..=self.arity).map(Local) {
             if !mir.local(local).is_captured {
                 continue;
@@ -873,15 +883,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let inst = self.emit(Instruction::StoreVar(slot));
             self.set_var_operand(inst, slot);
         }
-
-        // Build local type map for field name resolution (debug info).
-        for (i, local_decl) in mir.locals.iter().enumerate() {
-            self.local_types
-                .insert(Local(i), bex_vm_types::anchor_runtime_ty(&local_decl.ty));
-        }
-
-        // Build slot name mapping for debug metadata.
-        self.slot_names = Self::build_local_names(mir, &self.local_slots);
 
         // 2. Emit blocks in RPO order.
         //

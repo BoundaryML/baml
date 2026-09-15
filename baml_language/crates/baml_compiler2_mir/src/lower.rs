@@ -2994,6 +2994,22 @@ impl<'db> LoweringContext<'db> {
         self.binding_locals.get(&binding_id).copied()
     }
 
+    /// The type of a path root held by `local`, preferring what TIR inferred
+    /// for the root expression. When TIR knows a more specific type than the
+    /// local's `Unknown` declaration, the declaration is refined too, so the
+    /// emitter can resolve field names for display (`load_field .index`).
+    fn refined_root_local_ty(&mut self, expr_id: AstExprId, local: Local) -> RuntimeTy {
+        let Some(tir_root) = self.path_root_ty(expr_id) else {
+            return self.builder.local_ty(local);
+        };
+        if matches!(self.builder.local_ty(local), RuntimeTy::Unknown { .. })
+            && !matches!(tir_root, RuntimeTy::Unknown { .. } | RuntimeTy::Void { .. })
+        {
+            self.builder.set_local_ty(local, tir_root.clone());
+        }
+        tir_root
+    }
+
     /// The place holding the value of the binding `name` resolves to at
     /// `expr_id`: a local, or the value behind a cell for a captured binding
     /// or a capture.
@@ -6977,27 +6993,11 @@ impl<'db> LoweringContext<'db> {
         let root_place = self.place_for_path(expr_id, &segments[0]);
         let (mut current_place, mut current_ty) = if let Some(place) = root_place {
             let ty = match place {
-                Place::Local(root_local) => {
-                    if let Some(tir_root) = self.path_root_ty(expr_id) {
-                        // If TIR inferred a more specific type for the root local,
-                        // update the MIR local's declared type so the emitter can
-                        // resolve field names for display (e.g. `load_field .index`).
-                        if matches!(self.builder.local_ty(root_local), RuntimeTy::Unknown { .. })
-                            && !matches!(
-                                tir_root,
-                                RuntimeTy::Unknown { .. } | RuntimeTy::Void { .. }
-                            )
-                        {
-                            self.builder.set_local_ty(root_local, tir_root.clone());
-                        }
-                        tir_root
-                    } else {
-                        self.builder.local_ty(root_local)
-                    }
+                // The local itself, or the value in its cell: either way the
+                // root's type is the local's, refined by TIR.
+                Place::Local(root_local) | Place::Deref(CellId::Local(root_local)) => {
+                    self.refined_root_local_ty(expr_id, root_local)
                 }
-                Place::Deref(CellId::Local(local)) => self
-                    .path_root_ty(expr_id)
-                    .unwrap_or_else(|| self.builder.local_ty(local)),
                 Place::Deref(CellId::Capture(_)) => {
                     self.path_root_ty(expr_id)
                         .unwrap_or_else(|| RuntimeTy::Unknown {
