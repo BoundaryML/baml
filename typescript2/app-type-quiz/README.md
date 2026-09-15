@@ -209,9 +209,12 @@ without one.
 
 ## Hosting
 
-The site is built and published by `.github/workflows/type-quiz-pages.yml`
-on every push to canary that touches it, to the repository's GitHub Pages
-under `type-quiz/`. The bridge, the SDK and the app are built from one
+The site is built and published by `.github/workflows/pages.yml` on every push
+to canary that touches it, under `type-quiz/`. That workflow owns the whole of
+the repository's Pages site: a deploy uploads a complete site and replaces what
+was there, so there is exactly one publisher, and the stdlib matrix at the root
+is built and deployed alongside this. A commit touching either tool therefore
+republishes both. The bridge, the SDK and the app are built from one
 checkout in one job, which they must be: the SDK's bytecode is stamped with
 the commit it was generated at and the bridge refuses a mismatch. The same
 job is the app's check on a pull request. Every transcript a learner

@@ -1,76 +1,186 @@
-name: Stdlib Matrix
+name: Pages
 
-# Publishes the BAML ↔ TypeScript stdlib comparison to GitHub Pages.
+# The repository's GitHub Pages site, whole, in one workflow.
 #
-# Triggered by a completed BAML Language Release rather than by a push: the
-# matrix describes a released stdlib surface, and rebuilding it for every commit
-# would publish a view of code nobody can install yet.
+# Pages serves what the last deploy uploaded, and a deploy uploads a complete
+# site. There is therefore exactly one publisher: two workflows deploying
+# independently would each erase the other's half. Both tools that live on the
+# site are built here and deployed together — the stdlib matrix at the root,
+# the type-system quiz under `type-quiz/`.
 #
-# The release workflow serves every channel from one definition, and a
-# `workflow_run` payload does not carry the inputs it was dispatched with, so
-# there is no way here to tell a canary cut from a nightly or a dry run. That
-# turns out not to matter: `run --check` compares the *inputs* the deployed
-# report was built from — the stdlib surface's content hash and the TypeScript
-# release — and stops the job when they have not moved. A release that did not
-# touch the stdlib costs a build and no model calls at all.
+# The coupling that buys is real and deliberate: a commit touching either tool
+# rebuilds and republishes the whole site. What it avoids is a second
+# publishing mechanism, and a site that silently loses half of itself the
+# first time both tools land in the same hour.
 #
-# Cost is bounded by the same mechanism that makes the tool resumable. The
-# currently-deployed matrix.json is fetched and passed as `--previous`, so a
-# symbol whose declaration and references are unchanged keeps the judgement it
-# already has and is never sent to a model again. Only what actually moved is
-# re-judged. The first run, with nothing deployed to carry forward, is the one
-# that pays in full.
+# THE MATRIX is built from canary, on the commits that can change what it
+# says: the stdlib surface, its tool, its page, and the pinned TypeScript the
+# surface is compared against. It was built from whatever the last release
+# cut, which described the stdlib as it was rather than as it is, and the page
+# fell behind canary by however long a release cycle took.
+#
+# Its cost is bounded by the report already published, fetched and passed as
+# `--previous`: a symbol whose declaration and references are unchanged keeps
+# the judgement it has and is never sent to a model again. `run --check`
+# compares the INPUTS that report was built from, so a commit that did not
+# move the stdlib costs a build and no model calls. A cold run judges the
+# whole surface and has to be asked for by dispatch, so that a site outage
+# cannot turn an unrelated commit into one.
+#
+# THE QUIZ is built from one checkout in one job, and must be: its SDK's
+# bytecode is stamped with the commit it was generated at and the bridge
+# refuses a mismatch, so a bridge from an earlier build strands the page. On a
+# pull request touching it, this is its real check — the workspace-wide
+# typecheck skips it, since the generated inputs do not exist in a bare
+# checkout — and nothing is published.
 
 on:
-  workflow_run:
-    workflows: ["BAML Language Release"]
-    types: [completed]
+  push:
+    branches: [canary]
+    paths:
+      # The quiz.
+      - "typescript2/app-type-quiz/**"
+      - "baml_language/tools/type_quiz/**"
+      - "baml_language/crates/baml_fmt_wasm/**"
+      # The matrix. The TypeScript its surface is compared against is pinned
+      # in the root manifest and resolved by the lockfile beside it.
+      - "baml_language/crates/baml_builtins2/baml_std/**"
+      - "tools/stdlib-matrix/**"
+      - "typescript2/app-stdlib-matrix/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "typescript2/app-type-quiz/**"
+      - "baml_language/tools/type_quiz/**"
+      - "baml_language/crates/baml_fmt_wasm/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
     inputs:
       force:
-        description: "Rebuild even when the stdlib surface is unchanged"
+        description: "Judge the whole stdlib surface, ignoring what is published"
         type: boolean
         default: false
         required: false
 
 # Never cancel in flight: a cancelled run can leave Pages mid-deploy, and the
-# work is expensive enough that finishing beats starting over.
+# matrix is expensive enough that finishing beats starting over.
 concurrency:
-  group: stdlib-matrix
+  group: pages
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: "Build the matrix and the site"
-    # Only a release that succeeded describes a surface worth publishing.
-    if: >-
-      github.repository == 'BoundaryML/baml' &&
-      (github.event_name == 'workflow_dispatch' ||
-       github.event.workflow_run.conclusion == 'success')
+  quiz:
+    name: "Build the quiz"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js, pnpm, and wasm-pack
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
+
+      - name: Setup Rust WASM target
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-wasm"
+          save-if: false
+
+      # The release bridge: 15 MB of WebAssembly, against 100 for the debug
+      # build the local `pnpm prepare:deps` makes.
+      - name: Build the web bridge
+        working-directory: baml_language/sdks/typescript/bridge_typescript_web
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+          pnpm build
+          test -s dist/wasm/bridge_web_core_bg.wasm
+
+      - name: Build the compiler
+        working-directory: baml_language
+        run: cargo build -p baml_cli
+
+      - name: Install workspace dependencies
+        working-directory: typescript2
+        run: pnpm install --frozen-lockfile
+
+      # The SDK and the formatter are generated from this checkout, beside the
+      # bridge built from it: the same commit throughout.
+      - name: Generate the SDK and build the formatter
+        working-directory: typescript2/app-type-quiz
+        env:
+          BAML_AGENT_SKILL_CHECK: "off"
+        run: |
+          set -euo pipefail
+          pnpm generate
+          pnpm build:wasm
+          test -s src/baml_sdk/index.ts
+          test -s wasm/baml_fmt_wasm_bg.wasm
+
+      - name: Typecheck and lint
+        working-directory: typescript2/app-type-quiz
+        run: |
+          set -euo pipefail
+          pnpm typecheck:strict
+          pnpm exec biome check src scripts
+
+      - name: Build the site
+        working-directory: typescript2/app-type-quiz
+        env:
+          TYPE_QUIZ_COMMIT: ${{ github.sha }}
+        run: pnpm build
+
+      - name: Drive it in a browser
+        working-directory: typescript2/app-type-quiz
+        env:
+          BAML_AGENT_SKILL_CHECK: "off"
+        run: |
+          set -euo pipefail
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:smoke
+
+      - name: "Upload the quiz site"
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quiz-site
+          path: typescript2/app-type-quiz/dist
+          if-no-files-found: error
+
+  matrix:
+    name: "Build the stdlib matrix"
+    # Nothing to publish from a pull request, and the model calls below are
+    # not something a fork can ask for.
+    if: github.event_name != 'pull_request' && github.repository == 'BoundaryML/baml'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     # A cold run is ~200 sessions, each up to seven model calls plus the
     # subprocess lookups between them, eight sessions at a time. An incremental
     # run is minutes; this bound is for the cold one.
     timeout-minutes: 120
-    # Holds OPENAI_API_KEY. Pages needs its own environment, which is why
-    # deploying is a separate job — a job may name only one.
+    # Holds OPENAI_API_KEY.
     #
     # -prod rather than -dev: the key in -dev was rejected on every one of 199
     # sessions, and the one here is the more recently rotated.
     environment: boundary-tools-prod
-    outputs:
-      changed: ${{ steps.ratchet.outputs.changed }}
     steps:
-      # A `workflow_run` job checks out the default branch unless told
-      # otherwise, which would publish a matrix of whatever canary happens to
-      # hold rather than of the surface that was just released.
-      - name: "Checkout the released commit"
+      - name: "Checkout"
         uses: useblacksmith/checkout@v1
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       # No mise: nothing here comes from it. Rust arrives through rustup and
@@ -102,17 +212,30 @@ jobs:
       - name: "Setup Node for the web app"
         uses: ./.github/actions/setup-node2
 
-      # A 404 is the expected first run, not a failure: there is nothing
-      # deployed to carry forward yet.
-      - name: "Fetch the deployed report"
+      # A 404 is the expected FIRST run and nothing else. The site holds the
+      # whole matrix, so after one publish the report is always there; a fetch
+      # that fails later means the site is down, and treating that as "nothing
+      # to carry forward" would turn an unrelated commit into a cold run that
+      # judges the entire surface. So a cold run has to be asked for.
+      - name: "Fetch the published report"
         id: previous
         env:
           SITE: ${{ vars.STDLIB_MATRIX_URL || 'https://boundaryml.github.io/baml' }}
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
-          if ! curl -fsSL --max-time 60 "${SITE}/matrix.json" -o previous.json; then
+          if curl -fsSL --max-time 60 "${SITE}/matrix.json" -o previous.json; then
+            # Both or neither: a site holding the report holds the rendering
+            # of it, and publishing an empty one would read as a matrix that
+            # had nothing to say.
+            curl -fsSL --max-time 60 "${SITE}/matrix.md" -o previous.md
+          else
+            if [[ "${FORCED}" != "true" ]]; then
+              echo "::error::no published report at ${SITE}/matrix.json. If this is the first run, or the report is gone, dispatch this workflow with force=true to judge the whole surface deliberately." >&2
+              exit 1
+            fi
             echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "Nothing deployed yet; this run judges the whole surface."
+            echo "Nothing published; this run judges the whole surface."
             exit 0
           fi
           # A report the tool can no longer read is worse than none: passing it
@@ -126,15 +249,15 @@ jobs:
           version="$(jq -r '.format_version // 0' previous.json 2>/dev/null || echo unreadable)"
           if [[ "${version}" != "2" ]]; then
             echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::deployed report is format v${version}, this tool writes v2; judging the whole surface"
+            echo "::notice::published report is format v${version}, this tool writes v2; judging the whole surface"
             rm -f previous.json
             exit 0
           fi
           echo "have=true" >> "$GITHUB_OUTPUT"
           jq -er '"carried forward from \(.counts.judgements) judgements"' previous.json
 
-      # The ratchet compares the inputs the deployed report was built from. A
-      # release that did not move the stdlib stops here, before any model call.
+      # The ratchet compares the inputs the published report was built from. A
+      # commit that did not move the stdlib stops here, before any model call.
       - name: "Has the surface moved?"
         id: ratchet
         env:
@@ -156,7 +279,7 @@ jobs:
           if tools/stdlib-matrix/run --check --baseline previous.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "extracted=true" >> "$GITHUB_OUTPUT"
-            echo "The deployed report was built from these inputs; nothing to publish."
+            echo "The published report was built from these inputs; nothing to judge."
           else
             status=$?
             # 1 is "out of date", which is the whole point. 2 is a tool error.
@@ -244,28 +367,44 @@ jobs:
             exit 1
           fi
 
+      # Always, judged or not. The deploy replaces the whole site, so a run
+      # where the stdlib did not move still has to hand the matrix over as it
+      # stands — otherwise publishing a change to the quiz would take the
+      # matrix off the site.
+      #
       # The report is fetched by the page at runtime, so it ships beside it.
       - name: "Build the site"
-        if: steps.ratchet.outputs.changed == 'true'
         working-directory: typescript2/app-stdlib-matrix
+        env:
+          CHANGED: ${{ steps.ratchet.outputs.changed }}
         run: |
           set -euo pipefail
-          # No copy: the report was written here directly, which is also what
-          # created this directory.
+          # When something was judged, `run` wrote the report straight into
+          # public/ — which is also what created that directory. When nothing
+          # was, the report to publish is the one already published.
+          if [[ "${CHANGED}" != "true" ]]; then
+            mkdir -p public
+            cp "${GITHUB_WORKSPACE}/previous.json" public/matrix.json
+          fi
           pnpm exec tsc -b --noEmit
           pnpm exec vite build
-          cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
+          if [[ "${CHANGED}" == "true" ]]; then
+            cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
+          else
+            cp "${GITHUB_WORKSPACE}/previous.md" dist/matrix.md
+          fi
 
-      - name: "Upload the site"
-        if: steps.ratchet.outputs.changed == 'true'
-        uses: actions/upload-pages-artifact@v5
+      - name: "Upload the matrix site"
+        uses: actions/upload-artifact@v7
         with:
+          name: matrix-site
           path: typescript2/app-stdlib-matrix/dist
+          if-no-files-found: error
 
   deploy:
-    name: "Deploy to Pages"
-    needs: build
-    if: needs.build.outputs.changed == 'true'
+    name: "Deploy the site"
+    needs: [quiz, matrix]
+    if: github.event_name != 'pull_request' && github.repository == 'BoundaryML/baml'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -275,6 +414,31 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - name: "The matrix, at the root"
+        uses: actions/download-artifact@v8
+        with:
+          name: matrix-site
+          path: site
+
+      - name: "The quiz, under its own path"
+        uses: actions/download-artifact@v8
+        with:
+          name: quiz-site
+          path: site/type-quiz
+
+      # Both halves or nothing: a deploy replaces the whole site, so one that
+      # is missing a tool takes that tool off the air.
+      - name: "Check the site is whole"
+        run: |
+          set -euo pipefail
+          test -s site/index.html
+          test -s site/matrix.json
+          test -s site/type-quiz/index.html
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
       - name: "Deploy"
         id: deploy
         uses: actions/deploy-pages@v5
