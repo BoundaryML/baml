@@ -40,14 +40,112 @@ class Unjudged {
 /// What asking for a judgement comes back as.
 type Judged = Grade | Unjudged;
 
-/// The client a judgement is made with: the model named, the learner's own
-/// key, and the header Anthropic requires of a request made from a browser.
+/// The mark a grade amounts to, in the words a mark is kept in.
+///
+/// Takes the grade rather than its `understanding` for the reason given on
+/// `words_of`: an enum argument does not survive the generated web SDK. The
+/// word itself is `understanding_word`'s, so a judged mark and one the
+/// learner made by hand are spelled by the same function.
+function mark_of(grade: Grade) -> string throws never {
+    understanding_word(grade.understanding)
+}
+
+/// Who answers a judgement.
+///
+/// The provider decides how the request is made, which is the only thing
+/// outside the model's name that differs between them.
+enum Provider {
+    Anthropic,
+    OpenAI,
+}
+
+/// How a provider is put to a learner: its name, and what its keys look
+/// like. A surface asking for a key needs both and should not be deciding
+/// either from the provider's spelling — adding a provider adds an arm below
+/// and stops compiling until it has words.
+class ProviderWords {
+    name: string,
+    key_hint: string,
+}
+
+/// BUG: an enum cannot be passed as an argument from the generated web SDK —
+/// a TypeScript string enum's member IS a string at run time, the bridge's
+/// encoder lowers it as one, and the call dies in the VM with "expected
+/// variant, got string". So nothing here takes a `Provider` from a caller
+/// across that boundary: the words ride on the `Offer` the caller already
+/// holds. See the README's toolchain issues.
+function words_of(provider: Provider) -> ProviderWords throws never {
+    match (provider) {
+        Provider.Anthropic => ProviderWords { name: "Anthropic", key_hint: "sk-ant-…" },
+        Provider.OpenAI => ProviderWords { name: "OpenAI", key_hint: "sk-…" },
+    }
+}
+
+/// A model a judgement can be asked of.
+class Offer {
+    /// The provider's own name for the model, which is also what a learner's
+    /// saved settings hold.
+    id: string,
+    /// What the learner reads.
+    label: string,
+    provider: Provider,
+    /// How to ask for this provider's key. Carried on the row rather than
+    /// looked up by a caller, so asking for a key needs nothing but the row.
+    words: ProviderWords,
+}
+
+/// One row of the table.
+function offer(id: string, label: string, provider: Provider) -> Offer throws never {
+    Offer { id, label, provider, words: words_of(provider) }
+}
+
+/// The models a judgement may be asked of, best first for each provider.
+///
+/// One table. A surface offers a learner exactly these and hands an `id`
+/// back, and `judge_client` builds a client for exactly these, so a model
+/// that can be chosen but not asked — or asked but never offered — does not
+/// exist. Adding one is adding a row.
+function offered() -> Offer[] throws never {
+    [
+        offer("claude-sonnet-4-5", "Claude Sonnet 4.5", Provider.Anthropic),
+        offer("claude-haiku-4-5", "Claude Haiku 4.5", Provider.Anthropic),
+        offer("gpt-5", "GPT-5", Provider.OpenAI),
+        offer("gpt-5-mini", "GPT-5 mini", Provider.OpenAI),
+    ]
+}
+
+/// The offer `id` names.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if the id is not one of `offered()`. The
+///   caller is an interface of ours rather than a stranger: it chose from
+///   this table, so a name it never showed anyone is a defect in it and not
+///   something to absorb.
+function offer_of(id: string) -> Offer throws never {
+    offered().find((offer) -> {
+        offer.id == id
+    })
+        ?? throw baml.panics.Unreachable { message: `no such model: ${id}` }
+}
+
+/// The client a judgement is made with: the model, and the learner's own key.
+///
+/// Anthropic asks for a header before it will answer a request made from a
+/// browser; OpenAI asks for nothing beyond the key, so there is nothing to
+/// pass. Everything else about the two requests is the provider's business.
 function judge_client(key: string, model: string) -> ai.Client throws never {
-    anthropic.Client.new(
-        model = model,
-        api_key = key,
-        headers = { "anthropic-dangerous-direct-browser-access": "true" },
-    )
+    let offer = offer_of(model);
+    match (offer.provider) {
+        Provider.Anthropic => {
+            anthropic.Client.new(
+                model = offer.id,
+                api_key = key,
+                headers = { "anthropic-dangerous-direct-browser-access": "true" },
+            )
+        },
+        Provider.OpenAI => openai.ChatClient.new(model = offer.id, api_key = key),
+    }
 }
 
 /// The learner's answer as the sentence a grader is told.

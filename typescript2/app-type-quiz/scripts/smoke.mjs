@@ -346,10 +346,11 @@ try {
   );
 
   // Who marks the reasoning. With no key the learner marks their own, which
-  // is the fallback; with one stored, the sitting asks for reasons by
-  // default and says the judge will read them. The judgement itself is a
-  // call on a real key, so it is not made here: what is checked is that the
-  // page asks the right marker, and that a mark made by hand still lands.
+  // is the fallback; with one set, the sitting asks for reasons and says the
+  // judge will read them. The judgement itself is a call on a real key, so it
+  // is not made here: what is checked is that the page asks the right marker,
+  // that a key typed in is taken as one, and that a key stored under the
+  // older single-key shape still counts.
   await page.locator('button:has-text("New sitting")').first().click();
   await page.waitForSelector('button:has-text("Start")', WAIT);
   const asks = page.locator('label.check:has-text("Ask why")');
@@ -361,24 +362,62 @@ try {
     !(await asks.locator('input').isChecked()),
     "with no key, asking why should be the learner's to turn on",
   );
+
+  // Typing a key is enough: the marker changes, and asking why follows it
+  // rather than having been settled before the key arrived.
+  await page.click('details:has-text("Judge") summary');
+  await page.fill('label:has-text("API key") input', 'sk-ant-not-a-key');
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('label.check')
+        ?.textContent?.includes('have the judge mark') === true,
+    undefined,
+    WAIT,
+  );
+  expect(
+    await asks.locator('input').isChecked(),
+    'a key should turn on asking why, since reasons are what it reads',
+  );
+  // The key is held under the provider that issued it, and the field follows
+  // the model: switching to the other provider asks for its own key.
+  const anthropic = await page.evaluate(() =>
+    JSON.parse(window.localStorage.getItem('type-quiz/judge') ?? '{}'),
+  );
+  expect(
+    anthropic.keys?.Anthropic === 'sk-ant-not-a-key',
+    `the key is not held under its provider: ${JSON.stringify(anthropic)}`,
+  );
+  await page.selectOption('label:has-text("Model") select', 'gpt-5');
+  expect(
+    (await text(page, 'label:has-text("API key")')).includes('OpenAI'),
+    'the key field does not follow the model to its provider',
+  );
+  expect(
+    (await page.inputValue('label:has-text("API key") input')) === '',
+    "the other provider's key is being shown for OpenAI",
+  );
+
+  // Settings written before there was more than one provider held one key,
+  // under the model chosen then; they still count.
   await page.evaluate(() =>
     window.localStorage.setItem(
       'type-quiz/judge',
-      JSON.stringify({ key: 'sk-ant-not-a-key', model: 'claude-sonnet-4-5' }),
+      JSON.stringify({ key: 'sk-ant-older-shape', model: 'claude-haiku-4-5' }),
     ),
   );
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('button:has-text("New sitting")', WAIT);
   await page.locator('button:has-text("New sitting")').first().click();
   await page.waitForSelector('button:has-text("Start")', WAIT);
-  const judged = page.locator('label.check:has-text("Ask why")');
+  const older = page.locator('label.check:has-text("Ask why")');
   expect(
-    (await judged.textContent()).includes('have the judge mark'),
-    `with a key the judge should mark: ${await judged.textContent()}`,
+    (await older.textContent()).includes('have the judge mark'),
+    `a key saved in the older shape is not being read: ${await older.textContent()}`,
   );
   expect(
-    await judged.locator('input').isChecked(),
-    'a stored key should turn on asking why, since reasons are what it reads',
+    await older.locator('input').isChecked(),
+    'a key saved in the older shape should turn on asking why',
   );
 
   // Back to no key, and sit two cases the whole way: reasons asked for after

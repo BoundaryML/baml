@@ -43,27 +43,54 @@ function fixture_claims() -> root.engine.Claim[] throws never {
     ]
 }
 
-/// The key the fixtures run with, or empty when there is none, which is what
-/// keeps them off every run that did not ask for them.
-function live_key() -> string throws never {
-    baml.env.get("ANTHROPIC_API_KEY") catch_all (e) {
+/// The judge the fixtures ask: a key, and the model it can be spent on.
+class Live {
+    /// Empty when no provider's key is in the environment, which is what
+    /// keeps these fixtures off every run that did not ask for them.
+    key: string,
+    model: string,
+}
+
+/// The value of `name`, or empty when it is unset or unreadable.
+function env_key(name: string) -> string throws never {
+    baml.env.get(name) catch_all (e) {
         baml.errors.Io => "",
         baml.errors.ParseError => "",
     }
         ?? ""
 }
 
+/// One provider's judge: its key from the environment, and the best model the
+/// engine's own table offers for it, or `null` when the key is unset. The
+/// model is looked up rather than named here, so these fixtures cannot ask
+/// for a model the judge does not offer.
+function live_for(name: string, provider: root.engine.Provider) -> Live? throws never {
+    let key = env_key(name);
+    if (key == "") {
+        return null;
+    }
+    let offer = root.engine.offered().find((offer) -> {
+        offer.provider == provider
+    })
+        ?? return null;
+    Live { key, model: offer.id }
+}
+
+/// Whichever provider's key is set, Anthropic first. Calibration is about the
+/// grader's prompt and rubric rather than about one provider, so it runs on
+/// whichever key the person asking for it has.
+function live_judge() -> Live throws never {
+    live_for("ANTHROPIC_API_KEY", root.engine.Provider.Anthropic)
+        ?? live_for("OPENAI_API_KEY", root.engine.Provider.OpenAI)
+        ?? Live { key: "", model: "" }
+}
+
 /// A provider error is a failed fixture, not something to absorb: these run
 /// only when someone has asked for them with a key, and then they should say
 /// what went wrong.
 function marked(reasoning: string) -> root.engine.Grade {
-    let judged = root.engine.judge_reasoning(
-        live_key(),
-        "claude-sonnet-4-5",
-        fixture_revealed(),
-        "compiles",
-        reasoning,
-    );
+    let judge = live_judge();
+    let judged = root.engine.judge_reasoning(judge.key, judge.model, fixture_revealed(), "compiles", reasoning);
     match (judged) {
         let grade: root.engine.Grade => grade,
         let unjudged: root.engine.Unjudged => {
@@ -78,7 +105,7 @@ testset "live" with testing.Sequential() {
     test "preconditions" {
         assert.is_true(true)
     }
-    if (live_key() != "") {
+    if (live_judge().key != "") {
         test "sound reasoning is marked sound" {
             let grade = marked(
                 "A literal type like `1` is a subtype of its concrete type `int`, and a `let` with an annotation accepts any subtype of the annotation, so this compiles.",
@@ -92,6 +119,6 @@ testset "live" with testing.Sequential() {
             assert.is_true(grade.understanding != root.engine.Understanding.Sound)
         }
     } else {
-        log.warn("live::grader not registered: ANTHROPIC_API_KEY is unset")
+        log.warn("live::grader not registered: neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is set")
     }
 }

@@ -192,12 +192,17 @@ provider refused it, or the network did — the reveal says so in the provider's
 own words and offers to ask again or to move on unmarked. The transcript
 records which marked each case.
 
-The judge needs an Anthropic API key, entered under Setup → Judge; entering
-one also turns on asking why, since reasons are what a judge reads. The key is
-kept in this browser's local storage and sent only to Anthropic, once per
-judgement, with the header Anthropic requires of a request made from a
-browser; this site is static, has no server, and nothing of ours ever sees it.
-Clearing the field stops it, and marking falls back to the learner. Each
+The judge needs a key for the model chosen under Setup → Judge, which may be
+Anthropic's or OpenAI's; entering one also turns on asking why, since reasons
+are what a judge reads. Keys are held one per provider, because that is what
+they belong to: the field follows the model, a learner with both can move
+between them without pasting either again, and a key can never be sent to the
+provider that did not issue it. They are kept in this browser's local storage
+and sent only to that provider, once per judgement. Anthropic asks for a
+header before it will answer a request made from a browser and gets one;
+OpenAI asks for nothing beyond the key. This site is static, has no server,
+and nothing of ours ever sees a key. Clearing the field stops it, and marking
+falls back to the learner. Each
 judgement is one call on that key, so it is made once per case that has both a
 key to make it with and reasoning to read, and never for a case answered
 without one.

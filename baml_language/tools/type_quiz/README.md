@@ -287,15 +287,26 @@ call (`ai.errors.Failure` and the four the runtime itself raises), so a new
 channel stops the package compiling rather than reaching a learner as a
 blank.
 
-**The key is the learner's, and it goes nowhere of ours.** The page keeps it
-in the browser and passes it into each call; `judge_client` builds an
-Anthropic client with it and the header Anthropic documents for a request
-made from a browser, and that one request is the only thing it touches. The
-site is static — it has no server — so there is nothing for a key to be sent
-to but the provider. Nothing in this package reads an environment variable
+The models a judgement may be asked of are one table, `offered()`: a surface
+shows a learner exactly those and hands an id back, and `judge_client` builds
+a client for exactly those, so a model that can be chosen but not asked — or
+asked but never offered — does not exist, and adding one is adding a row.
+Which provider answers is the row's, not the id's: nothing reads a model's
+name to guess who made it.
+
+**The key is the learner's, and it goes nowhere of ours.** The page keeps one
+per provider in the browser and passes the right one into each call, so a key
+cannot reach a provider that did not issue it; `judge_client` builds that
+provider's client with it, with the header Anthropic documents for a request
+made from a browser where the row says Anthropic, and that one request is the
+only thing it touches. The site is static — it has no server — so there is
+nothing for a key to be sent to but the provider. Nothing in this package reads an environment variable
 on the quiz path. The grader's calibration fixtures (`ns_conformance/
-grader.baml`) run only under the `live` profile and only when
-`ANTHROPIC_API_KEY` is set, so CI, which runs offline, never calls a model.
+grader.baml`) run only under the `live` profile and only when a provider's
+key — `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` — is in the environment, on
+whichever of the two is set, since calibration is about the prompt and the
+rubric rather than about one provider. CI runs offline and never calls a
+model.
 
 ## Standing a model in for a learner
 
@@ -442,4 +453,19 @@ minimal single-file packages; none is fixed at the time of writing.
    built an hour ago, and the bridge is a multi-minute wasm build. A
    fingerprint over the bytecode format and the compiler's own sources would
    refuse the pairs that actually disagree.
+
+14. **An enum cannot be passed as an argument from the generated TypeScript
+   SDK.** The generator emits a string enum, whose member IS a string at run
+   time, so the bridge's encoder (`setInboundValue`) lowers it as
+   `stringValue` and the call dies inside the VM:
+   `baml.panics.SdkPanic: VM internal error: type error: expected variant,
+   got string`. Decoding is fine — a returned enum comes back as a member —
+   so the break is silent until something calls in the other direction, and
+   it is a run-time panic rather than a type error, since the generated
+   signature says `Provider` and TypeScript is happy to pass one. Every
+   function this package exposes to the page therefore takes classes and
+   strings only: the provider's words ride on the `Offer` row and `mark_of`
+   takes the `Grade` rather than its `understanding`. The encoder would need
+   the declared parameter type, which the wire already carries, to lower a
+   string against an enum position.
 

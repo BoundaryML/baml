@@ -1,11 +1,15 @@
-// The grader, from the page's side: the learner's key and model, kept in
-// this browser and nowhere else, and one call per judgement.
+// The grader, from the page's side: the learner's keys and chosen model,
+// kept in this browser and nowhere else, and one call per judgement.
 //
-// The key goes into exactly one request, to Anthropic, with the header that
-// provider documents for a call made from a browser. The site is static and
-// has no server of its own, so there is nothing of ours for the key to reach;
-// storing it here rather than asking every time is a convenience the learner
-// can undo by clearing it.
+// A key goes into exactly one request, to the provider that issued it. The
+// site is static and has no server of its own, so there is nothing of ours
+// for a key to reach; storing them here rather than asking every time is a
+// convenience the learner can undo by clearing the field.
+//
+// Keys are held one per provider, because that is what they belong to: a
+// learner with an Anthropic key and an OpenAI key can move between models
+// without pasting either again, and a key can never be sent to the provider
+// that did not issue it.
 
 import { engine } from '@quiz/sdk';
 import type { Revealed } from './quiz';
@@ -24,37 +28,87 @@ export type Judgement =
 
 const KEY = 'type-quiz/judge';
 
+export type Offer = engine.Offer;
+
 export interface JudgeSettings {
-  key: string;
+  /** A key per provider, by the provider's own name. */
+  keys: Record<string, string>;
   model: string;
 }
 
-/** The models offered, first is the default. */
-export const MODELS: ReadonlyArray<[string, string]> = [
-  ['claude-sonnet-4-5', 'Claude Sonnet 4.5'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5'],
-];
+/** The models a judgement may be asked of, best first; the engine's table. */
+export function models(): Offer[] {
+  return engine.offered();
+}
+
+/** The offer the settings name. */
+export function offerOf(model: string): Offer {
+  return engine.offer_of(model);
+}
+
+/**
+ * How the provider behind a model is put to a learner.
+ *
+ * Off the row rather than asked for: an enum argument does not survive the
+ * generated web SDK, so nothing here hands a `Provider` back to the engine.
+ */
+export function wordsFor(model: string): engine.ProviderWords {
+  return offerOf(model).words;
+}
+
+/** The key for a model's provider, or empty when there is none for it. */
+export function keyFor(settings: JudgeSettings, model: string): string {
+  return settings.keys[offerOf(model).provider] ?? '';
+}
+
+/** The settings with `key` set for the provider of the chosen model. */
+export function withKey(settings: JudgeSettings, key: string): JudgeSettings {
+  return {
+    ...settings,
+    keys: { ...settings.keys, [offerOf(settings.model).provider]: key },
+  };
+}
+
+function fresh(): JudgeSettings {
+  return { keys: {}, model: models()[0].id };
+}
 
 export function loadJudge(): JudgeSettings {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (raw === null) {
-      return { key: '', model: MODELS[0][0] };
+      return fresh();
     }
     const value: unknown = JSON.parse(raw);
     if (typeof value !== 'object' || value === null) {
-      return { key: '', model: MODELS[0][0] };
+      return fresh();
     }
-    const { key, model } = value as { key?: unknown; model?: unknown };
-    return {
-      key: typeof key === 'string' ? key : '',
-      model:
-        typeof model === 'string' && MODELS.some(([id]) => id === model)
-          ? model
-          : MODELS[0][0],
+    const { key, keys, model } = value as {
+      key?: unknown;
+      keys?: unknown;
+      model?: unknown;
     };
+    const offers = models();
+    const chosen =
+      typeof model === 'string' && offers.some((o) => o.id === model)
+        ? model
+        : offers[0].id;
+    const held: Record<string, string> = {};
+    if (typeof keys === 'object' && keys !== null) {
+      for (const [provider, value] of Object.entries(keys)) {
+        if (typeof value === 'string') {
+          held[provider] = value;
+        }
+      }
+    }
+    // Settings written before there was more than one provider held a single
+    // key, which belonged to whichever model was chosen then.
+    if (typeof key === 'string' && key !== '') {
+      held[offerOf(chosen).provider] ??= key;
+    }
+    return { keys: held, model: chosen };
   } catch {
-    return { key: '', model: MODELS[0][0] };
+    return fresh();
   }
 }
 
@@ -64,7 +118,7 @@ export function saveJudge(settings: JudgeSettings): void {
 
 /** Whether a judgement can be asked for at all. */
 export function judgeReady(settings: JudgeSettings): boolean {
-  return settings.key.trim() !== '';
+  return keyFor(settings, settings.model).trim() !== '';
 }
 
 /**
@@ -82,7 +136,7 @@ export async function judgeReasoning(
   reasoning: string,
 ): Promise<Judgement> {
   const judged = await engine.judge_reasoning_async(
-    settings.key.trim(),
+    keyFor(settings, settings.model).trim(),
     settings.model,
     revealed,
     said,
@@ -99,8 +153,9 @@ export async function judgeReasoning(
  * The engine's own word for the understanding, rather than a word of the
  * page's: the same three words name a mark the learner made by hand, and one
  * account of them is what keeps a judged mark and a self-made one from
- * drifting apart.
+ * drifting apart. It takes the grade, not its understanding, because an enum
+ * argument does not survive this boundary.
  */
 function markOf(grade: Grade): string {
-  return engine.understanding_word(grade.understanding);
+  return engine.mark_of(grade);
 }

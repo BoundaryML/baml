@@ -5,9 +5,12 @@ import { useState } from 'react';
 import {
   type JudgeSettings,
   judgeReady,
+  keyFor,
   loadJudge,
-  MODELS,
+  models,
   saveJudge,
+  withKey,
+  wordsFor,
 } from './judge';
 import { PointsRule, percent } from './panels';
 import {
@@ -62,10 +65,16 @@ export function Setup({
     setJudge(next);
     saveJudge(next);
   };
-  // Giving reasons is what a judge reads, so a sitting that has one to ask
-  // starts out asking for them. Without a key the marking would fall to the
-  // learner, which is a thing to opt into rather than to be handed.
-  const [full, setFull] = useState(() => judgeReady(judge));
+  // Giving reasons is what a judge reads, so a sitting with one to ask asks
+  // for them: until the learner says otherwise, this follows the key rather
+  // than being sampled from it once. Setting a key and finding that nothing
+  // is judged — because the box happened to be drawn before the key was
+  // pasted — is the whole failure this is here to prevent. Without a key the
+  // marking would fall to the learner, which is a thing to opt into rather
+  // than to be handed.
+  const [asking, setAsking] = useState<boolean | null>(null);
+  const full = asking ?? judgeReady(judge);
+  const chosen = wordsFor(judge.model);
   const knobs: KnobValues = {
     ...defaults,
     bar,
@@ -110,7 +119,7 @@ export function Setup({
       <label className="check">
         <input
           checked={full}
-          onChange={(e) => setFull(e.target.checked)}
+          onChange={(e) => setAsking(e.target.checked)}
           type="checkbox"
         />
         {judgeReady(judge)
@@ -187,33 +196,35 @@ export function Setup({
           explanation, in place of your marking it yourself, and says what the
           reasoning did not reach. That is one call on your key per case you
           give a reason for, and you are not asked to mark your own while there
-          is a key set. The key is kept in this browser and sent only to
-          Anthropic, with each judgement; this site has no server, and nothing
-          of ours ever sees it. Clear the field to stop.
+          is a key set. A key is kept in this browser and sent only to the
+          provider that issued it, with each judgement; this site has no server,
+          and nothing of ours ever sees it. Keys are held one per provider, so
+          moving between models does not ask for either again. Clear the field
+          to stop.
         </p>
-        <label>
-          Anthropic API key
-          <input
-            autoComplete="off"
-            onChange={(e) => keepJudge({ ...judge, key: e.target.value })}
-            placeholder="sk-ant-…"
-            spellCheck={false}
-            type="password"
-            value={judge.key}
-          />
-        </label>
         <label>
           Model
           <select
             onChange={(e) => keepJudge({ ...judge, model: e.target.value })}
             value={judge.model}
           >
-            {MODELS.map(([id, label]) => (
-              <option key={id} value={id}>
-                {label}
+            {models().map((offer) => (
+              <option key={offer.id} value={offer.id}>
+                {offer.label}
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          {chosen.name} API key
+          <input
+            autoComplete="off"
+            onChange={(e) => keepJudge(withKey(judge, e.target.value))}
+            placeholder={chosen.key_hint}
+            spellCheck={false}
+            type="password"
+            value={keyFor(judge, judge.model)}
+          />
         </label>
       </details>
       <div className="choices">
