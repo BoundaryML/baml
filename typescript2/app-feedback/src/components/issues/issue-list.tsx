@@ -10,12 +10,15 @@ import type { Difficulty, Issue, StatusState, Subsystem } from "@/lib/types";
 import { progress, relativeTime, stageInfo } from "@/lib/pipeline";
 import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStrip } from "./pipeline-strip";
+import { StatTiles } from "./stat-tiles";
 
 type ViewMode = "list" | "board";
 
 const STATUS_OPTIONS: { value: StatusState | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
+  { value: "awaiting_approval", label: "Paused (legacy)" },
+  { value: "approved", label: "Previously queued" },
   { value: "in_progress", label: "In progress" },
   { value: "merged", label: "Merged" },
   { value: "shipped", label: "Shipped" },
@@ -28,6 +31,8 @@ const DIFFICULTIES: Difficulty[] = ["Trivial", "Easy", "Medium", "Hard"];
 
 const BOARD_COLUMNS: { state: StatusState; label: string; color: string }[] = [
   { state: "open", label: "Open", color: "bg-blue-500" },
+  { state: "awaiting_approval", label: "Paused (legacy)", color: "bg-orange-600" },
+  { state: "approved", label: "Previously queued", color: "bg-teal-600" },
   { state: "in_progress", label: "In progress", color: "bg-amber-500" },
   { state: "merged", label: "Merged", color: "bg-purple-500" },
   { state: "shipped", label: "Shipped", color: "bg-green-600" },
@@ -118,10 +123,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
   const [showEval, setShowEval] = useState(false);
   const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length, [issues]);
 
+  const datasetIssues = useMemo(() => issues.filter((i) => showEval || i.dataset !== "eval"), [issues, showEval]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return issues
-      .filter((i) => showEval || i.dataset !== "eval")
+    return datasetIssues
       .filter((i) => view === "board" || status === "all" || i.status.state === status)
       .filter((i) => subsystem === "all" || i.subsystem === subsystem)
       .filter((i) => difficulty === "all" || i.difficulty === difficulty)
@@ -137,10 +143,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           ? a.updated_at.localeCompare(b.updated_at)
           : b.updated_at.localeCompare(a.updated_at),
       );
-  }, [issues, status, subsystem, difficulty, query, oldestFirst, view, showEval]);
+  }, [datasetIssues, status, subsystem, difficulty, query, oldestFirst, view]);
 
   return (
     <div className="space-y-4">
+      <StatTiles issues={datasetIssues} />
       <div className="flex flex-col gap-3">
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
           {view === "list" ? (
