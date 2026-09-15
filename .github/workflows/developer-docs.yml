@@ -46,10 +46,10 @@ jobs:
         id: changes
         env:
           ACTOR: ${{ github.actor }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -60,11 +60,13 @@ jobs:
           fi
           echo "can-use-secrets=$can_use_secrets" >> "$GITHUB_OUTPUT"
 
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
             echo "should-run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # A missing diff base must fail rather than silently skip required jobs.
+          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
           should_run=false
           while IFS= read -r file; do
             case "$file" in
@@ -85,7 +87,7 @@ jobs:
                 break
                 ;;
             esac
-          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          done <<< "$changed_files"
           echo "should-run=$should_run" >> "$GITHUB_OUTPUT"
 
   quality:
@@ -258,7 +260,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.19.0' }}
+      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || 'latest' }}
       VERCEL_ENV: preview
     steps:
       - name: Checkout
@@ -272,9 +274,10 @@ jobs:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
         run: test -n "$GENERATED_CONTENT_DATABASE_URL" || { echo "::error::GENERATED_CONTENT_DATABASE_URL is not configured"; exit 1; }
       - name: Verify the immutable release through the runtime reader
+        id: release
         env:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-        run: pnpm --filter app-developer-docs docs:db:verify --version "$GENERATED_CONTENT_VERSION"
+        run: pnpm --filter app-developer-docs docs:db:verify --version "$GENERATED_CONTENT_VERSION" --github-output
         working-directory: typescript2
       - name: Build the SSR application
         run: pnpm --filter app-developer-docs build
@@ -287,7 +290,7 @@ jobs:
         working-directory: typescript2/app-developer-docs
       - name: Verify representative exact-version pages, metadata, and 404s over HTTP
         env:
-          VERSION: v${{ env.GENERATED_CONTENT_VERSION }}
+          VERSION: v${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           ready=false
@@ -335,7 +338,7 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4173/cli/v0.0.0-missing)" = "404"
 
   pre-merge-gate:
-    name: Developer Docs Pre-merge Gate
+    name: Developer Docs
     needs:
       - determine-changes
       - quality
@@ -343,7 +346,7 @@ jobs:
       - snippets
       - database-integration
       - production-path
-    if: always() && github.event_name == 'pull_request'
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: Require affected documentation checks

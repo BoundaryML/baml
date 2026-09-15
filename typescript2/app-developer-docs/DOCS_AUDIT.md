@@ -18,7 +18,7 @@ changed example or instructions were checked again.
 | --- | --- | --- |
 | `/` | Verified | Navigation destinations and production HTML. |
 | `/baml` | Corrected | Explains both ordinary functions and model calls; CLI and SDK entry points. |
-| `/baml/get-started` | Corrected | Complete install, project, check, and run sequence. The example returns `42` without a provider. |
+| `/baml/get-started` | Corrected | Self-contained macOS/Linux, Windows, and Arch installation, PATH setup, editor/agent setup, updates, project creation, and first run. The example returns `42` without a provider. |
 | `/baml/book` | Verified | Available chapters link correctly; unpublished titles are explicitly planned. |
 | `/baml/book/errors` | Corrected | Effect examples explicitly target Effect 3. BAML behavior and inferred signatures pass; TypeScript, Effect, and Rust success/propagation/recovery examples execute. |
 | `/baml/book/interfaces` | Verified | Canonical projects compile; behavior and compiler-diagnostic checks pass. |
@@ -26,7 +26,7 @@ changed example or instructions were checked again.
 | `/baml/language` | Corrected | Removes placeholder claims and links readers to available syntax and chapters. |
 | `/baml/language/functions` | Corrected | Uses snake_case; explains named/default parameters and host SDK conventions. Snippets compile. |
 | `/baml/bridges` | Corrected | Describes the available Node.js guide and actual setup prerequisites. |
-| `/baml/bridges/typescript` | Corrected | Replaces `baml_client`/`b.stream` examples with generated `baml_sdk` exports, ESM setup, `_async`, and `$stream_async`. Tests actual SDK output and documents the `Done` typing limitation. |
+| `/baml/bridges/typescript` | Corrected | Replaces `baml_client`/`b.stream` examples with generated `baml_sdk` exports, ESM setup, `_async`, and `$stream_async`. Starts with a synchronous call, then shows the optional async variant. Tests actual SDK output and documents the `Done` typing limitation. |
 | `/cli` | Corrected | Shows channel selection and update separately. Command links resolve. |
 | `/bcs` | Corrected | Removes unsupported product-roadmap claims; says documentation is unavailable and provides the support link. |
 | `/examples` | Corrected | Describes the available examples and their credential requirements. |
@@ -78,6 +78,20 @@ Production logs showed PostgreSQL connection exhaustion during requests. The
 serverless pool now has a lower per-instance connection limit and releases idle
 connections. Local integration and crawl checks pass; production behavior must
 be observed after deployment.
+
+## CI corrections
+
+The required check is `Developer Docs`; the aggregate job now publishes that
+exact name on pull requests and merge groups. Change detection uses the merge
+group's base/head diff, so unrelated queue entries skip the expensive jobs.
+Failure to read the diff fails the check. Tests exercise failure and cancellation
+propagation, trusted/untrusted PR behavior, and unrelated/runtime merge-group
+diffs.
+
+The HTTP job previously assumed a release existed in CI's database because it
+was on the public site. It now verifies the latest release stored in the configured
+database (or the explicitly configured version), then uses the resolved version
+for every HTTP assertion. Missing releases still fail verification.
 
 ## Repeat the authored-page audit
 

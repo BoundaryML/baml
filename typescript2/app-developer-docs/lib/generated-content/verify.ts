@@ -16,13 +16,20 @@ export interface ReleaseVerificationSummary {
 }
 
 export async function verifyGeneratedRelease(
-  version: string,
+  requestedVersion: string,
 ): Promise<ReleaseVerificationSummary> {
-  const release = (await listDocumentReleaseSummaries()).find(
+  const releases = await listDocumentReleaseSummaries();
+  const version =
+    requestedVersion === 'latest'
+      ? releases[0]?.release.version
+      : requestedVersion;
+  const release = releases.find(
     (candidate) => candidate.release.version === version,
   );
-  if (!release) {
-    throw new Error(`Generated-content release ${version} does not exist.`);
+  if (!release || !version) {
+    throw new Error(
+      `Generated-content release ${requestedVersion} does not exist.`,
+    );
   }
 
   const routes = await listStoredRoutesForVersion(version);
