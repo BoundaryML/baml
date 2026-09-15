@@ -162,53 +162,23 @@ impl BamlClassBigint for PackageBamlImpl {
     }
 
     fn parse(text: &BexStr) -> Result<Arc<BigInt>, VmRustFnError> {
-        // Accept an optional leading sign followed by ASCII digits, matching the
-        // documented behaviour: no whitespace, no underscores, no other formats.
         let text: &str = text;
-        let (sign_str, digits) = if let Some(rest) = text.strip_prefix('-') {
-            ("-", rest)
-        } else if let Some(rest) = text.strip_prefix('+') {
-            ("", rest)
-        } else {
-            ("", text)
-        };
-
-        // Reject empty string or non-digit chars after the sign.
-        if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
-            return Err(VmBamlError::ParseError {
+        match parse_decimal_bigint(text) {
+            Ok(bi) => Ok(Arc::new(bi)),
+            Err(DecimalBigintError::Malformed) => Err(VmBamlError::ParseError {
                 message: format!("bigint.parse: cannot parse {text:?} as bigint"),
             }
-            .into());
-        }
-
-        // Pre-flight: reject inputs that would produce a bigint past the
-        // workspace cap before allocating the parsed value. Each decimal
-        // digit contributes at most ~3.32 bits, so a string longer than
-        // `MAX_BIGINT_DECIMAL_DIGITS` cannot fit and must be refused.
-        // `bigint.parse` is user-callable from BAML, so this is a reachable
-        // allocation vector — match the SAP / FFI guards.
-        if digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
-            return Err(VmPanic::AllocFailure {
+            .into()),
+            Err(DecimalBigintError::TooManyDigits { digits }) => Err(VmPanic::AllocFailure {
                 message: format!(
-                    "bigint.parse: input has {} decimal digits, more than the \
+                    "bigint.parse: input has {digits} decimal digits, more than the \
                      {}-digit limit (bigint cap: {} bits)",
-                    digits.len(),
                     baml_type::MAX_BIGINT_DECIMAL_DIGITS,
                     MAX_BIGINT_BITS
                 ),
             }
-            .into());
+            .into()),
         }
-
-        let full = format!("{sign_str}{digits}");
-        BigInt::parse_bytes(full.as_bytes(), 10)
-            .map(Arc::new)
-            .ok_or_else(|| {
-                VmBamlError::ParseError {
-                    message: format!("bigint.parse: cannot parse {text:?} as bigint"),
-                }
-                .into()
-            })
     }
 
     fn _random_byte_count(lower: Arc<BigInt>, upper: Arc<BigInt>) -> i64 {
@@ -275,4 +245,47 @@ fn random_draw_bits(lower: &BigInt, upper: &BigInt) -> u64 {
 /// the given message. Centralises the wrapping so call sites stay readable.
 pub(crate) fn alloc_failure_panic(message: String) -> VmRustFnError {
     VmRustFnError::Panic(VmPanic::AllocFailure { message })
+}
+
+/// Why [`parse_decimal_bigint`] refused a string, so each caller keeps its own
+/// diagnostics: `bigint.parse` reports the offending text, the JSON decoder
+/// raises a catchable `DecodeError`.
+pub(crate) enum DecimalBigintError {
+    /// Not an optional `+`/`-` sign followed by one or more ASCII digits.
+    Malformed,
+    /// More decimal digits than `baml_type::MAX_BIGINT_DECIMAL_DIGITS`.
+    TooManyDigits { digits: usize },
+}
+
+/// Validate and parse a decimal bigint string: an optional leading sign
+/// followed by ASCII digits only — no whitespace, no underscores, no other
+/// formats.
+///
+/// Pre-flight: reject inputs that would produce a bigint past the workspace
+/// cap before allocating the parsed value. Each decimal digit contributes at
+/// most ~3.32 bits, so a string longer than `MAX_BIGINT_DECIMAL_DIGITS` cannot
+/// fit and must be refused. Every caller (`bigint.parse`, JSON decode) is a
+/// user-reachable allocation vector — match the SAP / FFI guards.
+pub(crate) fn parse_decimal_bigint(text: &str) -> Result<BigInt, DecimalBigintError> {
+    let (sign_str, digits) = if let Some(rest) = text.strip_prefix('-') {
+        ("-", rest)
+    } else if let Some(rest) = text.strip_prefix('+') {
+        ("", rest)
+    } else {
+        ("", text)
+    };
+
+    // Reject empty string or non-digit chars after the sign.
+    if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return Err(DecimalBigintError::Malformed);
+    }
+
+    if digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+        return Err(DecimalBigintError::TooManyDigits {
+            digits: digits.len(),
+        });
+    }
+
+    let full = format!("{sign_str}{digits}");
+    BigInt::parse_bytes(full.as_bytes(), 10).ok_or(DecimalBigintError::Malformed)
 }
