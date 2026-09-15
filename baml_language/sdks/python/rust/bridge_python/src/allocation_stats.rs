@@ -180,7 +180,7 @@ pub fn snapshot() -> Vec<(&'static str, u64)> {
     let peak_live_bytes = PEAK_LIVE_BYTES.load(Ordering::Relaxed);
     let bucket_blocks: [u64; 9] =
         std::array::from_fn(|index| LIVE_BUCKET_BLOCKS[index].load(Ordering::Relaxed));
-    let strings = bex_str::allocation_stats();
+    let strings = bex_project::bex_str_allocation_stats();
     let allocator = process_allocator_stats();
 
     let mut values = vec![

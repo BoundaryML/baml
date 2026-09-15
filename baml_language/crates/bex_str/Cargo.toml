@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [features]
-allocation_profiling = []
+allocation_profiling = [  ]
 
 [dependencies]
 bytecount = { workspace = true }
