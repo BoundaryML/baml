@@ -199,6 +199,9 @@ jobs:
         uses: ./.github/actions/setup-node2
       - name: Compile canonical documentation snippets
         env:
+          # Disposable snippet projects do not reuse seeded bytecode.
+          # Keep full diagnostics here; the next step executes the projects.
+          BAML_NO_BYTECODE_CACHE: "1"
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2

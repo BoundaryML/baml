@@ -96,6 +96,11 @@ heading check selects `Record` or its older name, `CsvRecord`, from that release
 manifest. The full HTTP checks pass locally against both the September 1 and
 September 11 snapshots. HTTP failures now print the requested URL and status.
 
+The compile-only snippet step disables bytecode caching for disposable projects;
+it still collects all compiler diagnostics. Execution tests retain normal
+compilation and caching. Validation logs each snippet as it starts so CI shows
+progress rather than buffering all results until completion.
+
 ## Repeat the authored-page audit
 
 From this directory, with the production-mode site running:
