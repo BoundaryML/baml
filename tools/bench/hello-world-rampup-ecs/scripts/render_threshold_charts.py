@@ -189,21 +189,19 @@ def render_overview(data, output_dir):
     path = output_dir / 'highest-rps-overview.png'
     names = [data['benchmarks'][item['name']]['label'] for item in BENCHMARKS]
     values = [data['benchmarks'][item['name']]['pre']['configured_active_rps'] for item in BENCHMARKS]
-    fig, ax = plt.subplots(figsize=(8.2, 5.3))
-    bars = ax.barh(names, values, color=OVERVIEW_COLOR, height=0.62)
-    ax.invert_yaxis()
-    ax.set_xlabel('Highest passing active-window RPS')
-    fig.text(0.12, 0.965, 'Highest passing RPS — ARM64, 1-vCPU / 1-GiB ECS task',
+    fig, ax = plt.subplots(figsize=(12, 5.3))
+    bars = ax.bar(names, values, color=OVERVIEW_COLOR, width=0.62)
+    ax.set_ylabel('Highest passing active-window RPS')
+    fig.text(0.08, 0.965, 'Highest passing RPS — ARM64, 1-vCPU / 1-GiB ECS task',
              ha='left', va='top', fontsize=18, fontweight='bold')
-    fig.text(0.12, 0.915, 'c7g.medium host · six 4s-on/1s-off cycles per threshold candidate',
+    fig.text(0.08, 0.915, 'c7g.medium host · six 4s-on/1s-off cycles per threshold candidate',
              ha='left', va='top', fontsize=10, color='#555555')
-    ax.spines[['top', 'right', 'left']].set_visible(False)
-    ax.grid(axis='y', visible=False)
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, unused: f'{value:,.0f}'))
-    ax.set_xlim(0, max(values) * 1.18)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, unused: f'{value:,.0f}'))
+    ax.set_ylim(0, max(values) * 1.18)
     for bar, value in zip(bars, values):
-        ax.text(value + max(values) * 0.018, bar.get_y() + bar.get_height() / 2, f'{value:,}',
-                va='center', ha='left', fontweight='bold')
+        ax.text(bar.get_x() + bar.get_width() / 2, value + max(values) * 0.018, f'{value:,}',
+                va='bottom', ha='center', fontweight='bold')
     fig.text(0.5, 0.012, 'These retained CloudWatch runs were not performed on t4g.micro.',
              ha='center', va='bottom', fontsize=9, color='#555555')
     fig.tight_layout(rect=(0, 0.05, 1, 0.87))
@@ -212,16 +210,21 @@ def render_overview(data, output_dir):
     return path
 
 
-def render_contact_sheet(paths, output_dir):
+def render_contact_sheet(overview, chart_paths, output_dir):
     path = output_dir / 'all-threshold-charts.png'
-    fig, axes = plt.subplots(4, 4, figsize=(20, 15))
-    for axis, image_path in zip(axes.flat, paths):
-        axis.imshow(mpimg.imread(image_path))
-        axis.axis('off')
-    for axis in axes.flat[len(paths):]:
-        axis.axis('off')
-    fig.suptitle('Hello-world ARM64 threshold charts', fontsize=20, fontweight='bold')
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    if len(chart_paths) != len(BENCHMARKS) * 3:
+        raise ValueError(f'Expected three charts for each of {len(BENCHMARKS)} benchmarks')
+    fig = plt.figure(figsize=(20, 27), facecolor='white')
+    grid = fig.add_gridspec(6, 3, height_ratios=[1.05, 1, 1, 1, 1, 1])
+    overview_axis = fig.add_subplot(grid[0, :])
+    overview_axis.imshow(mpimg.imread(overview))
+    overview_axis.axis('off')
+    for row in range(len(BENCHMARKS)):
+        for column in range(3):
+            axis = fig.add_subplot(grid[row + 1, column])
+            axis.imshow(mpimg.imread(chart_paths[row * 3 + column]))
+            axis.axis('off')
+    fig.subplots_adjust(left=0.01, right=0.99, bottom=0.005, top=0.995, hspace=0.02, wspace=0.01)
     fig.savefig(path, dpi=140, bbox_inches='tight')
     plt.close(fig)
     return path
@@ -260,7 +263,7 @@ def main():
     data_path.write_text(json.dumps(data, indent=2) + '\n')
     chart_paths = render_individual(data, args.output_dir)
     overview = render_overview(data, args.output_dir)
-    contact_sheet = render_contact_sheet([overview, *chart_paths], args.output_dir)
+    contact_sheet = render_contact_sheet(overview, chart_paths, args.output_dir)
     write_index(data, chart_paths, overview, contact_sheet, args.output_dir)
     print(json.dumps({'data': str(data_path), 'charts': [str(path) for path in chart_paths],
                       'overview': str(overview), 'contact_sheet': str(contact_sheet)}, indent=2))
