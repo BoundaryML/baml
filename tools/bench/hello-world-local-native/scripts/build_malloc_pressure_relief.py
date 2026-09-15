@@ -12,6 +12,18 @@ import subprocess
 import build as native_build
 
 
+DIAGNOSTIC_BUILD = native_build.BUILD / "malloc-pressure-relief"
+BASE_ARTIFACTS = ("toolchain/baml-cli", "toolchain/baml-pack-host", "apps/baml-only-explicit-gc/hello")
+
+
+def verify_base_artifacts(manifest):
+    for relative in BASE_ARTIFACTS:
+        path = native_build.BUILD / relative
+        expected = manifest.get("artifacts", {}).get(relative)
+        if not path.is_file() or not expected or native_build.digest(path) != expected:
+            raise RuntimeError(f"base artifact does not match .build/manifest.json: {relative}; rebuild with scripts/build.py --explicit-gc-diagnostic")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baml-source", type=Path, required=True, help="Path to a baml_language workspace containing the pressure-relief pack-host probe")
@@ -28,6 +40,11 @@ def main():
     base_manifest = json.loads(base_manifest_path.read_text())
     if not base_manifest.get("explicit_gc_diagnostic"):
         parser.error("the base build lacks explicit-GC diagnostics")
+    try:
+        verify_base_artifacts(base_manifest)
+    except RuntimeError as error:
+        parser.error(str(error))
+    base_manifest_sha256 = native_build.digest(base_manifest_path)
 
     revision, dirty, source_status, source_snapshot = native_build.source_identity(source)
     if dirty:
@@ -67,12 +84,15 @@ def main():
         env=env,
     )
 
-    pack_host = native_build.BUILD / "toolchain/baml-pack-host"
+    toolchain = DIAGNOSTIC_BUILD / "toolchain"
+    toolchain.mkdir(parents=True, exist_ok=True)
+    cli = toolchain / "baml-cli"
+    pack_host = toolchain / "baml-pack-host"
+    shutil.copy2(native_build.BUILD / "toolchain/baml-cli", cli)
     shutil.copy2(native_build.BUILD / "cargo-target/release/baml-pack-host", pack_host)
-    app = native_build.BUILD / "apps/baml-only-explicit-gc"
+    app = DIAGNOSTIC_BUILD / "apps/baml-only-explicit-gc"
     native_build.copy_tree(native_build.ROOT / "diagnostics/baml-only-explicit-gc", app)
     executable = app / "hello"
-    cli = native_build.BUILD / "toolchain/baml-cli"
     native_build.run(cli, "pack", "main", "--target", native_build.TARGET, "--output", executable, "--no-progress", "--agent-skill-check", "off", cwd=app, env=env)
 
     manifest = {
@@ -83,13 +103,17 @@ def main():
         "source_snapshot": source_snapshot,
         "base_build_revision": base_revision,
         "embedded_toolchain_revision": base_revision,
-        "base_build_manifest_sha256": native_build.digest(base_manifest_path),
+        "base_build_manifest_sha256": base_manifest_sha256,
         "artifacts": {
+            "toolchain/baml-cli": native_build.digest(cli),
             "toolchain/baml-pack-host": native_build.digest(pack_host),
             "apps/baml-only-explicit-gc/hello": native_build.digest(executable),
         },
     }
-    output = native_build.BUILD / "malloc-pressure-relief-manifest.json"
+    verify_base_artifacts(base_manifest)
+    if native_build.digest(base_manifest_path) != base_manifest_sha256:
+        raise RuntimeError("base .build/manifest.json changed during focused build")
+    output = DIAGNOSTIC_BUILD / "manifest.json"
     output.write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Malloc pressure-relief diagnostic ready for {revision[:12]}. Run python3 scripts/run_malloc_pressure_relief.py")
     return 0

@@ -6,8 +6,9 @@
   "source_snapshot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "base_build_revision": "687d7b3470d3a00d556ff537841a334f43064577",
   "embedded_toolchain_revision": "687d7b3470d3a00d556ff537841a334f43064577",
-  "base_build_manifest_sha256": "80bb10818303d19fec61018bf387d5f7c4175e572e8beaa07d4ab2f92298a153",
+  "base_build_manifest_sha256": "c1ef21cb02dabd98a27856a4589827869a8d48b82238773dde564a852d195202",
   "artifacts": {
+    "toolchain/baml-cli": "822f56c7c18c85683134fcfb1ff758bffc9e7c85e309651cf83ca57982b14d5c",
     "toolchain/baml-pack-host": "e1e54a45bc49bcb64b9eefc0eec03200967c4109a8f5f150c4872fdadfd1db3f",
     "apps/baml-only-explicit-gc/hello": "bfa0c2e81e9c9e9c6a2ffb3d30d36c7519253fa631264c05459d2470261d832b"
   }

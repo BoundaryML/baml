@@ -16,6 +16,9 @@ import run as harness
 import run_explicit_gc as explicit_gc
 
 
+DIAGNOSTIC_BUILD = harness.BUILD / "malloc-pressure-relief"
+
+
 def digest(path):
     value = hashlib.sha256()
     with path.open("rb") as stream:
@@ -76,12 +79,12 @@ def main():
     if args.rate <= 0 or args.duration <= 0 or args.interval <= 0 or args.final_delay < 1:
         parser.error("rate, duration, and interval must be positive and final-delay must be at least one second")
 
-    manifest_path = harness.BUILD / "malloc-pressure-relief-manifest.json"
+    manifest_path = DIAGNOSTIC_BUILD / "manifest.json"
     if not manifest_path.exists():
-        parser.error("missing .build/malloc-pressure-relief-manifest.json; run scripts/build_malloc_pressure_relief.py first")
+        parser.error("missing .build/malloc-pressure-relief/manifest.json; run scripts/build_malloc_pressure_relief.py first")
     manifest = json.loads(manifest_path.read_text())
 
-    source_executable = harness.BUILD / "apps/baml-only-explicit-gc/hello"
+    source_executable = DIAGNOSTIC_BUILD / "apps/baml-only-explicit-gc/hello"
     vegeta = harness.BUILD / "tools/vegeta"
     for required in (source_executable, vegeta):
         if not required.exists():
@@ -136,9 +139,9 @@ def main():
     started = time.monotonic()
 
     with (result_dir / "samples.jsonl").open("w") as sample_file:
-        def sample(phase):
+        def sample(phase, include_heap=True):
             stats = harness.process_stats(process.pid)
-            heap = explicit_gc.sample_heap_stats(port) if stats.get("alive") else None
+            heap = explicit_gc.sample_heap_stats(port) if include_heap and stats.get("alive") else None
             value = {
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "elapsed_seconds": time.monotonic() - started,
@@ -151,9 +154,13 @@ def main():
             sample_file.flush()
             print(
                 f"t={value['elapsed_seconds']:.2f}s phase={phase} rss={stats.get('rss_bytes', 0) / 1048576:.2f}MiB "
-                f"malloc_live={heap.get('allocator_bytes_in_use', 0) / 1048576 if heap else 0:.2f}MiB "
-                f"malloc_reserved={heap.get('allocator_bytes_reserved', 0) / 1048576 if heap else 0:.2f}MiB "
-                f"runtime_objects={heap.get('runtime_objects', 0) if heap else 0}",
+                + (
+                    f"malloc_live={heap.get('allocator_bytes_in_use', 0) / 1048576:.2f}MiB "
+                    f"malloc_reserved={heap.get('allocator_bytes_reserved', 0) / 1048576:.2f}MiB "
+                    f"runtime_objects={heap.get('runtime_objects', 0)}"
+                    if heap
+                    else "heap=not-sampled"
+                ),
                 flush=True,
             )
             if not stats.get("alive"):
@@ -205,24 +212,25 @@ def main():
             vmmap("before-gc")
             heap, gc_seconds, _ = explicit_gc.force_gc(port)
             checkpoint["gc"] = {"elapsed_seconds": gc_seconds, "heap": heap}
-            checkpoint["after_gc_immediate"] = sample("after_gc_immediate")
+            checkpoint["after_gc_immediate"] = sample("after_gc_immediate", include_heap=False)
             time.sleep(1)
-            checkpoint["after_gc_1s"] = sample("after_gc_1s")
+            checkpoint["after_gc_1s"] = sample("after_gc_1s", include_heap=False)
             vmmap("after-gc")
-            checkpoint["before_relief"] = sample("before_relief")
+            checkpoint["before_relief"] = sample("before_relief", include_heap=False)
 
             relief_started = time.monotonic()
             checkpoint["pressure_relief"] = invoke_pressure_relief(process.pid, probe_result)
-            checkpoint["after_relief_immediate"] = sample("after_relief_immediate")
+            checkpoint["after_relief_immediate"] = sample("after_relief_immediate", include_heap=False)
             delayed = []
             for delay in (0.1, 0.5, 1.0, 5.0, args.final_delay):
                 if delay > args.final_delay or (delayed and delay == delayed[-1]["delay_seconds"]):
                     continue
                 time.sleep(max(0, relief_started + delay - time.monotonic()))
-                delayed.append({"delay_seconds": delay, "sample": sample(f"after_relief_{delay:g}s")})
+                delayed.append({"delay_seconds": delay, "sample": sample(f"after_relief_{delay:g}s", include_heap=False)})
             checkpoint["after_relief_delayed"] = delayed
             vmmap("after-relief")
             checkpoint["exact_response_after_relief"] = harness.probe(port)
+            checkpoint["heap_after_measurement"] = sample("heap_after_measurement")
         finally:
             elapsed = time.monotonic() - started
             harness.terminate(processes)

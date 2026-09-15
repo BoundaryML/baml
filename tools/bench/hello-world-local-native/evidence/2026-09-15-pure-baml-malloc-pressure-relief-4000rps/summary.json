@@ -1,7 +1,7 @@
 {
   "source_revision": "640c4ff55f003e9cedc99b664a8fc38be173de31",
   "source_dirty": false,
-  "elapsed_seconds": 333.50952925,
+  "elapsed_seconds": 333.367701416,
   "requests": 1200000,
   "status_counts": {
     "200": 1200000
@@ -15,46 +15,46 @@
       "command": [
         "vmmap",
         "-summary",
-        "99264"
+        "16501"
       ],
       "output": "vmmap-before-gc.txt",
       "returncode": 0,
-      "elapsed_seconds": 0.9270402920000151,
+      "elapsed_seconds": 0.9463465419999579,
       "label": "before-gc"
     },
     {
       "command": [
         "vmmap",
         "-summary",
-        "99264"
+        "16501"
       ],
       "output": "vmmap-after-gc.txt",
       "returncode": 0,
-      "elapsed_seconds": 0.5880057500000362,
+      "elapsed_seconds": 0.6162063329999796,
       "label": "after-gc"
     },
     {
       "command": [
         "vmmap",
         "-summary",
-        "99264"
+        "16501"
       ],
       "output": "vmmap-after-relief.txt",
       "returncode": 0,
-      "elapsed_seconds": 0.8809742500000084,
+      "elapsed_seconds": 0.6189935830000195,
       "label": "after-relief"
     }
   ],
   "checkpoint": {
     "before_gc": {
-      "timestamp": "2026-09-15T17:43:40.194392+00:00",
-      "elapsed_seconds": 300.046772625,
+      "timestamp": "2026-09-15T18:08:13.813535+00:00",
+      "elapsed_seconds": 300.12873974999997,
       "phase": "before_gc",
       "process": {
         "alive": true,
-        "rss_bytes": 166789120,
-        "cpu_percent": 14.0,
-        "elapsed": "05:01"
+        "rss_bytes": 168099840,
+        "cpu_percent": 14.5,
+        "elapsed": "05:00"
       },
       "heap": {
         "total_objects": 208791,
@@ -74,14 +74,14 @@
         "object_slot_bytes": 64,
         "tracked_slot_capacity_bytes": 13893632,
         "permit_holder_slots": 6368,
-        "allocator_blocks_in_use": 276062,
-        "allocator_bytes_in_use": 52786288,
+        "allocator_blocks_in_use": 276058,
+        "allocator_bytes_in_use": 52779600,
         "allocator_bytes_high_water": 0,
-        "allocator_bytes_reserved": 171966464
+        "allocator_bytes_reserved": 167772160
       }
     },
     "gc": {
-      "elapsed_seconds": 0.003960416999973404,
+      "elapsed_seconds": 0.003957458000002134,
       "heap": {
         "before": {
           "total_objects": 209047,
@@ -101,10 +101,10 @@
           "object_slot_bytes": 64,
           "tracked_slot_capacity_bytes": 13893632,
           "permit_holder_slots": 6369,
-          "allocator_blocks_in_use": 276274,
-          "allocator_bytes_in_use": 52811680,
+          "allocator_blocks_in_use": 276270,
+          "allocator_bytes_in_use": 52804992,
           "allocator_bytes_high_water": 0,
-          "allocator_bytes_reserved": 171966464
+          "allocator_bytes_reserved": 167772160
         },
         "after": {
           "total_objects": 4929,
@@ -124,338 +124,140 @@
           "object_slot_bytes": 64,
           "tracked_slot_capacity_bytes": 786432,
           "permit_holder_slots": 5,
-          "allocator_blocks_in_use": 129476,
-          "allocator_bytes_in_use": 20109216,
+          "allocator_blocks_in_use": 129472,
+          "allocator_bytes_in_use": 20102528,
           "allocator_bytes_high_water": 0,
-          "allocator_bytes_reserved": 171966464
+          "allocator_bytes_reserved": 167772160
         }
       }
     },
     "after_gc_immediate": {
-      "timestamp": "2026-09-15T17:43:41.129584+00:00",
-      "elapsed_seconds": 300.98196591699997,
+      "timestamp": "2026-09-15T18:08:14.767335+00:00",
+      "elapsed_seconds": 301.0825375,
       "phase": "after_gc_immediate",
       "process": {
         "alive": true,
-        "rss_bytes": 166789120,
-        "cpu_percent": 0.6,
-        "elapsed": "05:02"
+        "rss_bytes": 168099840,
+        "cpu_percent": 0.4,
+        "elapsed": "05:01"
       },
-      "heap": {
-        "total_objects": 5441,
-        "compile_time_objects": 4914,
-        "runtime_objects": 527,
-        "active_handles": 4,
-        "tlab_chunks": 16,
-        "reserved_slots": 512,
-        "gen0_slots": 512,
-        "gen1_slots": 0,
-        "gen2_slots": 15,
-        "gen0_capacity_slots": 4096,
-        "gen1_capacity_slots": 0,
-        "gen2_capacity_slots": 4096,
-        "scratch_capacity_slots": 0,
-        "allocations_since_gc": 272,
-        "object_slot_bytes": 64,
-        "tracked_slot_capacity_bytes": 1048576,
-        "permit_holder_slots": 6,
-        "allocator_blocks_in_use": 129871,
-        "allocator_bytes_in_use": 20417776,
-        "allocator_bytes_high_water": 0,
-        "allocator_bytes_reserved": 171966464
-      }
+      "heap": null
     },
     "after_gc_1s": {
-      "timestamp": "2026-09-15T17:43:42.147635+00:00",
-      "elapsed_seconds": 302.000019584,
+      "timestamp": "2026-09-15T18:08:15.783864+00:00",
+      "elapsed_seconds": 302.09912075,
       "phase": "after_gc_1s",
       "process": {
         "alive": true,
-        "rss_bytes": 166805504,
-        "cpu_percent": 0.1,
-        "elapsed": "05:03"
+        "rss_bytes": 168099840,
+        "cpu_percent": 0.3,
+        "elapsed": "05:02"
       },
-      "heap": {
-        "total_objects": 5697,
-        "compile_time_objects": 4914,
-        "runtime_objects": 783,
-        "active_handles": 4,
-        "tlab_chunks": 24,
-        "reserved_slots": 768,
-        "gen0_slots": 768,
-        "gen1_slots": 0,
-        "gen2_slots": 15,
-        "gen0_capacity_slots": 4096,
-        "gen1_capacity_slots": 0,
-        "gen2_capacity_slots": 4096,
-        "scratch_capacity_slots": 0,
-        "allocations_since_gc": 418,
-        "object_slot_bytes": 64,
-        "tracked_slot_capacity_bytes": 1048576,
-        "permit_holder_slots": 7,
-        "allocator_blocks_in_use": 130081,
-        "allocator_bytes_in_use": 20442560,
-        "allocator_bytes_high_water": 0,
-        "allocator_bytes_reserved": 171966464
-      }
+      "heap": null
     },
     "before_relief": {
-      "timestamp": "2026-09-15T17:43:42.740063+00:00",
-      "elapsed_seconds": 302.592433375,
+      "timestamp": "2026-09-15T18:08:16.404400+00:00",
+      "elapsed_seconds": 302.71959529099996,
       "phase": "before_relief",
       "process": {
         "alive": true,
-        "rss_bytes": 166805504,
+        "rss_bytes": 168099840,
         "cpu_percent": 0.0,
         "elapsed": "05:03"
       },
-      "heap": {
-        "total_objects": 5953,
-        "compile_time_objects": 4914,
-        "runtime_objects": 1039,
-        "active_handles": 4,
-        "tlab_chunks": 32,
-        "reserved_slots": 1024,
-        "gen0_slots": 1024,
-        "gen1_slots": 0,
-        "gen2_slots": 15,
-        "gen0_capacity_slots": 4096,
-        "gen1_capacity_slots": 0,
-        "gen2_capacity_slots": 4096,
-        "scratch_capacity_slots": 0,
-        "allocations_since_gc": 564,
-        "object_slot_bytes": 64,
-        "tracked_slot_capacity_bytes": 1048576,
-        "permit_holder_slots": 8,
-        "allocator_blocks_in_use": 130291,
-        "allocator_bytes_in_use": 20467344,
-        "allocator_bytes_high_water": 0,
-        "allocator_bytes_reserved": 171966464
-      }
+      "heap": null
     },
     "pressure_relief": {
       "signal": "SIGUSR2",
       "reported_bytes_relieved": 0,
-      "elapsed_seconds": 0.010672666000004938
+      "elapsed_seconds": 0.011072542000022167
     },
     "after_relief_immediate": {
-      "timestamp": "2026-09-15T17:43:42.754642+00:00",
-      "elapsed_seconds": 302.607011375,
+      "timestamp": "2026-09-15T18:08:16.418616+00:00",
+      "elapsed_seconds": 302.733809416,
       "phase": "after_relief_immediate",
       "process": {
         "alive": true,
-        "rss_bytes": 166821888,
+        "rss_bytes": 168116224,
         "cpu_percent": 0.0,
         "elapsed": "05:03"
       },
-      "heap": {
-        "total_objects": 6209,
-        "compile_time_objects": 4914,
-        "runtime_objects": 1295,
-        "active_handles": 4,
-        "tlab_chunks": 40,
-        "reserved_slots": 1280,
-        "gen0_slots": 1280,
-        "gen1_slots": 0,
-        "gen2_slots": 15,
-        "gen0_capacity_slots": 4096,
-        "gen1_capacity_slots": 0,
-        "gen2_capacity_slots": 4096,
-        "scratch_capacity_slots": 0,
-        "allocations_since_gc": 710,
-        "object_slot_bytes": 64,
-        "tracked_slot_capacity_bytes": 1048576,
-        "permit_holder_slots": 9,
-        "allocator_blocks_in_use": 130501,
-        "allocator_bytes_in_use": 20492128,
-        "allocator_bytes_high_water": 0,
-        "allocator_bytes_reserved": 171966464
-      }
+      "heap": null
     },
     "after_relief_delayed": [
       {
         "delay_seconds": 0.1,
         "sample": {
-          "timestamp": "2026-09-15T17:43:42.849799+00:00",
-          "elapsed_seconds": 302.702169334,
+          "timestamp": "2026-09-15T18:08:16.515921+00:00",
+          "elapsed_seconds": 302.831127041,
           "phase": "after_relief_0.1s",
           "process": {
             "alive": true,
-            "rss_bytes": 166838272,
-            "cpu_percent": 0.1,
+            "rss_bytes": 168116224,
+            "cpu_percent": 0.0,
             "elapsed": "05:03"
           },
-          "heap": {
-            "total_objects": 6465,
-            "compile_time_objects": 4914,
-            "runtime_objects": 1551,
-            "active_handles": 4,
-            "tlab_chunks": 48,
-            "reserved_slots": 1536,
-            "gen0_slots": 1536,
-            "gen1_slots": 0,
-            "gen2_slots": 15,
-            "gen0_capacity_slots": 4096,
-            "gen1_capacity_slots": 0,
-            "gen2_capacity_slots": 4096,
-            "scratch_capacity_slots": 0,
-            "allocations_since_gc": 856,
-            "object_slot_bytes": 64,
-            "tracked_slot_capacity_bytes": 1048576,
-            "permit_holder_slots": 10,
-            "allocator_blocks_in_use": 130711,
-            "allocator_bytes_in_use": 20516912,
-            "allocator_bytes_high_water": 0,
-            "allocator_bytes_reserved": 171966464
-          }
+          "heap": null
         }
       },
       {
         "delay_seconds": 0.5,
         "sample": {
-          "timestamp": "2026-09-15T17:43:43.258148+00:00",
-          "elapsed_seconds": 303.110526584,
+          "timestamp": "2026-09-15T18:08:16.920122+00:00",
+          "elapsed_seconds": 303.235346625,
           "phase": "after_relief_0.5s",
           "process": {
             "alive": true,
-            "rss_bytes": 166854656,
-            "cpu_percent": 0.0,
-            "elapsed": "05:04"
+            "rss_bytes": 168116224,
+            "cpu_percent": 0.2,
+            "elapsed": "05:03"
           },
-          "heap": {
-            "total_objects": 6721,
-            "compile_time_objects": 4914,
-            "runtime_objects": 1807,
-            "active_handles": 4,
-            "tlab_chunks": 56,
-            "reserved_slots": 1792,
-            "gen0_slots": 1792,
-            "gen1_slots": 0,
-            "gen2_slots": 15,
-            "gen0_capacity_slots": 4096,
-            "gen1_capacity_slots": 0,
-            "gen2_capacity_slots": 4096,
-            "scratch_capacity_slots": 0,
-            "allocations_since_gc": 1002,
-            "object_slot_bytes": 64,
-            "tracked_slot_capacity_bytes": 1048576,
-            "permit_holder_slots": 11,
-            "allocator_blocks_in_use": 130921,
-            "allocator_bytes_in_use": 20541696,
-            "allocator_bytes_high_water": 0,
-            "allocator_bytes_reserved": 171966464
-          }
+          "heap": null
         }
       },
       {
         "delay_seconds": 1.0,
         "sample": {
-          "timestamp": "2026-09-15T17:43:43.760544+00:00",
-          "elapsed_seconds": 303.61292249999997,
+          "timestamp": "2026-09-15T18:08:17.413152+00:00",
+          "elapsed_seconds": 303.728343166,
           "phase": "after_relief_1s",
           "process": {
             "alive": true,
-            "rss_bytes": 166854656,
-            "cpu_percent": 0.1,
+            "rss_bytes": 168116224,
+            "cpu_percent": 0.2,
             "elapsed": "05:04"
           },
-          "heap": {
-            "total_objects": 6977,
-            "compile_time_objects": 4914,
-            "runtime_objects": 2063,
-            "active_handles": 4,
-            "tlab_chunks": 64,
-            "reserved_slots": 2048,
-            "gen0_slots": 2048,
-            "gen1_slots": 0,
-            "gen2_slots": 15,
-            "gen0_capacity_slots": 4096,
-            "gen1_capacity_slots": 0,
-            "gen2_capacity_slots": 4096,
-            "scratch_capacity_slots": 0,
-            "allocations_since_gc": 1148,
-            "object_slot_bytes": 64,
-            "tracked_slot_capacity_bytes": 1048576,
-            "permit_holder_slots": 12,
-            "allocator_blocks_in_use": 131131,
-            "allocator_bytes_in_use": 20566480,
-            "allocator_bytes_high_water": 0,
-            "allocator_bytes_reserved": 171966464
-          }
+          "heap": null
         }
       },
       {
         "delay_seconds": 5.0,
         "sample": {
-          "timestamp": "2026-09-15T17:43:47.753712+00:00",
-          "elapsed_seconds": 307.606079334,
+          "timestamp": "2026-09-15T18:08:21.412917+00:00",
+          "elapsed_seconds": 307.728079041,
           "phase": "after_relief_5s",
           "process": {
             "alive": true,
-            "rss_bytes": 166871040,
-            "cpu_percent": 0.1,
+            "rss_bytes": 168116224,
+            "cpu_percent": 0.0,
             "elapsed": "05:08"
           },
-          "heap": {
-            "total_objects": 7233,
-            "compile_time_objects": 4914,
-            "runtime_objects": 2319,
-            "active_handles": 4,
-            "tlab_chunks": 72,
-            "reserved_slots": 2304,
-            "gen0_slots": 2304,
-            "gen1_slots": 0,
-            "gen2_slots": 15,
-            "gen0_capacity_slots": 4096,
-            "gen1_capacity_slots": 0,
-            "gen2_capacity_slots": 4096,
-            "scratch_capacity_slots": 0,
-            "allocations_since_gc": 1294,
-            "object_slot_bytes": 64,
-            "tracked_slot_capacity_bytes": 1048576,
-            "permit_holder_slots": 13,
-            "allocator_blocks_in_use": 131341,
-            "allocator_bytes_in_use": 20591264,
-            "allocator_bytes_high_water": 0,
-            "allocator_bytes_reserved": 171966464
-          }
+          "heap": null
         }
       },
       {
         "delay_seconds": 30.0,
         "sample": {
-          "timestamp": "2026-09-15T17:44:12.774693+00:00",
-          "elapsed_seconds": 332.626969209,
+          "timestamp": "2026-09-15T18:08:46.428278+00:00",
+          "elapsed_seconds": 332.743306291,
           "phase": "after_relief_30s",
           "process": {
             "alive": true,
-            "rss_bytes": 166887424,
-            "cpu_percent": 0.2,
+            "rss_bytes": 168116224,
+            "cpu_percent": 0.3,
             "elapsed": "05:33"
           },
-          "heap": {
-            "total_objects": 7489,
-            "compile_time_objects": 4914,
-            "runtime_objects": 2575,
-            "active_handles": 4,
-            "tlab_chunks": 80,
-            "reserved_slots": 2560,
-            "gen0_slots": 2560,
-            "gen1_slots": 0,
-            "gen2_slots": 15,
-            "gen0_capacity_slots": 4096,
-            "gen1_capacity_slots": 0,
-            "gen2_capacity_slots": 4096,
-            "scratch_capacity_slots": 0,
-            "allocations_since_gc": 1440,
-            "object_slot_bytes": 64,
-            "tracked_slot_capacity_bytes": 1048576,
-            "permit_holder_slots": 14,
-            "allocator_blocks_in_use": 131551,
-            "allocator_bytes_in_use": 20616048,
-            "allocator_bytes_high_water": 0,
-            "allocator_bytes_reserved": 171966464
-          }
+          "heap": null
         }
       }
     ],
@@ -465,10 +267,44 @@
       "body": "hello world",
       "content_type": "text/plain; charset=utf-8",
       "cache_control": "no-store"
+    },
+    "heap_after_measurement": {
+      "timestamp": "2026-09-15T18:08:47.052671+00:00",
+      "elapsed_seconds": 333.367630041,
+      "phase": "heap_after_measurement",
+      "process": {
+        "alive": true,
+        "rss_bytes": 168116224,
+        "cpu_percent": 0.0,
+        "elapsed": "05:34"
+      },
+      "heap": {
+        "total_objects": 5473,
+        "compile_time_objects": 4914,
+        "runtime_objects": 559,
+        "active_handles": 4,
+        "tlab_chunks": 17,
+        "reserved_slots": 544,
+        "gen0_slots": 544,
+        "gen1_slots": 0,
+        "gen2_slots": 15,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 291,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 1048576,
+        "permit_holder_slots": 7,
+        "allocator_blocks_in_use": 129890,
+        "allocator_bytes_in_use": 20414160,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 167772160
+      }
     }
   },
   "rss_immediate_relief_delta_mib": 0.015625,
-  "rss_final_relief_delta_mib": 0.078125,
+  "rss_final_relief_delta_mib": 0.015625,
   "alive_after_relief": true,
   "exact_response_after_relief": true
 }
