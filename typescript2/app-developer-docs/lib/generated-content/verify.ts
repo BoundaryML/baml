@@ -8,6 +8,7 @@ import { canonicalVersionToRouteVersion } from '@/lib/generated-content/versions
 export interface ReleaseVerificationSummary {
   cli_commands: number;
   content_schema_version: number;
+  csv_record_path: string | null;
   manifest_hash: string;
   reference_pages: number;
   routes: number;
@@ -120,6 +121,13 @@ export async function verifyGeneratedRelease(
       (route) => route.route_metadata.kind === 'cliCommand',
     ).length,
     content_schema_version: release.release.content_schema_version,
+    csv_record_path:
+      routes.find((route) =>
+        [
+          'baml/packages/baml/csv/Record',
+          'baml/packages/baml/csv/CsvRecord',
+        ].includes(route.path),
+      )?.route_metadata.publicPath ?? null,
     manifest_hash: release.release.manifest_hash,
     reference_pages: routes.filter(
       (route) => route.route_metadata.kind === 'packageReference',

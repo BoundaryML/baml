@@ -291,11 +291,14 @@ jobs:
       - name: Verify representative exact-version pages, metadata, and 404s over HTTP
         env:
           VERSION: v${{ steps.release.outputs.version }}
+          CSV_RECORD_PATH: ${{ steps.release.outputs.csv-record-path }}
         run: |
           set -euo pipefail
+          # Trace public URLs and print HTTP failures for actionable CI logs.
+          set -x
           ready=false
           for _ in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null; then
               ready=true
               break
             fi
@@ -305,20 +308,20 @@ jobs:
             echo "::error::developer docs server did not become ready"
             exit 1
           fi
-          curl --fail --silent --dump-header "$RUNNER_TEMP/package.headers" \
+          curl --fail --silent --show-error --dump-header "$RUNNER_TEMP/package.headers" \
             --output "$RUNNER_TEMP/package.html" \
             "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id"
           grep -q "boundary.id" "$RUNNER_TEMP/package.html"
           grep -qi '^cache-control:.*no-store' "$RUNNER_TEMP/package.headers"
-          curl --fail --silent --output "$RUNNER_TEMP/package-child.html" \
+          curl --fail --silent --show-error --output "$RUNNER_TEMP/package-child.html" \
             "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id/current"
           grep -q "boundary.id.current" "$RUNNER_TEMP/package-child.html"
           # Next.js can encode catch-all params differently for metadata and pages.
-          curl --fail --silent --output "$RUNNER_TEMP/stream-type.html" \
+          curl --fail --silent --show-error --output "$RUNNER_TEMP/stream-type.html" \
             "http://127.0.0.1:4173/baml/packages/$VERSION/ai/Agent%24stream"
           grep -q 'ai.Agent' "$RUNNER_TEMP/stream-type.html"
-          curl --fail --silent --output "$RUNNER_TEMP/record.html" \
-            "http://127.0.0.1:4173/baml/packages/$VERSION/baml/csv/Record"
+          curl --fail --silent --show-error --output "$RUNNER_TEMP/record.html" \
+            "http://127.0.0.1:4173$CSV_RECORD_PATH"
           python3 - "$RUNNER_TEMP/record.html" <<'PY_CHECK'
           import re, sys
           html = open(sys.argv[1]).read()
@@ -326,7 +329,7 @@ jobs:
           ids = re.findall(r' id="([^"]+)"', html)
           assert len(ids) == len(set(ids)), 'Member and section IDs must be unique'
           PY_CHECK
-          curl --fail --silent --output "$RUNNER_TEMP/cli.html" \
+          curl --fail --silent --show-error --output "$RUNNER_TEMP/cli.html" \
             "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add"
           grep -q "baml generate add" "$RUNNER_TEMP/cli.html"
           grep -q "noindex" "$RUNNER_TEMP/cli.html"

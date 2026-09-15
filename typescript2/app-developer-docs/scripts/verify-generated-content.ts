@@ -19,7 +19,15 @@ async function main(): Promise<void> {
     if (parsedArguments.flags.has('github-output')) {
       const outputPath = process.env.GITHUB_OUTPUT;
       if (!outputPath) throw new Error('GITHUB_OUTPUT is required.');
-      await appendFile(outputPath, `version=${summary.version}\n`);
+      if (!summary.csv_record_path) {
+        throw new Error(
+          'The HTTP contract requires a published CSV record page.',
+        );
+      }
+      await appendFile(
+        outputPath,
+        `version=${summary.version}\ncsv-record-path=${summary.csv_record_path}\n`,
+      );
     }
   } finally {
     await closeDocumentStore();

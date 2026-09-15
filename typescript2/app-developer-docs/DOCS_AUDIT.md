@@ -91,7 +91,10 @@ diffs.
 The HTTP job previously assumed a release existed in CI's database because it
 was on the public site. It now verifies the latest release stored in the configured
 database (or the explicitly configured version), then uses the resolved version
-for every HTTP assertion. Missing releases still fail verification.
+for every HTTP assertion. Missing releases still fail verification. The CSV
+heading check selects `Record` or its older name, `CsvRecord`, from that release's
+manifest. The full HTTP checks pass locally against both the September 1 and
+September 11 snapshots. HTTP failures now print the requested URL and status.
 
 ## Repeat the authored-page audit
 
