@@ -108,7 +108,12 @@ def fill_schedule() -> None:
 def notify(
     post_to_slack: bool = typer.Option(False, "--post-to-slack", help="Actually post to Slack"),
 ) -> None:
-    """Compose and (optionally) post the weekly on-call handoff."""
+    """Compose and (optionally) post the weekly on-call handoff.
+
+    Posts the handoff for the next shift immediately and schedules follow-up
+    reminders on the shift's first day. Reminders whose delivery time has
+    already passed (e.g. a manual run on Friday afternoon) are skipped.
+    """
     path = _schedule_path()
 
     wc = None
@@ -132,15 +137,35 @@ def notify(
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
 
+    now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
     if post_to_slack:
         from oncall.slack import post as slack_post
+        from oncall.slack import schedule as slack_schedule
 
+        posted = scheduled = 0
         for message in msgs:
-            slack_post(wc, message.channel, message.text, blocks=message.blocks)
-        console.print(f"[green]posted {len(msgs)} message(s)[/]")
+            if message.post_at is None:
+                slack_post(wc, message.channel, message.text, blocks=message.blocks)
+                posted += 1
+            elif message.post_at <= now:
+                console.print(
+                    f"[yellow]skipped[/] reminder scheduled for {message.post_at.isoformat()}: already in the past"
+                )
+            else:
+                slack_schedule(
+                    wc, message.channel, message.text, message.post_at, blocks=message.blocks
+                )
+                scheduled += 1
+        console.print(f"[green]posted {posted} message(s), scheduled {scheduled} reminder(s)[/]")
     else:
         for message in msgs:
-            console.print(f"[bold]→ {message.channel}[/]")
+            if message.post_at is None:
+                console.print(f"[bold]→ {message.channel}[/] (now)")
+            else:
+                stale = " [yellow](in the past; would be skipped)[/]" if message.post_at <= now else ""
+                console.print(
+                    f"[bold]→ {message.channel}[/] (scheduled for {message.post_at.isoformat()}){stale}"
+                )
             console.print(message.text)
             console.print()
 
